@@ -141,6 +141,38 @@ utility).
 
 #### 3.2.2 Coifman–Lafon α normalization (HIGH PRIORITY)
 
+**Implemented in SIMPLE (2026-07-24)**:
+
+- `normalize_diffmap_graph` in `src/main/pca/simple_diff_map_graphs.f90` now takes
+  an optional `alpha` argument. When `alpha > 0` it applies the Coifman–Lafon
+  density normalization `w_ij <- w_ij / (d_i^alpha d_j^alpha)` on the raw degree,
+  then recomputes the symmetric `1/sqrt(d_i d_j)` normalization on the rescaled
+  weights. `alpha = 0` (default) reproduces the previous plain graph Laplacian.
+- `alpha` is threaded through `pack_scalar_knn_to_csr`,
+  `build_euclidean_knn_graph`, `build_gated_euclidean_knn_graph`,
+  `build_gated_euclidean_graph_from_neighbors`, `build_orientation_knn_graph`,
+  and `build_cls_split_graph`. It is optional everywhere (default `0.0`), so
+  callers that do not pass it keep the current behavior.
+- New CLI-visible parameter `dm_alpha` (default `0.0`) exposed for
+  `ppca_denoise`, `cls_split`, `denoise_project`, and `flex_analysis`. Enable
+  the Laplace–Beltrami operator with, for example:
+
+```bash
+simple_exec prg=flex_analysis ... dm_alpha=1
+```
+
+- While wiring this in, the pre-existing `bandwidth_mode`/`bandwidth_tune`
+  parameters were found to be declared but **not registered** in
+  `bind_input_carg`/`bind_input_rarg` (`simple_parameters_parse.f90`), so their
+  CLI values (including the `flex_analysis` `ferguson` default) were silently
+  ignored. Registration was added for all three parameters, so `flex_analysis`
+  now genuinely uses `bandwidth_mode=ferguson` by default.
+
+The α default remains `0` everywhere (backward compatible); `alpha = 1` is
+recommended for cryo-EM because orientation coverage is non-uniform.
+
+The remaining discussion below records the original review rationale.
+
 **ManifoldEM location**: `DMembeddingII.py`, function `slaplacian` (~line 97):
 
 ```python

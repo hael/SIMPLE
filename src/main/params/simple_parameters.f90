@@ -487,6 +487,7 @@ type :: parameters
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
     real    :: bandwidth_tune=3.0  !< Ferguson bandwidth multiplier used when bandwidth_mode=ferguson
+    real    :: dm_alpha=0.0        !< diffusion-map Coifman-Lafon density normalization exponent(0=graph Laplacian|0.5=Fokker-Planck|1=Laplace-Beltrami){0.0}
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: chunk_count_penalty=0.05 !< complexity penalty per additional temporal chunk
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}

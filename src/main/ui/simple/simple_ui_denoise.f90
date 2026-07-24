@@ -133,6 +133,10 @@ contains
                 'Ferguson tune multiplier (default 3)', &
                 'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
                 'tune >= 0', .false., 3.0)
+            call ppca_denoise%add_input(UI_FILT, 'dm_alpha', 'num', &
+                'Diffusion-map density normalization (default 0)', &
+                'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
+                '0 <= alpha <= 1', .false., 0.0)
         call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
         call ppca_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
         call ppca_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
@@ -262,6 +266,10 @@ contains
             'Ferguson tune multiplier (default 3)', &
             'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
             'tune >= 0', .false., 3.0)
+        call cls_split%add_input(UI_FILT, 'dm_alpha', 'num', &
+            'Diffusion-map density normalization (default 0)', &
+            'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
+            '0 <= alpha <= 1', .false., 0.0)
         call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
         call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
@@ -294,6 +302,10 @@ contains
             'Ferguson tune multiplier (default 3)', &
             'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
             'tune >= 0', .false., 3.0)
+        call denoise_project%add_input(UI_FILT, 'dm_alpha', 'num', &
+            'Diffusion-map density normalization (default 0)', &
+            'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
+            '0 <= alpha <= 1', .false., 0.0)
         call denoise_project%add_input(UI_SRCH, nspace, required_override=.false.)
         call denoise_project%add_input(UI_SRCH, 'nspace_sub', 'num', &
             'SO3 mixture subspace size', 'SO3 mixture subspace size', &
@@ -355,6 +367,10 @@ contains
             'Ferguson tune multiplier (default 3)', &
             'Multiplier used only when bandwidth_mode=ferguson (larger => broader kernel)', &
             'tune >= 0', .false., 3.0)
+        call flex_analysis%add_input(UI_FILT, 'dm_alpha', 'num', &
+            'Diffusion-map density normalization (default 0)', &
+            'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
+            '0 <= alpha <= 1', .false., 0.0)
         call flex_analysis%add_input(UI_FILT, 'npreimages', 'num', &
             'Representative state volumes (default 8)', &
             'Number of k-medoids used as representative Nyström pre-image targets', &

@@ -53,20 +53,21 @@ contains
         select case(trim(metric))
             case('ori')
                 call build_orientation_knn_graph(params, spproj, pinds, max(2, params%k_nn), graph, &
-                    &bandwidth_mode=params%bandwidth_mode, bandwidth_tune=params%bandwidth_tune)
+                    &bandwidth_mode=params%bandwidth_mode, bandwidth_tune=params%bandwidth_tune, alpha=params%dm_alpha)
             case DEFAULT
                 if( .not. present(pcavecs) ) THROW_HARD('Euclidean graph requires pcavecs')
                 call build_euclidean_knn_graph(pcavecs, max(2, params%k_nn), graph, &
-                    &bandwidth_mode=params%bandwidth_mode, bandwidth_tune=params%bandwidth_tune)
+                    &bandwidth_mode=params%bandwidth_mode, bandwidth_tune=params%bandwidth_tune, alpha=params%dm_alpha)
         end select
     end subroutine build_cls_split_graph
 
-    subroutine build_euclidean_knn_graph( pcavecs, k_nn, graph, bandwidth_mode, bandwidth_tune )
+    subroutine build_euclidean_knn_graph( pcavecs, k_nn, graph, bandwidth_mode, bandwidth_tune, alpha )
         real,                 intent(in)  :: pcavecs(:,:)
         integer,              intent(in)  :: k_nn
         type(diffmap_graph),  intent(out) :: graph
         character(len=*), optional, intent(in) :: bandwidth_mode
         real, optional, intent(in) :: bandwidth_tune
+        real, optional, intent(in) :: alpha
         integer, allocatable :: nbrs(:,:)
         real,    allocatable :: d2s(:,:), kth_d2(:)
         integer :: n, k_used
@@ -81,7 +82,7 @@ contains
         allocate(d2s(k_used,n), kth_d2(n), source=0.)
         call find_euclidean_neighbors(pcavecs, k_used, nbrs, d2s)
         kth_d2 = d2s(k_used,:)
-        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc', graph, bandwidth_mode, bandwidth_tune)
+        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'euc', graph, bandwidth_mode, bandwidth_tune, alpha)
         deallocate(nbrs, d2s, kth_d2)
     end subroutine build_euclidean_knn_graph
 
@@ -90,7 +91,7 @@ contains
     !! visited in angular order until nang_nbrs particle candidates have been
     !! examined, and only the k_nn closest registered-residuals are retained.
     subroutine build_gated_euclidean_knn_graph( features, proj_ids, proj_dirs, k_nn, nang_nbrs, graph, &
-        &ncandidates_min, ncandidates_max, ncandidates_mean, bandwidth_mode, bandwidth_tune )
+        &ncandidates_min, ncandidates_max, ncandidates_mean, bandwidth_mode, bandwidth_tune, alpha )
         real,                intent(in)  :: features(:,:)
         integer,             intent(in)  :: proj_ids(:)
         real,                intent(in)  :: proj_dirs(:,:)
@@ -100,6 +101,7 @@ contains
         real, optional,      intent(out) :: ncandidates_mean
         character(len=*), optional, intent(in) :: bandwidth_mode
         real, optional, intent(in) :: bandwidth_tune
+        real, optional, intent(in) :: alpha
         integer, allocatable :: nbrs(:,:),ncandidates(:),rows(:)
         real, allocatable :: d2s(:,:)
         integer :: n, ndim, nproj, k_used, cap_used
@@ -121,7 +123,7 @@ contains
         k_used=min(max(1,k_nn),n-1); cap_used=min(max(k_used,nang_nbrs),n-1)
         allocate(rows(n)); rows=[(i,i=1,n)]
         call find_gated_euclidean_neighbors_rows(features,proj_ids,proj_dirs,k_used,cap_used,rows,nbrs,d2s,ncandidates)
-        call build_gated_euclidean_graph_from_neighbors(n,nbrs,d2s,ncandidates,graph,bandwidth_mode,bandwidth_tune)
+        call build_gated_euclidean_graph_from_neighbors(n,nbrs,d2s,ncandidates,graph,bandwidth_mode,bandwidth_tune,alpha)
         if( present(ncandidates_min)  ) ncandidates_min  = minval(ncandidates)
         if( present(ncandidates_max)  ) ncandidates_max  = maxval(ncandidates)
         if( present(ncandidates_mean) ) ncandidates_mean = real(sum(int(ncandidates,kind=8)),kind=sp) / real(n,kind=sp)
@@ -202,12 +204,13 @@ contains
     end subroutine find_gated_euclidean_neighbors_rows
 
     subroutine build_gated_euclidean_graph_from_neighbors( n, nbrs, d2s, ncandidates, graph, &
-        &bandwidth_mode, bandwidth_tune )
+        &bandwidth_mode, bandwidth_tune, alpha )
         integer, intent(in) :: n,nbrs(:,:),ncandidates(:)
         real, intent(in) :: d2s(:,:)
         type(diffmap_graph), intent(out) :: graph
         character(len=*), optional, intent(in) :: bandwidth_mode
         real, optional, intent(in) :: bandwidth_tune
+        real, optional, intent(in) :: alpha
         real, allocatable :: kth_d2(:)
         integer :: k_used
         if( n<2 .or. size(nbrs,2)/=n ) THROW_HARD('invalid gated neighbor table assembly')
@@ -217,17 +220,18 @@ contains
         if( size(ncandidates)/=n .or. any(nbrs<1).or.any(nbrs>n) ) THROW_HARD('incomplete gated neighbor table')
         allocate(kth_d2(n))
         kth_d2=d2s(k_used,:)
-        call pack_scalar_knn_to_csr(n,k_used,nbrs,d2s,kth_d2,'euc_gated',graph,bandwidth_mode,bandwidth_tune)
+        call pack_scalar_knn_to_csr(n,k_used,nbrs,d2s,kth_d2,'euc_gated',graph,bandwidth_mode,bandwidth_tune,alpha)
         deallocate(kth_d2)
     end subroutine build_gated_euclidean_graph_from_neighbors
 
-    subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, graph, bandwidth_mode, bandwidth_tune )
+    subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, graph, bandwidth_mode, bandwidth_tune, alpha )
         type(parameters),      intent(in)    :: params
         type(sp_project),      intent(inout) :: spproj
         integer,               intent(in)    :: pinds(:), k_nn
         type(diffmap_graph),   intent(out)   :: graph
         character(len=*), optional, intent(in) :: bandwidth_mode
         real, optional, intent(in) :: bandwidth_tune
+        real, optional, intent(in) :: alpha
         integer, allocatable :: nbrs(:,:)
         real,    allocatable :: d2s(:,:), kth_d2(:)
         integer :: n, k_used
@@ -242,7 +246,7 @@ contains
         allocate(d2s(k_used,n), kth_d2(n), source=0.)
         call find_orientation_neighbors(spproj, pinds, k_used, nbrs, d2s)
         kth_d2 = d2s(k_used,:)
-        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'ori', graph, bandwidth_mode, bandwidth_tune)
+        call pack_scalar_knn_to_csr(n, k_used, nbrs, d2s, kth_d2, 'ori', graph, bandwidth_mode, bandwidth_tune, alpha)
         deallocate(nbrs, d2s, kth_d2)
     end subroutine build_orientation_knn_graph
 
@@ -315,13 +319,14 @@ contains
         end do
     end subroutine find_orientation_neighbors
 
-    subroutine pack_scalar_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, graph, bandwidth_mode, bandwidth_tune )
+    subroutine pack_scalar_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, graph, bandwidth_mode, bandwidth_tune, alpha )
         integer,              intent(in)  :: n, k_used, nbrs(:,:)
         real,                 intent(in)  :: d2s(:,:), kth_d2(:)
         character(len=*),     intent(in)  :: metric
         type(diffmap_graph),  intent(out) :: graph
         character(len=*), optional, intent(in) :: bandwidth_mode
         real, optional, intent(in) :: bandwidth_tune
+        real, optional, intent(in) :: alpha
         integer, allocatable :: counts(:), cursor(:)
         real :: eps, w
         integer :: i, m, j, p, nnz
@@ -386,7 +391,7 @@ contains
                 endif
             end do
         end do
-        call graph%normalize()
+        call graph%normalize(alpha)
         deallocate(counts, cursor)
     contains
         logical function neighbor_contains( row_nbrs, target ) result(found)
@@ -523,21 +528,58 @@ contains
         graph%wnorm  = [1.]
     end subroutine make_singleton_graph
 
-    subroutine normalize_diffmap_graph( self )
+    !> Symmetric degree normalization of the Gaussian graph weights.
+    !! When alpha > 0 a Coifman-Lafon density normalization is applied first:
+    !! w_ij <- w_ij / (d_i^alpha d_j^alpha), then the symmetric 1/sqrt(d_i d_j)
+    !! normalization is recomputed on the rescaled weights.  alpha=0 (default)
+    !! reproduces the plain graph Laplacian (current behavior); alpha=0.5 gives
+    !! the Fokker-Planck operator; alpha=1 gives the Laplace-Beltrami operator,
+    !! which divides out the (non-uniform) sampling density and leaves the
+    !! intrinsic manifold geometry.  See Coifman & Lafon, ACHA 21 (2006).
+    subroutine normalize_diffmap_graph( self, alpha )
         class(diffmap_graph), intent(inout) :: self
-        real, allocatable :: deg(:)
+        real, optional,       intent(in)    :: alpha
+        real, allocatable :: deg(:), deg_a(:)
+        real    :: a
         integer :: i, j, p
         if( self%n < 1 ) return
+        a = 0.
+        if( present(alpha) ) a = alpha
         allocate(deg(self%n), source=0.)
         call self%degree(deg, normalized=.false.)
         if( allocated(self%wnorm) ) deallocate(self%wnorm)
         allocate(self%wnorm(self%nnz), source=0.)
-        do i = 1,self%n
-            do p = self%rowptr(i), self%rowptr(i+1) - 1
-                j = self%colind(p)
-                self%wnorm(p) = self%w(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
+        if( a > 0. )then
+            ! Coifman-Lafon density (alpha) normalization on the raw degree.
+            allocate(deg_a(self%n))
+            do i = 1,self%n
+                deg_a(i) = max(deg(i), DTINY)**a
             end do
-        end do
+            ! Rescale weights and accumulate the rescaled degree.
+            deg = 0.
+            do i = 1,self%n
+                do p = self%rowptr(i), self%rowptr(i+1) - 1
+                    j = self%colind(p)
+                    self%wnorm(p) = self%w(p) / (deg_a(i) * deg_a(j))
+                    deg(i)        = deg(i) + self%wnorm(p)
+                end do
+            end do
+            ! Symmetric normalization of the alpha-rescaled weights.
+            do i = 1,self%n
+                do p = self%rowptr(i), self%rowptr(i+1) - 1
+                    j = self%colind(p)
+                    self%wnorm(p) = self%wnorm(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
+                end do
+            end do
+            deallocate(deg_a)
+        else
+            do i = 1,self%n
+                do p = self%rowptr(i), self%rowptr(i+1) - 1
+                    j = self%colind(p)
+                    self%wnorm(p) = self%w(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
+                end do
+            end do
+        endif
         deallocate(deg)
     end subroutine normalize_diffmap_graph
 
