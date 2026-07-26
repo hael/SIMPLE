@@ -349,7 +349,7 @@ contains
         call read_flex_diffmap_feature_parts(params,self%nparts_run,features,proj_ids,build,pinds)
         call flex_projection_directions(build,proj_dirs)
         call build_gated_euclidean_knn_graph(features,proj_ids,proj_dirs,params%k_nn,params%nang_nbrs,graph, &
-            &cand_min,cand_max,cand_mean,params%bandwidth_mode,params%bandwidth_tune)
+            &cand_min,cand_max,cand_mean,params%bandwidth_mode,params%bandwidth_tune,params%dm_alpha)
         deallocate(features,proj_ids,proj_dirs)
         call cleanup_distributed_analysis_parts(params,self%nparts_run)
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP distributed_graph_seconds=',toc(t_step)
@@ -774,7 +774,7 @@ contains
             &' feature_values=',size(features,kind=8)
         t_step=tic()
         call build_gated_euclidean_knn_graph(features,proj_ids,proj_dirs,params%k_nn,params%nang_nbrs,graph, &
-            &cand_min,cand_max,cand_mean,params%bandwidth_mode,params%bandwidth_tune)
+            &cand_min,cand_max,cand_mean,params%bandwidth_mode,params%bandwidth_tune,params%dm_alpha)
         write(logfhandle,'(A,I0,A,I0,A,F8.1,A,I0)') '>>> FLEX DIFFMAP graph candidates_min=',cand_min, &
             &' max=',cand_max,' mean=',cand_mean,' directed_nnz=',graph%nnz
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP graph_seconds=',toc(t_step)
@@ -965,7 +965,7 @@ contains
         end do
         if( any(.not.covered) ) THROW_HARD('distributed flex graph parts do not cover every particle')
         call build_gated_euclidean_graph_from_neighbors(nptcls,nbrs,d2s,ncandidates,graph, &
-            &params%bandwidth_mode,params%bandwidth_tune)
+            &params%bandwidth_mode,params%bandwidth_tune,params%dm_alpha)
         cmin=minval(ncandidates); cmax=maxval(ncandidates)
         cmean=real(sum(int(ncandidates,kind=8)),kind=sp)/real(nptcls,kind=sp)
         deallocate(nbrs,ncandidates,d2s,covered,row_nbrs,row_d2s)
@@ -1089,6 +1089,8 @@ contains
         if( params%bandwidth_mode/='median' .and. params%bandwidth_mode/='ferguson' ) &
             &THROW_HARD('flex_analysis bandwidth_mode must be median|ferguson')
         params%bandwidth_tune=max(params%bandwidth_tune,0.)
+        if( params%dm_alpha<0. .or. params%dm_alpha>1. ) &
+            &THROW_HARD('flex_analysis dm_alpha must be in [0,1]')
     end subroutine validate_inputs
 
     subroutine select_particles( params, build, pinds, nptcls )
@@ -1232,6 +1234,7 @@ contains
         write(u,'(A,I0)') 'directed_edges=',graph%nnz
         write(u,'(A,I0)') 'k_nn=',graph%k_nn
         write(u,'(A,I0)') 'nang_nbrs=',params%nang_nbrs
+        write(u,'(A,F8.4)') 'dm_alpha=',params%dm_alpha
         write(u,'(A,I0)') 'candidates_min=',cmin
         write(u,'(A,I0)') 'candidates_max=',cmax
         write(u,'(A,F12.3)') 'candidates_mean=',cmean
