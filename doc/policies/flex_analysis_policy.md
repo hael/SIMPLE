@@ -38,7 +38,7 @@ The flex-specific defaults currently installed by
 | `lp` | 6 Å | graph-feature low-pass limit |
 | `bandwidth_mode` | `ferguson` | graph-kernel bandwidth selector |
 | `bandwidth_tune` | 1 | Ferguson bandwidth multiplier |
-| `dm_alpha` | 1 | Coifman–Lafon density-normalization exponent |
+| `dm_alpha` | 0 | Coifman–Lafon density-normalization exponent |
 | `npreimages` | 8 | representative state volumes |
 | `preimage_mode` | `linear` | local-linear pre-image estimator |
 | `preimage_ndim` | 2 | cap on local-linear coordinate dimension |
@@ -99,16 +99,23 @@ dense `N x nang_nbrs` candidate table is materialized.
 The Gaussian kernel is `exp(-d2 / eps)`.  `median` uses the median positive
 k-th-neighbour squared distance; `ferguson` uses the existing log-bandwidth
 scan with a median fallback.  `dm_alpha` is forwarded to every flex graph
-assembly path and must lie in `[0,1]`.  The active default is therefore
-Coifman–Lafon/Laplace–Beltrami normalization (`dm_alpha=1`); `dm_alpha=0`
-selects ordinary symmetric degree normalization.
+assembly path and must lie in `[0,1]`.  The active default is ordinary graph
+normalization (`dm_alpha=0`) while corrected density-normalized embeddings are
+validated on flex data; `dm_alpha=1` explicitly selects
+Coifman–Lafon/Laplace–Beltrami normalization.
 
-The existing sparse eigensolver omits the stationary vector.  With `icm=yes`,
-ICM chooses a nonempty spectral prefix.  With `icm=no`, every nontrivial
-eigenpair returned by the requested `neigs` scan is retained.  The files
-`flex_diffmap_coordinates.txt`, `flex_diffmap_spectrum.txt`, and
-`flex_diffmap_graph.txt` record the result; the graph summary records the
-effective `dm_alpha` for run-to-run comparison.
+The sparse eigensolver diagonalizes the symmetric conjugate of the Markov
+operator.  Its Perron vector is retained internally and every nontrivial
+symmetric eigenvector is divided by that vector to obtain the corresponding
+right Markov eigenfunction before diffusion coordinates are formed.  A
+disconnected graph is rejected because its stationary eigenspace is
+degenerate.  With `icm=yes`, ICM chooses a nonempty spectral prefix.  With
+`icm=no`, every nontrivial eigenpair returned by the requested `neigs` scan is
+retained.  The files `flex_diffmap_coordinates.txt`,
+`flex_diffmap_spectrum.txt`, and `flex_diffmap_graph.txt` record the result;
+the graph summary records the effective `dm_alpha`, connected-component count,
+raw-degree range, and stationary-measure range/effective sample size for
+run-to-run comparison.
 
 Representative descriptors are k-medoids obtained through
 `cluster_dmat(...,'kmed',...)` on the raw diffusion coordinates returned by

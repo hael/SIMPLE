@@ -35,6 +35,7 @@ contains
     procedure :: kill      => kill_diffmap_graph
     procedure :: normalize => normalize_diffmap_graph
     procedure :: degree    => diffmap_graph_degree
+    procedure :: ncomponents => diffmap_graph_ncomponents
 end type diffmap_graph
 
 contains
@@ -612,6 +613,35 @@ contains
             end do
         end do
     end subroutine diffmap_graph_degree
+
+    integer function diffmap_graph_ncomponents( self ) result(ncomponents)
+        class(diffmap_graph), intent(in) :: self
+        logical, allocatable :: visited(:)
+        integer, allocatable :: stack(:)
+        integer :: i, j, p, top
+        ncomponents = 0
+        if( self%n < 1 ) return
+        allocate(visited(self%n), source=.false.)
+        allocate(stack(self%n), source=0)
+        do i = 1,self%n
+            if( visited(i) ) cycle
+            ncomponents = ncomponents + 1
+            top = 1
+            stack(top) = i
+            visited(i) = .true.
+            do while( top > 0 )
+                j = stack(top)
+                top = top - 1
+                do p = self%rowptr(j),self%rowptr(j+1)-1
+                    if( visited(self%colind(p)) ) cycle
+                    visited(self%colind(p)) = .true.
+                    top = top + 1
+                    stack(top) = self%colind(p)
+                end do
+            end do
+        end do
+        deallocate(visited,stack)
+    end function diffmap_graph_ncomponents
 
     subroutine graph_matvec( ctx, x, y )
         class(*), intent(in)  :: ctx

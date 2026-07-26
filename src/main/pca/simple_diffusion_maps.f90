@@ -52,22 +52,40 @@ contains
 
 
 
-    subroutine embed_graph( graph, ndiff_req, coords, eigvals, raw_coords, eigenfunctions, nystrom_coords )
+    !> Embed a connected symmetric diffusion graph.
+    !!
+    !! The sparse eigensolver diagonalizes the symmetric conjugate
+    !! S=D^(-1/2) K_alpha D^(-1/2).  Its eigenvectors are not diffusion-map
+    !! eigenfunctions.  The latter are right eigenvectors of
+    !! P=D^(-1) K_alpha and are recovered as psi_k=phi_k/phi_0, where phi_0 is
+    !! the Perron eigenvector of S.  This is the convention used by
+    !! ManifoldEM and is essential when the stationary measure is nonuniform.
+    subroutine embed_graph( graph, ndiff_req, coords, eigvals, raw_coords, eigenfunctions, nystrom_coords, &
+        &stationary_measure )
         type(diffmap_graph), target, intent(in)  :: graph
         integer,                   intent(in)    :: ndiff_req
         real, allocatable,         intent(out)   :: coords(:,:), eigvals(:)
         real, allocatable, optional, intent(out) :: raw_coords(:,:)
-        real, allocatable, optional, intent(out) :: eigenfunctions(:,:), nystrom_coords(:,:)
-        real, allocatable :: evals(:), evecs(:,:), diff_evals(:)
-        real :: coeff
-        integer :: n, ndiff_scan, ndiff_used, nev, eig_info, max_basis, i, k, j, p, nbr
+        real, allocatable, optional, intent(out) :: eigenfunctions(:,:), nystrom_coords(:,:), stationary_measure(:)
+        real, allocatable :: evals(:), evecs(:,:), diff_evals(:), trivial(:), right_evecs(:,:)
+        real :: trivial_scale, trivial_floor, stationary_sum
+        integer :: n, ndiff_scan, ndiff_used, nev, eig_info, max_basis, i, k, j, ncomponents
         n = graph%n
         if( n < 3 )then
             allocate(coords(1,n), eigvals(1), source=0.)
             if( present(raw_coords) ) allocate(raw_coords(1,n), source=0.)
             if( present(eigenfunctions) ) allocate(eigenfunctions(1,n), source=0.)
             if( present(nystrom_coords) ) allocate(nystrom_coords(1,n), source=0.)
+            if( present(stationary_measure) )then
+                allocate(stationary_measure(n), source=1./real(max(n,1)))
+            endif
             return
+        endif
+        ncomponents = graph%ncomponents()
+        if( ncomponents /= 1 )then
+            write(logfhandle,'(A,I0)') '>>> DIFFMAP disconnected_graph_components=',ncomponents
+            call flush(logfhandle)
+            THROW_HARD('diffusion-map embedding requires a connected graph')
         endif
         if( ndiff_req <= 0 )then
             ndiff_scan = min(16, max(1, n - 2))
@@ -90,41 +108,40 @@ contains
         endif
         allocate(coords(ndiff_used,n), eigvals(ndiff_scan), source=0.)
         eigvals = diff_evals
+        allocate(trivial(n),right_evecs(ndiff_used,n))
+        trivial = evecs(:,nev)
+        if( sum(trivial) < 0. ) trivial = -trivial
+        trivial_scale = maxval(abs(trivial))
+        trivial_floor = max(100.*epsilon(1.)*trivial_scale,real(DTINY))
+        if( any(trivial <= trivial_floor) )then
+            write(logfhandle,'(A,ES12.4,A,ES12.4)') '>>> DIFFMAP stationary_vector min=',minval(trivial), &
+                &' max=',maxval(trivial)
+            call flush(logfhandle)
+            THROW_HARD('diffusion-map stationary vector is numerically singular')
+        endif
         do k = 1,ndiff_used
             j = nev - k
             do i = 1,n
-                coords(k,i) = evals(j) * evecs(i,j)
+                right_evecs(k,i) = evecs(i,j) / trivial(i)
+                coords(k,i) = evals(j) * right_evecs(k,i)
             end do
         end do
         if( present(raw_coords) ) allocate(raw_coords(ndiff_used,n), source=coords)
         if( present(eigenfunctions) )then
-            allocate(eigenfunctions(ndiff_used,n), source=0.)
-            do k = 1,ndiff_used
-                eigenfunctions(k,:) = evecs(:,nev-k)
-            end do
+            allocate(eigenfunctions(ndiff_used,n), source=right_evecs)
         endif
         if( present(nystrom_coords) )then
-            allocate(nystrom_coords(ndiff_used,n), source=0.)
-            do k = 1,ndiff_used
-                j = nev-k
-                if( abs(evals(j)) <= real(DTINY) ) cycle
-                do i = 1,n
-                    coeff = 0.
-                    do p = graph%rowptr(i),graph%rowptr(i+1)-1
-                        nbr = graph%colind(p)
-                        if( nbr < 1 .or. nbr > n ) cycle
-                        if( allocated(graph%wnorm) )then
-                            coeff = coeff + graph%wnorm(p)*evecs(nbr,j)
-                        else
-                            coeff = coeff + graph%w(p)*evecs(nbr,j)
-                        endif
-                    end do
-                    nystrom_coords(k,i) = coeff/evals(j)
-                end do
-            end do
+            ! All current callers request coefficients at training nodes.
+            ! Their exact extension is the fitted right eigenfunction itself.
+            allocate(nystrom_coords(ndiff_used,n), source=right_evecs)
+        endif
+        if( present(stationary_measure) )then
+            stationary_sum = sum(trivial*trivial)
+            if( stationary_sum <= real(DTINY) ) THROW_HARD('invalid diffusion-map stationary measure')
+            allocate(stationary_measure(n), source=(trivial*trivial)/stationary_sum)
         endif
         call normalize_coords(coords)
-        deallocate(evals, evecs, diff_evals)
+        deallocate(evals,evecs,diff_evals,trivial,right_evecs)
     end subroutine embed_graph
 
 

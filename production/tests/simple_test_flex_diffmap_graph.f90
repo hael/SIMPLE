@@ -5,12 +5,13 @@ use simple_diff_map_graphs, only: diffmap_graph, build_gated_euclidean_knn_graph
     &find_gated_euclidean_neighbors_rows, build_gated_euclidean_graph_from_neighbors, build_euclidean_knn_graph
 use simple_diffusion_maps, only: embed_graph
 implicit none
-type(diffmap_graph) :: graph,graph_parts,graph_many
-real :: features(2,6), features_many(2,24), dirs(3,2), cmean,angle
+type(diffmap_graph) :: graph,graph_parts,graph_many,graph_density
+real :: features(2,6),features_many(2,24),features_density(1,32),dirs(3,2),cmean,angle
 integer, allocatable :: nbrs1(:,:),nbrs2(:,:),nbrs(:,:),nc1(:),nc2(:),nc(:)
 real, allocatable :: d2s1(:,:),d2s2(:,:),d2s(:,:)
-real, allocatable :: coords(:,:),raw_coords(:,:),eigvals(:),eigenfunctions(:,:),nystrom_coords(:,:)
-integer :: proj(6), cmin, cmax, i, p
+real, allocatable :: coords(:,:),raw_coords(:,:),eigvals(:),eigenfunctions(:,:),nystrom_coords(:,:),stationary(:)
+real :: phi0(32),markov_lhs,max_markov_residual,max_raw_residual
+integer :: proj(6),cmin,cmax,i,p,k,j
 
 features(:,1) = [0.0,0.0]
 features(:,2) = [0.1,0.0]
@@ -41,11 +42,42 @@ call build_gated_euclidean_graph_from_neighbors(6,nbrs,d2s,nc,graph_parts)
 if( any(graph_parts%rowptr/=graph%rowptr) ) stop 'distributed graph row pointers differ'
 if( any(graph_parts%colind/=graph%colind) ) stop 'distributed graph neighbors differ'
 if( maxval(abs(graph_parts%w-graph%w))>1.e-6 ) stop 'distributed graph weights differ'
-call embed_graph(graph,2,coords,eigvals,raw_coords,eigenfunctions,nystrom_coords)
-if( any(shape(eigenfunctions)/=[2,6]) .or. any(shape(nystrom_coords)/=[2,6]) ) &
+if( graph%ncomponents()/=2 ) stop 'angularly gated graph component count mismatch'
+
+! A connected, nonuniformly sampled interval exercises the distinction between
+! symmetric eigenvectors and the right eigenfunctions of the Markov operator.
+do i=1,24
+    features_density(1,i)=0.4*real(i-1)/24.
+end do
+do i=25,32
+    features_density(1,i)=0.4+0.6*real(i-25)/7.
+end do
+call build_euclidean_knn_graph(features_density,6,graph_density,alpha=1.0)
+if( graph_density%ncomponents()/=1 ) stop 'density-normalized regression graph is disconnected'
+call embed_graph(graph_density,4,coords,eigvals,raw_coords,eigenfunctions,nystrom_coords,stationary)
+if( any(shape(eigenfunctions)/=[4,32]) .or. any(shape(nystrom_coords)/=[4,32]) ) &
     &stop 'diffusion spectral output shape mismatch'
 if( maxval(abs(eigenfunctions-nystrom_coords))>1.e-4 ) stop 'training-node Nystrom coefficients differ from eigenfunctions'
-deallocate(coords,raw_coords,eigvals,eigenfunctions,nystrom_coords)
+if( abs(sum(stationary)-1.)>1.e-5 .or. minval(stationary)<=0. ) stop 'invalid diffusion stationary measure'
+phi0=sqrt(stationary)
+max_markov_residual=0.
+max_raw_residual=0.
+do k=1,size(eigenfunctions,1)
+    do i=1,graph_density%n
+        markov_lhs=0.
+        do p=graph_density%rowptr(i),graph_density%rowptr(i+1)-1
+            j=graph_density%colind(p)
+            markov_lhs=markov_lhs+graph_density%wnorm(p)*phi0(j)*eigenfunctions(k,j)
+        end do
+        markov_lhs=markov_lhs/phi0(i)
+        max_markov_residual=max(max_markov_residual,abs(markov_lhs-eigvals(k)*eigenfunctions(k,i)))
+        max_raw_residual=max(max_raw_residual,abs(raw_coords(k,i)-eigvals(k)*eigenfunctions(k,i)))
+    end do
+end do
+if( max_markov_residual>5.e-4 ) stop 'diffusion coordinates are not right Markov eigenfunctions'
+if( max_raw_residual>5.e-5 ) stop 'raw diffusion coordinates do not equal lambda times right eigenfunctions'
+deallocate(coords,raw_coords,eigvals,eigenfunctions,nystrom_coords,stationary)
+call graph_density%kill()
 do i=1,size(features_many,2)
     angle=2.*acos(-1.)*real(i-1)/real(size(features_many,2))
     features_many(:,i)=[cos(angle),sin(angle)]

@@ -151,7 +151,7 @@ contains
         if( .not.cline%defined('lp') ) call cline%set('lp',6.0)
         if( .not.cline%defined('bandwidth_mode') ) call cline%set('bandwidth_mode','ferguson')
         if( .not.cline%defined('bandwidth_tune') ) call cline%set('bandwidth_tune',1.0)
-        if( .not.cline%defined('dm_alpha') ) call cline%set('dm_alpha',1.0)
+        if( .not.cline%defined('dm_alpha') ) call cline%set('dm_alpha',0.0)
         if( .not.cline%defined('preimage_mode') ) call cline%set('preimage_mode','linear')
         if( .not.cline%defined('outvol') ) call cline%set('outvol','flex_state_001.mrc')
     end subroutine apply_defaults
@@ -757,6 +757,7 @@ contains
         integer, allocatable :: proj_ids(:)
         real, allocatable :: features(:,:),proj_dirs(:,:),coords_mode_major(:,:),raw_mode_major(:,:),eigvals(:)
         real, allocatable :: spectral_mode_major(:,:),nystrom_mode_major(:,:)
+        real, allocatable :: stationary_measure(:)
         integer :: nptcls,max_modes,icm_iters,cand_min,cand_max
         real :: cand_mean,icm_score
         logical :: icm_converged
@@ -780,7 +781,8 @@ contains
         write(logfhandle,'(A,F10.3)') '>>> FLEX DIFFMAP graph_seconds=',toc(t_step)
         deallocate(features,proj_dirs,proj_ids)
         t_step=tic()
-        call embed_graph(graph,max_modes,coords_mode_major,eigvals,raw_mode_major,spectral_mode_major,nystrom_mode_major)
+        call embed_graph(graph,max_modes,coords_mode_major,eigvals,raw_mode_major,spectral_mode_major,nystrom_mode_major, &
+            &stationary_measure)
         if( size(eigvals)<1 ) THROW_HARD('diffusion embedding returned no nontrivial modes')
         call select_flex_spectral_rank(params,eigvals,nmodes,icm_converged,icm_iters,icm_score)
         nmodes=min(max(1,nmodes),min(max_modes,size(eigvals)))
@@ -795,10 +797,10 @@ contains
             &' embedding_seconds=',toc(t_step)
         call write_coordinates(pinds,coords,nptcls,nmodes)
         call write_spectrum(eigvals,nmodes,params%l_icm,icm_converged,icm_iters,icm_score)
-        call write_graph_summary(graph,cand_min,cand_max,cand_mean,params)
+        call write_graph_summary(graph,cand_min,cand_max,cand_mean,params,stationary_measure)
         if( present(fit_result) ) call capture_result(fit_result,pinds,coords,eigvals,nptcls,nmodes)
         call graph%kill()
-        deallocate(coords_mode_major,raw_mode_major,spectral_mode_major,nystrom_mode_major,eigvals)
+        deallocate(coords_mode_major,raw_mode_major,spectral_mode_major,nystrom_mode_major,eigvals,stationary_measure)
     end subroutine run_flex_analysis
 
     subroutine read_flex_reconstruction_assignment( fname, nmodes, pinds, spectral_z )
@@ -982,7 +984,7 @@ contains
         real, allocatable, intent(out) :: spectral_z(:,:),nystrom_coords(:,:)
         integer, intent(out) :: nmodes
         real, allocatable :: coords_mode_major(:,:),raw_mode_major(:,:),eigvals(:)
-        real, allocatable :: spectral_mode_major(:,:),nystrom_mode_major(:,:)
+        real, allocatable :: spectral_mode_major(:,:),nystrom_mode_major(:,:),stationary_measure(:)
         real :: icm_score
         integer :: icm_iters
         logical :: icm_converged
@@ -990,7 +992,8 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,F8.1,A,I0)') '>>> FLEX DIFFMAP graph candidates_min=',cmin, &
             &' max=',cmax,' mean=',cmean,' directed_nnz=',graph%nnz
         t_step=tic()
-        call embed_graph(graph,max_modes,coords_mode_major,eigvals,raw_mode_major,spectral_mode_major,nystrom_mode_major)
+        call embed_graph(graph,max_modes,coords_mode_major,eigvals,raw_mode_major,spectral_mode_major,nystrom_mode_major, &
+            &stationary_measure)
         if( size(eigvals)<1 ) THROW_HARD('diffusion embedding returned no nontrivial modes')
         call select_flex_spectral_rank(params,eigvals,nmodes,icm_converged,icm_iters,icm_score)
         nmodes=min(max(1,nmodes),min(max_modes,size(eigvals)))
@@ -1005,8 +1008,8 @@ contains
             &' embedding_seconds=',toc(t_step)
         call write_coordinates(pinds,coords,size(pinds),nmodes)
         call write_spectrum(eigvals,nmodes,params%l_icm,icm_converged,icm_iters,icm_score)
-        call write_graph_summary(graph,cmin,cmax,cmean,params)
-        deallocate(coords_mode_major,raw_mode_major,spectral_mode_major,nystrom_mode_major,eigvals)
+        call write_graph_summary(graph,cmin,cmax,cmean,params,stationary_measure)
+        deallocate(coords_mode_major,raw_mode_major,spectral_mode_major,nystrom_mode_major,eigvals,stationary_measure)
     end subroutine embed_flex_graph
 
     subroutine select_flex_spectral_rank( params, eigvals, nmodes, converged, niters, score )
@@ -1222,12 +1225,21 @@ contains
         close(u)
     end subroutine write_spectrum
 
-    subroutine write_graph_summary( graph, cmin, cmax, cmean, params )
+    subroutine write_graph_summary( graph, cmin, cmax, cmean, params, stationary_measure )
         type(diffmap_graph), intent(in) :: graph
         integer, intent(in) :: cmin,cmax
         real, intent(in) :: cmean
         class(parameters), intent(in) :: params
+        real, optional, intent(in) :: stationary_measure(:)
+        real, allocatable :: raw_degree(:)
+        real(dp) :: degree_min,degree_max,degree_ratio
+        real(dp) :: stationary_min,stationary_max,stationary_ratio,stationary_neff
         integer :: u
+        allocate(raw_degree(graph%n))
+        call graph%degree(raw_degree,normalized=.false.)
+        degree_min=real(minval(raw_degree),dp)
+        degree_max=real(maxval(raw_degree),dp)
+        degree_ratio=degree_max/max(degree_min,real(DTINY,dp))
         call del_file('flex_diffmap_graph.txt')
         open(newunit=u,file='flex_diffmap_graph.txt',status='replace',action='write')
         write(u,'(A,I0)') 'particles=',graph%n
@@ -1235,10 +1247,26 @@ contains
         write(u,'(A,I0)') 'k_nn=',graph%k_nn
         write(u,'(A,I0)') 'nang_nbrs=',params%nang_nbrs
         write(u,'(A,F8.4)') 'dm_alpha=',params%dm_alpha
+        write(u,'(A,I0)') 'connected_components=',graph%ncomponents()
+        write(u,'(A,ES16.8)') 'raw_degree_min=',degree_min
+        write(u,'(A,ES16.8)') 'raw_degree_max=',degree_max
+        write(u,'(A,ES16.8)') 'raw_degree_ratio=',degree_ratio
         write(u,'(A,I0)') 'candidates_min=',cmin
         write(u,'(A,I0)') 'candidates_max=',cmax
         write(u,'(A,F12.3)') 'candidates_mean=',cmean
+        if( present(stationary_measure) )then
+            if( size(stationary_measure) /= graph%n ) THROW_HARD('stationary-measure graph-summary size mismatch')
+            stationary_min=real(minval(stationary_measure),dp)
+            stationary_max=real(maxval(stationary_measure),dp)
+            stationary_ratio=stationary_max/max(stationary_min,real(DTINY,dp))
+            stationary_neff=1._dp/sum(real(stationary_measure,dp)**2)
+            write(u,'(A,ES16.8)') 'stationary_measure_min=',stationary_min
+            write(u,'(A,ES16.8)') 'stationary_measure_max=',stationary_max
+            write(u,'(A,ES16.8)') 'stationary_measure_ratio=',stationary_ratio
+            write(u,'(A,ES16.8)') 'stationary_measure_neff=',stationary_neff
+        endif
         close(u)
+        deallocate(raw_degree)
     end subroutine write_graph_summary
 
 end module simple_flex_analysis_strategy

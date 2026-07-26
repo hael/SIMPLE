@@ -187,6 +187,11 @@ does not affect graph construction or the eigensolver.
 
 #### 3.2.3 Stationary measure / Riemannian density (MEDIUM PRIORITY)
 
+> **Implemented.** `embed_graph` retains the Perron vector, exposes its square
+> as an optional normalized `stationary_measure`, and divides every
+> nontrivial symmetric eigenvector by the Perron vector to recover the right
+> Markov eigenfunction used by ManifoldEM.
+
 **ManifoldEM location**: `DMembeddingII.py`, function `op` (~line 611):
 
 ```python
@@ -205,21 +210,16 @@ A[ind4:ind5,:] = np.matmul(tmp, mu_psi)
 ```
 
 **SIMPLE current approach**: `embed_graph` in `simple_diffusion_maps.f90`
-(~line 139) skips eigenvector 0 entirely:
+retains the top symmetric eigenvector `phi_0` and forms
 
 ```fortran
-do k = 1,ndiff_used
-    j = nev - k          ! nev is ndiff_scan+1; k=1 takes the 2nd-largest eigenvalue
-    coords(k,i) = evals(j) * evecs(i,j)
-end do
+right_evecs(k,i) = evecs(i,j) / trivial(i)
+coords(k,i) = evals(j) * right_evecs(k,i)
 ```
 
-The trivial eigenfunction is discarded without ever being exposed to callers.
-
-**Suggested change**: add an optional output `stationary_measure` of shape
-`(n)` to `embed_graph`.  When present, fill it with `evecs(:, nev)**2` before
-the coordinate loop.  No existing caller is changed.  The measure can then be
-used for density-weighted trajectory generation or averaging, if needed.
+The optional `stationary_measure` is `phi_0**2`, normalized to unit sum.  Flex
+records its range and effective sample size as diagnostics; it does not
+automatically use the measure as a reconstruction weight.
 
 ---
 
