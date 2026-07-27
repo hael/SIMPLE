@@ -32,6 +32,7 @@ use simple_forked_process,                 only: forked_process, FORK_STATUS_RUN
 use simple_gui_metadata_api
 use simple_gui_assembler,                  only: gui_assembler
 use simple_gui_metadata_utils,             only: max_metadata_size
+use simple_timer,                          only: timer_int_kind, tic, tdiff
 
 implicit none
 
@@ -551,13 +552,22 @@ contains
             type(gui_metadata_optics_group) :: meta_optics_group_tmp
             type(gui_metadata_cavg2D)       :: meta_cavg2D_tmp 
             integer                         :: my_rc, my_buffer_type, my_i
+            integer(timer_int_kind)         :: my_case_t0, my_case_t1
+            integer(timer_int_kind)         :: my_loop_t0, my_loop_t1, my_mutex_t0, my_mutex_t1
+            integer                         :: my_nmsgs
             logical                         :: my_l_continue, my_l_reinit
+            real(dp)                        :: my_case_ms, my_loop_ms, my_mutex_ms
             my_l_continue = .true.
             do while( my_l_continue )
+                my_mutex_t0 = tic()
                 my_rc = c_pthread_mutex_lock(meta_mutex)
+                my_loop_t0  = tic()
+                my_nmsgs    = 0
                 do while( read_any_pipe_message(my_buffer) )
+                        my_nmsgs = my_nmsgs + 1
                         if( allocated(my_buffer) ) then
                             my_buffer_type = transfer(my_buffer, my_buffer_type)
+                            my_case_t0 = tic()
                             select case(my_buffer_type)
                                 case(GUI_METADATA_STREAM_PREPROCESS_TYPE)
                                     meta_preprocess = transfer(my_buffer, meta_preprocess)
@@ -781,10 +791,23 @@ contains
                                     endif
                                     ! place the already-deserialised tmp object into the correct slot
                                     meta_pool2D_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
+                                case default
+                                    ! Unknown metadata type received; keep listener alive and report it.
+                                    write(logfhandle,'(A,I0)') '>>> METADATA LISTENER RECEIVED UNKNOWN TYPE: ', my_buffer_type
                             end select
+                            my_case_t1 = tic()
+                            my_case_ms = 1000.0_dp * real(tdiff(my_case_t1, my_case_t0), dp)
+                            write(logfhandle,'(A,A,A,I0,A,F10.3,A)') '>>> META CASE TIMING: ', trim(metadata_case_name(my_buffer_type)),&
+                                &' (type=', my_buffer_type, ') took ', my_case_ms, ' ms'
                             deallocate(my_buffer)
                         end if
                     end do
+                my_loop_t1 = tic()
+                my_loop_ms = 1000.0_dp * real(tdiff(my_loop_t1, my_loop_t0), dp)
+                write(logfhandle,'(A,I0,A,F10.3,A)') '>>> META DRAIN LOOP TIMING: msgs=', my_nmsgs, ' took ', my_loop_ms, ' ms'
+                my_mutex_t1 = my_loop_t1
+                my_mutex_ms = 1000.0_dp * real(tdiff(my_mutex_t1, my_mutex_t0), dp)
+                write(logfhandle,'(A,F10.3,A)') '>>> META MUTEX HOLD TIMING: held for ', my_mutex_ms, ' ms'
                 my_rc = c_pthread_mutex_unlock(meta_mutex)
                 if( c_pthread_mutex_lock(terminate_mutex) /= 0 ) THROW_HARD('failed to lock terminate mutex')
                 if( l_terminate ) my_l_continue = .false.
@@ -793,6 +816,63 @@ contains
                 rc = c_usleep(10000)
             end do
         end subroutine metadata_listener
+
+        function metadata_case_name( meta_type ) result(name)
+            integer, intent(in) :: meta_type
+            character(len=64)   :: name
+            select case(meta_type)
+                case(GUI_METADATA_STREAM_PREPROCESS_TYPE)
+                    name = 'preprocess'
+                case(GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_ASTIG_TYPE)
+                    name = 'preprocess_hist_astig'
+                case(GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_CTFRES_TYPE)
+                    name = 'preprocess_hist_ctfres'
+                case(GUI_METADATA_STREAM_PREPROCESS_HISTOGRAM_ICEFRAC_TYPE)
+                    name = 'preprocess_hist_icefrac'
+                case(GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_ASTIG_TYPE)
+                    name = 'preprocess_time_astig'
+                case(GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_CTFRES_TYPE)
+                    name = 'preprocess_time_ctfres'
+                case(GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_DF_TYPE)
+                    name = 'preprocess_time_df'
+                case(GUI_METADATA_STREAM_PREPROCESS_TIMEPLOT_RATE_TYPE)
+                    name = 'preprocess_time_rate'
+                case(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_TYPE)
+                    name = 'optics_assignment'
+                case(GUI_METADATA_STREAM_INITIAL_PICKING_TYPE)
+                    name = 'initial_picking'
+                case(GUI_METADATA_STREAM_OPENING2D_TYPE)
+                    name = 'opening2D'
+                case(GUI_METADATA_STREAM_REFERENCE_PICKING_TYPE)
+                    name = 'reference_picking'
+                case(GUI_METADATA_STREAM_PARTICLE_SIEVING_TYPE)
+                    name = 'particle_sieving'
+                case(GUI_METADATA_STREAM_POOL2D_TYPE)
+                    name = 'pool2D'
+                case(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
+                    name = 'pool2D_snapshot'
+                case(GUI_METADATA_STREAM_PREPROCESS_MICROGRAPH_TYPE)
+                    name = 'preprocess_micrograph'
+                case(GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE)
+                    name = 'initial_picking_micrograph'
+                case(GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE)
+                    name = 'reference_picking_micrograph'
+                case(GUI_METADATA_STREAM_OPTICS_ASSIGNMENT_OPTICS_GROUP_TYPE)
+                    name = 'optics_assignment_group'
+                case(GUI_METADATA_STREAM_OPENING2D_CLS2D_TYPE)
+                    name = 'opening2D_cls2D'
+                case(GUI_METADATA_STREAM_OPENING2D_CLS2D_FINAL_TYPE)
+                    name = 'opening2D_cls2D_final'
+                case(GUI_METADATA_STREAM_REFERENCE_PICKING_CLS2D_TYPE)
+                    name = 'reference_picking_cls2D'
+                case(GUI_METADATA_STREAM_PARTICLE_SIEVING_CLS2D_TYPE)
+                    name = 'particle_sieving_cls2D'
+                case(GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE)
+                    name = 'pool2D_cls2D'
+                case default
+                    name = 'unknown'
+            end select
+        end function metadata_case_name
 
         logical function read_any_pipe_message(buffer)
             character(len=:), allocatable, intent(inout) :: buffer

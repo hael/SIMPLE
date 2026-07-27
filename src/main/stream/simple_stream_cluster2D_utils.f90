@@ -16,6 +16,7 @@ use simple_sp_project,           only: sp_project
 use simple_stack_io,             only: stack_io
 use simple_starproject,          only: starproject
 use simple_starproject_stream,   only: starproject_stream
+use simple_syslib,               only: get_current_rss_bytes, get_peak_rss_bytes
 implicit none
 
 public :: cleanup_root_folder
@@ -560,6 +561,7 @@ contains
 
     !> produces consolidated project
     subroutine write_project_stream2D( params, write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir, optics_offset)
+        use, intrinsic :: iso_c_binding, only: c_int64_t, c_double
         class(parameters), intent(inout) :: params
         logical,       optional, intent(in) :: write_star
         logical,       optional, intent(in) :: clspath
@@ -599,6 +601,7 @@ contains
         if( l_snapshot ) then
             write(logfhandle, '(A,I4,A,A,A,I0,A)') ">>> WRITING SNAPSHOT FROM ITERATION ", snapshot_iteration, snapshot_projfile%to_char(),&
             &' AT: ',cast_time_char(simple_gettime()), snapshot_jobid, params%niceserver%to_char()
+            call log_rss('snapshot/before copy')
             call json%destroy(snapshot_json)
             nullify(snapshot_json)
             if(snapshot_iteration .eq. pool_iter) then
@@ -609,6 +612,7 @@ contains
                 call snapshot_proj%copy(pool_proj_history(snapshot_iteration))
                 snapshot_proj_found = .true.
             end if
+            call log_rss('snapshot/after copy')
             if(snapshot_proj_found) then
                 if(.not. file_exists(stemname(stemname(snapshot_projfile)))) call simple_mkdir(stemname(stemname(snapshot_projfile)))
                 if(.not. file_exists(stemname(snapshot_projfile)))           call simple_mkdir(stemname(snapshot_projfile))
@@ -620,6 +624,7 @@ contains
                     endif
                 endif
                 call apply_snapshot_selection(snapshot_proj)
+                call log_rss('snapshot/after selection')
                 cavgsfname = stemname(snapshot_projfile) // '/cavgs' // STK_EXT
                 frcsfname  = stemname(snapshot_projfile) // '/' // FRCS_FILE
                 call snapshot_proj%get_cavgs_stk(l_stkname, l_ncls, l_smpd)
@@ -643,7 +648,9 @@ contains
                 endif
                 call set_snapshot_time()
                 snapshot_last_nptcls = snapshot_proj%os_ptcl2D%count_state_gt_zero()
+                call log_rss('snapshot/after write')
                 call snapshot_proj%kill
+                call log_rss('snapshot/after kill')
             else
                 write(logfhandle, '(A)') ">>> FAILED TO WRITE SNAPSHOT"
             end if
@@ -698,6 +705,19 @@ contains
         call pool_proj%os_cls2D%delete_entry('stk')
 
         contains
+
+        subroutine log_rss( phase )
+            character(len=*), intent(in) :: phase
+            integer(c_int64_t) :: current_rss, peak_rss
+            real(c_double)     :: current_mib, peak_mib
+            current_rss = get_current_rss_bytes()
+            peak_rss    = get_peak_rss_bytes()
+            if( current_rss < 0_c_int64_t .or. peak_rss < 0_c_int64_t ) return
+            current_mib = real(current_rss, c_double) / 1048576.0_c_double
+            peak_mib    = real(peak_rss,    c_double) / 1048576.0_c_double
+            write(logfhandle,'(A,A,A,F10.1,A,F10.1,A)') '>>> RSS ', trim(phase), ': current=', current_mib, ' MiB peak=', peak_mib, ' MiB'
+            call flush(logfhandle)
+        end subroutine log_rss
             
         subroutine set_snapshot_time()
             character(8)  :: date
