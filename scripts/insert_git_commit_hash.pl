@@ -5,22 +5,11 @@ use Tie::File;
 use Cwd;
 my $dir = getcwd;
 chomp($dir);
-my $simple_exec    = `readlink -f ../../production/simple_exec.f90`;
-my $single_exec    = `readlink -f ../../production/single_exec.f90`;
-my $stream_exec    = `readlink -f ../../production/simple_stream.f90`;
-my $git_commit_tag = `git rev-parse --short HEAD`;
-chomp($simple_exec);
-chomp($single_exec);
-chomp($stream_exec);
+my $git_version_file = "$ENV{SIMPLE_PATH}/lib/simple/SimpleGitVersion.h";
+my $git_commit_tag   = `git describe --abbrev=8 --always`;
 chomp($git_commit_tag);
-if( decide_to_substitute($simple_exec) == 1 ){
-    substitute($simple_exec);
-}
-if( decide_to_substitute($single_exec) == 1 ){
-    substitute($single_exec);
-}
-if( decide_to_substitute($stream_exec) == 1 ){
-    substitute($stream_exec);
+if( decide_to_substitute($git_version_file) == 1 ){
+    substitute($git_version_file);
 }
 
 sub substitute{
@@ -28,9 +17,9 @@ sub substitute{
     my @lines;
     tie @lines, 'Tie::File', $exec or die "Cannot tie to file: $exec\n";
     foreach my $line (@lines){
-        if( $line =~ /call simple_print_git_version\(\'(.+)\'\)/ ){
+        if( $line =~ /SIMPLE_GIT_VERSION\s*=\s*"(.+)"/ ){
             chomp($1);
-            $line =~ s/$1/$git_commit_tag/;
+            $line =~ s/\Q$1\E/$git_commit_tag/;
         }
     }
 }
@@ -40,7 +29,7 @@ sub decide_to_substitute{
     my @exec_doc = read_file_into_array($exec);
     # decide whether to substitute git commit tag without changing the timestamp
     foreach my $line (@exec_doc){
-        if( $line =~ /call simple_print_git_version\(\'(.+)\'\)/ ){
+        if( $line =~ /SIMPLE_GIT_VERSION\s*=\s*"(.+)"/ ){
             chomp($1);
             if( $1 eq $git_commit_tag ){
                 return 0;
