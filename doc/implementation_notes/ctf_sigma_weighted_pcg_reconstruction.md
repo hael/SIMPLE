@@ -2,10 +2,14 @@
 
 ## Status
 
-**Implementation in progress.** Milestones 0-2 are built (CTF-free operator,
-heterogeneous CTF/shift/sigma, and an initial real-project command). See
+**Implementation in progress.** Milestones 0-3 are built (CTF-free operator;
+heterogeneous CTF/shift/sigma; a real-project command; then parallelization,
+the section 8 preconditioner and the section 8.1 kernelized operator). See
 section 0 for what's implemented, what's deferred, and where the
-implementation deviated from this note's original plan.
+implementation deviated from this note's original plan — including two places
+where the note's own recipe turned out to be wrong (section 4's description of
+`transfer_plane`, and section 8.1's impulse-response kernel) and one where its
+stated rationale was wrong (section 10's licensing claim).
 
 This note proposes an experimental reconstruction command that solves a
 CTF- and noise-weighted least-squares problem with preconditioned conjugate
@@ -25,8 +29,15 @@ Code lives in:
   operator/solver type (milestones 0-1).
 - `src/main/commanders/simple/simple_commanders_pcg_recon.f90` -- the
   `reconstruct3D_pcg` production command (milestone 2).
-- Milestone 0/1 tests: `test=pcg_recon_ctf_free`, `test=pcg_recon_ctf_hetero`
-  (`src/main/commanders/test/simple_commanders_test_highlevel.f90`).
+- Tests, all in `src/main/commanders/test/simple_commanders_test_highlevel.f90`:
+  - `test=pcg_recon_ctf_free`, `test=pcg_recon_ctf_hetero` -- operator algebra
+    (adjointness, symmetry, self-consistent recovery). These generate their own
+    observations, so they deliberately run with deapodization off; see "Why the
+    synthetic tests could not see the modelling bias" below.
+  - `test=pcg_recon_deapod` -- the roll-off correction, against envelope-free
+    observations. The only test here that avoids the inverse crime.
+  - `test=pcg_recon_kernel` -- the section 8.1 equivalence gate for the
+    kernelized operator, plus the section 8 preconditioner.
 
 ### Milestone 0 -- CTF-free operator (section 9, stages 2-4)
 
@@ -66,10 +77,99 @@ the command running on real data and producing a solver diagnostics table
 came first; the comparison step is the next piece of work, once run against
 real project data.
 
-**Not started:** stage 7 (thread-count reproducibility), stage 8 / section
-8.1 (kernelized normal operator, phase 2), section 8's preconditioner, and
-everything in section 12 (continuous joint refinement). All correctly remain
-out of scope for phase 1.
+### Milestone 3 -- performance, convergence, and correctness of the model
+
+Milestone 2 ran but was unusable: roughly 57 s per CG iteration at 5000
+particles and box 128, single-threaded, so hours per reconstruction. Three
+causes, all now addressed:
+
+1. **Nothing was cached.** Every CG iteration re-derived each particle's `ori`
+   (a deep copy), CTF parameters (string-keyed hash lookups), shift, and
+   rotation matrix (`euler2m`, twice per particle), then re-evaluated the CTF
+   per Fourier pixel. All of it is constant for the whole solve.
+   `prep_particles` now caches it once.
+2. **No OpenMP anywhere.** The gather and plane-level loops now parallelize
+   directly; the scatter uses the same h-strided colouring scheme as
+   `reconstructor%insert_plane_oversamp`, writing safely into one shared
+   accumulator rather than per-thread copies.
+3. **`solve` was plain CG despite the name** -- `M = I`. The section 8
+   preconditioner is now implemented (`build_precond`), which matters most
+   exactly where this method should win: with heterogeneous CTFs, `H` is
+   severely ill-conditioned at CTF zeros.
+
+Also: gather and scatter are **fused** (KB weights computed once per plane
+pixel instead of twice); `apod_mat_3d_fast` replaces `apod_mat_3d`; packed
+addressing and Friedel folding are inlined instead of going through
+`class(image)` indirect calls 27 times per pixel; and work images persist so
+FFTW plans are not rebuilt every iteration.
+
+#### Oversampling -- one cause behind three symptoms
+
+Milestone 2's operator interpolated on the **native** lattice, with no
+oversampling. That single omission produced three separate-looking failures:
+
+- the KB roll-off envelope swung ~30x across the box, so the deapodization
+  correction was violent (~140x at a corner);
+- KB interpolation was only percent-accurate rather than the ~1e-3 that
+  `KBALPHA = 2` is designed to deliver;
+- the section 8.1 Gram kernel could not be made to agree with the operator.
+
+The operator now pads by `OSMPL_PAD_FAC` for all Fourier work while the
+**unknown stays on the native lattice** -- centre-padded going in, centre-
+cropped coming out, with `pad_vol`/`crop_vol` as exact adjoints. This is the
+same arrangement Fourier gridding uses (`interp_fcomp_oversamp` works at
+`loc*PAD_FAC` and rescales by `PAD_FAC**3`). The envelope correction is now
+mild (~1.5x per axis) and the kernel agrees with the reference.
+
+Because the padded lattice is already `2*box`, it *is* the grid a linear
+(non-wrapping) Gram convolution needs, so the kernel and the operator share
+one lattice and no separate padded image exists.
+
+#### Two distinct envelopes
+
+KB interpolation is not neutral: gathering `sum_k w(k-loc) xhat(k)` equals
+`FT[what . x]` sampled at `loc`, i.e. it multiplies the volume by an envelope
+in real space. Two of them appear, and both had to be handled:
+
+| Envelope | Origin | Handling |
+| --- | --- | --- |
+| Gather | reading the volume through the KB window | `build_env`, divided out by `deapod_mul` |
+| Deposition | laying `abs(T)**2` onto the kernel grid | measured and divided out in `build_kernel` |
+
+Both are **measured**, not derived. `kbinterpol%instr` is the *continuous*
+transform of the KB kernel, while this operator uses three discrete
+renormalized weight samples; the two disagreed by about a factor of two at the
+box edge. Measuring the impulse response through the operator's own stencil
+makes every packing, Nyquist and normalization convention match by
+construction.
+
+#### Why the synthetic tests could not see the modelling bias
+
+`pcg_recon_ctf_free` and `pcg_recon_ctf_hetero` generate their observations
+with `forward_plane`, so the gather envelope appears identically in the data
+and the model and cancels -- an inverse crime. That is what makes them a clean
+gate on operator *algebra*, and also why they scored 0.9998 correlation while
+the forward model was still wrong for real particles, which carry no such
+envelope. `pcg_recon_deapod` is the one test that avoids this, manufacturing
+envelope-free data via the identity `forward_plane(x/env) = FT[x]`.
+
+#### Status of the kernelized operator
+
+`test=pcg_recon_kernel` passes: 3.4% interior error against the matrix-free
+reference (10.1% including boundaries, where shift-invariance is expected to
+break down), the kernel is bit-identically invariant to particle shifts, and
+it tracks CTF changes. The scale calibration factor lands at `padf**6`, which
+is exactly the `padsc**2` the matrix-free operator carries and the kernel does
+not -- i.e. the constant is understood rather than absorbed.
+
+3.4% is good enough for a fast approximate operator but is **not** exact, so
+the matrix-free path remains the default and the reference; the kernel is
+opt-in via `pcgop=kernel`. It should not become the default until it is shown
+to give equivalent reconstructions on real data, not merely a similar operator.
+
+**Not started:** stage 7 (thread-count reproducibility), the FSC/anisotropy/
+peak-memory parts of stage 6, and everything in section 12 (continuous joint
+refinement).
 
 ### Where implementation deviated from this note, and why
 
@@ -119,19 +219,24 @@ out of scope for phase 1.
    "do not proceed past a failed earlier stage" discipline, just implemented
    as public API rather than a private-module self-test.
 
-5. **Sigma2 is a single profile shared across the whole selection, not
-   per-particle `N_i`.** Section 3's model and section 4's dependency table
-   (`sigma2` ownership -> `builder%esig`, "read the existing fixed spectra")
-   both imply per-particle noise weighting. The full `euclid_sigma2` path
-   needs a `polarft_calc` (`pftc`), meaning running search/polar-FT setup
-   this reconstruction-only solver has no other reason to pull in.
-   Milestone 2 instead reads the lightweight, project/pftc-independent
-   `sigma2_binfile` (same on-disk convention `euclid_sigma2` writes) and
-   averages the selected particles' spectra into one shared profile. This is
-   an explicit, narrower scope than the note describes, not an oversight --
-   true per-particle sigma2 is deferred to a later pass; the shared-profile
-   case already exercises the same "divide by `sqrt(sigma2)`" code path the
-   real thing needs.
+5. **Sigma2 is per-particle, read via `euclid_sigma2` as flex_analysis does.**
+   Milestone 2 had used the lightweight `sigma2_binfile` and averaged the
+   selection into one shared profile, on the assumption that the full
+   `euclid_sigma2` path required standing up search/polar-FT machinery. That
+   assumption was wrong: `euclid_sigma2%new` takes a `polarft_calc` only to
+   perform a pointer assignment (`polarft_core%assign_sigma2_noise`), so an
+   unconstructed `build%pftc` is fine and no strategy3D toolbox is needed.
+   Milestone 3 therefore carries sigma files over from prior runs, picks the
+   highest-iteration group star file, forces global sigma dispatch (reused
+   star files are typically single-group), and reads genuine
+   per-particle-per-shell spectra.
+
+   That logic was initially duplicated from flex_analysis. It now lives once,
+   in `src/fileio/simple_sigma2_files.f90`, which both flex_analysis and
+   `reconstruct3D_pcg` call. The module is deliberately builder-free --
+   `builder` depends on `euclid_sigma2`, so anything on the sigma2 side must
+   not depend back on `builder`; callers pass `pftc`, `esig` and the
+   orientations explicitly.
 
 6. **`objfun`-gated sigma2, not file-presence-gated.** Not specified in this
    note at all -- added to match `reconstruct3D`'s own convention (`objfun=cc`
@@ -151,10 +256,48 @@ out of scope for phase 1.
    just computes the width as `2*iwinsz+1` explicitly, to document the
    invariant instead of trusting it silently.
 
-Everything in section 10's non-goals list still holds: no changes to
+8. **Section 8.1's impulse-response kernel does not work, and was replaced.**
+   The note says to build the Gram kernel as `h = H_data(delta_at_origin)`.
+   That reduces *exactly* to gridding, and therefore gains nothing at all.
+   The reason: `kbinterpol%apod_mat_3d` normalizes the KB weights to sum to 1,
+   so `G` applied to a constant Fourier volume returns that constant, which
+   makes the row sums of `M = sum_i G_i^dagger |T_i|^2 G_i` precisely `rho`,
+   the gridding sampling density. A same-size kernel built that way gives
+   `H = F^dagger diag(rho) F + Lambda`, whose exact solution is the gridding
+   reconstruction -- PCG would converge in one step to the answer it was
+   supposed to improve on.
+
+   The implementation instead uses the standard NUFFT Gram construction:
+   scatter the weights `|T_i(p)|^2` onto a **2x oversampled** Fourier grid at
+   **doubled** coordinates. The oversampling is not a safety margin, it is the
+   entire mechanism -- it is what resolves sub-pixel frequency offsets that the
+   native grid cannot represent, and hence what makes the operator differ from
+   gridding at all. Since `t = IFFT_2N(Khat)`, the real-space kernel is never
+   formed explicitly; the scattered array *is* the Fourier multiplier.
+
+   This remains an approximation (it is shift-invariant, and the true operator
+   is not), which is why it is gated on the equivalence test and is not the
+   default.
+
+9. **Section 10's licensing rationale is wrong.** It forbids SPIDER-derived
+   code "because SPIDER is GPL-licensed". SIMPLE is **GPL-3.0** (`LICENSE`)
+   and SPIDER is **GPL-2.0-or-later** (see the header of
+   `SPIDER/src/bpcg.f`), and "or later" means SPIDER's code may legitimately
+   be used under GPL-3.0. There is no licensing barrier.
+
+   The *practical* conclusion is unchanged, for a different reason: SPIDER's
+   BP CG is real-space, ray-driven, and restricted to a sphere via run-length
+   voxel spans, whereas this design is Fourier central-section. The
+   architectures do not transfer. Two of its ideas remain worth revisiting --
+   merging duplicate viewing directions with integer multiplicity weights (so
+   per-iteration cost scales with distinct orientations rather than particle
+   count), and its derivative-stencil regularizers with roughly 15-20
+   iterations -- but neither requires copying code.
+
+Everything else in section 10's non-goals list still holds: no changes to
 `reconstructor`/`reconstructor_eo`/`volassemble`/online matcher, no new
-production `refine3D` argument, no MPI/GPU, no adaptive regularizer/automask
-/nonuniform filtering/FSC feedback inside PCG, and no SPIDER-derived code.
+production `refine3D` argument, no MPI/GPU, and no adaptive regularizer/
+automask/nonuniform filtering/FSC feedback inside PCG.
 
 ## 1. Question being tested
 
@@ -463,11 +606,18 @@ each PCG iteration:
   hp      = hp_data + Lambda(p)
 ```
 
-The initial, safest kernel construction is the impulse response shown above.
-It reuses the already verified matrix-free `K^dagger K` path and cannot change
-the CTF/sigma convention.  A later analytic construction may sum the rotated
-Kaiser--Bessel projection autocorrelation weighted by `abs(T_i)**2`, but only
-after it agrees with the impulse kernel and the matrix-free operator.
+**Correction (milestone 3): the impulse-response construction above does not
+work.** It reduces exactly to gridding. The KB weights are normalized to sum
+to 1, so `G` applied to a constant Fourier volume returns that constant, which
+makes the row sums of `M` precisely the gridding density `rho`; the resulting
+operator is `F^dagger diag(rho) F + Lambda`, whose exact solution *is* the
+gridding reconstruction. What is implemented instead is the standard NUFFT
+Gram construction: scatter `abs(T_i)**2` onto a **2x oversampled** Fourier
+grid at **doubled** coordinates. The oversampling is the mechanism, not a
+margin -- it resolves the sub-pixel frequency offsets the native grid cannot
+represent, which is precisely what distinguishes the operator from gridding.
+The scattered array is itself the Fourier multiplier, so the real-space kernel
+`h_data` is never formed. See section 0, deviation 8.
 
 This is a normal-operator acceleration, not a new reconstruction model.  It
 does not use the current `rho` division as its operator, and it does not
@@ -557,12 +707,15 @@ plausible reconstruction is not evidence that the CTF/sigma adjoint is correct.
 - no GPU/offload path;
 - no adaptive regularizer, automask, nonuniform filtering, or FSC feedback
   inside PCG;
-- no attempt to reproduce SPIDER BP-CG real-space interpolation;
-- no code copied or translated from SPIDER.
+- no attempt to reproduce SPIDER BP-CG real-space interpolation.
 
-The last point is intentional: SPIDER is GPL-licensed.  This design is based
-on the standard weighted least-squares/PCG formulation and SIMPLE's existing
-data-model contracts, with a new implementation and independent tests.
+**Correction (milestone 3).** This section previously also forbade "code
+copied or translated from SPIDER" on the grounds that SPIDER is GPL-licensed.
+That rationale is wrong: SIMPLE is GPL-3.0 and SPIDER is GPL-2.0-*or-later*,
+so SPIDER code could legitimately be used here. The design is nonetheless an
+independent implementation, because SPIDER's BP CG is real-space and
+ray-driven while this is Fourier central-section -- the architectures do not
+transfer. See section 0, deviation 9.
 
 ## 11. Acceptance decision after phase 1
 

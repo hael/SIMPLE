@@ -13,6 +13,8 @@ type(ui_program), target :: flex_preimage_identity
 type(ui_program), target :: flex_preimage_basis_ab
 type(ui_program), target :: pcg_recon_ctf_free
 type(ui_program), target :: pcg_recon_ctf_hetero
+type(ui_program), target :: pcg_recon_kernel
+type(ui_program), target :: pcg_recon_deapod
 
 contains
 
@@ -28,6 +30,8 @@ contains
         call new_flex_preimage_basis_ab(tsttab)
         call new_pcg_recon_ctf_free(tsttab)
         call new_pcg_recon_ctf_hetero(tsttab)
+        call new_pcg_recon_kernel(tsttab)
+        call new_pcg_recon_deapod(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -43,6 +47,8 @@ contains
         write(logfhandle,'(A)') flex_preimage_basis_ab%name%to_char()
         write(logfhandle,'(A)') pcg_recon_ctf_free%name%to_char()
         write(logfhandle,'(A)') pcg_recon_ctf_hetero%name%to_char()
+        write(logfhandle,'(A)') pcg_recon_kernel%name%to_char()
+        write(logfhandle,'(A)') pcg_recon_deapod%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -230,5 +236,38 @@ contains
         ! add to ui_hash
         call add_ui_program('pcg_recon_ctf_hetero', pcg_recon_ctf_hetero, tsttab)
     end subroutine new_pcg_recon_ctf_hetero
+
+    subroutine new_pcg_recon_kernel( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call pcg_recon_kernel%new(&
+        &'pcg_recon_kernel',&                        ! name
+        &'Kernelized (Toeplitz) PCG normal-operator equivalence test',&
+        &'Section 8.1 release gate for the kernelized normal operator: compares it against the '&
+        &'matrix-free reference over heterogeneous astigmatic CTFs and per-particle sigma, reporting '&
+        &'the error separately for all voxels and for an interior region; asserts the kernel is '&
+        &'shift-invariant but CTF-dependent; and exercises the section 8 preconditioner. '&
+        &'Self-contained, no project required.',&
+        &'simple_test_exec',&                        ! executable
+        &.false.)                                    ! requires sp_project
+        ! add to ui_hash
+        call add_ui_program('pcg_recon_kernel', pcg_recon_kernel, tsttab)
+    end subroutine new_pcg_recon_kernel
+
+    subroutine new_pcg_recon_deapod( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call pcg_recon_deapod%new(&
+        &'pcg_recon_deapod',&                        ! name
+        &'KB roll-off (deapodization) correction test',&
+        &'Checks that the deapodization correction recovers the true volume from ENVELOPE-FREE '&
+        &'observations. The other PCG tests generate their data with the operator itself, so the KB '&
+        &'envelope cancels and the bias is invisible to them; this one does not commit that inverse '&
+        &'crime. Self-contained, no project required.',&
+        &'simple_test_exec',&                        ! executable
+        &.false.)                                    ! requires sp_project
+        ! add to ui_hash
+        call add_ui_program('pcg_recon_deapod', pcg_recon_deapod, tsttab)
+    end subroutine new_pcg_recon_deapod
 
 end module simple_test_ui_highlevel

@@ -152,21 +152,38 @@ contains
         call reconstruct3D_pcg%new(&
         &'reconstruct3D_pcg',&                 ! name
         &'Experimental CTF/sigma-weighted PCG 3D reconstruction',&
-        &'is a milestone-2, experimental single-state 3D reconstruction program using a matrix-free, '&
+        &'is an experimental single-state 3D reconstruction program using a matrix-free, '&
         &'preconditioned-conjugate-gradient solver instead of Fourier gridding (doc/implementation_notes/'&
         &'ctf_sigma_weighted_pcg_reconstruction.md). Reads a project and reconstructs one volume for one '&
         &'state from its current particle orientations, CTF, and shifts; orientations are inputs, not '&
-        &'optimized. nparts=1, no even/odd split, no symmetry, no distributed execution. Writes to a new '&
+        &'optimized. objfun=euclid requires sigma2 files and weights the fit by them; objfun=cc runs '&
+        &'unweighted. nparts=1, no even/odd split, no symmetry, no distributed execution. Writes to a new '&
         &'experimental output directory and never modifies the project.',&
         &'simple_exec',&                       ! executable
         &.true.)                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! parameter input/output
-        call reconstruct3D_pcg%add_input(UI_PARM, projfile, required_override=.true.)
+        ! NOTE: projfile is deliberately NOT declared -- requires_sp_project
+        ! above makes params%new auto-discover a unique *.simple in the cwd,
+        ! exactly as reconstruct3D does. Declaring it would force the user to
+        ! pass it and defeat that discovery.
         call reconstruct3D_pcg%add_input(UI_PARM, oritype)
         call reconstruct3D_pcg%add_input(UI_PARM, objfun)
         call reconstruct3D_pcg%add_input(UI_PARM, 'state', 'num', 'State to reconstruct', &
             &'Index of the single state to reconstruct', 'state index{1}', .false., 1.)
+        ! search controls
+        call reconstruct3D_pcg%add_input(UI_SRCH, 'pcgop', 'multi', 'PCG normal operator', &
+            &'Normal-operator implementation: matrixfree is the exact reference; kernel is the '&
+            &'experimental section-8.1 Toeplitz operator whose per-iteration cost is independent of '&
+            &'particle count(matrixfree|kernel){matrixfree}', '(matrixfree|kernel){matrixfree}', &
+            &.false., 'matrixfree')
+        ! filter controls
+        call reconstruct3D_pcg%add_input(UI_FILT, maxits, required_override=.false.)
+        call reconstruct3D_pcg%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
+            &'Stop when the relative preconditioned residual falls below this', 'tolerance{0.001}', &
+            &.false., 0.001)
+        ! mask controls
+        call reconstruct3D_pcg%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         call reconstruct3D_pcg%add_input(UI_COMP, nthr)
         ! add to ui_hash

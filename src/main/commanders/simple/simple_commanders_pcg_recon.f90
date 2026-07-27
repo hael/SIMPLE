@@ -1,19 +1,20 @@
-!@descr: milestone 2 of doc/implementation_notes/ctf_sigma_weighted_pcg_reconstruction.md.
+!@descr: experimental CTF/sigma-weighted PCG 3D reconstruction command, see
+!  doc/implementation_notes/ctf_sigma_weighted_pcg_reconstruction.md.
 !  reconstruct3D_pcg reads an existing project and reconstructs ONE volume for
 !  ONE state from its current project-carried orientation/CTF/shift
-!  assignments, using the experimental matrix-free PCG operator
-!  (simple_pcg_reconstruction.f90). Phase-1 fixed-input contract (note section
-!  2): orientations/shifts are inputs, not optimized; single state selected;
-!  nparts=1, no even/odd split, no symmetry, no distributed execution; writes
-!  to a new experimental execution directory; never writes anything back to
-!  the project; does not enter through commander_volassemble or reuse its
-!  output filenames. Kept in its own file, deliberately separate from
-!  production reconstruction commanders.
+!  assignments, using the matrix-free (or, optionally, kernelized) PCG operator
+!  in simple_pcg_reconstruction. Phase-1 fixed-input contract (note section 2):
+!  orientations/shifts are inputs, not optimized; single state; nparts=1, no
+!  even/odd split, no symmetry, no distributed execution; writes to a new
+!  experimental execution directory; never writes anything back to the project;
+!  does not enter through commander_volassemble or reuse its output filenames.
+!  Kept in its own file, deliberately separate from production reconstruction.
 module simple_commanders_pcg_recon
 use simple_commanders_api
-use simple_pcg_reconstruction, only: pcg_reconstruction
-use simple_matcher_ptcl_io,    only: prepimgbatch, discrete_read_imgbatch
-use simple_sigma2_binfile,     only: sigma2_binfile
+use simple_pcg_reconstruction, only: pcg_reconstruction, PCG_OP_KERNEL
+use simple_matcher_ptcl_io,    only: prepimgbatch, discrete_read_imgbatch, killimgbatch
+use simple_sigma2_files,       only: load_sigma2_groups
+use simple_math_ft,            only: upsample_sigma2
 implicit none
 
 public :: commander_reconstruct3D_pcg
@@ -30,67 +31,111 @@ contains
     subroutine exec_reconstruct3D_pcg( self, cline )
         class(commander_reconstruct3D_pcg), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
-        real, parameter :: LAMBDA = 1.0e-3
+        real,    parameter :: LAMBDA         = 1.0e-3
+        integer, parameter :: MAXITS_DEFAULT = 30
+        real,    parameter :: RTOL_DEFAULT   = 1.0e-3
         type(parameters)         :: params
-        type(builder)             :: build
+        type(builder)            :: build
         type(pcg_reconstruction) :: pcgop
-        type(oris)                :: selection
-        type(ori)                 :: e
-        type(ctfparams)           :: ctfparms
-        type(sigma2_binfile)      :: s2file
-        type(string)               :: sigma2_fname
-        type(image)                :: outvol
-        integer, allocatable      :: pinds(:), state_filtered(:)
-        real,    allocatable      :: sig2_per_ptcl(:,:), sig2arr(:), x(:,:,:), rel_res_hist(:)
-        complex, allocatable      :: y_planes(:,:,:)
-        integer :: nptcls, i, ii, iptcl, ibatch, batchlims(2), batchsz, R, lims2(2,2)
-        integer :: niters, funit, cnt, kk, kclamp
-        real    :: shift(2)
-        logical :: l_have_sigma2
-        integer(timer_int_kind) :: t0
-        real(timer_int_kind)    :: rt_tot
+        type(oris)               :: selection
+        type(ori)                :: e
+        type(ctfparams)          :: ctfparms
+        type(image)              :: outvol
+        type(string)             :: opmode
+        integer, allocatable     :: pinds(:), tmpinds(:)
+        real,    allocatable     :: sig2(:,:), x(:,:,:), rel_res_hist(:)
+        complex, allocatable     :: y_planes(:,:,:)
+        integer :: nptcls, i, ii, iptcl, ibatch, batchlims(2), batchsz
+        integer :: lims2(2,2), R, niters, funit, cnt, maxits, kfromto(2)
+        real    :: rtol
+        logical :: l_use_ctf, l_kernel, l_sig_loaded
+        integer(timer_int_kind) :: t0, t1
+        real(timer_int_kind)    :: rt_tot, rt_setup, rt_solve
 
         t0 = tic()
+        ! ---- cline defaults, mirroring exec_rec3D's shape. NOTE: projfile is
+        !      deliberately NOT declared/required -- params%new ->
+        !      setup_execution_context auto-discovers a unique *.simple in the
+        !      cwd because the UI record declares requires_sp_project, exactly
+        !      as reconstruct3D does. mkdir=yes is what creates the numbered
+        !      execution directory and copies the project into it.
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('state')   ) call cline%set('state',   1.)
-        ! eulspace/nspace is built by init_params_and_build_general_tbox(do3d=.true.)
-        ! but never used by this operator (each particle's own continuous
-        ! orientation is used directly, not a discretized reference grid) --
-        ! set a dummy value so it never becomes a user-visible requirement.
+        if( .not. cline%defined('objfun')  ) call cline%set('objfun',  'euclid')
+        ! nspace is only consulted by build_general_tbox's eulspace grid, which
+        ! this operator never uses (it works from each particle's own continuous
+        ! orientation, not a discretized reference grid). Set a dummy so it does
+        ! not become a user-visible requirement.
         if( .not. cline%defined('nspace')  ) call cline%set('nspace',  1.)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
 
-        ! ---- particle selection: sample4rec (state>0, updatecnt>0), then
-        !      filter to exactly one state (phase-1 contract: single state) ----
+        maxits = MAXITS_DEFAULT
+        if( cline%defined('maxits') ) maxits = nint(cline%get_rarg('maxits'))
+        rtol = RTOL_DEFAULT
+        if( cline%defined('rtol')   ) rtol   = cline%get_rarg('rtol')
+        opmode = string('matrixfree')
+        if( cline%defined('pcgop')  ) opmode = cline%get_carg('pcgop')
+        l_kernel = opmode .eq. 'kernel'
+
+        ! ---- particle selection: sample4rec (state>0, updatecnt>0 when
+        !      available), then filtered to exactly one state, since the phase-1
+        !      contract reconstructs a single state ----
         nptcls = 0 ! sample4rec's nsamples argument is intent(inout)
         call build%spproj_field%sample4rec([params%fromp,params%top], nptcls, pinds)
-        allocate(state_filtered(nptcls))
+        allocate(tmpinds(max(nptcls,1)))
         cnt = 0
         do i = 1, nptcls
             if( build%spproj_field%get_state(pinds(i)) == params%state )then
                 cnt = cnt + 1
-                state_filtered(cnt) = pinds(i)
+                tmpinds(cnt) = pinds(i)
             endif
         end do
         deallocate(pinds)
-        allocate(pinds(cnt), source=state_filtered(1:cnt))
+        ! NOTE: THROW_HARD is a preprocessor macro, so its argument must stay on
+        ! one source line -- a Fortran continuation inside it does not compile.
+        if( cnt < 1 ) THROW_HARD('no particles for state '//int2str(params%state)//'; reconstruct3D_pcg')
+        allocate(pinds(cnt), source=tmpinds(1:cnt))
         nptcls = cnt
-        deallocate(state_filtered)
-        if( nptcls < 1 ) THROW_HARD('no particles selected for state='//int2str(params%state)//'; reconstruct3D_pcg')
-        write(logfhandle,'(a,i0,a)') '>>> RECONSTRUCT3D_PCG: ', nptcls, ' particles selected'
+        deallocate(tmpinds)
+        write(logfhandle,'(a,i0,a,i0)') '>>> RECONSTRUCT3D_PCG: particles selected = ', nptcls, &
+            &' for state ', params%state
 
-        ! ---- operator + selection oris (rotation + ctf + shift, per particle,
-        !      read-only from the project -- nothing here is ever written back) ----
         call pcgop%new(params%box, params%smpd, LAMBDA)
         lims2 = pcgop%get_lims2()
         R     = lims2(1,2)
+
+        ! ---- sigma2, fetched the way flex_analysis does: euclid_sigma2 over
+        !      the group star file, giving per-particle-per-shell spectra.
+        !      Gated on objfun exactly as reconstruct3D gates ml_reg: objfun=cc
+        !      needs no sigmas, objfun=euclid requires them. Failing loudly
+        !      rather than silently falling back matters here -- a missing
+        !      sigma2 file under euclid would quietly change what objective is
+        !      actually being minimized. ----
+        allocate(sig2(0:R,nptcls), source=1.0)
+        l_use_ctf = .true.
+        if( params%cc_objfun == OBJFUN_EUCLID )then
+            ! discovery, carry-over and group loading are shared with
+            ! flex_analysis; see simple_sigma2_files
+            call load_sigma2_groups(params, build%pftc, build%esig, build%spproj_field, cline, l_sig_loaded)
+            if( .not. l_sig_loaded )then
+                THROW_HARD('objfun=euclid requires sigma2 files; none found, use objfun=cc instead')
+            endif
+            kfromto = build%esig%get_kfromto()
+            do i = 1, nptcls
+                call upsample_sigma2(kfromto(1), kfromto(2), &
+                    &build%esig%sigma2_noise(kfromto(1):kfromto(2),pinds(i)), R, sig2(0:R,i))
+            end do
+            write(logfhandle,'(a)') '>>> RECONSTRUCT3D_PCG: objfun=euclid, per-particle sigma2 loaded'
+        else
+            write(logfhandle,'(a)') '>>> RECONSTRUCT3D_PCG: objfun=cc, no sigma weighting'
+        endif
+
+        ! ---- per-particle orientation/CTF/shift onto a selection oris, plus
+        !      the particle planes, read in batches exactly as calc_3Drec does
+        !      rather than opening the stack once per particle ----
         call selection%new(nptcls, .true.)
         allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), nptcls))
-
-        ! ---- batched particle image read, matching production's own I/O
-        !      pattern (calc_3Drec in simple_matcher_3Drec.f90) instead of
-        !      opening/closing the stack file once per particle ----
         call e%new(.false.)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
@@ -102,73 +147,64 @@ contains
                 iptcl = pinds(i)
                 call build%spproj_field%get_ori(iptcl, e)
                 ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
-                shift    = build%spproj_field%get_2Dshift(iptcl)
                 call e%set_ctfvars(ctfparms)
-                call e%set_shift(shift)
+                call e%set_shift(build%spproj_field%get_2Dshift(iptcl))
                 call selection%set_ori(i, e)
                 call build%imgbatch(ii)%fft()
                 y_planes(:,:,i) = pcgop%extract_native_plane(build%imgbatch(ii))
             end do
         end do
+        call killimgbatch(build)
 
-        ! ---- sigma2: gated on objfun, matching reconstruct3D's own convention
-        !      (objfun=cc needs no sigmas; objfun=euclid requires them -- not
-        !      a silent fallback, since a missing sigma2 file under euclid
-        !      would silently change what the objective actually is). Read
-        !      via the lightweight, project/pftc-independent sigma2_binfile
-        !      and averaged over the selection into one shared profile --
-        !      true per-particle sigma2 is a later, explicitly deferred
-        !      refinement (same scope decision as milestone 1). ----
-        l_have_sigma2 = .false.
-        if( trim(params%objfun) == 'euclid' )then
-            sigma2_fname = string(SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat')
-            if( .not. file_exists(sigma2_fname) )then
-                THROW_HARD('objfun=euclid requires a sigma2 file ('//sigma2_fname%to_char()//'), none found for this partition; reconstruct3D_pcg')
-            endif
-            call s2file%new_from_file(sigma2_fname)
-            call s2file%read(sig2_per_ptcl)
-            allocate(sig2arr(0:R), source=0.0)
-            do kk = 0, R
-                kclamp = min(max(kk, lbound(sig2_per_ptcl,1)), ubound(sig2_per_ptcl,1))
-                sig2arr(kk) = sum(sig2_per_ptcl(kclamp, pinds)) / real(nptcls)
-            end do
-            l_have_sigma2 = .true.
-            write(logfhandle,'(a)') '>>> RECONSTRUCT3D_PCG: objfun=euclid, using sigma2 from '//&
-                &sigma2_fname%to_char()//' (averaged over the selection)'
-        else
-            write(logfhandle,'(a)') '>>> RECONSTRUCT3D_PCG: objfun='//trim(params%objfun)//', no sigma weighting'
+        ! ---- operator setup ----
+        call pcgop%prep_particles(selection, use_ctf=l_use_ctf, sig2=sig2)
+        call pcgop%build_precond
+        if( l_kernel )then
+            write(logfhandle,'(a)') '>>> RECONSTRUCT3D_PCG: building kernelized (Toeplitz) normal operator'
+            call pcgop%build_kernel
+            call pcgop%set_op_mode(PCG_OP_KERNEL)
         endif
+        rt_setup = toc(t0)
+        write(logfhandle,'(a,f9.2,a)') '>>> RECONSTRUCT3D_PCG: setup time = ', rt_setup, ' s'
 
         ! ---- solve ----
+        t1 = tic()
         allocate(x(params%box,params%box,params%box), source=0.0)
-        if( l_have_sigma2 )then
-            call pcgop%solve(y_planes, selection, x, use_ctf=.true., sig2arr=sig2arr, &
-                &rel_res_hist=rel_res_hist, niters=niters)
-        else
-            call pcgop%solve(y_planes, selection, x, use_ctf=.true., &
-                &rel_res_hist=rel_res_hist, niters=niters)
-        endif
-        rt_tot = toc(t0)
+        call pcgop%solve(y_planes, x, maxits=maxits, rtol=rtol, &
+            &rel_res_hist=rel_res_hist, niters=niters)
+        rt_solve = toc(t1)
+        rt_tot   = toc(t0)
 
-        ! ---- output: experimental volume + diagnostics table. Deliberately
-        !      NOT any simple_refine3D_fnames name, and no call to
-        !      spproj%write or anything else that would mutate the project. ----
+        ! ---- output: experimental volume + diagnostics table. Deliberately NOT
+        !      any simple_refine3D_fnames name, and no spproj%write or anything
+        !      else that would mutate the project. ----
         call outvol%new([params%box,params%box,params%box], params%smpd)
         call outvol%set_rmat(x, .false.)
         call outvol%write(string('reconstruct3D_pcg_state'//int2str_pad(params%state,2)//'.mrc'))
-        open(newunit=funit, file='reconstruct3D_pcg_diagnostics.txt', status='replace', action='write')
-        write(funit,'(a,i0)')   'nptcls=', nptcls
-        write(funit,'(a,i0)')   'state=', params%state
-        write(funit,'(a,i0)')   'niters=', niters
-        write(funit,'(a,l1)')   'used_sigma2_file=', l_have_sigma2
-        write(funit,'(a,f8.2)') 'wall_time_sec=', rt_tot
+        call fopen(funit, string('reconstruct3D_pcg_diagnostics.txt'), status='replace', action='write')
+        write(funit,'(a,i0)')    'nptcls=',           nptcls
+        write(funit,'(a,i0)')    'state=',            params%state
+        write(funit,'(a,i0)')    'box=',              params%box
+        write(funit,'(a,a)')     'objfun=',           trim(params%objfun)
+        write(funit,'(a,a)')     'operator=',         opmode%to_char()
+        write(funit,'(a,i0)')    'nthr=',             params%nthr
+        write(funit,'(a,i0)')    'niters=',           niters
+        write(funit,'(a,f12.3)') 'setup_time_sec=',   rt_setup
+        write(funit,'(a,f12.3)') 'solve_time_sec=',   rt_solve
+        write(funit,'(a,f12.3)') 'total_time_sec=',   rt_tot
+        if( niters > 0 ) write(funit,'(a,f12.4)') 'sec_per_iteration=', rt_solve/real(niters)
         do i = 1, niters
             write(funit,'(a,i0,a,es14.6)') 'iter', i, '_rel_resid=', rel_res_hist(i)
         end do
-        close(funit)
+        call fclose(funit)
         write(logfhandle,'(a,i0,a)')   '>>> RECONSTRUCT3D_PCG: PCG ran ', niters, ' iterations'
-        write(logfhandle,'(a,f8.2,a)') '>>> RECONSTRUCT3D_PCG: wall time = ', rt_tot, ' s'
+        write(logfhandle,'(a,f9.2,a)') '>>> RECONSTRUCT3D_PCG: total time = ', rt_tot, ' s'
 
+        call outvol%kill
+        call pcgop%kill
+        call selection%kill
+        call e%kill
+        call opmode%kill
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_RECONSTRUCT3D_PCG NORMAL STOP ****')
     end subroutine exec_reconstruct3D_pcg
