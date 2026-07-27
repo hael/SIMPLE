@@ -779,7 +779,7 @@ contains
         complex, allocatable :: rho_accum(:,:,:)
         real,    allocatable :: absT2(:,:)
         complex, allocatable :: wplane(:,:)
-        integer :: i, h, k, cdim(3), m, hh, phys(3)
+        integer :: i, h, k, cdim(3), m, hh, phys(3), sh, sh_lim
         real    :: denom, eps
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_precond')
         call self%ensure_wimg
@@ -798,14 +798,30 @@ contains
         if( allocated(self%precond) ) deallocate(self%precond)
         allocate(self%precond(cdim(1),cdim(2),cdim(3)), source=1.0)
         eps = max(self%lambda, epsilon(1.0))
+        ! Data only ever reaches |loc| <= padf*Rnat, so beyond that radius rho is
+        ! identically zero and 1/(rho+lambda) would be 1/lambda -- amplifying
+        ! completely unconstrained modes by a thousandfold. Roughly half the
+        ! padded Fourier cube (its corners) is outside that ball, so CG would
+        ! spend its iterations optimizing modes the data says nothing about:
+        ! the residual stalls and then climbs, and the map fills with noise.
+        ! Zero them instead, exactly as reconstructor%sampl_dens_correct does
+        ! for sh > sh_lim. A singular (PSD) preconditioner is the right tool
+        ! here: it keeps the Krylov space out of the null space entirely, so
+        ! starting from x = 0 those modes are never excited at all.
+        sh_lim = self%padf * self%Rnat
         do m = self%lims3(3,1), self%lims3(3,2)
             do k = self%lims3(2,1), self%lims3(2,2)
                 do h = 0, self%lims3(1,2)
-                    hh    = self%wrap(h)
-                    phys  = self%wimg%comp_addr_phys(h,k,m)
-                    denom = real(rho_accum(hh,k,m)) + self%lambda
-                    if( denom < eps ) denom = eps
-                    self%precond(phys(1),phys(2),phys(3)) = 1.0 / denom
+                    phys = self%wimg%comp_addr_phys(h,k,m)
+                    sh   = nint(sqrt(real(h*h + k*k + m*m)))
+                    if( sh > sh_lim )then
+                        self%precond(phys(1),phys(2),phys(3)) = 0.0
+                    else
+                        hh    = self%wrap(h)
+                        denom = real(rho_accum(hh,k,m)) + self%lambda
+                        if( denom < eps ) denom = eps
+                        self%precond(phys(1),phys(2),phys(3)) = 1.0 / denom
+                    endif
                 end do
             end do
         end do
@@ -1275,6 +1291,8 @@ contains
         real(dp) :: rho, rho_new, rho0, alpha, beta, pHp
         integer  :: mmaxits, iter, n_done
         real     :: rrtol
+        integer(timer_int_kind) :: t_it
+        real(timer_int_kind)    :: rt_it
         mmaxits = 50
         if( present(maxits) ) mmaxits = maxits
         rrtol = 1.0e-4
@@ -1295,7 +1313,10 @@ contains
         rho0 = rho
         if( rho0 <= 0.0_dp ) THROW_HARD('non-positive initial dot(r,z); preconditioner is not positive definite; solve')
         n_done = 0
+        write(logfhandle,'(a,i0,a,es12.5)') '>>> PCG: starting, maxits = ', mmaxits, ', rtol = ', rrtol
+        call flush(logfhandle)
         do iter = 1, mmaxits
+            t_it = tic()
             hp  = self%apply_normal(p)
             pHp = self%dot_real_volume(p,hp)
             if( pHp <= 0.0_dp ) THROW_HARD('non-positive dot(p,Hp); PCG lost positive-definiteness; solve')
@@ -1307,6 +1328,13 @@ contains
             rho_new = self%dot_real_volume(r,z)
             n_done  = iter
             hist(iter) = real(sqrt(abs(rho_new)/rho0))
+            rt_it      = toc(t_it)
+            ! Per-iteration progress. Without this the solver is silent between
+            ! setup and completion, which on a real data set is indistinguishable
+            ! from a hang.
+            write(logfhandle,'(a,i4,a,es12.5,a,f9.2,a)') '>>> PCG iter ', iter, &
+                &'   rel_resid = ', hist(iter), '   (', rt_it, ' s)'
+            call flush(logfhandle)
             if( sqrt(abs(rho_new)/rho0) <= real(rrtol,dp) ) exit
             beta = rho_new / rho
             p    = z + real(beta) * p
