@@ -121,6 +121,6 @@ After distributed local-linear reconstruction exists, delete or clearly
 quarantine the unused global modal worker path so source structure no longer
 implies a production capability that is absent.
 
-Validate `preimage_mode` explicitly as `constant|linear` during flex input
-validation.  At present any value other than exactly `linear` follows the
-constant branch; this is not a suitable public parameter contract.
+Validate `preimage_mode` explicitly as `constant|linear|discrete` during flex
+input validation. The discrete diagnostic must terminate after hard k-medoids
+assignment and must not fall through to either pre-image estimator.

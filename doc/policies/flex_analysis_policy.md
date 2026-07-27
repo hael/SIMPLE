@@ -39,9 +39,10 @@ The flex-specific defaults currently installed by
 | `bandwidth_mode` | `ferguson` | graph-kernel bandwidth selector |
 | `bandwidth_tune` | 1 | Ferguson bandwidth multiplier |
 | `view_balance` | `yes` | fixed correction for uneven projection-bin occupancy |
-| `npreimages` | 8 | representative state volumes |
-| `preimage_mode` | `linear` | local-linear pre-image estimator |
+| `npreimages` | 8 | representative pre-images or discrete clusters |
+| `preimage_mode` | `linear` | output mode: `linear`, `constant`, or `discrete` |
 | `preimage_ndim` | 2 | cap on local-linear coordinate dimension |
+| `outfile` | `flex_cluster_states.simple` | project written by discrete mode |
 
 `k_nn` is clamped to at least one and `nang_nbrs` to at least `k_nn`.  The
 candidate cap is a particle count, not a direction count and not the number of
@@ -207,6 +208,14 @@ State one is written to `outvol` (default `flex_state_001.mrc`); additional
 states use the same stem with three-digit suffixes.  The medoid/assignment and
 soft-weight information is written to `flex_diffmap_preimages.txt` and
 `flex_registered_particle_preimage_map.txt`.
+
+`preimage_mode=discrete` is a diagnostic that bypasses kernel weighting and
+pre-image reconstruction after k-medoids. It copies the input project to
+`outfile` (default `flex_cluster_states.simple`), clears every `ptcl3D/state`,
+and assigns states `1:npreimages` to the selected particles from their hard
+k-medoids labels. The resulting project can be reconstructed independently
+with `reconstruct3D` using `nstates=npreimages`; unselected rows remain
+inactive (`state=0`).
 
 ## 7. Exclusions from this policy
 

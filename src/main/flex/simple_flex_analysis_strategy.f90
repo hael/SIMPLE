@@ -156,6 +156,7 @@ contains
         call cline%set('dm_alpha',0.0)
         if( .not.cline%defined('preimage_mode') ) call cline%set('preimage_mode','linear')
         if( .not.cline%defined('outvol') ) call cline%set('outvol','flex_state_001.mrc')
+        if( .not.cline%defined('outfile') ) call cline%set('outfile','flex_cluster_states.simple')
     end subroutine apply_defaults
 
     subroutine init_common( params, build, cline )
@@ -223,6 +224,13 @@ contains
         call run_flex_analysis(params,build,cline,pinds,coords,raw_coords,spectral_z,nystrom_coords,nmodes, &
             &registered_stack,registered_project)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
+        if( trim(params%preimage_mode) == 'discrete' )then
+            call write_preimage_particle_map(build%spproj,pinds,coords,labels)
+            call write_discrete_state_project(build%spproj,pinds,labels,size(medoids),params%outfile)
+            call finish_analysis_outputs(registered_stack,registered_project)
+            deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,medoids,labels)
+            return
+        endif
         call build_flex_preimage_kernel_weights(raw_coords,medoids,state_weights,state_bandwidths,state_neff)
         call write_preimage_particle_map(build%spproj,pinds,coords,labels,state_weights)
         call init_model_context(cline,registered_project,model_cline,model_params,model_build)
@@ -384,6 +392,15 @@ contains
         call embed_flex_graph(params,pinds,graph,max_modes,cand_min,cand_max,cand_mean,coords,raw_coords, &
             &spectral_z,nystrom_coords,nmodes)
         call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
+        if( trim(params%preimage_mode) == 'discrete' )then
+            call write_preimage_particle_map(build%spproj,pinds,coords,labels)
+            call graph%kill()
+            call write_discrete_state_project(build%spproj,pinds,labels,size(medoids),params%outfile)
+            call worker_program%kill
+            call finish_analysis_outputs(registered_stack,registered_project)
+            deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,medoids,labels)
+            return
+        endif
         call build_flex_preimage_kernel_weights(raw_coords,medoids,state_weights,state_bandwidths,state_neff)
         call write_preimage_particle_map(build%spproj,pinds,coords,labels,state_weights)
         call graph%kill()
@@ -1118,6 +1135,10 @@ contains
         params%bandwidth_tune=max(params%bandwidth_tune,0.)
         if( trim(params%view_balance)/='yes' .and. trim(params%view_balance)/='no' ) &
             &THROW_HARD('flex_analysis view_balance must be yes|no')
+        params%preimage_mode=lowercase(trim(params%preimage_mode))
+        if( params%preimage_mode/='constant' .and. params%preimage_mode/='linear' .and. &
+            &params%preimage_mode/='discrete' ) &
+            &THROW_HARD('flex_analysis preimage_mode must be constant|linear|discrete')
     end subroutine validate_inputs
 
     subroutine select_particles( params, build, pinds, nptcls )
@@ -1203,35 +1224,90 @@ contains
     subroutine write_preimage_particle_map( spproj, pinds, coords, labels, weights )
         type(sp_project), intent(inout) :: spproj
         integer, intent(in) :: pinds(:), labels(:)
-        real, intent(in) :: coords(:,:), weights(:,:)
+        real, intent(in) :: coords(:,:)
+        real, intent(in), optional :: weights(:,:)
         integer :: u,i,q,s,iptcl,iproj
         real :: hard_weight
         if( size(pinds)<1 ) THROW_HARD('cannot write an empty flex preimage particle map')
-        if( size(labels)/=size(pinds) .or. size(coords,1)/=size(pinds) .or. size(weights,1)/=size(pinds) ) &
+        if( size(labels)/=size(pinds) .or. size(coords,1)/=size(pinds) ) &
             &THROW_HARD('flex preimage particle-map row mismatch')
-        if( size(coords,2)<1 .or. size(weights,2)<1 ) THROW_HARD('invalid flex preimage particle-map columns')
+        if( size(coords,2)<1 ) THROW_HARD('invalid flex preimage particle-map columns')
+        if( present(weights) )then
+            if( size(weights,1)/=size(pinds) .or. size(weights,2)<1 ) &
+                &THROW_HARD('invalid flex preimage particle-map weights')
+        endif
         call del_file('flex_registered_particle_preimage_map.txt')
         open(newunit=u,file='flex_registered_particle_preimage_map.txt',status='replace',action='write')
-        write(u,'(A)',advance='no') '# feature_row raw_particle_index projection_index preimage_index preimage_weight'
+        write(u,'(A)',advance='no') '# feature_row raw_particle_index projection_index preimage_index'
+        if( present(weights) ) write(u,'(A)',advance='no') ' preimage_weight'
         do q=1,size(coords,2); write(u,'(A,I0)',advance='no') ' psi',q; end do
-        do s=1,size(weights,2); write(u,'(A,I3.3)',advance='no') ' preimage_weight_',s; end do
+        if( present(weights) )then
+            do s=1,size(weights,2); write(u,'(A,I3.3)',advance='no') ' preimage_weight_',s; end do
+        endif
         write(u,*)
         do i=1,size(pinds)
             iptcl=pinds(i)
             if( iptcl<1 .or. iptcl>spproj%os_ptcl3D%get_noris() ) THROW_HARD('flex preimage particle index outside project')
-            if( labels(i)<1 .or. labels(i)>size(weights,2) ) THROW_HARD('invalid flex preimage index')
+            if( labels(i)<1 ) THROW_HARD('invalid flex preimage index')
+            if( present(weights) )then
+                if( labels(i)>size(weights,2) ) THROW_HARD('invalid flex preimage index')
+            endif
             iproj=0
             if( spproj%os_ptcl3D%isthere(iptcl,'proj') ) iproj=spproj%os_ptcl3D%get_int(iptcl,'proj')
-            hard_weight=weights(i,labels(i))
-            write(u,'(I10,1X,I10,1X,I8,1X,I8,1X,ES16.8)',advance='no') i,iptcl,iproj,labels(i),hard_weight
+            write(u,'(I10,1X,I10,1X,I8,1X,I8)',advance='no') i,iptcl,iproj,labels(i)
+            if( present(weights) )then
+                hard_weight=weights(i,labels(i))
+                write(u,'(1X,ES16.8)',advance='no') hard_weight
+            endif
             do q=1,size(coords,2); write(u,'(1X,ES16.8)',advance='no') coords(i,q); end do
-            do s=1,size(weights,2); write(u,'(1X,ES16.8)',advance='no') weights(i,s); end do
+            if( present(weights) )then
+                do s=1,size(weights,2); write(u,'(1X,ES16.8)',advance='no') weights(i,s); end do
+            endif
             write(u,*)
         end do
         close(u)
         write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE particle map: flex_registered_particle_preimage_map.txt'
         call flush(logfhandle)
     end subroutine write_preimage_particle_map
+
+    subroutine write_discrete_state_project( spproj, pinds, labels, nstates, outfile )
+        type(sp_project), intent(inout) :: spproj
+        integer, intent(in) :: pinds(:),labels(:),nstates
+        type(string), intent(in) :: outfile
+        type(sp_project) :: outproj
+        logical, allocatable :: assigned(:)
+        integer :: i,iptcl,state,nptcls
+        if( size(pinds)<1 .or. size(labels)/=size(pinds) .or. nstates<2 ) &
+            &THROW_HARD('invalid flex discrete-state assignment')
+        if( len_trim(outfile%to_char())==0 ) THROW_HARD('flex discrete-state output project is empty')
+        nptcls=spproj%os_ptcl3D%get_noris()
+        allocate(assigned(nptcls),source=.false.)
+        call outproj%copy(spproj)
+        call outproj%update_projinfo(outfile)
+        do iptcl=1,nptcls
+            call outproj%os_ptcl3D%set_state(iptcl,0)
+        end do
+        do i=1,size(pinds)
+            iptcl=pinds(i)
+            state=labels(i)
+            if( iptcl<1 .or. iptcl>nptcls ) THROW_HARD('flex discrete-state particle index outside project')
+            if( assigned(iptcl) ) THROW_HARD('duplicate particle in flex discrete-state assignment')
+            if( state<1 .or. state>nstates ) THROW_HARD('flex discrete-state label outside state range')
+            call outproj%os_ptcl3D%set_state(iptcl,state)
+            assigned(iptcl)=.true.
+        end do
+        call outproj%write(outfile)
+        write(logfhandle,'(A,A)') '>>> FLEX DISCRETE-STATE PROJECT: ',outfile%to_char()
+        do state=1,nstates
+            write(logfhandle,'(A,I0,A,I0)') '>>> FLEX DISCRETE-STATE state=',state, &
+                &' population=',count(labels==state)
+        end do
+        write(logfhandle,'(A,A,A,I0)') '>>> RECONSTRUCT WITH: simple_exec prg=reconstruct3D projfile=', &
+            &outfile%to_char(),' nstates=',nstates
+        call flush(logfhandle)
+        call outproj%kill
+        deallocate(assigned)
+    end subroutine write_discrete_state_project
 
     subroutine write_spectrum( eigvals, nmodes, icm_enabled, converged, niters, score )
         real, intent(in) :: eigvals(:),score

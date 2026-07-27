@@ -282,7 +282,7 @@ type :: parameters
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
     character(len=STDLEN)     :: graph='euc'          !< class split graph metric(euc|ori){euc}
     character(len=STDLEN)     :: bandwidth_mode='median' !< diffusion-map bandwidth mode(median|ferguson){median}
-    character(len=STDLEN)     :: preimage_mode='constant' !< diffusion-map pre-image estimator(constant|linear){constant}
+    character(len=STDLEN)     :: preimage_mode='constant' !< diffusion-map output mode(constant|linear|discrete){constant}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}

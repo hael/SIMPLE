@@ -376,13 +376,17 @@ contains
             'Number of k-medoids used as representative Nyström pre-image targets', &
             '# state volumes', .false., 8.0)
         call flex_analysis%add_input(UI_FILT, 'preimage_mode', 'multi', &
-            'Diffusion-map pre-image estimator', &
-            'constant=local-constant (Nadaraya-Watson) kernel-weighted average; linear=local-linear WLS intercept that removes O(h^2) curvature bias', &
-            '(constant|linear){linear}', .false., 'linear')
+            'Diffusion-map output mode', &
+            'constant=local-constant kernel pre-images; linear=local-linear WLS pre-images; discrete=writes hard k-medoids labels to ptcl3D/state without running the pre-image reconstruction', &
+            '(constant|linear|discrete){linear}', .false., 'linear')
         call flex_analysis%add_input(UI_FILT, 'preimage_ndim', 'num', &
             'Local-linear pre-image design dimension (default 2)', &
             'Cap on the number of leading diffusion coordinates used in the local-linear design; only used when preimage_mode=linear; d=min(preimage_ndim,neigs)', &
             '# local dimensions >=1', .false., 2.0)
+        call flex_analysis%add_input(UI_PARM, 'outfile', 'file', &
+            'Discrete-state project', &
+            'Output project whose selected ptcl3D rows receive hard k-medoids state labels; only used when preimage_mode=discrete', &
+            'output project e.g. flex_cluster_states.simple', .false., 'flex_cluster_states.simple')
         call flex_analysis%add_input(UI_FILT, lp, required_override=.false., &
             descr_placeholder_override='Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered', &
             gui_submenu="regularization", gui_advanced=.false.)

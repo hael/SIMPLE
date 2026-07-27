@@ -41,3 +41,9 @@ The numerical contract and distributed-execution policy are documented in
 `../../../doc/policies/flex_analysis_policy.md`. Focused tests live in
 `../../../production/tests/simple_test_flex_projected_latent_model.f90` and
 `../../../production/tests/simple_test_flex_diffmap_graph.f90`.
+
+For isolating embedding/clustering from the pre-image estimator, run with
+`preimage_mode=discrete`. This writes hard k-medoids labels into
+`ptcl3D/state` in `outfile` (default `flex_cluster_states.simple`) and skips
+pre-image reconstruction, so the clusters can be checked with ordinary
+`reconstruct3D`.
