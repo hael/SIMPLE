@@ -272,7 +272,7 @@ contains
     end subroutine select_finch_level
 
     subroutine refine_finch_level( features, hierarchy, initial_level, labels, nclusters, &
-        &merge_costs, gap_scores, ward_penalty, validity_scores )
+        &merge_costs, gap_scores, ward_penalty, validity_scores, max_clusters )
         real,                  intent(in)  :: features(:,:)
         type(finch_hierarchy), intent(in)  :: hierarchy
         integer,               intent(in)  :: initial_level
@@ -281,6 +281,7 @@ contains
         real(dp), allocatable, optional, intent(out) :: merge_costs(:),gap_scores(:)
         real(dp), optional,    intent(out) :: ward_penalty
         real(dp), allocatable, optional, intent(out) :: validity_scores(:)
+        integer, optional,     intent(in)  :: max_clusters
         type(ward_edge_heap) :: heap
         real, allocatable :: centroids(:,:)
         real(dp), allocatable :: costs(:),normalized_costs(:),gaps(:),validity(:),node_sse(:)
@@ -295,8 +296,11 @@ contains
         nlevels = hierarchy%nlevels
         if( n /= hierarchy%npoints .or. n < 1 .or. d < 1 ) THROW_HARD('invalid FINCH refinement inputs')
         if( initial_level < 1 .or. initial_level > nlevels ) THROW_HARD('FINCH refinement level outside range')
+        if( present(max_clusters) )then
+            if( max_clusters < 1 ) THROW_HARD('FINCH maximum cluster count must be positive')
+        endif
         if( .not.all(ieee_is_finite(features)) ) THROW_HARD('FINCH refinement feature table contains nonfinite values')
-        if( nlevels == 1 )then
+        if( nlevels == 1 .and. hierarchy%nclusters(1) == 1 )then
             call hierarchy%get_labels(1,labels)
             nclusters = hierarchy%nclusters(1)
             if( present(merge_costs) ) allocate(merge_costs(0))
@@ -381,6 +385,10 @@ contains
         do i=0,nmerges-1
             if( validity(i+1) >= best_validity-validity_tolerance ) selected_merges = i
         end do
+        ! A requested cap is applied after unconstrained model selection.  The
+        ! existing Ward path is replayed farther only when the automatic result
+        ! contains too many clusters.
+        if( present(max_clusters) ) selected_merges = max(selected_merges,khi-max_clusters)
         allocate(component_parent(khi),root_label(khi),source=0)
         component_parent = [(i,i=1,khi)]
         root_label = 1
