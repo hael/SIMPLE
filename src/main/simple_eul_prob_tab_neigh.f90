@@ -19,8 +19,8 @@ private
 
 type, extends(eul_prob_tab) :: eul_prob_tab_neigh
     type(prob_candidate_store) :: candidate_store
-    integer, allocatable        :: candidate_fill_counts(:)
-    logical                 :: l_direct_stoch_neigh = .false.
+    integer, allocatable       :: candidate_fill_counts(:)
+    logical                    :: l_direct_stoch_neigh = .false.
 contains
     procedure :: new_neigh
     procedure :: new_neigh_global
@@ -401,7 +401,7 @@ contains
             if( l_geom_neigh )then
                 call build_geometric_neighborhood(ithr_loc, prev_proj)
             else
-                if( l_state_neigh ) call find_peak_subspaces    (i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
+                if( l_state_neigh ) call find_peak_subspaces(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift)
                 call build_pooled_neighborhood(ithr_loc, prev_proj)
             endif
             call evaluate_neighborhood(i_loc, ithr_loc, iptcl_loc, shift_seed_loc, l_with_shift, neval)

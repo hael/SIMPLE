@@ -1181,7 +1181,7 @@ contains
         type(simple_nice_comm)          :: nice_comm
         real    :: lprange(2)
         integer :: state, istage, icls, start_stage, nptcls2update, noris, nstates_on_cline
-        integer :: nstates_in_project, split_stage, last_stage
+        integer :: nstates_in_project, split_stage, last_stage, nptcls_cap
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
         logical :: l_state_continue
         logical :: l_force_full_sampling
@@ -1540,12 +1540,12 @@ contains
                     write(logfhandle,'(A,I0,A,F8.4)') &
                         &'>>> ABINITIO3D DOCKED SPLIT STAGE/PRE-SPLIT_UPDATE_FRAC: ',istage, '/',update_frac
                 else if( istage == split_stage )then
-                    ! map all particles to a projection direction
-                    call ensure_docked_multistate_particle_assignments
-                    ! update post-split sampling and reset nstates in params
                     if( l_force_full_sampling )then
                         update_frac = 1.0
+                        call ensure_docked_multistate_particle_assignments(nptcls_eff, update_frac)
                     else
+                        call calc_docked_multistate_max_sampling(params, nptcls_eff, nptcls_cap, update_frac)
+                        call ensure_docked_multistate_particle_assignments(nptcls_cap, update_frac)
                         update_frac = real(nstates_glob * params%nsample) / real(nptcls_eff)
                         update_frac = min(abinitio_update_frac_max(), update_frac)
                     endif
@@ -1700,28 +1700,30 @@ contains
             endif
         end subroutine ensure_multistate_particle_assignments
 
-        subroutine ensure_docked_multistate_particle_assignments
-            integer, parameter :: DOCKED_NITERS_MISSING = 1
-            type(cmdline)      :: cline_missing
-            integer            :: nactive, nupdated, nmissing, iter_missing
+        subroutine ensure_docked_multistate_particle_assignments( nsample, ufrac )
+            integer, intent(in) :: nsample
+            real ,   intent(in) ::ufrac
+            integer,  parameter :: DOCKED_NITERS_MISSING = 1
+            type(cmdline)       :: cline_missing
+            integer             :: nactive, nupdated, nmissing, iter_missing
             call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
             if( nactive < 1 )then
                 THROW_HARD('multistate abinitio3D has no active particles after staged refinement')
             endif
             if( nmissing > 0 )then
                 iter_missing = next_refine3D_iteration()
-                write(logfhandle,'(A,A,I0,A,I0,A,I0)') &
+                write(logfhandle,'(A,A,I0,A,I0,A,I0,A,I0)') &
                 &'>>> ABINITIO3D DOCKED MULTISTATE MISSING-UPDATE ASSIGNMENT', &
-                &' MISSING/ACTIVE/ITER: ', nmissing, '/', nactive, '/', iter_missing
-                call flush(logfhandle)
+                &' MISSING/ACTIVE/ITER/NSAMPLE: ', nmissing, '/', nactive, '/', iter_missing, '/', nsample
                 cline_missing = cline_refine3D
                 call cline_missing%set('prg',               'refine3D')
                 call cline_missing%set('mkdir',                   'no')
                 call cline_missing%set('refine',                'prob')
-                call cline_missing%set('balance',                 'no')
+                call cline_missing%set('balance',                'yes')
+                call cline_missing%set('nsample',              nsample)
                 call cline_missing%set('frac_best',                1.0)
                 call cline_missing%set('fillin',                  'no')
-                call cline_missing%set('update_frac',              1.0)
+                call cline_missing%set('update_frac',            ufrac)
                 call cline_missing%set('trail_rec',               'no')
                 call cline_missing%set('volrec',                  'no')
                 call cline_missing%set('maxits', DOCKED_NITERS_MISSING)
@@ -1730,15 +1732,14 @@ contains
                 call cline_missing%set('extr_iter',       iter_missing)
                 call cline_missing%delete('endit')
                 call cline_missing%delete('greedy_sampling')
-                call cline_missing%delete('partition')
                 call xrefine3D%execute(cline_missing)
                 call del_files(DIST_FBODY,      params%nparts, ext='.dat')
                 call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
                 call del_file(DIST_FBODY//'.dat')
                 call del_file(ASSIGNMENT_FBODY//'.dat')
                 call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
-                if( nmissing > 0 )then
-                    THROW_HARD('multistate abinitio3D final missing-update pass failed to update every active particle')
+                if( (nactive-nmissing) < nsample )then
+                    THROW_HARD('multistate abinitio3D final missing-update pass failed to update enough particles')
                 endif
                 call cline_missing%kill
             endif

@@ -111,6 +111,13 @@ interface
         logical,           intent(in) :: l_cavgs
     end subroutine set_cline_refine3D
 
+    module subroutine calc_docked_multistate_max_sampling( params, nptcls, nptcls_cap, ufrac_cap )
+        class(parameters), intent(in)  :: params
+        integer,           intent(in)  :: nptcls
+        integer,           intent(out) :: nptcls_cap
+        real,              intent(out) :: ufrac_cap
+    end subroutine calc_docked_multistate_max_sampling
+
     module subroutine force_stage1_lowpass_limit( lpinfo_local )
         type(lp_crop_inf), intent(inout) :: lpinfo_local(:)
     end subroutine force_stage1_lowpass_limit

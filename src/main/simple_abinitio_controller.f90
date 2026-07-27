@@ -30,6 +30,7 @@ integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-stan
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
+integer,          parameter :: NSAMPLE_HET_SPLIT_CAP   = 200000
 character(len=*), parameter :: PROB_NEIGH_MODE_STAGE1  = 'snhc'
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
 character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
@@ -181,7 +182,7 @@ contains
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_stage_controls( cfg, params, istage )
-        call apply_refine3D_search_overrides( cfg )
+        call apply_refine3D_search_overrides( cfg, params, istage )
     end subroutine build_refine3D_stage_cfg
 
     subroutine init_refine3D_iteration( cfg )
@@ -199,7 +200,7 @@ contains
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
         real :: update_frac_stage
-        if( docked_split_stage(params, istage) .or. force_full_sampling_mode(params) )then
+        if( force_full_sampling_mode(params) )then
             cfg%fillin          = 'no'
             cfg%update_frac_dyn = 1.0
             return
@@ -389,8 +390,10 @@ contains
         end select
     end subroutine set_refine3D_stage_controls
 
-    subroutine apply_refine3D_search_overrides( cfg )
+    subroutine apply_refine3D_search_overrides( cfg, params, istage )
         type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
         select case(cfg%refine%to_char())
             case('prob_neigh')
                 select case(cfg%prob_neigh_mode%to_char())
@@ -413,7 +416,7 @@ contains
         character(len=STDLEN) :: ptcl_src_eff
         real :: lp_eff
         logical :: l_full_update_stage
-        l_full_update_stage = docked_split_stage(params, istage) .or. force_full_sampling_mode(params)
+        l_full_update_stage = force_full_sampling_mode(params)
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         call cline_refine3D%set('prg',                     'refine3D')
@@ -508,6 +511,18 @@ contains
         integer,           intent(in) :: istage
         docked_split_stage = trim(params%multivol_mode).eq.'docked' .and. istage == params%split_stage
     end function docked_split_stage
+
+    module subroutine calc_docked_multistate_max_sampling( params, nptcls, nptcls_cap, ufrac_cap )
+        class(parameters), intent(in)  :: params
+        integer,           intent(in)  :: nptcls
+        integer,           intent(out) :: nptcls_cap
+        real,              intent(out) :: ufrac_cap
+        nptcls_cap = min(nint(params%nstates * 2.5 * params%nsample), NSAMPLE_HET_SPLIT_CAP)
+        nptcls_cap = min(nptcls_cap, nptcls)
+        ufrac_cap  = min(real(nptcls_cap) / real(nptcls), 1.0)
+        ufrac_cap  = min(abinitio_update_frac_max(), ufrac_cap)
+        nptcls_cap = min(nptcls,nint(nptcls*ufrac_cap))
+    end subroutine calc_docked_multistate_max_sampling
 
     logical function force_full_sampling_mode( params ) result( l_force_full )
         class(parameters), intent(in) :: params
