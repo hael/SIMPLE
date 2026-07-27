@@ -217,6 +217,7 @@ contains
         call reg%add_char('tseries', self%tseries)
         call reg%add_char('use_model', self%use_model)
         call reg%add_char('use_thres', self%use_thres)
+        call reg%add_char('view_balance', self%view_balance)
         call reg%add_char('vis', self%vis)
         call reg%add_char('verbose_exit', self%verbose_exit)
         call reg%add_char('verbose_exit_fname', self%verbose_exit_fname)

@@ -367,10 +367,10 @@ contains
             'Ferguson bandwidth multiplier (default 1)', &
             'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
             'tune >= 0', .false., 1.0)
-        call flex_analysis%add_input(UI_FILT, 'dm_alpha', 'num', &
-            'Diffusion-map density normalization (default 0)', &
-            'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
-            '0 <= alpha <= 1', .false., 0.0)
+        call flex_analysis%add_input(UI_FILT, 'view_balance', 'binary', &
+            'Correct uneven view distribution', &
+            'Give every occupied nspace projection bin equal total graph measure using fixed inverse-occupancy weights', &
+            '(yes|no){yes}', .false., 'yes')
         call flex_analysis%add_input(UI_FILT, 'npreimages', 'num', &
             'Representative state volumes (default 8)', &
             'Number of k-medoids used as representative Nyström pre-image targets', &

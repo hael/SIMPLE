@@ -18,6 +18,7 @@ public :: build_euclidean_knn_graph
 public :: build_gated_euclidean_knn_graph
 public :: find_gated_euclidean_neighbors_rows
 public :: build_gated_euclidean_graph_from_neighbors
+public :: projection_occupancy_weights
 public :: build_orientation_knn_graph
 public :: graph_matvec
 public :: graph_directed_edges
@@ -35,7 +36,6 @@ contains
     procedure :: kill      => kill_diffmap_graph
     procedure :: normalize => normalize_diffmap_graph
     procedure :: degree    => diffmap_graph_degree
-    procedure :: ncomponents => diffmap_graph_ncomponents
 end type diffmap_graph
 
 contains
@@ -92,7 +92,7 @@ contains
     !! visited in angular order until nang_nbrs particle candidates have been
     !! examined, and only the k_nn closest registered-residuals are retained.
     subroutine build_gated_euclidean_knn_graph( features, proj_ids, proj_dirs, k_nn, nang_nbrs, graph, &
-        &ncandidates_min, ncandidates_max, ncandidates_mean, bandwidth_mode, bandwidth_tune, alpha )
+        &ncandidates_min, ncandidates_max, ncandidates_mean, bandwidth_mode, bandwidth_tune, alpha, sample_weights )
         real,                intent(in)  :: features(:,:)
         integer,             intent(in)  :: proj_ids(:)
         real,                intent(in)  :: proj_dirs(:,:)
@@ -103,6 +103,7 @@ contains
         character(len=*), optional, intent(in) :: bandwidth_mode
         real, optional, intent(in) :: bandwidth_tune
         real, optional, intent(in) :: alpha
+        real, optional, intent(in) :: sample_weights(:)
         integer, allocatable :: nbrs(:,:),ncandidates(:),rows(:)
         real, allocatable :: d2s(:,:)
         integer :: n, ndim, nproj, k_used, cap_used
@@ -124,7 +125,8 @@ contains
         k_used=min(max(1,k_nn),n-1); cap_used=min(max(k_used,nang_nbrs),n-1)
         allocate(rows(n)); rows=[(i,i=1,n)]
         call find_gated_euclidean_neighbors_rows(features,proj_ids,proj_dirs,k_used,cap_used,rows,nbrs,d2s,ncandidates)
-        call build_gated_euclidean_graph_from_neighbors(n,nbrs,d2s,ncandidates,graph,bandwidth_mode,bandwidth_tune,alpha)
+        call build_gated_euclidean_graph_from_neighbors(n,nbrs,d2s,ncandidates,graph,bandwidth_mode,bandwidth_tune,alpha, &
+            &sample_weights)
         if( present(ncandidates_min)  ) ncandidates_min  = minval(ncandidates)
         if( present(ncandidates_max)  ) ncandidates_max  = maxval(ncandidates)
         if( present(ncandidates_mean) ) ncandidates_mean = real(sum(int(ncandidates,kind=8)),kind=sp) / real(n,kind=sp)
@@ -205,13 +207,14 @@ contains
     end subroutine find_gated_euclidean_neighbors_rows
 
     subroutine build_gated_euclidean_graph_from_neighbors( n, nbrs, d2s, ncandidates, graph, &
-        &bandwidth_mode, bandwidth_tune, alpha )
+        &bandwidth_mode, bandwidth_tune, alpha, sample_weights )
         integer, intent(in) :: n,nbrs(:,:),ncandidates(:)
         real, intent(in) :: d2s(:,:)
         type(diffmap_graph), intent(out) :: graph
         character(len=*), optional, intent(in) :: bandwidth_mode
         real, optional, intent(in) :: bandwidth_tune
         real, optional, intent(in) :: alpha
+        real, optional, intent(in) :: sample_weights(:)
         real, allocatable :: kth_d2(:)
         integer :: k_used
         if( n<2 .or. size(nbrs,2)/=n ) THROW_HARD('invalid gated neighbor table assembly')
@@ -221,9 +224,45 @@ contains
         if( size(ncandidates)/=n .or. any(nbrs<1).or.any(nbrs>n) ) THROW_HARD('incomplete gated neighbor table')
         allocate(kth_d2(n))
         kth_d2=d2s(k_used,:)
-        call pack_scalar_knn_to_csr(n,k_used,nbrs,d2s,kth_d2,'euc_gated',graph,bandwidth_mode,bandwidth_tune,alpha)
+        call pack_scalar_knn_to_csr(n,k_used,nbrs,d2s,kth_d2,'euc_gated',graph,bandwidth_mode,bandwidth_tune,alpha, &
+            &sample_weights)
         deallocate(kth_d2)
     end subroutine build_gated_euclidean_graph_from_neighbors
+
+    !> Parameter-free importance weights for uneven projection-direction occupancy.
+    !!
+    !! Every occupied projection bin receives the same total statistical mass.
+    !! Weights are normalized to unit mean, so equal occupancy produces exactly
+    !! unit weights and the unweighted graph normalization is recovered.
+    subroutine projection_occupancy_weights( proj_ids, nproj, weights, noccupied, min_occupancy, max_occupancy )
+        integer, intent(in) :: proj_ids(:),nproj
+        real, allocatable, intent(out) :: weights(:)
+        integer, optional, intent(out) :: noccupied,min_occupancy,max_occupancy
+        integer, allocatable :: counts(:)
+        integer :: i,nocc,occ_min,occ_max
+        real :: bin_mass
+        if( size(proj_ids)<1 .or. nproj<1 ) THROW_HARD('cannot balance empty projection occupancy')
+        if( any(proj_ids<1).or.any(proj_ids>nproj) ) THROW_HARD('projection id outside view-balance grid')
+        allocate(counts(nproj),source=0)
+        do i=1,size(proj_ids)
+            counts(proj_ids(i))=counts(proj_ids(i))+1
+        end do
+        nocc=count(counts>0)
+        if( nocc<1 ) THROW_HARD('view balance found no occupied projection bins')
+        occ_min=minval(counts,mask=counts>0)
+        occ_max=maxval(counts)
+        bin_mass=real(size(proj_ids))/real(nocc)
+        allocate(weights(size(proj_ids)))
+        do i=1,size(proj_ids)
+            weights(i)=bin_mass/real(counts(proj_ids(i)))
+        end do
+        if( abs(sum(weights)-real(size(weights)))>100.*epsilon(1.)*real(size(weights)) ) &
+            &THROW_HARD('view-balance weights failed unit-mean normalization')
+        if( present(noccupied) ) noccupied=nocc
+        if( present(min_occupancy) ) min_occupancy=occ_min
+        if( present(max_occupancy) ) max_occupancy=occ_max
+        deallocate(counts)
+    end subroutine projection_occupancy_weights
 
     subroutine build_orientation_knn_graph( params, spproj, pinds, k_nn, graph, bandwidth_mode, bandwidth_tune, alpha )
         type(parameters),      intent(in)    :: params
@@ -320,7 +359,8 @@ contains
         end do
     end subroutine find_orientation_neighbors
 
-    subroutine pack_scalar_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, graph, bandwidth_mode, bandwidth_tune, alpha )
+    subroutine pack_scalar_knn_to_csr( n, k_used, nbrs, d2s, kth_d2, metric, graph, bandwidth_mode, bandwidth_tune, alpha, &
+        &sample_weights )
         integer,              intent(in)  :: n, k_used, nbrs(:,:)
         real,                 intent(in)  :: d2s(:,:), kth_d2(:)
         character(len=*),     intent(in)  :: metric
@@ -328,6 +368,7 @@ contains
         character(len=*), optional, intent(in) :: bandwidth_mode
         real, optional, intent(in) :: bandwidth_tune
         real, optional, intent(in) :: alpha
+        real, optional, intent(in) :: sample_weights(:)
         integer, allocatable :: counts(:), cursor(:)
         real :: eps, w
         integer :: i, m, j, p, nnz
@@ -392,7 +433,7 @@ contains
                 endif
             end do
         end do
-        call graph%normalize(alpha)
+        call graph%normalize(alpha,sample_weights)
         deallocate(counts, cursor)
     contains
         logical function neighbor_contains( row_nbrs, target ) result(found)
@@ -546,10 +587,14 @@ contains
     !! the Fokker-Planck operator; alpha=1 gives the Laplace-Beltrami operator,
     !! which divides out the (non-uniform) sampling density and leaves the
     !! intrinsic manifold geometry.  See Coifman & Lafon, ACHA 21 (2006).
-    subroutine normalize_diffmap_graph( self, alpha )
+    !!
+    !! Optional sample_weights define a known target measure independently of
+    !! graph degree. They are used by flex to remove projection-bin occupancy.
+    subroutine normalize_diffmap_graph( self, alpha, sample_weights )
         class(diffmap_graph), intent(inout) :: self
         real, optional,       intent(in)    :: alpha
-        real, allocatable :: deg(:), deg_a(:)
+        real, optional,       intent(in)    :: sample_weights(:)
+        real, allocatable :: deg(:), deg_a(:), weighted_deg(:)
         real    :: a
         integer :: i, j, p
         if( self%n < 1 ) return
@@ -559,7 +604,41 @@ contains
         call self%degree(deg, normalized=.false.)
         if( allocated(self%wnorm) ) deallocate(self%wnorm)
         allocate(self%wnorm(self%nnz), source=0.)
-        if( a > 0. )then
+        if( present(sample_weights) )then
+            if( size(sample_weights)/=self%n ) THROW_HARD('graph sample-weight shape mismatch')
+            if( any(sample_weights<=0.).or.any(.not.ieee_is_finite(sample_weights)) ) &
+                &THROW_HARD('graph sample weights must be finite and positive')
+            if( a>0. )then
+                allocate(deg_a(self%n))
+                do i=1,self%n
+                    deg_a(i)=max(deg(i),DTINY)**a
+                end do
+                do i=1,self%n
+                    do p=self%rowptr(i),self%rowptr(i+1)-1
+                        j=self%colind(p)
+                        self%wnorm(p)=self%w(p)/(deg_a(i)*deg_a(j))
+                    end do
+                end do
+                deallocate(deg_a)
+            else
+                self%wnorm=self%w
+            endif
+            allocate(weighted_deg(self%n),source=0.)
+            do i=1,self%n
+                do p=self%rowptr(i),self%rowptr(i+1)-1
+                    j=self%colind(p)
+                    weighted_deg(i)=weighted_deg(i)+self%wnorm(p)*sample_weights(j)
+                end do
+            end do
+            do i=1,self%n
+                do p=self%rowptr(i),self%rowptr(i+1)-1
+                    j=self%colind(p)
+                    self%wnorm(p)=self%wnorm(p)*sqrt(sample_weights(i)*sample_weights(j))/ &
+                        &sqrt(max(weighted_deg(i),DTINY)*max(weighted_deg(j),DTINY))
+                end do
+            end do
+            deallocate(weighted_deg)
+        else if( a > 0. )then
             ! Coifman-Lafon density (alpha) normalization on the raw degree.
             allocate(deg_a(self%n))
             do i = 1,self%n
@@ -613,35 +692,6 @@ contains
             end do
         end do
     end subroutine diffmap_graph_degree
-
-    integer function diffmap_graph_ncomponents( self ) result(ncomponents)
-        class(diffmap_graph), intent(in) :: self
-        logical, allocatable :: visited(:)
-        integer, allocatable :: stack(:)
-        integer :: i, j, p, top
-        ncomponents = 0
-        if( self%n < 1 ) return
-        allocate(visited(self%n), source=.false.)
-        allocate(stack(self%n), source=0)
-        do i = 1,self%n
-            if( visited(i) ) cycle
-            ncomponents = ncomponents + 1
-            top = 1
-            stack(top) = i
-            visited(i) = .true.
-            do while( top > 0 )
-                j = stack(top)
-                top = top - 1
-                do p = self%rowptr(j),self%rowptr(j+1)-1
-                    if( visited(self%colind(p)) ) cycle
-                    visited(self%colind(p)) = .true.
-                    top = top + 1
-                    stack(top) = self%colind(p)
-                end do
-            end do
-        end do
-        deallocate(visited,stack)
-    end function diffmap_graph_ncomponents
 
     subroutine graph_matvec( ctx, x, y )
         class(*), intent(in)  :: ctx

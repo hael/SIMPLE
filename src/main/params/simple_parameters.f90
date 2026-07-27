@@ -164,6 +164,7 @@ type :: parameters
     character(len=3)          :: updated='no'         !< whether parameters has been updated
     character(len=3)          :: use_model='yes'      !< use model for class-average rejection in sieve(yes|no){yes}
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
+    character(len=3)          :: view_balance='yes'   !< equalize occupied projection-bin measure in flex diffusion maps
     character(len=3)          :: vis='no'             !< visualise(yes|no)
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}

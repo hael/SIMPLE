@@ -125,8 +125,11 @@ utility).
 
 #### 3.2.2 Coifman–Lafon α normalization (HIGH PRIORITY)
 
-> **Implemented.** The production behavior, parameters, defaults, and the
-> Ferguson-bandwidth correction history now live in the
+> **Implemented in the generic graph API, but no longer exposed by
+> `flex_analysis`.** Flex fixes `dm_alpha=0` and optionally applies a
+> parameter-free inverse projection-bin occupancy measure through
+> `view_balance=yes|no`. The production behavior and the Ferguson-bandwidth
+> correction history live in the
 > [`flex_analysis` policy, §3.1](../policies/flex_analysis_policy.md).
 > The review rationale below is retained for historical context.
 
@@ -164,11 +167,13 @@ This is a pure symmetric degree normalization — it corresponds to `alpha = 0`
 (graph Laplacian) applied to already-Gaussianized weights.  The
 sampling-density correction that `alpha = 1` would provide is absent.
 
-**Implication for cryo-EM**: because orientation coverage in cryo-EM datasets is
-never uniform (preferred orientations, angular gaps), the plain graph Laplacian
-embeds sampling density artefacts into the leading eigenvectors.  With
-`alpha = 1` those artefacts are cancelled, and the eigenvectors reflect the
-intrinsic molecular geometry of the particle set.
+**Revised implication for cryo-EM**: the degree of SIMPLE's global,
+projection-gated residual graph mixes view occupancy with conformational
+occupancy, feature reliability, neighbourhood reciprocity, and outliers.
+Therefore `alpha=1` does not selectively cancel preferred orientations and was
+empirically detrimental in flex. The flex policy now removes only projection
+occupancy using known `nspace` bin assignments, while retaining ordinary
+degree support.
 
 **Suggested change**: add an optional `alpha` argument (default `0`, preserving
 current behaviour) to `normalize_diffmap_graph`.  When `alpha > 0`, compute a
@@ -186,11 +191,6 @@ does not affect graph construction or the eigensolver.
 ---
 
 #### 3.2.3 Stationary measure / Riemannian density (MEDIUM PRIORITY)
-
-> **Implemented.** `embed_graph` retains the Perron vector, exposes its square
-> as an optional normalized `stationary_measure`, and divides every
-> nontrivial symmetric eigenvector by the Perron vector to recover the right
-> Markov eigenfunction used by ManifoldEM.
 
 **ManifoldEM location**: `DMembeddingII.py`, function `op` (~line 611):
 
@@ -210,16 +210,21 @@ A[ind4:ind5,:] = np.matmul(tmp, mu_psi)
 ```
 
 **SIMPLE current approach**: `embed_graph` in `simple_diffusion_maps.f90`
-retains the top symmetric eigenvector `phi_0` and forms
+(~line 139) skips eigenvector 0 entirely:
 
 ```fortran
-right_evecs(k,i) = evecs(i,j) / trivial(i)
-coords(k,i) = evals(j) * right_evecs(k,i)
+do k = 1,ndiff_used
+    j = nev - k          ! nev is ndiff_scan+1; k=1 takes the 2nd-largest eigenvalue
+    coords(k,i) = evals(j) * evecs(i,j)
+end do
 ```
 
-The optional `stationary_measure` is `phi_0**2`, normalized to unit sum.  Flex
-records its range and effective sample size as diagnostics; it does not
-automatically use the measure as a reconstruction weight.
+The trivial eigenfunction is discarded without ever being exposed to callers.
+
+**Suggested change**: add an optional output `stationary_measure` of shape
+`(n)` to `embed_graph`.  When present, fill it with `evecs(:, nev)**2` before
+the coordinate loop.  No existing caller is changed.  The measure can then be
+used for density-weighted trajectory generation or averaging, if needed.
 
 ---
 
