@@ -48,6 +48,10 @@ type :: pcg_reconstruction
     ! weighted adjoint identity, the same way it drives forward_plane/
     ! adjoint_plane_add directly in the T_i=1 case)
     procedure :: build_transfer
+    ! REAL-DATA INGEST (public: callers build y_planes for real particles from
+    ! this, since forward_plane only ever generates SYNTHETIC y_planes by
+    ! projecting a known volume)
+    procedure :: extract_native_plane
     ! GETTERS
     procedure :: get_lims2
     procedure :: get_lims3
@@ -372,6 +376,32 @@ contains
             end do
         end do
     end function build_transfer
+
+    !>  \brief  2D, non-interpolated analog of interp_from_volume: reads a real
+    !!          particle image's own Fourier plane directly into the full
+    !!          lims2 disk (exact native sampling -- the image's own box IS
+    !!          the native grid, no KB window, no periodic wrap needed, unlike
+    !!          forward_plane's rotated-projection gather from a 3D volume).
+    !!          Friedel folding for negative h is handled by
+    !!          get_fcomp/comp_addr_phys exactly as in the 3D case (m=0 fixed,
+    !!          the trivial third dimension of a 2D image). img2d must already
+    !!          be FFT'd. This is how y_planes gets built for REAL particles;
+    !!          forward_plane only ever builds SYNTHETIC y_planes (projecting
+    !!          a known volume).
+    function extract_native_plane( self, img2d ) result( plane )
+        class(pcg_reconstruction), intent(in) :: self
+        class(image),               intent(in) :: img2d
+        complex :: plane(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
+        integer :: h, k, phys(3)
+        plane = cmplx(0.,0.)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k > self%sqlp ) cycle
+                phys = img2d%comp_addr_phys(h,k,0)
+                plane(h,k) = img2d%get_fcomp([h,k,0], phys)
+            end do
+        end do
+    end function extract_native_plane
 
     ! PRIVATE HELPERS
 

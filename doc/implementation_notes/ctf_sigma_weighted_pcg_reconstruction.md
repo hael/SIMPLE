@@ -2,7 +2,10 @@
 
 ## Status
 
-**Proposal for review. No implementation is implied by this note.**
+**Implementation in progress.** Milestones 0-2 are built (CTF-free operator,
+heterogeneous CTF/shift/sigma, and an initial real-project command). See
+section 0 for what's implemented, what's deferred, and where the
+implementation deviated from this note's original plan.
 
 This note proposes an experimental reconstruction command that solves a
 CTF- and noise-weighted least-squares problem with preconditioned conjugate
@@ -13,6 +16,145 @@ more exact iterative data model gives a measurable improvement for a set of
 
 It is not a replacement for the current reconstruction path and must not
 change its numerical result, artifacts, or performance characteristics.
+
+## 0. Implementation status
+
+Code lives in:
+
+- `src/main/volume/simple_pcg_reconstruction.f90` -- the `pcg_reconstruction`
+  operator/solver type (milestones 0-1).
+- `src/main/commanders/simple/simple_commanders_pcg_recon.f90` -- the
+  `reconstruct3D_pcg` production command (milestone 2).
+- Milestone 0/1 tests: `test=pcg_recon_ctf_free`, `test=pcg_recon_ctf_hetero`
+  (`src/main/commanders/test/simple_commanders_test_highlevel.f90`).
+
+### Milestone 0 -- CTF-free operator (section 9, stages 2-4)
+
+Implements `forward_plane`/`adjoint_plane_add` (`G_i F` and its adjoint),
+`apply_normal`/`apply_adjoint_all`, and a plain (unpreconditioned) CG `solve`.
+`T_i = 1` for every particle (no CTF, no shift, no sigma). Validated by
+`test=pcg_recon_ctf_free`: adjoint dot-product test (stage 2), normal-operator
+symmetry/positive-definiteness test (stage 3), and a no-CTF/no-noise
+synthetic-phantom recovery test (stage 4) -- all in-memory, no project I/O.
+
+### Milestone 1 -- heterogeneous CTF/shift/sigma (section 9, stage 5)
+
+Adds `build_transfer` (`T_i = C_i S_i / sqrt(sigma2_i)`), and optional
+`use_ctf`/`sig2arr` arguments on `apply_normal`/`apply_adjoint_all`/`solve`
+(default off, reproducing milestone 0 exactly). Validated by
+`test=pcg_recon_ctf_hetero`: the same three-stage sequence, now with nonzero
+shifts, several distinct defocus/astigmatism groups, and a shared
+noise-power profile -- this is what actually exercises section 5's release
+gate ("must be run with nonzero shifts and a complex transfer"), which
+milestone 0's `T_i=1` case could not.
+
+### Milestone 2 -- real-project command (section 9, stage 6, partial)
+
+`reconstruct3D_pcg` reads a project, selects particles via `sample4rec`
+filtered to one state, reads per-particle orientation/CTF/shift straight from
+the project (read-only), reads particle images in production's own batched
+I/O pattern (`prepimgbatch`/`discrete_read_imgbatch`), and solves. Matches
+section 2's fixed-input contract: single state, orientations/shifts as
+inputs, `nparts=1`, no even/odd, no symmetry, no distributed execution,
+writes to a new experimental directory, never writes back to the project,
+does not enter through `commander_volassemble`.
+
+**Not yet done, from stage 6's full ask:** FSC comparison against a frozen
+gridding reference, local anisotropy indicators, and peak-memory reporting.
+Wall time is recorded. This is deliberately deferred, not dropped -- getting
+the command running on real data and producing a solver diagnostics table
+came first; the comparison step is the next piece of work, once run against
+real project data.
+
+**Not started:** stage 7 (thread-count reproducibility), stage 8 / section
+8.1 (kernelized normal operator, phase 2), section 8's preconditioner, and
+everything in section 12 (continuous joint refinement). All correctly remain
+out of scope for phase 1.
+
+### Where implementation deviated from this note, and why
+
+1. **`image%gen_fplane4rec` (section 4) was not reused.** Tracing its actual
+   implementation (`simple_image_ctf.f90`) surfaced two problems: (a) it
+   requires a one-time module-global cache (`simple_memoize_ft_maps`), which
+   conflicts directly with section 6's "must not use a module global for
+   ... FFT plans, or particle planes"; (b) its packed plane convention
+   (`k<=0` half-plane over a *padded*, `OSMPL_PAD_FAC`-scaled box) differs
+   from the full-symmetric-disk, native-box representation this
+   implementation uses (point 3 below), which would have reintroduced the
+   packed-half-plane indexing risk section 5 explicitly says to avoid.
+   `build_transfer` instead evaluates `C_i`/`S_i` directly via `ctf`/
+   `ctfparams` (`src/main/ctf/simple_ctf.f90`) -- the same underlying CTF
+   physics and reciprocal-pixel convention `image%apply_ctf` uses, just
+   invoked per-pixel rather than through the `fplane_type` wrapper.
+
+2. **A factual correction to this note's section 4.** It describes
+   `fplane_type%transfer_plane` (observation mode) as containing
+   `CTF*shift/sqrt(sigma2)`. Tracing the actual code shows the shift is *not*
+   in `transfer_plane` -- it's folded into `cmplx_plane` instead
+   (`cmplx_plane = S_i*y_i/sqrt(sigma2_i)`, `transfer_plane = C_i/sqrt(sigma2_i)`
+   only). This doesn't affect the implementation (which never called
+   `gen_fplane4rec`, per point 1), but is worth fixing here since a future
+   reader relying on this note's description of `transfer_plane` would be
+   misled.
+
+3. **The full-symmetric-disk plane representation (section 5's "may use ...
+   full complex work planes" escape hatch) became the permanent design, not
+   just a validation aid.** `forward_plane`/`adjoint_plane_add` always use an
+   unpacked, both-sign-`h` disk, never the packed half-plane. This was
+   load-bearing, not cosmetic: getting the packed convention's Nyquist-bin
+   bookkeeping right (which slot the redundant Friedel mate's energy
+   actually lands in after `adjoint_plane_add`'s scatter) was the hardest
+   bug in milestone 0 -- an orientation-dependent, silent energy-loss bug
+   that a single-orientation adjoint test did not catch; it only surfaced
+   once tested across multiple, sufficiently different rotations. Keeping
+   the full-disk representation permanently avoids reintroducing that
+   surface for a performance gain that hasn't been shown to matter yet.
+
+4. **`forward_plane`, `adjoint_plane_add`, `apply_normal`, `apply_adjoint_all`,
+   `build_transfer`, and `extract_native_plane` are public**, not the private
+   helpers section 6's sketch shows. The test commanders (and, for
+   `extract_native_plane`, the `reconstruct3D_pcg` commander) need to drive
+   the operator's individual pieces directly to validate the adjoint
+   identity *before* trusting `solve()` -- consistent with section 9's own
+   "do not proceed past a failed earlier stage" discipline, just implemented
+   as public API rather than a private-module self-test.
+
+5. **Sigma2 is a single profile shared across the whole selection, not
+   per-particle `N_i`.** Section 3's model and section 4's dependency table
+   (`sigma2` ownership -> `builder%esig`, "read the existing fixed spectra")
+   both imply per-particle noise weighting. The full `euclid_sigma2` path
+   needs a `polarft_calc` (`pftc`), meaning running search/polar-FT setup
+   this reconstruction-only solver has no other reason to pull in.
+   Milestone 2 instead reads the lightweight, project/pftc-independent
+   `sigma2_binfile` (same on-disk convention `euclid_sigma2` writes) and
+   averages the selected particles' spectra into one shared profile. This is
+   an explicit, narrower scope than the note describes, not an oversight --
+   true per-particle sigma2 is deferred to a later pass; the shared-profile
+   case already exercises the same "divide by `sqrt(sigma2)`" code path the
+   real thing needs.
+
+6. **`objfun`-gated sigma2, not file-presence-gated.** Not specified in this
+   note at all -- added to match `reconstruct3D`'s own convention (`objfun=cc`
+   needs no sigmas, `objfun=euclid` requires them) per direct instruction,
+   rather than the note's original silent-fallback framing. `reconstruct3D_pcg`
+   now requires (`THROW_HARD`s if absent) a sigma2 file when `objfun=euclid`,
+   instead of quietly reconstructing unweighted if the file happens to be
+   missing.
+
+7. **The KB window is used at its natural odd width** (3 points for
+   `KBWINSZ=1.5`), not blindly assumed to be even. This isn't a deviation
+   from anything the note specifies, but is worth recording: an even-width
+   window would not be centered on `nint(loc)`, breaking the
+   mirror-consistency the full-disk adjoint construction (point 3) depends
+   on. `KBWINSZ=1.5` already gives an odd window in this codebase, so no
+   change to KB parameters was needed -- `simple_pcg_reconstruction.f90`
+   just computes the width as `2*iwinsz+1` explicitly, to document the
+   invariant instead of trusting it silently.
+
+Everything in section 10's non-goals list still holds: no changes to
+`reconstructor`/`reconstructor_eo`/`volassemble`/online matcher, no new
+production `refine3D` argument, no MPI/GPU, no adaptive regularizer/automask
+/nonuniform filtering/FSC feedback inside PCG, and no SPIDER-derived code.
 
 ## 1. Question being tested
 

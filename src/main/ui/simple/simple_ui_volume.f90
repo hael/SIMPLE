@@ -6,6 +6,7 @@ implicit none
 type(ui_program), target :: center
 type(ui_program), target :: reproject
 type(ui_program), target :: volops
+type(ui_program), target :: reconstruct3D_pcg
 
 contains
 
@@ -14,6 +15,7 @@ contains
         call new_center(prgtab)
         call new_reproject(prgtab)
         call new_volops(prgtab)
+        call new_reconstruct3D_pcg(prgtab)
     end subroutine construct_volume_programs
 
     subroutine print_volume_programs(logfhandle)
@@ -22,6 +24,7 @@ contains
         write(logfhandle,'(A)') center%name%to_char()
         write(logfhandle,'(A)') reproject%name%to_char()
         write(logfhandle,'(A)') volops%name%to_char()
+        write(logfhandle,'(A)') reconstruct3D_pcg%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_volume_programs
 
@@ -142,5 +145,32 @@ contains
         ! add to ui_hash
         call add_ui_program('volops', volops, prgtab)
     end subroutine new_volops
+
+    subroutine new_reconstruct3D_pcg( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call reconstruct3D_pcg%new(&
+        &'reconstruct3D_pcg',&                 ! name
+        &'Experimental CTF/sigma-weighted PCG 3D reconstruction',&
+        &'is a milestone-2, experimental single-state 3D reconstruction program using a matrix-free, '&
+        &'preconditioned-conjugate-gradient solver instead of Fourier gridding (doc/implementation_notes/'&
+        &'ctf_sigma_weighted_pcg_reconstruction.md). Reads a project and reconstructs one volume for one '&
+        &'state from its current particle orientations, CTF, and shifts; orientations are inputs, not '&
+        &'optimized. nparts=1, no even/odd split, no symmetry, no distributed execution. Writes to a new '&
+        &'experimental output directory and never modifies the project.',&
+        &'simple_exec',&                       ! executable
+        &.true.)                                ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! parameter input/output
+        call reconstruct3D_pcg%add_input(UI_PARM, projfile, required_override=.true.)
+        call reconstruct3D_pcg%add_input(UI_PARM, oritype)
+        call reconstruct3D_pcg%add_input(UI_PARM, objfun)
+        call reconstruct3D_pcg%add_input(UI_PARM, 'state', 'num', 'State to reconstruct', &
+            &'Index of the single state to reconstruct', 'state index{1}', .false., 1.)
+        ! computer controls
+        call reconstruct3D_pcg%add_input(UI_COMP, nthr)
+        ! add to ui_hash
+        call add_ui_program('reconstruct3D_pcg', reconstruct3D_pcg, prgtab)
+    end subroutine new_reconstruct3D_pcg
 
 end module simple_ui_volume
