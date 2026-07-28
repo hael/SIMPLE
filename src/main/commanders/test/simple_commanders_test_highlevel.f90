@@ -1105,15 +1105,15 @@ subroutine exec_test_ptcls_ppca_subproject_distr( self, cline )
     call simple_end('**** TEST_PTCLS_PPCA_SUBPROJECT_DISTR NORMAL STOP ****')
 end subroutine exec_test_ptcls_ppca_subproject_distr
 
-!>  \brief  Milestone 0 of doc/implementation_notes/ctf_sigma_weighted_pcg_reconstruction.md:
-!  CTF-free (T_i=1), fully in-memory validation of the matrix-free PCG reconstruction
-!  operator. Three ordered, fail-fast stages mirroring the note's section 9 sequence:
-!    1. adjoint dot-product test on forward_plane/adjoint_plane_add (section 5 gate)
+!>  \brief  CTF-free (T_i=1), fully in-memory validation of the matrix-free PCG
+!  reconstruction operator, see doc/policies/reconstruct3D_pcg_policy.md. Three
+!  ordered, fail-fast stages:
+!    1. adjoint dot-product test on forward_plane/adjoint_plane_add
 !    2. normal-operator test on apply_normal (Hermitian symmetry, positive-definiteness)
 !    3. no-CTF/no-noise synthetic recovery: PCG must recover a known phantom
 !  Does not touch reconstructor, reconstructor_eo, or volassemble.
 subroutine exec_test_pcg_recon_ctf_free( self, cline )
-    use simple_pcg_reconstruction, only: pcg_reconstruction
+    use simple_reconstructor_pcg, only: reconstructor_pcg
     class(commander_test_pcg_recon_ctf_free), intent(inout) :: self
     class(cmdline),                           intent(inout) :: cline
     integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4
@@ -1127,7 +1127,7 @@ subroutine exec_test_pcg_recon_ctf_free( self, cline )
         &3.0,-2.0, 6.0], [3,NBLOBS])
     real,             parameter :: SIGMAS(NBLOBS) = [2.0, 2.5, 1.8, 2.2]
     real,             parameter :: AMPS(NBLOBS)   = [1.0, 0.8, 0.6, 0.5]
-    type(pcg_reconstruction) :: pcgop
+    type(reconstructor_pcg) :: pcgop
     type(oris)                :: projdirs
     type(ori)                 :: e
     real,    allocatable      :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
@@ -1280,23 +1280,20 @@ subroutine exec_test_pcg_recon_ctf_free( self, cline )
     endif
 end subroutine exec_test_pcg_recon_ctf_free
 
-!>  \brief  Milestone 1 of doc/implementation_notes/ctf_sigma_weighted_pcg_reconstruction.md:
-!  heterogeneous per-particle CTF + shift + a shared noise-power profile, still fully
-!  in-memory (note section 9, stage 5: "Heterogeneous CTF and sigma synthetic
-!  reconstruction"). Extends milestone 0's operator via its opt-in use_ctf/sig2arr
-!  arguments -- forward_plane/adjoint_plane_add/scatter_one/fold_and_ifft are
-!  untouched; only build_transfer (T_i = C_i*S_i/sqrt(sigma2_i)) is new. Three
-!  ordered, fail-fast stages:
-!    1. adjoint dot-product test WITH nonzero shift and a real heterogeneous CTF --
-!       the note's actual section 5 release gate, which milestone 0 never exercised
-!       (T_i=1 there trivially self-adjoint)
+!>  \brief  Heterogeneous per-particle CTF + shift + a shared noise-power profile,
+!  still fully in-memory, see doc/policies/reconstruct3D_pcg_policy.md. Exercises the
+!  operator's opt-in use_ctf/sig2arr arguments and build_transfer
+!  (T_i = C_i*S_i/sqrt(sigma2_i)); forward_plane/adjoint_plane_add/scatter_one/
+!  fold_and_ifft are untouched. Three ordered, fail-fast stages:
+!    1. adjoint dot-product test WITH nonzero shift and a real heterogeneous CTF
+!       (the CTF-free T_i=1 case is trivially self-adjoint and cannot exercise this)
 !    2. normal-operator test on apply_normal across a heterogeneous
 !       spiral set (distinct defocus groups, distinct shifts)
-!    3. heterogeneous synthetic recovery: PCG must recover the same known phantom
-!       milestone 0 used, now through CTF+shift+sigma-weighted synthetic data
+!    3. heterogeneous synthetic recovery: PCG must recover a known phantom
+!       through CTF+shift+sigma-weighted synthetic data
 !  Does not touch reconstructor, reconstructor_eo, or volassemble.
 subroutine exec_test_pcg_recon_ctf_hetero( self, cline )
-    use simple_pcg_reconstruction, only: pcg_reconstruction
+    use simple_reconstructor_pcg, only: reconstructor_pcg
     class(commander_test_pcg_recon_ctf_hetero), intent(inout) :: self
     class(cmdline),                             intent(inout) :: cline
     integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4, NCTF = 5
@@ -1314,7 +1311,7 @@ subroutine exec_test_pcg_recon_ctf_hetero( self, cline )
     real,             parameter :: DFX_VALS(NCTF)    = [1.0, 1.5, 2.0, 2.5, 3.0]
     real,             parameter :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
     real,             parameter :: ANGAST_VALS(NCTF) = [0., 20., 40., 60., 80.]
-    type(pcg_reconstruction) :: pcgop
+    type(reconstructor_pcg) :: pcgop
     type(oris)                :: projdirs
     type(ori)                 :: e
     type(ctfparams)           :: ctfparms
@@ -1336,7 +1333,7 @@ subroutine exec_test_pcg_recon_ctf_hetero( self, cline )
     allocate(iseed(iseed_n), source=42)
     call random_seed(put=iseed)
 
-    ! ---- build deterministic, asymmetric phantom (identical to milestone 0's) ----
+    ! ---- build deterministic, asymmetric phantom ----
     write(logfhandle,'(a)') '>>> TEST_PCG_RECON_CTF_HETERO: building deterministic phantom'
     allocate(phantom(BOX,BOX,BOX), source=0.0)
     ctr = real(BOX)/2.0 + 0.5
@@ -1369,7 +1366,7 @@ subroutine exec_test_pcg_recon_ctf_hetero( self, cline )
     end do
 
     ! ---- STAGE 1: adjoint dot-product test WITH nonzero shift + real heterogeneous
-    !               CTF (note section 5's actual release gate) ----
+    !               CTF (the operator's actual release gate) ----
     write(logfhandle,'(a)') '>>> STAGE 1: adjoint dot-product test (nonzero shift, real CTF)'
     call e%new(.false.)
     call e%set_euler([30.,55.,70.])
@@ -1506,11 +1503,11 @@ subroutine exec_test_pcg_recon_ctf_hetero( self, cline )
     endif
 end subroutine exec_test_pcg_recon_ctf_hetero
 
-!>  \brief  Milestone 3: the section 8.1 equivalence gate for the kernelized
-!  (Toeplitz/Gram) normal operator, plus the section 8 preconditioner.
+!>  \brief  Equivalence gate for the kernelized (Toeplitz/Gram) normal operator,
+!  plus the sampling-density preconditioner.
 !
-!  WHY THE KERNEL IS NOT THE NOTE'S IMPULSE RESPONSE. Section 8.1 says to build
-!  the kernel as h = H_data(delta_at_origin). That degenerates to gridding: the
+!  WHY THE KERNEL IS NOT AN IMPULSE RESPONSE. Building
+!  the kernel as h = H_data(delta_at_origin) degenerates to gridding: the
 !  KB weights are normalized to sum 1, so G applied to a constant Fourier
 !  volume returns that constant, making the row sums of sum_i G_i^dagger|T_i|^2 G_i
 !  exactly rho, the gridding sampling density. A kernel built that way makes
@@ -1525,27 +1522,27 @@ end subroutine exec_test_pcg_recon_ctf_hetero
 !       voxels and for an interior region with margin >= the KB support, since
 !       the kernel is shift-invariant and the true operator is not, so boundary
 !       error is expected to be larger.
-!    2. section 8.1 invariants: changing only particle shifts must leave the
+!    2. kernel invariants: changing only particle shifts must leave the
 !       kernel unchanged (the shift is a unit-modulus phase and cancels in
 !       |T|^2); changing a CTF must change it.
-!    3. the section 8 preconditioner must be positive and must not change the
+!    3. the preconditioner must be positive and must not change the
 !       converged solution, only the iteration count.
 subroutine exec_test_pcg_recon_kernel( self, cline )
-    use simple_pcg_reconstruction, only: pcg_reconstruction, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
+    use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
     class(commander_test_pcg_recon_kernel), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
     integer,          parameter :: BOX = 24, NPROJS = 30, NCTF = 5
     real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
     real,             parameter :: KV = 300., CS = 2.7, FRACA = 0.1
-    ! epsilon set from the single-precision roundoff the milestone-0/1 operator
-    ! tests measure (~1e-7 relative), loosened for the interior to allow for the
+    ! epsilon set from the single-precision roundoff the operator tests measure
+    ! (~1e-7 relative), loosened for the interior to allow for the
     ! kernel's shift-invariance approximation. NOT tuned after inspecting a
-    ! reconstruction, per the note.
+    ! reconstruction.
     real,             parameter :: EPS_INTERIOR = 5.0e-2
     real,             parameter :: DFX_VALS(NCTF)   = [1.0, 1.5, 2.0, 2.5, 3.0]
     real,             parameter :: ASTIG_VALS(NCTF) = [0.10, 0.15, 0.20, 0.12, 0.18]
     real,             parameter :: ANGAST_VALS(NCTF)= [0., 20., 40., 60., 80.]
-    type(pcg_reconstruction) :: pcgop
+    type(reconstructor_pcg) :: pcgop
     type(oris)               :: projdirs
     type(ori)                :: e
     type(ctfparams)          :: ctfparms
@@ -1610,7 +1607,7 @@ subroutine exec_test_pcg_recon_kernel( self, cline )
         write(logfhandle,'(a)') '    PASS: kernelized operator agrees with the reference in the interior'
     endif
 
-    ! ---- STAGE 2: section 8.1 invariants ----
+    ! ---- STAGE 2: kernel invariants ----
     if( all_ok )then
         write(logfhandle,'(a)') '>>> STAGE 2: kernel invariants (shift-independence, CTF-dependence)'
         khat_a = pcgop%apply_normal_kernel(p_probe)
@@ -1656,7 +1653,7 @@ subroutine exec_test_pcg_recon_kernel( self, cline )
         write(logfhandle,'(a)') '>>> STAGE 2 SKIPPED: stage 1 failed'
     endif
 
-    ! ---- STAGE 3: section 8 preconditioner ----
+    ! ---- STAGE 3: preconditioner ----
     if( all_ok )then
         write(logfhandle,'(a)') '>>> STAGE 3: preconditioner'
         call pcgop%set_op_mode(PCG_OP_MATRIXFREE)
@@ -1679,7 +1676,7 @@ subroutine exec_test_pcg_recon_kernel( self, cline )
     endif
 end subroutine exec_test_pcg_recon_kernel
 
-!>  \brief  Milestone 3: does the deapodization (KB roll-off) correction
+!>  \brief  Does the deapodization (KB roll-off) correction
 !  actually recover the true volume from ENVELOPE-FREE observations?
 !
 !  This is the one test in the suite that does NOT commit an inverse crime.
@@ -1699,7 +1696,7 @@ end subroutine exec_test_pcg_recon_kernel
 !    2. with honest observations, deapodization ON must recover the phantom
 !       strictly better than deapodization OFF
 subroutine exec_test_pcg_recon_deapod( self, cline )
-    use simple_pcg_reconstruction, only: pcg_reconstruction
+    use simple_reconstructor_pcg, only: reconstructor_pcg
     class(commander_test_pcg_recon_deapod), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
     integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4
@@ -1711,7 +1708,7 @@ subroutine exec_test_pcg_recon_deapod( self, cline )
         &3.0,-2.0, 6.0], [3,NBLOBS])
     real,             parameter :: SIGMAS(NBLOBS) = [2.0, 2.5, 1.8, 2.2]
     real,             parameter :: AMPS(NBLOBS)   = [1.0, 0.8, 0.6, 0.5]
-    type(pcg_reconstruction) :: pcgop
+    type(reconstructor_pcg) :: pcgop
     type(oris)               :: projdirs
     type(ori)                :: e
     real,    allocatable     :: phantom(:,:,:), xdiv(:,:,:), recon_on(:,:,:), recon_off(:,:,:)
@@ -1784,7 +1781,7 @@ subroutine exec_test_pcg_recon_deapod( self, cline )
         call pcgop%solve(y_planes, recon_on, maxits=40, rtol=1.0e-3, niters=niters)
         corr_on = corr_of(recon_on, phantom)
         write(logfhandle,'(a,i0,a,f9.5)') '    deapod ON : ', niters, ' iters, corr = ', corr_on
-        ! --- with it OFF (the milestone-2 behaviour, biased on real data) ---
+        ! --- with it OFF (biased on real data) ---
         call pcgop%set_deapod(.false.)
         call pcgop%prep_particles(projdirs)
         allocate(recon_off(BOX,BOX,BOX), source=0.0)

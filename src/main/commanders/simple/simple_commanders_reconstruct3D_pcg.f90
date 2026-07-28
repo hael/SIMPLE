@@ -1,17 +1,17 @@
 !@descr: experimental CTF/sigma-weighted PCG 3D reconstruction command, see
-!  doc/implementation_notes/ctf_sigma_weighted_pcg_reconstruction.md.
+!  doc/policies/reconstruct3D_pcg_policy.md.
 !  reconstruct3D_pcg reads an existing project and reconstructs ONE volume for
 !  ONE state from its current project-carried orientation/CTF/shift
 !  assignments, using the matrix-free (or, optionally, kernelized) PCG operator
-!  in simple_pcg_reconstruction. Phase-1 fixed-input contract (note section 2):
+!  in simple_reconstructor_pcg. Fixed-input contract:
 !  orientations/shifts are inputs, not optimized; single state; nparts=1, no
 !  even/odd split, no symmetry, no distributed execution; writes to a new
 !  experimental execution directory; never writes anything back to the project;
 !  does not enter through commander_volassemble or reuse its output filenames.
 !  Kept in its own file, deliberately separate from production reconstruction.
-module simple_commanders_pcg_recon
+module simple_commanders_reconstruct3D_pcg
 use simple_commanders_api
-use simple_pcg_reconstruction, only: pcg_reconstruction, PCG_OP_KERNEL
+use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL
 use simple_matcher_ptcl_io,    only: prepimgbatch, discrete_read_imgbatch, killimgbatch
 use simple_sigma2_files,       only: load_sigma2_groups
 use simple_math_ft,            only: upsample_sigma2
@@ -36,7 +36,7 @@ contains
         real,    parameter :: RTOL_DEFAULT   = 1.0e-3
         type(parameters)         :: params
         type(builder)            :: build
-        type(pcg_reconstruction) :: pcgop
+        type(reconstructor_pcg) :: pcgop
         type(oris)               :: selection
         type(ori)                :: e
         type(ctfparams)          :: ctfparms
@@ -77,6 +77,13 @@ contains
         endif
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
 
+        ! ---- fixed-input contract: reject the inputs
+        !      this path deliberately does not support, rather than silently
+        !      ignoring them and returning a volume that does not match what the
+        !      user asked for ----
+        if( params%nparts > 1 ) THROW_HARD('reconstruct3D_pcg is single-part; nparts>1 is not supported')
+        if( trim(params%pgrp) /= 'c1' ) THROW_HARD('reconstruct3D_pcg does not apply symmetry; use pgrp=c1')
+
         maxits = MAXITS_DEFAULT
         if( cline%defined('maxits') ) maxits = nint(cline%get_rarg('maxits'))
         ! pcgop and rtol are real parameters/type members, not cline-only flags:
@@ -87,6 +94,12 @@ contains
         rtol   = params%rtol
         if( rtol <= 0. ) rtol = RTOL_DEFAULT
         opmode = string(trim(params%pcgop))
+        select case( opmode%to_char() )
+            case( 'kernel', 'matrixfree' )
+                ! valid
+            case default
+                THROW_HARD('unknown pcgop='//opmode%to_char()//'; use pcgop=kernel or pcgop=matrixfree')
+        end select
         l_kernel = opmode .eq. 'kernel'
         l_norm_noise = params%msk > 0.5
         if( .not. l_norm_noise )then
@@ -94,7 +107,7 @@ contains
         endif
 
         ! ---- particle selection: sample4rec (state>0, updatecnt>0 when
-        !      available), then filtered to exactly one state, since the phase-1
+        !      available), then filtered to exactly one state, since the
         !      contract reconstructs a single state ----
         nptcls = 0 ! sample4rec's nsamples argument is intent(inout)
         call build%spproj_field%sample4rec([params%fromp,params%top], nptcls, pinds)
@@ -121,7 +134,7 @@ contains
         R     = lims2(1,2)
         ! Solve for the density INSIDE mskdiam only. This is a constraint on the
         ! normal equations, not a mask applied to the output -- see
-        ! pcg_reconstruction%set_mask. Skipped when mskdiam is absent, in which
+        ! reconstructor_pcg%set_mask. Skipped when mskdiam is absent, in which
         ! case the solve runs over the whole box as before.
         if( params%msk > 0.5 )then
             call pcgop%set_mask(params%msk)
@@ -265,4 +278,4 @@ contains
         call simple_end('**** SIMPLE_RECONSTRUCT3D_PCG NORMAL STOP ****')
     end subroutine exec_reconstruct3D_pcg
 
-end module simple_commanders_pcg_recon
+end module simple_commanders_reconstruct3D_pcg

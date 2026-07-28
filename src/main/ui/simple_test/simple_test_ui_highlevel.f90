@@ -154,7 +154,7 @@ contains
         call ptcls_ppca_subproject_distr%new(&
         &'ptcls_ppca_subproject_distr',&                                  ! name
         &'split particle chunks + ppca denoise in parallel',&                ! descr_short
-        &'Integration test: split filetab particles into equal chunks, build chunk stacks, denoise each chunk with '&
+        &'Integration test: split filetab particles into equal chunks, build chunk stacks, denoise each chunk with '//&
         &'ppca_denoise in parallel subprojects, merge outputs',&
         &'simple_test_exec',&                                             ! executable
         &.false.)   
@@ -212,8 +212,7 @@ contains
         call pcg_recon_ctf_free%new(&
         &'pcg_recon_ctf_free',&                      ! name
         &'CTF-free PCG reconstruction operator validation',&
-        &'Milestone 0 of the CTF/sigma-weighted PCG reconstruction design note: in-memory '&
-        &'adjoint dot-product test, normal-operator test, and no-CTF/no-noise synthetic '&
+        &'In-memory adjoint dot-product test, normal-operator test, and no-CTF/no-noise synthetic '//&
         &'recovery test against a deterministic phantom. Self-contained, no project required.',&
         &'simple_test_exec',&                       ! executable
         &.false.)                                   ! requires sp_project
@@ -227,9 +226,8 @@ contains
         call pcg_recon_ctf_hetero%new(&
         &'pcg_recon_ctf_hetero',&                    ! name
         &'Heterogeneous CTF/shift/sigma PCG reconstruction operator validation',&
-        &'Milestone 1 of the CTF/sigma-weighted PCG reconstruction design note: in-memory '&
-        &'adjoint dot-product test with nonzero shift and real CTF, normal-operator test '&
-        &'across heterogeneous defocus groups and shifts, and synthetic recovery test '&
+        &'In-memory adjoint dot-product test with nonzero shift and real CTF, normal-operator test '//&
+        &'across heterogeneous defocus groups and shifts, and synthetic recovery test '//&
         &'against a deterministic phantom. Self-contained, no project required.',&
         &'simple_test_exec',&                       ! executable
         &.false.)                                   ! requires sp_project
@@ -243,10 +241,10 @@ contains
         call pcg_recon_kernel%new(&
         &'pcg_recon_kernel',&                        ! name
         &'Kernelized (Toeplitz) PCG normal-operator equivalence test',&
-        &'Section 8.1 release gate for the kernelized normal operator: compares it against the '&
-        &'matrix-free reference over heterogeneous astigmatic CTFs and per-particle sigma, reporting '&
-        &'the error separately for all voxels and for an interior region; asserts the kernel is '&
-        &'shift-invariant but CTF-dependent; and exercises the section 8 preconditioner. '&
+        &'Equivalence gate for the kernelized normal operator: compares it against the '//&
+        &'matrix-free reference over heterogeneous astigmatic CTFs and per-particle sigma, reporting '//&
+        &'the error separately for all voxels and for an interior region; asserts the kernel is '//&
+        &'shift-invariant but CTF-dependent; and exercises the sampling-density preconditioner. '//&
         &'Self-contained, no project required.',&
         &'simple_test_exec',&                        ! executable
         &.false.)                                    ! requires sp_project
@@ -260,9 +258,9 @@ contains
         call pcg_recon_deapod%new(&
         &'pcg_recon_deapod',&                        ! name
         &'KB roll-off (deapodization) correction test',&
-        &'Checks that the deapodization correction recovers the true volume from ENVELOPE-FREE '&
-        &'observations. The other PCG tests generate their data with the operator itself, so the KB '&
-        &'envelope cancels and the bias is invisible to them; this one does not commit that inverse '&
+        &'Checks that the deapodization correction recovers the true volume from ENVELOPE-FREE '//&
+        &'observations. The other PCG tests generate their data with the operator itself, so the KB '//&
+        &'envelope cancels and the bias is invisible to them; this one does not commit that inverse '//&
         &'crime. Self-contained, no project required.',&
         &'simple_test_exec',&                        ! executable
         &.false.)                                    ! requires sp_project

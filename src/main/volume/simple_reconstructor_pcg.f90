@@ -1,31 +1,29 @@
 !@descr: experimental CTF/sigma-weighted, matrix-free Fourier-projection
 !  operator and preconditioned-conjugate-gradient volume solver. Isolated
-!  prototype, see doc/implementation_notes/
-!  ctf_sigma_weighted_pcg_reconstruction.md. Does not touch reconstructor,
-!  reconstructor_eo, volassemble, or any production reconstruction path.
+!  prototype, see doc/policies/reconstruct3D_pcg_policy.md. Does not touch
+!  reconstructor, reconstructor_eo, volassemble, or any production
+!  reconstruction path.
 !
-!  Milestone 0: CTF-free operator (T_i = 1), plain CG.
-!  Milestone 1: full per-particle transfer T_i = C_i*S_i/sqrt(sigma2_i).
-!  Milestone 3: per-particle data cached once by prep_particles (no longer
-!               re-derived every CG iteration), OpenMP throughout, the section
-!               8 diagonal preconditioner (so this is finally genuinely *P*CG
-!               rather than plain CG), and an optional section 8.1 kernelized
-!               (Toeplitz/Gram) normal operator whose per-iteration cost is
-!               independent of particle count.
-module simple_pcg_reconstruction
+!  Per-particle data is cached once by prep_particles (not re-derived every CG
+!  iteration), the particle loop is OpenMP-parallel throughout, and the solve
+!  is preconditioned with the sampling-density diagonal. An optional kernelized
+!  (Toeplitz/Gram) normal operator (pcgop=kernel) makes per-iteration cost
+!  independent of particle count; the matrix-free operator remains the exact
+!  reference.
+module simple_reconstructor_pcg
 use simple_core_module_api
 use simple_image, only: image
 use simple_ctf,   only: ctf
 implicit none
 
-public :: pcg_reconstruction, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
+public :: reconstructor_pcg, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
 private
 #include "simple_local_flags.inc"
 
 integer, parameter :: PCG_OP_MATRIXFREE = 0 !< reference operator: exact, cost ~ nptcls per iteration
-integer, parameter :: PCG_OP_KERNEL     = 1 !< section 8.1 Toeplitz operator: cost independent of nptcls
+integer, parameter :: PCG_OP_KERNEL     = 1 !< kernelized Toeplitz operator: cost independent of nptcls
 
-type :: pcg_reconstruction
+type :: reconstructor_pcg
     private
     integer          :: box        = 0   !< native box: the solver unknown lives here
     integer          :: boxpd      = 0   !< padf*box: every Fourier operation happens here
@@ -59,10 +57,10 @@ type :: pcg_reconstruction
     logical              :: l_mask = .false.
     type(image)          :: wimg                     !< persistent box^3 work image (keeps its FFTW plans)
     logical              :: wimg_exists = .false.
-    ! ---- section 8 preconditioner ----
+    ! ---- sampling-density preconditioner ----
     real,    allocatable :: precond(:,:,:)           !< 1/(rho+lambda) on wimg's cmat layout
     logical              :: l_precond = .false.
-    ! ---- section 8.1 kernelized operator ----
+    ! ---- kernelized operator ----
     integer              :: op_mode = PCG_OP_MATRIXFREE
     real,    allocatable :: Khat(:,:,:)              !< Gram kernel on wimg's cmat layout, real
     logical              :: l_kernel = .false.
@@ -133,14 +131,14 @@ type :: pcg_reconstruction
     procedure, private :: ensure_wimg
     procedure, private :: pad_vol
     procedure, private :: crop_vol
-end type pcg_reconstruction
+end type reconstructor_pcg
 
 contains
 
     ! CONSTRUCTOR
 
     subroutine new( self, box, smpd, lambda )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         integer,                   intent(in)    :: box
         real,                      intent(in)    :: smpd
         real, optional,            intent(in)    :: lambda
@@ -242,7 +240,7 @@ contains
     !!          packing, Nyquist and normalization convention matches the real
     !!          operator by construction rather than by derivation.
     subroutine build_env( self )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         real, parameter :: EPS_DIV = 1.0e-8
         complex, allocatable :: vol_accum(:,:,:)
         real    :: w(self%wdim,self%wdim,self%wdim), ctrval
@@ -286,19 +284,19 @@ contains
     end subroutine build_env
 
     pure function get_env( self ) result( env )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         real :: env(self%box,self%box,self%box)
         env = self%env
     end function get_env
 
     pure function get_invenv( self ) result( invenv )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         real :: invenv(self%box,self%box,self%box)
         invenv = self%invenv
     end function get_invenv
 
     subroutine set_deapod( self, l_deapod )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         logical,                    intent(in)    :: l_deapod
         self%l_deapod = l_deapod
     end subroutine set_deapod
@@ -326,9 +324,9 @@ contains
     !!          Production grids into a 2x padded box and therefore evaluates
     !!          the envelope over half the range, where the correction is mild
     !!          (~1.5x per axis). Adding oversampling is the proper fix and
-    !!          would make this step benign; see the note.
+    !!          would make this step benign.
     pure subroutine deapod_mul( self, v )
-        class(pcg_reconstruction), intent(in)    :: self
+        class(reconstructor_pcg), intent(in)    :: self
         real,                       intent(inout) :: v(self%box,self%box,self%box)
         if( .not. self%l_deapod ) return
         v = v * self%invenv
@@ -360,7 +358,7 @@ contains
     !!          it subtracting a background from what is meant to be a pure
     !!          window function.
     subroutine set_mask( self, mskrad )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: mskrad
         type(image)       :: mimg
         real, allocatable :: ones(:,:,:)
@@ -378,14 +376,14 @@ contains
     end subroutine set_mask
 
     pure subroutine mask_mul( self, v )
-        class(pcg_reconstruction), intent(in)    :: self
-        real,                       intent(inout) :: v(self%box,self%box,self%box)
+        class(reconstructor_pcg), intent(in)    :: self
+        real,                     intent(inout) :: v(self%box,self%box,self%box)
         if( .not. self%l_mask ) return
         v = v * self%mask
     end subroutine mask_mul
 
     subroutine ensure_wimg( self )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         if( self%wimg_exists ) return
         call self%wimg%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
         self%wimg_exists = .true.
@@ -395,8 +393,8 @@ contains
     !!          pad_vol and crop_vol are exact adjoints of one another, which is
     !!          what keeps the oversampled operator self-adjoint.
     function pad_vol( self, v ) result( vp )
-        class(pcg_reconstruction), intent(in) :: self
-        real,                       intent(in) :: v(self%box,self%box,self%box)
+        class(reconstructor_pcg), intent(in) :: self
+        real,                     intent(in) :: v(self%box,self%box,self%box)
         real, allocatable :: vp(:,:,:)
         integer :: o
         o = self%pad_off
@@ -406,8 +404,8 @@ contains
 
     !>  \brief  centre-crop the padded lattice back to the native box.
     function crop_vol( self, vp ) result( v )
-        class(pcg_reconstruction), intent(in) :: self
-        real,                       intent(in) :: vp(self%boxpd,self%boxpd,self%boxpd)
+        class(reconstructor_pcg), intent(in) :: self
+        real,                     intent(in) :: vp(self%boxpd,self%boxpd,self%boxpd)
         real, allocatable :: v(:,:,:)
         integer :: o
         o = self%pad_off
@@ -418,7 +416,7 @@ contains
     ! DESTRUCTOR
 
     subroutine kill( self )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         if( self%wimg_exists ) call self%wimg%kill
         if( allocated(self%rotmats)  ) deallocate(self%rotmats)
         if( allocated(self%ctfparms) ) deallocate(self%ctfparms)
@@ -450,14 +448,14 @@ contains
 
     !>  \brief  caches everything per-particle that does NOT depend on the CG
     !!          iterate: rotation matrices, CTF parameters, shifts and noise
-    !!          spectra. Before milestone 3 these were re-derived inside every
+    !!          spectra. Caching avoids re-deriving them inside every
     !!          apply_normal call -- an ori deep copy, string-keyed hash lookups
     !!          and two euler2m evaluations per particle per iteration. All of
     !!          it is small (order 100 kB for 5000 particles) and constant for
     !!          the whole solve. Caching it is also what lets the particle loop
     !!          be shared cleanly across OpenMP threads.
     subroutine prep_particles( self, orientations, use_ctf, sig2 )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         class(oris),                intent(inout) :: orientations
         logical,          optional, intent(in)    :: use_ctf
         real,             optional, intent(in)    :: sig2(0:,:)
@@ -493,7 +491,7 @@ contains
     end subroutine prep_particles
 
     subroutine set_op_mode( self, op_mode )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         integer,                    intent(in)    :: op_mode
         if( op_mode == PCG_OP_KERNEL .and. .not. self%l_kernel )then
             THROW_HARD('kernelized operator requested but build_kernel has not been called; set_op_mode')
@@ -515,7 +513,7 @@ contains
     !!          letting it leak into callers is exactly how convention bugs get
     !!          in.
     subroutine set_volume( self, v )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: v(self%box,self%box,self%box)
         call self%ensure_wimg
         call self%wimg%set_rmat(self%pad_vol(v), .false.)
@@ -528,7 +526,7 @@ contains
     !!          lattice as padf*loc, and padsc undoes fwd_ft's 1/product(ldim)
     !!          so the result carries native scale.
     subroutine forward_plane( self, e, plane )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         class(ori),                 intent(in)    :: e
         complex,                    intent(out)   :: plane(self%lims2(1,1):self%lims2(1,2),&
                                                             &self%lims2(2,1):self%lims2(2,2))
@@ -558,7 +556,7 @@ contains
     !!          dot-product test can form <x, G^dagger q> without needing to
     !!          know the lattice or the Friedel packing at all.
     function fourier_dot( self, accum ) result( d )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         complex,                    intent(in)    :: accum(self%lims3(1,1):self%lims3(1,2),&
                                                             &self%lims3(2,1):self%lims3(2,2),&
                                                             &self%lims3(3,1):self%lims3(3,2))
@@ -596,10 +594,9 @@ contains
     !!          its own location, with its own KB window -- verified against
     !!          forward_plane by the adjoint dot-product test for arbitrary
     !!          orientations. Written fresh, not derived from
-    !!          reconstructor%insert_plane_oversamp or compress_exp (note
-    !!          section 5).
+    !!          reconstructor%insert_plane_oversamp or compress_exp.
     subroutine adjoint_plane_add( self, plane, e, vol_accum )
-        class(pcg_reconstruction), intent(in)    :: self
+        class(reconstructor_pcg), intent(in)    :: self
         complex,                    intent(in)    :: plane(self%lims2(1,1):self%lims2(1,2),&
                                                             &self%lims2(2,1):self%lims2(2,2))
         class(ori),                 intent(in)    :: e
@@ -612,11 +609,11 @@ contains
     end subroutine adjoint_plane_add
 
     !>  \brief  T_i(h,k) = C_i(h,k) * S_i(h,k) / sqrt(sigma2_i(shell)), the full
-    !!          complex per-particle transfer (note section 3.1). Needed only
+    !!          complex per-particle transfer. Needed only
     !!          for the right-hand side: see absT2_plane for why apply_normal
     !!          does not use this.
     function build_transfer( self, ctfparms, shift, sig2arr ) result( T )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         type(ctfparams),           intent(in) :: ctfparms
         real,                      intent(in) :: shift(2)
         real,            optional, intent(in) :: sig2arr(0:)
@@ -628,7 +625,7 @@ contains
         ! ctfflag, exactly as image%gen_fplane4rec reads it: CTFFLAG_NO means the
         ! images carry no CTF to model, and CTFFLAG_FLIP means they are ALREADY
         ! phase-flipped, so the signed CTF would reintroduce the very phase the
-        ! flip removed. Ignoring the flag (as milestones 0-2 did) is invisible on
+        ! flip removed. Ignoring the flag is invisible on
         ! synthetic fixtures, which are always generated with a signed CTF, and
         ! destroys a real reconstruction on any phase-flipped project.
         l_ctf  = ctfparms%ctfflag /= CTFFLAG_NO
@@ -653,9 +650,9 @@ contains
                 ! SIGN. apply_adjoint_all forms conjg(T)*y, and production applies
                 ! exp(i*(-shift)*shconst*(h,k)) to y (gen_fplane4rec: pshift =
                 ! -shift*shconst). So T must carry the POSITIVE phase for its
-                ! conjugate to reproduce production's correction. Milestones 1-2
-                ! had this negated, which shifted every particle by twice its own
-                ! displacement in the wrong direction -- invisible on synthetic
+                ! conjugate to reproduce production's correction. A negated phase
+                ! here would shift every particle by twice its own displacement in
+                ! the wrong direction -- invisible on synthetic
                 ! data, where the same build_transfer generates the observations.
                 arg       = 2.0*PI * (real(h)*shift(1) + real(k)*shift(2)) / real(self%box)
                 sw        = 1.0
@@ -676,7 +673,7 @@ contains
     !!          built for REAL particles; forward_plane only builds SYNTHETIC
     !!          ones by projecting a known volume.
     function extract_native_plane( self, img2d ) result( plane )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         class(image),               intent(in) :: img2d
         complex :: plane(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
         integer :: h, k, phys(3)
@@ -690,10 +687,9 @@ contains
         end do
     end function extract_native_plane
 
-    !>  \brief  deterministic double-precision real-volume dot product (note
-    !!          section 7).
+    !>  \brief  deterministic double-precision real-volume dot product.
     pure function dot_real_volume( self, a, b ) result( d )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         real,                      intent(in) :: a(self%box,self%box,self%box)
         real,                      intent(in) :: b(self%box,self%box,self%box)
         real(dp) :: d
@@ -708,7 +704,7 @@ contains
     !!          them directly and compare them against one another, and a mask
     !!          would silently hide any disagreement outside its support.
     function apply_normal( self, p ) result( hp )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: p(self%box,self%box,self%box)
         real, allocatable :: hp(:,:,:), pm(:,:,:)
         if( self%l_mask )then
@@ -732,14 +728,13 @@ contains
         call self%mask_mul(hp)
     end function apply_normal
 
-    !>  \brief  H p = sum_i G_i^dagger |T_i|^2 G_i p + lambda*p -- the reference
-    !!          operator (note section 8.1: "the matrix-free operator remains
-    !!          the reference implementation").
+    !>  \brief  H p = sum_i G_i^dagger |T_i|^2 G_i p + lambda*p -- the exact
+    !!          reference operator.
     !!
     !!          Gather, weight and scatter are FUSED into one pass over the
     !!          plane so the rotated coordinate, the wrapped window indices and
     !!          the KB weights are computed once and used for both directions,
-    !!          rather than twice as in milestones 0-1.
+    !!          rather than twice.
     !!
     !!          OpenMP: the particle loop is walked in lockstep by all threads,
     !!          with the plane's h loop worksharing inside it. The scatter uses
@@ -748,7 +743,7 @@ contains
     !!          accumulator -- chosen over per-thread accumulators because at
     !!          box 256 those cost ~135 MB per thread.
     function apply_normal_matrixfree( self, p ) result( hp )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: p(self%box,self%box,self%box)
         real,    allocatable :: hp(:,:,:), pd(:,:,:)
         complex, allocatable :: vol_accum(:,:,:), cmat(:,:,:)
@@ -811,13 +806,13 @@ contains
         hp = hp + self%lambda * p
     end function apply_normal_matrixfree
 
-    !>  \brief  section 8.1 kernelized (Toeplitz/Gram) normal operator:
+    !>  \brief  kernelized (Toeplitz/Gram) normal operator:
     !!          H_data p = crop(IFFT(Khat * FFT(pad(p)))), cost O(box^3 log box)
     !!          and INDEPENDENT of particle count. See build_kernel for how Khat
-    !!          is constructed and why it is not the note's literal impulse
+    !!          is constructed and why it is not a literal impulse
     !!          response.
     function apply_normal_kernel( self, p ) result( hp )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: p(self%box,self%box,self%box)
         real,    allocatable :: hp(:,:,:), work(:,:,:)
         complex, allocatable :: cmat(:,:,:)
@@ -864,7 +859,7 @@ contains
     !!          data right-hand side (no prior term). Unlike H, the RHS DOES
     !!          need the full complex T_i including the shift phase.
     function apply_adjoint_all( self, y_planes ) result( b )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         complex,                    intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
                                                                &self%lims2(2,1):self%lims2(2,2), *)
         real,    allocatable :: b(:,:,:)
@@ -906,10 +901,10 @@ contains
 
     ! SETUP: PRECONDITIONER AND KERNEL
 
-    !>  \brief  section 8 preconditioner M(k) = rho(k) + floor(sh), where
+    !>  \brief  sampling-density preconditioner M(k) = rho(k) + floor(sh), where
     !!          rho = sum_i G_i^dagger |T_i|^2 is exactly the gridding sampling
-    !!          density -- the scatter without the gather. Before milestone 3
-    !!          the solver ran with M = I, i.e. plain CG despite the name. With
+    !!          density -- the scatter without the gather. Without it the solver
+    !!          would run with M = I, i.e. plain CG despite the name. With
     !!          heterogeneous CTFs H is severely ill-conditioned at CTF zeros,
     !!          so this is the other half of the performance problem: it cuts
     !!          iteration count, independently of per-iteration cost.
@@ -935,7 +930,7 @@ contains
     !!          overall scale -- which matters because rho here is accumulated
     !!          without the padsc factors that apply_normal carries.
     subroutine build_precond( self )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         complex, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_precond')
         call self%ensure_wimg
@@ -964,7 +959,7 @@ contains
     !!          calling scatter_plane per particle, which opened and closed one
     !!          region per particle -- 5000 of them on a typical run.
     subroutine accumulate_absT2( self, acc )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         complex,                    intent(inout) :: acc(self%lims3(1,1):self%lims3(1,2),&
                                                           &self%lims3(2,1):self%lims3(2,2),&
                                                           &self%lims3(3,1):self%lims3(3,2))
@@ -995,7 +990,7 @@ contains
     end subroutine accumulate_absT2
 
     subroutine precond_from_accum( self, rho_accum )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         complex,                    intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
                                                                 &self%lims3(2,1):self%lims3(2,2),&
                                                                 &self%lims3(3,1):self%lims3(3,2))
@@ -1055,10 +1050,9 @@ contains
         self%l_precond = .true.
     end subroutine precond_from_accum
 
-    !>  \brief  Builds the section 8.1 Gram kernel.
+    !>  \brief  Builds the Gram kernel.
     !!
-    !!          IMPORTANT DEVIATION from the note's literal recipe. The note
-    !!          says to build the kernel as the impulse response of the
+    !!          The kernel is NOT the impulse response of the
     !!          matrix-free operator, h = H_data(delta_at_origin). That does not
     !!          work: the KB weights are normalized to sum 1 (see
     !!          kbinterpol%apod_mat_3d), so G applied to a constant Fourier
@@ -1086,7 +1080,7 @@ contains
     !!          Memory: the padded work image is (2*box)^3, about 1.1 GB at
     !!          box 256. That is the price of the kernelized operator.
     subroutine build_kernel( self )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         complex, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_kernel')
         call self%ensure_wimg
@@ -1109,7 +1103,7 @@ contains
     !!          remain separately callable for the test commanders, which drive
     !!          one without the other.
     subroutine build_operators( self, l_kernel )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         logical,                    intent(in)    :: l_kernel
         complex, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_operators')
@@ -1125,7 +1119,7 @@ contains
     end subroutine build_operators
 
     subroutine fold_accum_to_khat( self, kacc )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         complex,                    intent(in)    :: kacc(self%lims3(1,1):self%lims3(1,2),&
                                                            &self%lims3(2,1):self%lims3(2,2),&
                                                            &self%lims3(3,1):self%lims3(3,2))
@@ -1145,7 +1139,7 @@ contains
     end subroutine fold_accum_to_khat
 
     subroutine finalize_khat( self )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         real,    parameter   :: EPS_D = 1.0e-8
         complex, allocatable :: dacc(:,:,:), ctmp(:,:,:)
         real,    allocatable :: tker(:,:,:), dep(:,:,:)
@@ -1218,7 +1212,7 @@ contains
     !!          fitted factor is reported precisely so a value far from unity
     !!          shows up as the convention problem it would be.
     subroutine calibrate_kernel( self )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         real,    allocatable :: probe(:,:,:), hm(:,:,:), hk(:,:,:)
         real(dp) :: num, den
         real     :: lam_save, ctr, sig, dx, dy, dz, scale
@@ -1253,10 +1247,9 @@ contains
     !!
     !!          apply_normal computes conjg(T)*(T*plane) = |T|^2 * plane, and
     !!          the shift factor exp(-i*2*pi*f.t) has unit modulus, so the SHIFT
-    !!          CANCELS EXACTLY in the normal operator (note section 8.1 says
-    !!          the same). H therefore depends only on this real, iteration-
+    !!          CANCELS EXACTLY in the normal operator. H therefore depends only on this real, iteration-
     !!          invariant quantity: no shift phase, no complex multiply, and
-    !!          half the transcendentals of the milestone-1 code path. The full
+    !!          half the transcendentals of a full complex path. The full
     !!          complex transfer is still needed for the RHS -- see
     !!          transfer_plane_cmplx.
     !!          The worksharing loops here are ORPHANED: when called from inside
@@ -1269,7 +1262,7 @@ contains
     !!          inside a worksharing loop, so there is no benign-looking
     !!          all-threads-write race on the shared buffer.
     subroutine absT2_plane( self, iptcl, absT2 )
-        class(pcg_reconstruction), intent(in)  :: self
+        class(reconstructor_pcg), intent(in)  :: self
         integer,                    intent(in)  :: iptcl
         real,                       intent(out) :: absT2(self%lims2(1,1):self%lims2(1,2),&
                                                           &self%lims2(2,1):self%lims2(2,2))
@@ -1321,7 +1314,7 @@ contains
 
     !>  \brief  full complex T_i for the cached particle iptcl (RHS only).
     subroutine transfer_plane_cmplx( self, iptcl, T )
-        class(pcg_reconstruction), intent(in)  :: self
+        class(reconstructor_pcg), intent(in)  :: self
         integer,                    intent(in)  :: iptcl
         complex,                    intent(out) :: T(self%lims2(1,1):self%lims2(1,2),&
                                                       &self%lims2(2,1):self%lims2(2,2))
@@ -1338,7 +1331,7 @@ contains
     !!          Nyquist bin's accumulated value lives at h = -lims3(1,2); the
     !!          wrap table sends it there.
     function fold_and_ifft( self, vol_accum ) result( z )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         complex,                    intent(in)    :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
                                                                 &self%lims3(2,1):self%lims3(2,2),&
                                                                 &self%lims3(3,1):self%lims3(3,2))
@@ -1381,7 +1374,7 @@ contains
     !!          likely source of the non-monotone bump seen at iteration 2 with
     !!          both operators.
     function apply_precond( self, r ) result( z )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: r(self%box,self%box,self%box)
         real,    allocatable :: z(:,:,:), rw(:,:,:)
         complex, allocatable :: cmat(:,:,:)
@@ -1426,11 +1419,11 @@ contains
 
     !>  \brief  KB-weighted gather of one Fourier component from an image's
     !!          packed cmat, with the physical addressing and Friedel folding
-    !!          inlined. Milestones 0-1 went through class(image)%comp_addr_phys
-    !!          and %get_fcomp here -- true indirect calls into a submodule, 27
+    !!          inlined. A direct path through class(image)%comp_addr_phys
+    !!          and %get_fcomp here would be true indirect calls into a submodule, 27
     !!          times per plane pixel, which also blocked vectorization.
     pure complex function gather_window( self, cmat, i0, w ) result( comp )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         complex,                    intent(in) :: cmat(:,:,:)
         integer,                    intent(in) :: i0(3)
         real,                       intent(in) :: w(self%wdim,self%wdim,self%wdim)
@@ -1462,7 +1455,7 @@ contains
 
     !>  \brief  KB-weighted scatter of one value into the full-range accumulator.
     pure subroutine scatter_window( self, i0, w, val, vol_accum )
-        class(pcg_reconstruction), intent(in)    :: self
+        class(reconstructor_pcg), intent(in)    :: self
         integer,                    intent(in)    :: i0(3)
         real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim)
         complex,                    intent(in)    :: val
@@ -1482,35 +1475,11 @@ contains
         end do
     end subroutine scatter_window
 
-    !>  \brief  scatter_window against an explicitly supplied lattice, used for
-    !!          the oversampled kernel grid in build_kernel (whose limits differ
-    !!          from the solver's own).
-    pure subroutine scatter_window_lims( self, i0, w, val, pwlims, plims, acc )
-        class(pcg_reconstruction), intent(in)    :: self
-        integer,                    intent(in)    :: i0(3), pwlims(2), plims(3,2)
-        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim)
-        complex,                    intent(in)    :: val
-        complex,                    intent(inout) :: acc(plims(1,1):plims(1,2),&
-                                                          &plims(2,1):plims(2,2),&
-                                                          &plims(3,1):plims(3,2))
-        integer :: di, dj, dk, hh, kk, mm
-        do dk = 1, self%wdim
-            mm = cyci_1d(pwlims, i0(3)+dk-1)
-            do dj = 1, self%wdim
-                kk = cyci_1d(pwlims, i0(2)+dj-1)
-                do di = 1, self%wdim
-                    hh = cyci_1d(pwlims, i0(1)+di-1)
-                    acc(hh,kk,mm) = acc(hh,kk,mm) + w(di,dj,dk) * val
-                end do
-            end do
-        end do
-    end subroutine scatter_window_lims
-
     !>  \brief  scatter a whole plane, h-strided so it is safe to call from
     !!          inside an OpenMP parallel region (used by the non-fused paths:
     !!          adjoint_plane_add, apply_adjoint_all, build_precond).
     subroutine scatter_plane( self, plane, rot, vol_accum )
-        class(pcg_reconstruction), intent(in)    :: self
+        class(reconstructor_pcg), intent(in)    :: self
         complex,                    intent(in)    :: plane(self%lims2(1,1):self%lims2(1,2),&
                                                             &self%lims2(2,1):self%lims2(2,2))
         real,                       intent(in)    :: rot(3,3)
@@ -1540,29 +1509,29 @@ contains
     ! GETTERS
 
     pure function get_lims2( self ) result( lims2 )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         integer :: lims2(2,2)
         lims2 = self%lims2
     end function get_lims2
 
     pure function get_lims3( self ) result( lims3 )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         integer :: lims3(3,2)
         lims3 = self%lims3
     end function get_lims3
 
     pure integer function get_nptcls( self )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         get_nptcls = self%nptcls
     end function get_nptcls
 
     ! SOLVER
 
-    !>  \brief  preconditioned CG solve of H x = b, per note section 7. With
+    !>  \brief  preconditioned CG solve of H x = b. With
     !!          build_precond called this is genuinely preconditioned; without
-    !!          it, M = I and this degenerates to the plain CG of milestones 0-1.
+    !!          it, M = I and this degenerates to plain CG.
     subroutine solve( self, y_planes, x, maxits, rtol, rel_res_hist, niters )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         complex,                    intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
                                                                &self%lims2(2,1):self%lims2(2,2), *)
         real,                        intent(inout) :: x(self%box,self%box,self%box)
@@ -1609,7 +1578,7 @@ contains
         call self%mask_mul(b)
         call self%reset_profile
         if( all(x == 0.0) )then
-            ! zero initialization is the documented baseline (note section 8);
+            ! zero initialization is the documented baseline;
             ! skip a full operator application that is known to return zero
             allocate(hp(self%box,self%box,self%box), source=0.0)
         else
@@ -1682,7 +1651,7 @@ contains
     ! PROFILING
 
     subroutine reset_profile( self, l_on )
-        class(pcg_reconstruction), intent(inout) :: self
+        class(reconstructor_pcg), intent(inout) :: self
         logical, optional,          intent(in)    :: l_on
         self%t_setvol = 0.0_dp
         self%t_cmatcp = 0.0_dp
@@ -1703,7 +1672,7 @@ contains
     !!          operator does NOT remove, and which only a Fourier-domain
     !!          formulation of the solve eliminates)?
     subroutine report_profile( self, niters )
-        class(pcg_reconstruction), intent(in) :: self
+        class(reconstructor_pcg), intent(in) :: self
         integer,                    intent(in) :: niters
         real(dp) :: rn, tot, ffts
         if( niters < 1 ) return
@@ -1727,4 +1696,4 @@ contains
         call flush(logfhandle)
     end subroutine report_profile
 
-end module simple_pcg_reconstruction
+end module simple_reconstructor_pcg

@@ -3,7 +3,7 @@ module simple_exec_volume
 use simple_cmdline,           only: cmdline
 use simple_commanders_volops,    only: commander_centervol, commander_volops
 use simple_commanders_reproject, only: commander_reproject
-use simple_commanders_pcg_recon, only: commander_reconstruct3D_pcg
+use simple_commanders_reconstruct3D_pcg, only: commander_reconstruct3D_pcg
 implicit none
 
 public :: exec_volume_commander

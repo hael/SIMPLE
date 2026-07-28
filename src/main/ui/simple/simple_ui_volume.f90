@@ -152,12 +152,12 @@ contains
         call reconstruct3D_pcg%new(&
         &'reconstruct3D_pcg',&                 ! name
         &'Experimental CTF/sigma-weighted PCG 3D reconstruction',&
-        &'is an experimental single-state 3D reconstruction program using a matrix-free, '&
-        &'preconditioned-conjugate-gradient solver instead of Fourier gridding (doc/implementation_notes/'&
-        &'ctf_sigma_weighted_pcg_reconstruction.md). Reads a project and reconstructs one volume for one '&
-        &'state from its current particle orientations, CTF, and shifts; orientations are inputs, not '&
-        &'optimized. objfun=euclid requires sigma2 files and weights the fit by them; objfun=cc runs '&
-        &'unweighted. nparts=1, no even/odd split, no symmetry, no distributed execution. Writes to a new '&
+        &'is an experimental single-state 3D reconstruction program using a matrix-free, '//&
+        &'preconditioned-conjugate-gradient solver instead of Fourier gridding (doc/policies/'//&
+        &'reconstruct3D_pcg_policy.md). Reads a project and reconstructs one volume for one '//&
+        &'state from its current particle orientations, CTF, and shifts; orientations are inputs, not '//&
+        &'optimized. objfun=euclid requires sigma2 files and weights the fit by them; objfun=cc runs '//&
+        &'unweighted. nparts=1, no even/odd split, no symmetry, no distributed execution. Writes to a new '//&
         &'experimental output directory and never modifies the project.',&
         &'simple_exec',&                       ! executable
         &.true.)                                ! requires sp_project
@@ -173,9 +173,9 @@ contains
             &'Index of the single state to reconstruct', 'state index{1}', .false., 1.)
         ! search controls
         call reconstruct3D_pcg%add_input(UI_SRCH, 'pcgop', 'multi', 'PCG normal operator', &
-            &'Normal-operator implementation: kernel is the section-8.1 Toeplitz operator, whose '&
-            &'per-iteration cost is independent of particle count and is roughly 7x faster per '&
-            &'iteration; matrixfree is the exact reference operator, slower but free of the '&
+            &'Normal-operator implementation: kernel is the section-8.1 Toeplitz operator, whose '//&
+            &'per-iteration cost is independent of particle count and is roughly 7x faster per '//&
+            &'iteration; matrixfree is the exact reference operator, slower but free of the '//&
             &'kernel shift-invariance approximation(matrixfree|kernel){kernel}', &
             &'(matrixfree|kernel){kernel}', .false., 'kernel')
         ! filter controls
