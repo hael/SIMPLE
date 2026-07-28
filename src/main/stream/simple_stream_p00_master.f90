@@ -231,9 +231,7 @@ contains
         logical                                    :: got_snapshot_id, got_snapshot_iter, got_snapshot_sel, got_snapshot_file
         logical                                    :: l_existing_pickrefs, l_existing_box, l_existing_preprocess
         integer                                    :: stat, rc, max_msgsize, i_val, snapshot_id
-        integer(timer_int_kind)                    :: asm_t0, asm_t1
         real(kind=dp)                              :: r_val
-        real(dp)                                   :: asm_ms
         type(pipe_rx_state)                        :: rx_state(N_STREAM_PIPES)
         ! check cline arguments 
         l_existing_pickrefs   = .false.
@@ -334,47 +332,13 @@ contains
             call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_reference_picking, fork_particle_sieving, fork_pool2D)
             ! processes
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
-            asm_t0 = tic()
             call assembler%assemble_stream_preprocess(meta_preprocess, meta_preprocess_micrographs, meta_preprocess_histograms, meta_preprocess_timeplots)
-            asm_t1 = tic()
-            asm_ms = 1000.0_dp * real(tdiff(asm_t1, asm_t0), dp)
-            write(logfhandle,'(A,F10.3,A)') '>>> ASSEMBLER TIMING preprocess: ', asm_ms, ' ms'
-
-            asm_t0 = tic()
             call assembler%assemble_stream_optics_assignment(meta_optics_assignment, meta_optics_assignment_optics_groups)
-            asm_t1 = tic()
-            asm_ms = 1000.0_dp * real(tdiff(asm_t1, asm_t0), dp)
-            write(logfhandle,'(A,F10.3,A)') '>>> ASSEMBLER TIMING optics_assignment: ', asm_ms, ' ms'
-
-            asm_t0 = tic()
             call assembler%assemble_stream_initial_picking(meta_initial_picking, meta_initial_picking_micrographs)
-            asm_t1 = tic()
-            asm_ms = 1000.0_dp * real(tdiff(asm_t1, asm_t0), dp)
-            write(logfhandle,'(A,F10.3,A)') '>>> ASSEMBLER TIMING initial_picking: ', asm_ms, ' ms'
-
-            asm_t0 = tic()
             call assembler%assemble_stream_opening2D(meta_opening2D, meta_opening2D_cavgs2D, meta_opening2D_final_cavgs2D)
-            asm_t1 = tic()
-            asm_ms = 1000.0_dp * real(tdiff(asm_t1, asm_t0), dp)
-            write(logfhandle,'(A,F10.3,A)') '>>> ASSEMBLER TIMING opening2D: ', asm_ms, ' ms'
-
-            asm_t0 = tic()
             call assembler%assemble_stream_reference_picking(meta_reference_picking, meta_reference_picking_micrographs, meta_reference_picking_cavgs2D)
-            asm_t1 = tic()
-            asm_ms = 1000.0_dp * real(tdiff(asm_t1, asm_t0), dp)
-            write(logfhandle,'(A,F10.3,A)') '>>> ASSEMBLER TIMING reference_picking: ', asm_ms, ' ms'
-
-            asm_t0 = tic()
             call assembler%assemble_stream_particle_sieving(meta_particle_sieving, meta_particle_sieving_cavgs2D, meta_particle_sieving_ref_cavgs2D)
-            asm_t1 = tic()
-            asm_ms = 1000.0_dp * real(tdiff(asm_t1, asm_t0), dp)
-            write(logfhandle,'(A,F10.3,A)') '>>> ASSEMBLER TIMING particle_sieving: ', asm_ms, ' ms'
-
-            asm_t0 = tic()
             call assembler%assemble_stream_pool2D(meta_pool2D, meta_pool2D_cavgs2D, meta_pool2D_snapshot)
-            asm_t1 = tic()
-            asm_ms = 1000.0_dp * real(tdiff(asm_t1, asm_t0), dp)
-            write(logfhandle,'(A,F10.3,A)') '>>> ASSEMBLER TIMING pool2D: ', asm_ms, ' ms'
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             ! stringify assembled json
             request = assembler%to_string()
