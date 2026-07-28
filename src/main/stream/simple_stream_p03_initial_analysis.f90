@@ -50,7 +50,7 @@ use simple_mini_stream_utils,     only: segdiampick_mics_multi
 use simple_qsys_env,              only: qsys_env
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality
 use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_CHUNK_DEFAULT
-use simple_cavg_quality_types,    only: cavg_quality_result
+use simple_cavg_quality_types,    only: cavg_quality_result, CAVG_QUALITY_CONTEXT_CHUNK
 use simple_imgarr_utils,          only: dealloc_imgarr, read_cavgs_into_imgarr, read_stk_into_imgarr
 use simple_image_msk,             only: automask2D
 use simple_projfile_utils,        only: merge_chunk_projfiles, merge_selected_project_files
@@ -774,21 +774,23 @@ contains
 
             ! Evaluate class-average quality, map accepted classes, and emit GUI-ready cavgs.
             subroutine run_cavg_quality_selection(spproj_inout, cluster_projfile, outdir, cwd_cycle_in, mskdiam_inout, imgfiles_inout, smpd_stk_out, n_selected )
-                type(sp_project),            intent(inout) :: spproj_inout
-                type(string),                intent(in)    :: cluster_projfile
-                type(string),                intent(in)    :: outdir
-                type(string),                intent(in)    :: cwd_cycle_in
-                real,                        intent(inout) :: mskdiam_inout
-                type(string), allocatable,   intent(inout) :: imgfiles_inout(:)
-                real,                        intent(out)   :: smpd_stk_out
-                integer,                     intent(out)   :: n_selected
-                type(string)                :: cavgsstk_local
-                type(string)                :: cwd
-                type(image), allocatable    :: cavg_imgs_local(:)
-                type(cavg_quality_model)    :: model_local
-                type(cavg_quality_result)   :: quality_local
-                integer, allocatable        :: cavg_inds_local(:)
-                integer                     :: ncls_local, i_mic_local, xtiles_local, ytiles_local
+                type(string),     allocatable, intent(inout) :: imgfiles_inout(:)
+                type(sp_project),              intent(inout) :: spproj_inout
+                real,                          intent(inout) :: mskdiam_inout
+                type(string),                  intent(in)    :: cluster_projfile
+                type(string),                  intent(in)    :: outdir
+                type(string),                  intent(in)    :: cwd_cycle_in
+                integer,                       intent(out)   :: n_selected
+                real,                          intent(out)   :: smpd_stk_out
+                type(image),      allocatable                :: cavg_imgs_local(:)
+                integer,          allocatable                :: cavg_inds_local(:)
+                type(cavg_quality_model)                     :: model_local
+                type(cavg_quality_result)                    :: quality_local
+                type(parameters)                             :: relation_params
+                type(cmdline)                                :: relation_cline
+                type(string)                                 :: cavgsstk_local
+                type(string)                                 :: cwd
+                integer                                      :: ncls_local, i_mic_local, xtiles_local, ytiles_local
                 call simple_getcwd(cwd)
                 call simple_mkdir(outdir)
                 call simple_copy_file(cluster_projfile, outdir//'/'//cluster_projfile) ! copy projfile to quality selection dir for processing
@@ -801,9 +803,17 @@ contains
                 imgfiles_inout(1) = cavgsstk_local
                 cavg_imgs_local = read_cavgs_into_imgarr(spproj_inout)
                 smpd_stk_out    = spproj_inout%get_smpd()
+                ! generate the relation parameters for the coarse/fine quality model
+                if( size(cavg_imgs_local) < 1 ) THROW_HARD('No class averages found in project for quality selection')
+                call relation_cline%set('box', cavg_imgs_local(1)%get_box())
+                call relation_cline%set('oritype',                  'cls2D')
+                call relation_cline%set('ctf',                         'no')
+                call relation_cline%set('objfun',                      'cc')
+                call relation_cline%set('mskdiam',            mskdiam_inout)
+                call relation_params%new(relation_cline)
                 call model_local%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
                 call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, mskdiam_inout, quality_local, &
-                    model_local, relation_params=params)
+                    model_local, CAVG_QUALITY_CONTEXT_CHUNK, relation_params=relation_params)
                 call model_local%kill()
                 n_selected = count(quality_local%states > 0)
                 call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.true.)
