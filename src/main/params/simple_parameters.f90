@@ -313,7 +313,7 @@ type :: parameters
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
     ! class-average quality context: sieve=small hard-gate-only chunks, chunk=larger learned chunks, pool=pre-3D pooled classes
     character(len=STDLEN)     :: quality_context='chunk' !< class-average quality hard-gate context(chunk|pool|sieve){chunk}
-    ! class-average quality model preset(chunk100mics){chunk100mics}
+    ! class-average quality model preset(chunk100mics|sieve|pool){chunk100mics}
     character(len=STDLEN)     :: quality_model='chunk100mics'
     character(len=STDLEN)     :: real_filter=''
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|prob_snhc){shc}

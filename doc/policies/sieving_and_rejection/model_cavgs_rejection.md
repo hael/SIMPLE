@@ -141,9 +141,10 @@ For `apply`, `analyze`, and project-backed `evaluate`, the command uses `chunk10
 
 ## Model Selection
 
-`quality_model` selects the built-in preset outside learn mode. The promoted built-in is:
+`quality_model` selects a built-in preset outside learn mode. The promoted built-ins are:
 
 - `chunk100mics`: default chunk/stream-style version-10 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/chunk_training5`; it includes `corr_knn_signal_v1` relational evidence.
+- `pool`: version-10 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/pool_training4` for pooled class averages before 3D refinement.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
 
@@ -260,6 +261,8 @@ Project-backed `apply`, `analyze`, and `evaluate` runs also write `hard_gate_rej
 ## Built-In Presets
 
 `chunk100mics` uses feature policy `microchunk_plus_score_signal` and the relational logistic model. It was trained from `/Users/elmlundho/model_cavgs_rejection/chunk_training5`.
+
+`pool` uses feature policy `microchunk_plus_signal`, a `0.30` acceptance probability threshold, and the same `corr_knn_signal_v1` relational evidence schema. It was trained from `/Users/elmlundho/model_cavgs_rejection/pool_training4`.
 
 ```text
 prob_threshold      3.500000E-01
