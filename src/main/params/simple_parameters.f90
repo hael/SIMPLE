@@ -295,6 +295,7 @@ type :: parameters
     character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
+    character(len=STDLEN)     :: pcgop='kernel'       !< PCG normal-operator implementation, reconstruct3D_pcg(matrixfree|kernel){kernel}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN)     :: pickkind='gau'       !< Picking quasi-template(gau|ring|disc){gau}
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
@@ -574,6 +575,7 @@ type :: parameters
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
+    real    :: rtol=1.0e-3         !< PCG relative residual tolerance, reconstruct3D_pcg{0.001}
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale_movies=1.     !< movie scale factor
     real    :: sherr=0.            !< shift error(in pixels){2}

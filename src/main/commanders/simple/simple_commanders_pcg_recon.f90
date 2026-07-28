@@ -47,8 +47,8 @@ contains
         complex, allocatable     :: y_planes(:,:,:)
         integer :: nptcls, i, ii, iptcl, ibatch, batchlims(2), batchsz
         integer :: lims2(2,2), R, niters, funit, cnt, maxits, kfromto(2), nspace_dummy
-        real    :: rtol
-        logical :: l_use_ctf, l_kernel, l_sig_loaded
+        real    :: rtol, sdev_noise, edge_mean
+        logical :: l_use_ctf, l_kernel, l_sig_loaded, l_norm_noise
         integer(timer_int_kind) :: t0, t1
         real(timer_int_kind)    :: rt_tot, rt_setup, rt_solve
 
@@ -79,11 +79,19 @@ contains
 
         maxits = MAXITS_DEFAULT
         if( cline%defined('maxits') ) maxits = nint(cline%get_rarg('maxits'))
-        rtol = RTOL_DEFAULT
-        if( cline%defined('rtol')   ) rtol   = cline%get_rarg('rtol')
-        opmode = string('matrixfree')
-        if( cline%defined('pcgop')  ) opmode = cline%get_carg('pcgop')
+        ! pcgop and rtol are real parameters/type members, not cline-only flags:
+        ! simple_args.f90 (the CLI allowlist) is GENERATED from the declarations
+        ! in simple_parameters.f90, so a UI record alone is not enough -- an
+        ! undeclared key is rejected as "argument is not allowed" before the
+        ! commander ever runs.
+        rtol   = params%rtol
+        if( rtol <= 0. ) rtol = RTOL_DEFAULT
+        opmode = string(trim(params%pcgop))
         l_kernel = opmode .eq. 'kernel'
+        l_norm_noise = params%msk > 0.5
+        if( .not. l_norm_noise )then
+            write(logfhandle,'(a)') '>>> RECONSTRUCT3D_PCG: WARNING, no mskdiam given, skipping noise normalization'
+        endif
 
         ! ---- particle selection: sample4rec (state>0, updatecnt>0 when
         !      available), then filtered to exactly one state, since the phase-1
@@ -111,6 +119,15 @@ contains
         call pcgop%new(params%box, params%smpd, LAMBDA)
         lims2 = pcgop%get_lims2()
         R     = lims2(1,2)
+        ! Solve for the density INSIDE mskdiam only. This is a constraint on the
+        ! normal equations, not a mask applied to the output -- see
+        ! pcg_reconstruction%set_mask. Skipped when mskdiam is absent, in which
+        ! case the solve runs over the whole box as before.
+        if( params%msk > 0.5 )then
+            call pcgop%set_mask(params%msk)
+            write(logfhandle,'(a,f7.1,a)') '>>> RECONSTRUCT3D_PCG: solving inside a soft sphere of radius ', &
+                &params%msk, ' pixels'
+        endif
 
         ! ---- sigma2, fetched the way flex_analysis does: euclid_sigma2 over
         !      the group star file, giving per-particle-per-shell spectra.
@@ -144,6 +161,8 @@ contains
         call selection%new(nptcls, .true.)
         allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), nptcls))
         call e%new(.false.)
+        sdev_noise = 0.  ! norm_noise takes it intent(inout)
+        edge_mean  = 0.
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch+MAXIMGBATCHSZ-1)]
@@ -157,6 +176,34 @@ contains
                 call e%set_ctfvars(ctfparms)
                 call e%set_shift(build%spproj_field%get_2Dshift(iptcl))
                 call selection%set_ori(i, e)
+                ! Normalize, TAPER, then transform -- the same three steps, in the
+                ! same order, that production fuses into
+                ! norm_noise_taper_edge_pad_fft (calc_3Drec's prep).
+                !
+                ! norm_noise: a bare fft() leaves each particle with its own
+                ! arbitrary background level and variance, so the least-squares
+                ! fit is dominated by whichever micrographs happen to be noisiest
+                ! and every box contributes a large orientation-independent
+                ! low-frequency term.
+                !
+                ! taper_edges_particle: a particle box is a hard-truncated crop
+                ! out of a micrograph, so its border is a step discontinuity. The
+                ! DFT reads that as a periodic wrap-around jump and answers with
+                ! the familiar cross of energy along the axes -- which, scattered
+                ! into the volume over thousands of orientations, accumulates as
+                ! artefacts at the box edges of the reconstruction. Rolling the
+                ! border off to the local edge mean over COSMSKHALFWIDTH pixels
+                ! removes the discontinuity. Production has always done this; the
+                ! first version of this commander did not.
+                !
+                ! build%lmsk is the box-sized logical disc built from mskdiam by
+                ! build_general_tbox. Without mskdiam params%msk is 0, so lmsk
+                ! selects nothing and the background statistics would be
+                ! undefined -- fall back to a bare transform in that case.
+                if( l_norm_noise )then
+                    call build%imgbatch(ii)%norm_noise(build%lmsk, sdev_noise)
+                    call build%imgbatch(ii)%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
+                endif
                 call build%imgbatch(ii)%fft()
                 y_planes(:,:,i) = pcgop%extract_native_plane(build%imgbatch(ii))
             end do
@@ -165,12 +212,13 @@ contains
 
         ! ---- operator setup ----
         call pcgop%prep_particles(selection, use_ctf=l_use_ctf, sig2=sig2)
-        call pcgop%build_precond
-        if( l_kernel )then
-            write(logfhandle,'(a)') '>>> RECONSTRUCT3D_PCG: building kernelized (Toeplitz) normal operator'
-            call pcgop%build_kernel
-            call pcgop%set_op_mode(PCG_OP_KERNEL)
-        endif
+        ! ONE particle pass builds both: the preconditioner's sampling density and
+        ! the Gram kernel are the same scatter of |T_i|^2, so build_operators
+        ! shares it rather than walking all the particles twice.
+        if( l_kernel ) write(logfhandle,'(a)') &
+            &'>>> RECONSTRUCT3D_PCG: building kernelized (Toeplitz) normal operator'
+        call pcgop%build_operators(l_kernel)
+        if( l_kernel ) call pcgop%set_op_mode(PCG_OP_KERNEL)
         rt_setup = toc(t0)
         write(logfhandle,'(a,f9.2,a)') '>>> RECONSTRUCT3D_PCG: setup time = ', rt_setup, ' s'
 
@@ -201,7 +249,8 @@ contains
         write(funit,'(a,f12.3)') 'total_time_sec=',   rt_tot
         if( niters > 0 ) write(funit,'(a,f12.4)') 'sec_per_iteration=', rt_solve/real(niters)
         do i = 1, niters
-            write(funit,'(a,i0,a,es14.6)') 'iter', i, '_rel_resid=', rel_res_hist(i)
+            ! true relative residual ||r||_2/||b||_2, not the preconditioned norm
+            write(funit,'(a,i0,a,es14.6)') 'iter', i, '_rel_resid_l2=', rel_res_hist(i)
         end do
         call fclose(funit)
         write(logfhandle,'(a,i0,a)')   '>>> RECONSTRUCT3D_PCG: PCG ran ', niters, ' iterations'

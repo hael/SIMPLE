@@ -173,10 +173,11 @@ contains
             &'Index of the single state to reconstruct', 'state index{1}', .false., 1.)
         ! search controls
         call reconstruct3D_pcg%add_input(UI_SRCH, 'pcgop', 'multi', 'PCG normal operator', &
-            &'Normal-operator implementation: matrixfree is the exact reference; kernel is the '&
-            &'experimental section-8.1 Toeplitz operator whose per-iteration cost is independent of '&
-            &'particle count(matrixfree|kernel){matrixfree}', '(matrixfree|kernel){matrixfree}', &
-            &.false., 'matrixfree')
+            &'Normal-operator implementation: kernel is the section-8.1 Toeplitz operator, whose '&
+            &'per-iteration cost is independent of particle count and is roughly 7x faster per '&
+            &'iteration; matrixfree is the exact reference operator, slower but free of the '&
+            &'kernel shift-invariance approximation(matrixfree|kernel){kernel}', &
+            &'(matrixfree|kernel){kernel}', .false., 'kernel')
         ! filter controls
         call reconstruct3D_pcg%add_input(UI_FILT, maxits, required_override=.false.)
         call reconstruct3D_pcg%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &

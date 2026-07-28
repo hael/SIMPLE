@@ -55,6 +55,8 @@ type :: pcg_reconstruction
     real,    allocatable :: env(:,:,:)               !< measured KB instrument envelope, see build_env
     real,    allocatable :: invenv(:,:,:)            !< its guarded reciprocal, for deapodization
     logical              :: l_deapod = .true.        !< correct the KB roll-off, see deapod_mul
+    real,    allocatable :: mask(:,:,:)              !< soft spherical support constraint, see set_mask
+    logical              :: l_mask = .false.
     type(image)          :: wimg                     !< persistent box^3 work image (keeps its FFTW plans)
     logical              :: wimg_exists = .false.
     ! ---- section 8 preconditioner ----
@@ -64,6 +66,19 @@ type :: pcg_reconstruction
     integer              :: op_mode = PCG_OP_MATRIXFREE
     real,    allocatable :: Khat(:,:,:)              !< Gram kernel on wimg's cmat layout, real
     logical              :: l_kernel = .false.
+    ! ---- per-phase profiling, accumulated over a solve. Exists to answer one
+    !      question before any further optimization: of the seconds an iteration
+    !      costs, how many are the particle loop (which the kernelized operator
+    !      removes) and how many are FFT + bulk cmat traffic on the padf-times
+    !      padded lattice (which it does NOT)? Guessing that split wrong means
+    !      optimizing the wrong half. ----
+    logical  :: l_profile = .false.
+    real(dp) :: t_setvol  = 0.0_dp  !< pad + forward FFT of the iterate
+    real(dp) :: t_cmatcp  = 0.0_dp  !< get_cmat/set_cmat bulk copies
+    real(dp) :: t_ploop   = 0.0_dp  !< the particle loop proper
+    real(dp) :: t_fold    = 0.0_dp  !< fold + inverse FFT + crop
+    real(dp) :: t_khat    = 0.0_dp  !< kernel pointwise multiply
+    real(dp) :: t_prec    = 0.0_dp  !< apply_precond, whole call
     logical              :: exists = .false.
   contains
     ! CONSTRUCTOR / DESTRUCTOR
@@ -73,9 +88,16 @@ type :: pcg_reconstruction
     procedure :: prep_particles
     procedure :: build_precond
     procedure :: build_kernel
+    procedure :: build_operators
+    procedure, private :: accumulate_absT2
+    procedure, private :: precond_from_accum
+    procedure, private :: fold_accum_to_khat
+    procedure, private :: finalize_khat
     procedure :: set_deapod
+    procedure :: set_mask
     procedure, private :: build_env
     procedure, private :: deapod_mul
+    procedure, private :: mask_mul
     procedure, private :: calibrate_kernel
     procedure :: set_op_mode
     ! LOW-LEVEL OPERATOR (public: the test commanders drive these directly to
@@ -100,6 +122,9 @@ type :: pcg_reconstruction
     procedure :: get_invenv
     ! SOLVER
     procedure :: solve
+    ! PROFILING
+    procedure :: reset_profile
+    procedure :: report_profile
     ! PRIVATE HELPERS
     procedure, private :: absT2_plane
     procedure, private :: transfer_plane_cmplx
@@ -309,6 +334,56 @@ contains
         v = v * self%invenv
     end subroutine deapod_mul
 
+    !>  \brief  Constrains the solution to a soft spherical support.
+    !!
+    !!          This is a CONSTRAINT ON THE SOLVE, not a cosmetic post-hoc mask.
+    !!          Writing x = P u and minimizing ||A P u - y||^2 gives the normal
+    !!          equations (P H P) u = P b, so P is applied on BOTH sides of the
+    !!          operator and once to the right-hand side; apply_normal and solve
+    !!          do exactly that. P H P is still symmetric positive semi-definite,
+    !!          and its null space -- everything outside the support -- is simply
+    !!          never entered when starting from x = 0, the same argument that
+    !!          makes the singular preconditioner safe (see build_precond).
+    !!
+    !!          Two things are gained. The obvious one: solvent outside the
+    !!          particle is where E^-1 deapodization amplifies hardest (~3.4x at
+    !!          a box corner), which is what puts artefacts at the box sides when
+    !!          the display threshold is raised. The less obvious and more
+    !!          valuable one: at mskdiam 180 in a 256 box the sphere is only ~18%
+    !!          of the volume, so five sixths of the unknowns being solved for
+    !!          were solvent the data says almost nothing about. Removing them
+    !!          shrinks the problem and improves conditioning.
+    !!
+    !!          The edge profile is production's own cosedge_r2_3d, obtained by
+    !!          running a unit volume through image%mask3D_soft, so the roll-off
+    !!          matches what the rest of SIMPLE uses. backgr=0. is passed to stop
+    !!          it subtracting a background from what is meant to be a pure
+    !!          window function.
+    subroutine set_mask( self, mskrad )
+        class(pcg_reconstruction), intent(inout) :: self
+        real,                       intent(in)    :: mskrad
+        type(image)       :: mimg
+        real, allocatable :: ones(:,:,:)
+        if( allocated(self%mask) ) deallocate(self%mask)
+        self%l_mask = .false.
+        if( mskrad <= 0.0 ) return
+        allocate(ones(self%box,self%box,self%box), source=1.0)
+        call mimg%new([self%box,self%box,self%box], self%smpd)
+        call mimg%set_rmat(ones, .false.)
+        call mimg%mask3D_soft(mskrad, backgr=0.)
+        self%mask = mimg%get_rmat()
+        call mimg%kill
+        deallocate(ones)
+        self%l_mask = .true.
+    end subroutine set_mask
+
+    pure subroutine mask_mul( self, v )
+        class(pcg_reconstruction), intent(in)    :: self
+        real,                       intent(inout) :: v(self%box,self%box,self%box)
+        if( .not. self%l_mask ) return
+        v = v * self%mask
+    end subroutine mask_mul
+
     subroutine ensure_wimg( self )
         class(pcg_reconstruction), intent(inout) :: self
         if( self%wimg_exists ) return
@@ -352,6 +427,7 @@ contains
         if( allocated(self%wrap)     ) deallocate(self%wrap)
         if( allocated(self%env)      ) deallocate(self%env)
         if( allocated(self%invenv)   ) deallocate(self%invenv)
+        if( allocated(self%mask)     ) deallocate(self%mask)
         if( allocated(self%precond)  ) deallocate(self%precond)
         if( allocated(self%Khat)     ) deallocate(self%Khat)
         self%box    = 0
@@ -361,10 +437,12 @@ contains
         self%lambda = 0.0
         self%nptcls = 0
         self%l_use_ctf   = .false.
+        self%l_mask      = .false.
         self%l_precond   = .false.
         self%l_kernel    = .false.
         self%wimg_exists = .false.
         self%op_mode     = PCG_OP_MATRIXFREE
+        call self%reset_profile(.false.)
         self%exists      = .false.
     end subroutine kill
 
@@ -546,18 +624,40 @@ contains
         type(ctf) :: tfun
         real      :: spafreqsq, ang, cval, arg, sw
         integer   :: h, k, shell
-        tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-        call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
+        logical   :: l_ctf, l_flip
+        ! ctfflag, exactly as image%gen_fplane4rec reads it: CTFFLAG_NO means the
+        ! images carry no CTF to model, and CTFFLAG_FLIP means they are ALREADY
+        ! phase-flipped, so the signed CTF would reintroduce the very phase the
+        ! flip removed. Ignoring the flag (as milestones 0-2 did) is invisible on
+        ! synthetic fixtures, which are always generated with a signed CTF, and
+        ! destroys a real reconstruction on any phase-flipped project.
+        l_ctf  = ctfparms%ctfflag /= CTFFLAG_NO
+        l_flip = ctfparms%ctfflag == CTFFLAG_FLIP
+        if( l_ctf )then
+            tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+            call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
+        endif
         T = cmplx(0.,0.)
         !$omp parallel do collapse(2) default(shared) &
         !$omp private(h,k,spafreqsq,ang,cval,arg,shell,sw) schedule(static) proc_bind(close)
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
                 if( h*h + k*k > self%sqlp ) cycle
-                spafreqsq = (real(h)/real(self%box))**2 + (real(k)/real(self%box))**2
-                ang       = atan2(real(k), real(h))
-                cval      = tfun%eval(spafreqsq, ang, ctfparms%phshift)
-                arg       = -2.0*PI * (real(h)*shift(1) + real(k)*shift(2)) / real(self%box)
+                cval = 1.0
+                if( l_ctf )then
+                    spafreqsq = (real(h)/real(self%box))**2 + (real(k)/real(self%box))**2
+                    ang       = atan2(real(k), real(h))
+                    cval      = tfun%eval(spafreqsq, ang, ctfparms%phshift)
+                    if( l_flip ) cval = abs(cval)
+                endif
+                ! SIGN. apply_adjoint_all forms conjg(T)*y, and production applies
+                ! exp(i*(-shift)*shconst*(h,k)) to y (gen_fplane4rec: pshift =
+                ! -shift*shconst). So T must carry the POSITIVE phase for its
+                ! conjugate to reproduce production's correction. Milestones 1-2
+                ! had this negated, which shifted every particle by twice its own
+                ! displacement in the wrong direction -- invisible on synthetic
+                ! data, where the same build_transfer generates the observations.
+                arg       = 2.0*PI * (real(h)*shift(1) + real(k)*shift(2)) / real(self%box)
                 sw        = 1.0
                 if( present(sig2arr) )then
                     shell = min(nint(sqrt(real(h*h+k*k))), ubound(sig2arr,1))
@@ -602,16 +702,34 @@ contains
 
     ! HIGH-LEVEL OPERATOR
 
+    !>  \brief  The operator the SOLVER sees: P H P when a support constraint is
+    !!          set (see set_mask), plain H otherwise. The two concrete operators
+    !!          below are deliberately left unmasked -- the test commanders drive
+    !!          them directly and compare them against one another, and a mask
+    !!          would silently hide any disagreement outside its support.
     function apply_normal( self, p ) result( hp )
         class(pcg_reconstruction), intent(inout) :: self
         real,                       intent(in)    :: p(self%box,self%box,self%box)
-        real, allocatable :: hp(:,:,:)
+        real, allocatable :: hp(:,:,:), pm(:,:,:)
+        if( self%l_mask )then
+            allocate(pm(self%box,self%box,self%box), source=p)
+            call self%mask_mul(pm)
+        endif
         select case( self%op_mode )
             case( PCG_OP_KERNEL )
-                hp = self%apply_normal_kernel(p)
+                if( self%l_mask )then
+                    hp = self%apply_normal_kernel(pm)
+                else
+                    hp = self%apply_normal_kernel(p)
+                endif
             case default
-                hp = self%apply_normal_matrixfree(p)
+                if( self%l_mask )then
+                    hp = self%apply_normal_matrixfree(pm)
+                else
+                    hp = self%apply_normal_matrixfree(p)
+                endif
         end select
+        call self%mask_mul(hp)
     end function apply_normal
 
     !>  \brief  H p = sum_i G_i^dagger |T_i|^2 G_i p + lambda*p -- the reference
@@ -638,18 +756,29 @@ contains
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
         complex :: comp
         integer :: i, h, k, l, i0(3)
+        integer(timer_int_kind) :: tp
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; apply_normal_matrixfree')
         call self%ensure_wimg
         ! A = A~ . E^-1 : deapodize going in, and again coming out of the
         ! adjoint, so the operator is the true D.S rather than D.S.E
         allocate(pd(self%box,self%box,self%box), source=p)
         call self%deapod_mul(pd)
+        if( self%l_profile ) tp = tic()
         call self%set_volume(pd)
+        if( self%l_profile ) self%t_setvol = self%t_setvol + real(toc(tp),dp)
+        ! NOTE: get_cmat returns a COPY. On the padded lattice that is
+        ! (boxpd/2+1)*boxpd^2 complex -- 539 MB at box 256 -- allocated and
+        ! streamed on every call. t_cmatcp is what separates that traffic from
+        ! the transforms themselves; image offers get_rmat_ptr but no cmat
+        ! equivalent, so removing it would mean adding one.
+        if( self%l_profile ) tp = tic()
         cmat = self%wimg%get_cmat()
+        if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + real(toc(tp),dp)
         allocate(vol_accum(self%lims3(1,1):self%lims3(1,2),&
                           &self%lims3(2,1):self%lims3(2,2),&
                           &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
         allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
+        if( self%l_profile ) tp = tic()
         !$omp parallel default(shared) private(i,h,k,l,loc,i0,w,comp,rot) proc_bind(close)
         do i = 1, self%nptcls
             rot = self%rotmats(:,:,i)
@@ -676,6 +805,7 @@ contains
             end do
         end do
         !$omp end parallel
+        if( self%l_profile ) self%t_ploop = self%t_ploop + real(toc(tp),dp)
         hp = self%fold_and_ifft(vol_accum)
         call self%deapod_mul(hp)
         hp = hp + self%lambda * p
@@ -692,6 +822,7 @@ contains
         real,    allocatable :: hp(:,:,:), work(:,:,:)
         complex, allocatable :: cmat(:,:,:)
         integer :: cdim(3), i, j, k
+        integer(timer_int_kind) :: tp
         if( .not. self%l_kernel ) THROW_HARD('build_kernel has not been called; apply_normal_kernel')
         call self%ensure_wimg
         allocate(work(self%box,self%box,self%box), source=p)
@@ -700,10 +831,15 @@ contains
         ! more is needed. With it OFF the matrix-free operator is E T E, so the
         ! envelope has to be reinstated on both sides for the two to agree.
         if( .not. self%l_deapod ) work = work * self%env
+        if( self%l_profile ) tp = tic()
         call self%wimg%set_rmat(self%pad_vol(work), .false.)
         call self%wimg%fft()
+        if( self%l_profile ) self%t_setvol = self%t_setvol + real(toc(tp),dp)
+        if( self%l_profile ) tp = tic()
         cmat = self%wimg%get_cmat()
+        if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + real(toc(tp),dp)
         cdim = self%wimg%get_array_shape()
+        if( self%l_profile ) tp = tic()
         !$omp parallel do collapse(3) default(shared) private(i,j,k) &
         !$omp schedule(static) proc_bind(close)
         do k = 1, cdim(3)
@@ -714,9 +850,12 @@ contains
             end do
         end do
         !$omp end parallel do
+        if( self%l_profile ) self%t_khat = self%t_khat + real(toc(tp),dp)
+        if( self%l_profile ) tp = tic()
         call self%wimg%set_cmat(cmat)
         call self%wimg%ifft()
         hp = self%crop_vol(self%wimg%get_rmat())
+        if( self%l_profile ) self%t_fold = self%t_fold + real(toc(tp),dp)
         if( .not. self%l_deapod ) hp = hp * self%env
         hp = hp + self%lambda * p
     end function apply_normal_kernel
@@ -767,66 +906,154 @@ contains
 
     ! SETUP: PRECONDITIONER AND KERNEL
 
-    !>  \brief  section 8 preconditioner M(k) = rho(k) + lambda, where
+    !>  \brief  section 8 preconditioner M(k) = rho(k) + floor(sh), where
     !!          rho = sum_i G_i^dagger |T_i|^2 is exactly the gridding sampling
     !!          density -- the scatter without the gather. Before milestone 3
     !!          the solver ran with M = I, i.e. plain CG despite the name. With
     !!          heterogeneous CTFs H is severely ill-conditioned at CTF zeros,
     !!          so this is the other half of the performance problem: it cuts
     !!          iteration count, independently of per-iteration cost.
+    !!
+    !!          THE FLOOR MUST BE RELATIVE TO rho, NOT AN ABSOLUTE CONSTANT.
+    !!          Using 1/(rho + lambda) with the solver's own lambda looks
+    !!          harmless and is not: rho spans many orders of magnitude across
+    !!          the oversampled lattice (it falls off as 1/sh^2 and is genuinely
+    !!          zero in the gaps between rotated planes), so wherever rho ~ 0 the
+    !!          preconditioner returns 1/lambda while well-sampled voxels get
+    !!          1/rho -- a relative amplification of the least-constrained modes
+    !!          by six to nine orders of magnitude. PCG then spends every
+    !!          iteration chasing directions the data barely determines: the
+    !!          residual falls for a few iterations, turns around, and the map
+    !!          fills with noise. Production never hits this because
+    !!          reconstructor%sampl_dens_correct leaves a voxel UNCHANGED when
+    !!          rho is below 1e-6 (image%div_cmat_at_1) instead of dividing, and
+    !!          because gridding is a single pass with no feedback.
+    !!
+    !!          Flooring at a fixed fraction of the shell-mean rho caps the
+    !!          within-shell dynamic range at 1/RHO_FLOOR_FRAC while staying
+    !!          symmetric positive definite, and is invariant to the operator's
+    !!          overall scale -- which matters because rho here is accumulated
+    !!          without the padsc factors that apply_normal carries.
     subroutine build_precond( self )
         class(pcg_reconstruction), intent(inout) :: self
-        complex, allocatable :: rho_accum(:,:,:)
-        real,    allocatable :: absT2(:,:)
-        complex, allocatable :: wplane(:,:)
-        integer :: i, h, k, cdim(3), m, hh, phys(3), sh, sh_lim
-        real    :: denom, eps
+        complex, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_precond')
         call self%ensure_wimg
-        allocate(rho_accum(self%lims3(1,1):self%lims3(1,2),&
-                          &self%lims3(2,1):self%lims3(2,2),&
-                          &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
+        allocate(acc(self%lims3(1,1):self%lims3(1,2),&
+                    &self%lims3(2,1):self%lims3(2,2),&
+                    &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
+        call self%accumulate_absT2(acc)
+        call self%precond_from_accum(acc)
+    end subroutine build_precond
+
+    !>  \brief  The ONE pass over the particles that both the preconditioner and
+    !!          the Gram kernel are derived from.
+    !!
+    !!          These were two separate passes until it became apparent they are
+    !!          the identical computation: build_precond went through
+    !!          scatter_plane and build_kernel had its own inlined copy, but both
+    !!          evaluate the same |T_i|^2, at the same rotated coordinate
+    !!          padf*R_i*[h,k,0], through the same KB stencil. The accumulators
+    !!          differed only by the constant padsc that scatter_plane applies --
+    !!          and BOTH consumers are invariant to overall scale: the
+    !!          preconditioner's floor is a fraction of the shell mean (see
+    !!          precond_from_accum) and the kernel is least-squares rescaled by
+    !!          calibrate_kernel. So the fusion is exact, not an approximation.
+    !!
+    !!          The particle loop is inside a single parallel region rather than
+    !!          calling scatter_plane per particle, which opened and closed one
+    !!          region per particle -- 5000 of them on a typical run.
+    subroutine accumulate_absT2( self, acc )
+        class(pcg_reconstruction), intent(inout) :: self
+        complex,                    intent(inout) :: acc(self%lims3(1,1):self%lims3(1,2),&
+                                                          &self%lims3(2,1):self%lims3(2,2),&
+                                                          &self%lims3(3,1):self%lims3(3,2))
+        real,    allocatable :: absT2(:,:)
+        real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
+        integer :: i, h, k, l, i0(3)
         allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        allocate(wplane(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
+        !$omp parallel default(shared) private(i,h,k,l,loc,i0,w,rot) proc_bind(close)
         do i = 1, self%nptcls
+            rot = self%rotmats(:,:,i)
             call self%absT2_plane(i, absT2)
-            wplane = cmplx(absT2, 0.)
-            call scatter_plane(self, wplane, self%rotmats(:,:,i), rho_accum)
+            do l = 0, self%stride-1
+                !$omp do schedule(static,1)
+                do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
+                    do k = self%lims2(2,1), self%lims2(2,2)
+                        if( h*h + k*k > self%sqlp ) cycle
+                        if( absT2(h,k) == 0. ) cycle
+                        loc = real(self%padf) * matmul(real([h,k,0]), rot)
+                        i0  = nint(loc) - self%iwinsz
+                        call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                        call scatter_window(self, i0, w, cmplx(absT2(h,k),0.), acc)
+                    end do
+                end do
+                !$omp end do
+            end do
         end do
+        !$omp end parallel
+    end subroutine accumulate_absT2
+
+    subroutine precond_from_accum( self, rho_accum )
+        class(pcg_reconstruction), intent(inout) :: self
+        complex,                    intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                                &self%lims3(2,1):self%lims3(2,2),&
+                                                                &self%lims3(3,1):self%lims3(3,2))
+        real, parameter :: RHO_FLOOR_FRAC = 1.0e-2
+        real(dp), allocatable :: shsum(:)
+        integer,  allocatable :: shcnt(:)
+        real,     allocatable :: shfloor(:)
+        integer :: h, k, cdim(3), m, hh, phys(3), sh, sh_lim
+        real    :: denom, rval
         ! fold onto the packed cmat layout and invert with a guard
         cdim = self%wimg%get_array_shape()
         if( allocated(self%precond) ) deallocate(self%precond)
-        allocate(self%precond(cdim(1),cdim(2),cdim(3)), source=1.0)
-        eps = max(self%lambda, epsilon(1.0))
+        allocate(self%precond(cdim(1),cdim(2),cdim(3)), source=0.0)
         ! Data only ever reaches |loc| <= padf*Rnat, so beyond that radius rho is
-        ! identically zero and 1/(rho+lambda) would be 1/lambda -- amplifying
-        ! completely unconstrained modes by a thousandfold. Roughly half the
-        ! padded Fourier cube (its corners) is outside that ball, so CG would
-        ! spend its iterations optimizing modes the data says nothing about:
-        ! the residual stalls and then climbs, and the map fills with noise.
-        ! Zero them instead, exactly as reconstructor%sampl_dens_correct does
-        ! for sh > sh_lim. A singular (PSD) preconditioner is the right tool
-        ! here: it keeps the Krylov space out of the null space entirely, so
-        ! starting from x = 0 those modes are never excited at all.
+        ! identically zero: those modes are completely unconstrained. Zero them,
+        ! exactly as reconstructor%sampl_dens_correct does for sh > sh_lim. A
+        ! singular (PSD) preconditioner is the right tool here -- it keeps the
+        ! Krylov space out of the null space entirely, so starting from x = 0
+        ! those modes are never excited at all.
         sh_lim = self%padf * self%Rnat
+        ! PASS 1: mean rho per shell, over the sampled voxels only. Averaging in
+        ! the zeros would drag the floor down exactly where sampling is sparse,
+        ! which is the regime the floor exists to protect.
+        allocate(shsum(0:sh_lim), source=0.0_dp)
+        allocate(shcnt(0:sh_lim), source=0)
         do m = self%lims3(3,1), self%lims3(3,2)
             do k = self%lims3(2,1), self%lims3(2,2)
                 do h = 0, self%lims3(1,2)
-                    phys = self%wimg%comp_addr_phys(h,k,m)
-                    sh   = nint(sqrt(real(h*h + k*k + m*m)))
-                    if( sh > sh_lim )then
-                        self%precond(phys(1),phys(2),phys(3)) = 0.0
-                    else
-                        hh    = self%wrap(h)
-                        denom = real(rho_accum(hh,k,m)) + self%lambda
-                        if( denom < eps ) denom = eps
-                        self%precond(phys(1),phys(2),phys(3)) = 1.0 / denom
-                    endif
+                    sh = nint(sqrt(real(h*h + k*k + m*m)))
+                    if( sh > sh_lim ) cycle
+                    rval = real(rho_accum(self%wrap(h),k,m))
+                    if( rval <= 0.0 ) cycle
+                    shsum(sh) = shsum(sh) + real(rval,dp)
+                    shcnt(sh) = shcnt(sh) + 1
+                end do
+            end do
+        end do
+        allocate(shfloor(0:sh_lim), source=0.0)
+        do sh = 0, sh_lim
+            if( shcnt(sh) > 0 ) shfloor(sh) = RHO_FLOOR_FRAC * real(shsum(sh) / real(shcnt(sh),dp))
+        end do
+        ! PASS 2: guarded reciprocal. An empty shell (shfloor == 0) leaves its
+        ! voxels at the initialized 0.0, i.e. treated as unconstrained.
+        do m = self%lims3(3,1), self%lims3(3,2)
+            do k = self%lims3(2,1), self%lims3(2,2)
+                do h = 0, self%lims3(1,2)
+                    sh = nint(sqrt(real(h*h + k*k + m*m)))
+                    if( sh > sh_lim ) cycle
+                    if( shfloor(sh) <= 0.0 ) cycle
+                    hh    = self%wrap(h)
+                    denom = max(real(rho_accum(hh,k,m)), 0.0) + shfloor(sh)
+                    phys  = self%wimg%comp_addr_phys(h,k,m)
+                    self%precond(phys(1),phys(2),phys(3)) = 1.0 / denom
                 end do
             end do
         end do
         self%l_precond = .true.
-    end subroutine build_precond
+    end subroutine precond_from_accum
 
     !>  \brief  Builds the section 8.1 Gram kernel.
     !!
@@ -860,41 +1087,49 @@ contains
     !!          box 256. That is the price of the kernelized operator.
     subroutine build_kernel( self )
         class(pcg_reconstruction), intent(inout) :: self
-        real,    parameter   :: EPS_D = 1.0e-8
-        complex, allocatable :: kacc(:,:,:), dacc(:,:,:), ctmp(:,:,:)
-        real,    allocatable :: absT2(:,:), tker(:,:,:), dep(:,:,:)
-        real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
-        real    :: wz(self%wdim,self%wdim,self%wdim), depc
-        integer :: i, h, k, l, i0(3), i0z(3), cdim(3), m, phys(3), hh, cc
+        complex, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_kernel')
         call self%ensure_wimg
         ! With oversampling in place the operator ALREADY works on a padf*box
         ! lattice, which is exactly the 2x grid the Gram kernel needs for a
         ! linear (non-wrapping) convolution of a box-supported volume. The two
         ! lattices coincide, so no separate padded image is required.
-        allocate(kacc(self%lims3(1,1):self%lims3(1,2),&
-                     &self%lims3(2,1):self%lims3(2,2),&
-                     &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
-        allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        !$omp parallel default(shared) private(i,h,k,l,loc,i0,w,rot) proc_bind(close)
-        do i = 1, self%nptcls
-            rot = self%rotmats(:,:,i)
-            call self%absT2_plane(i, absT2)
-            do l = 0, self%stride-1
-                !$omp do schedule(static,1)
-                do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
-                    do k = self%lims2(2,1), self%lims2(2,2)
-                        if( h*h + k*k > self%sqlp ) cycle
-                        loc = real(self%padf) * matmul(real([h,k,0]), rot)
-                        i0  = nint(loc) - self%iwinsz
-                        call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                        call scatter_window(self, i0, w, cmplx(absT2(h,k),0.), kacc)
-                    end do
-                end do
-                !$omp end do
-            end do
-        end do
-        !$omp end parallel
+        allocate(acc(self%lims3(1,1):self%lims3(1,2),&
+                    &self%lims3(2,1):self%lims3(2,2),&
+                    &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
+        call self%accumulate_absT2(acc)
+        call self%fold_accum_to_khat(acc)
+        ! freed BEFORE finalize_khat, which is the memory-heavy half
+        deallocate(acc)
+        call self%finalize_khat
+    end subroutine build_kernel
+
+    !>  \brief  Builds preconditioner and kernel from a SINGLE particle pass.
+    !!          This is what the solver path uses; build_precond and build_kernel
+    !!          remain separately callable for the test commanders, which drive
+    !!          one without the other.
+    subroutine build_operators( self, l_kernel )
+        class(pcg_reconstruction), intent(inout) :: self
+        logical,                    intent(in)    :: l_kernel
+        complex, allocatable :: acc(:,:,:)
+        if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_operators')
+        call self%ensure_wimg
+        allocate(acc(self%lims3(1,1):self%lims3(1,2),&
+                    &self%lims3(2,1):self%lims3(2,2),&
+                    &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
+        call self%accumulate_absT2(acc)
+        call self%precond_from_accum(acc)
+        if( l_kernel ) call self%fold_accum_to_khat(acc)
+        deallocate(acc)
+        if( l_kernel ) call self%finalize_khat
+    end subroutine build_operators
+
+    subroutine fold_accum_to_khat( self, kacc )
+        class(pcg_reconstruction), intent(inout) :: self
+        complex,                    intent(in)    :: kacc(self%lims3(1,1):self%lims3(1,2),&
+                                                           &self%lims3(2,1):self%lims3(2,2),&
+                                                           &self%lims3(3,1):self%lims3(3,2))
+        integer :: h, k, m, hh, phys(3), cdim(3)
         cdim = self%wimg%get_array_shape()
         if( allocated(self%Khat) ) deallocate(self%Khat)
         allocate(self%Khat(cdim(1),cdim(2),cdim(3)), source=0.0)
@@ -907,7 +1142,16 @@ contains
                 end do
             end do
         end do
-        deallocate(kacc)
+    end subroutine fold_accum_to_khat
+
+    subroutine finalize_khat( self )
+        class(pcg_reconstruction), intent(inout) :: self
+        real,    parameter   :: EPS_D = 1.0e-8
+        complex, allocatable :: dacc(:,:,:), ctmp(:,:,:)
+        real,    allocatable :: tker(:,:,:), dep(:,:,:)
+        real    :: wz(self%wdim,self%wdim,self%wdim), depc
+        integer :: h, k, i0z(3), cdim(3), m, phys(3), hh, cc
+        cdim = self%wimg%get_array_shape()
         ! ---- divide out the DEPOSITION envelope ----
         ! Laying |T|^2 down through the KB window convolves the kernel spectrum
         ! with that window, which multiplies the real-space kernel by the
@@ -956,7 +1200,7 @@ contains
         deallocate(ctmp, tker, dep)
         self%l_kernel = .true.
         call self%calibrate_kernel
-    end subroutine build_kernel
+    end subroutine finalize_khat
 
     !>  \brief  One-off least-squares calibration of the kernel's overall scale
     !!          against the matrix-free reference.
@@ -1032,6 +1276,7 @@ contains
         type(ctf) :: tfun
         real      :: spafreqsq, ang, cval
         integer   :: h, k, shell, R
+        logical   :: l_ctf, l_flip
         if( .not. self%l_use_ctf )then
             !$omp do collapse(2) schedule(static)
             do k = self%lims2(2,1), self%lims2(2,2)
@@ -1042,19 +1287,30 @@ contains
             !$omp end do
             return
         endif
-        R    = self%lims2(1,2)
-        tfun = ctf(self%ctfparms(iptcl)%smpd, self%ctfparms(iptcl)%kv, &
-            &self%ctfparms(iptcl)%cs, self%ctfparms(iptcl)%fraca)
-        call tfun%init(self%ctfparms(iptcl)%dfx, self%ctfparms(iptcl)%dfy, self%ctfparms(iptcl)%angast)
+        R = self%lims2(1,2)
+        ! same ctfflag semantics as build_transfer; note |CTF|^2 == CTF^2, so the
+        ! FLIP case only matters for the complex T, not here -- but the NO case
+        ! does, and applying a CTF the images never saw would be wrong.
+        l_ctf  = self%ctfparms(iptcl)%ctfflag /= CTFFLAG_NO
+        l_flip = self%ctfparms(iptcl)%ctfflag == CTFFLAG_FLIP
+        if( l_ctf )then
+            tfun = ctf(self%ctfparms(iptcl)%smpd, self%ctfparms(iptcl)%kv, &
+                &self%ctfparms(iptcl)%cs, self%ctfparms(iptcl)%fraca)
+            call tfun%init(self%ctfparms(iptcl)%dfx, self%ctfparms(iptcl)%dfy, self%ctfparms(iptcl)%angast)
+        endif
         !$omp do collapse(2) schedule(static) private(spafreqsq,ang,cval,shell)
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
                 if( h*h + k*k > self%sqlp )then
                     absT2(h,k) = 0.
                 else
-                    spafreqsq  = (real(h)/real(self%box))**2 + (real(k)/real(self%box))**2
-                    ang        = atan2(real(k), real(h))
-                    cval       = tfun%eval(spafreqsq, ang, self%ctfparms(iptcl)%phshift)
+                    cval = 1.0
+                    if( l_ctf )then
+                        spafreqsq = (real(h)/real(self%box))**2 + (real(k)/real(self%box))**2
+                        ang       = atan2(real(k), real(h))
+                        cval      = tfun%eval(spafreqsq, ang, self%ctfparms(iptcl)%phshift)
+                        if( l_flip ) cval = abs(cval)
+                    endif
                     shell      = min(nint(sqrt(real(h*h+k*k))), R)
                     absT2(h,k) = cval * cval / self%sig2(shell,iptcl)
                 endif
@@ -1088,7 +1344,9 @@ contains
                                                                 &self%lims3(3,1):self%lims3(3,2))
         real, allocatable :: z(:,:,:)
         integer :: h, hh, k, m, phys(3)
+        integer(timer_int_kind) :: tp
         call self%ensure_wimg
+        if( self%l_profile ) tp = tic()
         call self%wimg%zero_and_flag_ft()
         !$omp parallel do collapse(2) default(shared) private(h,hh,k,m,phys) &
         !$omp schedule(static) proc_bind(close)
@@ -1105,21 +1363,40 @@ contains
         call self%wimg%ifft()
         ! back to the native lattice: the unknown never leaves box^3
         z = self%crop_vol(self%wimg%get_rmat())
+        if( self%l_profile ) self%t_fold = self%t_fold + real(toc(tp),dp)
     end function fold_and_ifft
 
     !>  \brief  z = M^-1 r via FFT, guarded elementwise divide, inverse FFT.
+    !!
+    !!          THE ENVELOPE BELONGS IN THE PRECONDITIONER TOO. rho is the
+    !!          Fourier diagonal of the BARE operator T = A~^dagger W A~, but the
+    !!          operator actually being solved is H = E^-1 T E^-1 (deapodization
+    !!          on both sides, see deapod_mul). Inverting that gives
+    !!          H^-1 = E T^-1 E, so the same real-space envelope has to bracket
+    !!          the Fourier-domain divide -- multiplying by env, not invenv,
+    !!          because this is the INVERSE of the deapodization sandwich.
+    !!          Leaving it out means preconditioning with something that differs
+    !!          from the true diagonal by a factor of E^2, which varies smoothly
+    !!          but substantially across the box; that mismatch is the most
+    !!          likely source of the non-monotone bump seen at iteration 2 with
+    !!          both operators.
     function apply_precond( self, r ) result( z )
         class(pcg_reconstruction), intent(inout) :: self
         real,                       intent(in)    :: r(self%box,self%box,self%box)
-        real,    allocatable :: z(:,:,:)
+        real,    allocatable :: z(:,:,:), rw(:,:,:)
         complex, allocatable :: cmat(:,:,:)
         integer :: cdim(3), i, j, k
+        integer(timer_int_kind) :: tp
         if( .not. self%l_precond )then
             allocate(z(self%box,self%box,self%box), source=r)
+            call self%mask_mul(z)
             return
         endif
         call self%ensure_wimg
-        call self%wimg%set_rmat(self%pad_vol(r), .false.)
+        if( self%l_profile ) tp = tic()
+        allocate(rw(self%box,self%box,self%box), source=r)
+        if( self%l_deapod ) rw = rw * self%env
+        call self%wimg%set_rmat(self%pad_vol(rw), .false.)
         call self%wimg%fft()
         cmat = self%wimg%get_cmat()
         cdim = self%wimg%get_array_shape()
@@ -1136,6 +1413,12 @@ contains
         call self%wimg%set_cmat(cmat)
         call self%wimg%ifft()
         z = self%crop_vol(self%wimg%get_rmat())
+        if( self%l_deapod ) z = z * self%env
+        ! keeping z inside the support keeps the whole Krylov space there; M^-1
+        ! is a Fourier diagonal and would otherwise leak the search directions
+        ! back out into the solvent that P H P has just been set up to ignore
+        call self%mask_mul(z)
+        if( self%l_profile ) self%t_prec = self%t_prec + real(toc(tp),dp)
     end function apply_precond
 
     ! MODULE-LEVEL KERNELS (not type-bound: kept free of polymorphic dispatch so
@@ -1287,8 +1570,29 @@ contains
         real,             optional,  intent(in)    :: rtol
         real, allocatable, optional, intent(out)   :: rel_res_hist(:)
         integer,          optional,  intent(out)   :: niters
+        ! WHICH RESIDUAL IS REPORTED MATTERS. This used to report
+        ! ||r||_Minv / ||r0||_Minv, the PRECONDITIONED norm, which in PCG is not
+        ! monotone -- only ||e||_H is -- and with a singular preconditioner it
+        ! wanders freely. It duly oscillated, which reads exactly like a solver
+        ! that has lost conjugacy while the solve was in fact converging
+        ! perfectly well. The headline number and the stopping test are now the
+        ! true relative residual ||r||_2 / ||b||_2, which is what a reader
+        ! actually wants and costs two dot products against 1.5 s of FFTs. The
+        ! M-norm is still logged, because it is the honest diagnostic for the
+        ! PRECONDITIONER: a large gap between the two says M is a poor model of H.
+        !
+        ! RESIDUAL REPLACEMENT. CG propagates the residual by the recurrence
+        ! r <- r - alpha*Hp rather than recomputing b - Hx, which is what makes
+        ! an iteration cost one operator application instead of two; the two can
+        ! drift apart in finite precision. Measured here, they agree to six
+        ! significant figures at box 256, so this is kept only as a periodic
+        ! audit at a long interval rather than a correction -- reporting ||r||_2
+        ! from the recurrence is only legitimate because this check backs it up.
+        integer, parameter :: RESID_REPLACE = 25
         real, allocatable :: b(:,:,:), r(:,:,:), p(:,:,:), hp(:,:,:), z(:,:,:), hist(:)
-        real(dp) :: rho, rho_new, rho0, alpha, beta, pHp
+        real, allocatable :: rtr(:,:,:)
+        real(dp) :: rho, rho_new, rho0, alpha, beta, pHp, nrec, ntru
+        real(dp) :: bnorm, rnorm, xnorm, dxnorm, mnorm
         integer  :: mmaxits, iter, n_done
         real     :: rrtol
         integer(timer_int_kind) :: t_it
@@ -1298,7 +1602,12 @@ contains
         rrtol = 1.0e-4
         if( present(rtol) ) rrtol = rtol
         allocate(hist(mmaxits))
+        ! profile the ITERATIONS only: the RHS below is a one-off setup cost and
+        ! folding it in would flatter whichever phase it happens to share.
         b  = self%apply_adjoint_all(y_planes)
+        ! b' = P b, completing the (P H P) u = P b normal equations
+        call self%mask_mul(b)
+        call self%reset_profile
         if( all(x == 0.0) )then
             ! zero initialization is the documented baseline (note section 8);
             ! skip a full operator application that is known to return zero
@@ -1312,6 +1621,8 @@ contains
         rho  = self%dot_real_volume(r,z)
         rho0 = rho
         if( rho0 <= 0.0_dp ) THROW_HARD('non-positive initial dot(r,z); preconditioner is not positive definite; solve')
+        bnorm = sqrt(self%dot_real_volume(b,b))
+        if( bnorm <= 0.0_dp ) THROW_HARD('zero right-hand side; nothing to reconstruct; solve')
         n_done = 0
         write(logfhandle,'(a,i0,a,es12.5)') '>>> PCG: starting, maxits = ', mmaxits, ', rtol = ', rrtol
         call flush(logfhandle)
@@ -1324,24 +1635,96 @@ contains
             alpha = rho / pHp
             x  = x + real(alpha) * p
             r  = r - real(alpha) * hp
+            if( mod(iter, RESID_REPLACE) == 0 )then
+                nrec = sqrt(self%dot_real_volume(r,r))
+                rtr  = b - self%apply_normal(x)
+                ntru = sqrt(self%dot_real_volume(rtr,rtr))
+                write(logfhandle,'(a,i4,a,es12.5,a,es12.5)') '>>> PCG residual replacement at iter ', &
+                    &iter, ':  recurrence = ', real(nrec), '   true = ', real(ntru)
+                call flush(logfhandle)
+                r = rtr
+            endif
             z  = self%apply_precond(r)
             rho_new = self%dot_real_volume(r,z)
             n_done  = iter
-            hist(iter) = real(sqrt(abs(rho_new)/rho0))
+            ! headline: true relative residual. dx/x says how much the map is
+            ! still moving, which for a reconstruction is often the more
+            ! practical stopping signal than any residual level.
+            rnorm      = sqrt(self%dot_real_volume(r,r))
+            xnorm      = sqrt(self%dot_real_volume(x,x))
+            dxnorm     = abs(alpha) * sqrt(self%dot_real_volume(p,p))
+            mnorm      = sqrt(abs(rho_new)/rho0)
+            hist(iter) = real(rnorm / bnorm)
             rt_it      = toc(t_it)
             ! Per-iteration progress. Without this the solver is silent between
             ! setup and completion, which on a real data set is indistinguishable
             ! from a hang.
-            write(logfhandle,'(a,i4,a,es12.5,a,f9.2,a)') '>>> PCG iter ', iter, &
-                &'   rel_resid = ', hist(iter), '   (', rt_it, ' s)'
+            write(logfhandle,'(a,i4,a,es11.4,a,es10.3,a,es10.3,a,f7.2,a)') '>>> PCG iter ', iter, &
+                &'  |r|/|b| = ', hist(iter), '  dx/x = ', real(dxnorm/max(xnorm,epsilon(1.0_dp))), &
+                &'  (M-norm ', real(mnorm), ')  (', rt_it, ' s)'
             call flush(logfhandle)
-            if( sqrt(abs(rho_new)/rho0) <= real(rrtol,dp) ) exit
+            if( rnorm / bnorm <= real(rrtol,dp) ) exit
             beta = rho_new / rho
             p    = z + real(beta) * p
             rho  = rho_new
         end do
+        ! x = P u: the CG variable u is unconstrained outside the support (P H P
+        ! annihilates it there, so it never influenced the residual), but it does
+        ! accumulate arbitrary values via the preconditioner. This is the step
+        ! that makes the returned volume the constrained solution.
+        call self%mask_mul(x)
         if( present(niters) ) niters = n_done
         if( present(rel_res_hist) ) allocate(rel_res_hist(n_done), source=hist(1:n_done))
+        self%l_profile = .false.
+        if( n_done > 0 ) call self%report_profile(n_done)
     end subroutine solve
+
+    ! PROFILING
+
+    subroutine reset_profile( self, l_on )
+        class(pcg_reconstruction), intent(inout) :: self
+        logical, optional,          intent(in)    :: l_on
+        self%t_setvol = 0.0_dp
+        self%t_cmatcp = 0.0_dp
+        self%t_ploop  = 0.0_dp
+        self%t_fold   = 0.0_dp
+        self%t_khat   = 0.0_dp
+        self%t_prec   = 0.0_dp
+        self%l_profile = .true.
+        if( present(l_on) ) self%l_profile = l_on
+    end subroutine reset_profile
+
+    !>  \brief  Per-iteration breakdown of where the solve's time actually goes.
+    !!
+    !!          Read it as one question: how much of an iteration is the PARTICLE
+    !!          LOOP (t_ploop -- the only part the kernelized operator removes)
+    !!          and how much is FFT plus bulk traffic on the padded lattice
+    !!          (t_setvol + t_cmatcp + t_fold + t_prec -- which switching
+    !!          operator does NOT remove, and which only a Fourier-domain
+    !!          formulation of the solve eliminates)?
+    subroutine report_profile( self, niters )
+        class(pcg_reconstruction), intent(in) :: self
+        integer,                    intent(in) :: niters
+        real(dp) :: rn, tot, ffts
+        if( niters < 1 ) return
+        rn   = real(niters,dp)
+        ffts = self%t_setvol + self%t_cmatcp + self%t_fold + self%t_prec
+        tot  = ffts + self%t_ploop + self%t_khat
+        write(logfhandle,'(a)')    '>>> PCG PROFILE (seconds per iteration)'
+        write(logfhandle,'(a,f9.3)') '    pad + fwd FFT of iterate     : ', self%t_setvol / rn
+        write(logfhandle,'(a,f9.3)') '    get_cmat/set_cmat copies     : ', self%t_cmatcp / rn
+        write(logfhandle,'(a,f9.3)') '    particle loop                : ', self%t_ploop  / rn
+        write(logfhandle,'(a,f9.3)') '    kernel pointwise multiply    : ', self%t_khat   / rn
+        write(logfhandle,'(a,f9.3)') '    fold + inv FFT + crop        : ', self%t_fold   / rn
+        write(logfhandle,'(a,f9.3)') '    apply_precond (2 FFT + copy) : ', self%t_prec   / rn
+        write(logfhandle,'(a,f9.3)') '    ---- accounted subtotal      : ', tot / rn
+        if( tot > 0.0_dp )then
+            write(logfhandle,'(a,f7.1,a)') '    particle loop is ', &
+                &100.0_dp * self%t_ploop / tot, '% of accounted time'
+            write(logfhandle,'(a,f7.1,a)') '    FFT + lattice traffic is ', &
+                &100.0_dp * ffts / tot, '% of accounted time'
+        endif
+        call flush(logfhandle)
+    end subroutine report_profile
 
 end module simple_pcg_reconstruction
