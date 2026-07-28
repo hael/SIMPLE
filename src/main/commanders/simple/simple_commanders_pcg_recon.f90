@@ -46,7 +46,7 @@ contains
         real,    allocatable     :: sig2(:,:), x(:,:,:), rel_res_hist(:)
         complex, allocatable     :: y_planes(:,:,:)
         integer :: nptcls, i, ii, iptcl, ibatch, batchlims(2), batchsz
-        integer :: lims2(2,2), R, niters, funit, cnt, maxits, kfromto(2)
+        integer :: lims2(2,2), R, niters, funit, cnt, maxits, kfromto(2), nspace_dummy
         real    :: rtol
         logical :: l_use_ctf, l_kernel, l_sig_loaded
         integer(timer_int_kind) :: t0, t1
@@ -65,9 +65,16 @@ contains
         if( .not. cline%defined('objfun')  ) call cline%set('objfun',  'euclid')
         ! nspace is only consulted by build_general_tbox's eulspace grid, which
         ! this operator never uses (it works from each particle's own continuous
-        ! orientation, not a discretized reference grid). Set a dummy so it does
-        ! not become a user-visible requirement.
-        if( .not. cline%defined('nspace')  ) call cline%set('nspace',  1.)
+        ! orientation, not a discretized reference grid). Keep a harmless even
+        ! placeholder to satisfy internal setup and avoid build_refspiral's odd
+        ! direction-count guard.
+        if( .not. cline%defined('nspace') ) call cline%set('nspace', 2.)
+        nspace_dummy = nint(cline%get_rarg('nspace'))
+        if( is_odd(nspace_dummy) )then
+            nspace_dummy = nspace_dummy + 1
+            call cline%set('nspace', real(nspace_dummy))
+            write(logfhandle,'(a,i0)') '>>> RECONSTRUCT3D_PCG: adjusted odd nspace to even placeholder=', nspace_dummy
+        endif
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
 
         maxits = MAXITS_DEFAULT
