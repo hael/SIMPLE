@@ -1,4 +1,4 @@
-module simple_motion_gain_analysis_helpers
+module simple_motion_gain_helpers
 use simple_core_module_api
 use simple_image, only: image
 implicit none
@@ -6,6 +6,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: read_movies_and_sum_frames
+public :: normalized_inverse_average_intensity
 
 contains
 
@@ -65,4 +66,45 @@ contains
         if( have_sum ) call frame%kill()
     end subroutine read_movies_and_sum_frames
 
-end module simple_motion_gain_analysis_helpers
+    subroutine normalized_inverse_average_intensity(sum_img, nframes, inv_avg_img, avg_value)
+        class(image), intent(in)    :: sum_img
+        integer,      intent(in)    :: nframes
+        type(image),  intent(out)   :: inv_avg_img
+        real,         intent(out)   :: avg_value
+        real, parameter :: INV_AVG_EPS = 1.0e-12
+        integer :: ldim(3)
+        real    :: npix
+        real, allocatable :: rmat(:,:,:)
+
+        if( nframes < 1 )then
+            THROW_HARD('nframes must be >= 1; normalized_inverse_average_intensity')
+        endif
+
+        ldim = sum_img%get_ldim()
+        if( any(ldim < 1) )then
+            THROW_HARD('sum_img has invalid dimensions; normalized_inverse_average_intensity')
+        endif
+
+        npix = real(ldim(1) * ldim(2) * ldim(3))
+        rmat = sum_img%get_rmat()
+        avg_value = sum(rmat) / (npix * real(nframes))
+
+        if( abs(avg_value) <= INV_AVG_EPS )then
+            THROW_HARD('Average intensity is near zero; cannot compute stable inverse scaling')
+        endif
+
+        rmat = rmat / real(nframes)
+        where( abs(rmat) > INV_AVG_EPS )
+            rmat = avg_value / rmat
+        elsewhere
+            rmat = 0.
+        end where
+      
+        call inv_avg_img%new(ldim, sum_img%get_smpd(), wthreads=.false.)
+        call inv_avg_img%set_rmat(rmat, .false.)
+        
+        deallocate(rmat)
+
+    end subroutine normalized_inverse_average_intensity
+
+end module simple_motion_gain_helpers

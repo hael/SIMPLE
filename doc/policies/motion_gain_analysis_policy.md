@@ -8,7 +8,7 @@ analysis workflow used by test-time gain-flip evaluation.
 Scope:
 
 - `simple_motion_gain_analysis.f90`
-- `simple_motion_gain_analysis_helpers.f90`
+- `simple_motion_gain_helpers.f90`
 - test wiring through `simple_motion_gain_tester.f90`,
   `simple_test_search_gain_flips.f90`, and unit-test entrypoints
 
@@ -23,7 +23,7 @@ The workflow has two distinct responsibilities that must stay separate:
 
 Current ownership:
 
-- `simple_motion_gain_analysis_helpers.f90` owns reading movie stacks and
+- `simple_motion_gain_helpers.f90` owns reading movie stacks and
   returning a summed image plus count metadata.
 - `simple_motion_gain_analysis.f90` owns gain-reference variants,
   correlation scoring, convergence metrics, and best-gain output artifacts.

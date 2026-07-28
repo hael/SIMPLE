@@ -1,7 +1,7 @@
 program simple_test_search_gain_flips
 use simple_core_module_api
 use simple_image,                          only: image
-use simple_motion_gain_analysis_helpers,   only: read_movies_and_sum_frames
+use simple_motion_gain_helpers,            only: read_movies_and_sum_frames
 use simple_motion_gain_analysis,           only: gain_flip_analyzer, GAIN_FIRST_ANALYSIS_AT
 implicit none
 #include "simple_local_flags.inc"

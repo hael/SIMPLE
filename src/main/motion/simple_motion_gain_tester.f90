@@ -3,7 +3,7 @@ module simple_motion_gain_tester
 use simple_core_module_api
 use simple_image,                        only: image
 use simple_motion_gain_analysis,         only: gain_flip_analyzer
-use simple_motion_gain_analysis_helpers, only: read_movies_and_sum_frames
+use simple_motion_gain_helpers, only: read_movies_and_sum_frames
 use simple_test_utils
 implicit none
 private
