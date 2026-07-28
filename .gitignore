@@ -48,3 +48,4 @@ db.sqlite3
 __pycache__
 # Docs
 docs/
+/.vscode

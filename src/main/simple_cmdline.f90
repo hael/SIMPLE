@@ -73,6 +73,8 @@ contains
         call get_command_argument(0,buffer)
         exec_cmd   = trim(adjustl(buffer))
         executable = basename(exec_cmd)
+        if( executable%has_substr('.exe') ) executable = executable%substr_remove(string('.exe'))
+        
         select case(executable%to_char())
             case('simple_exec', 'single_exec', 'simple_stream', 'simple_private_exec')
                 if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg=flag must be set on command line')
