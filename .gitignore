@@ -49,3 +49,5 @@ __pycache__
 # Docs
 docs/
 /.vscode
+# Codex agent notes are local by default; force-add only deliberately shared files.
+/.codex
