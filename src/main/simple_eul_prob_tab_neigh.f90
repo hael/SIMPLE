@@ -17,6 +17,11 @@ public :: eul_prob_tab_neigh
 private
 #include "simple_local_flags.inc"
 
+! Every direct stochastic search contributes this many active fine-reference
+! candidates before its stochastic stopping rule may take effect.  When fewer
+! active references exist, all of them are searched.
+integer, parameter :: MIN_STOCH_FINE_REFS = 5
+
 type, extends(eul_prob_tab) :: eul_prob_tab_neigh
     type(prob_candidate_store) :: candidate_store
     integer, allocatable       :: candidate_fill_counts(:)
@@ -231,7 +236,7 @@ contains
             logical, intent(in)  :: l_with_shift
             integer, intent(out) :: neval_loc
             integer :: full_ref_loc, prev_full_ref_loc, isample, ri_loc, irot_loc
-            integer :: nrefs_bound, smpl_ninpl, nrots
+            integer :: nrefs_bound, nmin_refs, smpl_ninpl, nrots
             real    :: dist_loc, corr_loc, prev_corr_loc, neigh_frac
             logical :: l_greedy_first
             neval_loc = 0
@@ -248,6 +253,8 @@ contains
             l_greedy_first = l_shc_neigh .and. (.not. self%b_ptr%spproj_field%has_been_searched(iptcl_loc))
             nrots          = self%b_ptr%pftc%get_nrots()
             nrefs_bound    = nfull_refs
+            if( self%nrefs < 1 ) THROW_HARD('direct stochastic neighborhood search has no active references')
+            nmin_refs      = min(MIN_STOCH_FINE_REFS,self%nrefs)
             smpl_ninpl     = nrots
             if( l_snhc_neigh )then
                 neigh_frac  = extremal_decay(self%p_ptr%extr_iter, self%p_ptr%extr_lim)
@@ -259,7 +266,9 @@ contains
                 call calc_previous_corr(ithr_loc, iptcl_loc, prev_full_ref_loc, prev_corr_loc)
             endif
             do isample = 1,nfull_refs
-                if( l_snhc_neigh .and. isample > nrefs_bound ) exit
+                ! SNHC may leave its stochastic neighbourhood only after the
+                ! particle has the minimum number of active fine candidates.
+                if( l_snhc_neigh .and. isample > nrefs_bound .and. neval_loc >= nmin_refs ) exit
                 full_ref_loc = direct_srch_order(isample,ithr_loc)
                 if( full_ref_loc < 1 .or. full_ref_loc > size(eval_work%fullref_to_sparse_ref) ) cycle
                 ri_loc = eval_work%fullref_to_sparse_ref(full_ref_loc)
@@ -270,8 +279,14 @@ contains
                 neval_loc = neval_loc + 1
                 eval_work%evaluated_ref_ids(neval_loc,ithr_loc)   = ri_loc
                 eval_work%evaluated_ref_dists(neval_loc,ithr_loc) = dist_loc
-                if( l_shc_neigh .and. (.not. l_greedy_first) .and. corr_loc > prev_corr_loc ) exit
+                ! SHC acceptance is likewise deferred until the candidate
+                ! floor has been established for this sampled particle.
+                if( l_shc_neigh .and. (.not. l_greedy_first) .and. corr_loc > prev_corr_loc .and. &
+                    &neval_loc >= nmin_refs ) exit
             enddo
+            if( neval_loc < nmin_refs )then
+                THROW_HARD('direct stochastic neighborhood search did not meet the minimum active-reference count')
+            endif
         end subroutine evaluate_direct_stochastic_refs
 
         ! Computes the maximum correlation of the previous orientation without shift
