@@ -46,7 +46,6 @@ type(string)               :: benchfname
 
 type :: cluster2D_ctrl
     character(len=:), allocatable :: refine_flag
-    logical :: l_partial_sums
     logical :: l_sample_updates
     logical :: l_frac_restore
     logical :: l_ctf
@@ -184,7 +183,6 @@ contains
             ctrl%l_stream          = (trim(p_ptr%stream2d) == 'yes')
             ctrl%l_sample_updates  = p_ptr%l_update_frac
             ctrl%l_frac_restore    = ctrl%l_sample_updates
-            ctrl%l_partial_sums    = ctrl%l_frac_restore
             ctrl%l_prob_align      = p_ptr%l_prob_align_mode
             ctrl%l_restore_cavgs   = (trim(p_ptr%restore_cavgs) == 'yes')
             ctrl%l_require_full_assignment = cluster2D_requires_full_assignment(p_ptr)
@@ -192,7 +190,6 @@ contains
             ctrl%do_bench          = L_BENCH_GLOB
             if( p_ptr%startit == 1 )then
                 ctrl%l_frac_restore = .false.
-                ctrl%l_partial_sums = .false.
             endif
             if( p_ptr%extr_iter == 1 )then
                 ctrl%l_greedy       = .true.
@@ -207,13 +204,11 @@ contains
                     p_ptr%l_update_frac   = .true.
                     ctrl%l_sample_updates = .true.
                     ctrl%l_frac_restore   = .true.
-                    ctrl%l_partial_sums   = .true.
                 else
                     p_ptr%update_frac     = 1.0
                     p_ptr%l_update_frac   = .false.
                     ctrl%l_sample_updates = .false.
                     ctrl%l_frac_restore   = .false.
-                    ctrl%l_partial_sums   = .false.
                 endif
                 if( trim(ctrl%refine_flag) == 'snhc' ) ctrl%refine_flag = 'snhc_smpl'
             endif
@@ -267,7 +262,6 @@ contains
                 THROW_HARD('need refs to be part of command line for cluster2D execution')
             endif
             call cavger_read_all
-            ctrl%l_partial_sums = ctrl%l_frac_restore
             call cavger_init_online(batchsz_max, ctrl%l_frac_restore)
         end subroutine prepare_class_averages_and_restoration
 
@@ -275,9 +269,10 @@ contains
             integer, intent(in) :: batchsz_max
             if( str_has_substr(ctrl%refine_flag, '_many') )then
                 call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream,&
-                                        &nmany_refs=s2D%snhc_nrefs_bound)
+                                        &ctrl%l_frac_restore, nmany_refs=s2D%snhc_nrefs_bound)
             else
-                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream)
+                call prep_pftc4align2D(p_ptr, b_ptr, ptcl_match_imgs_pad, batchsz_max, which_iter, ctrl%l_stream,&
+                                        &ctrl%l_frac_restore)
             endif
         end subroutine prepare_alignment_references
 
@@ -485,7 +480,6 @@ contains
         write(logfhandle,'(a,a)') 'refine_flag           : ', trim(self%refine_flag)
         write(logfhandle,'(a,l1)') 'l_sample_updates     : ', self%l_sample_updates
         write(logfhandle,'(a,l1)') 'l_frac_restore       : ', self%l_frac_restore
-        write(logfhandle,'(a,l1)') 'l_partial_sums       : ', self%l_partial_sums
         write(logfhandle,'(a,l1)') 'l_ctf                : ', self%l_ctf
         write(logfhandle,'(a,l1)') 'l_snhc               : ', self%l_snhc
         write(logfhandle,'(a,l1)') 'l_stream             : ', self%l_stream

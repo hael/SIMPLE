@@ -361,7 +361,7 @@ contains
         call cavger_new(params, build)
         if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
         call cavger_read_all
-        call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, params%which_iter, .false.)
+        call prep_pftc4align2D(params, build, ptcl_match_imgs_pad, batchsz_max, params%which_iter, .false., .false.)
         ! Fill the partition table in matcher-sized batches to cap polar FT memo memory.
         call eulprob_obj_part%new_worker(params,build,pinds)
         fname = string(DIST_FBODY)//int2str_pad(params%part,params%numlen)//'.dat'

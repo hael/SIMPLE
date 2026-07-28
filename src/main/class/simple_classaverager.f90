@@ -22,7 +22,7 @@ public :: cavger_assemble_sums, cavger_restore_cavgs
 ! I/O & handling of distributed sums
 public :: cavger_write_eo, cavger_write_all, cavger_write_merged, cavger_read_all
 public :: cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts
-public :: cavger_pad_partial_sums
+public :: cavger_pad_partial_sums, cavger_shift_partial_eosum
 ! Reusable reciprocal-space 2D sums (no restoration or real-space conversion)
 public :: fourier_2d_accumulator
 ! Stacks used for alignment
@@ -72,6 +72,7 @@ type :: stack
     procedure          :: frc
     procedure          :: ctf_dens_correct
     procedure          :: softmask
+    procedure          :: shift
     procedure          :: insert_lowres_serial
     procedure          :: add_invnoisepower2rho
     procedure, private :: accumulate_fplane => stack_accumulate_fplane
@@ -105,6 +106,7 @@ type cavgs_set
     procedure          :: new_set
     procedure          :: zero_set
     procedure          :: copy_fast
+    procedure          :: shift_eo
     procedure          :: kill_set
 end type cavgs_set
 
@@ -164,6 +166,12 @@ interface
         integer,         intent(in)    :: is
         logical,         intent(in)    :: ft
     end subroutine
+
+    module subroutine shift_eo( self, offset, is )
+        class(cavgs_set), intent(inout) :: self
+        real,             intent(in)    :: offset(2)
+        integer,          intent(in)    :: is
+    end subroutine shift_eo
 
     module subroutine kill_set( self )
         class(cavgs_set), intent(inout) :: self
@@ -261,6 +269,12 @@ interface
         class(stack), intent(inout) :: self
         integer,      intent(in)    :: is
     end subroutine softmask
+
+    module subroutine shift( self, offset, is )
+        class(stack), intent(inout) :: self
+        real,         intent(in)    :: offset(2)
+        integer,      intent(in)    :: is
+    end subroutine shift
 
     module subroutine insert_lowres_serial( self, self2insert, is, find )
         class(stack), intent(inout) :: self
@@ -397,6 +411,10 @@ interface
         integer, intent(in) :: old_box, new_box, n, nparts, numlen
     end subroutine cavger_pad_partial_sums
 
+    module subroutine cavger_shift_partial_eosum( offset, icls )
+        real,    intent(in) :: offset(2)
+        integer, intent(in) :: icls
+    end subroutine cavger_shift_partial_eosum
 
     ! Destructors
 

@@ -2,7 +2,7 @@
 module simple_matcher_pftc_prep
 use simple_core_module_api
 use simple_builder,              only: builder
-use simple_classaverager,        only: cavgs_merged, cavgs_even, cavgs_odd
+use simple_classaverager,        only: cavgs_merged, cavgs_even, cavgs_odd, cavger_shift_partial_eosum
 use simple_image,                only: image
 use simple_matcher_ptcl_batch,   only: prep_sigmas_objfun
 use simple_parameters,           only: parameters
@@ -16,15 +16,15 @@ private
 contains
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
-    subroutine prep_pftc4align2D( params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, l_stream, nmany_refs )
+    subroutine prep_pftc4align2D( params, build, ptcl_match_imgs_pad, batchsz_max, which_iter, l_stream, l_frac_restore, nmany_refs )
         use simple_matcher_2Dprep, only: prep2dref, calc_2Dref_offset
         class(parameters),          intent(inout) :: params
         class(builder),             intent(inout) :: build
         type(image),                intent(inout) :: ptcl_match_imgs_pad(:)
         integer,                    intent(in)    :: batchsz_max, which_iter
         logical,                    intent(in)    :: l_stream
+        logical,                    intent(in)    :: l_frac_restore
         integer,          optional, intent(in)    :: nmany_refs
-        class(image), pointer :: cavgs_m(:), cavgs_e(:), cavgs_o(:)
         type(image), allocatable :: match_imgs(:)
         real         :: xyz(3)
         integer      :: icls, pop, pop_even, pop_odd, centype, ithr, pdim_srch(3)
@@ -41,12 +41,9 @@ contains
         pdim_srch = build%pftc%get_pdim_srch()
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pdim_srch)
         allocate(match_imgs(params%ncls))
-        cavgs_m => cavgs_merged
-        cavgs_e => cavgs_even
-        cavgs_o => cavgs_odd
-        call cavgs_m(1)%construct_thread_safe_tmp_imgs(nthr_glob)
+        call cavgs_merged(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! mask memoization
-        call cavgs_m(1)%memoize_mask_coords
+        call cavgs_merged(1)%memoize_mask_coords
         ! mode of cavg centering
         centype = get_centype(params%center_type)
         ! PREPARATION OF REFERENCES IN pftc
@@ -69,15 +66,19 @@ contains
                 do_center = has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)
                 do_center = input_center .and. do_center
                 if( do_center )then
-                    call match_imgs(icls)%copy_fast(cavgs_m(icls))
+                    call match_imgs(icls)%copy_fast(cavgs_merged(icls))
                     call calc_2Dref_offset(params, build, match_imgs(icls), icls, centype, xyz)
                 else
                     xyz = 0.0
                 endif
+                if( l_frac_restore )then
+                    ! Shifts e/o class sum used during fractional restoration
+                    if( arg(xyz) > CENTHRESH ) call cavger_shift_partial_eosum(xyz(1:2), icls)
+                endif
                 ! Prepare the references
                 if( l_use_merged_ref )then
                     ! merged class average in both even and odd positions
-                    call match_imgs(icls)%copy_fast(cavgs_m(icls))
+                    call match_imgs(icls)%copy_fast(cavgs_merged(icls))
                     call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                     call build%pftc%polarize_ref_pft(ptcl_match_imgs_pad(ithr), icls, iseven=.true.,&
                         &pdim=pdim_srch, oversamp=.true.)
@@ -85,17 +86,17 @@ contains
                 else
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! even & odd
-                        call match_imgs(icls)%copy_fast(cavgs_e(icls))
+                        call match_imgs(icls)%copy_fast(cavgs_even(icls))
                         call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call build%pftc%polarize_ref_pft(ptcl_match_imgs_pad(ithr), icls, iseven=.true.,&
                             &pdim=pdim_srch, oversamp=.true.)
-                        call match_imgs(icls)%copy_fast(cavgs_o(icls))
+                        call match_imgs(icls)%copy_fast(cavgs_odd(icls))
                         call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call build%pftc%polarize_ref_pft(ptcl_match_imgs_pad(ithr), icls, iseven=.false.,&
                             &pdim=pdim_srch, oversamp=.true.)
                     else
                         ! merged class average in both even and odd positions
-                        call match_imgs(icls)%copy_fast(cavgs_m(icls))
+                        call match_imgs(icls)%copy_fast(cavgs_merged(icls))
                         call prep2Dref(params, build, match_imgs(icls), icls, xyz, ptcl_match_imgs_pad(ithr))
                         call build%pftc%polarize_ref_pft(ptcl_match_imgs_pad(ithr), icls, iseven=.true.,&
                             &pdim=pdim_srch, oversamp=.true.)
@@ -109,8 +110,7 @@ contains
         call build%pftc%memoize_refs
         ! CLEANUP
         deallocate(match_imgs)
-        call cavgs_m(1)%kill_thread_safe_tmp_imgs
-        nullify(cavgs_m,cavgs_e,cavgs_o)
+        call cavgs_merged(1)%kill_thread_safe_tmp_imgs
     end subroutine prep_pftc4align2D
 
 end module simple_matcher_pftc_prep

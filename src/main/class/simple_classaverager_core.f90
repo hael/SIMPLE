@@ -42,6 +42,15 @@ contains
         self%merged%slices(is)%ft = ft
     end subroutine copy_fast
 
+    ! Applies offset to the even and odd cavg slices.  The merged cavg is not shifted.
+    module subroutine shift_eo( self, offset, is )
+        class(cavgs_set), intent(inout) :: self
+        real,             intent(in)    :: offset(2)
+        integer,          intent(in)    :: is
+        call self%even%shift(offset, is)
+        call self%odd%shift( offset, is)
+    end subroutine shift_eo
+
     module subroutine kill_set( self )
         class(cavgs_set), intent(inout) :: self
         self%ldim = 0
@@ -559,6 +568,39 @@ contains
         edge_avg = real(edge_sum / real(4*self%ldim(1)-4,dp))
         self%rmat(:self%ldim(1),:self%ldim(2),is) = self%soft_mask * (self%rmat(:self%ldim(1),:self%ldim(2),is) - edge_avg)
     end subroutine softmask
+
+    !> Applies offset to cmat in the Fourier domain
+    module subroutine shift( self, offset, is )
+        class(stack), intent(inout) :: self
+        real,         intent(in)    :: offset(2)
+        integer,      intent(in)    :: is
+        complex(dp) :: ph_h(0:self%ldim(1)/2)
+        complex(dp) :: ph_k(-self%ldim(2)/2:(self%ldim(2)-1)/2)
+        complex(dp) :: w1, w2
+        real(dp)    :: sh(2)
+        integer     :: lims(3,2), h,k, hphys,kphys
+        if( .not. self%slices(is)%ft ) THROW_HARD('image to be modified assumed to be FTed; shift')
+        lims  = self%fit%loop_lims(2)
+        sh(1) = real(offset(1) * PI/real(self%ldim(1)/2),dp)
+        sh(2) = real(offset(2) * PI/real(self%ldim(2)/2),dp)
+        w1    = cmplx(cos(sh(1)), sin(sh(1)), kind=dp)
+        w2    = cmplx(cos(sh(2)), sin(sh(2)), kind=dp)
+        ph_h(lims(1,1)) = cmplx(cos(real(lims(1,1),dp)*sh(1)),  sin(real(lims(1,1),dp)*sh(1)), kind=dp)
+        do h = lims(1,1)+1,lims(1,2)
+            ph_h(h) = ph_h(h-1) * w1
+        enddo
+        ph_k(lims(2,1)) = cmplx(cos(real(lims(2,1),dp)*sh(2)),  sin(real(lims(2,1),dp)*sh(2)), kind=dp)
+        do k = lims(2,1)+1,lims(2,2)
+            ph_k(k) = ph_k(k-1) * w2
+        enddo
+        do k = lims(2,1),lims(2,2)
+            kphys = k + 1 + merge(self%ldim(2),0,k<0)
+            do h = lims(1,1),lims(1,2)
+                hphys = h + 1
+                self%cmat(hphys,kphys,is) = self%cmat(hphys,kphys,is) * cmplx(ph_k(k) * ph_h(h),kind=sp)
+            enddo
+        enddo
+    end subroutine shift
 
     ! To insert the low resolutions rings of even+odd into even and odd
     ! and keep these cavgs in register

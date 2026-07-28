@@ -81,7 +81,7 @@ contains
         call cline%set('balance',         'no') ! no balancing based on 2D clustering
         call cline%set('greedy_sampling', 'no') ! only active when balance is 'yes'`
         call cline%set('trail_rec',      'yes') ! trailing average 3D reconstruction
-        call cline%set('refine', 'prob_neigh') ! probabilistioc neighborhood 3D refinement
+        call cline%set('refine',  'prob_neigh') ! probabilistic neighborhood 3D refinement
         call cline%set('ml_reg',         'yes') ! ML regularization is on
         call cline%set('overlap',         0.99) ! convergence if overlap > 99%
         call cline%set('nstates',            1) ! only single-state refinement is supported
@@ -96,8 +96,7 @@ contains
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',        'no') ! 4 now, to allow more rapid testing
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',        'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
-        if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',      'yes')
-        if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',       'yes') ! better map with ml_reg='yes'
+        if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',        'yes')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
         if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! envelope masking for background flattening

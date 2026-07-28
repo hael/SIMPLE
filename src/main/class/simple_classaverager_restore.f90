@@ -594,6 +594,13 @@ contains
         call ca%kill; call ct%kill
     end subroutine cavger_pad_partial_sums
 
+    !>  \brief  shift partial eo sums (fractional update)
+    module subroutine cavger_shift_partial_eosum( offset, icls )
+        real,    intent(in) :: offset(2)
+        integer, intent(in) :: icls
+        call cavgs%shift_eo(offset, icls)
+    end subroutine cavger_shift_partial_eosum
+
     module subroutine apply_weights2cavgs( class_update_fracs )
         real, intent(in) :: class_update_fracs(:)
         real :: w
