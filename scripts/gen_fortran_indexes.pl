@@ -5,6 +5,7 @@ use File::Find;
 use Getopt::Long;
 use File::Path qw(make_path);
 use File::Spec;
+use Cwd qw(abs_path);
 
 # ------------------------------------------------------------
 # Config
@@ -18,6 +19,7 @@ my @FORTRAN_EXT = qw(.f .F .f90 .F90 .f95 .F95);
 
 my $root_dir;
 my $out_dir = '.';
+my $root_abs;
 
 GetOptions(
     'root=s' => \$root_dir,
@@ -27,6 +29,7 @@ GetOptions(
 die "Usage: $0 --root /path/to/src [--out docs]\n"
     unless defined $root_dir && -d $root_dir;
 
+$root_abs = abs_path($root_dir);
 make_path($out_dir) unless -d $out_dir;
 
 # ------------------------------------------------------------
@@ -39,7 +42,9 @@ make_path($out_dir) unless -d $out_dir;
 #       files       => { file_path => 1, ... },
 #       procs       => [ { name, kind, file, line, visibility }, ... ],
 #       visibility  => { symbol_name => 'public'|'private' },
-#       default_vis => 'public'|'private'|undef
+#       default_vis => 'public'|'private'|undef,
+#       uses        => { module_name => 1 },
+#       symbols     => [ { name, kind, file, line, visibility }, ... ]
 #   }
 
 my %modules;
@@ -48,6 +53,7 @@ my %modules;
 # @procedures: { name, kind, module, file, line, visibility }
 
 my @procedures;
+my @symbols;
 
 # ------------------------------------------------------------
 # Helpers
@@ -73,6 +79,21 @@ sub strip_inline_comment {
     # crude: strip anything after ! unless it's in a string (ignore that complexity)
     $line =~ s/!.*$//;
     return $line;
+}
+
+sub csv_quote {
+    my ($value) = @_;
+    $value //= '';
+    $value =~ s/"/""/g;
+    return '"' . $value . '"' if $value =~ /[,"\n\r]/;
+    return $value;
+}
+
+sub relative_path {
+    my ($path) = @_;
+    my $rel = File::Spec->abs2rel($path, $root_abs);
+    $rel =~ s{\\}{/}g;
+    return $rel;
 }
 
 # ------------------------------------------------------------
@@ -107,6 +128,8 @@ sub process_fortran_file {
                 procs       => [],
                 visibility  => {},
                 default_vis => undef, # unknown until we see PRIVATE without list
+                uses        => {},
+                symbols     => [],
             };
             $modules{$modkey}{files}{$file} = 1;
             $current_module = $modkey;
@@ -122,6 +145,12 @@ sub process_fortran_file {
         # If inside a module, try to pick up PUBLIC/PRIVATE statements
         if (defined $current_module) {
             my $mod = $modules{$current_module};
+
+            if ($line =~ /^\s*use\s+(?:,\s*[^:]+::\s*)?([a-zA-Z0-9_]+)/i) {
+                my $used = normalize_name($1);
+                $mod->{uses}{$used} = 1 unless $used eq $current_module;
+                next;
+            }
 
             # PRIVATE with no list => default private
             if ($line =~ /^\s*private\s*$/i) {
@@ -184,6 +213,8 @@ sub process_fortran_file {
             };
 
             push @procedures, $proc;
+            push @symbols, $proc;
+            push @{$modules{$current_module}{symbols}}, $proc if defined $current_module;
 
             if (defined $current_module) {
                 push @{$modules{$current_module}{procs}}, $proc;
@@ -223,11 +254,28 @@ sub process_fortran_file {
             };
 
             push @procedures, $proc;
+            push @symbols, $proc;
+            push @{$modules{$current_module}{symbols}}, $proc if defined $current_module;
 
             if (defined $current_module) {
                 push @{$modules{$current_module}{procs}}, $proc;
             }
 
+            next;
+        }
+
+        if (defined $current_module && $line =~ /^\s*type\s*(?:,\s*[^:]*)?::\s*([a-zA-Z0-9_]+)/i) {
+            my $name = $1;
+            my $key = normalize_name($name);
+            my $mod = $modules{$current_module};
+            my $vis = exists $mod->{visibility}{$key} ? $mod->{visibility}{$key}
+                : (defined $mod->{default_vis} ? $mod->{default_vis} : 'public');
+            my $symbol = {
+                name => $name, kind => 'type', module => $mod->{name},
+                file => $file, line => $line_no, visibility => $vis,
+            };
+            push @symbols, $symbol;
+            push @{$mod->{symbols}}, $symbol;
             next;
         }
     }
@@ -307,7 +355,7 @@ sub write_api_index_md {
         my $pname = $p->{name};
         my $kind  = $p->{kind};
         my $mod   = $p->{module} || '';
-        my $file  = $p->{file};
+        my $file  = relative_path($p->{file});
         my $line  = $p->{line};
         my $vis   = $p->{visibility};
 
@@ -317,14 +365,88 @@ sub write_api_index_md {
     close $out;
 }
 
+sub write_module_index_md {
+    my ($path) = @_;
+    open my $out, '>', $path or die "Cannot write $path: $!";
+    print $out "# Module Index\n\n";
+
+    foreach my $modkey (sort keys %modules) {
+        my $m = $modules{$modkey};
+        my @files = sort map { relative_path($_) } keys %{$m->{files}};
+        print $out "## Module: $m->{name}\n\n";
+        print $out "Files:\n";
+        print $out "- `$_`\n" for @files;
+
+        my @uses = sort keys %{$m->{uses}};
+        if (@uses) {
+            print $out "\nUses:\n";
+            print $out "- `$_`\n" for @uses;
+        }
+
+        my @public = sort { lc($a->{name}) cmp lc($b->{name}) }
+            grep { $_->{visibility} eq 'public' } @{$m->{symbols}};
+        if (@public) {
+            print $out "\nPublic symbols:\n";
+            print $out "- `$_->{name}` — $_->{kind}\n" for @public;
+        }
+
+        my @private = sort { lc($a->{name}) cmp lc($b->{name}) }
+            grep { $_->{visibility} eq 'private' } @{$m->{symbols}};
+        if (@private) {
+            print $out "\nPrivate symbols:\n";
+            print $out "- `$_->{name}` — $_->{kind}\n" for @private;
+        }
+        print $out "\n---\n";
+    }
+    close $out;
+}
+
+sub write_symbol_index_csv {
+    my ($path) = @_;
+    open my $out, '>', $path or die "Cannot write $path: $!";
+    print $out "module,file,symbol,kind,visibility,line\n";
+    my @sorted = sort {
+        lc($a->{module} // '') cmp lc($b->{module} // '')
+            || lc($a->{name}) cmp lc($b->{name})
+            || $a->{line} <=> $b->{line}
+    } @symbols;
+    for my $s (@sorted) {
+        print $out join(',', map { csv_quote($_) }
+            $s->{module} // '', relative_path($s->{file}), $s->{name},
+            $s->{kind}, $s->{visibility}, $s->{line}), "\n";
+    }
+    close $out;
+}
+
+sub write_module_graph_dot {
+    my ($path) = @_;
+    open my $out, '>', $path or die "Cannot write $path: $!";
+    print $out "digraph module_graph {\n";
+    print $out "  \"$modules{$_}{name}\";\n" for sort keys %modules;
+    for my $modkey (sort keys %modules) {
+        for my $used (sort keys %{$modules{$modkey}{uses}}) {
+            print $out "  \"$modules{$modkey}{name}\" -> \"$used\";\n";
+        }
+    }
+    print $out "}\n";
+    close $out;
+}
+
 # ------------------------------------------------------------
 # Write outputs
 # ------------------------------------------------------------
 
 my $modules_md   = File::Spec->catfile($out_dir, 'modules.md');
 my $api_index_md = File::Spec->catfile($out_dir, 'api_index.md');
+my $module_index_md = File::Spec->catfile($out_dir, 'module_index.md');
+my $symbol_index_csv = File::Spec->catfile($out_dir, 'symbol_index.csv');
+my $module_graph_dot = File::Spec->catfile($out_dir, 'module_graph.dot');
 
 write_modules_md($modules_md);
 write_api_index_md($api_index_md);
+write_module_index_md($module_index_md);
+write_symbol_index_csv($symbol_index_csv);
+write_module_graph_dot($module_graph_dot);
 
 print "Wrote:\n  $modules_md\n  $api_index_md\n";
+print "  $module_index_md\n  $symbol_index_csv\n  $module_graph_dot\n";
