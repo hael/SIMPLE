@@ -5,7 +5,7 @@ implicit none
 
 type(ui_program), target :: binarize
 type(ui_program), target :: convert
-type(ui_program), target :: ctf_phaseflip
+type(ui_program), target :: ctf_correct
 type(ui_program), target :: ctfops
 type(ui_program), target :: normalize_
 type(ui_program), target :: scale
@@ -18,7 +18,7 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call new_binarize(prgtab)
         call new_convert(prgtab)
-        call new_ctf_phaseflip(prgtab)
+        call new_ctf_correct(prgtab)
         call new_ctfops(prgtab)
         call new_normalize(prgtab)
         call new_scale(prgtab)
@@ -31,7 +31,7 @@ contains
         write(logfhandle,'(A)') format_str('GENERAL IMAGE PROCESSING:', C_UNDERLINED)
         write(logfhandle,'(A)') binarize%name%to_char()
         write(logfhandle,'(A)') convert%name%to_char()
-        write(logfhandle,'(A)') ctf_phaseflip%name%to_char()
+        write(logfhandle,'(A)') ctf_correct%name%to_char()
         write(logfhandle,'(A)') ctfops%name%to_char()
         write(logfhandle,'(A)') normalize_%name%to_char()
         write(logfhandle,'(A)') scale%name%to_char()
@@ -105,33 +105,38 @@ contains
         call add_ui_program('convert', convert, prgtab)
     end subroutine new_convert
 
-    subroutine new_ctf_phaseflip( prgtab )
+    subroutine new_ctf_correct( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
-        call ctf_phaseflip%new(&
-        &'ctf_phaseflip', &                                        ! name
-        &'CTF phaseflip images in project',&                       ! descr_short
-        &'is a program for CTF phase flipping images in project',& ! descr long
+        call ctf_correct%new(&
+        &'ctf_correct', &                                          ! name
+        &'Correct particle CTFs in project',&                      ! descr_short
+        &'is a program for CTF phase flipping or Wiener correction of particle images in project',& ! descr long
         &'simple_exec',&                                           ! executable
         &.true.)                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call ctf_phaseflip%add_input(UI_PARM, smpd)
+        call ctf_correct%add_input(UI_PARM, smpd)
+        call ctf_correct%add_input(UI_PARM, 'ctf_correct_mode', 'multi', 'CTF correction mode', &
+            &'CTF correction operation(phaseflip|wiener){phaseflip}', '(phaseflip|wiener){phaseflip}', .false., 'phaseflip')
+        call ctf_correct%add_input(UI_PARM, 'wiener_const', 'num', 'Wiener regularizer', &
+            &'Wiener N/S regularizer; a negative value uses 10 percent of mean CTF squared', 'N/S{-1}', .false., -1.)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        ! <empty>
+        call ctf_correct%add_input(UI_FILT, 'fsc', 'file', 'FSC file', &
+            &'Optional merged FSC for shell-dependent Wiener regularization', 'e.g. fsc_state01.bin', .false., '')
         ! mask controls
         ! <empty>
         ! computer controls
-        call ctf_phaseflip%add_input(UI_COMP, nthr)
+        call ctf_correct%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('ctf_phaseflip', ctf_phaseflip, prgtab)
-    end subroutine new_ctf_phaseflip
+        call add_ui_program('ctf_correct', ctf_correct, prgtab)
+    end subroutine new_ctf_correct
 
     subroutine new_ctfops( prgtab )
         class(ui_hash), intent(inout) :: prgtab

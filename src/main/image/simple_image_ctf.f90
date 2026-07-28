@@ -131,6 +131,99 @@ contains
         end do
     end subroutine apply_ctf
 
+    !> Apply a Wiener CTF correction in Fourier space.  The optional
+    !! noise_to_signal array is the radial N/S regularizer.  With no supplied
+    !! spectrum, a negative wiener_const selects the Xmipp/FREALIGN-style
+    !! regularizer: 10% of the mean CTF squared over the Fourier plane.
+    module subroutine apply_ctf_wiener( self, tfun, ctfparms, wiener_const, noise_to_signal )
+        class(image),     intent(inout) :: self
+        class(ctf),       intent(inout) :: tfun
+        type(ctfparams),  intent(in)    :: ctfparms
+        real,             intent(in)    :: wiener_const
+        real, optional,   intent(in)    :: noise_to_signal(:)
+        type(ctfvars) :: ctfvals
+        real :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs
+        real :: ctfval, ctf2, regularizer, ctf2_sum
+        integer :: h, k, phys(2), shell, ncoeff, lims(3,2)
+        logical :: phase_flipped
+        if( .not. self%is_ft() ) THROW_HARD('image must be Fourier transformed; apply_ctf_wiener')
+        if( self%is_3d() ) THROW_HARD('Wiener CTF correction is 2D only; apply_ctf_wiener')
+        select case(ctfparms%ctfflag)
+            case(CTFFLAG_YES, CTFFLAG_FLIP)
+                phase_flipped = ctfparms%ctfflag == CTFFLAG_FLIP
+            case DEFAULT
+                THROW_HARD('Wiener CTF correction requires ctf=yes or ctf=flip; apply_ctf_wiener')
+        end select
+        call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
+        ctfvals         = tfun%get_ctfvars(ctfparms%phshift)
+        wl              = ctfvals%wl
+        half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
+        sum_df          = ctfvals%dfx + ctfvals%dfy
+        diff_df         = ctfvals%dfx - ctfvals%dfy
+        angast          = ctfvals%angast
+        amp_contr_const = ctfvals%amp_contr_const
+        if( present(noise_to_signal) )then
+            if( size(noise_to_signal) < self%get_filtsz() ) &
+                &THROW_HARD('noise_to_signal has too few shells; apply_ctf_wiener')
+        endif
+        lims     = self%fit%loop_lims(2)
+        ctf2_sum = 0.
+        ncoeff   = 0
+        do h = lims(1,1), lims(1,2)
+            do k = lims(2,1), lims(2,2)
+                ctfval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                    &amp_contr_const, wl, half_wl2_cs)
+                if( phase_flipped ) ctfval = abs(ctfval)
+                ctf2_sum = ctf2_sum + ctfval * ctfval
+                ncoeff   = ncoeff + 1
+            end do
+        end do
+        if( ncoeff == 0 ) THROW_HARD('empty Fourier plane; apply_ctf_wiener')
+        regularizer = wiener_const
+        if( .not. present(noise_to_signal) .and. regularizer < 0. ) regularizer = 0.1 * ctf2_sum / real(ncoeff)
+        do h = lims(1,1), lims(1,2)
+            do k = lims(2,1), lims(2,2)
+                ctfval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                    &amp_contr_const, wl, half_wl2_cs)
+                if( phase_flipped ) ctfval = abs(ctfval)
+                ctf2 = ctfval * ctfval
+                if( present(noise_to_signal) )then
+                    shell = min(size(noise_to_signal), nint(hyp(real(h),real(k))))
+                    regularizer = noise_to_signal(max(1,shell))
+                endif
+                phys = self%fit%comp_addr_phys(h,k)
+                self%cmat(phys(1),phys(2),1) = self%cmat(phys(1),phys(2),1) * ctfval / max(ctf2 + regularizer, TINY)
+            end do
+        end do
+    end subroutine apply_ctf_wiener
+
+    !> Use twofold zero padding before correction, as in Xmipp's
+    !! ctf_correct_wiener2d, and return to the original box afterwards.
+    module subroutine apply_ctf_wiener_wpad( self, tfun, ctfparms, wiener_const, noise_to_signal )
+        class(image),     intent(inout) :: self
+        class(ctf),       intent(inout) :: tfun
+        type(ctfparams),  intent(in)    :: ctfparms
+        real,             intent(in)    :: wiener_const
+        real, optional,   intent(in)    :: noise_to_signal(:)
+        type(image) :: img_pad
+        integer :: ldim(3)
+        if( self%is_ft() ) THROW_HARD('Wiener CTF correction expects a real-space image; apply_ctf_wiener_wpad')
+        if( self%is_3d() ) THROW_HARD('Wiener CTF correction is 2D only; apply_ctf_wiener_wpad')
+        ldim = 2 * self%get_ldim()
+        ldim(3) = 1
+        call img_pad%new(ldim, self%smpd)
+        call self%pad(img_pad, backgr=0., antialiasing=.false.)
+        call img_pad%fft()
+        if( present(noise_to_signal) )then
+            call img_pad%apply_ctf_wiener(tfun, ctfparms, wiener_const, noise_to_signal)
+        else
+            call img_pad%apply_ctf_wiener(tfun, ctfparms, wiener_const)
+        endif
+        call img_pad%ifft()
+        call img_pad%clip(self)
+        call img_pad%kill()
+    end subroutine apply_ctf_wiener_wpad
+
     module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr, &
         &store_transfer, observation_model )
         use simple_math,          only: ceil_div, floor_div

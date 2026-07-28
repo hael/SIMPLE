@@ -274,6 +274,7 @@ type :: parameters
     character(len=STDLEN)     :: clust_crit='hybrid'  !< clustering criterion (fm|pow|hist|hybrid){hybrid}
     character(len=STDLEN)     :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN)     :: ctf='no'             !< ctf flag(yes|no|flip)
+    character(len=STDLEN)     :: ctf_correct_mode='phaseflip' !< CTF correction operation(phaseflip|wiener)
     character(len=STDLEN)     :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN)     :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=5)          :: element ='     '     !< atom kind
@@ -497,6 +498,7 @@ type :: parameters
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: corr_thres=0.5      !< per-atom validation correlation threshold for discarding atoms
     real    :: ctfresthreshold=CTFRES_THRESHOLD !< ctf resolution threshold{30A}
+    real    :: wiener_const=-1.    !< Wiener N/S regularizer; negative selects the Grigorieff default
     real    :: defocus=2.          !< defocus(in microns){2.}
     real    :: dferr=1.            !< defocus error(in microns){1.0}
     real    :: dfmax=DFMAX_DEFAULT !< maximum expected defocus(in microns)

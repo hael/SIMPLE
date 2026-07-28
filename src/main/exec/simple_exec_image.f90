@@ -2,7 +2,7 @@
 module simple_exec_image
 use simple_cmdline,            only: cmdline
 use simple_commanders_imgops,  only: commander_binarize, commander_normalize, commander_scale
-use simple_commanders_imgproc, only: commander_ctfops, commander_ctf_phaseflip
+use simple_commanders_imgproc, only: commander_ctfops, commander_ctf_correct
 use simple_commanders_stkops,  only: commander_convert, commander_stack, commander_stackops
 implicit none
 
@@ -11,7 +11,7 @@ private
 
 type(commander_binarize)      :: xbinarize
 type(commander_convert)       :: xconvert
-type(commander_ctf_phaseflip) :: xctf_phaseflip
+type(commander_ctf_correct)   :: xctf_correct
 type(commander_ctfops)        :: xctfops
 type(commander_normalize)     :: xnormalize
 type(commander_scale)         :: xscale
@@ -33,8 +33,8 @@ contains
                 call xbinarize%execute(cline)
             case( 'convert' )
                 call xconvert%execute(cline)
-            case( 'ctf_phaseflip' )
-                call xctf_phaseflip%execute(cline)
+            case( 'ctf_correct' )
+                call xctf_correct%execute(cline)
             case( 'ctfops' )
                 call xctfops%execute(cline)
             case( 'normalize' )

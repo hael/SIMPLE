@@ -334,6 +334,8 @@ contains
     procedure          :: ctf2img
     procedure          :: apply_ctf_wpad
     procedure          :: apply_ctf
+    procedure          :: apply_ctf_wiener
+    procedure          :: apply_ctf_wiener_wpad
     procedure          :: gen_fplane4rec
     procedure          :: calc_ice_frac
     procedure          :: ctf_dens_correct
@@ -2100,6 +2102,22 @@ interface
         character(len=*), intent(in)    :: mode     !< abs, ctf, flip, flipneg, neg, square
         type(ctfparams),  intent(in)    :: ctfparms !< CTF parameters
     end subroutine apply_ctf
+
+    module subroutine apply_ctf_wiener( self, tfun, ctfparms, wiener_const, noise_to_signal )
+        class(image),     intent(inout) :: self
+        class(ctf),       intent(inout) :: tfun
+        type(ctfparams),  intent(in)    :: ctfparms
+        real,             intent(in)    :: wiener_const
+        real, optional,   intent(in)    :: noise_to_signal(:)
+    end subroutine apply_ctf_wiener
+
+    module subroutine apply_ctf_wiener_wpad( self, tfun, ctfparms, wiener_const, noise_to_signal )
+        class(image),     intent(inout) :: self
+        class(ctf),       intent(inout) :: tfun
+        type(ctfparams),  intent(in)    :: ctfparms
+        real,             intent(in)    :: wiener_const
+        real, optional,   intent(in)    :: noise_to_signal(:)
+    end subroutine apply_ctf_wiener_wpad
 
     module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr, &
         &store_transfer, observation_model )

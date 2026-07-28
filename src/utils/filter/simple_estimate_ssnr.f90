@@ -13,7 +13,7 @@ use simple_string_utils
 use simple_fileio
 implicit none
 
-public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
+public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
 public :: lowpass_from_klim, gaussian_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
@@ -36,6 +36,19 @@ contains
             ssnr(k) = (2. * fsc) / (1. - fsc)
         end do
     end function fsc2ssnr
+
+    !> Convert a merged-map FSC to the per-observation N/S term used by a
+    !! Wiener CTF correction. nobs is the number of independent original
+    !! observations represented by the merged FSC, not the number per half-map.
+    function fsc2wiener_regularizer( corrs, nobs ) result( noise_to_signal )
+        real,    intent(in) :: corrs(:)
+        integer, intent(in) :: nobs
+        real, allocatable :: noise_to_signal(:), ssnr(:)
+        if( nobs < 1 ) THROW_HARD('nobs must be positive; fsc2wiener_regularizer')
+        ssnr = fsc2ssnr(corrs)
+        allocate(noise_to_signal(size(ssnr)), source=1. / TINY)
+        where( ssnr > TINY ) noise_to_signal = real(nobs) / ssnr
+    end function fsc2wiener_regularizer
 
     !> \brief  converts the FSC to the optimal low-pass filter
     function fsc2optlp( corrs ) result( filt )

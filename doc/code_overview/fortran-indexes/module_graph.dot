@@ -1309,6 +1309,8 @@ digraph module_graph {
   "simple_commanders_imgops" -> "simple_segmentation";
   "simple_commanders_imgproc" -> "simple_commanders_api";
   "simple_commanders_imgproc" -> "simple_ctf";
+  "simple_commanders_imgproc" -> "simple_estimate_ssnr";
+  "simple_commanders_imgproc" -> "simple_fileio";
   "simple_commanders_imgproc" -> "simple_matcher_ptcl_io";
   "simple_commanders_imgproc" -> "simple_memoize_ft_maps";
   "simple_commanders_imgproc" -> "simple_ori";
