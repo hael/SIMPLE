@@ -32,6 +32,7 @@ use simple_forked_process,                 only: forked_process, FORK_STATUS_RUN
 use simple_gui_metadata_api
 use simple_gui_assembler,                  only: gui_assembler
 use simple_gui_metadata_utils,             only: max_metadata_size
+use simple_memory_monitor,                 only: mem_monitor_init, mem_monitor_finish
 
 implicit none
 
@@ -237,8 +238,9 @@ contains
         l_existing_pickrefs   = .false.
         l_existing_box        = .false.
         l_existing_preprocess = .false.
-        if( cline%defined('pickrefs') )    l_existing_pickrefs = .true.
-        if( cline%defined('box_extract') ) l_existing_box      = .true.
+        if( cline%defined('pickrefs')       ) l_existing_pickrefs = .true.
+        if( cline%defined('box_extract')    ) l_existing_box      = .true.
+        if( .not.cline%defined('memreport') ) call cline%set('memreport', 'yes')
         ! init params
         call cline%printline()
         call params%new(cline)
@@ -326,6 +328,8 @@ contains
         ! attach signal handlers after fork else propagated to processes
         call signal(SIGTERM, sigterm_handler)
         call signal(SIGINT,   sigint_handler)
+        ! init memory monitor
+        call mem_monitor_init(cline, 'simple_stream: master')
         ! main loop
         do while( .true. )
             ! heartbeat
@@ -507,6 +511,7 @@ contains
         call qsys%kill()
         call post%kill()
         call assembler%kill()
+        call mem_monitor_finish()
         ! close IPC pipes
         call kill_ipc_pipe(ipc_pipe_preprocess_in)
         call kill_ipc_pipe(ipc_pipe_preprocess_out)
@@ -911,6 +916,10 @@ contains
             call cline_preprocess%delete( 'niceprocid')
             call cline_preprocess%delete('box_extract')
             call cline_preprocess%delete(   'pickrefs')
+            if( params%memreport == 'yes' ) then
+                call cline_preprocess%set('memreport', 'yes')
+                call cline_preprocess%set('memreport_interval', params%memreport_interval)
+            endif
         end subroutine init_cline_preprocess
 
         subroutine init_metadata_preprocess()
@@ -945,6 +954,10 @@ contains
             call cline_assign_optics%set('dir_target',            PREPROC_JOB_NAME)
             call cline_assign_optics%set('nthr',                                 1)
             call cline_assign_optics%set('mkdir',                            'yes')
+            if( params%memreport == 'yes' ) then
+                call cline_assign_optics%set('memreport', 'yes')
+                call cline_assign_optics%set('memreport_interval', params%memreport_interval)
+            endif
         end subroutine init_cline_assign_optics
 
         subroutine init_metadata_assign_optics()
@@ -962,6 +975,10 @@ contains
             call cline_opening2D%set('nthr',                                   32)
             call cline_opening2D%set('mkdir',                               'yes')
             call cline_opening2D%set('worker_priority',                    'high')
+            if( params%memreport == 'yes' ) then
+                call cline_opening2D%set('memreport', 'yes')
+                call cline_opening2D%set('memreport_interval', params%memreport_interval)
+            endif
         end subroutine init_cline_opening2D
 
         subroutine init_metadata_opening2D()
@@ -991,6 +1008,10 @@ contains
             end if
             if( l_existing_box ) call cline_reference_picking%set('box_extract', params%box_extract)
             if( params%thres > 0.0 ) call cline_reference_picking%set('thres', params%thres)
+            if( params%memreport == 'yes' ) then
+                call cline_reference_picking%set('memreport', 'yes')
+                call cline_reference_picking%set('memreport_interval', params%memreport_interval)
+            endif
         end subroutine init_cline_reference_picking
 
         subroutine init_metadata_reference_picking()
@@ -1018,6 +1039,10 @@ contains
                 call cline_particle_sieving%set('pickrefs',    '../'//OPENING2D_JOB_NAME//'/selected_references.mrcs') 
             end if
             if( server_address%strlen() > 0 ) call cline_particle_sieving%set('worker_server', server_address)
+            if( params%memreport == 'yes' ) then
+                call cline_particle_sieving%set('memreport', 'yes')
+                call cline_particle_sieving%set('memreport_interval', params%memreport_interval)
+            endif
         end subroutine init_cline_particle_sieving
 
         subroutine init_metadata_particle_sieving()
@@ -1042,6 +1067,10 @@ contains
             call cline_pool2D%set('nicedispid',                  params%nicedispid)
             call cline_pool2D%set('worker_priority',                        'high')
             if( server_address%strlen() > 0 ) call cline_pool2D%set('worker_server', server_address)
+            if( params%memreport == 'yes' ) then
+                call cline_pool2D%set('memreport', 'yes')
+                call cline_pool2D%set('memreport_interval', params%memreport_interval)
+            endif
         end subroutine init_cline_pool2D
 
         subroutine init_metadata_pool2D()

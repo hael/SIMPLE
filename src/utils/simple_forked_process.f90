@@ -29,18 +29,19 @@
 !   unix, simple_string, simple_syslib, simple_string_utils, simple_cmdline
 !==============================================================================
 module simple_forked_process
-  use unix,                only: c_pid_t, c_int, c_long, c_null_char, &
+  use unix,                  only: c_pid_t, c_int, c_long, c_null_char, &
                                   c_fork, c_kill, c_exit, c_time,     &
                                   c_waitpid, c_usleep, c_perror,      &
                                   SIGTERM, SIGKILL, EXIT_SUCCESS,     &
                                   WNOHANG
-  use simple_defs,         only: logfhandle
-  use simple_error,        only: simple_exception
-  use simple_fileio,       only: fclose                  
-  use simple_string,       only: string
-  use simple_syslib,       only: file_exists
-  use simple_cmdline,      only: cmdline
-  use simple_string_utils, only: int2str
+  use simple_defs,           only: logfhandle
+  use simple_error,          only: simple_exception
+  use simple_fileio,         only: fclose                  
+  use simple_string,         only: string
+  use simple_syslib,         only: file_exists
+  use simple_cmdline,        only: cmdline
+  use simple_string_utils,   only: int2str
+  use simple_memory_monitor, only: mem_monitor_init, mem_monitor_finish
   
   implicit none
 
@@ -132,8 +133,11 @@ contains
         end if
         if( ios /= 0 ) THROW_HARD('Failed to open logfile')
       end if
+      ! init memory monitor
+      call mem_monitor_init(self%cline, 'simple_stream: ' // self%name%to_char())
       call self%execute(self%cline)
       if( .not. self%logfile%is_blank() ) call fclose(logfhandle)
+      call mem_monitor_finish()
       call c_exit(0)
     else
       ! Parent process: record running state, timestamps, and description.
