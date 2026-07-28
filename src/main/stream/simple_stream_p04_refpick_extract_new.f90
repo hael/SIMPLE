@@ -469,9 +469,6 @@ contains
                     endif
                 endif
                 call spproj%write_non_data_segments(params%projfile)
-                ! Keep only micrograph state resident between snapshots.
-                call spproj%os_stk%kill
-                call spproj%os_ptcl2D%kill
                 ! benchmark
                 if( DEBUG_HERE )then
                     rt_write = toc(t0)

@@ -1,7 +1,6 @@
 !@descr: utilities for running the pool 2D refinement
 module simple_stream_pool2D_utils
 use simple_stream_api
-use simple_syslib, only: get_current_rss_bytes, get_peak_rss_bytes
 implicit none
 
 ! CALCULATORS
@@ -192,7 +191,6 @@ contains
     ! Performs one iteration:
     ! updates to command-line, particles sampling, temporary project & execution
     subroutine iterate_pool( params )
-        use, intrinsic :: iso_c_binding, only: c_int64_t, c_double
         class(parameters), intent(inout) :: params
         logical, parameter            :: L_BENCH = .false.
         type(sp_project)              :: spproj, spproj_history
@@ -213,9 +211,7 @@ contains
         if( nptcls_tot == 0 ) return
         ! save pool project to history
         if(pool_iter .gt. 0) then
-            call log_rss('pool/history before copy')
             call spproj_history%copy(pool_proj)
-            call log_rss('pool/history after copy')
             call simple_copy_file(string(POOL_DIR)//FRCS_FILE, string(POOL_DIR)//swap_suffix(FRCS_FILE,"_iter"//int2str_pad(pool_iter, 3)//".bin",".bin"))
             call spproj_history%get_cavgs_stk(stkname, ncls, smpd)
             call spproj_history%os_out%kill
@@ -243,7 +239,6 @@ contains
                 allocate(pool_proj_history(1))
                 pool_proj_history(1) = spproj_history
             endif
-            call log_rss('pool/history after append')
             if( allocated(pool_proj_history_timestamps) )then
                 pool_proj_history_timestamps = [pool_proj_history_timestamps(:), time8()]
             else
@@ -256,9 +251,7 @@ contains
                     pool_proj_history_timestamps(i) = 0
                 end if
             end do
-            call log_rss('pool/history after prune')
             call spproj_history%kill
-            call log_rss('pool/history after tmp kill')
         end if
         pool_iter = pool_iter + 1 ! Global iteration counter update
         call cline_cluster2D_pool%set('ncls',    ncls_glob)
@@ -402,20 +395,7 @@ contains
         if( allocated(clspops) )             deallocate(clspops)
         call tidy_2Dstream_iter
 
-            contains
-
-                subroutine log_rss( phase )
-                        character(len=*), intent(in) :: phase
-                        integer(c_int64_t) :: current_rss, peak_rss
-                        real(c_double)     :: current_mib, peak_mib
-                        current_rss = get_current_rss_bytes()
-                        peak_rss    = get_peak_rss_bytes()
-                        if( current_rss < 0_c_int64_t .or. peak_rss < 0_c_int64_t ) return
-                        current_mib = real(current_rss, c_double) / 1048576.0_c_double
-                        peak_mib    = real(peak_rss,    c_double) / 1048576.0_c_double
-                        write(logfhandle,'(A,A,A,F10.1,A,F10.1,A)') '>>> RSS ', trim(phase), ': current=', current_mib, ' MiB peak=', peak_mib, ' MiB'
-                        call flush(logfhandle)
-                end subroutine log_rss
+      contains
 
         subroutine uniform_stack_sampling
             use simple_ran_tabu
