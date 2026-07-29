@@ -79,6 +79,7 @@ end type pool2D_fork
 
 type pipe_rx_state
     character(len=:), allocatable :: pending
+    integer                       :: pending_len = 0
     integer                       :: expected_len = -1
 end type pipe_rx_state
 
@@ -232,6 +233,7 @@ contains
         logical                                    :: got_snapshot_id, got_snapshot_iter, got_snapshot_sel, got_snapshot_file
         logical                                    :: l_existing_pickrefs, l_existing_box, l_existing_preprocess
         integer                                    :: stat, rc, max_msgsize, i_val, snapshot_id
+        integer                                    :: loop_counter
         real(kind=dp)                              :: r_val
         type(pipe_rx_state)                        :: rx_state(N_STREAM_PIPES)
         ! check cline arguments 
@@ -331,25 +333,39 @@ contains
         ! init memory monitor
         call mem_monitor_init(cline, 'simple_stream: master')
         ! main loop
+        loop_counter = 0
         do while( .true. )
+            loop_counter = loop_counter + 1
             ! heartbeat
-            call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_reference_picking, fork_particle_sieving, fork_pool2D)
+             call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_reference_picking, fork_particle_sieving, fork_pool2D)
             ! processes
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_preprocess(meta_preprocess, meta_preprocess_micrographs, meta_preprocess_histograms, meta_preprocess_timeplots)
+            if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
+            if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_optics_assignment(meta_optics_assignment, meta_optics_assignment_optics_groups)
+            if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
+            if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_initial_picking(meta_initial_picking, meta_initial_picking_micrographs)
+            if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
+            if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_opening2D(meta_opening2D, meta_opening2D_cavgs2D, meta_opening2D_final_cavgs2D)
+            if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
+            if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_reference_picking(meta_reference_picking, meta_reference_picking_micrographs, meta_reference_picking_cavgs2D)
+            if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
+            if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_particle_sieving(meta_particle_sieving, meta_particle_sieving_cavgs2D, meta_particle_sieving_ref_cavgs2D)
+            if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
+            if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_pool2D(meta_pool2D, meta_pool2D_cavgs2D, meta_pool2D_snapshot)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             ! stringify assembled json
             request = assembler%to_string()
-            write(*,*) request%to_char()
+         !   write(*,*) request%to_char()
             ! send
             if( post%request(response, request) ) then
-                write(*, *) "POST", request%to_char()
+              !  write(*, *) "POST", request%to_char()
                 if( response%code == 200) then
                     write(*, *) "RESPONSE", response%content%to_char()
                     ! parse response JSON
@@ -357,7 +373,7 @@ contains
                     if( json%failed()) then
                         write(logfhandle, '(A,A)') "FAILED TO PARSE JSON RESPONSE ", response%content%to_char()
                         call json%clear_exceptions()
-                        nullify(json_response_ptr)
+                        call safe_destroy_json_ptr(json_response_ptr)
                     else
                         ! check for master process termination
                         call json%get(json_response_ptr, 'terminate', l_test, l_found)
@@ -471,8 +487,12 @@ contains
                 call assembler%clear_hashes()
             endif
             ! clean up
-            if( associated(json_response_ptr) ) call json%destroy(json_response_ptr)
+            call request%kill()
+            call response%content%kill()
+            call response%content_type%kill()
+            call safe_destroy_json_ptr(json_response_ptr)
             call qsys%service_persistent_worker_warmup()
+            if( mod(loop_counter, 12) == 0 ) call log_master_memory_state()
             ! exit if l_last_loop
             if( l_last_loop ) exit
             ! exit if terminate received all processes stopped
@@ -537,6 +557,61 @@ contains
             write(logfhandle, '(A)') 'SIGTERM RECEIVED (MASTER)'
             l_terminate_loop = .true.
         end subroutine sigterm_handler
+
+        subroutine safe_destroy_json_ptr(ptr_json)
+            type(json_value), pointer, intent(inout) :: ptr_json
+            if( associated(ptr_json) ) call json%destroy(ptr_json)
+            nullify(ptr_json)
+        end subroutine safe_destroy_json_ptr
+
+        subroutine log_master_memory_state()
+            integer :: ipipe, pending_bytes
+
+            pending_bytes = 0
+            do ipipe=1,N_STREAM_PIPES
+                pending_bytes = pending_bytes + rx_state(ipipe)%pending_len
+            enddo
+
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0,A,I0)') &
+                '>>> MASTER META STATE: pending_bytes=', pending_bytes, &
+                ' preprocess_mics=', alloc_size_micrograph(meta_preprocess_micrographs), &
+                ' init_pick_mics=', alloc_size_micrograph(meta_initial_picking_micrographs), &
+                ' ref_pick_mics=', alloc_size_micrograph(meta_reference_picking_micrographs), &
+                ' optics_groups=', alloc_size_optics_group(meta_optics_assignment_optics_groups), &
+                ' opening2D_cls=', alloc_size_cavg2D(meta_opening2D_cavgs2D), &
+                ' opening2D_final=', alloc_size_cavg2D(meta_opening2D_final_cavgs2D), &
+                ' ref_pick_cls=', alloc_size_cavg2D(meta_reference_picking_cavgs2D), &
+                ' sieve_cls=', alloc_size_cavg2D(meta_particle_sieving_cavgs2D), &
+                ' pool2D_cls=', alloc_size_cavg2D(meta_pool2D_cavgs2D)
+            call flush(logfhandle)
+        end subroutine log_master_memory_state
+
+        integer function alloc_size_micrograph(arr) result(n)
+            type(gui_metadata_micrograph), allocatable, intent(in) :: arr(:)
+            if( allocated(arr) )then
+                n = size(arr)
+            else
+                n = 0
+            endif
+        end function alloc_size_micrograph
+
+        integer function alloc_size_optics_group(arr) result(n)
+            type(gui_metadata_optics_group), allocatable, intent(in) :: arr(:)
+            if( allocated(arr) )then
+                n = size(arr)
+            else
+                n = 0
+            endif
+        end function alloc_size_optics_group
+
+        integer function alloc_size_cavg2D(arr) result(n)
+            type(gui_metadata_cavg2D), allocatable, intent(in) :: arr(:)
+            if( allocated(arr) )then
+                n = size(arr)
+            else
+                n = 0
+            endif
+        end function alloc_size_cavg2D
 
         subroutine sigint_handler()
             integer :: my_rc
@@ -616,7 +691,6 @@ contains
                                     ! place the already-deserialised tmp object into the correct slot
                                     meta_preprocess_micrographs(meta_mic_tmp%get_i()) = meta_mic_tmp
                                 case( GUI_METADATA_STREAM_INITIAL_PICKING_MICROGRAPH_TYPE )
-                                    write(*,*) 'GUI_METADATA_STREAM_PICKING_MICROGRAPH_TYPE'
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of mic meta data
                                     meta_mic_tmp = transfer(my_buffer, meta_mic_tmp)
@@ -638,7 +712,6 @@ contains
                                     ! place the already-deserialised tmp object into the correct slot
                                     meta_initial_picking_micrographs(meta_mic_tmp%get_i()) = meta_mic_tmp
                                 case( GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE )
-                                    write(*,*) 'GUI_METADATA_STREAM_REFERENCE_PICKING_MICROGRAPH_TYPE'
                                     my_l_reinit = .false.
                                     ! deserialise temporary copy of mic meta data
                                     meta_mic_tmp = transfer(my_buffer, meta_mic_tmp)
@@ -835,16 +908,15 @@ contains
             character(len=:), allocatable, intent(inout)  :: buffer
             logical, intent(inout)                        :: got_message
             integer                                       :: nread, i
-            character(len=:), allocatable                 :: chunk
+            character(len=max_msgsize)                    :: chunk
 
             if( fd < 0 .or. got_message ) return
             nread = c_read(fd, c_loc(raw(1)), int(size(raw), c_size_t))
             if( nread > 0 ) then
-                allocate(character(len=nread) :: chunk)
                 do i = 1, nread
                     chunk(i:i) = transfer(raw(i), 'a')
                 end do
-                call append_pending(state, chunk)
+                call append_pending(state, chunk(1:nread))
             endif
             call try_extract_framed_message(state, buffer, got_message)
         end subroutine try_read_from_fd
@@ -852,14 +924,26 @@ contains
         subroutine append_pending(state, chunk)
             type(pipe_rx_state), intent(inout) :: state
             character(len=*), intent(in)       :: chunk
+            character(len=:), allocatable      :: tmp
+            integer                             :: needed_len, new_capacity
 
             if( len(chunk) <= 0 ) return
-            if( allocated(state%pending) ) then
-                state%pending = state%pending // chunk
-            else
-                allocate(character(len=len(chunk)) :: state%pending)
-                state%pending = chunk
+
+            needed_len = state%pending_len + len(chunk)
+
+            if( .not.allocated(state%pending) ) then
+                new_capacity = max(needed_len, max_msgsize)
+                allocate(character(len=new_capacity) :: state%pending)
+                state%pending_len = 0
+            else if( len(state%pending) < needed_len ) then
+                new_capacity = max(needed_len, 2 * len(state%pending))
+                allocate(character(len=new_capacity) :: tmp)
+                if( state%pending_len > 0 ) tmp(1:state%pending_len) = state%pending(1:state%pending_len)
+                call move_alloc(tmp, state%pending)
             endif
+
+            state%pending(state%pending_len + 1:needed_len) = chunk
+            state%pending_len = needed_len
         end subroutine append_pending
 
         subroutine try_extract_framed_message(state, buffer, got_message)
@@ -867,41 +951,59 @@ contains
             character(len=:), allocatable, intent(inout) :: buffer
             logical, intent(inout)                       :: got_message
             integer(c_int), target                       :: msg_len_c
-            integer                                      :: header_bytes
+            integer                                      :: header_bytes, remaining
 
             if( got_message ) return
             header_bytes = sizeof(msg_len_c)
 
             if( state%expected_len < 0 ) then
-                if( .not. allocated(state%pending) ) return
-                if( len(state%pending) < header_bytes ) return
+                if( state%pending_len < header_bytes ) return
                 msg_len_c = transfer(state%pending(1:header_bytes), msg_len_c)
                 state%expected_len = int(msg_len_c)
                 if( state%expected_len <= 0 .or. state%expected_len > max_msgsize ) then
                     THROW_HARD('invalid framed metadata length read from stream pipe')
                 endif
-                if( len(state%pending) == header_bytes ) then
-                    deallocate(state%pending)
-                else
-                    state%pending = state%pending(header_bytes + 1:)
-                endif
+                remaining = state%pending_len - header_bytes
+                if( remaining > 0 ) state%pending(1:remaining) = state%pending(header_bytes + 1:state%pending_len)
+                state%pending_len = remaining
             endif
 
-            if( .not. allocated(state%pending) ) return
-            if( len(state%pending) < state%expected_len ) return
+            if( state%pending_len < state%expected_len ) return
 
             if( allocated(buffer) ) deallocate(buffer)
             allocate(character(len=state%expected_len) :: buffer)
             buffer = state%pending(1:state%expected_len)
 
-            if( len(state%pending) == state%expected_len ) then
-                deallocate(state%pending)
-            else
-                state%pending = state%pending(state%expected_len + 1:)
-            endif
+            remaining = state%pending_len - state%expected_len
+            if( remaining > 0 ) state%pending(1:remaining) = state%pending(state%expected_len + 1:state%pending_len)
+            state%pending_len = remaining
             state%expected_len = -1
             got_message = .true.
+            call trim_pending_capacity(state)
         end subroutine try_extract_framed_message
+
+        subroutine trim_pending_capacity(state)
+            type(pipe_rx_state), intent(inout) :: state
+            character(len=:), allocatable      :: tmp
+            integer                             :: cap, new_capacity
+
+            if( .not. allocated(state%pending) ) return
+
+            cap = len(state%pending)
+            if( state%pending_len == 0 ) then
+                ! Release oversized idle buffers; small buffers are kept to avoid churn.
+                if( cap > 4 * max_msgsize ) deallocate(state%pending)
+                return
+            endif
+
+            if( cap <= 2 * max_msgsize ) return
+            if( cap <= 8 * state%pending_len ) return
+
+            new_capacity = max(max_msgsize, 2 * state%pending_len)
+            allocate(character(len=new_capacity) :: tmp)
+            tmp(1:state%pending_len) = state%pending(1:state%pending_len)
+            call move_alloc(tmp, state%pending)
+        end subroutine trim_pending_capacity
 
         subroutine init_cline_preprocess()
             cline_preprocess = cline
@@ -1127,14 +1229,17 @@ contains
         subroutine send_framed_to_pipe(fd, buffer)
             integer, intent(in)                          :: fd
             character(len=*), intent(in)                 :: buffer
-            character(len=:), allocatable                :: framed
-            character(kind=c_char), allocatable, target  :: cbuf(:)
+            character(len=:), allocatable, save          :: framed
+            character(kind=c_char), allocatable, target, save :: cbuf(:)
             integer(c_int), target                       :: msg_len
             integer(c_int)                               :: nwritten
-            integer                                      :: nbytes, header_bytes, framed_nbytes
+            integer                                      :: nbytes, header_bytes, framed_nbytes, new_capacity
             integer                                      :: sent, retry_count, rc_sleep, err_no, ich
+            integer, save                                :: framed_capacity = 0
+            integer, save                                :: small_payload_streak = 0
             integer, parameter                           :: MAX_RETRIES = 200
             integer, parameter                           :: RETRY_SLEEP_US = 10000
+            integer, parameter                           :: TRIM_STREAK = 64
 
             if( fd < 0 ) return
             nbytes = len(buffer)
@@ -1143,11 +1248,15 @@ contains
             msg_len = int(nbytes, c_int)
             header_bytes = sizeof(msg_len)
             framed_nbytes = header_bytes + nbytes
-            allocate(character(len=framed_nbytes) :: framed)
+            if( framed_nbytes > framed_capacity )then
+                if( allocated(framed) ) deallocate(framed)
+                if( allocated(cbuf)   ) deallocate(cbuf)
+                allocate(character(len=framed_nbytes) :: framed)
+                allocate(cbuf(framed_nbytes))
+                framed_capacity = framed_nbytes
+            endif
             framed(1:header_bytes) = transfer(msg_len, framed(1:header_bytes))
             framed(header_bytes + 1:) = buffer
-
-            allocate(cbuf(framed_nbytes))
             do ich = 1, framed_nbytes
                 cbuf(ich) = transfer(framed(ich:ich), cbuf(ich))
             end do
@@ -1181,7 +1290,25 @@ contains
                 exit
             end do
 
-            if( allocated(cbuf) ) deallocate(cbuf)
+            if( sent == framed_nbytes ) then
+                if( framed_capacity > 4 * max_msgsize .and. framed_capacity > 8 * framed_nbytes ) then
+                    small_payload_streak = small_payload_streak + 1
+                else
+                    small_payload_streak = 0
+                endif
+
+                if( small_payload_streak >= TRIM_STREAK ) then
+                    new_capacity = max(max_msgsize, 2 * framed_nbytes)
+                    if( new_capacity < framed_capacity ) then
+                        if( allocated(framed) ) deallocate(framed)
+                        if( allocated(cbuf)   ) deallocate(cbuf)
+                        allocate(character(len=new_capacity) :: framed)
+                        allocate(cbuf(new_capacity))
+                        framed_capacity = new_capacity
+                    endif
+                    small_payload_streak = 0
+                endif
+            endif
         end subroutine send_framed_to_pipe
 
     end subroutine exec_stream_p00_master

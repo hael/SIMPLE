@@ -272,6 +272,7 @@ contains
                 end do
 
                 if( allocated(cbuf) ) deallocate(cbuf)
+                
             end subroutine send_to_assign_optics_in_pipe
 
     end subroutine exec_stream_p02_assign_optics

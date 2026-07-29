@@ -243,7 +243,11 @@ contains
           call self%json%add(json_mics_ptr, meta_micrographs(i_mic)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
+      if( l_add ) then
+        call self%json%add(json_ptr, json_mics_ptr)
+      else
+        call self%json%destroy(json_mics_ptr)
+      endif
     endif
     if( allocated(meta_histograms) ) then
       l_add = .false.
@@ -254,7 +258,11 @@ contains
           call self%json%add(json_hists_ptr, meta_histograms(i_hist)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_hists_ptr)
+      if( l_add ) then
+        call self%json%add(json_ptr, json_hists_ptr)
+      else
+        call self%json%destroy(json_hists_ptr)
+      endif
     endif
     if( allocated(meta_timeplots) ) then
       l_add = .false.
@@ -265,14 +273,21 @@ contains
           call self%json%add(json_timeplots_ptr, meta_timeplots(i_timeplot)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_timeplots_ptr)
+      if( l_add ) then
+        call self%json%add(json_ptr, json_timeplots_ptr)
+      else
+        call self%json%destroy(json_timeplots_ptr)
+      endif
     endif
     call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%preprocess_hash ) then
       call self%json%add(self%json_root, json_ptr)
+      call self%preprocess_hash%kill()
       self%preprocess_hash = hash
+    else
+      call self%json%destroy(json_ptr)
     endif
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr, json_mics_ptr, json_hists_ptr, json_timeplots_ptr)
@@ -302,14 +317,21 @@ contains
           call self%json%add(json_optics_groups_ptr, meta_optics_groups(i_group)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_optics_groups_ptr)
+      if( l_add ) then
+        call self%json%add(json_ptr, json_optics_groups_ptr)
+      else
+        call self%json%destroy(json_optics_groups_ptr)
+      endif
     endif
     call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%optics_assignment_hash ) then
       call self%json%add(self%json_root, json_ptr)
+      call self%optics_assignment_hash%kill()
       self%optics_assignment_hash = hash
+    else
+      call self%json%destroy(json_ptr)
     endif
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
@@ -339,14 +361,21 @@ contains
           call self%json%add(json_mics_ptr, meta_micrographs(i_mic)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
+      if( l_add ) then
+        call self%json%add(json_ptr, json_mics_ptr)
+      else
+        call self%json%destroy(json_mics_ptr)
+      endif
     endif
     call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%initial_picking_hash ) then
       call self%json%add(self%json_root, json_ptr)
+      call self%initial_picking_hash%kill()
       self%initial_picking_hash = hash
+    else
+      call self%json%destroy(json_ptr)
     endif
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
@@ -377,7 +406,11 @@ contains
           call self%json%add(json_mics_ptr, meta_micrographs(i_mic)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_mics_ptr)
+      if( l_add ) then
+        call self%json%add(json_ptr, json_mics_ptr)
+      else
+        call self%json%destroy(json_mics_ptr)
+      endif
     endif
     if( allocated(meta_cavgs2D) ) then
       l_add = .false.
@@ -388,14 +421,21 @@ contains
           call self%json%add(json_cavgs2D_ptr, meta_cavgs2D(i_cavg)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_cavgs2D_ptr)
+      if( l_add ) then
+        call self%json%add(json_ptr, json_cavgs2D_ptr)
+      else
+        call self%json%destroy(json_cavgs2D_ptr)
+      endif
     endif
     call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%reference_picking_hash ) then
       call self%json%add(self%json_root, json_ptr)
+      call self%reference_picking_hash%kill()
       self%reference_picking_hash = hash
+    else
+      call self%json%destroy(json_ptr)
     endif
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
@@ -426,7 +466,11 @@ contains
           call self%json%add(json_pickrefs_ptr, meta_selected_pickrefs(i_cls2D)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_pickrefs_ptr)
+      if( l_add ) then
+        call self%json%add(json_ptr, json_pickrefs_ptr)
+      else
+        call self%json%destroy(json_pickrefs_ptr)
+      endif
     endif
     if( allocated(meta_latest_cavgs2D) ) then
       call self%json%create_array(json_cavgs2D_ptr, 'latest_cls2D')
@@ -436,14 +480,21 @@ contains
           call self%json%add(json_cavgs2D_ptr, meta_latest_cavgs2D(i_cls2D)%jsonise())
         endif
       enddo
-      if( l_add ) call self%json%add(json_ptr, json_cavgs2D_ptr)
+      if( l_add ) then
+        call self%json%add(json_ptr, json_cavgs2D_ptr)
+      else
+        call self%json%destroy(json_cavgs2D_ptr)
+      endif
     endif
     call self%json%print_to_string_fast(json_ptr, buffer)
     str  = buffer
     hash = str%to_fnv1a_hash64()
     if( hash /= self%opening2D_hash ) then
       call self%json%add(self%json_root, json_ptr)
+      call self%opening2D_hash%kill()
       self%opening2D_hash = hash
+    else
+      call self%json%destroy(json_ptr)
     endif
     if( allocated(buffer) ) deallocate(buffer)
     nullify(json_ptr)
@@ -502,6 +553,7 @@ contains
     hash = str%to_fnv1a_hash64()
     if( hash /= self%particle_sieving_hash ) then
       call self%json%add(self%json_root, json_ptr)
+      call self%particle_sieving_hash%kill()
       self%particle_sieving_hash = hash
     else
       call self%json%destroy(json_ptr)
@@ -554,6 +606,7 @@ contains
     hash = str%to_fnv1a_hash64()
     if( hash /= self%pool2D_hash ) then
       call self%json%add(self%json_root, json_ptr)
+      call self%pool2D_hash%kill()
       self%pool2D_hash = hash
     else
       call self%json%destroy(json_ptr)
