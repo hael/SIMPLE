@@ -30,7 +30,6 @@ contains
         real,              allocatable, target :: symmats(:,:,:), rotmats(:,:,:)
         integer   :: vollims(3,2)
         integer   :: cdim(3), clb(3), jsym, nsym, h_edge, nyq
-        logical   :: l_den_src
         integer(timer_int_kind) :: t, t0
 #ifndef USE_OPENMP_OFFLOAD
         THROW_HARD('calc_3Drec_gpu is part of the GPU path. Use calc_3Drec instead')
@@ -52,7 +51,6 @@ contains
         call build%eorecvol%reset_all
         ! Prep batch image objects
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        l_den_src = params%l_ptcl_src_den
         ! 3D limits
         vollims = build%eorecvol%even%loop_lims(2)
         h_edge  = vollims(1,1)
@@ -125,11 +123,13 @@ contains
         complex,    allocatable :: fplanes(:,:,:)
         real,       allocatable :: ctfsqplanes(:,:,:)
         logical,    allocatable :: even(:)
+        logical                 :: l_den_src
         integer(timer_int_kind) :: t, t_stage
         real(timer_int_kind)    :: dt_h2d, dt_launch, dt_wait
         integer :: fpllims(3,2), fpllims_pd(3,2), cdim2D(2), clb2D(2), batchlims(2)
         integer :: ibatch, batchsz, sz, nbatch
         ! prep first batch
+        l_den_src = params%l_ptcl_src_den
         nbatch = ceiling(real(nptcls)/real(MAXIMGBATCHSZ))
         call prep_batch(1, batchsz, batchlims)
         if( DEBUG ) t = tic()
