@@ -133,7 +133,7 @@ contains
 
     !> Apply a Wiener CTF correction in Fourier space.  The optional
     !! noise_to_signal array is the radial N/S regularizer.  With no supplied
-    !! spectrum, a negative wiener_const selects the Xmipp/FREALIGN-style
+    !! spectrum, a non-positive wiener_const selects the Xmipp/FREALIGN-style
     !! regularizer: 10% of the mean CTF squared over the Fourier plane.
     module subroutine apply_ctf_wiener( self, tfun, ctfparms, wiener_const, noise_to_signal )
         class(image),     intent(inout) :: self
@@ -180,7 +180,7 @@ contains
         end do
         if( ncoeff == 0 ) THROW_HARD('empty Fourier plane; apply_ctf_wiener')
         regularizer = wiener_const
-        if( .not. present(noise_to_signal) .and. regularizer < 0. ) regularizer = 0.1 * ctf2_sum / real(ncoeff)
+        if( .not. present(noise_to_signal) .and. regularizer <= 0. ) regularizer = 0.1 * ctf2_sum / real(ncoeff)
         do h = lims(1,1), lims(1,2)
             do k = lims(2,1), lims(2,2)
                 ctfval = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &

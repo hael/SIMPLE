@@ -121,8 +121,6 @@ contains
         call ctf_correct%add_input(UI_PARM, smpd)
         call ctf_correct%add_input(UI_PARM, 'ctf_correct_mode', 'multi', 'CTF correction mode', &
             &'CTF correction operation(phaseflip|wiener){phaseflip}', '(phaseflip|wiener){phaseflip}', .false., 'phaseflip')
-        call ctf_correct%add_input(UI_PARM, 'wiener_const', 'num', 'Wiener regularizer', &
-            &'Wiener N/S regularizer; a negative value uses 10 percent of mean CTF squared', 'N/S{-1}', .false., -1.)
         ! alternative inputs
         ! <empty>
         ! search controls
