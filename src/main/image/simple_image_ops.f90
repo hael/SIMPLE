@@ -10,7 +10,7 @@ contains
     !===========================
 
     !> \brief insert  inserts a box*box particle image into a micrograph
-    module subroutine insert(self_in, coord, self_out )
+    module subroutine insert( self_in, coord, self_out )
         class(image), intent(in)    :: self_in
         integer,      intent(in)    :: coord(2)
         type(image),  intent(inout) :: self_out
@@ -22,8 +22,13 @@ contains
             if( self_out%ldim(3) > 1 )  THROW_HARD('only 4 2D images; insert')
             if( self_out%is_ft() )      THROW_HARD('only 4 real images; insert')
             if( self_out%ldim(1) > self_in%ldim(1) .and. self_out%ldim(2) > self_in%ldim(2) .and. self_out%ldim(3) == 1 )then
-                if( (coord(1) < self_in%ldim(1)/2+1 .or. coord(1) > self_out%ldim(1)-self_in%ldim(1)/2-1) .or.&
-                    (coord(2) < self_in%ldim(2)/2+1 .or. coord(2) > self_out%ldim(2)-self_in%ldim(2)/2-1) )then
+                ! The particle footprint is coord-half:coord+half-1.  Check
+                ! those exact bounds so the final two valid centre positions
+                ! are not rejected.
+                if( (coord(1)-self_in%ldim(1)/2 < 1 .or. &
+                     coord(1)+self_in%ldim(1)/2-1 > self_out%ldim(1)) .or. &
+                    (coord(2)-self_in%ldim(2)/2 < 1 .or. &
+                     coord(2)+self_in%ldim(2)/2-1 > self_out%ldim(2)) )then
                     THROW_HARD('particle outside micrograph area; insert')
                 endif
             else

@@ -335,24 +335,42 @@ contains
                 integer, intent(in), optional :: box
                 integer, allocatable          :: pos(:,:)
                 logical                       :: occupied(xdim,ydim), skip
-                integer                       :: ix, iy, cnt, i, j
+                integer                       :: ix, iy, cnt, ntries, max_tries
+                integer                       :: x_min, x_max, y_min, y_max, b_half
                 allocate( pos(npos,2) )
                 occupied = .false.
                 cnt = 0
-                do
+                ntries = 0
+                max_tries = max(1000, 500*npos)
+                if( present(box) )then
+                    if( box < 1 .or. box >= xdim .or. box >= ydim )then
+                        THROW_HARD('particle box must fit inside the simulated micrograph; gen_ptcl_pos')
+                    endif
+                endif
+                do while( cnt < npos )
+                    ntries = ntries + 1
+                    if( ntries >= max_tries )then
+                        THROW_HARD('could not place all particles; reduce nptcls or increase xdim/ydim; gen_ptcl_pos')
+                    endif
                     skip = .false.
                     ix = irnd_uni(xdim)
                     iy = irnd_uni(ydim)
                     if( present(box) )then
-                        if( ix < box/2+1 .or. ix > xdim-box/2-1 ) cycle
-                        if( iy < box/2+1 .or. iy > ydim-box/2-1 ) cycle
-                        skip = any(occupied(ix-box/2:ix+box/2-1,iy-box/2:iy+box/2-1))
+                        b_half = box / 2
+                        x_min  = ix - b_half
+                        !x_max  = ix + box - b_half - 1
+                        x_max  = ix + b_half - 1
+                        y_min  = iy - b_half
+                        y_max  = iy + b_half - 1
+                        if( x_min < 1 .or. x_max > xdim ) cycle
+                        if( y_min < 1 .or. y_max > ydim ) cycle
+                        skip = any(occupied(x_min:x_max,y_min:y_max))
                     else
                         skip = occupied(ix,iy)
                     endif
                     if( skip ) cycle
                     if( present(box) )then
-                        occupied(ix-box/2:ix+box/2-1,iy-box/2:iy+box/2-1) = .true.
+                        occupied(x_min:x_max,y_min:y_max) = .true.
                     else
                         occupied(ix,iy) = .true.
                     endif
@@ -360,11 +378,6 @@ contains
                     call progress(cnt,npos)
                     pos(cnt,1) = ix
                     pos(cnt,2) = iy
-                    if( cnt == 500*npos )then
-                        THROW_WARN('exiting loop because maximum nr of iterations; gen_ptcl_pos')
-                        exit
-                    endif
-                    if( cnt == npos ) exit
                 end do
             end function gen_ptcl_pos
 

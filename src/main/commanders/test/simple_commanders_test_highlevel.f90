@@ -536,7 +536,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     real,             parameter :: KV             = 300.0
     real,             parameter :: FRACA          = 0.1
     integer,          parameter :: NPROJS         = 100
-    integer,          parameter :: NPER_MOVIE     = 16
+    integer,          parameter :: NPER_MOVIE     = 12
     integer,          parameter :: MOVIE_DIM      = 1536
     integer,          parameter :: NFRAMES        = 16
     integer,          parameter :: NMOVIES        = 10
@@ -560,13 +560,14 @@ subroutine exec_test_simulated_workflow( self, cline )
     type(image)                         :: projection
     type(sp_project)                    :: spproj
     type(string)                        :: cwd_root, workflow_root, project_path, reproj_path, subset_path, filetab_path
-    type(string)                        :: system_name, test_workdir, vol_file, reproj_file
+    type(string)                        :: system_name, pgrp, test_workdir, vol_file, reproj_file
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname
     type(string)                        :: movie_files(NMOVIES)
     character(len=XLONGSTRLEN)          :: workflow_root_path
     integer                             :: i, j, iproj, proj_inds(NPER_MOVIE), ldim(3), nprojs_stk
     integer                             :: reproj_box, npickrefs, nptcls, ncls, status
     real                                :: pickref_smpd, pickref_width
+    integer                             :: rnd_defocus
 
     ! The test executable initializes only the test UI.  Directly invoked SIMPLE
     ! commanders need the regular UI metadata to implement mkdir=yes correctly.
@@ -578,9 +579,11 @@ subroutine exec_test_simulated_workflow( self, cline )
         case('6vxx')
             vol_file    = '6VXX.mrc'
             reproj_file = 'reprojs_6VXX.mrcs'
+            pgrp        = 'c3'
         case('1jxy')
             vol_file    = '1JXY.mrc'
             reproj_file = 'reprojs_1JXY.mrcs'
+            pgrp        = 'c1'
         case default
             THROW_HARD('Unsupported simulated-workflow system: '//system_name%to_char()//'; expected 6vxx or 1jxy')
     end select
@@ -619,7 +622,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     call cline_projection%set('vol1', VOL_DIR//'/'//vol_file%to_char())
     call cline_projection%set('outstk',                    reproj_file)
     call cline_projection%set('smpd',                             SMPD)
-    call cline_projection%set('pgrp',                             'c1')
+    call cline_projection%set('pgrp',                             pgrp)
     call cline_projection%set('mskdiam',                       MSKDIAM)
     call cline_projection%set('nspace',                         NPROJS)
     call cline_projection%set('nthr',                             NTHR)
@@ -669,7 +672,9 @@ subroutine exec_test_simulated_workflow( self, cline )
         call cline_sim_mov%set('kv',                          KV)
         call cline_sim_mov%set('cs',                          CS)
         call cline_sim_mov%set('fraca',                    FRACA)
-        call cline_sim_mov%set('defocus',                    2.0)
+        call seed_rnd
+        rnd_defocus = irnd_uni(3)
+        call cline_sim_mov%set('defocus',            rnd_defocus)
         call cline_sim_mov%set('trs',                        2.0)
         call cline_sim_mov%set('nthr',                      NTHR)
         call xsimov%execute(cline_sim_mov)
@@ -816,7 +821,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     call cline_abinitio3D%set('prg',                'abinitio3D')
     call cline_abinitio3D%set('projfile',           project_path)
     call cline_abinitio3D%set('mkdir',                     'yes')
-    call cline_abinitio3D%set('pgrp',                       'c1')
+    call cline_abinitio3D%set('pgrp',                      pgrp)
     call cline_abinitio3D%set('mskdiam',                 MSKDIAM)
     call cline_abinitio3D%set('nthr',                       NTHR)
     call xabinitio3D%execute(cline_abinitio3D)
