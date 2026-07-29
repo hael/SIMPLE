@@ -1,0 +1,368 @@
+# SIMULATION
+suite_id = "simple_exec"
+group_id = "simulation"
+group_title = "SIMULATION"
+group_order = 140
+
+[[program]]
+name = "cif2mrc"
+executable = "all"
+display_name = "PDBx/mmCIF to MRC simulator"
+summary = "PDBx/mmCIF to MRC simulator"
+help = "is a program to simulate a 3D density map in MRC format using a PDBx/mmCIF format coordinates file"
+
+[[program.input]]
+key = "ciffile"
+label = "PDBx/mmCIF input coordinates file"
+help = "Input coordinates file in PDBx/mmCIF format"
+placeholder = "PDBx/mmCIF file e.g. molecule.cif"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program]]
+name = "pdb2mrc"
+executable = "all"
+display_name = "PDB to MRC simulator"
+summary = "PDB to MRC simulator"
+help = "is a program to simulate a 3D density map in MRC format using a PDB format coordinates file"
+
+[[program.input]]
+key = "pdbfile"
+label = "PDB input coordinates file"
+help = "Input coordinates file in PDB format"
+placeholder = "PDB file e.g. molecule.pdb"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "vol_dim"
+label = "Simulated volume dimensions"
+help = "Dimensions of the simulated volume in voxels"
+placeholder = "# dimensions of the simulated volume"
+visibility = "developer"
+
+[[program.input]]
+key = "outvol"
+label = "Output volume name"
+help = "Output volume name"
+placeholder = "e.g. outvol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "pdbout"
+label = "Output PDB volume-centered molecule"
+help = "Output coordinates file in PDB format for the volume-centered molecule"
+placeholder = "e.g. output.pdb"
+visibility = "developer"
+
+[[program.input]]
+key = "center_pdb"
+label = "Whether to move the PDB atomic center to the center of the box"
+help = "Whether to move the PDB atomic center to the center of the box (yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program]]
+name = "simulate_movie"
+executable = "simple_exec"
+display_name = "Simulate DDD movie"
+summary = "Simulate DDD movie"
+help = "is a program for crude simulation of a DDD movie. Input is a set of projection images to place. Movie frames are then generated related by randomly shifting the base image and applying noise"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Particle image stack"
+help = "Particle image stack"
+placeholder = "xxx.mrc file with particles"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "snr"
+label = "SNR"
+help = "Signal-to-noise ratio of movie frame"
+placeholder = "signal-to-noise ratio(0.)"
+visibility = "developer"
+
+[[program.input]]
+key = "kv"
+label = "Acceleration voltage"
+help = "Acceleration voltage in kV{300}"
+placeholder = "in kV{300}"
+visibility = "developer"
+
+[[program.input]]
+key = "cs"
+label = "Spherical aberration"
+help = "Spherical aberration constant(in mm){2.7}"
+placeholder = "in mm{2.7}"
+visibility = "developer"
+
+[[program.input]]
+key = "fraca"
+label = "Amplitude contrast fraction"
+help = "Fraction of amplitude contrast used for fitting CTF{0.1}"
+placeholder = "fraction{0.1}"
+visibility = "developer"
+
+[[program.input]]
+key = "defocus"
+label = "Underfocus"
+help = "Underfocus(in microns)"
+placeholder = "in microns"
+visibility = "developer"
+
+[[program.input]]
+key = "trs"
+label = "Maximum translational shift"
+help = "Maximum half-width for bund-constrained search of rotational origin shifts"
+placeholder = "max shift per iteration in pixels{5}"
+visibility = "developer"
+
+[[program.input]]
+key = "nframes"
+label = "Number of frames"
+help = "Number of movie frames"
+placeholder = "# frames"
+visibility = "developer"
+
+[[program.input]]
+key = "xdim"
+label = "x-dimension"
+help = "Number of pixels in x-direction"
+placeholder = "# pixels in x"
+visibility = "developer"
+
+[[program.input]]
+key = "ydim"
+label = "y-dimension"
+help = "Number of pixels in y-direction"
+placeholder = "# pixels in y"
+visibility = "developer"
+
+[[program.input]]
+key = "bfac"
+label = "CTF B-factor"
+help = "B-factor of CTF in Angstroms^2"
+placeholder = "B-factor in Angstroms^2(>0.0){0}"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "simulate_noise"
+executable = "simple_exec"
+display_name = "White noise simulation"
+summary = "White noise simulation"
+help = "is a program for generating pure noise images"
+visibility = "developer"
+
+[[program.input]]
+key = "box"
+label = "Particle box size"
+help = "Particle box size(in pixels)"
+placeholder = "# pixels of box"
+visibility = "developer"
+
+[[program.input]]
+key = "nptcls"
+label = "Number of particles"
+help = "Number of particle images"
+placeholder = "# particles"
+visibility = "developer"
+
+[[program]]
+name = "simulate_particles"
+executable = "simple_exec"
+display_name = "Simulate single-particle images"
+summary = "Simulate single-particle images"
+help = "is a program for simulating single-particle cryo-EM images. It is not a very sophisticated simulator, but it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. The volume is projected using Fourier interpolation, 20% of the total noise is added to the images (pink noise), they are then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed before the remaining 80% of the noise (white noise) is added"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Volume"
+help = "Volume to project"
+placeholder = "input volume e.g. vol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "nptcls"
+label = "Number of particles"
+help = "Number of particle images"
+placeholder = "# particles"
+visibility = "developer"
+
+[[program.input]]
+key = "snr"
+label = "SNR"
+help = "Signal-to-noise ratio of particle images"
+placeholder = "signal-to-noise ratio(0.)"
+visibility = "developer"
+
+[[program.input]]
+key = "oritab"
+label = "Orientation and CTF parameter file"
+help = "Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "outfile"
+label = "Output orientation and CTF parameter file"
+help = "Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "outstk"
+label = "Output stack name"
+help = "Output images stack name"
+placeholder = "e.g. outstk.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "even"
+label = "Generate even projections"
+help = "Generate quasi-even projection directions(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "sherr"
+label = "Shift error half-width"
+help = "Uniform rotational origin shift error half-width(in pixels)"
+placeholder = "shift error in pixels"
+visibility = "developer"
+
+[[program.input]]
+key = "kv"
+label = "Acceleration voltage"
+help = "Acceleration voltage in kV{300}"
+placeholder = "in kV{300}"
+visibility = "developer"
+
+[[program.input]]
+key = "cs"
+label = "Spherical aberration"
+help = "Spherical aberration constant(in mm){2.7}"
+placeholder = "in mm{2.7}"
+visibility = "developer"
+
+[[program.input]]
+key = "fraca"
+label = "Amplitude contrast fraction"
+help = "Fraction of amplitude contrast used for fitting CTF{0.1}"
+placeholder = "fraction{0.1}"
+visibility = "developer"
+
+[[program.input]]
+key = "deftab"
+label = "CTF parameter file"
+help = "CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "defocus"
+label = "Underfocus"
+help = "Underfocus(in microns)"
+placeholder = "in microns"
+visibility = "developer"
+
+[[program.input]]
+key = "dferr"
+label = "Underfocus error half-width"
+help = "Uniform underfoucs error half-width(in microns)"
+placeholder = "defocus error in microns"
+visibility = "developer"
+
+[[program.input]]
+key = "astigerr"
+label = "Astigmatism error"
+help = "Uniform astigmatism error(in microns)"
+placeholder = "error in microns"
+visibility = "developer"
+
+[[program.input]]
+key = "ctf"
+label = "CTF status"
+help = "Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}"
+placeholder = "(yes|no|flip){no}"
+visibility = "developer"
+choices = ["yes", "no", "flip"]
+
+[[program.input]]
+key = "nframes"
+label = "# of particle frames"
+help = "# of lower SNR particle frames"
+placeholder = "{1}"
+visibility = "developer"
+
+[[program.input]]
+key = "pgrp"
+label = "Point-group symmetry"
+help = "Point-group symmetry of particle(cn|dn|t|o|i){c1}"
+placeholder = "point-group(cn|dn|t|o|i){c1}"
+visibility = "developer"
+
+[[program.input]]
+key = "bfac"
+label = "CTF B-factor"
+help = "B-factor of CTF in Angstroms^2"
+placeholder = "B-factor in Angstroms^2(>0.0){0}"
+visibility = "developer"
+
+[[program.input]]
+key = "bfacerr"
+label = "B-factor error"
+help = "Uniform B-factor error(in Angstroms^2)"
+placeholder = "error(in Angstroms^2)"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"

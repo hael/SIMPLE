@@ -6,6 +6,7 @@ use simple_ansi_ctrls
 use simple_ui_params_common
 use simple_ui_hash,         only: ui_hash
 use simple_ui_program,      only: ui_program
+use simple_ui_visibility,   only: ui_visibility_name
 ! program table grouping helpers
 use simple_ui_simple_group, only: add_simple_programs, print_simple_programs
 use simple_ui_stream_group, only: add_stream_programs, print_stream_programs_group
@@ -120,6 +121,7 @@ contains
                     call json%add(program, 'descr_long',  p%descr_long%to_char())
                     call json%add(program, 'executable',  p%executable%to_char())
                     call json%add(program, 'advanced',    p%advanced)
+                    call json%add(program, 'visibility',  trim(ui_visibility_name(p%visibility)))
                     if( p%gui_submenu_list%is_allocated() ) then
                         call json%add(program, 'gui_submenu_list', p%gui_submenu_list%to_char())
                     endif
@@ -179,6 +181,7 @@ contains
                         call json%add(entry, 'default', "unknown")
                     endif
                     call json%add(entry, 'advanced', u%advanced)
+                    call json%add(entry, 'visibility', trim(ui_visibility_name(u%visibility)))
                     call json%add(entry, 'online',   u%online)
                     param_is_multi  = (u%keytype%to_char() .eq. 'multi')
                     param_is_binary = (u%keytype%to_char() .eq. 'binary')
@@ -251,6 +254,7 @@ contains
                     call json%add(program, 'descr_long',  p%descr_long%to_char())
                     call json%add(program, 'executable',  p%executable%to_char())
                     call json%add(program, 'advanced',    p%advanced)
+                    call json%add(program, 'visibility',  trim(ui_visibility_name(p%visibility)))
                     if ( p%gui_submenu_list%is_allocated() ) then
                         call json%add(program, 'gui_submenu_list', p%gui_submenu_list%to_char())
                     endif
@@ -303,6 +307,7 @@ contains
                         call json%add(entry, 'active_flags', u%active_flags%to_char())
                     endif
                     call json%add(entry, 'advanced', u%advanced)
+                    call json%add(entry, 'visibility', trim(ui_visibility_name(u%visibility)))
                     call json%add(entry, 'online',   u%online)
                     if ( u%keytype%to_char() == "num" ) then
                         call json%add(entry, 'default', dble(u%rval_default))

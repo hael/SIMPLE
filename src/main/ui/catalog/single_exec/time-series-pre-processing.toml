@@ -1,0 +1,384 @@
+# TIME-SERIES PRE-PROCESSING
+suite_id = "single_exec"
+group_id = "time-series-pre-processing"
+group_title = "TIME-SERIES PRE-PROCESSING"
+group_order = 10
+
+[[program]]
+name = "track_particles"
+executable = "single_exec"
+display_name = "Track particles in time-series"
+summary = "Track particles in time-series"
+help = "is a distributed workflow for particle tracking in time-series data"
+
+[[program.input]]
+key = "fbody"
+label = "Template output tracked series"
+help = "Template output tracked series"
+placeholder = "e.g. tracked_ptcl"
+visibility = "developer"
+
+[[program.input]]
+key = "boxfile"
+label = "List of particle coordinates"
+help = ".txt file with EMAN particle coordinates"
+placeholder = "e.g. coords.box"
+visibility = "developer"
+
+[[program.input]]
+key = "neg"
+label = "Invert contrast"
+help = "Invert contrast(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "tester"
+label = "Write periodic tester-mode outputs"
+help = "Periodically write masked reference images and registered particle chunks for debugging(no|yes){no}"
+placeholder = "(no|yes){no}"
+visibility = "developer"
+choices = ["no", "yes"]
+
+[[program.input]]
+key = "fromf"
+label = "Frame to start tracking from"
+help = "Frame to start tracking from"
+placeholder = "frame index"
+visibility = "developer"
+
+[[program.input]]
+key = "offset"
+label = "Shift half-width search bound"
+help = "Shift half-width search bound(in pixels)"
+placeholder = "pixels window halfwidth{20}"
+visibility = "developer"
+
+[[program.input]]
+key = "nframesgrp"
+label = "Number of contigous frames to average"
+help = "# contigous frames to average before tracking{50}"
+placeholder = "{50}"
+visibility = "developer"
+
+[[program.input]]
+key = "lp_pick"
+label = "Low-pass limit in Angs"
+help = "Low-pass limit in Angs{2.3}"
+placeholder = "lp in Angs{2.3}"
+visibility = "developer"
+
+[[program.input]]
+key = "cenlp"
+label = "Centering low-pass limit"
+help = "Limit for low-pass filter used in binarisation prior to determination of the center of gravity of the particle and centering"
+placeholder = "centering low-pass limit in Angstroms{5}"
+visibility = "developer"
+
+[[program.input]]
+key = "filter"
+label = "Alternative filter for particle tracking"
+help = "Alternative filter for particle tracking(no|tv|nlmean){nlmean}"
+placeholder = "(no|tv|nlmean){nlmean}"
+visibility = "developer"
+choices = ["no", "tv", "nlmean"]
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "ncunits"
+label = "Concurrent particle trackers"
+help = "Maximum number of independent particle tracking jobs to run at once"
+placeholder = "# simultaneous trackers"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "tseries_import"
+executable = "single_exec"
+display_name = "Imports time-series datasets"
+summary = "Imports time-series datasets"
+help = "is a workflow for importing time-series data"
+
+[[program.input]]
+key = "filetab"
+label = "List of individual movie frame files"
+help = "List of frame files (*.mrcs) to import"
+placeholder = "e.g. movie_frames.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "kv"
+label = "Acceleration voltage"
+help = "Acceleration voltage in kV{300}"
+placeholder = "in kV{300}"
+visibility = "developer"
+
+[[program.input]]
+key = "cs"
+label = "Spherical aberration"
+help = "Spherical aberration constant(in mm){0.0}"
+placeholder = "in mm{0.0}"
+visibility = "developer"
+
+[[program.input]]
+key = "fraca"
+label = "Amplitude contrast fraction"
+help = "Fraction of amplitude contrast used for fitting CTF{0.4}"
+placeholder = "fraction{0.4}"
+visibility = "developer"
+
+[[program]]
+name = "tseries_make_pickavg"
+executable = "single_exec"
+display_name = "Align & average the first few frames of the time-series"
+summary = "Align & average the first few frames of the time-series"
+help = "is a program for aligning & averaging the first few frames of the time-series to accomplish SNR enhancement for particle identification"
+
+[[program.input]]
+key = "nframesgrp"
+label = "# contigous frames to average"
+help = "Number of contigous frames to average using correlation-based weights{100}"
+placeholder = "{100}"
+visibility = "developer"
+
+[[program.input]]
+key = "fromf"
+label = "Frame to start averaging from"
+help = "Frame to start averaging from"
+placeholder = "frame index"
+visibility = "developer"
+
+[[program.input]]
+key = "period"
+label = "Period for repeated averaging windows"
+help = "If > 0, run align+denoise for a nframesgrp-sized window every period frames{0}"
+placeholder = "period in frames{0}"
+visibility = "developer"
+
+[[program.input]]
+key = "trs"
+label = "Max shift per iter in pixels{10.}"
+help = "Maximum half-width for bund-constrained search of movie frame shifts"
+placeholder = "max shift per iter in pixels{10}"
+visibility = "developer"
+
+[[program.input]]
+key = "bfac"
+label = "B-factor applied to frames"
+help = "B-factor applied to frames (in Angstroms^2)"
+placeholder = "in Angstroms^2{5}"
+visibility = "developer"
+
+[[program.input]]
+key = "mcpatch"
+label = "Patch-based motion correction"
+help = "Whether to perform Patch-based motion correction(yes|no){yes}"
+placeholder = "(yes|no){yes}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "nxpatch"
+label = "# of patches along x-axis"
+help = "# of patches along x-axis(3)"
+placeholder = "# x-patches{3}"
+visibility = "developer"
+
+[[program.input]]
+key = "nypatch"
+label = "# of patches along y-axis"
+help = "# of patches along y-axis(3)"
+placeholder = "# y-patches{3}"
+visibility = "developer"
+
+[[program.input]]
+key = "lpstart"
+label = "Initial low-pass limit"
+help = "Low-pass limit to be applied in the first iterations of movie alignment (in Angstroms){5}"
+placeholder = "in Angstroms{5}"
+visibility = "developer"
+
+[[program.input]]
+key = "lpstop"
+label = "Final low-pass limit"
+help = "Low-pass limit to be applied in the last iterations of movie alignment (in Angstroms){3}"
+placeholder = "in Angstroms{3}"
+visibility = "developer"
+
+[[program.input]]
+key = "wcrit"
+label = "Correlation to weights conversion scheme"
+help = "Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}"
+placeholder = "(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}"
+visibility = "developer"
+choices = ["softmax", "zscore", "sum", "cen", "exp", "inv", "uniform", "no"]
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "tseries_motion_correct"
+executable = "single_exec"
+display_name = "Anisotropic motion correction of time-series of nanoparticles"
+summary = "Anisotropic motion correction of time-series of nanoparticles"
+help = "is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles."
+
+[[program.input]]
+key = "boxfile"
+label = "List of particle coordinates"
+help = ".txt file with EMAN-convention particle coordinates"
+placeholder = "e.g. coords.box"
+visibility = "developer"
+
+[[program.input]]
+key = "trs"
+label = "Max shift per iter in pixels{10.}"
+help = "Maximum half-width for bund-constrained search of movie frame shifts"
+placeholder = "max shift per iter in pixels{10}"
+visibility = "developer"
+
+[[program.input]]
+key = "nframesgrp"
+label = "# frames in time moving time window"
+help = "# frames in time moving time window subjected to correction"
+placeholder = "{5}"
+visibility = "developer"
+
+[[program.input]]
+key = "bfac"
+label = "B-factor applied to frames"
+help = "B-factor applied to frames (in Angstroms^2)"
+placeholder = "in Angstroms^2{5}"
+visibility = "developer"
+
+[[program.input]]
+key = "mcpatch"
+label = "Patch-based motion correction"
+help = "Whether to perform Patch-based motion correction(yes|no){yes}"
+placeholder = "(yes|no){yes}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "nxpatch"
+label = "# of patches along x-axis"
+help = "# of patches along x-axis(3)"
+placeholder = "# x-patches{3}"
+visibility = "developer"
+
+[[program.input]]
+key = "nypatch"
+label = "# of patches along y-axis"
+help = "# of patches along y-axis(3)"
+placeholder = "# y-patches{3}"
+visibility = "developer"
+
+[[program.input]]
+key = "algorithm"
+label = "Algorithm for motion correction"
+help = "Algorithm for motion correction(iso|patch|patch_refine){patch}"
+placeholder = "(iso|patch|patch_refine){patch}"
+visibility = "developer"
+choices = ["iso", "patch", "patch_refine"]
+
+[[program.input]]
+key = "lpstart"
+label = "Initial low-pass limit"
+help = "Low-pass limit to be applied in the first iterations of movie alignment (in Angstroms){5}"
+placeholder = "in Angstroms{5}"
+visibility = "developer"
+
+[[program.input]]
+key = "lpstop"
+label = "Final low-pass limit"
+help = "Low-pass limit to be applied in the last iterations of movie alignment (in Angstroms){3}"
+placeholder = "in Angstroms{3}"
+visibility = "developer"
+
+[[program.input]]
+key = "wcrit"
+label = "Correlation to weights conversion scheme"
+help = "Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}"
+placeholder = "(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}"
+visibility = "developer"
+choices = ["softmax", "zscore", "sum", "cen", "exp", "inv", "uniform", "no"]
+
+[[program.input]]
+key = "nparts"
+label = "Number of computing nodes"
+help = "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity"
+placeholder = "divide job into # parts"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "tseries_prep4tracking"
+executable = "single_exec"
+display_name = "Prepare time-series for particle tracking"
+summary = "Prepare time-series for particle tracking"
+help = "is a program for preparing time-series for preparing particle tracking"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "tseries_extractor"
+executable = "single_exec"
+display_name = "Extract particle trajectories from time-series"
+summary = "Extract particle trajectories from time-series"
+help = "is a program for extracting particle trajectories from time-series (movies) of nanoparticles."
+
+[[program.input]]
+key = "infile"
+label = "Selected particle trajectory"
+help = "Text file (.txt) containing particle coordinates per frame"
+placeholder = "give .txt trajectory file"
+visibility = "developer"
+
+[[program.input]]
+key = "box_extract"
+label = "Extracted particle image size"
+help = "Extracted particle image size(in pixels)"
+placeholder = "Extracted particle image size"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"

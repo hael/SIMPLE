@@ -1,0 +1,730 @@
+# DENOISING
+suite_id = "simple_exec"
+group_id = "denoising"
+group_title = "DENOISING"
+group_order = 70
+
+[[program]]
+name = "icm2D"
+executable = "simple_exec"
+display_name = "ICM 2D filter"
+summary = "ICM 2D filter"
+help = "is a program for 2D ICM denoising of even/odd image stacks"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Odd stack"
+help = "Odd stack"
+placeholder = "stack_even.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "stk2"
+label = "Even stack"
+help = "Even stack"
+placeholder = "stack_odd.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lambda"
+label = "ICM lambda regularization parameter"
+help = "Strength of noise reduction"
+placeholder = "(0.01-3.0){1.0}"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "icm3D"
+executable = "simple_exec"
+display_name = "ICM 3D filter"
+summary = "ICM 3D filter"
+help = "is a program for 3D nonuniform filtering by Iterated Conditional Modes"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Odd volume"
+help = "Odd volume"
+placeholder = "vol1.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "vol2"
+label = "Even volume"
+help = "Even volume"
+placeholder = "vol2.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lambda"
+label = "ICM lambda regularization parameter"
+help = "Strength of noise reduction"
+placeholder = "(0.01-3.0){1.0}"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "ppca_denoise"
+executable = "simple_exec"
+display_name = "Filter stack/volume"
+summary = "Filter stack/volume"
+help = "is a program for ppca-based denoising of an image stack"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Stack to denoise"
+help = "Stack of images to denoise"
+placeholder = "e.g. stk.mrcs"
+visibility = "developer"
+
+[[program.input]]
+key = "outstk"
+label = "Output stack name"
+help = "Output images stack name"
+placeholder = "e.g. outstk.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "neigs"
+label = "Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)"
+help = "Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)"
+placeholder = "# eigenvecs"
+visibility = "developer"
+
+[[program.input]]
+key = "pca_mode"
+label = "PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, or diffusion maps"
+help = "PCA methods"
+placeholder = "(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}"
+visibility = "developer"
+choices = ["ppca", "ppca_kpca_resid", "pca_svd", "kpca", "diffusion_maps"]
+
+[[program.input]]
+key = "k_nn"
+label = "Diffusion graph neighbors (default 5; try 5-30)"
+help = "Local nearest neighbors used for pca_mode=diffusion_maps"
+placeholder = "# neighbors"
+visibility = "developer"
+
+[[program.input]]
+key = "bandwidth_mode"
+label = "Diffusion-map bandwidth mode"
+help = "Kernel bandwidth policy for diffusion maps(median|ferguson){median}"
+placeholder = "(median|ferguson){median}"
+visibility = "developer"
+choices = ["median", "ferguson"]
+
+[[program.input]]
+key = "bandwidth_tune"
+label = "Ferguson bandwidth multiplier (default 1)"
+help = "Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson"
+placeholder = "tune >= 0"
+visibility = "developer"
+
+[[program.input]]
+key = "dm_alpha"
+label = "Diffusion-map density normalization (default 0)"
+help = "Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)"
+placeholder = "0 <= alpha <= 1"
+visibility = "developer"
+
+[[program.input]]
+key = "kpca_ker"
+label = "Kernel PCA kernel"
+help = "Kernel PCA kernel(rbf|cosine){rbf}"
+placeholder = "(rbf|cosine){rbf}"
+visibility = "developer"
+choices = ["rbf", "cosine"]
+
+[[program.input]]
+key = "kpca_backend"
+label = "Kernel PCA backend"
+help = "Kernel PCA backend(exact|nystrom){nystrom}"
+placeholder = "(exact|nystrom){nystrom}"
+visibility = "developer"
+choices = ["exact", "nystrom"]
+
+[[program.input]]
+key = "kpca_rbf_gamma"
+label = "RBF gamma (0 => auto)"
+help = "RBF gamma (0 => auto)"
+placeholder = "gamma"
+visibility = "developer"
+
+[[program.input]]
+key = "ppca_kpca_resid_alpha"
+label = "Residual hybrid damping (0 => PPCA only; default 0.5)"
+help = "Residual hybrid damping (0 => PPCA only; default 0.5)"
+placeholder = "hybrid alpha"
+visibility = "developer"
+
+[[program.input]]
+key = "kpca_nystrom_npts"
+label = "Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)"
+help = "Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)"
+placeholder = "# landmarks"
+visibility = "developer"
+
+[[program.input]]
+key = "kpca_nystrom_local_nbrs"
+label = "Nyström max local support neighbors (default 96; try 96, 128)"
+help = "Nyström max local support neighbors (default 96; try 96, 128)"
+placeholder = "# max local nbrs"
+visibility = "developer"
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "ppca_denoise_classes"
+executable = "all"
+display_name = "Filter stack/volume"
+summary = "Filter stack/volume"
+help = "is a program for ppca-based denoising of image classes"
+visibility = "developer"
+
+[[program.input]]
+key = "pre_norm"
+label = "Pre-normalize images"
+help = "Statistical normalization(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "neigs"
+label = "# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)"
+help = "# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)"
+placeholder = "# eigenvecs"
+visibility = "developer"
+
+[[program.input]]
+key = "transp_pca"
+label = "transpose for pixel-wise learning"
+help = "transpose for pixel-wise learning(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "pca_mode"
+label = "PCA methods: PPCA, standard SVD PCA or kernel PCA"
+help = "PCA methods"
+placeholder = "(ppca|pca_svd|kpca){ppca}"
+visibility = "developer"
+choices = ["ppca", "pca_svd", "kpca"]
+
+[[program.input]]
+key = "kpca_ker"
+label = "Kernel PCA kernel"
+help = "Kernel PCA kernel(rbf|cosine){rbf}"
+placeholder = "(rbf|cosine){rbf}"
+visibility = "developer"
+choices = ["rbf", "cosine"]
+
+[[program.input]]
+key = "kpca_backend"
+label = "Kernel PCA backend"
+help = "Kernel PCA backend(exact|nystrom){nystrom}"
+placeholder = "(exact|nystrom){nystrom}"
+visibility = "developer"
+choices = ["exact", "nystrom"]
+
+[[program.input]]
+key = "kpca_rbf_gamma"
+label = "RBF gamma (0 => auto)"
+help = "RBF gamma (0 => auto)"
+placeholder = "gamma"
+visibility = "developer"
+
+[[program.input]]
+key = "kpca_nystrom_npts"
+label = "Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)"
+help = "Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)"
+placeholder = "# landmarks"
+visibility = "developer"
+
+[[program.input]]
+key = "kpca_nystrom_local_nbrs"
+label = "Nyström max local support neighbors (default 96; try 96, 128)"
+help = "Nyström max local support neighbors (default 96; try 96, 128)"
+placeholder = "# max local nbrs"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "cls_split"
+executable = "all"
+display_name = "Split classes with latent clustering"
+summary = "Split classes with latent clustering"
+help = "splits 2D/3D particle classes into subclasses using diffusion-map or kPCA embeddings and k-medoids clustering"
+visibility = "developer"
+
+[[program.input]]
+key = "class"
+label = "Optional class index to split"
+help = "Optional 2D class index or 3D projection/class index to split; omit to process all classes"
+placeholder = "e.g. 5"
+visibility = "developer"
+
+[[program.input]]
+key = "ncls"
+label = "Fixed number of subclasses (0 => auto)"
+help = "Fixed number of subclasses (0 => auto)"
+placeholder = "# subclasses"
+visibility = "developer"
+
+[[program.input]]
+key = "nsubcls_min"
+label = "Minimum subclass trial count in auto mode (default 3)"
+help = "Used only when ncls=0: optimization tries every subclass count from nsubcls_min through nsubcls_max"
+placeholder = "# min trial subclasses"
+visibility = "developer"
+
+[[program.input]]
+key = "nsubcls_max"
+label = "Maximum subclass trial count in auto mode (default 10)"
+help = "Used only when ncls=0: optimization tries every subclass count from nsubcls_min through nsubcls_max"
+placeholder = "# max trial subclasses"
+visibility = "developer"
+
+[[program.input]]
+key = "k_nn"
+label = "Diffusion graph neighbors (default 10; try 5-30)"
+help = "Local nearest neighbors used only for diffusion-map modes; larger values smooth the graph"
+placeholder = "# neighbors"
+visibility = "developer"
+
+[[program.input]]
+key = "oritype"
+label = "Particle type to split"
+help = "Particle type to split(ptcl2D|ptcl3D){ptcl2D}"
+placeholder = "(ptcl2D|ptcl3D){ptcl2D}"
+visibility = "developer"
+choices = ["ptcl2D", "ptcl3D"]
+
+[[program.input]]
+key = "neigs"
+label = "Number of eigencomponents (0 => auto scan; default 200)"
+help = "Number of eigencomponents used as the scan upper bound before ICM dimension selection"
+placeholder = "# eigenvecs"
+visibility = "developer"
+
+[[program.input]]
+key = "pca_mode"
+label = "Class split embedding method"
+help = "Class split embedding method(diffusion_maps|kpca){diffusion_maps}"
+placeholder = "(diffusion_maps|kpca){diffusion_maps}"
+visibility = "developer"
+choices = ["diffusion_maps", "kpca"]
+
+[[program.input]]
+key = "graph"
+label = "Class split graph"
+help = "Class split graph(euc|ori){euc}"
+placeholder = "(euc|ori){euc}"
+visibility = "developer"
+choices = ["euc", "ori"]
+
+[[program.input]]
+key = "bandwidth_mode"
+label = "Diffusion-map bandwidth mode"
+help = "Kernel bandwidth policy for diffusion maps(median|ferguson){median}"
+placeholder = "(median|ferguson){median}"
+visibility = "developer"
+choices = ["median", "ferguson"]
+
+[[program.input]]
+key = "bandwidth_tune"
+label = "Ferguson bandwidth multiplier (default 1)"
+help = "Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson"
+placeholder = "tune >= 0"
+visibility = "developer"
+
+[[program.input]]
+key = "dm_alpha"
+label = "Diffusion-map density normalization (default 0)"
+help = "Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)"
+placeholder = "0 <= alpha <= 1"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+
+[[program.input]]
+key = "nparts"
+label = "Number of computing nodes"
+help = "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity"
+placeholder = "divide job into # parts"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+
+[[program]]
+name = "denoise_project"
+executable = "all"
+display_name = "Create dual denoised project"
+summary = "Create dual denoised project"
+help = "is a workflow for creating a dual-representation project from existing 2D clustering by writing registered phase-flipped raw particles and denoised particle samples from diffusion maps"
+visibility = "developer"
+
+[[program.input]]
+key = "nspace"
+label = "Number of projection directions"
+help = "Number of projection directions used"
+placeholder = "# projections"
+visibility = "developer"
+
+[[program.input]]
+key = "nspace_sub"
+label = "SO3 mixture subspace size"
+help = "SO3 mixture subspace size"
+placeholder = "# subspace directions"
+visibility = "developer"
+
+[[program.input]]
+key = "neigs"
+label = "Number of eigencomponents (0 => auto scan; default 200)"
+help = "Number of eigencomponents used as the scan upper bound before ICM rank selection"
+placeholder = "# eigenvecs"
+visibility = "developer"
+
+[[program.input]]
+key = "k_nn"
+label = "Diffusion graph neighbors (default 10; try 5-30)"
+help = "Local nearest neighbors used for diffusion-map graph construction"
+placeholder = "# neighbors"
+visibility = "developer"
+
+[[program.input]]
+key = "graph"
+label = "Diffusion graph"
+help = "Diffusion graph(euc|ori){euc}"
+placeholder = "(euc|ori){euc}"
+visibility = "developer"
+choices = ["euc", "ori"]
+
+[[program.input]]
+key = "bandwidth_mode"
+label = "Diffusion-map bandwidth mode"
+help = "Kernel bandwidth policy for diffusion maps(median|ferguson){median}"
+placeholder = "(median|ferguson){median}"
+visibility = "developer"
+choices = ["median", "ferguson"]
+
+[[program.input]]
+key = "bandwidth_tune"
+label = "Ferguson bandwidth multiplier (default 1)"
+help = "Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson"
+placeholder = "tune >= 0"
+visibility = "developer"
+
+[[program.input]]
+key = "dm_alpha"
+label = "Diffusion-map density normalization (default 0)"
+help = "Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)"
+placeholder = "0 <= alpha <= 1"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+
+[[program.input]]
+key = "nparts"
+label = "Number of computing nodes"
+help = "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity"
+placeholder = "divide job into # parts"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+
+[[program]]
+name = "map_params_from_den"
+executable = "all"
+display_name = "Map denoised-project assignments to raw particles"
+summary = "Map denoised-project assignments to raw particles"
+help = "is a workflow for transferring assignments obtained on denoise_project transformed particles back to the raw project particle frame"
+visibility = "developer"
+
+[[program.input]]
+key = "projfile_raw"
+label = "Raw project file"
+help = "SIMPLE project input to denoise_project"
+placeholder = "e.g. raw_project.simple"
+visibility = "developer"
+
+[[program.input]]
+key = "projfile_den"
+label = "Denoised child project file"
+help = "SIMPLE denoise_project child project containing assignments to map"
+placeholder = "e.g. den_project.simple"
+visibility = "developer"
+
+[[program.input]]
+key = "projfile"
+label = "Project file"
+help = "SIMPLE projectfile"
+placeholder = "e.g. myproject.simple"
+visibility = "developer"
+
+[[program]]
+name = "flex_analysis"
+executable = "simple_exec"
+display_name = "Diffusion-manifold representative 3D states"
+summary = "Diffusion-manifold representative 3D states"
+help = "builds a sparse diffusion map, selects k-medoids, fits a coupled projection-aware residual basis, and synthesizes Nyström 3D pre-images around the fixed mean"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Mean volume"
+help = "Fixed mean volume used by the projection-aware residual model"
+placeholder = "input volume e.g. vol1.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "outvol"
+label = "Output volume name"
+help = "Output volume name"
+placeholder = "e.g. outvol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "outfile"
+label = "Discrete-state project"
+help = "Output project whose selected ptcl3D rows receive hard k-medoids state labels; only used when preimage_mode=discrete"
+placeholder = "output project e.g. flex_cluster_states.simple"
+visibility = "developer"
+
+[[program.input]]
+key = "oritype"
+label = "Particle orientation segment"
+help = "Particle orientation segment fixed to ptcl3D"
+placeholder = "ptcl3D"
+visibility = "developer"
+
+[[program.input]]
+key = "nspace"
+label = "Number of projection directions"
+help = "Number of projection directions used"
+placeholder = "# projections"
+visibility = "developer"
+
+[[program.input]]
+key = "neigs"
+label = "Maximum number of diffusion modes (default 15)"
+help = "Positive eigenpair scan limit, bounded only by the nontrivial graph spectrum; all returned modes are retained when icm=no"
+placeholder = "# modes >=1"
+visibility = "developer"
+
+[[program.input]]
+key = "icm"
+label = "Automatic diffusion-mode selection"
+help = "Use ICM to select a spectral prefix; icm=no retains every mode returned by the neigs scan"
+placeholder = "(yes|no){yes}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "k_nn"
+label = "Nearest neighbors (default 100)"
+help = "Registered-residual neighbors retained per particle"
+placeholder = "# neighbors"
+visibility = "developer"
+
+[[program.input]]
+key = "nang_nbrs"
+label = "Angular candidate cap (default 1000)"
+help = "Maximum orientation-gated candidate particles compared per particle"
+placeholder = "# candidates"
+visibility = "developer"
+
+[[program.input]]
+key = "bandwidth_mode"
+label = "Diffusion-map bandwidth mode"
+help = "Kernel bandwidth policy for diffusion maps(median|ferguson){ferguson}"
+placeholder = "(median|ferguson){ferguson}"
+visibility = "developer"
+choices = ["median", "ferguson"]
+
+[[program.input]]
+key = "bandwidth_tune"
+label = "Ferguson bandwidth multiplier (default 1)"
+help = "Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson"
+placeholder = "tune >= 0"
+visibility = "developer"
+
+[[program.input]]
+key = "view_balance"
+label = "Correct uneven view distribution"
+help = "Give every occupied nspace projection bin equal total graph measure using fixed inverse-occupancy weights"
+placeholder = "(yes|no){yes}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "npreimages"
+label = "Representative state volumes (default 8)"
+help = "Number of k-medoids used as representative Nyström pre-image targets"
+placeholder = "# state volumes"
+visibility = "developer"
+
+[[program.input]]
+key = "preimage_mode"
+label = "Diffusion-map output mode"
+help = "constant=local-constant kernel pre-images; linear=local-linear WLS pre-images; discrete=writes hard k-medoids labels to ptcl3D/state without running the pre-image reconstruction"
+placeholder = "(constant|linear|discrete){linear}"
+visibility = "developer"
+choices = ["constant", "linear", "discrete"]
+
+[[program.input]]
+key = "preimage_ndim"
+label = "Local-linear pre-image design dimension (default 2)"
+help = "Cap on the number of leading diffusion coordinates used in the local-linear design; only used when preimage_mode=linear; d=min(preimage_ndim,neigs)"
+placeholder = "# local dimensions >=1"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+
+[[program.input]]
+key = "nparts"
+label = "Number of computing nodes"
+help = "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity"
+placeholder = "divide job into # parts"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+
+[[program]]
+name = "ppca_volvar"
+executable = "simple_exec"
+display_name = "Volume variability analysis using ppca"
+summary = "Volume variability analysis using ppca"
+help = "is a program for ppca-based volume variability"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Volume"
+help = "Volume for creating 2D central sections"
+placeholder = "input volume e.g. vol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "neigs"
+label = "# eigenvecs"
+help = "# eigenvecs"
+placeholder = "# eigenvecs"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"

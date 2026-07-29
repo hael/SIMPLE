@@ -1,0 +1,418 @@
+# CLASS AVERAGE PROCESSING
+suite_id = "simple_exec"
+group_id = "class-average-processing"
+group_title = "CLASS AVERAGE PROCESSING"
+group_order = 40
+
+[[program]]
+name = "cluster_cavgs"
+executable = "simple_exec"
+display_name = "Analysis of class averages with affinity propagation"
+summary = "Analysis of class averages with affinity propagation"
+help = "is a program for analyzing class averages with affinity propagation"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Particle image stack"
+help = "Particle image stack"
+placeholder = "xxx.mrc file with particles"
+visibility = "developer"
+
+[[program.input]]
+key = "ncls"
+label = "Number of clusters"
+help = "Number of clusters"
+placeholder = "# clusters"
+visibility = "developer"
+
+[[program.input]]
+key = "prune"
+label = "Automated particles pruning"
+help = "Whether to prune deselected particles(yes|no){no}"
+placeholder = "Automated particles pruning(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "clust_crit"
+label = "Clustering criterion"
+help = "Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}"
+placeholder = "(sig|sig_clust|cc|res|hybrid){hybrid}"
+visibility = "developer"
+choices = ["sig", "sig_clust", "cc", "res", "hybrid"]
+
+[[program.input]]
+key = "skip_rejection"
+label = "Skip class-average rejection"
+help = "Skip class-average rejection and leave project selections unchanged(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "model_cavgs_rejection"
+executable = "simple_exec"
+display_name = "Model-driven rejection of class averages"
+summary = "Model-driven rejection of class averages"
+help = "is a program for automatic class-average rejection using normalized quality feature vectors"
+visibility = "developer"
+
+[[program.input]]
+key = "quality_mode"
+label = "Class-average quality mode"
+help = "Whether to apply selection, analyze it, learn, or emit promotion code(apply|analyze|learn|evaluate|promote){apply}"
+placeholder = "Class-average quality mode(apply|analyze|learn|evaluate|promote){apply}"
+visibility = "developer"
+choices = ["apply", "analyze", "learn", "evaluate", "promote"]
+
+[[program.input]]
+key = "quality_model"
+label = "Class-average quality model"
+help = "Built-in class-average quality model preset(chunk100mics|none){chunk100mics}"
+placeholder = "Quality model(chunk100mics|none){chunk100mics}"
+visibility = "developer"
+choices = ["chunk100mics", "none"]
+
+[[program.input]]
+key = "quality_context"
+label = "Class-average quality context"
+help = "Hard-gate context for class-average quality rejection(chunk|pool|sieve){chunk}"
+placeholder = "Class-average quality context(chunk|pool|sieve){chunk}"
+visibility = "developer"
+choices = ["chunk", "pool", "sieve"]
+
+[[program.input]]
+key = "prune"
+label = "Automated particles pruning"
+help = "Whether to prune deselected particles(yes|no){no}"
+placeholder = "Automated particles pruning(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "filetab"
+label = "Analysis file table"
+help = "File table of canonical cavgs_quality_training.txt files for quality_mode=learn|evaluate"
+placeholder = "e.g. cavgs_quality_training_filetab.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "infile"
+label = "Quality model input"
+help = "Optional learned quality model file for apply/analyze/evaluate or promotion-code generation"
+placeholder = "e.g. cavgs_quality_model_chunk_learned.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "fname"
+label = "Quality model output"
+help = "Output quality model file, evaluation report, or promotion-code snippet for quality_mode=learn|evaluate|promote"
+placeholder = "e.g. cavgs_quality_model_chunk_learned.txt, cavgs_quality_evaluate_report.txt, or cavgs_quality_model_builtin_code.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "cluster_cavgs_selection"
+executable = "simple_exec"
+display_name = "Analysis of selected class averages with affinity propagation to prepare for match_cavgs"
+summary = "Analysis of selected class averages with affinity propagation to prepare for match_cavgs"
+help = "is a program for analyzing selected class averages with affinity propagation"
+visibility = "developer"
+
+[[program.input]]
+key = "clust_crit"
+label = "Clustering criterion"
+help = "Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}"
+placeholder = "(sig|sig_clust|cc|res|hybrid){hybrid}"
+visibility = "developer"
+choices = ["sig", "sig_clust", "cc", "res", "hybrid"]
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "cluster_stack"
+executable = "simple_exec"
+display_name = "Analysis of class averages with k-medoids"
+summary = "Analysis of class averages with k-medoids"
+help = "is a program for analyzing class averages with k-medoids"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Particle image stack"
+help = "Particle image stack"
+placeholder = "xxx.mrc file with particles"
+visibility = "developer"
+
+[[program.input]]
+key = "ncls"
+label = "Number of clusters"
+help = "Number of clusters"
+placeholder = "# clusters"
+visibility = "developer"
+
+[[program.input]]
+key = "clust_crit"
+label = "Clustering criterion"
+help = "Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}"
+placeholder = "(sig|sig_clust|cc|res|hybrid){hybrid}"
+visibility = "developer"
+choices = ["sig", "sig_clust", "cc", "res", "hybrid"]
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "match_cavgs"
+executable = "simple_exec"
+display_name = "Analysis of class averages with k-medoids"
+summary = "Analysis of class averages with k-medoids"
+help = "is a program for analyzing class averages with k-medoids"
+visibility = "developer"
+
+[[program.input]]
+key = "projfile"
+label = "Project file"
+help = "SIMPLE projectfile"
+placeholder = "e.g. myproject.simple"
+visibility = "developer"
+
+[[program.input]]
+key = "projfile_ref"
+label = "Reference project file"
+help = "SIMPLE projectfile"
+placeholder = "e.g. myproject2.simple"
+visibility = "developer"
+
+[[program.input]]
+key = "prune"
+label = "Automated particles pruning"
+help = "Whether to prune deselected particles(yes|no){no}"
+placeholder = "Automated particles pruning(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "clust_crit"
+label = "Clustering criterion"
+help = "Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}"
+placeholder = "(sig|sig_clust|cc|res|hybrid){hybrid}"
+visibility = "developer"
+choices = ["sig", "sig_clust", "cc", "res", "hybrid"]
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "match_stacks"
+executable = "simple_exec"
+display_name = "Analysis of class averages with k-medoids"
+summary = "Analysis of class averages with k-medoids"
+help = "is a program for analyzing class averages with k-medoids"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Particle image stack"
+help = "Particle image stack"
+placeholder = "xxx.mrc file with particles"
+visibility = "developer"
+
+[[program.input]]
+key = "stk2"
+label = "Second Particle image stack"
+help = "Particle image stack"
+placeholder = "xxx.mrc file with particles"
+visibility = "developer"
+
+[[program.input]]
+key = "clust_crit"
+label = "Clustering criterion"
+help = "Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}"
+placeholder = "(sig|sig_clust|cc|res|hybrid){hybrid}"
+visibility = "developer"
+choices = ["sig", "sig_clust", "cc", "res", "hybrid"]
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "select_clusters"
+executable = "simple_exec"
+display_name = "Select clusters"
+summary = "Select clusters"
+help = "is a program for selecting clusters from a project"
+visibility = "developer"
+
+[[program.input]]
+key = "select_flag"
+label = "flag to use for selection"
+help = "flag to use for selection (cluster|class){cluster}"
+placeholder = "(cluster|class){cluster}"
+visibility = "developer"
+choices = ["cluster", "class"]
+
+[[program.input]]
+key = "prune"
+label = "Automated particles pruning"
+help = "Whether to prune deselected particles(yes|no){no}"
+placeholder = "Automated particles pruning(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "clustinds"
+label = "Comma separated cluster indices"
+help = "Comma separated cluster indices"
+placeholder = "indx1,indx2"
+visibility = "developer"
+
+[[program.input]]
+key = "clustind"
+label = "Cluster index"
+help = "Cluster index"
+placeholder = "e.g. 5"
+visibility = "developer"

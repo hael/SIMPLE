@@ -1,0 +1,359 @@
+# ORIENTATION PROCESSING
+suite_id = "simple_exec"
+group_id = "orientation-processing"
+group_title = "ORIENTATION PROCESSING"
+group_order = 110
+
+[[program]]
+name = "make_oris"
+executable = "simple_exec"
+display_name = "Make orientations"
+summary = "Make orientations"
+help = "is a program for making SIMPLE orientation files. Random Euler angles and random origin shifts are generated. If ndiscrete is set to an integer number > 0, the orientations produced are randomly sampled from the set of ndiscrete quasi-even projection directions, and the in-plane parameters are assigned randomly. If even is set to yes, then all nptcls orientations are assigned quasi-even projection directions and  random in-plane parameters. If nstates is set to some integer number > 0, then states are assigned randomly"
+visibility = "developer"
+
+[[program.input]]
+key = "nptcls"
+label = "Number of per-particle orientations"
+help = "Number of per-particle orientations to produce"
+placeholder = "# per-ptcl oris"
+visibility = "developer"
+
+[[program.input]]
+key = "ncls"
+label = "Number of random class labels"
+help = "Number of random class labels to produce"
+placeholder = "# classes"
+visibility = "developer"
+
+[[program.input]]
+key = "outfile"
+label = "Output orientation and CTF parameter file"
+help = "Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "nstates"
+label = "Number of random state labels"
+help = "Number of random state labels to produce"
+placeholder = "# states"
+visibility = "developer"
+
+[[program.input]]
+key = "pgrp"
+label = "Point-group symmetry"
+help = "Point-group symmetry of particle(cn|dn|t|o|i){c1}"
+placeholder = "point-group(cn|dn|t|o|i){c1}"
+visibility = "developer"
+
+[[program.input]]
+key = "sherr"
+label = "Shift error half-width"
+help = "Uniform rotational origin shift error half-width(in pixels)"
+placeholder = "shift error in pixels"
+visibility = "developer"
+
+[[program.input]]
+key = "angerr"
+label = "Rotation angle error half-width"
+help = "Uniform rotation angle shift error half-width(in degrees)"
+placeholder = "rotation error in degrees"
+visibility = "developer"
+
+[[program.input]]
+key = "even"
+label = "Generate even projections"
+help = "Generate quasi-even projection directions(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "ndiscrete"
+label = "Number of discrete projection directions"
+help = "Number of discrete projection directions to sample from"
+placeholder = "# discrete projs"
+visibility = "developer"
+
+[[program.input]]
+key = "oritype"
+label = "Oritype segment in project"
+help = "Oritype segment in project(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}"
+placeholder = "(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}"
+visibility = "developer"
+choices = ["mic", "stk", "ptcl2D", "cls2D", "cls3D", "ptcl3D", "out", "projinfo", "jobproc", "compenv"]
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "oriops"
+executable = "simple_exec"
+display_name = "Standard orientation editing"
+summary = "Standard orientation editing"
+help = "is a program for modifying SIMPLE orientation/parameter files. If errify=yes, uniform random angular errors, and uniform origin shift errors,  and uniform random defocus errors are introduced. If nstates > 1 then random states are assigned. If mirr=2d, then the Euler angles in oritab are mirrored according to the relation e1=e1, e2=180+e2, e3=-e3. If mirr=3d, then the Euler angles in oritab are mirrored according to the relation R=M(M*R), where R is the rotation matrix calculated from the Euler angle triplet and M is a 3D reflection matrix. If e1, e2, or e3 is inputted, the orientations are rotated correspondingly. If you input state, only the orientations assigned to state state are rotated. If mul is defined, the origin shifts are multiplied with mul. If zero=yes, then the shifts are zeroed"
+visibility = "developer"
+
+[[program.input]]
+key = "oritab"
+label = "Orientation and CTF parameter file"
+help = "Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "outfile"
+label = "Output orientation and CTF parameter file"
+help = "Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "e1"
+label = "Rotation along Phi"
+help = "Phi Euler angle"
+placeholder = "in degrees"
+visibility = "developer"
+
+[[program.input]]
+key = "e2"
+label = "Rotation along Theta"
+help = "Theat Euler angle"
+placeholder = "in degrees"
+visibility = "developer"
+
+[[program.input]]
+key = "e3"
+label = "Rotation along Psi"
+help = "Psi Euler angle"
+placeholder = "in degrees"
+visibility = "developer"
+
+[[program.input]]
+key = "nstates"
+label = "Number of random state labels"
+help = "Number of random state labels to insert"
+placeholder = "# states"
+visibility = "developer"
+
+[[program.input]]
+key = "pgrp"
+label = "Point-group symmetry"
+help = "Point-group symmetry of particle(cn|dn|t|o|i){c1}"
+placeholder = "point-group(cn|dn|t|o|i){c1}"
+visibility = "developer"
+
+[[program.input]]
+key = "ctf"
+label = "CTF status"
+help = "Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}"
+placeholder = "(yes|no|flip){no}"
+visibility = "developer"
+choices = ["yes", "no", "flip"]
+
+[[program.input]]
+key = "angerr"
+label = "Rotation angle error half-width"
+help = "Uniform rotation angle shift error half-width(in degrees)"
+placeholder = "rotation error in degrees"
+visibility = "developer"
+
+[[program.input]]
+key = "sherr"
+label = "Shift error half-width"
+help = "Uniform rotational origin shift error half-width(in pixels)"
+placeholder = "shift error in pixels"
+visibility = "developer"
+
+[[program.input]]
+key = "dferr"
+label = "Underfocus error half-width"
+help = "Uniform underfoucs error half-width(in microns)"
+placeholder = "defocus error in microns"
+visibility = "developer"
+
+[[program.input]]
+key = "zero"
+label = "Zero shifts"
+help = "Zero shifts(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "ndiscrete"
+label = "Number of discrete projection directions"
+help = "Number of projection directions to use for discretization of input orientations"
+placeholder = "# discrete projs"
+visibility = "developer"
+
+[[program.input]]
+key = "state"
+label = "State to modify"
+help = "Index of state to modify"
+placeholder = "give state index"
+visibility = "developer"
+
+[[program.input]]
+key = "mul"
+label = "Shift multiplication factor"
+help = "Origin shift multiplication factor{1}"
+placeholder = "1/scale in pixels{1}"
+visibility = "developer"
+
+[[program.input]]
+key = "mirr"
+label = "Mirror orientations"
+help = "Mirror orientations(2d|3d|no){no}"
+placeholder = "(2d|3d|no){no}"
+visibility = "developer"
+choices = ["2d", "3d", "no"]
+
+[[program.input]]
+key = "symrnd"
+label = "Randomize over subgroubs of point-group"
+help = "Expand orientations over entire unit sphere by permutation according to randomly selected subgroup symmetry(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "oritype"
+label = "Oritype segment in project"
+help = "Oritype segment in project(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}"
+placeholder = "(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}"
+visibility = "developer"
+choices = ["mic", "stk", "ptcl2D", "cls2D", "cls3D", "ptcl3D", "out", "projinfo", "jobproc", "compenv"]
+
+[[program]]
+name = "oristats"
+executable = "simple_exec"
+display_name = "Statistical analyses of orientations"
+summary = "Statistical analyses of orientations"
+help = "is a program for analyzing SIMPLE orientation/parameter files. If two orientation tables (oritab and oritab2) are inputted, statistics of the distances between the orientations in the two documents are provided"
+visibility = "developer"
+
+[[program.input]]
+key = "oritab"
+label = "Orientation and CTF parameter file"
+help = "Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "oritab2"
+label = "2nd orientation and CTF parameter file"
+help = "2nd orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "pgrp"
+label = "Point-group symmetry"
+help = "Point-group symmetry of particle(cn|dn|t|o|i){c1}"
+placeholder = "point-group(cn|dn|t|o|i){c1}"
+visibility = "developer"
+
+[[program.input]]
+key = "nspace"
+label = "Number of projection directions"
+help = "Number of projection directions used"
+placeholder = "# projections"
+visibility = "developer"
+
+[[program.input]]
+key = "oritype"
+label = "Oritype segment in project"
+help = "Oritype segment in project(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}"
+placeholder = "(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}"
+visibility = "developer"
+choices = ["mic", "stk", "ptcl2D", "cls2D", "cls3D", "ptcl3D", "out", "projinfo", "jobproc", "compenv"]
+
+[[program.input]]
+key = "ctfstats"
+label = "CTF statistics"
+help = "Provide statistics about CTF(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "classtats"
+label = "Class statistics"
+help = "Provide statistics about 2D clusters(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "projstats"
+label = "Projection statistics"
+help = "Provide statistics about projection directions(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "trsstats"
+label = "Shift statistics"
+help = "Provide statistics about rotational origin shifts(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "vizoris"
+executable = "all"
+display_name = "Visualization of orientation distribution"
+summary = "Visualization of orientation distribution"
+help = "is a program for extracting projection directions from orientations for visualization in UCSF Chimera"
+visibility = "developer"
+
+[[program.input]]
+key = "oritab"
+label = "Orientation and CTF parameter file"
+help = "Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "nspace"
+label = "Number of projection directions"
+help = "Number of projection directions used"
+placeholder = "# projections"
+visibility = "developer"
+
+[[program.input]]
+key = "pgrp"
+label = "Point-group symmetry"
+help = "Point-group symmetry of particle(cn|dn|t|o|i){c1}"
+placeholder = "point-group(cn|dn|t|o|i){c1}"
+visibility = "developer"
+
+[[program.input]]
+key = "oritype"
+label = "Oritype segment in project"
+help = "Oritype segment in project(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}"
+placeholder = "(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}"
+visibility = "developer"
+choices = ["mic", "stk", "ptcl2D", "cls2D", "cls3D", "ptcl3D", "out", "projinfo", "jobproc", "compenv"]
+
+[[program.input]]
+key = "tseries"
+label = "Time series analysis"
+help = "Orientations originate from analysis of a time-series(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]

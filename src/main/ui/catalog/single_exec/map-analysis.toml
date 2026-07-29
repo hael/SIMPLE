@@ -1,0 +1,68 @@
+# MAP ANALYSIS
+suite_id = "single_exec"
+group_id = "map-analysis"
+group_title = "MAP ANALYSIS"
+group_order = 60
+
+[[program]]
+name = "conv_atom_denoise"
+executable = "single_exec"
+display_name = "Denoise atomic-resolution nanoparticle map through atom convolution"
+summary = "Denoise atomic-resolution nanoparticle map through atom convolution"
+help = "is a program for denoising atomic-resolution nanoparticle maps exactly as in detect_atoms"
+
+[[program.input]]
+key = "vol1"
+label = "Volume"
+help = "Nanoparticle volume to analyse"
+placeholder = "input volume e.g. vol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "element"
+label = "Atom element name: Au, Pt etc."
+help = "Atom element name: Au, Pt etc."
+placeholder = "atom composition e.g. Pt"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "tsegmaps_core_finder"
+executable = "single_exec"
+display_name = "For doing radial averaging of the core of docked 3D time-segment maps of NPs"
+summary = "For doing radial averaging of the core of docked 3D time-segment maps of NPs"
+help = "is a program that analyses docked time-series density maps"
+
+[[program.input]]
+key = "filetab"
+label = "Volumes list"
+help = "List of volumes to analyze"
+placeholder = "list input e.g. voltab.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"

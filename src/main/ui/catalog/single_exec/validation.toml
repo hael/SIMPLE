@@ -1,0 +1,198 @@
+# VALIDATION
+suite_id = "single_exec"
+group_id = "validation"
+group_title = "VALIDATION"
+group_order = 70
+
+[[program]]
+name = "cavgseoproc_nano"
+executable = "single_exec"
+display_name = "Analysis of even and odd class averages along nanocrystal time-series"
+summary = "Analysis of even and odd class averages along nanocrystal time-series"
+help = "is a program to analyze the core/surface dynamics of nanocrystals using even and odd class averages"
+
+[[program.input]]
+key = "vol1"
+label = "Volume"
+help = "Input volume"
+placeholder = "input volume e.g. vol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "pgrp"
+label = "Point-group symmetry"
+help = "Point-group symmetry of particle(cn|dn|t|o|i){c1}"
+placeholder = "point-group(cn|dn|t|o|i){c1}"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program.input]]
+key = "script"
+label = "Generate script for shared-mem exec on cluster"
+help = "Generate script for shared-mem exec on cluster(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program]]
+name = "cavgsproc_nano"
+executable = "single_exec"
+display_name = "Analysis of class averages along nanocrystal time-series"
+summary = "Analysis of class averages along nanocrystal time-series"
+help = "is a program to analyze the core/surface dynamics of nanocrystals using class averages and re-projections"
+
+[[program.input]]
+key = "vol1"
+label = "Volume"
+help = "Input volume"
+placeholder = "input volume e.g. vol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "pgrp"
+label = "Point-group symmetry"
+help = "Point-group symmetry of particle(cn|dn|t|o|i){c1}"
+placeholder = "point-group(cn|dn|t|o|i){c1}"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program.input]]
+key = "script"
+label = "Generate script for shared-mem exec on cluster"
+help = "Generate script for shared-mem exec on cluster(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program]]
+name = "ptclsproc_nano"
+executable = "single_exec"
+display_name = "Analysis of particle images inside a class along nanocrystal time-series using radial cross-correlation"
+summary = "Analysis of particle images inside a class along nanocrystal time-series using radial cross-correlation"
+help = "is a program to analyze the core/surface dynamics of nanocrystals using particle images inside a class"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "pgrp"
+label = "Point-group symmetry"
+help = "Point-group symmetry of particle(cn|dn|t|o|i){c1}"
+placeholder = "point-group(cn|dn|t|o|i){c1}"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program.input]]
+key = "script"
+label = "Generate script for shared-mem exec on cluster"
+help = "Generate script for shared-mem exec on cluster(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program]]
+name = "validate_cavgs_vs_model"
+executable = "single_exec"
+display_name = "Validation of class averages against model projections"
+summary = "Validation of class averages against model projections"
+help = "is a program to validate the class averages against model projections using cross-correlation"
+
+[[program.input]]
+key = "vol1"
+label = "Volume"
+help = "Input volume"
+placeholder = "input volume e.g. vol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "pgrp"
+label = "Point-group symmetry"
+help = "Point-group symmetry of particle(cn|dn|t|o|i){c1}"
+placeholder = "point-group(cn|dn|t|o|i){c1}"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program.input]]
+key = "script"
+label = "Generate script for shared-mem exec on cluster"
+help = "Generate script for shared-mem exec on cluster(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]

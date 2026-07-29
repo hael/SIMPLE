@@ -1,0 +1,141 @@
+# RESOLUTION ESTIMATION
+suite_id = "simple_exec"
+group_id = "resolution-estimation"
+group_title = "RESOLUTION ESTIMATION"
+group_order = 130
+
+[[program]]
+name = "fsc"
+executable = "simple_exec"
+display_name = "Calculate FSC between the two input volumes"
+summary = "Calculate FSC between the two input volumes"
+help = "is a program for calculating the FSC between the two input volumes"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Odd volume"
+help = "Odd volume"
+placeholder = "vol1.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "vol2"
+label = "Even volume"
+help = "Even volume"
+placeholder = "vol2.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "fsc_area_score"
+executable = "simple_exec"
+display_name = "Calculate a conical FSC area ratio from two half maps"
+summary = "Calculate a conical FSC area ratio from two half maps"
+help = "is a program for calculating a CryoSPARC-like conical FSC area ratio from two half maps"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Odd volume"
+help = "Odd volume"
+placeholder = "vol1.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "vol2"
+label = "Even volume"
+help = "Even volume"
+placeholder = "vol2.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "nspace"
+label = "Number of cone axes"
+help = "Number of Fibonacci-sampled cone axes used for conical FSC area scoring{256}"
+placeholder = "# cone axes{256}"
+visibility = "developer"
+
+[[program.input]]
+key = "athres"
+label = "Cone half-angle"
+help = "Cone half-angle in degrees for conical FSC area scoring{20}"
+placeholder = "degrees{20}"
+visibility = "developer"
+
+[[program.input]]
+key = "fbody"
+label = "Output file body"
+help = "File body for fsc_area_score output tables"
+placeholder = "file body{fsc_area_score}"
+visibility = "developer"
+
+[[program.input]]
+key = "lplim_crit"
+label = "Low-pass limit FSC criterion"
+help = "FSC criterion for determining the low-pass limit(0.143-0.5){0.143}"
+placeholder = "low-pass FSC criterion(0.143-0.5){0.143}"
+visibility = "developer"
+
+[[program.input]]
+key = "automsk"
+label = "Perform envelope masking"
+help = "Whether to generate/apply an envelope mask(yes|tight|no){no}"
+placeholder = "(yes|tight|no){no}"
+visibility = "developer"
+choices = ["yes", "tight", "no"]
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"

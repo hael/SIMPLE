@@ -1,0 +1,204 @@
+# VOLUME DOCKING
+suite_id = "simple_exec"
+group_id = "volume-docking"
+group_title = "VOLUME DOCKING"
+group_order = 170
+
+[[program]]
+name = "dock_volpair"
+executable = "simple_exec"
+display_name = "Dock a pair of volumes"
+summary = "Dock a pair of volumes"
+help = "is a program for docking a pair of volumes"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Volume"
+help = "Reference volume"
+placeholder = "input reference volume e.g. vol1.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "vol2"
+label = "Volume"
+help = "Target volume"
+placeholder = "input target volume e.g. vol2.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "outvol"
+label = "Output volume name"
+help = "Output volume name"
+placeholder = "e.g. outvol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "outfile"
+label = "Output orientation and CTF parameter file"
+help = "Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "trs"
+label = "Maximum translational shift"
+help = "Maximum half-width for bund-constrained search of rotational origin shifts"
+placeholder = "max shift per iteration in pixels{5}"
+visibility = "developer"
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "volanalyze"
+executable = "simple_exec"
+display_name = "Analyze an emsemble of ab initio volumes"
+summary = "Analyze an emsemble of ab initio volumes"
+help = "is a program for statistical analysis an ensemble of ab initio volumes"
+visibility = "developer"
+
+[[program.input]]
+key = "filetab"
+label = "Volumes list"
+help = "List of volumes to analyze"
+placeholder = "list input e.g. voltab.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "ref_ind"
+label = "Reference volume index"
+help = "Index of volume in voltab to use as reference"
+placeholder = "ref idx"
+visibility = "developer"
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "volcluster"
+executable = "simple_exec"
+display_name = "Cluster docked volumes"
+summary = "Cluster docked volumes"
+help = "is a program for affinity-propagation clustering of pre-docked volumes"
+visibility = "developer"
+
+[[program.input]]
+key = "filetab"
+label = "Volumes list"
+help = "List of docked volumes to cluster"
+placeholder = "list input e.g. voltab.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "outfile"
+label = "Output orientation and CTF parameter file"
+help = "Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "ncls"
+label = "Number of 2D clusters"
+help = "Number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR"
+placeholder = "# 2D clusters"
+visibility = "developer"
+
+[[program.input]]
+key = "hp"
+label = "High-pass limit"
+help = "High-pass resolution limit"
+placeholder = "high-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "lp"
+label = "Low-pass limit"
+help = "Low-pass resolution limit"
+placeholder = "low-pass limit in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"

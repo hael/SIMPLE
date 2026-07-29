@@ -4,6 +4,9 @@ use simple_core_module_api
 use simple_ansi_ctrls
 use simple_linked_list, only: linked_list, list_iterator
 use simple_ui_param,    only: ui_param
+use simple_ui_description_catalog, only: get_ui_program_presentation, get_ui_input_presentation, &
+                                      &apply_ui_input_choice_presentation
+use simple_ui_visibility, only: UI_VIS_DEVELOPER, ui_visibility_from_advanced, ui_visibility_is_valid, ui_visibility_name
 implicit none
 #include "simple_local_flags.inc"
 
@@ -12,11 +15,13 @@ integer, parameter :: UI_IMG=1, UI_PARM=2, UI_ALT=3, UI_SRCH=4, UI_FILT=5, UI_MA
 ! production-level program interface for simple_exec, single_exec & simple_stream executables
 type :: ui_program
     type(string) :: name
+    type(string) :: display_name
     type(string) :: descr_short
     type(string) :: descr_long
     type(string) :: executable
     type(string) :: gui_submenu_list
     logical      :: advanced = .true.
+    integer      :: visibility = UI_VIS_DEVELOPER
     ! image input/output
     type(linked_list) :: img_ios
     ! parameter input/output
@@ -55,14 +60,19 @@ end type ui_program
 
 contains
 
-    subroutine new( self, name, descr_short, descr_long, executable, sp_required, gui_advanced, gui_submenu_list )
+    subroutine new( self, name, descr_short, descr_long, executable, sp_required, gui_advanced, gui_submenu_list, gui_visibility )
         class(ui_program),          intent(inout) :: self
         character(len=*),           intent(in)    :: name, descr_short, descr_long, executable
         logical,                    intent(in)    :: sp_required
         logical,          optional, intent(in)    :: gui_advanced
         character(len=*), optional, intent(in)    :: gui_submenu_list
+        integer,          optional, intent(in)    :: gui_visibility
+        character(len=:), allocatable :: catalog_display_name, catalog_summary, catalog_help
+        integer :: catalog_visibility
+        logical :: catalog_found
         call self%kill
         self%name        = trim(name)
+        self%display_name = trim(descr_short)
         self%descr_short = trim(descr_short)
         self%descr_long  = trim(descr_long)
         self%executable  = trim(executable)
@@ -70,10 +80,26 @@ contains
         self%exists      = .true.
         if(present(gui_advanced)    ) self%advanced         = gui_advanced
         if(present(gui_submenu_list)) self%gui_submenu_list = gui_submenu_list
+        if( present(gui_visibility) )then
+            if( .not. ui_visibility_is_valid(gui_visibility) )then
+                THROW_HARD('ui_program%new received an invalid visibility level')
+            endif
+            self%visibility = gui_visibility
+        else if( present(gui_advanced) )then
+            self%visibility = ui_visibility_from_advanced(gui_advanced)
+        endif
+        call get_ui_program_presentation(self%executable%to_char(), self%name%to_char(), catalog_display_name, catalog_summary, &
+            &catalog_help, catalog_visibility, catalog_found)
+        if( catalog_found )then
+            self%display_name = catalog_display_name
+            self%descr_short = catalog_summary
+            self%descr_long  = catalog_help
+            self%visibility  = catalog_visibility
+        endif
     end subroutine new
 
     subroutine add_input_num( self, which, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value, &
-                            gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online )
+                            gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online, gui_visibility )
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         character(len=*),           intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
@@ -81,9 +107,11 @@ contains
         real,                       intent(in)    :: default_value
         character(len=*), optional, intent(in)    :: gui_submenu, gui_exclusive_group, gui_active_flags
         logical,          optional, intent(in)    :: gui_advanced, gui_online
+        integer,          optional, intent(in)    :: gui_visibility
         type(ui_param) :: p
         call p%set_param(key, keytype, descr_short, descr_long, descr_placeholder, required, default_value)
-        call p%apply_gui_overrides(gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
+        call p%apply_gui_overrides(gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online, gui_visibility)
+        call apply_catalog_input(self%executable%to_char(), self%name%to_char(), p)
         select case (which)
             case (UI_IMG);  call self%img_ios%push_back(p)
             case (UI_PARM); call self%parm_ios%push_back(p)
@@ -98,7 +126,7 @@ contains
     end subroutine add_input_num
 
     subroutine add_input_str( self, which, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value, &
-                            gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online )
+                            gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online, gui_visibility )
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         character(len=*),           intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
@@ -106,9 +134,11 @@ contains
         character(len=*),           intent(in)    :: default_value
         character(len=*), optional, intent(in)    :: gui_submenu, gui_exclusive_group, gui_active_flags
         logical,          optional, intent(in)    :: gui_advanced, gui_online
+        integer,          optional, intent(in)    :: gui_visibility
         type(ui_param) :: p
         call p%set_param(key, keytype, descr_short, descr_long, descr_placeholder, required, default_value)
-        call p%apply_gui_overrides(gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
+        call p%apply_gui_overrides(gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online, gui_visibility)
+        call apply_catalog_input(self%executable%to_char(), self%name%to_char(), p)
         select case (which)
             case (UI_IMG);  call self%img_ios%push_back(p)
             case (UI_PARM); call self%parm_ios%push_back(p)
@@ -123,7 +153,7 @@ contains
     end subroutine add_input_str
 
     subroutine add_input_param( self, which, param, descr_short_override, descr_long_override, descr_placeholder_override,&
-    &required_override, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online )
+    &required_override, gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online, gui_visibility )
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         type(ui_param),             intent(in)    :: param
@@ -131,13 +161,21 @@ contains
         logical,          optional, intent(in)    :: required_override
         character(len=*), optional, intent(in)    :: gui_submenu, gui_exclusive_group, gui_active_flags
         logical,          optional, intent(in)    :: gui_advanced, gui_online
+        integer,          optional, intent(in)    :: gui_visibility
         type(ui_param) :: p
         p = param
         if( present(descr_short_override)       ) p%descr_short       = descr_short_override
         if( present(descr_long_override)        ) p%descr_long        = descr_long_override
-        if( present(descr_placeholder_override) ) p%descr_placeholder = descr_placeholder_override
-        if( present(required_override)          ) p%required          = required_override
-        call p%apply_gui_overrides(gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online)
+        if( present(descr_placeholder_override) )then
+            p%descr_placeholder = descr_placeholder_override
+            call p%refresh_legacy_choices()
+        endif
+        if( present(required_override) )then
+            p%required = required_override
+            if( p%required ) p%has_default = .false.
+        endif
+        call p%apply_gui_overrides(gui_submenu, gui_exclusive_group, gui_active_flags, gui_advanced, gui_online, gui_visibility)
+        call apply_catalog_input(self%executable%to_char(), self%name%to_char(), p)
         select case (which)
             case (UI_IMG);  call self%img_ios%push_back(p)
             case (UI_PARM); call self%parm_ios%push_back(p)
@@ -151,16 +189,36 @@ contains
         end select
     end subroutine add_input_param
 
+    subroutine apply_catalog_input( executable, program_name, param )
+        character(len=*), intent(in)    :: executable, program_name
+        type(ui_param),   intent(inout) :: param
+        character(len=:), allocatable :: label, help, placeholder, units
+        integer :: catalog_visibility
+        logical :: catalog_found, choices_found
+
+        call get_ui_input_presentation(executable, program_name, param%key%to_char(), label, help, placeholder, units, &
+            &catalog_visibility, catalog_found)
+        if( .not. catalog_found ) return
+        param%descr_short       = label
+        param%descr_long        = help
+        param%descr_placeholder = placeholder
+        param%units             = units
+        param%visibility        = catalog_visibility
+        call param%refresh_legacy_choices()
+        call apply_ui_input_choice_presentation(executable, program_name, param%key%to_char(), param%choices, choices_found)
+    end subroutine apply_catalog_input
+
     subroutine print_ui( self )
         class(ui_program), intent(in) :: self
         type(chash) :: ch
         write(logfhandle,'(a)') ''
         write(logfhandle,'(a)') '>>> PROGRAM INFO'
-        call ch%new(4)
+        call ch%new(5)
         call ch%push('name',        self%name%to_char())
         call ch%push('descr_short', self%descr_short%to_char())
         call ch%push('descr_long',  self%descr_long%to_char())
         call ch%push('executable',  self%executable%to_char())
+        call ch%push('visibility',  trim(ui_visibility_name(self%visibility)))
         call ch%print_key_val_pairs(logfhandle)
         call ch%kill
         if (.not. self%img_ios%is_empty()) then
@@ -265,6 +323,7 @@ contains
         call json%add(program, 'descr_short', self%descr_short%to_char())
         call json%add(program, 'descr_long',  self%descr_long%to_char())
         call json%add(program, 'executable',  self%executable%to_char())
+        call json%add(program, 'visibility',  trim(ui_visibility_name(self%visibility)))
         ! all sections (linked lists)
         call create_section_from_list(json, program_entry, 'image input/output',     self%img_ios)
         call create_section_from_list(json, program_entry, 'parameter input/output', self%parm_ios)
@@ -359,7 +418,9 @@ contains
         call self%filt_ctrls%kill()
         call self%mask_ctrls%kill()
         call self%comp_ctrls%kill()
+        call self%display_name%kill()
         self%advanced    = .true.
+        self%visibility  = UI_VIS_DEVELOPER
         self%sp_required = .true.
         self%exists      = .false.
     end subroutine kill
@@ -381,13 +442,14 @@ contains
             select type(t => tmp)
                 type is (ui_param)
                     write(logfhandle,'(a,1x,i3)') '>>> PARAMETER #', i
-                    call ch%new(6)
+                    call ch%new(7)
                     call ch%push('key',               t%key%to_char())
                     call ch%push('keytype',           t%keytype%to_char())
                     call ch%push('descr_short',       t%descr_short%to_char())
                     call ch%push('descr_long',        t%descr_long%to_char())
                     call ch%push('descr_placeholder', t%descr_placeholder%to_char())
                     call ch%push('required', merge('T','F', t%required))
+                    call ch%push('visibility', trim(ui_visibility_name(t%visibility)))
                     call ch%print_key_val_pairs(logfhandle)
                     call ch%kill
                 class default
@@ -517,6 +579,7 @@ contains
                         call json%add(entry, 'active_flags', t%active_flags%to_char())
                     end if
                     call json%add(entry, 'advanced', t%advanced)
+                    call json%add(entry, 'visibility', trim(ui_visibility_name(t%visibility)))
                     call json%add(entry, 'online',   t%online)
                     ! options parsing (multi/binary)
                     param_is_multi  = (t%keytype%to_char() == 'multi')

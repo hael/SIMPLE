@@ -1,0 +1,266 @@
+# VALIDATION
+suite_id = "simple_exec"
+group_id = "validation"
+group_title = "VALIDATION"
+group_order = 150
+
+[[program]]
+name = "check_refpick"
+executable = "simple_exec"
+display_name = "validation of reference-based picking"
+summary = "validation of reference-based picking"
+help = "is a program for validation of reference-based picking"
+visibility = "developer"
+
+[[program.input]]
+key = "filetab"
+label = "List of files"
+help = "List of files (*.mrcs) to process"
+placeholder = "e.g. mics.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "pickrefs"
+label = "Stack of class-averages/reprojections for picking"
+help = "Stack of class-averages/reprojections for picking"
+placeholder = "e.g. pickrefs.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "pcontrast"
+label = "Input particle contrast"
+help = "Input particle contrast(black|white){black}"
+placeholder = "(black|white){black}"
+visibility = "developer"
+choices = ["black", "white"]
+
+[[program.input]]
+key = "kv"
+label = "Acceleration voltage"
+help = "Acceleration voltage in kV{300}"
+placeholder = "in kV{300}"
+visibility = "developer"
+
+[[program.input]]
+key = "cs"
+label = "Spherical aberration"
+help = "Spherical aberration constant(in mm){2.7}"
+placeholder = "in mm{2.7}"
+visibility = "developer"
+
+[[program.input]]
+key = "fraca"
+label = "Amplitude contrast fraction"
+help = "Fraction of amplitude contrast used for fitting CTF{0.1}"
+placeholder = "fraction{0.1}"
+visibility = "developer"
+
+[[program.input]]
+key = "fit_phshift"
+label = "Fit CTF phase shift"
+help = "Fit the additive phase shift during CTF estimation(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "nptcls_per_cls"
+label = "Number of particles per class"
+help = "Number of particles per class{200}"
+placeholder = "# particles per class{200}"
+visibility = "developer"
+
+[[program.input]]
+key = "pick_roi"
+label = "Artefactual regions exclusion(new picker only)"
+help = "Whether to exclude regions of disinterest(carbon, thick ice, new picker only)(yes|no){yes}"
+placeholder = "(yes|no){yes}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "particle_density"
+label = "Particle density in micrographs"
+help = "Particle density in micrographs(low|optimal|high){optimal}"
+placeholder = "(low|optimal|high){optimal}"
+visibility = "developer"
+choices = ["low", "optimal", "high"]
+
+[[program.input]]
+key = "nboxes_max"
+label = "Max # boxes per micrograph"
+help = "Max # boxes per micrograph"
+placeholder = "Max # boxes"
+visibility = "developer"
+
+[[program.input]]
+key = "phshift_min"
+label = "Minimum CTF phase shift"
+help = "Minimum fitted additive phase shift in degrees{0}"
+placeholder = "in degrees{0}"
+visibility = "developer"
+
+[[program.input]]
+key = "phshift_max"
+label = "Maximum CTF phase shift"
+help = "Maximum fitted additive phase shift in degrees; 180 is the exclusive pi boundary{180}"
+placeholder = "in degrees{180}"
+visibility = "developer"
+
+[[program.input]]
+key = "phshift_step"
+label = "CTF phase-shift step"
+help = "Initial phase-shift grid step in degrees{10}"
+placeholder = "in degrees{10}"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "mini_stream"
+executable = "simple_exec"
+display_name = "standalone mini_stream for a quick look"
+summary = "standalone mini_stream for a quick look"
+help = "is a program for doing a standalone mini_stream for a quick look"
+visibility = "developer"
+
+[[program.input]]
+key = "filetab"
+label = "List of files"
+help = "List of files (*.mrcs) to process"
+placeholder = "e.g. mics.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "pcontrast"
+label = "Input particle contrast"
+help = "Input particle contrast(black|white){black}"
+placeholder = "(black|white){black}"
+visibility = "developer"
+choices = ["black", "white"]
+
+[[program.input]]
+key = "kv"
+label = "Acceleration voltage"
+help = "Acceleration voltage in kV{300}"
+placeholder = "in kV{300}"
+visibility = "developer"
+
+[[program.input]]
+key = "cs"
+label = "Spherical aberration"
+help = "Spherical aberration constant(in mm){2.7}"
+placeholder = "in mm{2.7}"
+visibility = "developer"
+
+[[program.input]]
+key = "fraca"
+label = "Amplitude contrast fraction"
+help = "Fraction of amplitude contrast used for fitting CTF{0.1}"
+placeholder = "fraction{0.1}"
+visibility = "developer"
+
+[[program.input]]
+key = "moldiam_max"
+label = "Max molecular diameter"
+help = "Max molecular diameter(in Angstroms)"
+placeholder = "In Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "fit_phshift"
+label = "Fit CTF phase shift"
+help = "Fit the additive phase shift during CTF estimation(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "nptcls_per_cls"
+label = "Number of particles per class"
+help = "Number of particles per class{200}"
+placeholder = "# particles per class{200}"
+visibility = "developer"
+
+[[program.input]]
+key = "phshift_min"
+label = "Minimum CTF phase shift"
+help = "Minimum fitted additive phase shift in degrees{0}"
+placeholder = "in degrees{0}"
+visibility = "developer"
+
+[[program.input]]
+key = "phshift_max"
+label = "Maximum CTF phase shift"
+help = "Maximum fitted additive phase shift in degrees; 180 is the exclusive pi boundary{180}"
+placeholder = "in degrees{180}"
+visibility = "developer"
+
+[[program.input]]
+key = "phshift_step"
+label = "CTF phase-shift step"
+help = "Initial phase-shift grid step in degrees{10}"
+placeholder = "in degrees{10}"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "model_validate"
+executable = "simple_exec"
+display_name = "Validation of atomic model"
+summary = "Validation of atomic model"
+help = "is a program to validate the PDB atomic model given a 3D experimental density map in MRC"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Experimental volume"
+help = "Experimental volume"
+placeholder = "vol.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "pdbfile"
+label = "PDB input coordinates file"
+help = "Input coordinates file in PDB format"
+placeholder = "PDB file e.g. molecule.pdb"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd_target"
+label = "Target sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"

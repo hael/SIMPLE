@@ -295,8 +295,12 @@ Text must follow these rules:
 
 ### 5.4 Change ownership
 
-- Program modules own program membership, scientific wording, grouping,
-  visibility, and program-specific overrides.
+- The UI catalog owns user-facing wording, visibility, and suite/group
+  navigation. During the transition it supplies presentation overrides to the
+  handwritten program modules; after cutover it will supply all descriptor
+  construction data.
+- Program modules continue to own execution membership and program-specific
+  behavior until generated registry construction replaces them.
 - The common-parameter module owns reusable input definitions.
 - The UI core types own representation and lifecycle.
 - A single serializer must own the exported schema.
@@ -317,3 +321,17 @@ A descriptor change must be checked for:
 
 Scientific wording and Standard/Advanced classification require review by
 someone familiar with the affected workflow.
+
+### 5.6 Catalog source files
+
+The editable catalog is code under `src/main/ui/catalog/`, not Markdown
+documentation. Each suite has a `suite.toml`; each program group has one
+additional `.toml` file. Generated Fortran is never edited directly.
+
+The format favors omission over repeated boilerplate: Standard visibility and
+empty help, placeholder, units, and choice help use defined defaults. Ordinary
+CLI choices use a short string list such as `choices = ["yes", "no"]`.
+Expanded choice tables are reserved for the uncommon case where the displayed
+label or choice-specific help differs from the CLI value. The generator
+validates every catalog file and rejects unknown fields and the older nested
+choice-table syntax.

@@ -1,0 +1,537 @@
+# GENERAL IMAGE PROCESSING
+suite_id = "simple_exec"
+group_id = "general-image-processing"
+group_title = "GENERAL IMAGE PROCESSING"
+group_order = 90
+
+[[program]]
+name = "binarize"
+executable = "simple_exec"
+display_name = "Binarization routines for volumes and stacks"
+summary = "Binarization routines for volumes and stacks"
+help = "Binarization routines for volumes and stacks"
+visibility = "developer"
+
+[[program.input]]
+key = "fill_holes"
+label = "Fill holes"
+help = "Fill holes(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "ndev"
+label = "Binarization threshold"
+help = "Binarization threshold in # sigmas"
+placeholder = "# sigmas"
+visibility = "developer"
+
+[[program.input]]
+key = "winsz"
+label = "Half-window size"
+help = "Half-window size(in pixels)"
+placeholder = "winsz in pixels"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Volume"
+help = "Volume to binarize"
+placeholder = "input volume e.g. vol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Stack"
+help = "Stack to binarize"
+placeholder = "input stack e.g. imgs.mrcs"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "convert"
+executable = "simple_exec"
+display_name = "Convert between SPIDER and MRC formats"
+summary = "Convert between SPIDER and MRC formats"
+help = "is a program for converting between SPIDER and MRC formats"
+visibility = "developer"
+
+[[program.input]]
+key = "outvol"
+label = "Output volume name"
+help = "Output volume name"
+placeholder = "e.g. outvol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "outstk"
+label = "Output stack name"
+help = "Output images stack name"
+placeholder = "e.g. outstk.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Volume"
+help = "Volume to convert"
+placeholder = "input volume e.g. vol.spi"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Stack"
+help = "Stack to convert"
+placeholder = "input stack e.g. imgs.spi"
+visibility = "developer"
+
+[[program]]
+name = "ctf_phaseflip"
+executable = "simple_exec"
+display_name = "CTF phaseflip images in project"
+summary = "CTF phaseflip images in project"
+help = "is a program for CTF phase flipping images in project"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "ctfops"
+executable = "simple_exec"
+display_name = "Apply CTF to stacked images"
+summary = "Apply CTF to stacked images"
+help = "is a program for applying CTF to stacked images"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Particle image stack"
+help = "Particle image stack"
+placeholder = "xxx.mrc file with particles"
+visibility = "developer"
+
+[[program.input]]
+key = "outstk"
+label = "Output stack name"
+help = "Output images stack name"
+placeholder = "e.g. outstk.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "neg"
+label = "Invert contrast"
+help = "Invert contrast(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "oritab"
+label = "Orientation and CTF parameter file"
+help = "Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "deftab"
+label = "CTF parameter file"
+help = "CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "ctf"
+label = "CTF status"
+help = "Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}"
+placeholder = "(yes|no|flip){no}"
+visibility = "developer"
+choices = ["yes", "no", "flip"]
+
+[[program.input]]
+key = "bfac"
+label = "CTF B-factor"
+help = "B-factor of CTF in Angstroms^2"
+placeholder = "B-factor in Angstroms^2(>0.0){0}"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "normalize"
+executable = "simple_exec"
+display_name = "Normalize volume/stack"
+summary = "Normalize volume/stack"
+help = "is a program for normalization of MRC or SPIDER stacks and volumes"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "norm"
+label = "Normalize"
+help = "Statistical normalization: avg=zero, var=1(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "noise_norm"
+label = "Noise normalize"
+help = "Statistical normalization based on background(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "stk"
+label = "Stack to normalize"
+help = "Stack of images to normalize"
+placeholder = "e.g. imgs.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Volume to normalize"
+help = "Volume to normalize"
+placeholder = "e.g. vol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "mskdiam"
+label = "Mask diameter"
+help = "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise"
+placeholder = "mask diameter in A"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "scale"
+executable = "simple_exec"
+display_name = "Re-scaling MRC and SPIDER stacks and volumes"
+summary = "Re-scaling MRC and SPIDER stacks and volumes"
+help = "is a program for re-scaling, clipping and padding MRC and SPIDER stacks and volumes"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "newbox"
+label = "Scaled box size"
+help = "Target for scaled box size in pixels"
+placeholder = "new box in pixels"
+visibility = "developer"
+
+[[program.input]]
+key = "scale"
+label = "Scaling ratio"
+help = "Target box ratio for scaling(0-1+)"
+placeholder = "(0-1+)"
+visibility = "developer"
+
+[[program.input]]
+key = "clip"
+label = "Clipped box size"
+help = "Target box size for clipping in pixels"
+placeholder = "in pixels"
+visibility = "developer"
+
+[[program.input]]
+key = "outvol"
+label = "Output volume name"
+help = "Output volume name"
+placeholder = "e.g. outvol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "outstk"
+label = "Output stack name"
+help = "Output images stack name"
+placeholder = "e.g. outstk.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Particle image stack"
+help = "Particle image stack"
+placeholder = "xxx.mrc file with particles"
+visibility = "developer"
+
+[[program.input]]
+key = "vol1"
+label = "Input volume"
+help = "Input volume to re-scale"
+placeholder = "input volume e.g. vol.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "filetab"
+label = "Stacks list"
+help = "List of stacks of images to rescale"
+placeholder = "list input e.g. stktab.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"
+
+[[program]]
+name = "stack"
+executable = "simple_exec"
+display_name = "Stack images"
+summary = "Stack images"
+help = "is a program for stacking individual images (list) or multiple stacks into one"
+visibility = "developer"
+
+[[program.input]]
+key = "filetab"
+label = "Stacks list"
+help = "List of stacks of images to stack into one"
+placeholder = "list input e.g. stktab.txt"
+visibility = "developer"
+
+[[program.input]]
+key = "outstk"
+label = "Output stack name"
+help = "Output images stack name"
+placeholder = "e.g. outstk.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "clip"
+label = "Clipped box size"
+help = "Target box size for clipping in pixels"
+placeholder = "in pixels"
+visibility = "developer"
+
+[[program]]
+name = "stackops"
+executable = "simple_exec"
+display_name = "Standard stack editing"
+summary = "Standard stack editing"
+help = "is a program that provides standard single-particle image processing routines for MRC or SPIDER stacks. To extract a particular state, give oritab and set state. To apply noise, give the desired signal-to-noise ratio via snr. To calculate the autocorrelation function, set acf=yes. To extract a contiguous subset of images from the stack, set fromp and top. To extract a number of particle images at random, set nran to the desired number. With avg=yes the global average of the stack is calculated. If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced, which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images"
+visibility = "developer"
+
+[[program.input]]
+key = "stk"
+label = "Particle image stack"
+help = "Particle image stack"
+placeholder = "xxx.mrc file with particles"
+visibility = "developer"
+
+[[program.input]]
+key = "outstk"
+label = "Output stack name"
+help = "Output images stack name"
+placeholder = "e.g. outstk.mrc"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "oritab"
+label = "Orientation and CTF parameter file"
+help = "Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "mirr"
+label = "Perform mirroring"
+help = "Whether to mirror and along which axis(no|x|y){no}"
+placeholder = "(no|x|y){no}"
+visibility = "developer"
+choices = ["no", "x", "y"]
+
+[[program.input]]
+key = "nran"
+label = "Number of random samples"
+help = "Number of entries to randomly sample"
+placeholder = "# random samples"
+visibility = "developer"
+
+[[program.input]]
+key = "state"
+label = "State index"
+help = "Index of state to extract"
+placeholder = "give state index"
+visibility = "developer"
+
+[[program.input]]
+key = "class"
+label = "Class index"
+help = "Index of class to extract"
+placeholder = "give class index"
+visibility = "developer"
+
+[[program.input]]
+key = "neg"
+label = "Invert contrast"
+help = "Invert contrast(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "acf"
+label = "Autocorrelation, A * conjg(A)"
+help = "Generate autocorrelation function: A * conjg(A)(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "avg"
+label = "Average stack"
+help = "Generate global stack average(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "nframesgrp"
+label = "Number of stack entries to group & average"
+help = "Number of stack entries to group & average{0}"
+placeholder = "# frames"
+visibility = "developer"
+
+[[program.input]]
+key = "vis"
+label = "Visualize stack images"
+help = "Visualize stack images with gnuplot(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "snr"
+label = "Apply noise to give SNR"
+help = "Apply noise to give this signal-to-noise ratio of output"
+placeholder = "signal-to-noise ratio(0.)"
+visibility = "developer"
+
+[[program.input]]
+key = "fromp"
+label = "From particle index"
+help = "Start index for stack copy"
+placeholder = "start index"
+visibility = "developer"
+
+[[program.input]]
+key = "top"
+label = "To particle index"
+help = "Stop index for stack copy"
+placeholder = "stop index"
+visibility = "developer"
+
+[[program.input]]
+key = "outfile"
+label = "Output orientation and CTF parameter file"
+help = "Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format"
+placeholder = ".simple|.txt parameter file"
+visibility = "developer"
+
+[[program.input]]
+key = "stats"
+label = "Provide statistics"
+help = "Provide statistics about images in stack(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "roavg"
+label = "Rotationally average"
+help = "Rotationally average images in stack(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "angstep"
+label = "Angular stepsize"
+help = "Angular stepsize for rotational averaging(in degrees)"
+placeholder = "give degrees"
+visibility = "developer"
+
+[[program.input]]
+key = "makemovie"
+label = "Whether to make a movie"
+help = "Generates images and script to make a movie with FFmpeg(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "winsz"
+label = "Window size for local sdev estimation"
+help = "Window size for local sdev estimation(in pixels)"
+placeholder = "winsz in pixels"
+visibility = "developer"
+
+[[program.input]]
+key = "nthr"
+label = "Number of threads per computing node, give 0 if unsure"
+help = "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket."
+placeholder = "# shared-memory CPU threads"
+visibility = "developer"

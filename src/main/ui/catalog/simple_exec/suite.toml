@@ -1,0 +1,5 @@
+id = "simple_exec"
+executable = "simple_exec"
+display_name = "SIMPLE"
+layout = "grouped"
+order = 10

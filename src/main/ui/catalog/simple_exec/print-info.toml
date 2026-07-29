@@ -1,0 +1,159 @@
+# PRINT INFO
+suite_id = "simple_exec"
+group_id = "print-info"
+group_title = "PRINT INFO"
+group_order = 120
+
+[[program]]
+name = "info_image"
+executable = "simple_exec"
+display_name = "Print header information"
+summary = "Print header information"
+help = "is a program for printing header information in MRC and SPIDER stacks and volumes"
+visibility = "developer"
+
+[[program.input]]
+key = "fname"
+label = "Name of image file"
+help = "Name of image file"
+placeholder = "xxx.mrc file"
+visibility = "developer"
+
+[[program.input]]
+key = "stats"
+label = "Output statistics"
+help = "Output statistics(yes|no){no}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program.input]]
+key = "vis"
+label = "Visualize image"
+help = "Visualize image with gnuplot(yes|no){yes}"
+placeholder = "(yes|no){no}"
+visibility = "developer"
+choices = ["yes", "no"]
+
+[[program]]
+name = "info_stktab"
+executable = "simple_exec"
+display_name = "Print stktab information"
+summary = "Print stktab information"
+help = "is a program for printing information about stktab (list of stacks)"
+visibility = "developer"
+
+[[program.input]]
+key = "stktab"
+label = "List of per-micrograph particle stacks"
+help = "List of per-micrograph particle stacks"
+placeholder = "stktab.txt file containing file names"
+visibility = "developer"
+
+[[program]]
+name = "print_dose_weights"
+executable = "simple_exec"
+display_name = "Print dose weights used in motion correction"
+summary = "Print dose weights used in motion correction"
+help = "is a program for printing the dose weights used in motion correction"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "box"
+label = "Particle box size"
+help = "Particle box size(in pixels)"
+placeholder = "# pixels of box"
+visibility = "developer"
+
+[[program.input]]
+key = "nframes"
+label = "Number of frames"
+help = "Number of movie frames"
+placeholder = "# frames"
+visibility = "developer"
+
+[[program.input]]
+key = "kv"
+label = "Acceleration voltage"
+help = "Acceleration voltage in kV{300}"
+placeholder = "in kV{300}"
+visibility = "developer"
+
+[[program.input]]
+key = "total_dose"
+label = "Total exposure dose (e/Ang^2)"
+help = "Total exposure dose (e/Ang^2)"
+placeholder = "in e/Ang^2"
+visibility = "developer"
+
+[[program]]
+name = "print_fsc"
+executable = "simple_exec"
+display_name = "Print FSC file produced by REFINE3D"
+summary = "Print FSC file produced by REFINE3D"
+help = "is a program for printing the binary FSC files produced by REFINE3D"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "box"
+label = "Particle box size"
+help = "Particle box size(in pixels)"
+placeholder = "# pixels of box"
+visibility = "developer"
+
+[[program.input]]
+key = "fsc"
+label = "FSC file"
+help = "Binary file with FSC info"
+placeholder = "input binary file e.g. fsc_state01.bin"
+visibility = "developer"
+
+[[program.input]]
+key = "frcs"
+label = "Projection FRCs file"
+help = "Projection FRCs file"
+placeholder = "e.g. frcs.bin"
+visibility = "developer"
+
+[[program]]
+name = "print_magic_boxes"
+executable = "simple_exec"
+display_name = "Print magic boxes (fast FFT)"
+summary = "Print magic boxes (fast FFT)"
+help = "is a program for printing magic box sizes (fast FFT)"
+visibility = "developer"
+
+[[program.input]]
+key = "smpd"
+label = "Sampling distance"
+help = "Distance between neighbouring pixels in Angstroms"
+placeholder = "pixel size in Angstroms"
+visibility = "developer"
+
+[[program.input]]
+key = "box"
+label = "Particle box size"
+help = "Particle box size(in pixels)"
+placeholder = "# pixels of box"
+visibility = "developer"
+
+[[program.input]]
+key = "moldiam"
+label = "Molecular diameter"
+help = "Molecular diameter(in Angstroms)"
+placeholder = "In Angstroms"
+visibility = "developer"
