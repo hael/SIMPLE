@@ -4,10 +4,7 @@ use simple_cmdline,                   only: cmdline
 use simple_commanders_test_highlevel, only: commander_test_mini_stream, commander_test_simulate_particles, commander_test_reproject, &
                                             commander_test_simulated_workflow, commander_test_subproject_distr, &
                                             commander_test_ptcls_ppca_subproject_distr, commander_test_flex_preimage_identity, &
-                                            commander_test_flex_preimage_basis_ab, commander_test_pcg_recon_ctf_free, &
-                                            commander_test_pcg_recon_ctf_hetero, &
-                                            commander_test_pcg_recon_kernel, &
-                                            commander_test_pcg_recon_deapod
+                                            commander_test_flex_preimage_basis_ab, commander_test_pcg_recon
 implicit none
 
 public :: exec_test_highlevel_commander
@@ -21,10 +18,7 @@ type(commander_test_subproject_distr)            :: xsubproject_distr
 type(commander_test_ptcls_ppca_subproject_distr) :: xptcls_ppca_subproject_distr
 type(commander_test_flex_preimage_identity)      :: xflex_preimage_identity
 type(commander_test_flex_preimage_basis_ab)      :: xflex_preimage_basis_ab
-type(commander_test_pcg_recon_ctf_free)          :: xpcg_recon_ctf_free
-type(commander_test_pcg_recon_ctf_hetero)        :: xpcg_recon_ctf_hetero
-type(commander_test_pcg_recon_kernel)            :: xpcg_recon_kernel
-type(commander_test_pcg_recon_deapod)            :: xpcg_recon_deapod
+type(commander_test_pcg_recon)                   :: xpcg_recon
 
 contains
 
@@ -53,14 +47,8 @@ contains
                 call xflex_preimage_identity%execute(cline)
             case( 'flex_preimage_basis_ab' )
                 call xflex_preimage_basis_ab%execute(cline)
-            case( 'pcg_recon_ctf_free' )
-                call xpcg_recon_ctf_free%execute(cline)
-            case( 'pcg_recon_ctf_hetero' )
-                call xpcg_recon_ctf_hetero%execute(cline)
-            case( 'pcg_recon_kernel' )
-                call xpcg_recon_kernel%execute(cline)
-            case( 'pcg_recon_deapod' )
-                call xpcg_recon_deapod%execute(cline)
+            case( 'pcg_recon' )
+                call xpcg_recon%execute(cline)
             case default
                 l_did_execute = .false.
         end select

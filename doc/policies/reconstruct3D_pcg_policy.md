@@ -48,7 +48,7 @@ relative residual, and timing.
 
 | File | Contents |
 | --- | --- |
-| `src/main/volume/simple_reconstructor_pcg.f90` | `pcg_reconstruction` operator/solver type |
+| `src/main/volume/simple_reconstructor_pcg.f90` | `reconstructor_pcg` operator/solver type |
 | `src/main/commanders/simple/simple_commanders_reconstruct3D_pcg.f90` | `reconstruct3D_pcg` command |
 | `src/main/ui/simple/simple_ui_volume.f90` | UI record |
 | `src/main/exec/simple_exec_volume.f90` | exec routing |
@@ -207,14 +207,11 @@ is not evidence that the CTF/sigma adjoint is correct.
 
 | Test | Gate |
 | --- | --- |
-| `test=pcg_recon_ctf_free` | adjoint dot-product, normal-operator symmetry/positive-definiteness, and no-CTF/no-noise phantom recovery, `T_i=1` |
-| `test=pcg_recon_ctf_hetero` | the same with nonzero shifts, heterogeneous astigmatic CTFs, and per-particle sigma |
-| `test=pcg_recon_kernel` | kernelized-vs-matrix-free equivalence (interior and boundary error), shift-invariance, CTF/sigma dependence, and the preconditioner |
-| `test=pcg_recon_deapod` | the deapodization correction against envelope-free data — the one test that avoids the inverse crime |
+| `test=pcg_recon` | single gate, eight fail-fast stages: (1) adjoint dot-product with `T_i=1`; (2) the same with nonzero shift, astigmatic CTF and sigma2, isolating `build_transfer`; (3) normal-operator symmetry and positive-definiteness; (4) heterogeneous phantom recovery; (5) kernelized-vs-matrix-free equivalence, all-voxel and interior; (6) kernel shift-invariance, CTF-dependence, and the preconditioner; (7) streaming batch accumulation reproducing the monolithic solve; (8) deapodization against envelope-free data — the one stage that avoids the inverse crime |
 
 The CTF-free and hetero tests generate their observations with `forward_plane`,
 so the gather envelope cancels; they gate operator *algebra* only. Envelope
-correctness for real particles is gated solely by `pcg_recon_deapod`.
+correctness for real particles is gated solely by stage 8 of `pcg_recon`.
 
 ## 9. Deliberate non-goals (current path)
 

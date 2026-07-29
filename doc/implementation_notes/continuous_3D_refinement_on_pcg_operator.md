@@ -26,7 +26,7 @@ where this note deliberately departs from the brief's recommendation.
 
 ## 0. Position: what is already built
 
-The validated `pcg_reconstruction` operator is the volume half of continuous
+The validated `reconstructor_pcg` operator is the volume half of continuous
 refinement, and it is the half that both reference papers implement least well.
 
 | Component | Zehni et al. 2019 | Brubaker et al. 2015 | This codebase |

@@ -58,25 +58,10 @@ type, extends(commander_base) :: commander_test_flex_preimage_basis_ab
         procedure :: execute      => exec_test_flex_preimage_basis_ab
 end type commander_test_flex_preimage_basis_ab
 
-type, extends(commander_base) :: commander_test_pcg_recon_ctf_free
+type, extends(commander_base) :: commander_test_pcg_recon
   contains
-    procedure :: execute      => exec_test_pcg_recon_ctf_free
-end type commander_test_pcg_recon_ctf_free
-
-type, extends(commander_base) :: commander_test_pcg_recon_ctf_hetero
-  contains
-    procedure :: execute      => exec_test_pcg_recon_ctf_hetero
-end type commander_test_pcg_recon_ctf_hetero
-
-type, extends(commander_base) :: commander_test_pcg_recon_kernel
-  contains
-    procedure :: execute      => exec_test_pcg_recon_kernel
-end type commander_test_pcg_recon_kernel
-
-type, extends(commander_base) :: commander_test_pcg_recon_deapod
-  contains
-    procedure :: execute      => exec_test_pcg_recon_deapod
-end type commander_test_pcg_recon_deapod
+    procedure :: execute      => exec_test_pcg_recon
+end type commander_test_pcg_recon
 
 contains
 
@@ -1109,22 +1094,63 @@ subroutine exec_test_ptcls_ppca_subproject_distr( self, cline )
     call qenv%kill
     call simple_end('**** TEST_PTCLS_PPCA_SUBPROJECT_DISTR NORMAL STOP ****')
 end subroutine exec_test_ptcls_ppca_subproject_distr
-
-!>  \brief  CTF-free (T_i=1), fully in-memory validation of the matrix-free PCG
-!  reconstruction operator, see doc/policies/reconstruct3D_pcg_policy.md. Three
-!  ordered, fail-fast stages:
-!    1. adjoint dot-product test on forward_plane/adjoint_plane_add
-!    2. normal-operator test on apply_normal (Hermitian symmetry, positive-definiteness)
-!    3. no-CTF/no-noise synthetic recovery: PCG must recover a known phantom
+!>  \brief  Single gate for the PCG reconstruction operator and solver,
+!  see doc/policies/reconstruct3D_pcg_policy.md.
+!
+!  Replaces the former pcg_recon_ctf_free / _ctf_hetero / _kernel / _deapod
+!  tests. Those shared a phantom, an RNG seed and three near-identical stages;
+!  the CTF-free normal-operator and recovery stages were strict special cases
+!  (T_i = 1) of the heterogeneous ones and are not repeated here. The CTF-free
+!  ADJOINT check is kept, because it is the cheap isolation gate: if stage 2
+!  fails while stage 1 passes, the fault is in build_transfer rather than in
+!  the gather/scatter pair.
+!
+!  Stages run in increasing cost and fail fast, so the first failure is the
+!  most local one:
+!
+!    1. adjoint identity, T = 1              -- gather/scatter pair alone
+!    2. adjoint identity, T = C*S/sqrt(s2)   -- adds build_transfer
+!    3. normal operator: symmetry + PSD      -- the two properties CG requires
+!    4. synthetic recovery                   -- end-to-end solve
+!    5. kernel vs matrix-free equivalence    -- the approximation's error budget
+!    6. kernel invariants + preconditioner   -- |T|^2 drops the shift, keeps CTF
+!    7. streaming vs monolithic accumulation -- begin_accum/accumulate_batch/
+!                                               end_accum/solve_accum must
+!                                               reproduce solve() exactly
+!    8. deapodization                        -- the only stage without an
+!                                               inverse crime (see below)
+!
+!  INVERSE CRIME, deliberately. Stages 1-7 generate observations with
+!  forward_plane, so the operator's own KB envelope appears identically in the
+!  data and the model and cancels. That is what makes them clean gates on the
+!  operator ALGEBRA, and it is also why they cannot see an envelope bias: they
+!  scored 0.9998 correlation while the forward model was still wrong for real
+!  particles. Stage 8 is the honest one and exists for exactly that reason.
+!
 !  Does not touch reconstructor, reconstructor_eo, or volassemble.
-subroutine exec_test_pcg_recon_ctf_free( self, cline )
-    use simple_reconstructor_pcg, only: reconstructor_pcg
-    class(commander_test_pcg_recon_ctf_free), intent(inout) :: self
-    class(cmdline),                           intent(inout) :: cline
-    integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4
+subroutine exec_test_pcg_recon( self, cline )
+    use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_MATRIXFREE
+    class(commander_test_pcg_recon), intent(inout) :: self
+    class(cmdline),                  intent(inout) :: cline
+    integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4, NCTF = 5
+    integer,          parameter :: BATCHSZ = 7          ! deliberately not a divisor of NPROJS
     real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
     real,             parameter :: ADJOINT_RELTOL = 1.0e-5, NORMAL_OP_RELTOL = 1.0e-4
     real,             parameter :: RECON_CORR_THRES = 0.9, MONOTONIC_SLACK = 1.0e-3
+    ! kernel epsilon set from the single-precision roundoff the operator stages
+    ! measure (~1e-7 relative), loosened for the interior to allow for the
+    ! kernel's shift-invariance approximation. NOT tuned after inspecting a
+    ! reconstruction.
+    real,             parameter :: EPS_INTERIOR = 5.0e-2
+    ! calibrate_kernel now applies the ANALYTIC factor padsc**2 instead of
+    ! fitting one. The fit is retained in measure_kernel_scale purely so this
+    ! test can assert the constant has not drifted: it returns 1.0 exactly when
+    ! the analytic value is right. Observed fits were within 0.5% of it.
+    real,             parameter :: KSCALE_TOL = 2.0e-2
+    ! the two accumulation paths differ only in summation grouping, so at a
+    ! FIXED iteration count they should agree far inside single precision
+    real,             parameter :: STREAM_RELTOL = 1.0e-5
+    integer,          parameter :: STREAM_ITS    = 20
     real,             parameter :: CTRS(3,NBLOBS) = reshape([&
         &-5.0,-3.0, 2.0,&
         &4.0, 5.0,-3.0,&
@@ -1132,27 +1158,42 @@ subroutine exec_test_pcg_recon_ctf_free( self, cline )
         &3.0,-2.0, 6.0], [3,NBLOBS])
     real,             parameter :: SIGMAS(NBLOBS) = [2.0, 2.5, 1.8, 2.2]
     real,             parameter :: AMPS(NBLOBS)   = [1.0, 0.8, 0.6, 0.5]
+    real,             parameter :: KV = 300., CS = 2.7, FRACA = 0.1
+    real,             parameter :: DFX_VALS(NCTF)    = [1.0, 1.5, 2.0, 2.5, 3.0]
+    real,             parameter :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
+    real,             parameter :: ANGAST_VALS(NCTF) = [0., 20., 40., 60., 80.]
     type(reconstructor_pcg) :: pcgop
-    type(oris)                :: projdirs
-    type(ori)                 :: e
-    real,    allocatable      :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
-    real,    allocatable      :: hp(:,:,:), hq(:,:,:), recon(:,:,:), rel_res_hist(:)
-    real,    allocatable      :: qplane_re(:,:), qplane_im(:,:)
-    complex, allocatable      :: gx_plane(:,:), qplane(:,:), adj_out(:,:,:), y_planes(:,:,:)
-    integer :: lims2(2,2), lims3(3,2), i, j, k, b, niters, iseed_n
+    type(oris)              :: projdirs
+    type(ori)               :: e
+    type(ctfparams)         :: ctfparms
+    real,    allocatable    :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
+    real,    allocatable    :: hp(:,:,:), hq(:,:,:), hm(:,:,:), hk(:,:,:)
+    real,    allocatable    :: recon(:,:,:), recon_str(:,:,:), rel_res_hist(:)
+    real,    allocatable    :: xdiv(:,:,:), recon_on(:,:,:), recon_off(:,:,:)
+    real,    allocatable    :: env(:,:,:), invenv(:,:,:)
+    real,    allocatable    :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
+    real,    allocatable    :: qplane_re(:,:), qplane_im(:,:), sig2arr(:), sig2_2d(:,:)
+    complex, allocatable    :: gx_plane(:,:), qplane(:,:), mplane(:,:), wplane(:,:), Ti(:,:)
+    complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:)
+    integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, c, niters, iseed_n
+    integer :: R, margin, lo, hi, ifrom, nb
     integer, allocatable :: iseed(:)
-    real    :: ctr, dx, dy, dz, adjoint_err, meanA, meanB, corr_num, corr_denA, corr_denB, corr
+    real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
+    real    :: err_all, err_int, den_all, den_int, kdiff, stream_err, rhs_err, kscale
+    real    :: corr_on, corr_off, env_ctr, env_edge, recip_err
     real(dp):: lhs, rhs, dp_p_hq, dp_hp_q, dp_p_hp
     logical :: all_ok
     all_ok = .true.
 
-    ! ---- deterministic RNG seed ----
+    ! ---- deterministic RNG seed: every probe below must be reproducible or a
+    !      tolerance failure cannot be told from a different random draw ----
     call random_seed(size=iseed_n)
     allocate(iseed(iseed_n), source=42)
     call random_seed(put=iseed)
 
-    ! ---- build deterministic, asymmetric phantom (sum of off-center Gaussian blobs) ----
-    write(logfhandle,'(a)') '>>> TEST_PCG_RECON_CTF_FREE: building deterministic phantom'
+    ! ---- deterministic, asymmetric phantom (sum of off-centre Gaussian blobs).
+    !      Asymmetric on purpose: a symmetric phantom hides orientation bugs. ----
+    write(logfhandle,'(a)') '>>> TEST_PCG_RECON: building deterministic phantom'
     allocate(phantom(BOX,BOX,BOX), source=0.0)
     ctr = real(BOX)/2.0 + 0.5
     do k = 1,BOX
@@ -1167,20 +1208,20 @@ subroutine exec_test_pcg_recon_ctf_free( self, cline )
     end do
 
     call pcgop%new(BOX, SMPD, LAMBDA)
-    ! Deapodization OFF here on purpose. This test generates its observations
-    ! with forward_plane, i.e. with the operator's own KB envelope baked in --
-    ! an inverse crime. That is exactly what makes it a clean gate on the
-    ! operator ALGEBRA (adjointness, symmetry, self-consistent recovery), but it
-    ! means the roll-off correction must be disabled or the operator would no
-    ! longer match the data-generating process. The physics of deapodization is
-    ! covered by test=pcg_recon_deapod, which uses envelope-free observations.
+    ! Deapodization OFF for stages 1-7 -- see the inverse-crime note in the
+    ! header. Stage 8 turns it back on and supplies envelope-free data.
     call pcgop%set_deapod(.false.)
     lims2 = pcgop%get_lims2()
     lims3 = pcgop%get_lims3()
-
-    ! ---- STAGE 1: adjoint dot-product test on forward_plane/adjoint_plane_add ----
-    write(logfhandle,'(a)') '>>> STAGE 1: adjoint dot-product test'
+    R     = lims2(1,2)
+    allocate(sig2arr(0:R))
+    do i = 0, R
+        sig2arr(i) = 1.0 + 0.15*real(i)
+    end do
     call e%new(.false.)
+
+    ! ================= STAGE 1: adjoint identity, T = 1 =================
+    write(logfhandle,'(a)') '>>> STAGE 1: adjoint dot-product identity (T = 1)'
     call e%set_euler([30.,55.,70.])
     allocate(gx_plane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
     call pcgop%set_volume(phantom)
@@ -1206,12 +1247,63 @@ subroutine exec_test_pcg_recon_ctf_free( self, cline )
         write(logfhandle,'(a)') '    PASS: adjoint dot-product identity holds'
     endif
 
-    ! ---- STAGE 2: normal-operator test on apply_normal (only if stage 1 passed) ----
+    ! ============ STAGE 2: adjoint identity, weighted transfer ============
+    ! The T = 1 case above is trivially self-adjoint and cannot exercise
+    ! build_transfer; this one carries a real astigmatic CTF, a nonzero shift
+    ! and a sigma2 profile.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 2: normal-operator test'
-        call projdirs%new(NPROJS, .false.)
-        call projdirs%spiral
-        call pcgop%prep_particles(projdirs)
+        write(logfhandle,'(a)') '>>> STAGE 2: adjoint identity with T = C*S/sqrt(sigma2)'
+        ctfparms%smpd = SMPD; ctfparms%kv = KV; ctfparms%cs = CS; ctfparms%fraca = FRACA
+        ctfparms%dfx = DFX_VALS(1); ctfparms%dfy = DFX_VALS(1)+ASTIG_VALS(1)
+        ctfparms%angast = ANGAST_VALS(1); ctfparms%phshift = 0.
+        shift = [1.7, -2.3]
+        allocate(Ti(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
+        Ti = pcgop%build_transfer(ctfparms, shift, sig2arr)
+        allocate(mplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
+        mplane = Ti * gx_plane
+        lhs = sum(real(conjg(mplane)*qplane, dp))
+        allocate(wplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
+        wplane  = conjg(Ti) * qplane
+        adj_out = cmplx(0.,0.)
+        call pcgop%adjoint_plane_add(wplane, e, adj_out)
+        rhs = pcgop%fourier_dot(adj_out)
+        adjoint_err = real(abs(lhs-rhs) / max(1.0_dp, abs(lhs), abs(rhs)))
+        write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <T*Gx,q>=', real(lhs), &
+            &' <x,G^T(conjg(T)*q)>=', real(rhs), ' rel_err=', adjoint_err
+        if( adjoint_err > ADJOINT_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: weighted adjoint identity violated (build_transfer)'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: weighted adjoint identity holds'
+        endif
+    else
+        write(logfhandle,'(a)') '>>> STAGE 2 SKIPPED: stage 1 failed'
+    endif
+
+    ! ---- heterogeneous selection used by stages 3-7 ----
+    call projdirs%new(NPROJS, .false.)
+    call projdirs%spiral
+    do i = 1, NPROJS
+        call projdirs%get_ori(i, e)
+        g = mod(i-1, NCTF) + 1
+        ctfparms%smpd = SMPD; ctfparms%kv = KV; ctfparms%cs = CS; ctfparms%fraca = FRACA
+        ctfparms%dfx = DFX_VALS(g); ctfparms%dfy = DFX_VALS(g)+ASTIG_VALS(g)
+        ctfparms%angast = ANGAST_VALS(g); ctfparms%phshift = 0.
+        call e%set_ctfvars(ctfparms)
+        call e%set_shift([1.0+0.3*real(mod(i-1,5)), -1.0+0.2*real(mod(i-1,7))])
+        call projdirs%set_ori(i, e)
+    end do
+    allocate(sig2_2d(0:R,NPROJS))
+    do i = 1, NPROJS
+        sig2_2d(:,i) = sig2arr
+    end do
+
+    ! ========== STAGE 3: normal operator, symmetry and PSD ==========
+    ! CG requires both. Symmetry is checked by the dot-product identity across
+    ! two independent random probes; PSD by a single quadratic form.
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 3: normal-operator symmetry and positive-definiteness'
+        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
         allocate(p_probe(BOX,BOX,BOX), q_probe(BOX,BOX,BOX))
         call random_number(p_probe); call random_number(q_probe)
         p_probe = p_probe - 0.5; q_probe = q_probe - 0.5
@@ -1237,233 +1329,12 @@ subroutine exec_test_pcg_recon_ctf_free( self, cline )
             write(logfhandle,'(a)') '    PASS: normal operator is positive-definite'
         endif
     else
-        write(logfhandle,'(a)') '>>> STAGE 2 SKIPPED: stage 1 (adjoint test) failed'
-    endif
-
-    ! ---- STAGE 3: no-CTF/no-noise synthetic recovery (only if stages 1-2 passed) ----
-    if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 3: no-CTF/no-noise synthetic recovery'
-        allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
-        call pcgop%set_volume(phantom)
-        do i = 1, NPROJS
-            call projdirs%get_ori(i, e)
-            call pcgop%forward_plane(e, y_planes(:,:,i))
-        end do
-        allocate(recon(BOX,BOX,BOX), source=0.0)
-        call pcgop%solve(y_planes, recon, maxits=40, rtol=1.0e-3, &
-            &rel_res_hist=rel_res_hist, niters=niters)
-        write(logfhandle,'(a,i0,a)') '    PCG ran ', niters, ' iterations'
-        do i = 1, niters
-            write(logfhandle,'(a,i3,a,es14.6)') '      iter ', i, ' rel_resid=', rel_res_hist(i)
-        end do
-        do i = 2, niters
-            if( rel_res_hist(i) > rel_res_hist(i-1) + MONOTONIC_SLACK )then
-                write(logfhandle,'(a,i0)') '    FAIL: relative residual increased at iteration ', i
-                all_ok = .false.
-            endif
-        end do
-        meanA = sum(recon)/real(size(recon)); meanB = sum(phantom)/real(size(phantom))
-        corr_num  = sum((recon-meanA)*(phantom-meanB))
-        corr_denA = sum((recon-meanA)**2); corr_denB = sum((phantom-meanB)**2)
-        corr = corr_num / sqrt(corr_denA*corr_denB)
-        write(logfhandle,'(a,f8.5)') '    recon-vs-phantom correlation = ', corr
-        if( corr < RECON_CORR_THRES )then
-            write(logfhandle,'(a)') '    FAIL: recovered volume does not correlate with the known phantom'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: recovered volume correlates with the known phantom'
-        endif
-    else
         write(logfhandle,'(a)') '>>> STAGE 3 SKIPPED: an earlier stage failed'
     endif
 
-    ! ---- final verdict ----
+    ! ============== STAGE 4: heterogeneous synthetic recovery ==============
     if( all_ok )then
-        call simple_end('**** SIMPLE_TEST_PCG_RECON_CTF_FREE NORMAL STOP ****')
-    else
-        THROW_HARD('TEST_PCG_RECON_CTF_FREE FAILED')
-    endif
-end subroutine exec_test_pcg_recon_ctf_free
-
-!>  \brief  Heterogeneous per-particle CTF + shift + a shared noise-power profile,
-!  still fully in-memory, see doc/policies/reconstruct3D_pcg_policy.md. Exercises the
-!  operator's opt-in use_ctf/sig2arr arguments and build_transfer
-!  (T_i = C_i*S_i/sqrt(sigma2_i)); forward_plane/adjoint_plane_add/scatter_one/
-!  fold_and_ifft are untouched. Three ordered, fail-fast stages:
-!    1. adjoint dot-product test WITH nonzero shift and a real heterogeneous CTF
-!       (the CTF-free T_i=1 case is trivially self-adjoint and cannot exercise this)
-!    2. normal-operator test on apply_normal across a heterogeneous
-!       spiral set (distinct defocus groups, distinct shifts)
-!    3. heterogeneous synthetic recovery: PCG must recover a known phantom
-!       through CTF+shift+sigma-weighted synthetic data
-!  Does not touch reconstructor, reconstructor_eo, or volassemble.
-subroutine exec_test_pcg_recon_ctf_hetero( self, cline )
-    use simple_reconstructor_pcg, only: reconstructor_pcg
-    class(commander_test_pcg_recon_ctf_hetero), intent(inout) :: self
-    class(cmdline),                             intent(inout) :: cline
-    integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4, NCTF = 5
-    real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
-    real,             parameter :: ADJOINT_RELTOL = 1.0e-5, NORMAL_OP_RELTOL = 1.0e-4
-    real,             parameter :: RECON_CORR_THRES = 0.9, MONOTONIC_SLACK = 1.0e-3
-    real,             parameter :: CTRS(3,NBLOBS) = reshape([&
-        &-5.0,-3.0, 2.0,&
-        &4.0, 5.0,-3.0,&
-        &0.0,-6.0,-5.0,&
-        &3.0,-2.0, 6.0], [3,NBLOBS])
-    real,             parameter :: SIGMAS(NBLOBS) = [2.0, 2.5, 1.8, 2.2]
-    real,             parameter :: AMPS(NBLOBS)   = [1.0, 0.8, 0.6, 0.5]
-    real,             parameter :: KV = 300., CS = 2.7, FRACA = 0.1
-    real,             parameter :: DFX_VALS(NCTF)    = [1.0, 1.5, 2.0, 2.5, 3.0]
-    real,             parameter :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
-    real,             parameter :: ANGAST_VALS(NCTF) = [0., 20., 40., 60., 80.]
-    type(reconstructor_pcg) :: pcgop
-    type(oris)                :: projdirs
-    type(ori)                 :: e
-    type(ctfparams)           :: ctfparms
-    real,    allocatable      :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
-    real,    allocatable      :: hp(:,:,:), hq(:,:,:), recon(:,:,:), rel_res_hist(:)
-    real,    allocatable      :: qplane_re(:,:), qplane_im(:,:), sig2arr(:), sig2_2d(:,:)
-    complex, allocatable      :: gx_plane(:,:), qplane(:,:), mplane(:,:), wplane(:,:)
-    complex, allocatable      :: adj_out(:,:,:), y_planes(:,:,:), Ti(:,:)
-    integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, niters, iseed_n, R
-    integer, allocatable :: iseed(:)
-    real    :: ctr, dx, dy, dz, adjoint_err, meanA, meanB, corr_num, corr_denA, corr_denB, corr
-    real    :: shift(2)
-    real(dp):: lhs, rhs, dp_p_hq, dp_hp_q, dp_p_hp
-    logical :: all_ok
-    all_ok = .true.
-
-    ! ---- deterministic RNG seed ----
-    call random_seed(size=iseed_n)
-    allocate(iseed(iseed_n), source=42)
-    call random_seed(put=iseed)
-
-    ! ---- build deterministic, asymmetric phantom ----
-    write(logfhandle,'(a)') '>>> TEST_PCG_RECON_CTF_HETERO: building deterministic phantom'
-    allocate(phantom(BOX,BOX,BOX), source=0.0)
-    ctr = real(BOX)/2.0 + 0.5
-    do k = 1,BOX
-        do j = 1,BOX
-            do i = 1,BOX
-                do b = 1,NBLOBS
-                    dx = real(i)-ctr-CTRS(1,b); dy = real(j)-ctr-CTRS(2,b); dz = real(k)-ctr-CTRS(3,b)
-                    phantom(i,j,k) = phantom(i,j,k) + AMPS(b)*exp(-(dx*dx+dy*dy+dz*dz)/(2.0*SIGMAS(b)**2))
-                end do
-            end do
-        end do
-    end do
-
-    call pcgop%new(BOX, SMPD, LAMBDA)
-    ! Deapodization OFF here on purpose. This test generates its observations
-    ! with forward_plane, i.e. with the operator's own KB envelope baked in --
-    ! an inverse crime. That is exactly what makes it a clean gate on the
-    ! operator ALGEBRA (adjointness, symmetry, self-consistent recovery), but it
-    ! means the roll-off correction must be disabled or the operator would no
-    ! longer match the data-generating process. The physics of deapodization is
-    ! covered by test=pcg_recon_deapod, which uses envelope-free observations.
-    call pcgop%set_deapod(.false.)
-    lims2 = pcgop%get_lims2()
-    lims3 = pcgop%get_lims3()
-    R = lims2(1,2)
-    allocate(sig2arr(0:R))
-    do i = 0, R
-        sig2arr(i) = 1.0 + 0.15*real(i)
-    end do
-
-    ! ---- STAGE 1: adjoint dot-product test WITH nonzero shift + real heterogeneous
-    !               CTF (the operator's actual release gate) ----
-    write(logfhandle,'(a)') '>>> STAGE 1: adjoint dot-product test (nonzero shift, real CTF)'
-    call e%new(.false.)
-    call e%set_euler([30.,55.,70.])
-    ctfparms%smpd = SMPD; ctfparms%kv = KV; ctfparms%cs = CS; ctfparms%fraca = FRACA
-    ctfparms%dfx = DFX_VALS(1); ctfparms%dfy = DFX_VALS(1)+ASTIG_VALS(1)
-    ctfparms%angast = ANGAST_VALS(1); ctfparms%phshift = 0.
-    shift = [1.7, -2.3]
-    allocate(Ti(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    Ti = pcgop%build_transfer(ctfparms, shift, sig2arr)
-    allocate(gx_plane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    call pcgop%set_volume(phantom)
-    call pcgop%forward_plane(e, gx_plane)
-    allocate(mplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    mplane = Ti * gx_plane
-    allocate(qplane_re(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    allocate(qplane_im(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    call random_number(qplane_re); call random_number(qplane_im)
-    allocate(qplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    qplane = cmplx(qplane_re-0.5, qplane_im-0.5)
-    lhs = sum(real(conjg(mplane)*qplane, dp))
-    allocate(wplane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
-    wplane = conjg(Ti) * qplane
-    allocate(adj_out(lims3(1,1):lims3(1,2), lims3(2,1):lims3(2,2), lims3(3,1):lims3(3,2)), source=cmplx(0.,0.))
-    call pcgop%adjoint_plane_add(wplane, e, adj_out)
-    ! <x, G^dagger q> over the operator's own oversampled lattice; fourier_dot
-    ! keeps that lattice and its Friedel packing an implementation detail
-    rhs = pcgop%fourier_dot(adj_out)
-    adjoint_err = real(abs(lhs-rhs) / max(1.0_dp, abs(lhs), abs(rhs)))
-    write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <T*Gx,q>=', real(lhs), ' <x,G^T(conjg(T)*q)>=', real(rhs), &
-        &' rel_err=', adjoint_err
-    if( adjoint_err > ADJOINT_RELTOL )then
-        write(logfhandle,'(a)') '    FAIL: weighted adjoint dot-product identity violated'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: weighted adjoint dot-product identity holds'
-    endif
-
-    ! ---- STAGE 2: normal-operator test on apply_normal across a heterogeneous
-    !               spiral set, CTF/shift/sigma supplied via prep_particles
-    !               (only if stage 1 passed) ----
-    if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 2: normal-operator test (heterogeneous CTF/shift)'
-        call projdirs%new(NPROJS, .false.)
-        call projdirs%spiral
-        do i = 1, NPROJS
-            call projdirs%get_ori(i, e)
-            g = mod(i-1, NCTF) + 1
-            ctfparms%smpd = SMPD; ctfparms%kv = KV; ctfparms%cs = CS; ctfparms%fraca = FRACA
-            ctfparms%dfx = DFX_VALS(g); ctfparms%dfy = DFX_VALS(g)+ASTIG_VALS(g)
-            ctfparms%angast = ANGAST_VALS(g); ctfparms%phshift = 0.
-            call e%set_ctfvars(ctfparms)
-            call e%set_shift([1.0+0.3*real(mod(i-1,5)), -1.0+0.2*real(mod(i-1,7))])
-            call projdirs%set_ori(i, e)
-        end do
-        allocate(p_probe(BOX,BOX,BOX), q_probe(BOX,BOX,BOX))
-        call random_number(p_probe); call random_number(q_probe)
-        p_probe = p_probe - 0.5; q_probe = q_probe - 0.5
-        ! per-particle sigma2: the module now takes a (0:R, nptcls) table, so
-        ! replicate this test's shared profile across the selection
-        allocate(sig2_2d(0:R,NPROJS))
-        do i = 1, NPROJS
-            sig2_2d(:,i) = sig2arr
-        end do
-        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
-        hp = pcgop%apply_normal(p_probe)
-        hq = pcgop%apply_normal(q_probe)
-        dp_p_hq = pcgop%dot_real_volume(p_probe, hq)
-        dp_hp_q = pcgop%dot_real_volume(hp, q_probe)
-        dp_p_hp = pcgop%dot_real_volume(p_probe, hp)
-        adjoint_err = real(abs(dp_p_hq-dp_hp_q) / max(1.0_dp, abs(dp_p_hq), abs(dp_hp_q)))
-        write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    dot(p,Hq)=', real(dp_p_hq), &
-            &' dot(Hp,q)=', real(dp_hp_q), ' rel_err=', adjoint_err
-        if( adjoint_err > NORMAL_OP_RELTOL )then
-            write(logfhandle,'(a)') '    FAIL: heterogeneous normal operator is not symmetric'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: heterogeneous normal operator is symmetric'
-        endif
-        write(logfhandle,'(a,es14.6)') '    dot(p,Hp)=', real(dp_p_hp)
-        if( dp_p_hp <= 0.0_dp )then
-            write(logfhandle,'(a)') '    FAIL: heterogeneous normal operator is not positive-definite'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: heterogeneous normal operator is positive-definite'
-        endif
-    else
-        write(logfhandle,'(a)') '>>> STAGE 2 SKIPPED: stage 1 (weighted adjoint test) failed'
-    endif
-
-    ! ---- STAGE 3: heterogeneous synthetic recovery (only if stages 1-2 passed) ----
-    if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 3: heterogeneous synthetic recovery'
+        write(logfhandle,'(a)') '>>> STAGE 4: synthetic recovery through CTF + shift + sigma'
         allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
         call pcgop%set_volume(phantom)
         do i = 1, NPROJS
@@ -1472,23 +1343,20 @@ subroutine exec_test_pcg_recon_ctf_hetero( self, cline )
             Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), sig2arr)
             y_planes(:,:,i) = Ti * gx_plane
         end do
+        ! build_operators here rather than a bare solve, so stage 7 can compare
+        ! the two accumulation paths with identical preconditioner state
+        call pcgop%build_operators(.false.)
         allocate(recon(BOX,BOX,BOX), source=0.0)
         call pcgop%solve(y_planes, recon, maxits=40, rtol=1.0e-3, &
             &rel_res_hist=rel_res_hist, niters=niters)
         write(logfhandle,'(a,i0,a)') '    PCG ran ', niters, ' iterations'
-        do i = 1, niters
-            write(logfhandle,'(a,i3,a,es14.6)') '      iter ', i, ' rel_resid=', rel_res_hist(i)
-        end do
         do i = 2, niters
             if( rel_res_hist(i) > rel_res_hist(i-1) + MONOTONIC_SLACK )then
                 write(logfhandle,'(a,i0)') '    FAIL: relative residual increased at iteration ', i
                 all_ok = .false.
             endif
         end do
-        meanA = sum(recon)/real(size(recon)); meanB = sum(phantom)/real(size(phantom))
-        corr_num  = sum((recon-meanA)*(phantom-meanB))
-        corr_denA = sum((recon-meanA)**2); corr_denB = sum((phantom-meanB)**2)
-        corr = corr_num / sqrt(corr_denA*corr_denB)
+        corr = corr_of(recon, phantom)
         write(logfhandle,'(a,f8.5)') '    recon-vs-phantom correlation = ', corr
         if( corr < RECON_CORR_THRES )then
             write(logfhandle,'(a)') '    FAIL: recovered volume does not correlate with the known phantom'
@@ -1497,127 +1365,53 @@ subroutine exec_test_pcg_recon_ctf_hetero( self, cline )
             write(logfhandle,'(a)') '    PASS: recovered volume correlates with the known phantom'
         endif
     else
-        write(logfhandle,'(a)') '>>> STAGE 3 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 4 SKIPPED: an earlier stage failed'
     endif
 
-    ! ---- final verdict ----
+    ! ============ STAGE 5: kernel vs matrix-free equivalence ============
     if( all_ok )then
-        call simple_end('**** SIMPLE_TEST_PCG_RECON_CTF_HETERO NORMAL STOP ****')
+        write(logfhandle,'(a)') '>>> STAGE 5: kernelized vs matrix-free normal operator'
+        call pcgop%build_kernel
+        hm = pcgop%apply_normal_matrixfree(p_probe)
+        hk = pcgop%apply_normal_kernel(p_probe)
+        den_all = max(1.0, sqrt(sum(hm*hm)))
+        err_all = sqrt(sum((hk-hm)**2)) / den_all
+        ! interior margin at least the KB support, so the shift-invariance
+        ! approximation is not judged on the boundary where it is known to differ
+        margin  = 4
+        lo      = margin + 1
+        hi      = BOX - margin
+        den_int = max(1.0, sqrt(sum(hm(lo:hi,lo:hi,lo:hi)**2)))
+        err_int = sqrt(sum((hk(lo:hi,lo:hi,lo:hi)-hm(lo:hi,lo:hi,lo:hi))**2)) / den_int
+        write(logfhandle,'(a,es14.6)') '    relative error, all voxels = ', err_all
+        write(logfhandle,'(a,es14.6)') '    relative error, interior   = ', err_int
+        if( err_int > EPS_INTERIOR )then
+            write(logfhandle,'(a)') '    FAIL: kernelized operator disagrees with the matrix-free reference'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: kernelized operator agrees with the reference in the interior'
+        endif
+        ! A scale error of a few percent would pass the interior check above but
+        ! is exactly what a drift in the analytic constant would look like, so
+        ! assert on it directly.
+        kscale = pcgop%measure_kernel_scale()
+        write(logfhandle,'(a,f10.6)') '    measured kernel scale (1.0 = analytic padsc**2 exact) = ', kscale
+        if( abs(kscale - 1.0) > KSCALE_TOL )then
+            write(logfhandle,'(a)') '    FAIL: kernel scale has drifted from the analytic constant'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: analytic kernel scale is correct'
+        endif
     else
-        THROW_HARD('TEST_PCG_RECON_CTF_HETERO FAILED')
-    endif
-end subroutine exec_test_pcg_recon_ctf_hetero
-
-!>  \brief  Equivalence gate for the kernelized (Toeplitz/Gram) normal operator,
-!  plus the sampling-density preconditioner.
-!
-!  WHY THE KERNEL IS NOT AN IMPULSE RESPONSE. Building
-!  the kernel as h = H_data(delta_at_origin) degenerates to gridding: the
-!  KB weights are normalized to sum 1, so G applied to a constant Fourier
-!  volume returns that constant, making the row sums of sum_i G_i^dagger|T_i|^2 G_i
-!  exactly rho, the gridding sampling density. A kernel built that way makes
-!  PCG converge in one step to the gridding answer and gain nothing. The
-!  implementation instead scatters |T_i|^2 onto a 2x OVERSAMPLED Fourier grid
-!  at doubled coordinates (the standard NUFFT Gram construction) -- the extra
-!  resolution is what resolves sub-pixel frequency offsets and makes the
-!  operator genuinely different from gridding.
-!
-!  Stages, fail-fast:
-!    1. H_kernel vs H_matrixfree relative error, reported SEPARATELY for all
-!       voxels and for an interior region with margin >= the KB support, since
-!       the kernel is shift-invariant and the true operator is not, so boundary
-!       error is expected to be larger.
-!    2. kernel invariants: changing only particle shifts must leave the
-!       kernel unchanged (the shift is a unit-modulus phase and cancels in
-!       |T|^2); changing a CTF must change it.
-!    3. the preconditioner must be positive and must not change the
-!       converged solution, only the iteration count.
-subroutine exec_test_pcg_recon_kernel( self, cline )
-    use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
-    class(commander_test_pcg_recon_kernel), intent(inout) :: self
-    class(cmdline),                         intent(inout) :: cline
-    integer,          parameter :: BOX = 24, NPROJS = 30, NCTF = 5
-    real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
-    real,             parameter :: KV = 300., CS = 2.7, FRACA = 0.1
-    ! epsilon set from the single-precision roundoff the operator tests measure
-    ! (~1e-7 relative), loosened for the interior to allow for the
-    ! kernel's shift-invariance approximation. NOT tuned after inspecting a
-    ! reconstruction.
-    real,             parameter :: EPS_INTERIOR = 5.0e-2
-    real,             parameter :: DFX_VALS(NCTF)   = [1.0, 1.5, 2.0, 2.5, 3.0]
-    real,             parameter :: ASTIG_VALS(NCTF) = [0.10, 0.15, 0.20, 0.12, 0.18]
-    real,             parameter :: ANGAST_VALS(NCTF)= [0., 20., 40., 60., 80.]
-    type(reconstructor_pcg) :: pcgop
-    type(oris)               :: projdirs
-    type(ori)                :: e
-    type(ctfparams)          :: ctfparms
-    real,    allocatable     :: p_probe(:,:,:), hk(:,:,:), hm(:,:,:), sig2_2d(:,:)
-    real,    allocatable     :: khat_a(:,:,:), khat_b(:,:,:)
-    integer :: lims2(2,2), i, g, R, iseed_n, margin, lo, hi
-    integer, allocatable :: iseed(:)
-    real    :: err_all, err_int, den_all, den_int, kdiff
-    logical :: all_ok
-    all_ok = .true.
-
-    call random_seed(size=iseed_n)
-    allocate(iseed(iseed_n), source=42)
-    call random_seed(put=iseed)
-
-    write(logfhandle,'(a)') '>>> TEST_PCG_RECON_KERNEL: setting up heterogeneous selection'
-    call pcgop%new(BOX, SMPD, LAMBDA)
-    lims2 = pcgop%get_lims2()
-    R     = lims2(1,2)
-    allocate(sig2_2d(0:R,NPROJS))
-    do i = 0, R
-        sig2_2d(i,:) = 1.0 + 0.15*real(i)
-    end do
-    call projdirs%new(NPROJS, .false.)
-    call projdirs%spiral
-    call e%new(.false.)
-    do i = 1, NPROJS
-        call projdirs%get_ori(i, e)
-        g = mod(i-1, NCTF) + 1
-        ctfparms%smpd = SMPD; ctfparms%kv = KV; ctfparms%cs = CS; ctfparms%fraca = FRACA
-        ctfparms%dfx = DFX_VALS(g); ctfparms%dfy = DFX_VALS(g)+ASTIG_VALS(g)
-        ctfparms%angast = ANGAST_VALS(g); ctfparms%phshift = 0.
-        call e%set_ctfvars(ctfparms)
-        call e%set_shift([1.0+0.3*real(mod(i-1,5)), -1.0+0.2*real(mod(i-1,7))])
-        call projdirs%set_ori(i, e)
-    end do
-    call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
-
-    ! ---- STAGE 1: kernelized vs matrix-free normal operator ----
-    write(logfhandle,'(a)') '>>> STAGE 1: kernel vs matrix-free equivalence'
-    call pcgop%build_kernel
-    allocate(p_probe(BOX,BOX,BOX))
-    call random_number(p_probe)
-    p_probe = p_probe - 0.5
-    hm = pcgop%apply_normal_matrixfree(p_probe)
-    hk = pcgop%apply_normal_kernel(p_probe)
-    den_all = max(1.0, sqrt(sum(hm*hm)))
-    err_all = sqrt(sum((hk-hm)**2)) / den_all
-    ! interior region: margin at least the KB support so the shift-invariance
-    ! approximation is not judged on the boundary, where it is known to differ
-    margin = 4
-    lo = margin + 1
-    hi = BOX - margin
-    den_int = max(1.0, sqrt(sum(hm(lo:hi,lo:hi,lo:hi)**2)))
-    err_int = sqrt(sum((hk(lo:hi,lo:hi,lo:hi)-hm(lo:hi,lo:hi,lo:hi))**2)) / den_int
-    write(logfhandle,'(a,es14.6)') '    relative error, all voxels = ', err_all
-    write(logfhandle,'(a,es14.6)') '    relative error, interior   = ', err_int
-    if( err_int > EPS_INTERIOR )then
-        write(logfhandle,'(a)') '    FAIL: kernelized operator disagrees with the matrix-free reference'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: kernelized operator agrees with the reference in the interior'
+        write(logfhandle,'(a)') '>>> STAGE 5 SKIPPED: an earlier stage failed'
     endif
 
-    ! ---- STAGE 2: kernel invariants ----
+    ! ========= STAGE 6: kernel invariants and preconditioner =========
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 2: kernel invariants (shift-independence, CTF-dependence)'
+        write(logfhandle,'(a)') '>>> STAGE 6: kernel invariants and preconditioner'
         khat_a = pcgop%apply_normal_kernel(p_probe)
-        ! changing ONLY the shifts must leave the normal operator unchanged,
-        ! because the shift is a unit-modulus phase that cancels in |T|^2
+        ! changing ONLY the shifts must leave the normal operator unchanged: the
+        ! shift is a unit-modulus phase and cancels in |T|^2
         do i = 1, NPROJS
             call projdirs%get_ori(i, e)
             call e%set_shift([-2.0+0.11*real(i), 3.0-0.07*real(i)])
@@ -1654,13 +1448,6 @@ subroutine exec_test_pcg_recon_kernel( self, cline )
         else
             write(logfhandle,'(a)') '    PASS: kernel tracks the CTF'
         endif
-    else
-        write(logfhandle,'(a)') '>>> STAGE 2 SKIPPED: stage 1 failed'
-    endif
-
-    ! ---- STAGE 3: preconditioner ----
-    if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 3: preconditioner'
         call pcgop%set_op_mode(PCG_OP_MATRIXFREE)
         call pcgop%build_precond
         hm = pcgop%apply_normal_matrixfree(p_probe)
@@ -1671,122 +1458,146 @@ subroutine exec_test_pcg_recon_kernel( self, cline )
             write(logfhandle,'(a)') '    PASS: preconditioner built, operator still finite'
         endif
     else
-        write(logfhandle,'(a)') '>>> STAGE 3 SKIPPED: an earlier stage failed'
+        write(logfhandle,'(a)') '>>> STAGE 6 SKIPPED: an earlier stage failed'
     endif
 
+    ! ================== STAGE 7: streaming accumulation ==================
+    ! begin_accum/accumulate_batch/end_accum/solve_accum must reproduce what
+    ! solve() produces from all planes at once. The two differ only in how the
+    ! accumulators are grouped, so they should agree far inside single
+    ! precision; a real discrepancy means a batch-indexing or folding error.
+    ! BATCHSZ is deliberately not a divisor of NPROJS so the short final batch
+    ! is exercised.
     if( all_ok )then
-        call simple_end('**** SIMPLE_TEST_PCG_RECON_KERNEL NORMAL STOP ****')
-    else
-        THROW_HARD('TEST_PCG_RECON_KERNEL FAILED')
-    endif
-end subroutine exec_test_pcg_recon_kernel
-
-!>  \brief  Does the deapodization (KB roll-off) correction
-!  actually recover the true volume from ENVELOPE-FREE observations?
-!
-!  This is the one test in the suite that does NOT commit an inverse crime.
-!  pcg_recon_ctf_free and pcg_recon_ctf_hetero both generate their
-!  observations with forward_plane, so the operator's own KB envelope appears
-!  identically in the data and the model and cancels -- which is precisely why
-!  they cannot see this bias, and why they scored 0.9998 correlation while the
-!  forward model was still wrong for real particles.
-!
-!  The trick used to manufacture honest data without new machinery: since the
-!  gather satisfies forward_plane(x) = FT[env . x], feeding it (x / env) yields
-!  FT[env . x / env] = FT[x] -- the true, envelope-free central section of x.
-!
-!  Stages:
-!    1. sanity of the measured envelope: unity at the box centre, decaying
-!       outward, and invenv its reciprocal
-!    2. with honest observations, deapodization ON must recover the phantom
-!       strictly better than deapodization OFF
-subroutine exec_test_pcg_recon_deapod( self, cline )
-    use simple_reconstructor_pcg, only: reconstructor_pcg
-    class(commander_test_pcg_recon_deapod), intent(inout) :: self
-    class(cmdline),                         intent(inout) :: cline
-    integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4
-    real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
-    real,             parameter :: CTRS(3,NBLOBS) = reshape([&
-        &-5.0,-3.0, 2.0,&
-        &4.0, 5.0,-3.0,&
-        &0.0,-6.0,-5.0,&
-        &3.0,-2.0, 6.0], [3,NBLOBS])
-    real,             parameter :: SIGMAS(NBLOBS) = [2.0, 2.5, 1.8, 2.2]
-    real,             parameter :: AMPS(NBLOBS)   = [1.0, 0.8, 0.6, 0.5]
-    type(reconstructor_pcg) :: pcgop
-    type(oris)               :: projdirs
-    type(ori)                :: e
-    real,    allocatable     :: phantom(:,:,:), xdiv(:,:,:), recon_on(:,:,:), recon_off(:,:,:)
-    real,    allocatable     :: env(:,:,:), invenv(:,:,:)
-    complex, allocatable     :: y_planes(:,:,:)
-    integer :: lims2(2,2), i, j, k, b, c, niters
-    real    :: ctr, dx, dy, dz, corr_on, corr_off, env_ctr, env_edge, recip_err
-    logical :: all_ok
-    all_ok = .true.
-
-    write(logfhandle,'(a)') '>>> TEST_PCG_RECON_DEAPOD: building deterministic phantom'
-    allocate(phantom(BOX,BOX,BOX), source=0.0)
-    ctr = real(BOX)/2.0 + 0.5
-    do k = 1,BOX
-        do j = 1,BOX
-            do i = 1,BOX
-                do b = 1,NBLOBS
-                    dx = real(i)-ctr-CTRS(1,b); dy = real(j)-ctr-CTRS(2,b); dz = real(k)-ctr-CTRS(3,b)
-                    phantom(i,j,k) = phantom(i,j,k) + AMPS(b)*exp(-(dx*dx+dy*dy+dz*dz)/(2.0*SIGMAS(b)**2))
-                end do
-            end do
+        write(logfhandle,'(a)') '>>> STAGE 7: streaming accumulation vs monolithic solve'
+        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        ! regenerate observations: stage 6 edited the shifts and CTFs
+        call pcgop%set_volume(phantom)
+        do i = 1, NPROJS
+            call projdirs%get_ori(i, e)
+            call pcgop%forward_plane(e, gx_plane)
+            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), sig2arr)
+            y_planes(:,:,i) = Ti * gx_plane
         end do
-    end do
-    call pcgop%new(BOX, SMPD, LAMBDA)
-    lims2 = pcgop%get_lims2()
-
-    ! ---- STAGE 1: measured envelope sanity ----
-    write(logfhandle,'(a)') '>>> STAGE 1: measured KB envelope'
-    env    = pcgop%get_env()
-    invenv = pcgop%get_invenv()
-    c        = BOX/2 + 1
-    env_ctr  = env(c,c,c)
-    env_edge = env(1,c,c)
-    recip_err = maxval(abs(env*invenv - 1.0))
-    write(logfhandle,'(a,f10.6)') '    envelope at centre      = ', env_ctr
-    write(logfhandle,'(a,f10.6)') '    envelope at edge (1,c,c)= ', env_edge
-    write(logfhandle,'(a,es14.6)') '    max|env*invenv - 1|     = ', recip_err
-    if( abs(env_ctr - 1.0) > 1.0e-5 )then
-        write(logfhandle,'(a)') '    FAIL: envelope is not unity at the box centre'
-        all_ok = .false.
-    else if( env_edge >= env_ctr )then
-        write(logfhandle,'(a)') '    FAIL: envelope does not decay away from the centre'
-        all_ok = .false.
-    else if( recip_err > 1.0e-4 )then
-        write(logfhandle,'(a)') '    FAIL: invenv is not the reciprocal of env'
-        all_ok = .false.
+        ! BOTH paths run a FIXED number of iterations with the tolerance
+        ! disabled. Comparing two tolerance-stopped solves is meaningless:
+        ! round-off in the accumulators can put the stopping decision one
+        ! iteration apart, and a single CG step near convergence moves the
+        ! solution by O(rtol) -- orders of magnitude above anything worth
+        ! asserting. Forcing identical steps leaves accumulator round-off as the
+        ! only difference between the two paths, which is what is being tested.
+        ! reference path: one shot
+        call pcgop%build_operators(.false.)
+        recon = 0.0
+        call pcgop%solve(y_planes, recon, maxits=STREAM_ITS, rtol=0.0, niters=niters)
+        call pcgop%get_rhs(b_mono)
+        write(logfhandle,'(a,i0,a)') '    monolithic: ', niters, ' iterations'
+        ! Two streaming runs, so a failure localizes itself rather than just
+        ! reporting a number: ONE batch covering everything isolates the
+        ! begin/end_accum machinery, and many batches adds the per-batch
+        ! indexing on top. If single-batch agrees and multi-batch does not, the
+        ! fault is in the batch range handling; if neither agrees, it is in the
+        ! accumulate/fold path shared by both.
+        allocate(recon_str(BOX,BOX,BOX))
+        do j = 1, 2
+            if( j == 1 )then
+                nb = NPROJS                     ! single batch
+            else
+                nb = BATCHSZ                    ! many batches, short final one
+            endif
+            call pcgop%begin_accum
+            do ifrom = 1, NPROJS, nb
+                k = min(nb, NPROJS - ifrom + 1)
+                call pcgop%accumulate_batch(y_planes(:,:,ifrom:ifrom+k-1), k, ifrom)
+            end do
+            call pcgop%end_accum(.false.)
+            ! compare the RHS before the solve: if b already differs the fault is
+            ! in accumulate_rhs or the fold; if b agrees but the solutions do
+            ! not, it is in the |T|^2 accumulator feeding the preconditioner
+            call pcgop%get_rhs(b_str)
+            rhs_err = sqrt(sum((b_str-b_mono)**2)) / max(1.0, sqrt(sum(b_mono*b_mono)))
+            recon_str = 0.0
+            call pcgop%solve_accum(recon_str, maxits=STREAM_ITS, rtol=0.0, niters=niters)
+            stream_err = sqrt(sum((recon_str-recon)**2)) / max(1.0, sqrt(sum(recon*recon)))
+            write(logfhandle,'(a,i3,a,es14.6,a,es14.6)') '    batch size ', nb, &
+                &': rel_err(b) = ', rhs_err, '   rel_err(x) = ', stream_err
+            if( stream_err > STREAM_RELTOL )then
+                write(logfhandle,'(a)') '    FAIL: streaming accumulation does not reproduce the monolithic solve'
+                all_ok = .false.
+            else
+                write(logfhandle,'(a)') '    PASS: streaming accumulation reproduces the monolithic solve'
+            endif
+        end do
+        ! The command's DEFAULT is pcgop=kernel, which reaches the kernel through
+        ! end_accum(.true.) -- a branch the runs above never touch, since they
+        ! pass .false. Deriving Khat from a streamed accumulator must match
+        ! deriving it from a monolithic one, or the default path is untested.
+        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcgop%build_kernel
+        khat_a = pcgop%apply_normal_kernel(p_probe)
+        call pcgop%begin_accum
+        do ifrom = 1, NPROJS, BATCHSZ
+            k = min(BATCHSZ, NPROJS - ifrom + 1)
+            call pcgop%accumulate_batch(y_planes(:,:,ifrom:ifrom+k-1), k, ifrom)
+        end do
+        call pcgop%end_accum(.true.)
+        khat_b = pcgop%apply_normal_kernel(p_probe)
+        kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
+        write(logfhandle,'(a,es14.6)') '    streamed vs monolithic kernel: rel_err = ', kdiff
+        if( kdiff > STREAM_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: kernel built from a streamed accumulator differs'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: kernel is identical either way'
+        endif
     else
-        write(logfhandle,'(a)') '    PASS: envelope measured, normalized and invertible'
+        write(logfhandle,'(a)') '>>> STAGE 7 SKIPPED: an earlier stage failed'
     endif
 
-    ! ---- STAGE 2: recovery from ENVELOPE-FREE observations ----
+    ! ============ STAGE 8: deapodization, the honest stage ============
+    ! Run last because it flips deapod state and rebuilds the selection.
+    ! forward_plane(x/env) = FT[env . (x/env)] = FT[x], i.e. the true
+    ! envelope-free central section -- no inverse crime.
     if( all_ok )then
-        write(logfhandle,'(a)') '>>> STAGE 2: recovery from envelope-free observations'
-        ! forward_plane(x/env) = FT[env . (x/env)] = FT[x], i.e. honest data
+        write(logfhandle,'(a)') '>>> STAGE 8: deapodization against envelope-free observations'
+        env    = pcgop%get_env()
+        invenv = pcgop%get_invenv()
+        c         = BOX/2 + 1
+        env_ctr   = env(c,c,c)
+        env_edge  = env(1,c,c)
+        recip_err = maxval(abs(env*invenv - 1.0))
+        write(logfhandle,'(a,f10.6)')  '    envelope at centre       = ', env_ctr
+        write(logfhandle,'(a,f10.6)')  '    envelope at edge (1,c,c) = ', env_edge
+        write(logfhandle,'(a,es14.6)') '    max|env*invenv - 1|      = ', recip_err
+        if( abs(env_ctr - 1.0) > 1.0e-5 )then
+            write(logfhandle,'(a)') '    FAIL: envelope is not unity at the box centre'
+            all_ok = .false.
+        else if( env_edge >= env_ctr )then
+            write(logfhandle,'(a)') '    FAIL: envelope does not decay away from the centre'
+            all_ok = .false.
+        else if( recip_err > 1.0e-4 )then
+            write(logfhandle,'(a)') '    FAIL: invenv is not the reciprocal of env'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: envelope measured, normalized and invertible'
+        endif
+    endif
+    if( all_ok )then
         allocate(xdiv(BOX,BOX,BOX))
         xdiv = phantom * invenv
         call projdirs%new(NPROJS, .false.)
         call projdirs%spiral
-        call e%new(.false.)
-        allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
         call pcgop%set_volume(xdiv)
         do i = 1, NPROJS
             call projdirs%get_ori(i, e)
             call pcgop%forward_plane(e, y_planes(:,:,i))
         end do
-        ! --- with the correction ON (the default, and the correct model) ---
         call pcgop%set_deapod(.true.)
         call pcgop%prep_particles(projdirs)
         allocate(recon_on(BOX,BOX,BOX), source=0.0)
         call pcgop%solve(y_planes, recon_on, maxits=40, rtol=1.0e-3, niters=niters)
         corr_on = corr_of(recon_on, phantom)
         write(logfhandle,'(a,i0,a,f9.5)') '    deapod ON : ', niters, ' iters, corr = ', corr_on
-        ! --- with it OFF (biased on real data) ---
         call pcgop%set_deapod(.false.)
         call pcgop%prep_particles(projdirs)
         allocate(recon_off(BOX,BOX,BOX), source=0.0)
@@ -1800,13 +1611,16 @@ subroutine exec_test_pcg_recon_deapod( self, cline )
             write(logfhandle,'(a)') '    PASS: deapodization recovers the true volume better'
         endif
     else
-        write(logfhandle,'(a)') '>>> STAGE 2 SKIPPED: stage 1 failed'
+        write(logfhandle,'(a)') '>>> STAGE 8 SKIPPED: an earlier stage failed'
     endif
 
+    call pcgop%kill
+    call projdirs%kill
+    call e%kill
     if( all_ok )then
-        call simple_end('**** SIMPLE_TEST_PCG_RECON_DEAPOD NORMAL STOP ****')
+        call simple_end('**** SIMPLE_TEST_PCG_RECON NORMAL STOP ****')
     else
-        THROW_HARD('TEST_PCG_RECON_DEAPOD FAILED')
+        THROW_HARD('TEST_PCG_RECON FAILED')
     endif
 
   contains
@@ -1822,6 +1636,6 @@ subroutine exec_test_pcg_recon_deapod( self, cline )
         corr_of = num / sqrt(max(da*db, TINY))
     end function corr_of
 
-end subroutine exec_test_pcg_recon_deapod
+end subroutine exec_test_pcg_recon
 
 end module simple_commanders_test_highlevel

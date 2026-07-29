@@ -44,7 +44,8 @@ contains
         type(string)             :: opmode
         integer, allocatable     :: pinds(:), tmpinds(:)
         real,    allocatable     :: sig2(:,:), x(:,:,:), rel_res_hist(:)
-        complex, allocatable     :: y_planes(:,:,:)
+        ! one batch of observed planes, never the whole selection
+        complex, allocatable     :: y_batch(:,:,:)
         integer :: nptcls, i, ii, iptcl, ibatch, batchlims(2), batchsz
         integer :: lims2(2,2), R, niters, funit, cnt, maxits, kfromto(2), nspace_dummy
         real    :: rtol, sdev_noise, edge_mean
@@ -168,27 +169,40 @@ contains
             write(logfhandle,'(a)') '>>> RECONSTRUCT3D_PCG: objfun=cc, no sigma weighting'
         endif
 
-        ! ---- per-particle orientation/CTF/shift onto a selection oris, plus
-        !      the particle planes, read in batches exactly as calc_3Drec does
-        !      rather than opening the stack once per particle ----
+        ! ---- per-particle orientation/CTF/shift onto a selection oris. This is
+        !      metadata only and needs no image I/O, so it runs as its own cheap
+        !      pass: prep_particles must be complete before the streaming
+        !      accumulation below, which reads the cached rotations and CTF. ----
         call selection%new(nptcls, .true.)
-        allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), nptcls))
         call e%new(.false.)
+        do i = 1, nptcls
+            iptcl = pinds(i)
+            call build%spproj_field%get_ori(iptcl, e)
+            ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
+            call e%set_ctfvars(ctfparms)
+            call e%set_shift(build%spproj_field%get_2Dshift(iptcl))
+            call selection%set_ori(i, e)
+        end do
+        call pcgop%prep_particles(selection, use_ctf=l_use_ctf, sig2=sig2)
+
+        ! ---- streaming accumulation: read a batch, fold it into the two Fourier
+        !      accumulators, discard it. The observed planes are needed for one
+        !      thing only (forming the RHS) and for one pass only, so nothing
+        !      proportional to nptcls is ever resident -- see
+        !      doc/implementation_notes/pcg_reconstruction_as_gridding_replacement.md
+        !      section 5.1. Batch shape follows calc_3Drec. ----
+        if( l_kernel ) write(logfhandle,'(a)') &
+            &'>>> RECONSTRUCT3D_PCG: building kernelized (Toeplitz) normal operator'
+        allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
         sdev_noise = 0.  ! norm_noise takes it intent(inout)
         edge_mean  = 0.
+        call pcgop%begin_accum
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch+MAXIMGBATCHSZ-1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
             call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
             do ii = 1, batchsz
-                i     = batchlims(1) + ii - 1
-                iptcl = pinds(i)
-                call build%spproj_field%get_ori(iptcl, e)
-                ctfparms = build%spproj%get_ctfparams(params%oritype, iptcl)
-                call e%set_ctfvars(ctfparms)
-                call e%set_shift(build%spproj_field%get_2Dshift(iptcl))
-                call selection%set_ori(i, e)
                 ! Normalize, TAPER, then transform -- the same three steps, in the
                 ! same order, that production fuses into
                 ! norm_noise_taper_edge_pad_fft (calc_3Drec's prep).
@@ -218,19 +232,20 @@ contains
                     call build%imgbatch(ii)%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
                 endif
                 call build%imgbatch(ii)%fft()
-                y_planes(:,:,i) = pcgop%extract_native_plane(build%imgbatch(ii))
+                y_batch(:,:,ii) = pcgop%extract_native_plane(build%imgbatch(ii))
             end do
+            ! one call folds this batch into BOTH accumulators: the RHS (which
+            ! needs the planes) and the |T|^2 sampling density (which does not)
+            call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
         end do
         call killimgbatch(build)
+        deallocate(y_batch)
 
-        ! ---- operator setup ----
-        call pcgop%prep_particles(selection, use_ctf=l_use_ctf, sig2=sig2)
-        ! ONE particle pass builds both: the preconditioner's sampling density and
-        ! the Gram kernel are the same scatter of |T_i|^2, so build_operators
-        ! shares it rather than walking all the particles twice.
-        if( l_kernel ) write(logfhandle,'(a)') &
-            &'>>> RECONSTRUCT3D_PCG: building kernelized (Toeplitz) normal operator'
-        call pcgop%build_operators(l_kernel)
+        ! ---- close accumulation: folds the RHS once and derives the
+        !      preconditioner and, when requested, the Gram kernel. Both come
+        !      from the same |T_i|^2 accumulator, so neither costs a second
+        !      particle pass. ----
+        call pcgop%end_accum(l_kernel)
         if( l_kernel ) call pcgop%set_op_mode(PCG_OP_KERNEL)
         rt_setup = toc(t0)
         write(logfhandle,'(a,f9.2,a)') '>>> RECONSTRUCT3D_PCG: setup time = ', rt_setup, ' s'
@@ -238,7 +253,7 @@ contains
         ! ---- solve ----
         t1 = tic()
         allocate(x(params%box,params%box,params%box), source=0.0)
-        call pcgop%solve(y_planes, x, maxits=maxits, rtol=rtol, &
+        call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, &
             &rel_res_hist=rel_res_hist, niters=niters)
         rt_solve = toc(t1)
         rt_tot   = toc(t0)
