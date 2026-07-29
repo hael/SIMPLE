@@ -3,6 +3,7 @@ module simple_test_ui_geometry
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('geometry', 'Geometry', 30)
 type(ui_program), target :: angres
 type(ui_program), target :: ori_test
 type(ui_program), target :: oris_test
@@ -39,7 +40,7 @@ contains
         ! PROGRAM SPECIFICATION
         call angres%new(&
         &'angres',&                            ! name
-        &'angres ',&                           ! descr_short
+        &'angres ',&                           ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -59,7 +60,7 @@ contains
         ! computer controls
         !call angres%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('angres', angres, tsttab)
+        call add_ui_program('angres', angres, tsttab, UI_CATEGORY)
     end subroutine new_angres
 
     subroutine new_ori_test( tsttab )
@@ -67,7 +68,7 @@ contains
         ! PROGRAM SPECIFICATION
         call ori_test%new(&
         &'ori_test',&                          ! name
-        &'ori_test ',&                         ! descr_short
+        &'ori_test ',&                         ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -87,7 +88,7 @@ contains
         ! computer controls
         !call ori_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ori_test', ori_test, tsttab)
+        call add_ui_program('ori_test', ori_test, tsttab, UI_CATEGORY)
     end subroutine new_ori_test
 
     subroutine new_oris_test( tsttab )
@@ -95,7 +96,7 @@ contains
         ! PROGRAM SPECIFICATION
         call oris_test%new(&
         &'oris_test',&                         ! name
-        &'oris_test ',&                        ! descr_short
+        &'oris_test ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -115,7 +116,7 @@ contains
         ! computer controls
         !call oris_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('oris_test', oris_test, tsttab)
+        call add_ui_program('oris_test', oris_test, tsttab, UI_CATEGORY)
     end subroutine new_oris_test
 
     subroutine new_sym_test( tsttab )
@@ -123,7 +124,7 @@ contains
         ! PROGRAM SPECIFICATION
         call sym_test%new(&
         &'sym_test',&                          ! name
-        &'sym_test ',&                         ! descr_short
+        &'sym_test ',&                         ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -143,7 +144,7 @@ contains
         ! computer controls
         !call sym_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('sym_test', sym_test, tsttab)
+        call add_ui_program('sym_test', sym_test, tsttab, UI_CATEGORY)
     end subroutine new_sym_test
 
     subroutine new_uniform_euler( tsttab )
@@ -151,7 +152,7 @@ contains
         ! PROGRAM SPECIFICATION
         call uniform_euler%new(&
         &'uniform_euler',&                     ! name
-        &'uniform_euler ',&                    ! descr_short
+        &'uniform_euler ',&                    ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -171,7 +172,7 @@ contains
         ! computer controls
         !call uniform_euler%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('uniform_euler', uniform_euler, tsttab)
+        call add_ui_program('uniform_euler', uniform_euler, tsttab, UI_CATEGORY)
     end subroutine new_uniform_euler
 
     subroutine new_uniform_rot( tsttab )
@@ -179,7 +180,7 @@ contains
         ! PROGRAM SPECIFICATION
         call uniform_rot%new(&
         &'uniform_rot',&                       ! name
-        &'uniform_rot ',&                      ! descr_short
+        &'uniform_rot ',&                      ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -199,7 +200,7 @@ contains
         ! computer controls
         !call uniform_rot%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('uniform_rot', uniform_rot, tsttab)
+        call add_ui_program('uniform_rot', uniform_rot, tsttab, UI_CATEGORY)
     end subroutine new_uniform_rot
 
 end module simple_test_ui_geometry

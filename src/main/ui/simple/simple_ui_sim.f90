@@ -3,6 +3,7 @@ module simple_ui_sim
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('sim', 'Simulation', 140)
 type(ui_program), target :: cif2mrc
 type(ui_program), target :: pdb2mrc
 type(ui_program), target :: simulate_movie
@@ -36,10 +37,10 @@ contains
         ! PROGRAM SPECIFICATION
         call cif2mrc%new(&
         &'cif2mrc', &                                      ! name
-        &'PDBx/mmCIF to MRC simulator',&                   ! descr_short
+        &'Simulate an MRC density map from PDBx/mmCIF coordinates',& ! summary
         &'is a program to simulate a 3D density map in MRC format using a PDBx/mmCIF format coordinates file',& ! descr long
         &'all',&                                           ! executable
-        &.false., gui_advanced=.false.)                    ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cif2mrc%add_input(UI_IMG, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif')
@@ -53,7 +54,7 @@ contains
         ! mask controls
         ! computer controls
         ! add to ui_hash
-        call add_ui_program('cif2mrc', cif2mrc, prgtab)
+        call add_ui_program('cif2mrc', cif2mrc, prgtab, UI_CATEGORY)
     end subroutine new_cif2mrc
 
     subroutine new_pdb2mrc( prgtab )
@@ -61,10 +62,10 @@ contains
         ! PROGRAM SPECIFICATION
         call pdb2mrc%new(&
         &'pdb2mrc', &                                      ! name
-        &'PDB to MRC simulator',&                          ! descr_short
+        &'Simulate an MRC density map from PDB coordinates',& ! summary
         &'is a program to simulate a 3D density map in MRC format using a PDB format coordinates file',& ! descr long
         &'all',&                                           ! executable
-        &.false., gui_advanced=.false.)                    ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pdb2mrc%add_input(UI_IMG, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
@@ -82,7 +83,7 @@ contains
         ! mask controls
         ! computer controls
         ! add to ui_hash
-        call add_ui_program('pdb2mrc', pdb2mrc, prgtab)
+        call add_ui_program('pdb2mrc', pdb2mrc, prgtab, UI_CATEGORY)
     end subroutine new_pdb2mrc
 
     subroutine new_simulate_movie( prgtab )
@@ -90,9 +91,9 @@ contains
         ! PROGRAM SPECIFICATION
         call simulate_movie%new(&
         &'simulate_movie',&                                 ! name
-        &'Simulate DDD movie',&                             ! descr_short
+        &'Simulate a dose-fractionated electron-microscopy movie',& ! summary
         &'is a program for crude simulation of a DDD movie. Input is a set of projection images to place. &
-        &Movie frames are then generated related by randomly shifting the base image and applying noise',& ! descr_long
+        &Movie frames are then generated related by randomly shifting the base image and applying noise',& ! help
         &'simple_exec',&                                    ! executable
         &.false.)                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -120,7 +121,7 @@ contains
         ! computer controls
         call simulate_movie%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('simulate_movie', simulate_movie, prgtab)
+        call add_ui_program('simulate_movie', simulate_movie, prgtab, UI_CATEGORY)
     end subroutine new_simulate_movie
 
     subroutine new_simulate_noise( prgtab )
@@ -128,8 +129,8 @@ contains
         ! PROGRAM SPECIFICATION
         call simulate_noise%new(&
         &'simulate_noise',&                                ! name
-        &'White noise simulation',&                        ! descr_short
-        &'is a program for generating pure noise images',& ! descr_long
+        &'Generate white-noise images or volumes',& ! summary
+        &'is a program for generating pure noise images',& ! help
         &'simple_exec',&                                   ! executable
         &.false.)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -149,7 +150,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('simulate_noise', simulate_noise, prgtab)
+        call add_ui_program('simulate_noise', simulate_noise, prgtab, UI_CATEGORY)
     end subroutine new_simulate_noise
 
     subroutine new_simulate_particles( prgtab )
@@ -157,14 +158,14 @@ contains
         ! PROGRAM SPECIFICATION
         call simulate_particles%new(&
         &'simulate_particles',&                                           ! name
-        &'Simulate single-particle images',&                              ! descr_short
+        &'Simulate single-particle images',&                              ! summary
         &'is a program for simulating single-particle cryo-EM images. It is not a very sophisticated simulator, but&
         & it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be&
         & used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input&
         & is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. The volume is&
         & projected using Fourier interpolation, 20% of the total noise is added to the images (pink noise), they are&
         & then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed&
-        & before the remaining 80% of the noise (white noise) is added',& ! descr_long
+        & before the remaining 80% of the noise (white noise) is added',& ! help
         &'simple_exec',&                                                  ! executable
         &.false.)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -200,7 +201,7 @@ contains
         ! computer controls
         call simulate_particles%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('simulate_particles', simulate_particles, prgtab)
+        call add_ui_program('simulate_particles', simulate_particles, prgtab, UI_CATEGORY)
     end subroutine new_simulate_particles
 
 end module simple_ui_sim

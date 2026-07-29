@@ -137,7 +137,7 @@ contains
         end select
         ! describe program if so instructed
         if( str_has_substr(self%entire_line, 'describe=yes') )then
-            call ptr2prg%print_prg_descr_long()
+            call ptr2prg%print_help()
             stop
         endif
         if( .not. associated(ptr2prg) )then

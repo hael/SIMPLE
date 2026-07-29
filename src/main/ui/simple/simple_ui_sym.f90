@@ -3,6 +3,7 @@ module simple_ui_sym
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('sym', 'Symmetry', 160)
 type(ui_program), target :: symaxis_search
 type(ui_program), target :: symmetrize_map
 type(ui_program), target :: symmetry_test
@@ -30,10 +31,10 @@ contains
         ! PROGRAM SPECIFICATION
         call symaxis_search%new(&
         &'symaxis_search',&                                                                                 ! name
-        &'Search for symmetry axis',&                                                                       ! descr_short
+        &'Find the principal symmetry axis of a C1 volume',& ! summary
         &'is a program for searching for the principal symmetry axis of a volume reconstructed in C1. &
         &The rotational transformation is applied to the oritype field in the project and the project &
-        &file is updated. If you are unsure about the point-group, use the symmetry_test program instead',& ! descr_long
+        &file is updated. If you are unsure about the point-group, use the symmetry_test program instead',& ! help
         &'simple_exec',&                                                                                    ! executable
         &.false.)                                                                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -59,7 +60,7 @@ contains
         ! computer controls
         call symaxis_search%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('symaxis_search', symaxis_search, prgtab)
+        call add_ui_program('symaxis_search', symaxis_search, prgtab, UI_CATEGORY)
     end subroutine new_symaxis_search
 
     subroutine new_symmetrize_map( prgtab )
@@ -67,7 +68,7 @@ contains
         ! PROGRAM SPECIFICATION
         call symmetrize_map%new(&
         &'symmetrize_map',&                                                                                          ! name
-        &'Symmetrization of density map',&                                                                           ! descr_short
+        &'Align and symmetrize a density map by point group',& ! summary
         &'is a program that implements symmetrization of the input density map. &
         &Input is a volume and point-group symmetry, output is the volume aligned to the principal symmetry axis and averaged over the symmetry operations',& ! descr long
         &'simple_exec',&                                                                                             ! executable
@@ -96,7 +97,7 @@ contains
         ! computer controls
         call symmetrize_map%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('symmetrize_map', symmetrize_map, prgtab)
+        call add_ui_program('symmetrize_map', symmetrize_map, prgtab, UI_CATEGORY)
     end subroutine new_symmetrize_map
 
     subroutine new_symmetry_test( prgtab )
@@ -104,7 +105,7 @@ contains
         ! PROGRAM SPECIFICATION
         call symmetry_test%new(&
         &'symmetry_test',&                                                                                           ! name
-        &'Statistical test for symmetry',&                                                                           ! descr_short
+        &'Test the most likely point-group symmetry of a C1 volume',& ! summary
         &'is a program that implements a statistical test for point-group symmetry. &
         &Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry',& ! descr long
         &'simple_exec',&                                                                                             ! executable
@@ -133,7 +134,7 @@ contains
         ! computer controls
         call symmetry_test%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('symmetry_test', symmetry_test, prgtab)
+        call add_ui_program('symmetry_test', symmetry_test, prgtab, UI_CATEGORY)
     end subroutine new_symmetry_test
 
 end module simple_ui_sym

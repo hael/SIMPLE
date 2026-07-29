@@ -3,6 +3,7 @@ module simple_test_ui_stats
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('stats', 'Statistics', 120)
 type(ui_program), target :: class_sample_test
 type(ui_program), target :: clustering
 type(ui_program), target :: ctf_test
@@ -48,7 +49,7 @@ contains
         ! PROGRAM SPECIFICATION
         call class_sample_test%new(&
         &'class_sample_test',&                 ! name
-        &'class_sample_test ',&                ! descr_short
+        &'class_sample_test ',&                ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -68,7 +69,7 @@ contains
         ! computer controls
         !call class_sample_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('class_sample_test', class_sample_test, tsttab)
+        call add_ui_program('class_sample_test', class_sample_test, tsttab, UI_CATEGORY)
     end subroutine new_class_sample_test
 
     subroutine new_clustering( tsttab )
@@ -76,7 +77,7 @@ contains
         ! PROGRAM SPECIFICATION
         call clustering%new(&
         &'clustering',&                        ! name
-        &'clustering ',&                       ! descr_short
+        &'clustering ',&                       ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -96,7 +97,7 @@ contains
         ! computer controls
         !call clustering%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('clustering', clustering, tsttab)
+        call add_ui_program('clustering', clustering, tsttab, UI_CATEGORY)
     end subroutine new_clustering
 
     subroutine new_ctf_test( tsttab )
@@ -104,7 +105,7 @@ contains
         ! PROGRAM SPECIFICATION
         call ctf_test%new(&
         &'ctf_test',&                          ! name
-        &'ctf_test ',&                         ! descr_short
+        &'ctf_test ',&                         ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -124,7 +125,7 @@ contains
         ! computer controls
         !call ctf_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ctf_test', ctf_test, tsttab)
+        call add_ui_program('ctf_test', ctf_test, tsttab, UI_CATEGORY)
     end subroutine new_ctf_test
 
     subroutine new_eo_diff( tsttab )
@@ -132,7 +133,7 @@ contains
         ! PROGRAM SPECIFICATION
         call eo_diff%new(&
         &'eo_diff',&                           ! name
-        &'eo_diff ',&                          ! descr_short
+        &'eo_diff ',&                          ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -152,7 +153,7 @@ contains
         ! computer controls
         !call eo_diff%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('eo_diff', eo_diff, tsttab)
+        call add_ui_program('eo_diff', eo_diff, tsttab, UI_CATEGORY)
     end subroutine new_eo_diff
 
     subroutine new_extr_frac( tsttab )
@@ -160,7 +161,7 @@ contains
         ! PROGRAM SPECIFICATION
         call extr_frac%new(&
         &'extr_frac',&                         ! name
-        &'extr_frac ',&                        ! descr_short
+        &'extr_frac ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -180,7 +181,7 @@ contains
         ! computer controls
         !call extr_frac%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('extr_frac', extr_frac, tsttab)
+        call add_ui_program('extr_frac', extr_frac, tsttab, UI_CATEGORY)
     end subroutine new_extr_frac
 
     subroutine new_multinomal_test( tsttab )
@@ -188,7 +189,7 @@ contains
         ! PROGRAM SPECIFICATION
         call multinomal_test%new(&
         &'multinomal_test',&                   ! name
-        &'multinomal_test ',&                  ! descr_short
+        &'multinomal_test ',&                  ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -208,7 +209,7 @@ contains
         ! computer controls
         !call multinomal_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('multinomal_test', multinomal_test, tsttab)
+        call add_ui_program('multinomal_test', multinomal_test, tsttab, UI_CATEGORY)
     end subroutine new_multinomal_test
 
     subroutine new_pca_all( tsttab )
@@ -216,7 +217,7 @@ contains
         ! PROGRAM SPECIFICATION
         call pca_all%new(&
         &'pca_all',&                           ! name
-        &'pca_all ',&                          ! descr_short
+        &'pca_all ',&                          ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -236,7 +237,7 @@ contains
         ! computer controls
         !call pca_all%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('pca_all', pca_all, tsttab)
+        call add_ui_program('pca_all', pca_all, tsttab, UI_CATEGORY)
     end subroutine new_pca_all
 
     subroutine new_pca_imgvar( tsttab )
@@ -244,7 +245,7 @@ contains
         ! PROGRAM SPECIFICATION
         call pca_imgvar%new(&
         &'pca_imgvar',&                        ! name
-        &'pca_imgvar ',&                       ! descr_short
+        &'pca_imgvar ',&                       ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -264,7 +265,7 @@ contains
         ! computer controls
         !call pca_imgvar%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('pca_imgvar', pca_imgvar, tsttab)
+        call add_ui_program('pca_imgvar', pca_imgvar, tsttab, UI_CATEGORY)
     end subroutine new_pca_imgvar
 
     subroutine new_sp_project( tsttab )
@@ -272,7 +273,7 @@ contains
         ! PROGRAM SPECIFICATION
         call sp_project%new(&
         &'sp_project',&                        ! name
-        &'sp_project ',&                       ! descr_short
+        &'sp_project ',&                       ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -292,7 +293,7 @@ contains
         ! computer controls
         !call sp_project%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('sp_project', sp_project, tsttab)
+        call add_ui_program('sp_project', sp_project, tsttab, UI_CATEGORY)
     end subroutine new_sp_project
 
 end module simple_test_ui_stats

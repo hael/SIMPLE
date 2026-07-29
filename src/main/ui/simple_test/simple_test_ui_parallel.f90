@@ -3,6 +3,7 @@ module simple_test_ui_parallel
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('parallel', 'Parallel', 100)
 type(ui_program), target :: coarrays
 type(ui_program), target :: openacc
 type(ui_program), target :: openmp
@@ -33,7 +34,7 @@ contains
         ! PROGRAM SPECIFICATION
         call coarrays%new(&
         &'coarrays',&                          ! name
-        &'coarrays ',&                         ! descr_short
+        &'coarrays ',&                         ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -56,7 +57,7 @@ contains
         &'Number of coarray images to launch concurrently; defaults to nparts',&
         &'# coarray images', .false., 0.)
         ! add to ui_hash
-        call add_ui_program('coarrays', coarrays, tsttab)
+        call add_ui_program('coarrays', coarrays, tsttab, UI_CATEGORY)
     end subroutine new_coarrays
 
     subroutine new_openacc( tsttab )
@@ -64,7 +65,7 @@ contains
         ! PROGRAM SPECIFICATION
         call openacc%new(&
         &'openacc',&                           ! name
-        &'openacc ',&                          ! descr_short
+        &'openacc ',&                          ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -84,7 +85,7 @@ contains
         ! computer controls
         !call openacc%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('openacc', openacc, tsttab)
+        call add_ui_program('openacc', openacc, tsttab, UI_CATEGORY)
     end subroutine new_openacc
 
     subroutine new_openmp( tsttab )
@@ -92,7 +93,7 @@ contains
         ! PROGRAM SPECIFICATION
         call openmp%new(&
         &'openmp',&                            ! name
-        &'openmp ',&                           ! descr_short
+        &'openmp ',&                           ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -112,7 +113,7 @@ contains
         ! computer controls
         !call openmp%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('openmp', openmp, tsttab)
+        call add_ui_program('openmp', openmp, tsttab, UI_CATEGORY)
     end subroutine new_openmp
 
     subroutine new_simd( tsttab )
@@ -120,7 +121,7 @@ contains
         ! PROGRAM SPECIFICATION
         call simd%new(&
         &'simd',&                              ! name
-        &'simd ',&                             ! descr_short
+        &'simd ',&                             ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -140,7 +141,7 @@ contains
         ! computer controls
         !call simd%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simd', simd, tsttab)
+        call add_ui_program('simd', simd, tsttab, UI_CATEGORY)
     end subroutine new_simd
 
 end module simple_test_ui_parallel

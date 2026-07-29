@@ -3,6 +3,7 @@ module simple_ui_filter
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('filter', 'Filtering', 80)
 type(ui_program), target :: filter
 type(ui_program), target :: uniform_filter2D
 type(ui_program), target :: uniform_filter3D
@@ -33,8 +34,8 @@ contains
         ! PROGRAM SPECIFICATION
         call filter%new(&
         &'filter',&                                   ! name
-        &'Filter stack/volume',&                      ! descr_short
-        &'is a program for filtering stack/volume',&  ! descr_long
+        &'Apply a selected filter to an image stack or volume',& ! summary
+        &'is a program for filtering stack/volume',&  ! help
         &'simple_exec',&                              ! executable
         &.false.)                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -69,7 +70,7 @@ contains
         ! computer controls
         call filter%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('filter', filter, prgtab)
+        call add_ui_program('filter', filter, prgtab, UI_CATEGORY)
     end subroutine new_filter
 
     subroutine new_uniform_filter2D( prgtab )
@@ -77,8 +78,8 @@ contains
         ! PROGRAM SPECIFICATION
         call uniform_filter2D%new(&
         &'uniform_filter2D',&            ! name
-        &'Uniform 2D filter',&           ! descr_short
-        &'is a program for 2D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
+        &'Filter 2D images using cross-validation',& ! summary
+        &'is a program for 2D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! help
         &'simple_exec',&                 ! executable
         &.false.)                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -99,7 +100,7 @@ contains
         ! computer controls
         call uniform_filter2D%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('uniform_filter2D', uniform_filter2D, prgtab)
+        call add_ui_program('uniform_filter2D', uniform_filter2D, prgtab, UI_CATEGORY)
     end subroutine new_uniform_filter2D
 
     subroutine new_uniform_filter3D( prgtab )
@@ -107,8 +108,8 @@ contains
         ! PROGRAM SPECIFICATION
         call uniform_filter3D%new(&
         &'uniform_filter3D',&                                   ! name
-        &'Uniform Butterworth 3D filter',&                      ! descr_short
-        &'is a program for 3D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
+        &'Apply a uniform Butterworth filter to a 3D volume',& ! summary
+        &'is a program for 3D uniform filter by minimizing/searching the fourier index of the CV cost function',& ! help
         &'simple_exec',&                                        ! executable
         &.false.)                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -131,7 +132,7 @@ contains
         ! computer controls
         call uniform_filter3D%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('uniform_filter3D', uniform_filter3D, prgtab)
+        call add_ui_program('uniform_filter3D', uniform_filter3D, prgtab, UI_CATEGORY)
     end subroutine new_uniform_filter3D
 
     subroutine new_nu_filt3D( prgtab )
@@ -139,8 +140,8 @@ contains
         ! PROGRAM SPECIFICATION
         call nu_filt3D%new(&
         &'nu_filt3D',&                                 ! name
-        &'Nonuniform 3D filter',&                              ! descr_short
-        &'is a program for 3D nonuniform local low-pass filtering of even/odd volumes',& ! descr_long
+        &'Apply spatially varying low-pass filtering to a 3D volume',& ! summary
+        &'is a program for 3D nonuniform local low-pass filtering of even/odd volumes',& ! help
         &'simple_exec',&                                       ! executable
         &.false.)                                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -161,8 +162,8 @@ contains
         ! computer controls
         call nu_filt3D%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('nu_filt3D', nu_filt3D, prgtab)
-        call add_ui_program('nonu_filt3D', nu_filt3D, prgtab)
+        call add_ui_program('nu_filt3D', nu_filt3D, prgtab, UI_CATEGORY)
+        call add_ui_program('nonu_filt3D', nu_filt3D, prgtab, UI_CATEGORY)
     end subroutine new_nu_filt3D
 
 end module simple_ui_filter

@@ -3,6 +3,7 @@ module simple_ui_dock
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('dock', 'Volume Docking', 170)
 type(ui_program), target :: dock_volpair
 type(ui_program), target :: volanalyze
 type(ui_program), target :: volcluster
@@ -30,7 +31,7 @@ contains
         ! PROGRAM SPECIFICATION
         call dock_volpair%new(&
         &'dock_volpair', &                              ! name
-        &'Dock a pair of volumes',&                     ! descr_short
+        &'Align and dock two input volumes',& ! summary
         &'is a program for docking a pair of volumes',& ! descr long
         &'simple_exec',&                                ! executable
         &.false.)                                       ! requires sp_project
@@ -56,7 +57,7 @@ contains
         ! computer controls
         call dock_volpair%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('dock_volpair', dock_volpair, prgtab)
+        call add_ui_program('dock_volpair', dock_volpair, prgtab, UI_CATEGORY)
     end subroutine new_dock_volpair
 
     subroutine new_volanalyze( prgtab )
@@ -64,8 +65,8 @@ contains
         ! PROGRAM SPECIFICATION
         call volanalyze%new(&
         &'volanalyze',&                                                             ! name
-        &'Analyze an emsemble of ab initio volumes',&                               ! descr_short
-        &'is a program for statistical analysis an ensemble of ab initio volumes',& ! descr_long
+        &'Analyze an emsemble of ab initio volumes',&                               ! summary
+        &'is a program for statistical analysis an ensemble of ab initio volumes',& ! help
         &'simple_exec',&                                                            ! executable
         &.false.)                                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -88,7 +89,7 @@ contains
         ! computer controls
         call volanalyze%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('volanalyze', volanalyze, prgtab)
+        call add_ui_program('volanalyze', volanalyze, prgtab, UI_CATEGORY)
     end subroutine new_volanalyze
 
     subroutine new_volcluster( prgtab )
@@ -96,8 +97,8 @@ contains
         ! PROGRAM SPECIFICATION
         call volcluster%new(&
         &'volcluster',&                                                             ! name
-        &'Cluster docked volumes',&                                                 ! descr_short
-        &'is a program for affinity-propagation clustering of pre-docked volumes',& ! descr_long
+        &'Cluster pre-docked volumes by affinity propagation',& ! summary
+        &'is a program for affinity-propagation clustering of pre-docked volumes',& ! help
         &'simple_exec',&                                                            ! executable
         &.false.)                                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -120,7 +121,7 @@ contains
         ! computer controls
         call volcluster%add_input(UI_COMP, nthr, required_override=.false.)
         ! add to ui_hash
-        call add_ui_program('volcluster', volcluster, prgtab)
+        call add_ui_program('volcluster', volcluster, prgtab, UI_CATEGORY)
     end subroutine new_volcluster
 
 end module simple_ui_dock

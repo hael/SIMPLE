@@ -3,6 +3,7 @@ module simple_test_ui_masks
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('masks', 'Masks', 60)
 type(ui_program), target :: bounds_from_mask3D_test
 type(ui_program), target :: graphene_mask
 type(ui_program), target :: image_bin
@@ -45,7 +46,7 @@ contains
         ! PROGRAM SPECIFICATION
         call bounds_from_mask3D_test%new(&
         &'bounds_from_mask3D_test',&           ! name
-        &'bounds_from_mask3D_test ',&          ! descr_short
+        &'bounds_from_mask3D_test ',&          ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -65,7 +66,7 @@ contains
         ! computer controls
         !call bounds_from_mask3D_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('bounds_from_mask3D_test', bounds_from_mask3D_test, tsttab)
+        call add_ui_program('bounds_from_mask3D_test', bounds_from_mask3D_test, tsttab, UI_CATEGORY)
     end subroutine new_bounds_from_mask3D_test
 
     subroutine new_graphene_mask( tsttab )
@@ -73,7 +74,7 @@ contains
         ! PROGRAM SPECIFICATION
         call graphene_mask%new(&
         &'graphene_mask',&                     ! name
-        &'graphene_mask ',&                    ! descr_short
+        &'graphene_mask ',&                    ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -93,7 +94,7 @@ contains
         ! computer controls
         !call graphene_mask%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('graphene_mask', graphene_mask, tsttab)
+        call add_ui_program('graphene_mask', graphene_mask, tsttab, UI_CATEGORY)
     end subroutine new_graphene_mask
 
     subroutine new_image_bin( tsttab )
@@ -101,7 +102,7 @@ contains
         ! PROGRAM SPECIFICATION
         call image_bin%new(&
         &'image_bin',&                         ! name
-        &'image_bin ',&                        ! descr_short
+        &'image_bin ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -121,7 +122,7 @@ contains
         ! computer controls
         !call image_bin%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('image_bin', image_bin, tsttab)
+        call add_ui_program('image_bin', image_bin, tsttab, UI_CATEGORY)
     end subroutine new_image_bin
 
     subroutine new_mask( tsttab )
@@ -129,7 +130,7 @@ contains
         ! PROGRAM SPECIFICATION
         call mask%new(&
         &'mask',&                         ! name
-        &'mask ',&                        ! descr_short
+        &'mask ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -149,7 +150,7 @@ contains
         ! computer controls
         !call mask%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('mask', mask, tsttab)
+        call add_ui_program('mask', mask, tsttab, UI_CATEGORY)
     end subroutine new_mask
 
     subroutine new_msk_routines( tsttab )
@@ -157,7 +158,7 @@ contains
         ! PROGRAM SPECIFICATION
         call msk_routines%new(&
         &'msk_routines',&                      ! name
-        &'msk_routines ',&                     ! descr_short
+        &'msk_routines ',&                     ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -177,7 +178,7 @@ contains
         ! computer controls
         !call msk_routines%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('msk_routines', msk_routines, tsttab)
+        call add_ui_program('msk_routines', msk_routines, tsttab, UI_CATEGORY)
     end subroutine new_msk_routines
 
     subroutine new_nano_mask( tsttab )
@@ -185,7 +186,7 @@ contains
         ! PROGRAM SPECIFICATION
         call nano_mask%new(&
         &'nano_mask',&                         ! name
-        &'nano_mask ',&                        ! descr_short
+        &'nano_mask ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -205,7 +206,7 @@ contains
         ! computer controls
         !call nano_mask%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('nano_mask', nano_mask, tsttab)
+        call add_ui_program('nano_mask', nano_mask, tsttab, UI_CATEGORY)
     end subroutine new_nano_mask
 
     subroutine new_otsu_test( tsttab )
@@ -213,7 +214,7 @@ contains
         ! PROGRAM SPECIFICATION
         call otsu_test%new(&
         &'otsu_test',&                         ! name
-        &'otsu_test ',&                        ! descr_short
+        &'otsu_test ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -233,7 +234,7 @@ contains
         ! computer controls
         !call otsu_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('otsu_test', otsu_test, tsttab)
+        call add_ui_program('otsu_test', otsu_test, tsttab, UI_CATEGORY)
     end subroutine new_otsu_test
 
     subroutine new_ptcl_center( tsttab )
@@ -241,7 +242,7 @@ contains
         ! PROGRAM SPECIFICATION
         call ptcl_center%new(&
         &'ptcl_center',&                       ! name
-        &'ptcl_center ',&                      ! descr_short
+        &'ptcl_center ',&                      ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -261,7 +262,7 @@ contains
         ! computer controls
         !call ptcl_center%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ptcl_center', ptcl_center, tsttab)
+        call add_ui_program('ptcl_center', ptcl_center, tsttab, UI_CATEGORY)
     end subroutine new_ptcl_center
 
 end module simple_test_ui_masks

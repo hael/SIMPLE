@@ -3,6 +3,7 @@ module simple_ui_print
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('print', 'Print Information', 120)
 type(ui_program), target :: info_image
 type(ui_program), target :: info_stktab
 type(ui_program), target :: print_dose_weights
@@ -36,8 +37,8 @@ contains
         ! PROGRAM SPECIFICATION
         call info_image%new(&
         &'info_image', &                                                                       ! name
-        &'Print header information',&                                                          ! descr_short
-        &'is a program for printing header information in MRC and SPIDER stacks and volumes',& ! descr_long
+        &'Print header metadata for an MRC or SPIDER image file',& ! summary
+        &'is a program for printing header information in MRC and SPIDER stacks and volumes',& ! help
         &'simple_exec',&                                                                       ! executable
         &.false.)                                                                              ! requires sp_project
         ! TEMPLATE
@@ -58,7 +59,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('info_image', info_image, prgtab)
+        call add_ui_program('info_image', info_image, prgtab, UI_CATEGORY)
     end subroutine new_info_image
 
     subroutine new_info_stktab( prgtab )
@@ -66,8 +67,8 @@ contains
         ! PROGRAM SPECIFICATION
         call info_stktab%new(&
         &'info_stktab', &                                                        ! name
-        &'Print stktab information',&                                            ! descr_short
-        &'is a program for printing information about stktab (list of stacks)',& ! descr_long
+        &'Print the contents of a stack-table file',& ! summary
+        &'is a program for printing information about stktab (list of stacks)',& ! help
         &'simple_exec',&                                                         ! executable
         &.false.)                                                                ! requires sp_project
         ! TEMPLATE
@@ -88,7 +89,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('info_stktab', info_stktab, prgtab)
+        call add_ui_program('info_stktab', info_stktab, prgtab, UI_CATEGORY)
     end subroutine new_info_stktab
 
     subroutine new_print_dose_weights( prgtab )
@@ -96,8 +97,8 @@ contains
         ! PROGRAM SPECIFICATION
         call print_dose_weights%new(&
         &'print_dose_weights', &                                                  ! name
-        &'Print dose weights used in motion correction',&                         ! descr_short
-        &'is a program for printing the dose weights used in motion correction',& ! descr_long
+        &'Print dose weights used in motion correction',&                         ! summary
+        &'is a program for printing the dose weights used in motion correction',& ! help
         &'simple_exec',&                                                          ! executable
         &.false.)                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -120,7 +121,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('print_dose_weights', print_dose_weights, prgtab)
+        call add_ui_program('print_dose_weights', print_dose_weights, prgtab, UI_CATEGORY)
     end subroutine new_print_dose_weights
 
     subroutine new_print_fsc( prgtab )
@@ -128,8 +129,8 @@ contains
         ! PROGRAM SPECIFICATION
         call print_fsc%new(&
         &'print_fsc', &                                                          ! name
-        &'Print FSC file produced by REFINE3D',&                                 ! descr_short
-        &'is a program for printing the binary FSC files produced by REFINE3D',& ! descr_long
+        &'Print FSC file produced by REFINE3D',&                                 ! summary
+        &'is a program for printing the binary FSC files produced by REFINE3D',& ! help
         &'simple_exec',&                                                         ! executable
         &.false.)                                                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -152,7 +153,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('print_fsc', print_fsc, prgtab)
+        call add_ui_program('print_fsc', print_fsc, prgtab, UI_CATEGORY)
     end subroutine new_print_fsc
 
     subroutine new_print_magic_boxes( prgtab )
@@ -160,8 +161,8 @@ contains
         ! PROGRAM SPECIFICATION
         call print_magic_boxes%new(&
         &'print_magic_boxes', &                                   ! name
-        &'Print magic boxes (fast FFT)',&                         ! descr_short
-        &'is a program for printing magic box sizes (fast FFT)',& ! descr_long
+        &'List FFT-efficient image sizes for a requested range',& ! summary
+        &'is a program for printing magic box sizes (fast FFT)',& ! help
         &'simple_exec',&                                          ! executable
         &.false.)                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -182,7 +183,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('print_magic_boxes', print_magic_boxes, prgtab)
+        call add_ui_program('print_magic_boxes', print_magic_boxes, prgtab, UI_CATEGORY)
     end subroutine new_print_magic_boxes
 
 end module simple_ui_print

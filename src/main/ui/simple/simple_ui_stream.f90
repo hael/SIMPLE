@@ -3,6 +3,7 @@ module simple_ui_stream
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('stream', 'Stream Workflows', 10)
 type(ui_program), target :: abinitio2D_stream
 type(ui_program), target :: assign_optics
 type(ui_program), target :: gen_pickrefs
@@ -42,17 +43,17 @@ contains
         ! PROGRAM SPECIFICATION
         call abinitio2D_stream%new(&
         &'abinitio2D_stream', &                                                  ! name
-        &'2D analysis in streaming mode',&                                       ! descr_short
-        &'is a distributed workflow that executes 2D analysis'//&                ! descr_long
+        &'Run streaming 2D analysis as new data arrive',& ! summary
+        &'is a distributed workflow that executes 2D analysis'//&                ! help
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                       ! executable
         &.true.,&                                                                ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")     ! GUI
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "data,cluster 2D,compute")     ! GUI
         ! image input/output
         ! <empty>
         ! parameter input/output
         call abinitio2D_stream%add_input(UI_PARM, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', gui_submenu="data", gui_advanced=.false.)
+        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         call abinitio2D_stream%add_input(UI_PARM, 'dir_exec', 'file', 'Previous run directory',&
         &'Directory where previous 2D analysis took place', 'e.g. 3_abinitio2D_stream', .false., '', gui_submenu="data")
         ! alternative inputs
@@ -60,19 +61,19 @@ contains
         ! search controls
         call abinitio2D_stream%add_input(UI_SRCH, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., gui_submenu="cluster 2D",&
-        &gui_advanced=.false.)
+        &gui_visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls
         call abinitio2D_stream%add_input(UI_MASK, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
-        &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
+        &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_visibility=UI_VIS_STANDARD)
         ! computer controls
-        call abinitio2D_stream%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call abinitio2D_stream%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call abinitio2D_stream%add_input(UI_COMP, nparts, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call abinitio2D_stream%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         call abinitio2D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
         ! add to ui_hash
-        call add_ui_program('abinitio2D_stream', abinitio2D_stream, prgtab)
+        call add_ui_program('abinitio2D_stream', abinitio2D_stream, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D_stream
 
     subroutine new_assign_optics( prgtab )
@@ -80,7 +81,7 @@ contains
         ! PROGRAM SPECIFICATION
         call assign_optics%new(&
         &'assign_optics', &                                              ! name
-        &'Assign optics groups',&                                        ! descr_short
+        &'Assign optics groups from microscope metadata',& ! summary
         &'is a program to assign optics groups during streaming',&       ! descr long
         &'simple_stream',&                                               ! executable
         &.true.)                                                         ! requires sp_project
@@ -98,9 +99,9 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call assign_optics%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call assign_optics%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('assign_optics', assign_optics, prgtab)
+        call add_ui_program('assign_optics', assign_optics, prgtab, UI_CATEGORY)
     end subroutine new_assign_optics
 
     subroutine new_gen_pickrefs( prgtab )
@@ -108,7 +109,7 @@ contains
         ! PROGRAM SPECIFICATION
         call gen_pickrefs%new(&
         &'gen_pickrefs', &                                               ! name
-        &'Do a mini stream to create the opening 2D for generation of picking references',&  ! descr_short
+        &'Do a mini stream to create the opening 2D for generation of picking references',&  ! summary
         &'is a program to do a mini stream to create the opening 2D',&   ! descr long
         &'simple_stream',&                                               ! executable
         &.true.)                                                         ! requires sp_project
@@ -130,9 +131,9 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call gen_pickrefs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call gen_pickrefs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('gen_pickrefs', gen_pickrefs, prgtab)
+        call add_ui_program('gen_pickrefs', gen_pickrefs, prgtab, UI_CATEGORY)
     end subroutine new_gen_pickrefs
 
     subroutine new_master( prgtab )
@@ -140,8 +141,8 @@ contains
         ! PROGRAM SPECIFICATION
         call master%new(&
         &'master', &                                                                 ! name
-        &'Stream master process',&                                                   ! descr_short
-        &'master process that forks streaming programs, collates metadata,'//&       ! descr_long
+        &'Coordinate streaming jobs, metadata, and NICE communication',& ! summary
+        &'master process that forks streaming programs, collates metadata,'//&       ! help
         &'communicates with Nice and provides job control',&
         &'simple_stream',&                                                           ! executable
         &.false.)                                                                     ! requires sp_project
@@ -164,7 +165,7 @@ contains
         call master%add_input(UI_PARM, 'total_dose',     'float',  'Total exposure dose (e/A2)',  'Total exposure dose (e/A2)',  '',                       .true.,  '')
         call master%add_input(UI_PARM, 'pickrefs',       'file',   '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)',    '', .false., '')
         call master%add_input(UI_PARM, 'box_extract',    'int',    'Force box size (px, optional)',                        'force a box size (px) eg. to match an existing dataset"', '', .false., '')
-        call master%add_input(UI_PARM, 'dir_preprocess', 'hidden_dir',    'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '',                                    .false., '')     
+        call master%add_input(UI_PARM, 'dir_preprocess', 'hidden_dir',    'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '',                                    .false., '')
         call master%add_input(UI_PARM, 'nicedispid',     'hidden_int',    'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '')
         call master%add_input(UI_PARM, 'thres',          'hidden_float',  'Distance threshold for peak picking(A)', 'Distance threshold for peak picking(A)', '0', .false., '')
         ! alternative inputs
@@ -173,7 +174,7 @@ contains
         ! mask controls
         ! computer controls
         ! add to ui_hash
-        call add_ui_program('master', master, prgtab)
+        call add_ui_program('master', master, prgtab, UI_CATEGORY)
     end subroutine new_master
 
     subroutine new_pick_extract( prgtab )
@@ -181,14 +182,14 @@ contains
         ! PROGRAM SPECIFICATION
         call pick_extract%new(&
         &'pick_extract', &                                                               ! name
-        &'Preprocessing in streaming mode',&                                             ! descr_short
-        &'is a distributed workflow that executes picking and extraction'//&             ! descr_long
+        &'Preprocessing in streaming mode',&                                             ! summary
+        &'is a distributed workflow that executes picking and extraction'//&             ! help
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                               ! executable
         &.true.,&                                                                        ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,picking,extract,compute")        ! GUI                    
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "data,picking,extract,compute")        ! GUI
         ! image input/output
-        call pick_extract%add_input(UI_IMG, pickrefs, gui_submenu="picking", gui_advanced=.false., gui_exclusive_group="pickrefs")
+        call pick_extract%add_input(UI_IMG, pickrefs, gui_submenu="picking", gui_visibility=UI_VIS_STANDARD, gui_exclusive_group="pickrefs")
         call pick_extract%add_input(UI_IMG, 'dir_exec', 'file', 'Previous run directory',&
         &'Directory where a previous pick_extract application was run', 'e.g. 2_pick_extract', .false., '', gui_submenu="data")
         ! parameter input/output
@@ -203,7 +204,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call pick_extract%add_input(UI_SRCH, pgrp, required_override=.false., gui_submenu="picking", gui_advanced=.false.)
+        call pick_extract%add_input(UI_SRCH, pgrp, required_override=.false., gui_submenu="picking", gui_visibility=UI_VIS_STANDARD)
         ! filter controls
         call pick_extract%add_input(UI_FILT, lp_pick,          gui_submenu="picking")
         call pick_extract%add_input(UI_FILT, ctfresthreshold,  gui_submenu="data")
@@ -212,12 +213,12 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call pick_extract%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
-        call pick_extract%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
+        call pick_extract%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call pick_extract%add_input(UI_COMP, nparts, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         call pick_extract%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
         ! add to ui_hash
-        call add_ui_program('pick_extract', pick_extract, prgtab)
+        call add_ui_program('pick_extract', pick_extract, prgtab, UI_CATEGORY)
     end subroutine new_pick_extract
 
     subroutine new_preproc( prgtab )
@@ -225,30 +226,30 @@ contains
         ! PROGRAM SPECIFICATION
         call preproc%new(&
         &'preproc', &                                                                       ! name
-        &'Preprocessing',&                                                                  ! descr_short
-        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
+        &'Run streaming preprocessing as new data arrive',& ! summary
+        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! help
         &' in sequence',&
         &'simple_stream',&                                                                    ! executable
         &.true.)                                                                            ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS           
+        ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preproc%add_input(UI_IMG, dir_movies, gui_submenu="data", gui_advanced=.false.)
-        call preproc%add_input(UI_IMG, gainref,    gui_submenu="data", gui_advanced=.false.)
+        call preproc%add_input(UI_IMG, dir_movies, gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_IMG, gainref,    gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_IMG, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous stream application was run', 'e.g. 2_preproc', .false., '', gui_submenu="data")
         call preproc%add_input(UI_IMG, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
-            &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '', gui_submenu="data", gui_advanced=.false.)
+            &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call preproc%add_input(UI_PARM, total_dose,                      gui_submenu="data",              gui_advanced=.false.)
-        call preproc%add_input(UI_PARM, fraction_dose_target,            gui_submenu="data",              gui_advanced=.false.)
-        call preproc%add_input(UI_PARM, smpd_downscale,                  gui_submenu="motion correction", gui_advanced=.false.)
+        call preproc%add_input(UI_PARM, total_dose,                      gui_submenu="data",              gui_visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_PARM, fraction_dose_target,            gui_submenu="data",              gui_visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_PARM, smpd_downscale,                  gui_submenu="motion correction", gui_visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, eer_fraction,                    gui_submenu="motion correction")
         call preproc%add_input(UI_PARM, max_dose,                        gui_submenu="motion correction")
-        call preproc%add_input(UI_PARM, kv,    required_override=.true., gui_submenu="data",              gui_advanced=.false.)
-        call preproc%add_input(UI_PARM, cs,    required_override=.true., gui_submenu="data",              gui_advanced=.false.)
-        call preproc%add_input(UI_PARM, fraca, required_override=.true., gui_submenu="data",              gui_advanced=.false.)
-        call preproc%add_input(UI_PARM, smpd,  required_override=.true., gui_submenu="data",              gui_advanced=.false.)
-        call preproc%add_input(UI_PARM, fit_phshift, gui_submenu="CTF estimation", gui_advanced=.false.)
+        call preproc%add_input(UI_PARM, kv,    required_override=.true., gui_submenu="data",              gui_visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_PARM, cs,    required_override=.true., gui_submenu="data",              gui_visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_PARM, fraca, required_override=.true., gui_submenu="data",              gui_visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_PARM, smpd,  required_override=.true., gui_submenu="data",              gui_visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_PARM, fit_phshift, gui_submenu="CTF estimation", gui_visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, flipgain, gui_submenu="motion correction")
         call preproc%add_input(UI_PARM, 'ninipick', 'num', 'Number of micrographs to perform initial picking preprocessing on',&
         & 'Number of micrographs to perform initial picking preprocessing on', 'e.g 500', .false., 0.0)
@@ -269,12 +270,12 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call preproc%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call preproc%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
+        call preproc%add_input(UI_COMP, nparts, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
         ! add to ui_hash
-        call add_ui_program('preproc', preproc, prgtab)
+        call add_ui_program('preproc', preproc, prgtab, UI_CATEGORY)
     end subroutine new_preproc
 
     subroutine new_sieve_cavgs( prgtab )
@@ -282,38 +283,38 @@ contains
         ! PROGRAM SPECIFICATION
         call sieve_cavgs%new(&
         &'sieve_cavgs', &                                                       ! name
-        &'2D analysis in streaming mode',&                                      ! descr_short
-        &'is a distributed workflow that executes 2D analysis'//&               ! descr_long
+        &'Run streaming 2D analysis as new data arrive',& ! summary
+        &'is a distributed workflow that executes 2D analysis'//&               ! help
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                      ! executable
         &.true.,&                                                               ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,cluster 2D,compute")    ! GUI
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "data,cluster 2D,compute")    ! GUI
         ! image input/output
         ! <empty>
         ! parameter input/output
         call sieve_cavgs%add_input(UI_PARM, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', gui_submenu="data", gui_advanced=.false.)
+        &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_PARM, 'dir_exec', 'file', 'Previous run directory',&
         &'Directory where previous 2D analysis took place', 'e.g. 3_sieve_cavgs', .false., '', gui_submenu="data")
         ! alternative inputs
         ! <empty>
         ! search controls
-        call sieve_cavgs%add_input(UI_SRCH, ncls,                                     gui_submenu="cluster 2D", gui_advanced=.false.)
-        call sieve_cavgs%add_input(UI_SRCH, nptcls_per_cls, required_override=.true., gui_submenu="cluster 2D", gui_advanced=.false.)
-        call sieve_cavgs%add_input(UI_SRCH, nchunksperset,                                                      gui_advanced=.false.)
+        call sieve_cavgs%add_input(UI_SRCH, ncls,                                     gui_submenu="cluster 2D", gui_visibility=UI_VIS_STANDARD)
+        call sieve_cavgs%add_input(UI_SRCH, nptcls_per_cls, required_override=.true., gui_submenu="cluster 2D", gui_visibility=UI_VIS_STANDARD)
+        call sieve_cavgs%add_input(UI_SRCH, nchunksperset,                                                      gui_visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls
         call sieve_cavgs%add_input(UI_MASK, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
-        &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_advanced=.false.)
+        &remove background noise', 'mask diameter in A', .false., 0., gui_submenu="cluster 2D", gui_visibility=UI_VIS_STANDARD)
         ! computer controls
-        call sieve_cavgs%add_input(UI_COMP, nchunks,                          gui_submenu="compute", gui_advanced=.false.)
-        call sieve_cavgs%add_input(UI_COMP, nparts, required_override=.true., gui_submenu="compute", gui_advanced=.false.)
-        call sieve_cavgs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call sieve_cavgs%add_input(UI_COMP, nchunks,                          gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call sieve_cavgs%add_input(UI_COMP, nparts, required_override=.true., gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call sieve_cavgs%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
         ! add to ui_hash
-        call add_ui_program('sieve_cavgs', sieve_cavgs, prgtab)
+        call add_ui_program('sieve_cavgs', sieve_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_sieve_cavgs
 
 end module simple_ui_stream

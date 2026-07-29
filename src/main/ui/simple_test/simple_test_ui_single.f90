@@ -3,6 +3,7 @@ module simple_test_ui_single
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('single', 'SINGLE', 110)
 type(ui_program), target :: atoms_stats
 type(ui_program), target :: detect_atoms
 type(ui_program), target :: simulate_nanoparticle
@@ -55,7 +56,7 @@ contains
         ! computer controls
         !call atoms_stats%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('atoms_stats', atoms_stats, tsttab)
+        call add_ui_program('atoms_stats', atoms_stats, tsttab, UI_CATEGORY)
     end subroutine new_atoms_stats
 
     subroutine new_detect_atoms( tsttab )
@@ -85,7 +86,7 @@ contains
         ! computer controls
         !call detect_atoms%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('detect_atoms', detect_atoms, tsttab)
+        call add_ui_program('detect_atoms', detect_atoms, tsttab, UI_CATEGORY)
     end subroutine new_detect_atoms
 
     subroutine new_simulate_nanoparticle( tsttab )
@@ -115,7 +116,7 @@ contains
         ! computer controls
         !call simulate_nanoparticle%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('simulate_nanoparticle', simulate_nanoparticle, tsttab)
+        call add_ui_program('simulate_nanoparticle', simulate_nanoparticle, tsttab, UI_CATEGORY)
     end subroutine new_simulate_nanoparticle
 
     subroutine new_single_workflow( tsttab )
@@ -123,7 +124,7 @@ contains
         ! PROGRAM SPECIFICATION
         call single_workflow%new(&
         &'single_workflow',&                            ! name
-        &'single workflow',&                           ! descr_short
+        &'single workflow',&                           ! summary
         &'is a test program for single workflow',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -145,7 +146,7 @@ contains
         ! computer controls
         !call single_workflow%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('single_workflow', single_workflow, tsttab)
+        call add_ui_program('single_workflow', single_workflow, tsttab, UI_CATEGORY)
     end subroutine new_single_workflow
 
 end module simple_test_ui_single

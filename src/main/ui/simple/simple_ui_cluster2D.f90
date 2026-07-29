@@ -3,6 +3,7 @@ module simple_ui_cluster2D
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('cluster2d', 'Cluster2D Workflows', 30)
 type(ui_program), target :: abinitio2D
 type(ui_program), target :: cluster2D
 type(ui_program), target :: abinitio2D_chunks
@@ -15,7 +16,7 @@ type(ui_program), target :: write_classes
 
 contains
 
-    subroutine construct_cluster2D_programs( prgtab ) 
+    subroutine construct_cluster2D_programs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call new_abinitio2D(prgtab)
         call new_abinitio2D_chunks(prgtab)
@@ -41,16 +42,16 @@ contains
         write(logfhandle,'(A)') ''
     end subroutine print_cluster2D_programs
 
-    subroutine new_abinitio2D( prgtab ) 
+    subroutine new_abinitio2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call abinitio2D%new(&
         &'abinitio2D',&                                                                ! name
-        &'ab initio 2D analysis from particles',&                                      ! descr_short
-        &'is a distributed workflow for generating 2D class averages from particles',& ! descr_long                                                           ! descr_long
+        &'ab initio 2D analysis from particles',&                                      ! summary
+        &'is a distributed workflow for generating 2D class averages from particles',& ! help                                                           ! help
         &'simple_exec',&                                                               ! executable
         &.true.,&                                                                      ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "model,filter,mask,compute"  )       ! GUI
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "model,filter,mask,compute"  )       ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -59,7 +60,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call abinitio2D%add_input(UI_SRCH, ncls, gui_submenu="search", gui_advanced=.false.)
+        call abinitio2D%add_input(UI_SRCH, ncls, gui_submenu="search", gui_visibility=UI_VIS_STANDARD)
         call abinitio2D%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their &
         &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
         call abinitio2D%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
@@ -70,24 +71,24 @@ contains
         call abinitio2D%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
         &'Sigma estimation method(group|global){global}', '(group|global){global}', .false., 'global', gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
-        call abinitio2D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.true.)
+        call abinitio2D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         ! Minimal Design A SGD control. This is the sole user-facing switch;
         ! the implementation is always the table-free streaming path.
         call abinitio2D%add_input(UI_SRCH, 'sgd_stage4_mode', 'multi', 'Stage-4 SGD policy', &
             &'Stage-4 stream policy(off|on|alternate){off}', '(off|on|alternate){off}', .false., 'off', &
-            gui_submenu="search", gui_advanced=.true.)
+            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'sgd_diagnostic', 'binary', 'SGD diagnostics', &
             &'Emit SGD diagnostic and safety logs(yes|no){no}', '(yes|no){no}', .false., 'no', &
-            gui_submenu="search", gui_advanced=.true.)
+            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'sgd_eta_shift', 'num', 'SGD shift learning rate', &
             &'Learning rate for bounded analytical shift updates{0.25}', 'learning rate{0.25}', .false., 0.25, &
-            gui_submenu="search", gui_advanced=.true.)
+            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'sgd_update_frac', 'num', 'SGD mini-batch fraction', &
             &'Fraction of active particles sampled afresh on each SGD iteration{0.6}', 'fraction{0.6}', .false., 0.6, &
-            gui_submenu="search", gui_advanced=.true.)
+            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'sgd_shift_its', 'num', 'SGD shift steps', &
             &'Maximum bounded analytical shift steps per particle{4}', 'steps{4}', .false., 4., &
-            gui_submenu="search", gui_advanced=.true.)
+            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         ! filter controls
         call abinitio2D%add_input(UI_FILT, hp, gui_submenu="filter")
         call abinitio2D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -99,12 +100,12 @@ contains
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., gui_submenu="filter")
         call abinitio2D%add_input(UI_FILT, lp, gui_submenu="filter")
         ! mask controls
-        call abinitio2D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call abinitio2D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
         ! computer controls
-        call abinitio2D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call abinitio2D%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call abinitio2D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call abinitio2D%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('abinitio2D', abinitio2D, prgtab)
+        call add_ui_program('abinitio2D', abinitio2D, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D
 
     subroutine new_abinitio2D_chunks( prgtab )
@@ -112,11 +113,11 @@ contains
         ! PROGRAM SPECIFICATION
         call abinitio2D_chunks%new(&
         &'abinitio2D_chunks',&                                                                    ! name
-        &'Independent ab initio 2D analysis of particle subsets',&                                ! descr_short
-        &'splits a project into particle-balanced subsets and runs independent abinitio2D jobs',& ! descr_long
+        &'Independent ab initio 2D analysis of particle subsets',&                                ! summary
+        &'splits a project into particle-balanced subsets and runs independent abinitio2D jobs',& ! help
         &'simple_exec',&                                                                          ! executable
         &.true.,&                                                                                 ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "cluster 2D,compute")                           ! GUI           
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "cluster 2D,compute")                           ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -128,7 +129,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, descr_placeholder_override='# of particles per cluster{500}', gui_submenu="cluster 2D", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, placeholder_override='# of particles per cluster{500}', gui_submenu="cluster 2D", gui_visibility=UI_VIS_STANDARD)
         call abinitio2D_chunks%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
         call abinitio2D_chunks%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
@@ -142,18 +143,16 @@ contains
         &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
         call abinitio2D_chunks%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
         &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.,&
-        &gui_submenu="filter", gui_advanced=.true.)
+        &gui_submenu="filter", gui_visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call abinitio2D_chunks%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_visibility=UI_VIS_STANDARD)
         ! computer controls
-        call abinitio2D_chunks%add_input(UI_COMP, 'nparts', 'num', 'Number of chunks classified simultaneously', &
-        &'Number of particle subsets abinitio2D jobs run concurrently. Each job itself runs shared-memory with nthr&
-        &threads (per-chunk MPI partitioning is not used){1}',  '# of concurrent chunks{1}', .false., 1., gui_submenu="compute", gui_advanced=.false.)
-        call abinitio2D_chunks%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call abinitio2D_chunks%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         call abinitio2D_chunks%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
         ! add to ui_hash
-        call add_ui_program('abinitio2D_chunks', abinitio2D_chunks, prgtab)
+        call add_ui_program('abinitio2D_chunks', abinitio2D_chunks, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D_chunks
 
     subroutine new_make_cavgs( prgtab )
@@ -161,9 +160,9 @@ contains
         ! PROGRAM SPECIFICATION
         call make_cavgs%new(&
         &'make_cavgs', &                           ! name
-        &'Make class averages',&                   ! descr_short
+        &'Create class averages from aligned particle images',& ! summary
         &'is a distributed workflow for generating class averages or initial random references&
-        & for cluster2D execution',&               ! descr_long
+        & for cluster2D execution',&               ! help
         &'simple_exec',&                           ! executable
         &.true.)                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -187,7 +186,7 @@ contains
         call make_cavgs%add_input(UI_COMP, nparts)
         call make_cavgs%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('make_cavgs', make_cavgs, prgtab)
+        call add_ui_program('make_cavgs', make_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_make_cavgs
 
     subroutine new_bootstrap_cavgs( prgtab )
@@ -195,9 +194,9 @@ contains
         ! PROGRAM SPECIFICATION
         call bootstrap_cavgs%new(&
         &'bootstrap_cavgs', &                                                   ! name
-        &'Bootstrap class-average space',&                                      ! descr_short
+        &'Bootstrap class averages from existing 2D class memberships',& ! summary
         &'creates an oversampled class-average stack by stochastic expansion &
-        &of existing 2D class memberships and then runs make_cavgs',&           ! descr_long
+        &of existing 2D class memberships and then runs make_cavgs',&           ! help
         &'simple_exec',&                                                        ! executable
         &.true.)                                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -222,7 +221,7 @@ contains
         call bootstrap_cavgs%add_input(UI_COMP, nparts, required_override=.false.)
         call bootstrap_cavgs%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('bootstrap_cavgs', bootstrap_cavgs, prgtab)
+        call add_ui_program('bootstrap_cavgs', bootstrap_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_bootstrap_cavgs
 
     subroutine new_unbootstrap_cavgs( prgtab )
@@ -230,8 +229,8 @@ contains
         ! PROGRAM SPECIFICATION
         call unbootstrap_cavgs%new(&
         &'unbootstrap_cavgs', &                                                ! name
-        &'Map bootstrap cls3D back to original project',&                      ! descr_short
-        &'transfers cls3D alignment from bootstrap originals (child=0) to their bootstrap_parent class indices in the original project and maps to particles',& ! descr_long
+        &'Map bootstrap cls3D back to original project',&                      ! summary
+        &'transfers cls3D alignment from bootstrap originals (child=0) to their bootstrap_parent class indices in the original project and maps to particles',& ! help
         &'simple_exec',&                                                        ! executable
         &.true.)                                                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -254,7 +253,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('unbootstrap_cavgs', unbootstrap_cavgs, prgtab)
+        call add_ui_program('unbootstrap_cavgs', unbootstrap_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_unbootstrap_cavgs
 
     subroutine new_map_cavgs_selection( prgtab )
@@ -262,8 +261,8 @@ contains
         ! PROGRAM SPECIFICATION
         call map_cavgs_selection%new(&
         &'map_cavgs_selection',&                                         ! name
-        &'Map class average selection to particles in project file',&    ! descr_short
-        &'is a program for mapping selection based on class averages to the individual particles using correlation matching',& ! descr_long
+        &'Map class average selection to particles in project file',&    ! summary
+        &'is a program for mapping selection based on class averages to the individual particles using correlation matching',& ! help
         &'all',&                                                         ! executable
         &.true.)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -283,7 +282,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('map_cavgs_selection', map_cavgs_selection, prgtab)
+        call add_ui_program('map_cavgs_selection', map_cavgs_selection, prgtab, UI_CATEGORY)
     end subroutine new_map_cavgs_selection
 
     subroutine new_sample_classes( prgtab )
@@ -291,8 +290,8 @@ contains
         ! PROGRAM SPECIFICATION
         call sample_classes%new(&
         &'sample_classes',&                                                                 ! name
-        &'Probabilistic sampling of particles based on class statistics',&                  ! descr_short
-        &'is a program for probabilistic sampling of particles based on class statistics',& ! descr_long
+        &'Probabilistic sampling of particles based on class statistics',&                  ! summary
+        &'is a program for probabilistic sampling of particles based on class statistics',& ! help
         &'simple_exec',&                                                                    ! executable
         &.true.)                                                                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -316,7 +315,7 @@ contains
         ! computer controls
         call sample_classes%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('sample_classes', sample_classes, prgtab)
+        call add_ui_program('sample_classes', sample_classes, prgtab, UI_CATEGORY)
     end subroutine new_sample_classes
 
     subroutine new_write_classes( prgtab )
@@ -324,8 +323,8 @@ contains
         ! PROGRAM SPECIFICATION
         call write_classes%new(&
         &'write_classes',&                                                                                  ! name
-        &'Writes the class averages and the individual (rotated and shifted) particles part of the class',& ! descr_short
-        &'is a program for the class averages and the individual (rotated and shifted) particles part of the classto to individual stacks',& ! descr_long
+        &'Writes the class averages and the individual (rotated and shifted) particles part of the class',& ! summary
+        &'is a program for the class averages and the individual (rotated and shifted) particles part of the classto to individual stacks',& ! help
         &'simple_exec',&                                                                                    ! executable
         &.true.)                                                                                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -344,7 +343,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('write_classes', write_classes, prgtab)
+        call add_ui_program('write_classes', write_classes, prgtab, UI_CATEGORY)
     end subroutine new_write_classes
 
 end module simple_ui_cluster2D

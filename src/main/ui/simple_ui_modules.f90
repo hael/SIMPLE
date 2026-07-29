@@ -7,6 +7,5 @@ use simple_ui_hash, only: ui_hash
 use simple_ui_program
 use simple_ui_visibility
 use simple_ui_descriptor_types
-use simple_ui_navigation
 use simple_ui_utils
 end module simple_ui_modules

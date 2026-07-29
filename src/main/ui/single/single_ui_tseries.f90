@@ -3,6 +3,7 @@ module single_ui_tseries
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('tseries', 'Time-series Pre-processing', 10)
 type(ui_program), target :: track_particles
 type(ui_program), target :: tseries_import
 type(ui_program), target :: tseries_make_pickavg
@@ -39,10 +40,10 @@ contains
         ! PROGRAM SPECIFICATION
         call track_particles%new(&
         &'track_particles',&                                                     ! name
-        &'Track particles in time-series',&                                      ! descr_short
-        &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
+        &'Track particles in time-series',&                                      ! summary
+        &'is a distributed workflow for particle tracking in time-series data',& ! help
         &'single_exec',&                                                         ! executable
-        &.true., gui_advanced=.false.)                                           ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -77,7 +78,7 @@ contains
         &'# simultaneous trackers', .true., 1.)
         call track_particles%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('track_particles', track_particles, prgtab)
+        call add_ui_program('track_particles', track_particles, prgtab, UI_CATEGORY)
     end subroutine new_track_particles
 
     subroutine new_tseries_import( prgtab )
@@ -85,10 +86,10 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_import%new(&
         &'tseries_import',&                                 ! name
-        &'Imports time-series datasets',&                   ! descr_short
-        &'is a workflow for importing time-series data',&   ! descr_long
+        &'Import nanoparticle time-series data into a SIMPLE project',& ! summary
+        &'is a workflow for importing time-series data',&   ! help
         &'single_exec',&                                    ! executable
-        &.true., gui_advanced=.false.)                      ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_import%add_input(UI_IMG, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
@@ -108,7 +109,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('tseries_import', tseries_import, prgtab)
+        call add_ui_program('tseries_import', tseries_import, prgtab, UI_CATEGORY)
     end subroutine new_tseries_import
 
     subroutine new_tseries_make_pickavg( prgtab )
@@ -116,11 +117,11 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_make_pickavg%new(&
         &'tseries_make_pickavg',&                                                        ! name
-        &'Align & average the first few frames of the time-series',&                     ! descr_short
+        &'Align & average the first few frames of the time-series',&                     ! summary
         &'is a program for aligning & averaging the first few frames of the time-series&
-        & to accomplish SNR enhancement for particle identification',&                   ! descr_long
+        & to accomplish SNR enhancement for particle identification',&                   ! help
         &'single_exec',&                                                                 ! executable
-        &.true., gui_advanced=.false.)                                                    ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -147,7 +148,7 @@ contains
         ! computer controls
         call tseries_make_pickavg%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('tseries_make_pickavg', tseries_make_pickavg, prgtab)
+        call add_ui_program('tseries_make_pickavg', tseries_make_pickavg, prgtab, UI_CATEGORY)
     end subroutine new_tseries_make_pickavg
 
     subroutine new_tseries_motion_correct( prgtab )
@@ -155,10 +156,10 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_motion_correct%new(&
         &'tseries_motion_correct', &                                                                               ! name
-        &'Anisotropic motion correction of time-series of nanoparticles',&                                         ! descr_short
-        &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.',& ! descr_long
+        &'Anisotropic motion correction of time-series of nanoparticles',&                                         ! summary
+        &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.',& ! help
         &'single_exec',&                                                                                           ! executable
-        &.true., gui_advanced=.false.)                                                                             ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                                             ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -186,7 +187,7 @@ contains
         call tseries_motion_correct%add_input(UI_COMP, nparts)
         call tseries_motion_correct%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab)
+        call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab, UI_CATEGORY)
     end subroutine new_tseries_motion_correct
 
     subroutine new_tseries_prep4tracking( prgtab )
@@ -194,10 +195,10 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_prep4tracking%new(&
         &'tseries_prep4tracking',&                                                        ! name
-        &'Prepare time-series for particle tracking',&                                    ! descr_short
-        &'is a program for preparing time-series for preparing particle tracking',&       ! descr_long
+        &'Prepare time-series for particle tracking',&                                    ! summary
+        &'is a program for preparing time-series for preparing particle tracking',&       ! help
         &'single_exec',&                                                                  ! executable
-        &.true., gui_advanced=.false.)                                                    ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -214,7 +215,7 @@ contains
         ! computer controls
         call tseries_prep4tracking%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('tseries_prep4tracking', tseries_prep4tracking, prgtab)
+        call add_ui_program('tseries_prep4tracking', tseries_prep4tracking, prgtab, UI_CATEGORY)
     end subroutine new_tseries_prep4tracking
 
     subroutine new_tseries_extractor( prgtab )
@@ -222,10 +223,10 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_extractor%new(&
         &'tseries_extractor',&                                                           ! name
-        &'Extract particle trajectories from time-series',&                              ! descr_short
-        &'is a program for extracting particle trajectories from time-series (movies) of nanoparticles.',& ! descr_long
+        &'Extract particle trajectories from time-series',&                              ! summary
+        &'is a program for extracting particle trajectories from time-series (movies) of nanoparticles.',& ! help
         &'single_exec',&                                                                  ! executable
-        &.true., gui_advanced=.false.)                                                    ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -244,7 +245,7 @@ contains
         ! computer controls
         call tseries_extractor%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('tseries_extractor', tseries_extractor, prgtab)
+        call add_ui_program('tseries_extractor', tseries_extractor, prgtab, UI_CATEGORY)
     end subroutine new_tseries_extractor
 
 end module single_ui_tseries

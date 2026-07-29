@@ -3,6 +3,7 @@ module single_ui_nano2D
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('nano2d', '2D Analysis', 30)
 type(ui_program), target :: analysis2D_nano
 type(ui_program), target :: center2D_nano
 type(ui_program), target :: cluster2D_nano
@@ -33,10 +34,10 @@ contains
         ! PROGRAM SPECIFICATION
         call analysis2D_nano%new(&
         &'analysis2D_nano', &                                         ! name
-        &'2D analysis (centering, diameter estimation & clustering) for nanocrystal time-series',& ! descr_short
+        &'2D analysis (centering, diameter estimation & clustering) for nanocrystal time-series',& ! summary
         &'is a program for 2D analysis for nanycrystal time-series',& ! descr long
         &'single_exec',&                                              ! executable
-        &.true., gui_advanced=.false.)                                ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -54,7 +55,7 @@ contains
         call analysis2D_nano%add_input(UI_COMP, nthr)
         call analysis2D_nano%add_input(UI_COMP, script)
         ! add to ui_hash
-        call add_ui_program('analysis2D_nano', analysis2D_nano, prgtab)
+        call add_ui_program('analysis2D_nano', analysis2D_nano, prgtab, UI_CATEGORY)
     end subroutine new_analysis2D_nano
 
     subroutine new_center2D_nano( prgtab )
@@ -62,11 +63,11 @@ contains
         ! PROGRAM SPECIFICATION
         call center2D_nano%new(&
         &'center2D_nano',&                                                      ! name
-        &'Simultaneous 2D alignment and clustering of nanoparticle images',&    ! descr_short
+        &'Simultaneous 2D alignment and clustering of nanoparticle images',&    ! summary
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
-        & suitable for the first pass of cleanup after time-series tracking',&  ! descr_long
+        & suitable for the first pass of cleanup after time-series tracking',&  ! help
         &'single_exec',&                                                        ! executable
-        &.true., gui_advanced=.false.)                                          ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -85,7 +86,7 @@ contains
         call center2D_nano%add_input(UI_COMP, nthr)
         call center2D_nano%add_input(UI_COMP, script)
         ! add to ui_hash
-        call add_ui_program('center2D_nano', center2D_nano, prgtab)
+        call add_ui_program('center2D_nano', center2D_nano, prgtab, UI_CATEGORY)
     end subroutine new_center2D_nano
 
     subroutine new_cluster2D_nano( prgtab )
@@ -93,10 +94,10 @@ contains
         ! PROGRAM SPECIFICATION
         call cluster2D_nano%new(&
         &'cluster2D_nano',&                                                                 ! name
-        &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! descr_short
-        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! descr_long
+        &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! summary
+        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! help
         &'single_exec',&                                                                    ! executable
-        &.true., gui_advanced=.false.)                                                      ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -126,7 +127,7 @@ contains
         call cluster2D_nano%add_input(UI_COMP, nthr)
         call cluster2D_nano%add_input(UI_COMP, script)
         ! add to ui_hash
-        call add_ui_program('cluster2D_nano', cluster2D_nano, prgtab)
+        call add_ui_program('cluster2D_nano', cluster2D_nano, prgtab, UI_CATEGORY)
     end subroutine new_cluster2D_nano
 
     subroutine new_estimate_diam( prgtab )
@@ -134,10 +135,10 @@ contains
         ! PROGRAM SPECIFICATION
         call estimate_diam%new(&
         &'estimate_diam',&                                                                                              ! name
-        &'Estimation of a suitable mask diameter for nanoparticle time-series',&                                        ! descr_short
-        &'is a program for estimation of a suitable mask diameter for spherical masking of nanoparticle time-series ',& ! descr_long
+        &'Estimation of a suitable mask diameter for nanoparticle time-series',&                                        ! summary
+        &'is a program for estimation of a suitable mask diameter for spherical masking of nanoparticle time-series ',& ! help
         &'single_exec',&                                                                                                ! executable
-        &.false., gui_advanced=.false.)                                                                                 ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call estimate_diam%add_input(UI_IMG, stk, required_override=.true.)
@@ -149,13 +150,13 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call estimate_diam%add_input(UI_FILT, lp, descr_short_override='low-pass limit in Angstroms{7.}')
+        call estimate_diam%add_input(UI_FILT, lp, label_override='low-pass limit in Angstroms{7.}')
         ! mask controls
         call estimate_diam%add_input(UI_MASK, mskdiam)
         ! computer controls
         call estimate_diam%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('estimate_diam', estimate_diam, prgtab)
+        call add_ui_program('estimate_diam', estimate_diam, prgtab, UI_CATEGORY)
     end subroutine new_estimate_diam
 
 end module single_ui_nano2D

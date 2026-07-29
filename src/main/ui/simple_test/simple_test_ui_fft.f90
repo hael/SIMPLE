@@ -3,6 +3,7 @@ module simple_test_ui_fft
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('fft', 'FFT', 20)
 type(ui_program), target :: corrs2weights_test
 type(ui_program), target :: eval_polarftcc
 type(ui_program), target :: ft_expanded
@@ -45,11 +46,11 @@ contains
         ! PROGRAM SPECIFICATION
         call corrs2weights_test%new(&
         &'corrs2weights_test',&                ! name
-        &'corrs2weights test ',&               ! descr_short
+        &'corrs2weights test ',&               ! summary
         &'is a test program for generating correlation-based weights ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
-        call add_ui_program('corrs2weights_test', corrs2weights_test, tsttab)
+        call add_ui_program('corrs2weights_test', corrs2weights_test, tsttab, UI_CATEGORY)
     end subroutine new_corrs2weights_test
 
     subroutine new_eval_polarftcc( tsttab )
@@ -57,7 +58,7 @@ contains
         ! PROGRAM SPECIFICATION
         call eval_polarftcc%new(&
         &'eval_polarftcc',&                    ! name
-        &'eval_polarftcc ',&                   ! descr_short
+        &'eval_polarftcc ',&                   ! summary
         &'is a test program for evaluating polar fourier cross-correlations ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -77,7 +78,7 @@ contains
         ! computer controls
         !call eval_polarftcc%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('eval_polarftcc', eval_polarftcc, tsttab)
+        call add_ui_program('eval_polarftcc', eval_polarftcc, tsttab, UI_CATEGORY)
     end subroutine new_eval_polarftcc
 
     subroutine new_ft_expanded( tsttab )
@@ -85,7 +86,7 @@ contains
         ! PROGRAM SPECIFICATION
         call ft_expanded%new(&
         &'ft_expanded',&                       ! name
-        &'ft_expanded ',&                      ! descr_short
+        &'ft_expanded ',&                      ! summary
         &'is a test program for shift search with L-BFGS-B using expanded Fourier transforms',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -105,7 +106,7 @@ contains
         ! computer controls
         !call ft_expanded%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ft_expanded', ft_expanded, tsttab)
+        call add_ui_program('ft_expanded', ft_expanded, tsttab, UI_CATEGORY)
     end subroutine new_ft_expanded
 
     subroutine new_gencorrs_fft( tsttab )
@@ -113,7 +114,7 @@ contains
         ! PROGRAM SPECIFICATION
         call gencorrs_fft%new(&
         &'gencorrs_fft',&                      ! name
-        &'gencorrs_fft ',&                     ! descr_short
+        &'gencorrs_fft ',&                     ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -133,7 +134,7 @@ contains
         ! computer controls
         !call gencorrs_fft%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('gencorrs_fft', gencorrs_fft, tsttab)
+        call add_ui_program('gencorrs_fft', gencorrs_fft, tsttab, UI_CATEGORY)
     end subroutine new_gencorrs_fft
 
     subroutine new_order_corr( tsttab )
@@ -141,7 +142,7 @@ contains
         ! PROGRAM SPECIFICATION
         call order_corr%new(&
         &'order_corr',&                        ! name
-        &'order_corr ',&                       ! descr_short
+        &'order_corr ',&                       ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -161,7 +162,7 @@ contains
         ! computer controls
         !call order_corr%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('order_corr', order_corr, tsttab)
+        call add_ui_program('order_corr', order_corr, tsttab, UI_CATEGORY)
     end subroutine new_order_corr
 
     subroutine new_phasecorr( tsttab )
@@ -169,7 +170,7 @@ contains
         ! PROGRAM SPECIFICATION
         call phasecorr%new(&
         &'phasecorr',&                         ! name
-        &'phasecorr ',&                        ! descr_short
+        &'phasecorr ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -189,7 +190,7 @@ contains
         ! computer controls
         !call phasecorr%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('phasecorr', phasecorr, tsttab)
+        call add_ui_program('phasecorr', phasecorr, tsttab, UI_CATEGORY)
     end subroutine new_phasecorr
 
     subroutine new_rank_weights( tsttab )
@@ -197,7 +198,7 @@ contains
         ! PROGRAM SPECIFICATION
         call rank_weights%new(&
         &'rank_weights',&                      ! name
-        &'rank_weights ',&                     ! descr_short
+        &'rank_weights ',&                     ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -217,7 +218,7 @@ contains
         ! computer controls
         !call rank_weights%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('rank_weights', rank_weights, tsttab)
+        call add_ui_program('rank_weights', rank_weights, tsttab, UI_CATEGORY)
     end subroutine new_rank_weights
 
     subroutine new_rotate_ref( tsttab )
@@ -225,7 +226,7 @@ contains
         ! PROGRAM SPECIFICATION
         call rotate_ref%new(&
         &'rotate_ref',&                        ! name
-        &'rotate_ref ',&                       ! descr_short
+        &'rotate_ref ',&                       ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -245,7 +246,7 @@ contains
         ! computer controls
         !call rotate_ref%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('rotate_ref', rotate_ref, tsttab)
+        call add_ui_program('rotate_ref', rotate_ref, tsttab, UI_CATEGORY)
     end subroutine new_rotate_ref
 
 end module simple_test_ui_fft

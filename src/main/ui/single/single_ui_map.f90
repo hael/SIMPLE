@@ -3,6 +3,7 @@ module single_ui_map
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('map', 'Map Analysis', 60)
 type(ui_program), target :: conv_atom_denoise
 type(ui_program), target :: tsegmaps_core_finder
 
@@ -27,10 +28,10 @@ contains
         ! PROGRAM SPECIFICATION
         call conv_atom_denoise%new(&
         &'conv_atom_denoise', &                                                  ! name
-        &'Denoise atomic-resolution nanoparticle map through atom convolution',& ! descr_short
+        &'Denoise atomic-resolution nanoparticle map through atom convolution',& ! summary
         &'is a program for denoising atomic-resolution nanoparticle maps exactly as in detect_atoms',& ! descr long
         &'single_exec',&                                                         ! executable
-        &.false., gui_advanced=.false.)                                          ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call conv_atom_denoise%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -48,7 +49,7 @@ contains
         ! computer controls
         call conv_atom_denoise%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('conv_atom_denoise', conv_atom_denoise, prgtab)
+        call add_ui_program('conv_atom_denoise', conv_atom_denoise, prgtab, UI_CATEGORY)
     end subroutine new_conv_atom_denoise
 
     subroutine new_tsegmaps_core_finder( prgtab )
@@ -56,10 +57,10 @@ contains
         ! PROGRAM SPECIFICATION
         call tsegmaps_core_finder%new(&
         &'tsegmaps_core_finder',&                                                         ! name
-        &'For doing radial averaging of the core of docked 3D time-segment maps of NPs',& ! descr_short
+        &'For doing radial averaging of the core of docked 3D time-segment maps of NPs',& ! summary
         &'is a program that analyses docked time-series density maps',&                   ! descr long
         &'single_exec',&                                                                  ! executable
-        &.false., gui_advanced=.false.)                                                   ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tsegmaps_core_finder%add_input(UI_IMG, 'filetab', 'file', 'Volumes list',&
@@ -77,7 +78,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('tsegmaps_core_finder', tsegmaps_core_finder, prgtab)
+        call add_ui_program('tsegmaps_core_finder', tsegmaps_core_finder, prgtab, UI_CATEGORY)
     end subroutine new_tsegmaps_core_finder
 
 end module single_ui_map

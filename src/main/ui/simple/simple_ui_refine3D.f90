@@ -3,6 +3,7 @@ module simple_ui_refine3D
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('refine3d', 'Refine 3D Workflows', 60)
 type(ui_program), target :: automask
 type(ui_program), target :: postprocess
 type(ui_program), target :: reconstruct3D
@@ -42,8 +43,8 @@ contains
         ! PROGRAM SPECIFICATION
         call automask%new(&
         &'automask',&                                    ! name
-        &'envelope masking',&                            ! descr_short
-        &'is a program for automated envelope masking',& ! descr_long
+        &'Create a spherical mask from the estimated particle diameter',& ! summary
+        &'is a program for automated envelope masking',& ! help
         &'simple_exec',&                                 ! executable
         &.false.)                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -70,7 +71,7 @@ contains
         ! computer controls
         call automask%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('automask', automask, prgtab)
+        call add_ui_program('automask', automask, prgtab, UI_CATEGORY)
     end subroutine new_automask
 
     subroutine new_postprocess( prgtab )
@@ -78,8 +79,8 @@ contains
         ! PROGRAM SPECIFICATION
         call postprocess%new(&
         &'postprocess',&                                                      ! name
-        &'Post-processing of volume',&                                        ! descr_short
-        &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
+        &'Post-process a reconstructed volume with filtering and sharpening',& ! summary
+        &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! help
         &'simple_exec',&                                                      ! executable
         &.true.)                                                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -105,7 +106,7 @@ contains
         ! computer controls
         call postprocess%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('postprocess', postprocess, prgtab)
+        call add_ui_program('postprocess', postprocess, prgtab, UI_CATEGORY)
     end subroutine new_postprocess
 
     subroutine new_reconstruct3D( prgtab )
@@ -113,7 +114,7 @@ contains
         ! PROGRAM SPECIFICATION
         call reconstruct3D%new(&
         &'reconstruct3D',&                                               ! name
-        &'3D reconstruction from oriented particles',&                   ! descr_short
+        &'3D reconstruction from oriented particles',&                   ! summary
         &'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,&
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
@@ -142,7 +143,7 @@ contains
         call reconstruct3D%add_input(UI_COMP, nparts, required_override=.false.)
         call reconstruct3D%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('reconstruct3D', reconstruct3D, prgtab)
+        call add_ui_program('reconstruct3D', reconstruct3D, prgtab, UI_CATEGORY)
     end subroutine new_reconstruct3D
 
     subroutine new_bootstrap_rec3D( prgtab )
@@ -150,7 +151,7 @@ contains
         ! PROGRAM SPECIFICATION
         call bootstrap_rec3D%new(&
         &'bootstrap_rec3D',&                                             ! name
-        &'bootstrap ML-regularized 3D reconstruction',&                  ! descr_short
+        &'bootstrap ML-regularized 3D reconstruction',&                  ! summary
         &'generates an unregularized even/odd reconstruction, estimates weighted global sigma2 curves from the half-map difference,&
         & and reruns reconstruct3D with Euclidean ML regularization',&
         &'simple_exec',&                                                 ! executable
@@ -178,7 +179,7 @@ contains
         call bootstrap_rec3D%add_input(UI_COMP, nparts, required_override=.false.)
         call bootstrap_rec3D%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('bootstrap_rec3D', bootstrap_rec3D, prgtab)
+        call add_ui_program('bootstrap_rec3D', bootstrap_rec3D, prgtab, UI_CATEGORY)
     end subroutine new_bootstrap_rec3D
 
     subroutine new_refine3D( prgtab )
@@ -186,11 +187,11 @@ contains
         ! PROGRAM SPECIFICATION
         call refine3D%new(&
         &'refine3D',&                                                                               ! name
-        &'3D refinement',&                                                                          ! descr_short
-        &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
+        &'Refine a 3D structure from particles by projection matching',& ! summary
+        &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "search,filter,mask,compute")                     ! GUI
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "search,filter,mask,compute")                     ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%add_input(UI_IMG, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -206,7 +207,7 @@ contains
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, maxits, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, update_frac, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_advanced=.false.)
+        call refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_visibility=UI_VIS_STANDARD)
         call refine3D%add_input(UI_SRCH, nstates, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, objfun, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, objfun_den, gui_submenu="search")
@@ -214,7 +215,7 @@ contains
         call refine3D%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction reconstruction',&
         &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}',&
-        &'(yes|no){no}', .false., 'no', gui_submenu="search", gui_advanced=.true.)
+        &'(yes|no){no}', .false., 'no', gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}',&
         &.false., 'shc', gui_submenu="search")
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
@@ -237,17 +238,17 @@ contains
         call refine3D%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., gui_submenu="filter")
         call refine3D%add_input(UI_FILT, ml_reg, gui_submenu="filter")
-        call refine3D%add_input(UI_FILT, conical_fsc, gui_submenu="filter", gui_advanced=.true.)
+        call refine3D%add_input(UI_FILT, conical_fsc, gui_submenu="filter", gui_visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, nu_refine, gui_submenu="filter")
         call refine3D%add_input(UI_FILT, combine_eo, gui_submenu="filter")
         ! mask controls
-        call refine3D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call refine3D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
         call refine3D%add_input(UI_MASK, automsk, gui_submenu="mask")
         ! computer controls
-        call refine3D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call refine3D%add_input(UI_COMP, nthr,                              gui_submenu="compute", gui_advanced=.false.)
+        call refine3D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call refine3D%add_input(UI_COMP, nthr,                              gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('refine3D', refine3D, prgtab)
+        call add_ui_program('refine3D', refine3D, prgtab, UI_CATEGORY)
     end subroutine new_refine3D
 
     subroutine new_refine3D_auto( prgtab )
@@ -255,11 +256,11 @@ contains
         ! PROGRAM SPECIFICATION
         call refine3D_auto%new(&
         &'refine3D_auto',&                                                                          ! name
-        &'automated single-state 3D refinement',&                                                   ! descr_short
-        &'is an automated workflow for single-state 3D refinement based on probabilistic projection matching',& ! descr_long
+        &'automated single-state 3D refinement',&                                                   ! summary
+        &'is an automated workflow for single-state 3D refinement based on probabilistic projection matching',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "search,filter,mask,compute")                     ! GUI
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "search,filter,mask,compute")                     ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_auto%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
@@ -270,7 +271,7 @@ contains
         ! <empty>
         ! search controls
         call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., gui_submenu="search")
-        call refine3D_auto%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
+        call refine3D_auto%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_visibility=UI_VIS_STANDARD)
         call refine3D_auto%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
         call refine3D_auto%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
@@ -289,12 +290,12 @@ contains
         call refine3D_auto%add_input(UI_FILT, 'res_target', 'num', 'Resolution target (in A)',&
         & 'Resolution target in Angstroms', 'Resolution target in Angstroms', .false., 3., gui_submenu="filter")
         ! mask controls
-        call refine3D_auto%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call refine3D_auto%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
         ! computer controls
-        call refine3D_auto%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call refine3D_auto%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call refine3D_auto%add_input(UI_COMP, nparts, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call refine3D_auto%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('refine3D_auto', refine3D_auto, prgtab)
+        call add_ui_program('refine3D_auto', refine3D_auto, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_auto
 
     subroutine new_refine3D_multi( prgtab )
@@ -302,11 +303,11 @@ contains
         ! PROGRAM SPECIFICATION
         call refine3D_multi%new(&
         &'refine3D_multi',&                                                                         ! name
-        &'automated multi-state 3D refinement',&                                                    ! descr_short
-        &'is an automated workflow for multi-state 3D refinement from project state labels or command-line nstates',& ! descr_long
+        &'automated multi-state 3D refinement',&                                                    ! summary
+        &'is an automated workflow for multi-state 3D refinement from project state labels or command-line nstates',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "search,filter,mask,compute")                     ! GUI
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "search,filter,mask,compute")                     ! GUI
         ! search controls
         call refine3D_multi%add_input(UI_SRCH, maxits,      required_override=.false., gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, nstates,     required_override=.false., gui_submenu="search")
@@ -317,7 +318,7 @@ contains
         call refine3D_multi%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
         &'Prob-neigh neighborhood mode(state|geom){geom}', '(state|geom){geom}', .false., 'geom', &
         &gui_submenu="search")
-        call refine3D_multi%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_advanced=.false.)
+        call refine3D_multi%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_visibility=UI_VIS_STANDARD)
         call refine3D_multi%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
         call refine3D_multi%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
@@ -333,14 +334,14 @@ contains
         &gui_submenu="filter")
         call refine3D_multi%add_input(UI_FILT, ml_reg, gui_submenu="filter")
         ! mask controls
-        call refine3D_multi%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_advanced=.false.)
+        call refine3D_multi%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
         call refine3D_multi%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &
         &'Perform envelope masking(yes|tight|no){no}', '(yes|tight|no){no}', .false., 'no', gui_submenu="mask")
         ! computer controls
-        call refine3D_multi%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call refine3D_multi%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call refine3D_multi%add_input(UI_COMP, nparts, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call refine3D_multi%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('refine3D_multi', refine3D_multi, prgtab)
+        call add_ui_program('refine3D_multi', refine3D_multi, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_multi
 
 end module simple_ui_refine3D

@@ -3,6 +3,7 @@ module single_ui_trajectory
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('trajectory', 'Trajectory Analysis', 20)
 type(ui_program), target :: extract_substk
 type(ui_program), target :: graphene_subtr
 type(ui_program), target :: import_trajectory
@@ -42,10 +43,10 @@ contains
         ! PROGRAM SPECIFICATION
         call extract_substk%new(&
         &'extract_substk',&                                                                                            ! name
-        &'extraction of a substack segment of time-series of metallic nanoparticles',&                                 ! descr_short
-        &'is a shared-memory workflow for extraction of a substack segment of time-series of metallic nanoparticles',& ! descr_long
+        &'extraction of a substack segment of time-series of metallic nanoparticles',&                                 ! summary
+        &'is a shared-memory workflow for extraction of a substack segment of time-series of metallic nanoparticles',& ! help
         &'single_exec',&                                                                                               ! executable
-        &.true., gui_advanced=.false.)                                                                                 ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -65,7 +66,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('extract_substk', extract_substk, prgtab)
+        call add_ui_program('extract_substk', extract_substk, prgtab, UI_CATEGORY)
     end subroutine new_extract_substk
 
     subroutine new_graphene_subtr( prgtab )
@@ -73,10 +74,10 @@ contains
         ! PROGRAM SPECIFICATION
         call graphene_subtr%new(&
         &'graphene_subtr',&                                  ! name
-        &'Removes graphene Fourier peaks in time-series',&   ! descr_short
-        &'Removes graphene Fourier peaks in time-series',&   ! descr_long
+        &'Removes graphene Fourier peaks in time-series',&   ! summary
+        &'Removes graphene Fourier peaks in time-series',&   ! help
         &'single_exec',&                                     ! executable
-        &.false., gui_advanced=.false.)                      ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call graphene_subtr%add_input(UI_IMG, stk_traj)
@@ -96,7 +97,7 @@ contains
         ! computer controls
         call graphene_subtr%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('graphene_subtr', graphene_subtr, prgtab)
+        call add_ui_program('graphene_subtr', graphene_subtr, prgtab, UI_CATEGORY)
     end subroutine new_graphene_subtr
 
     subroutine new_import_trajectory( prgtab )
@@ -104,10 +105,10 @@ contains
         ! PROGRAM SPECIFICATION
         call import_trajectory%new(&
         &'import_trajectory',&                    ! name
-        &'Imports time-series particles stack',&            ! descr_short
-        &'is a workflow for importing time-series data',&   ! descr_long
+        &'Imports time-series particles stack',&            ! summary
+        &'is a workflow for importing time-series data',&   ! help
         &'single_exec',&                                    ! executable
-        &.true., gui_advanced=.false.)                      ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call import_trajectory%add_input(UI_IMG, stk, required_override=.true.)
@@ -125,7 +126,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('import_trajectory', import_trajectory, prgtab)
+        call add_ui_program('import_trajectory', import_trajectory, prgtab, UI_CATEGORY)
     end subroutine new_import_trajectory
 
     subroutine new_trajectory_denoise( prgtab )
@@ -133,10 +134,10 @@ contains
         ! PROGRAM SPECIFICATION
         call trajectory_denoise%new(&
         &'trajectory_denoise',&                                       ! name
-        &'diffusion-map trajectory denoising',&                       ! descr_short
-        &'is a program for diffusion-map denoising of an image stack',& ! descr_long
+        &'diffusion-map trajectory denoising',&                       ! summary
+        &'is a program for diffusion-map denoising of an image stack',& ! help
         &'single_exec',&                                              ! executable
-        &.false., gui_advanced=.false.)                               ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call trajectory_denoise%add_input(UI_IMG, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '')
@@ -164,7 +165,7 @@ contains
         ! computer controls
         call trajectory_denoise%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('trajectory_denoise', trajectory_denoise, prgtab)
+        call add_ui_program('trajectory_denoise', trajectory_denoise, prgtab, UI_CATEGORY)
     end subroutine new_trajectory_denoise
 
     subroutine new_trajectory_make_projavgs( prgtab )
@@ -172,11 +173,11 @@ contains
         ! PROGRAM SPECIFICATION
         call trajectory_make_projavgs%new(&
         &'trajectory_make_projavgs',&                                                    ! name
-        &'Align & average the first few frames of the time-series',&                     ! descr_short
+        &'Align & average the first few frames of the time-series',&                     ! summary
         &'is a program for aligning & averaging the first few frames of the time-series&
-        & to accomplish SNR enhancement for particle identification',&                   ! descr_long
+        & to accomplish SNR enhancement for particle identification',&                   ! help
         &'single_exec',&                                                                 ! executable
-        &.true., gui_advanced=.false.)                                                   ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -194,7 +195,7 @@ contains
         ! computer controls
         call trajectory_make_projavgs%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('trajectory_make_projavgs', trajectory_make_projavgs, prgtab)
+        call add_ui_program('trajectory_make_projavgs', trajectory_make_projavgs, prgtab, UI_CATEGORY)
     end subroutine new_trajectory_make_projavgs
 
     subroutine new_trajectory_reconstruct3D( prgtab )
@@ -202,10 +203,10 @@ contains
         ! PROGRAM SPECIFICATION
         call trajectory_reconstruct3D%new(&
         &'trajectory_reconstruct3D',&                                    ! name
-        &'Time windowed 3D reconstruction from oriented particles',&     ! descr_long
+        &'Time windowed 3D reconstruction from oriented particles',&     ! help
         &'Time windowed 3D reconstruction from oriented particles',&
         &'single_exec',&                                                 ! executable
-        &.true., gui_advanced=.false.)                                   ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call trajectory_reconstruct3D%add_input(UI_IMG, 'vol1', 'file', 'Mean volume for latent chunking', &
@@ -249,7 +250,7 @@ contains
         call trajectory_reconstruct3D%add_input(UI_COMP, nparts, required_override=.false.)
         call trajectory_reconstruct3D%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('trajectory_reconstruct3D', trajectory_reconstruct3D, prgtab)
+        call add_ui_program('trajectory_reconstruct3D', trajectory_reconstruct3D, prgtab, UI_CATEGORY)
     end subroutine new_trajectory_reconstruct3D
 
     subroutine new_trajectory_swap_stack( prgtab )
@@ -257,10 +258,10 @@ contains
         ! PROGRAM SPECIFICATION
         call trajectory_swap_stack%new(&
         &'trajectory_swap_stack',&                                        ! name
-        &'Substitutes stack into an existing project',&                   ! descr_short
-        &'is a program for substituting stack into an existing project',& ! descr_long
+        &'Substitutes stack into an existing project',&                   ! summary
+        &'is a program for substituting stack into an existing project',& ! help
         &'single_exec',&                                                  ! executable
-        &.true., gui_advanced=.false.)                                    ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call trajectory_swap_stack%add_input(UI_IMG, stk, required_override=.true.)
@@ -277,7 +278,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('trajectory_swap_stack', trajectory_swap_stack, prgtab)
+        call add_ui_program('trajectory_swap_stack', trajectory_swap_stack, prgtab, UI_CATEGORY)
     end subroutine new_trajectory_swap_stack
 
 end module single_ui_trajectory

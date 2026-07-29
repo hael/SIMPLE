@@ -3,6 +3,7 @@ module simple_ui_cavgproc
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('cavgproc', 'Class Average Processing', 40)
 type(ui_program), target :: cluster_cavgs
 type(ui_program), target :: model_cavgs_rejection
 type(ui_program), target :: cluster_cavgs_selection
@@ -42,8 +43,8 @@ contains
         ! PROGRAM SPECIFICATION
         call cluster_cavgs%new(&
         &'cluster_cavgs',&                                                       ! name
-        &'Analysis of class averages with affinity propagation',&                ! descr_short
-        &'is a program for analyzing class averages with affinity propagation',& ! descr_long
+        &'Analysis of class averages with affinity propagation',&                ! summary
+        &'is a program for analyzing class averages with affinity propagation',& ! help
         &'simple_exec',&                                                         ! executable
         &.false.)                                                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -65,7 +66,7 @@ contains
         ! computer controls
         call cluster_cavgs%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('cluster_cavgs', cluster_cavgs, prgtab)
+        call add_ui_program('cluster_cavgs', cluster_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_cluster_cavgs
 
     subroutine new_model_cavgs_rejection( prgtab )
@@ -73,8 +74,8 @@ contains
         ! PROGRAM SPECIFICATION
         call model_cavgs_rejection%new(&
         &'model_cavgs_rejection',&                                               ! name
-        &'Model-driven rejection of class averages',&                            ! descr_short
-        &'is a program for automatic class-average rejection using normalized quality feature vectors',& ! descr_long
+        &'Model-driven rejection of class averages',&                            ! summary
+        &'is a program for automatic class-average rejection using normalized quality feature vectors',& ! help
         &'simple_exec',&                                                         ! executable
         &.true.)                                                                 ! requires sp_project except quality_mode=learn|evaluate|promote
         ! INPUT PARAMETER SPECIFICATIONS
@@ -104,7 +105,7 @@ contains
         ! computer controls
         call model_cavgs_rejection%add_input(UI_COMP, nthr, gui_active_flags='quality_mode=apply|analyze|learn|evaluate')
         ! add to ui_hash
-        call add_ui_program('model_cavgs_rejection', model_cavgs_rejection, prgtab)
+        call add_ui_program('model_cavgs_rejection', model_cavgs_rejection, prgtab, UI_CATEGORY)
     end subroutine new_model_cavgs_rejection
 
     subroutine new_cluster_cavgs_selection( prgtab )    
@@ -112,8 +113,8 @@ contains
         ! PROGRAM SPECIFICATION
         call cluster_cavgs_selection%new(&
         &'cluster_cavgs_selection',&                                                                  ! name
-        &'Analysis of selected class averages with affinity propagation to prepare for match_cavgs',& ! descr_short
-        &'is a program for analyzing selected class averages with affinity propagation',&             ! descr_long
+        &'Analysis of selected class averages with affinity propagation to prepare for match_cavgs',& ! summary
+        &'is a program for analyzing selected class averages with affinity propagation',&             ! help
         &'simple_exec',&                                                                              ! executable
         &.true.)                                                                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -133,7 +134,7 @@ contains
         ! computer controls
         call cluster_cavgs_selection%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('cluster_cavgs_selection', cluster_cavgs_selection, prgtab)
+        call add_ui_program('cluster_cavgs_selection', cluster_cavgs_selection, prgtab, UI_CATEGORY)
     end subroutine new_cluster_cavgs_selection
 
     subroutine new_cluster_stack( prgtab )  
@@ -141,8 +142,8 @@ contains
         ! PROGRAM SPECIFICATION
         call cluster_stack%new(&
         &'cluster_stack',&                                            ! name
-        &'Analysis of class averages with k-medoids',&                ! descr_short
-        &'is a program for analyzing class averages with k-medoids',& ! descr_long
+        &'Analysis of class averages with k-medoids',&                ! summary
+        &'is a program for analyzing class averages with k-medoids',& ! help
         &'simple_exec',&                                              ! executable
         &.false.)                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -162,7 +163,7 @@ contains
         ! computer controls
         call cluster_stack%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('cluster_stack', cluster_stack, prgtab)
+        call add_ui_program('cluster_stack', cluster_stack, prgtab, UI_CATEGORY)
     end subroutine new_cluster_stack
 
     subroutine new_match_cavgs( prgtab )
@@ -170,8 +171,8 @@ contains
         ! PROGRAM SPECIFICATION
         call match_cavgs%new(&
         &'match_cavgs',&                                              ! name
-        &'Analysis of class averages with k-medoids',&                ! descr_short
-        &'is a program for analyzing class averages with k-medoids',& ! descr_long
+        &'Analysis of class averages with k-medoids',&                ! summary
+        &'is a program for analyzing class averages with k-medoids',& ! help
         &'simple_exec',&                                              ! executable
         &.true.)                                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -193,7 +194,7 @@ contains
         ! computer controls
         call match_cavgs%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('match_cavgs', match_cavgs, prgtab)
+        call add_ui_program('match_cavgs', match_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_match_cavgs
 
      subroutine new_match_stacks( prgtab )
@@ -201,8 +202,8 @@ contains
         ! PROGRAM SPECIFICATION
         call match_stacks%new(&
         &'match_stacks',&                                              ! name
-        &'Analysis of class averages with k-medoids',&                ! descr_short
-        &'is a program for analyzing class averages with k-medoids',& ! descr_long
+        &'Analysis of class averages with k-medoids',&                ! summary
+        &'is a program for analyzing class averages with k-medoids',& ! help
         &'simple_exec',&                                              ! executable
         &.false.)                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -224,7 +225,7 @@ contains
         ! computer controls
         call match_stacks%add_input(UI_COMP, nthr)
         ! add 2 ui  
-        call add_ui_program('match_stacks', match_stacks, prgtab)
+        call add_ui_program('match_stacks', match_stacks, prgtab, UI_CATEGORY)
     end subroutine new_match_stacks
 
     subroutine new_select_clusters( prgtab )
@@ -232,8 +233,8 @@ contains
         ! PROGRAM SPECIFICATIONq
         call select_clusters%new(&
         &'select_clusters',&                                    ! name
-        &'Select clusters',&                                    ! descr_short
-        &'is a program for selecting clusters from a project',& ! descr_long
+        &'Select particle clusters from a SIMPLE project',& ! summary
+        &'is a program for selecting clusters from a project',& ! help
         &'simple_exec',&                                        ! executable
         &.true.)                                                ! requires sp_project
         ! TEMPLATE
@@ -255,7 +256,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('select_clusters', select_clusters, prgtab)
+        call add_ui_program('select_clusters', select_clusters, prgtab, UI_CATEGORY)
     end subroutine new_select_clusters
 
 end module simple_ui_cavgproc

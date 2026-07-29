@@ -3,6 +3,7 @@ module single_ui_atom
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('atom', 'Atom Analysis', 50)
 type(ui_program), target :: atoms_register
 type(ui_program), target :: atoms_rmsd
 type(ui_program), target :: atoms_stats
@@ -42,10 +43,10 @@ contains
         ! PROGRAM SPECIFICATION
         call atoms_register%new(&
         &'atoms_register',&                                                                           ! name
-        &'Registration of two nanoparticles',&                                                        ! descr_short
+        &'Registration of two nanoparticles',&                                                        ! summary
         &'is a program that registers two nanoparticles given the maps and the atom position maps.',& ! descr long
         &'single_exec',&                                                                              ! executable
-        &.false., gui_advanced=.false.)                                                               ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atoms_register%add_input(UI_IMG, 'fname', 'file', 'PDB file list', 'PDB file list', 'e.g. pdb_files.txt', .true., '')
@@ -60,7 +61,7 @@ contains
         ! computer controls
         call atoms_register%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('atoms_register', atoms_register, prgtab) 
+        call add_ui_program('atoms_register', atoms_register, prgtab, UI_CATEGORY)
     end subroutine new_atoms_register
 
     subroutine new_atoms_rmsd( prgtab )
@@ -68,10 +69,10 @@ contains
         ! PROGRAM SPECIFICATION
         call atoms_rmsd%new(&
         &'atoms_rmsd',&                                                               ! name
-        &'Analysis of results obtained with trajectory_reconstruct3D and detect_atoms',& ! descr_short
+        &'Analysis of results obtained with trajectory_reconstruct3D and detect_atoms',& ! summary
         &'is a program that analyzes atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
-        &.false., gui_advanced=.false.)                                               ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -90,7 +91,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('atoms_rmsd', atoms_rmsd, prgtab) 
+        call add_ui_program('atoms_rmsd', atoms_rmsd, prgtab, UI_CATEGORY)
     end subroutine new_atoms_rmsd
 
     subroutine new_atoms_stats( prgtab )
@@ -98,10 +99,10 @@ contains
         ! PROGRAM SPECIFICATION
         call atoms_stats%new(&
         &'atoms_stats',&                                                                              ! name
-        &'Statistical test for radial dependent symmetry',&                                           ! descr_short
+        &'Statistical test for radial dependent symmetry',&                                           ! summary
         &'is a program that generates statistics at different radii and across the whole nano map.',& ! descr long
         &'single_exec',&                                                                              ! executable
-        &.false., gui_advanced=.false.)                                                               ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atoms_stats%add_input(UI_IMG, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
@@ -126,7 +127,7 @@ contains
         ! computer controls
         call atoms_stats%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('atoms_stats', atoms_stats, prgtab) 
+        call add_ui_program('atoms_stats', atoms_stats, prgtab, UI_CATEGORY)
     end subroutine new_atoms_stats
 
     subroutine new_core_atoms_analysis( prgtab )
@@ -134,10 +135,10 @@ contains
         ! PROGRAM SPECIFICATION
         call core_atoms_analysis%new(&
         &'core_atoms_analysis',&                                                      ! name
-        &'Analysis of results obtianed with trajectory_reconstruct3D and detect_atoms',& ! descr_short
+        &'Analysis of results obtianed with trajectory_reconstruct3D and detect_atoms',& ! summary
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
-        &.false., gui_advanced=.false.)                                               ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -156,7 +157,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('core_atoms_analysis', core_atoms_analysis, prgtab) 
+        call add_ui_program('core_atoms_analysis', core_atoms_analysis, prgtab, UI_CATEGORY)
     end subroutine new_core_atoms_analysis
 
     subroutine new_crys_score( prgtab )
@@ -164,10 +165,10 @@ contains
         ! PROGRAM SPECIFICATION
         call crys_score%new(&
         &'crys_score',&                                                 ! name
-        &'Computing crystal score',&                                    ! descr_short
+        &'Calculate the crystal score for a nanoparticle map',& ! summary
         &'is a program that computes crystal score.',&                  ! descr long
         &'single_exec',&                                                ! executable
-        &.false., gui_advanced=.false.)                                 ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call crys_score%add_input(UI_IMG, 'fname', 'file', 'PDB file list', 'PDB file list', 'e.g. np_pdbs.txt', .true., '')
@@ -185,7 +186,7 @@ contains
         ! computer controls
         call crys_score%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('crys_score', crys_score, prgtab) 
+        call add_ui_program('crys_score', crys_score, prgtab, UI_CATEGORY)
     end subroutine new_crys_score
 
     subroutine new_detect_atoms( prgtab )
@@ -193,10 +194,10 @@ contains
         ! PROGRAM SPECIFICATION
         call detect_atoms%new(&
         &'detect_atoms', &                                      ! name
-        &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
+        &'Detect atoms in atomic-resolution nanoparticle map',& ! summary
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-components map',& ! descr long
         &'single_exec',&                                        ! executable
-        &.false., gui_advanced=.false.)                         ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -214,7 +215,7 @@ contains
         ! computer controls
         call detect_atoms%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('detect_atoms', detect_atoms, prgtab) 
+        call add_ui_program('detect_atoms', detect_atoms, prgtab, UI_CATEGORY)
     end subroutine new_detect_atoms
 
     subroutine new_simulate_nanoparticle( prgtab )
@@ -222,10 +223,10 @@ contains
         ! PROGRAM SPECIFICATION
         call simulate_nanoparticle%new(&
         &'simulate_nanoparticle',&                                              ! name
-        &'Simulate nanoparticle for lattice density',&                          ! descr_short
-        &'is a program for simulation of nanoparticle for lattice density',&    ! descr_long
+        &'Simulate nanoparticle for lattice density',&                          ! summary
+        &'is a program for simulation of nanoparticle for lattice density',&    ! help
         &'single_exec',&                                                        ! executable
-        &.false., gui_advanced=.false.)                                         ! requires sp_project
+        &.false., gui_visibility=UI_VIS_STANDARD)                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_nanoparticle%add_input(UI_IMG, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '')
@@ -245,7 +246,7 @@ contains
         ! computer controls
         call simulate_nanoparticle%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('simulate_nanoparticle', simulate_nanoparticle, prgtab) 
+        call add_ui_program('simulate_nanoparticle', simulate_nanoparticle, prgtab, UI_CATEGORY)
     end subroutine new_simulate_nanoparticle
 
 

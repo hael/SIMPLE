@@ -3,6 +3,7 @@ module simple_ui_image
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('image', 'General Image Processing', 90)
 type(ui_program), target :: binarize
 type(ui_program), target :: convert
 type(ui_program), target :: ctf_correct
@@ -44,8 +45,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call binarize%new(&
         &'binarize',&                                     ! name
-        &'Binarization routines for volumes and stacks',& ! descr_long
-        &'Binarization routines for volumes and stacks',& ! descr_long
+        &'Binarization routines for volumes and stacks',& ! help
+        &'Binarization routines for volumes and stacks',& ! help
         &'simple_exec',&                                  ! executable
         &.false.)                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -70,7 +71,7 @@ contains
         ! <empty>
         call binarize%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('binarize', binarize, prgtab)
+        call add_ui_program('binarize', binarize, prgtab, UI_CATEGORY)
     end subroutine new_binarize
 
     subroutine new_convert( prgtab )
@@ -78,8 +79,8 @@ contains
         ! PROGRAM SPECIFICATION
         call convert%new(&
         &'convert',&                                                    ! name
-        &'Convert between SPIDER and MRC formats',&                     ! descr_short
-        &'is a program for converting between SPIDER and MRC formats',& ! descr_long
+        &'Convert between SPIDER and MRC formats',&                     ! summary
+        &'is a program for converting between SPIDER and MRC formats',& ! help
         &'simple_exec',&                                                ! executable
         &.false.)                                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -102,7 +103,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('convert', convert, prgtab)
+        call add_ui_program('convert', convert, prgtab, UI_CATEGORY)
     end subroutine new_convert
 
     subroutine new_ctf_correct( prgtab )
@@ -110,7 +111,7 @@ contains
         ! PROGRAM SPECIFICATION
         call ctf_correct%new(&
         &'ctf_correct', &                                          ! name
-        &'Correct particle CTFs in project',&                      ! descr_short
+        &'Correct particle CTFs in project',&                      ! summary
         &'is a program for CTF phase flipping or Wiener correction of particle images in project',& ! descr long
         &'simple_exec',&                                           ! executable
         &.true.)                                                   ! requires sp_project
@@ -133,7 +134,7 @@ contains
         ! computer controls
         call ctf_correct%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('ctf_correct', ctf_correct, prgtab)
+        call add_ui_program('ctf_correct', ctf_correct, prgtab, UI_CATEGORY)
     end subroutine new_ctf_correct
 
     subroutine new_ctfops( prgtab )
@@ -141,7 +142,7 @@ contains
         ! PROGRAM SPECIFICATION
         call ctfops%new(&
         &'ctfops', &                                         ! name
-        &'Apply CTF to stacked images',&                     ! descr_short
+        &'Apply a CTF transfer function to an image stack',& ! summary
         &'is a program for applying CTF to stacked images',& ! descr long
         &'simple_exec',&                                     ! executable
         &.false.)                                            ! requires sp_project
@@ -167,7 +168,7 @@ contains
         ! computer controls
         call ctfops%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('ctfops', ctfops, prgtab)
+        call add_ui_program('ctfops', ctfops, prgtab, UI_CATEGORY)
     end subroutine new_ctfops
 
     subroutine new_normalize( prgtab )
@@ -175,7 +176,7 @@ contains
         ! PROGRAM SPECIFICATION
         call normalize_%new(&
         &'normalize',&                         ! name
-        &'Normalize volume/stack',&            ! descr_short
+        &'Normalize an image stack or volume',& ! summary
         &'is a program for normalization of MRC or SPIDER stacks and volumes',&
         &'simple_exec',&                       ! executable
         &.false.)                              ! requires sp_project
@@ -198,7 +199,7 @@ contains
         ! computer controls
         call normalize_%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('normalize', normalize_, prgtab)
+        call add_ui_program('normalize', normalize_, prgtab, UI_CATEGORY)
     end subroutine new_normalize
 
     subroutine new_scale( prgtab )
@@ -206,8 +207,8 @@ contains
         ! PROGRAM SPECIFICATION
         call scale%new(&
         &'scale', &                                                                               ! name
-        &'Re-scaling MRC and SPIDER stacks and volumes',&                                         ! descr_short
-        &'is a program for re-scaling, clipping and padding MRC and SPIDER stacks and volumes',&  ! descr_long
+        &'Re-scaling MRC and SPIDER stacks and volumes',&                                         ! summary
+        &'is a program for re-scaling, clipping and padding MRC and SPIDER stacks and volumes',&  ! help
         &'simple_exec',&                                                                          ! executable
         &.false.)                                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -235,7 +236,7 @@ contains
         ! computer controls
         call scale%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('scale', scale, prgtab)
+        call add_ui_program('scale', scale, prgtab, UI_CATEGORY)
     end subroutine new_scale
 
     subroutine new_stack( prgtab )
@@ -243,8 +244,8 @@ contains
         ! PROGRAM SPECIFICATION
         call stack%new(&
         &'stack',&                     ! name
-        &'Stack images',&              ! descr_short
-        &'is a program for stacking individual images (list) or multiple stacks into one',& ! descr_long
+        &'Combine image files or stacks into one stack',& ! summary
+        &'is a program for stacking individual images (list) or multiple stacks into one',& ! help
         &'simple_exec',&               ! executable
         &.false.)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -266,7 +267,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('stack', stack, prgtab)
+        call add_ui_program('stack', stack, prgtab, UI_CATEGORY)
     end subroutine new_stack
 
     subroutine new_stackops( prgtab )
@@ -274,7 +275,7 @@ contains
         ! PROGRAM SPECIFICATION
         call stackops%new(&
         &'stackops',&                                ! name
-        &'Standard stack editing',&                  ! descr_short
+        &'Edit, filter, transform, or resample an image stack',& ! summary
         &'is a program that provides standard single-particle image processing routines for MRC or SPIDER&
         & stacks. To extract a particular state, give oritab and set state.&
         & To apply noise, give the desired signal-to-noise ratio via snr. To calculate the autocorrelation&
@@ -282,7 +283,7 @@ contains
         & fromp and top. To extract a number of particle images at random, set nran to the desired number.&
         & With avg=yes the global average of the stack is calculated.&
         & If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced,&
-        & which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
+        & which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! help
         &'simple_exec',&                             ! executable
         &.false.)                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -321,7 +322,7 @@ contains
         ! computer controls
         call stackops%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('stackops', stackops, prgtab)
+        call add_ui_program('stackops', stackops, prgtab, UI_CATEGORY)
     end subroutine new_stackops
 
 end module simple_ui_image

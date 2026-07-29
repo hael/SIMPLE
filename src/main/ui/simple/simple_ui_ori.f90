@@ -3,6 +3,7 @@ module simple_ui_ori
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('ori', 'Orientation Processing', 110)
 type(ui_program), target :: make_oris
 type(ui_program), target :: oriops
 type(ui_program), target :: oristats
@@ -33,7 +34,7 @@ contains
         ! PROGRAM SPECIFICATION
         call make_oris%new(&
         &'make_oris',&                       ! name
-        &'Make orientations',&               ! descr_short
+        &'Create orientation files with random angles and shifts',& ! summary
         &'is a program for making SIMPLE orientation files. Random Euler angles and random origin shifts are generated.&
         & If ndiscrete is set to an integer number > 0, the orientations produced are randomly sampled from the set of&
         & ndiscrete quasi-even projection directions, and the in-plane parameters are assigned randomly. If even is set&
@@ -66,7 +67,7 @@ contains
         ! computer controls
         call make_oris%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('make_oris', make_oris, prgtab)
+        call add_ui_program('make_oris', make_oris, prgtab, UI_CATEGORY)
     end subroutine new_make_oris
 
     subroutine new_oriops( prgtab )
@@ -74,7 +75,7 @@ contains
         ! PROGRAM SPECIFICATION
         call oriops%new(&
         &'oriops',&                      ! name
-        &'Standard orientation editing',& ! descr_short
+        &'Edit orientations, shifts, states, and related parameters',& ! summary
         &'is a program for modifying SIMPLE orientation/parameter files. If errify=yes,&
         & uniform random angular errors, and uniform origin shift errors, &
         & and uniform random defocus errors are introduced. If nstates > 1 then random states are assigned.&
@@ -123,7 +124,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('oriops', oriops, prgtab)
+        call add_ui_program('oriops', oriops, prgtab, UI_CATEGORY)
     end subroutine new_oriops
 
     subroutine new_oristats( prgtab )
@@ -131,7 +132,7 @@ contains
         ! PROGRAM SPECIFICATION
         call oristats%new(&
         &'oristats',&                             ! name
-        &'Statistical analyses of orientations',& ! descr_short
+        &'Statistical analyses of orientations',& ! summary
         &'is a program for analyzing SIMPLE orientation/parameter files. If two orientation&
         & tables (oritab and oritab2) are inputted, statistics of the distances between the orientations&
         & in the two documents are provided',&
@@ -161,7 +162,7 @@ contains
         ! computer controls
         call oristats%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('oristats', oristats, prgtab)
+        call add_ui_program('oristats', oristats, prgtab, UI_CATEGORY)
     end subroutine new_oristats
 
     subroutine new_vizoris( prgtab )
@@ -169,8 +170,8 @@ contains
         ! PROGRAM SPECIFICATION
         call vizoris%new(&
         &'vizoris',&                                                                                               ! name
-        &'Visualization of orientation distribution',&                                                             ! descr_short
-        &'is a program for extracting projection directions from orientations for visualization in UCSF Chimera',& ! descr_long
+        &'Visualization of orientation distribution',&                                                             ! summary
+        &'is a program for extracting projection directions from orientations for visualization in UCSF Chimera',& ! help
         &'all',&                                                                                                   ! executable
         &.false.)                                                                                                  ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -193,7 +194,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('vizoris', vizoris, prgtab)
+        call add_ui_program('vizoris', vizoris, prgtab, UI_CATEGORY)
     end subroutine new_vizoris
 
 end module simple_ui_ori

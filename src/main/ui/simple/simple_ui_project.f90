@@ -3,6 +3,7 @@ module simple_ui_project
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('project', 'Project Management', 10)
 type(ui_program), target :: export_relion
 type(ui_program), target :: export_starproject
 type(ui_program), target :: export_manifoldem_starproject
@@ -87,7 +88,7 @@ contains
         ! PROGRAM SPECIFICATION
         call export_relion%new(&
         &'export_relion',&                                              ! name
-        &'Export project to relion ',&                                  ! descr_short
+        &'Export a SIMPLE project for use in RELION',& ! summary
         &'is a program to export simple project to relion',&
         &'simple_exec',&                                                ! executable
         &.true.)                                                        ! requires sp_project
@@ -115,7 +116,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('export_relion', export_relion, prgtab)
+        call add_ui_program('export_relion', export_relion, prgtab, UI_CATEGORY)
     end subroutine new_export_relion
 
     subroutine new_export_starproject( prgtab )
@@ -123,7 +124,7 @@ contains
         ! PROGRAM SPECIFICATION
         call export_starproject%new(&
         &'export_starproject', &                                                ! name
-        &'Export projectfile in star format',&                                  ! descr_short
+        &'Export projectfile in star format',&                                  ! summary
         &'is a program to export a SIMPLE projectfile in star format',&         ! descr long
         &'simple_exec',&                                                        ! executable
         &.true.)                                                                ! requires sp_project
@@ -141,7 +142,7 @@ contains
         ! <empty>
         ! computer controls
         ! add to ui_hash
-        call add_ui_program('export_starproject', export_starproject, prgtab)
+        call add_ui_program('export_starproject', export_starproject, prgtab, UI_CATEGORY)
     end subroutine new_export_starproject
 
     subroutine new_export_manifoldem_starproject( prgtab )
@@ -149,7 +150,7 @@ contains
         ! PROGRAM SPECIFICATION
         call export_manifoldem_starproject%new(&
         &'export_manifoldem_starproject', &                                      ! name
-        &'Export ManifoldEM-compatible STAR file',&                              ! descr_short
+        &'Export ManifoldEM-compatible STAR file',&                              ! summary
         &'is a program to export ptcl3D orientations in the STAR subset parsed by ManifoldEM',& ! descr long
         &'simple_exec',&                                                         ! executable
         &.true.)                                                                 ! requires sp_project
@@ -168,7 +169,7 @@ contains
         ! <empty>
         ! computer controls
         ! add to ui_hash
-        call add_ui_program('export_manifoldem_starproject', export_manifoldem_starproject, prgtab)
+        call add_ui_program('export_manifoldem_starproject', export_manifoldem_starproject, prgtab, UI_CATEGORY)
     end subroutine new_export_manifoldem_starproject
 
     subroutine new_extract_subproj( prgtab )
@@ -176,10 +177,10 @@ contains
         ! PROGRAM SPECIFICATION
         call extract_subproj%new(&
         &'extract_subproj',&                                                                                     ! name
-        &'extraction of a subproject of time-series of metallic nanoparticles',&                                 ! descr_short
-        &'is a shared-memory workflow for extraction of a subproject of time-series of metallic nanoparticles',& ! descr_long
+        &'extraction of a subproject of time-series of metallic nanoparticles',&                                 ! summary
+        &'is a shared-memory workflow for extraction of a subproject of time-series of metallic nanoparticles',& ! help
         &'all',&                                                                                                 ! executable
-        &.true., gui_advanced=.false.)                                                                           ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -201,7 +202,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('extract_subproj', extract_subproj, prgtab)
+        call add_ui_program('extract_subproj', extract_subproj, prgtab, UI_CATEGORY)
     end subroutine new_extract_subproj
 
     subroutine new_import_boxes( prgtab )
@@ -209,7 +210,7 @@ contains
         ! PROGRAM SPECIFICATION
         call import_boxes%new(&
         &'import_boxes',&                                  ! name
-        &'Import EMAN box coordinates to SIMPLE project',& ! descr_short
+        &'Import EMAN box coordinates to SIMPLE project',& ! summary
         &'is a program for importing EMAN1.9 box coordinates to the project. The *box (text) files should be listed in boxtab',&
         &'simple_exec',&                                   ! executable
         &.true.)                                           ! requires sp_project
@@ -230,7 +231,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('import_boxes', import_boxes, prgtab)
+        call add_ui_program('import_boxes', import_boxes, prgtab, UI_CATEGORY)
     end subroutine new_import_boxes
 
     subroutine new_import_cavgs( prgtab )
@@ -238,7 +239,7 @@ contains
         ! PROGRAM SPECIFICATION
         call import_cavgs%new(&
         &'import_cavgs',&                                        ! name
-        &'Import class averages to SIMPLE project',&             ! descr_short
+        &'Import class averages to SIMPLE project',&             ! summary
         &'is a program for importing class averages movies to the project',&
         &'simple_exec',&                                         ! executable
         &.true.)                                                 ! requires sp_project
@@ -247,7 +248,7 @@ contains
         ! parameter input/output
         call import_cavgs%add_input(UI_PARM, smpd)
         ! add to ui_hash
-        call add_ui_program('import_cavgs', import_cavgs, prgtab)
+        call add_ui_program('import_cavgs', import_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_import_cavgs
 
     subroutine new_import_movies( prgtab )
@@ -255,7 +256,7 @@ contains
         ! PROGRAM SPECIFICATION
         call import_movies%new(&
         &'import_movies',&                                       ! name
-        &'Import movies to SIMPLE project',&                     ! descr_short
+        &'Import movies to SIMPLE project',&                     ! summary
         &'is a program for importing DDD movies to the project. The movies can be located in any read-only location&
         & accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected&
         & and integrated. Box files (in EMAN format) can be imported along with the movies',&
@@ -285,7 +286,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('import_movies', import_movies, prgtab)
+        call add_ui_program('import_movies', import_movies, prgtab, UI_CATEGORY)
     end subroutine new_import_movies
 
     subroutine new_import_particles( prgtab )
@@ -293,7 +294,7 @@ contains
         ! PROGRAM SPECIFICATION
         call import_particles%new(&
         &'import_particles',&                                       ! name
-        &'Import particles to SIMPLE project',&                     ! descr_short
+        &'Import particles to SIMPLE project',&                     ! summary
         &'is a program for importing extracted particle images to the project',&
         &'all',&                                                    ! executable
         &.true.)                                                    ! requires sp_project
@@ -321,7 +322,7 @@ contains
         &'Stack of particle images to import', 'e.g. stk.mrcs', .false., '')
         call import_particles%add_input(UI_ALT, stk_den)
         call import_particles%add_input(UI_ALT, 'starfile', 'file', 'Particles Metadata starfile', 'Path to starfile containing particle metadata',&
-        &'e.g. shiny.star', .false., '', gui_submenu="data", gui_advanced=.false.)
+        &'e.g. shiny.star', .false., '', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         ! search controls
         ! <empty>
         ! filter controls
@@ -331,7 +332,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('import_particles', import_particles, prgtab)
+        call add_ui_program('import_particles', import_particles, prgtab, UI_CATEGORY)
     end subroutine new_import_particles
 
     subroutine new_reimport_particles( prgtab )
@@ -339,7 +340,7 @@ contains
         ! PROGRAM SPECIFICATION
         call reimport_particles%new(&
         &'reimport_particles',&                                    ! name
-        &'Re-import denoised particle stack',&                     ! descr_short
+        &'Re-import denoised particle stack',&                     ! summary
         &'is a program for replacing the project particle stack while preserving particle/class metadata',&
         &'all',&                                                   ! executable
         &.true.)                                                   ! requires sp_project
@@ -348,7 +349,7 @@ contains
         &'Denoised particle stack to replace the project stack', 'e.g. denoised.mrcs', .true., '')
         call reimport_particles%add_input(UI_PARM, ctf_yes)
         ! add to ui_hash
-        call add_ui_program('reimport_particles', reimport_particles, prgtab)
+        call add_ui_program('reimport_particles', reimport_particles, prgtab, UI_CATEGORY)
     end subroutine new_reimport_particles
 
     subroutine new_import_starproject( prgtab )
@@ -356,20 +357,20 @@ contains
         ! PROGRAM SPECIFICATION
         call import_starproject%new(&
         &'import_starproject', &                                                ! name
-        &'Import project in in star format',&                                   ! descr_short
+        &'Import project in in star format',&                                   ! summary
         &'is a program to import a SIMPLE projectfile from star format',&       ! descr long
         &'simple_exec',&                                                        ! executable
         &.false.,&                                                              ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data")                       ! GUI
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "data")                       ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
         call import_starproject%add_input(UI_PARM, 'import_dir',  'dir',   'Import directory', 'Directory to import data from. In auto mode should be output &
-        &from an external job e.g. relion', 'e.g. MotionCorr/job001', .true., '', gui_submenu="data", gui_advanced=.false.)
+        &from an external job e.g. relion', 'e.g. MotionCorr/job001', .true., '', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         call import_starproject%add_input(UI_PARM, 'starfile',    'file',  'Metadata starfile', 'Path to starfile containing micrograph/particle metadata. Only &
-        &required when not using auto mode', 'e.g. micrographs.star', .false., '', gui_submenu="data", gui_advanced=.false.)
+        &required when not using auto mode', 'e.g. micrographs.star', .false., '', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         call import_starproject%add_input(UI_PARM, 'import_type', 'multi', 'Import type', 'Type of data contained in starfile (auto|mic|ptcl2D|ptcl3D){auto}. &
-        &Auto mode (default) will attempt to determine this automatically', '(auto|mic|ptcl2D|ptcl3D){auto}', .false., 'auto', gui_submenu="data", gui_advanced=.false.)
+        &Auto mode (default) will attempt to determine this automatically', '(auto|mic|ptcl2D|ptcl3D){auto}', .false., 'auto', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         ! <empty>
         ! search controls
         ! <empty>
@@ -380,7 +381,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('import_starproject', import_starproject, prgtab)
+        call add_ui_program('import_starproject', import_starproject, prgtab, UI_CATEGORY)
     end subroutine new_import_starproject
 
     subroutine new_merge_projects( prgtab )
@@ -388,21 +389,21 @@ contains
         ! PROGRAM SPECIFICATION
         call merge_projects%new(&
         &'merge_projects', &                                            ! name
-        &'Merge selected projects',&                                    ! descr_short
-        &'is a program to merge a file table of SIMPLE projects with matching populated project fields', & ! descr_long
+        &'Merge selected SIMPLE projects with compatible fields',& ! summary
+        &'is a program to merge a file table of SIMPLE projects with matching populated project fields', & ! help
         &'simple_exec',&                                                ! executable
         &.false.)                                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call merge_projects%add_input(UI_PARM, projtab,&
-        &descr_long_override        = 'Text file listing SIMPLE project files (*.simple) to merge',&
-        &descr_placeholder_override = 'e.g. projtab.txt',&
+        &help_override        = 'Text file listing SIMPLE project files (*.simple) to merge',&
+        &placeholder_override = 'e.g. projtab.txt',&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_advanced=.false.)
+        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call merge_projects%add_input(UI_PARM, projfile_merged,&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_advanced=.false.)
+        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -414,7 +415,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('merge_projects', merge_projects, prgtab)
+        call add_ui_program('merge_projects', merge_projects, prgtab, UI_CATEGORY)
     end subroutine new_merge_projects
 
     subroutine new_ptcl3D_state_consensus( prgtab )
@@ -422,29 +423,29 @@ contains
         ! PROGRAM SPECIFICATION
         call ptcl3D_state_consensus%new(&
         &'ptcl3D_state_consensus', &                                    ! name
-        &'Build consensus ptcl3D states',&                              ! descr_short
+        &'Build consensus particle-state assignments across projects',& ! summary
         &'is a program that builds a consensus particle state assignment from a file table of SIMPLE projects &
-        &and writes it to the target project ptcl3D field', &           ! descr_long
+        &and writes it to the target project ptcl3D field', &           ! help
         &'simple_exec',&                                                ! executable
         &.false.)                                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call ptcl3D_state_consensus%add_input(UI_PARM, projtab,&
-        &descr_long_override        = 'Text file listing SIMPLE project files (*.simple) containing ptcl3D state assignments',&
-        &descr_placeholder_override = 'e.g. projtab.txt',&
+        &help_override        = 'Text file listing SIMPLE project files (*.simple) containing ptcl3D state assignments',&
+        &placeholder_override = 'e.g. projtab.txt',&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_advanced=.false.)
+        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call ptcl3D_state_consensus%add_input(UI_PARM, projfile,&
-        &descr_long_override        = 'Target SIMPLE project file that receives the consensus ptcl3D state assignment',&
+        &help_override        = 'Target SIMPLE project file that receives the consensus ptcl3D state assignment',&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_advanced=.false.)
+        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         call ptcl3D_state_consensus%add_input(UI_SRCH, nstates,&
-        &descr_long_override        = 'Number of state labels to match; inferred from projtab when omitted',&
+        &help_override        = 'Number of state labels to match; inferred from projtab when omitted',&
         &required_override          = .false.,&
-        &gui_submenu="state", gui_advanced=.true.)
+        &gui_submenu="state", gui_visibility=UI_VIS_ADVANCED)
         call ptcl3D_state_consensus%add_input(UI_PARM, prune,&
-        &gui_submenu="data", gui_advanced=.true.)
+        &gui_submenu="data", gui_visibility=UI_VIS_ADVANCED)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -456,7 +457,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('ptcl3D_state_consensus', ptcl3D_state_consensus, prgtab)
+        call add_ui_program('ptcl3D_state_consensus', ptcl3D_state_consensus, prgtab, UI_CATEGORY)
     end subroutine new_ptcl3D_state_consensus
 
     subroutine new_validate_projfile( prgtab )
@@ -464,8 +465,8 @@ contains
         ! PROGRAM SPECIFICATION
         call validate_projfile%new(&
         &'validate_projfile', &                                         ! name
-        &'Validate and repair a project',&                              ! descr_short
-        &'is a program to validate SIMPLE project stack indexing metadata and write a repaired project', & ! descr_long
+        &'Check and repair project stack-index metadata',& ! summary
+        &'is a program to validate SIMPLE project stack indexing metadata and write a repaired project', & ! help
         &'simple_exec',&                                                ! executable
         &.true.)                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -474,7 +475,7 @@ contains
         ! parameter input/output
         call validate_projfile%add_input(UI_PARM, projfile,&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_advanced=.false.)
+        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -486,7 +487,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('validate_projfile', validate_projfile, prgtab)
+        call add_ui_program('validate_projfile', validate_projfile, prgtab, UI_CATEGORY)
     end subroutine new_validate_projfile
 
     subroutine new_new_project( prgtab )
@@ -494,13 +495,13 @@ contains
         ! PROGRAM SPECIFICATION
         call new_project%new(&
         &'new_project',&                     ! name
-        &'Create a new project',&            ! descr_short
+        &'Create a SIMPLE project directory and project file',& ! summary
         &'is a program for creating a new project. SIMPLE3.0 relies on a monolithic project file for controlling &
         &execution on distributed and shared-memory systems and for unified meta-data management. This program &
         &creates a directory named projname and a file projname.simple inside that directory that contains all &
         &information about the project as well as all meta data generated by the different SIMPLE programs. This &
         &file is mirrored by an abstract data type in the back-end, which manages the parameters and &
-        &meta-data I/O required for execution of SIMPLE',& ! descr_longg
+        &meta-data I/O required for execution of SIMPLE',& ! help
         &'all',&                             ! executable
         &.false.)                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -530,7 +531,7 @@ contains
         call new_project%add_input(UI_COMP, qsys_name)
         call new_project%add_input(UI_COMP, walltime)
         ! add to ui_hash
-        call add_ui_program('new_project', new_project, prgtab)
+        call add_ui_program('new_project', new_project, prgtab, UI_CATEGORY)
     end subroutine new_new_project
 
     subroutine new_print_project_field( prgtab )
@@ -538,8 +539,8 @@ contains
         ! PROGRAM SPECIFICATION
         call print_project_field%new(&
         &'print_project_field', &                                             ! name
-        &'Print project field',&                                              ! descr_short
-        &'is a program for printing an orientation field in the project data structure (segment in *.simple project file)',&  ! descr_long
+        &'Print a selected orientation field from a SIMPLE project',& ! summary
+        &'is a program for printing an orientation field in the project data structure (segment in *.simple project file)',&  ! help
         &'all',&                                                              ! executable
         &.true.)                                                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -562,7 +563,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('print_project_field', print_project_field, prgtab)
+        call add_ui_program('print_project_field', print_project_field, prgtab, UI_CATEGORY)
     end subroutine new_print_project_field
 
     subroutine new_print_project_info( prgtab )
@@ -570,8 +571,8 @@ contains
         ! PROGRAM SPECIFICATION
         call print_project_info%new(&
         &'print_project_info', &                                           ! name
-        &'Print project info',&                                            ! descr_short
-        &'is a program prints information about a *.simple project file',& ! descr_long
+        &'Print metadata and contents of a SIMPLE project',& ! summary
+        &'is a program prints information about a *.simple project file',& ! help
         &'all',&                                                           ! executable
         &.true.)                                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -590,7 +591,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('print_project_info', print_project_info, prgtab)
+        call add_ui_program('print_project_info', print_project_info, prgtab, UI_CATEGORY)
     end subroutine new_print_project_info
 
     subroutine new_prune_project( prgtab )
@@ -598,8 +599,8 @@ contains
         ! PROGRAM SPECIFICATION
         call prune_project%new(&
         &'prune_project',&                            ! name
-        &'discards deselected data from a project',&  ! descr_short
-        &'is a program for discarding deselected data (particles,stacks) from a project',& ! descr_long
+        &'discards deselected data from a project',&  ! summary
+        &'is a program for discarding deselected data (particles,stacks) from a project',& ! help
         &'all',&                                      ! executable
         &.true.)                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -618,7 +619,7 @@ contains
         ! computer controls
         call prune_project%add_input(UI_COMP, nparts)
         ! add to ui_hash
-        call add_ui_program('prune_project', prune_project, prgtab)
+        call add_ui_program('prune_project', prune_project, prgtab, UI_CATEGORY)
     end subroutine new_prune_project
 
     subroutine new_replace_project_field( prgtab )
@@ -626,8 +627,8 @@ contains
         ! PROGRAM SPECIFICATION
         call replace_project_field%new(&
         &'replace_project_field',&                    ! name
-        &'hard substitution of project field',&       ! descr_short
-        &'is a program for hard substitution of project field, for development purposes',& ! descr_long
+        &'hard substitution of project field',&       ! summary
+        &'is a program for hard substitution of project field, for development purposes',& ! help
         &'simple_exec',&                              ! executable
         &.false.)                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -648,7 +649,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('replace_project_field', replace_project_field, prgtab)
+        call add_ui_program('replace_project_field', replace_project_field, prgtab, UI_CATEGORY)
     end subroutine new_replace_project_field
 
     subroutine new_selection( prgtab )
@@ -656,8 +657,8 @@ contains
         ! PROGRAM SPECIFICATION
         call selection%new(&
         &'selection',&                                                                  ! name
-        &'Reports external selection through state 0/1 tags to project',&               ! descr_short
-        &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
+        &'Reports external selection through state 0/1 tags to project',&               ! summary
+        &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! help
         &'simple_exec',&                                                                ! executable
         &.true.)                                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -693,7 +694,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('selection', selection, prgtab)
+        call add_ui_program('selection', selection, prgtab, UI_CATEGORY)
     end subroutine new_selection
 
     subroutine new_update_project( prgtab )
@@ -701,8 +702,8 @@ contains
         ! PROGRAM SPECIFICATION
         call update_project%new(&
         &'update_project',&                  ! name
-        &'Update an existing project',&      ! descr_short
-        &'is a program for updating an existing project: changing the name/user_email/computer controls',& ! descr_long
+        &'Update project identity and computing settings',& ! summary
+        &'is a program for updating an existing project: changing the name/user_email/computer controls',& ! help
         &'all',&                             ! executable
         &.true.)                             ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -730,7 +731,7 @@ contains
         call update_project%add_input(UI_COMP, qsys_name)
         call update_project%add_input(UI_COMP, walltime)
         ! add to ui_hash
-        call add_ui_program('update_project', update_project, prgtab)
+        call add_ui_program('update_project', update_project, prgtab, UI_CATEGORY)
     end subroutine new_update_project
 
     subroutine new_zero_project_shifts( prgtab )
@@ -738,8 +739,8 @@ contains
         ! PROGRAM SPECIFICATION
         call zero_project_shifts%new(&
         &'zero_project_shifts', &                                       ! name
-        &'zero_project_shifts',&                                        ! descr_short
-        &'is a program that zeroes the shifts in the ptcl2D/ptcl3D fields in the project',& ! descr_long
+        &'Zero particle shifts in a SIMPLE project',& ! summary
+        &'is a program that zeroes the shifts in the ptcl2D/ptcl3D fields in the project',& ! help
         &'simple_exec',&                                                ! executable
         &.true.)                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -758,7 +759,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('zero_project_shifts', zero_project_shifts, prgtab)
+        call add_ui_program('zero_project_shifts', zero_project_shifts, prgtab, UI_CATEGORY)
     end subroutine new_zero_project_shifts
 
     subroutine new_write_mic_filetab( prgtab )
@@ -766,8 +767,8 @@ contains
         ! PROGRAM SPECIFICATION
         call write_mic_filetab%new(&
         &'write_mic_filetab',&                                            ! name
-        &'Writes a filetable of state > 0 micrographs',&                  ! descr_short
-        &'is a program for writing a filetable of selected micrographs',& ! descr_long
+        &'Writes a filetable of state > 0 micrographs',&                  ! summary
+        &'is a program for writing a filetable of selected micrographs',& ! help
         &'simple_exec',&                                                  ! executable
         &.true.)                                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -786,7 +787,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('write_mic_filetab', write_mic_filetab, prgtab)
+        call add_ui_program('write_mic_filetab', write_mic_filetab, prgtab, UI_CATEGORY)
     end subroutine new_write_mic_filetab
 
 end module simple_ui_project

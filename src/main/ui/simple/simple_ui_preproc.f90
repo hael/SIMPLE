@@ -3,6 +3,7 @@ module simple_ui_preproc
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('preproc', 'Pre-processing', 20)
 type(ui_program), target :: assign_optics_groups
 type(ui_program), target :: ctf_estimate
 type(ui_program), target :: extract
@@ -48,7 +49,7 @@ contains
         ! PROGRAM SPECIFICATION
         call assign_optics_groups%new(&
         &'assign_optics_groups', &                                              ! name
-        &'Assign optics groups',&                                               ! descr_short
+        &'Assign optics groups from microscope metadata',& ! summary
         &'is a program to assign optics groups',&                               ! descr long
         &'simple_exec',&                                                        ! executable
         &.true.)                                                                ! requires sp_project
@@ -76,7 +77,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('assign_optics_groups', assign_optics_groups, prgtab)
+        call add_ui_program('assign_optics_groups', assign_optics_groups, prgtab, UI_CATEGORY)
     end subroutine new_assign_optics_groups
 
     subroutine new_ctf_estimate( prgtab )
@@ -84,11 +85,11 @@ contains
         ! PROGRAM SPECIFICATION
         call ctf_estimate%new(&
         &'ctf_estimate', &                                                  ! name
-        &'CTF parameter fitting',&                                          ! descr_short
-        &'is a distributed SIMPLE workflow for CTF parameter fitting',&     ! descr_long
+        &'Estimate CTF parameters from micrographs',& ! summary
+        &'is a distributed SIMPLE workflow for CTF parameter fitting',&     ! help
         &'simple_exec',&                                                    ! executable
         &.true.,&                                                           ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "CTF estimation,compute") ! GUI            
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "CTF estimation,compute") ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -114,7 +115,7 @@ contains
         call ctf_estimate%add_input(UI_COMP, nparts, gui_submenu="compute")
         call ctf_estimate%add_input(UI_COMP, nthr, gui_submenu="compute")
         ! add to ui_hash
-        call add_ui_program('ctf_estimate', ctf_estimate, prgtab)
+        call add_ui_program('ctf_estimate', ctf_estimate, prgtab, UI_CATEGORY)
     end subroutine new_ctf_estimate
 
     subroutine new_extract( prgtab )
@@ -122,18 +123,18 @@ contains
         ! PROGRAM SPECIFICATION
         call extract%new(&
         &'extract', &                                                           ! name
-        &'Extract particle images from integrated movies',&                     ! descr_short
+        &'Extract particle images from integrated movies',&                     ! summary
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                        ! executable
         &.true.,&                                                               ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "extract,compute")            ! GUI      
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "extract,compute")            ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call extract%add_input(UI_IMG, 'dir_box', 'dir', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '',&
         &gui_submenu="extract")
         ! parameter input/output
-        call extract%add_input(UI_PARM, box, required_override=.false., gui_submenu="extract", gui_advanced=.false.)
-        call extract%add_input(UI_PARM, pcontrast, gui_submenu="extract", gui_advanced=.false.)
+        call extract%add_input(UI_PARM, box, required_override=.false., gui_submenu="extract", gui_visibility=UI_VIS_STANDARD)
+        call extract%add_input(UI_PARM, pcontrast, gui_submenu="extract", gui_visibility=UI_VIS_STANDARD)
         call extract%add_input(UI_PARM, outside, gui_submenu="extract")
         call extract%add_input(UI_PARM, backgr_subtr, gui_submenu="extract")
         ! alternative inputs
@@ -145,10 +146,10 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call extract%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call extract%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call extract%add_input(UI_COMP, nparts, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call extract%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('extract', extract, prgtab)
+        call add_ui_program('extract', extract, prgtab, UI_CATEGORY)
     end subroutine new_extract
 
     subroutine new_gen_pspecs_and_thumbs( prgtab )
@@ -156,9 +157,9 @@ contains
         ! PROGRAM SPECIFICATION
         call gen_pspecs_and_thumbs%new(&
         &'gen_pspecs_and_thumbs', &                                              ! name
-        &'Motion correction of movies',&                                         ! descr_short
+        &'Correct anisotropic motion in movie frames',& ! summary
         &'is a distributed workflow for generating power spectra and thumbnails&
-        & for imported integrated movies',&                                      ! descr_long
+        & for imported integrated movies',&                                      ! help
         &'simple_exec',&                                                         ! executable
         &.true.)                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -178,7 +179,7 @@ contains
         call gen_pspecs_and_thumbs%add_input(UI_COMP, nparts)
         call gen_pspecs_and_thumbs%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('gen_pspecs_and_thumbs', gen_pspecs_and_thumbs, prgtab)
+        call add_ui_program('gen_pspecs_and_thumbs', gen_pspecs_and_thumbs, prgtab, UI_CATEGORY)
     end subroutine new_gen_pspecs_and_thumbs
 
     subroutine new_motion_correct( prgtab )
@@ -186,19 +187,19 @@ contains
         ! PROGRAM SPECIFICATION
         call motion_correct%new(&
         &'motion_correct', &                                                            ! name
-        &'Anisotropic motion correction of movies',&                                    ! descr_short
+        &'Anisotropic motion correction of movies',&                                    ! summary
         &'is a distributed workflow for anisotropic motion correction of movies.&
         & If then total dose is given the individual frames will be filtered accordingly&
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
-        & the down-scaling factor (for super-resolution movies).',&                     ! descr_long
+        & the down-scaling factor (for super-resolution movies).',&                     ! help
         &'simple_exec',&                                                                ! executable
         &.true.,&                                                                       ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "data,motion correction,compute")     ! GUI                    
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "data,motion correction,compute")     ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call motion_correct%add_input(UI_IMG, gainref, gui_submenu="data", gui_advanced=.false.)
+        call motion_correct%add_input(UI_IMG, gainref, gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call motion_correct%add_input(UI_PARM, total_dose, gui_submenu="data", gui_advanced=.false.)
+        call motion_correct%add_input(UI_PARM, total_dose, gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
         call motion_correct%add_input(UI_PARM, fraction_dose_target, gui_submenu="data")
         call motion_correct%add_input(UI_PARM, max_dose, gui_submenu="data")
         call motion_correct%add_input(UI_PARM, smpd_downscale, gui_submenu="data")
@@ -231,7 +232,7 @@ contains
         call motion_correct%add_input(UI_COMP, nparts, gui_submenu="compute")
         call motion_correct%add_input(UI_COMP, nthr, gui_submenu="compute")
         ! add to ui_hash
-        call add_ui_program('motion_correct', motion_correct, prgtab)
+        call add_ui_program('motion_correct', motion_correct, prgtab, UI_CATEGORY)
     end subroutine new_motion_correct
 
     subroutine new_particle_sieving( prgtab )
@@ -239,11 +240,11 @@ contains
         ! PROGRAM SPECIFICATION
         call particle_sieving%new(&
         &'particle_sieving', &                                               ! name
-        &'Particle sieving',&                                                ! descr_short
-        &'workflow for automated particle sieving',& ! descr_long
+        &'Select particles automatically using a sieving workflow',& ! summary
+        &'workflow for automated particle sieving',& ! help
         &'simple_exec',&                                                   ! executable
         &.true.,&                                                          ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "picking,compute")       ! GUI         
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "picking,compute")       ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -254,43 +255,43 @@ contains
         ! search controls
         call particle_sieving%add_input(UI_SRCH, 'nmics', 'num', 'Max # of micrographs per chunk', &
         &'Maximum number of micrographs accumulated into one chunk{50}', &
-        &'max # of micrographs per chunk{50}', .false., 50., gui_submenu="search", gui_advanced=.true.)
+        &'max # of micrographs per chunk{50}', .false., 50., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         call particle_sieving%add_input(UI_SRCH, 'nptcls_coarse', 'num', 'Target # of particles per coarse chunk', 'Target # of particles per coarse chunk{5000}',&
-        &'Target # of particles per coarse chunk{5000}', .false., 5000., gui_submenu="search", gui_advanced=.true.)
+        &'Target # of particles per coarse chunk{5000}', .false., 5000., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         call particle_sieving%add_input(UI_SRCH, 'nptcls_fine', 'num', 'Target # of particles per fine chunk', 'Target # of particles per fine chunk{10000}',&
-        &'Target # of particles per fine chunk{10000}', .false., 10000., gui_submenu="search", gui_advanced=.true.)
+        &'Target # of particles per fine chunk{10000}', .false., 10000., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         call particle_sieving%add_input(UI_SRCH, 'maxnchunks', 'num', 'Max # of chunks to process', &
         &'Cap on the total number of chunks processed, 0 = no limit{0}', &
-        &'max # of chunks (0=no limit){0}', .false., 0., gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'box_fine', 'num', 'Box size for fine sieving', 'Box size for fine sieving{128}', 'in pixels{128}', .false., 128., gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'box_coarse', 'num', 'Box size for coarse sieving', 'Box size for coarse sieving{128}', 'in pixels{128}', .false., 128., gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'ncls_coarse', 'num', 'Number of clusters for coarse sieving', 'Number of clusters for coarse sieving{100}', 'in clusters{100}', .false., 100., gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'ncls_fine', 'num', 'Number of clusters for fine sieving', 'Number of clusters for fine sieving{100}', 'in clusters{100}', .false., 100., gui_submenu="search", gui_advanced=.true.)
+        &'max # of chunks (0=no limit){0}', .false., 0., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+        call particle_sieving%add_input(UI_SRCH, 'box_fine', 'num', 'Box size for fine sieving', 'Box size for fine sieving{128}', 'in pixels{128}', .false., 128., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+        call particle_sieving%add_input(UI_SRCH, 'box_coarse', 'num', 'Box size for coarse sieving', 'Box size for coarse sieving{128}', 'in pixels{128}', .false., 128., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+        call particle_sieving%add_input(UI_SRCH, 'ncls_coarse', 'num', 'Number of clusters for coarse sieving', 'Number of clusters for coarse sieving{100}', 'in clusters{100}', .false., 100., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+        call particle_sieving%add_input(UI_SRCH, 'ncls_fine', 'num', 'Number of clusters for fine sieving', 'Number of clusters for fine sieving{100}', 'in clusters{100}', .false., 100., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         ! alternative inputs
-        call particle_sieving%add_input(UI_SRCH, 'nsample_coarse', 'num', 'Number of particles to sample in coarse sieving', 'Number of particles to sample in coarse sieving{2000}', 'in particles{2000}', .false., 2000., gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'nsample_fine', 'num', 'Number of particles to sample in fine sieving', 'Number of particles to sample in fine sieving{2000}', 'in particles{2000}', .false., 2000., gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'use_model', 'str', 'Use model for class-average rejection in sieving', 'Use model for class-average rejection in sieving(yes|no){yes}', 'yes|no{yes}', .false., 'yes', gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'refs', 'file', 'Reference class averages to initialise size compatibility model', 'Reference class averages to initialise size compatibility model', 'e.g. refs.mrcs', .false., '', gui_submenu="search", gui_advanced=.true.)
-        call particle_sieving%add_input(UI_SRCH, 'single_pass', 'str', 'Coarse pass only', 'Coarse pass only(yes|no){no}', 'yes|no{no}', .false., 'no', gui_submenu="search", gui_advanced=.true.)
+        call particle_sieving%add_input(UI_SRCH, 'nsample_coarse', 'num', 'Number of particles to sample in coarse sieving', 'Number of particles to sample in coarse sieving{2000}', 'in particles{2000}', .false., 2000., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+        call particle_sieving%add_input(UI_SRCH, 'nsample_fine', 'num', 'Number of particles to sample in fine sieving', 'Number of particles to sample in fine sieving{2000}', 'in particles{2000}', .false., 2000., gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+        call particle_sieving%add_input(UI_SRCH, 'use_model', 'str', 'Use model for class-average rejection in sieving', 'Use model for class-average rejection in sieving(yes|no){yes}', 'yes|no{yes}', .false., 'yes', gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+        call particle_sieving%add_input(UI_SRCH, 'refs', 'file', 'Reference class averages to initialise size compatibility model', 'Reference class averages to initialise size compatibility model', 'e.g. refs.mrcs', .false., '', gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+        call particle_sieving%add_input(UI_SRCH, 'single_pass', 'str', 'Coarse pass only', 'Coarse pass only(yes|no){no}', 'yes|no{no}', .false., 'no', gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
         ! filter controls
         call particle_sieving%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of particle sieving (in Angstroms){15.0}', 'in Angstroms{15.0}', .false., 15., gui_submenu="filter", gui_advanced=.true.)
+        &iterations of particle sieving (in Angstroms){15.0}', 'in Angstroms{15.0}', .false., 15., gui_submenu="filter", gui_visibility=UI_VIS_ADVANCED)
         call particle_sieving%add_input(UI_FILT, 'lpstop_coarse', 'num', 'Final low-pass limit for coarse sieving', 'Low-pass limit to be applied in the last iterations of coarse particle sieving (in Angstroms){15.0}',&
-        &'in Angstroms{15.0}', .false., 15., gui_submenu="filter", gui_advanced=.true.)
+        &'in Angstroms{15.0}', .false., 15., gui_submenu="filter", gui_visibility=UI_VIS_ADVANCED)
         call particle_sieving%add_input(UI_FILT, 'lpstop_fine', 'num', 'Final low-pass limit for fine sieving', 'Low-pass limit to be applied in the last iterations of fine particle sieving (in Angstroms){10.0}',&
-        &'in Angstroms{10.0}', .false., 10., gui_submenu="filter", gui_advanced=.true.)
+        &'in Angstroms{10.0}', .false., 10., gui_submenu="filter", gui_visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call particle_sieving%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
+        call particle_sieving%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         call particle_sieving%add_input(UI_COMP, 'nparts', 'num', 'Number of chunks classified simultaneously', &
         &'Number of particle-subset (chunk) abinitio2D jobs run concurrently on the local machine. Each chunk job &
         &itself runs shared-memory with nthr threads (per-chunk MPI partitioning is not used in offline sieving){1}', &
-        &'# of concurrent chunks{1}', .false., 1., gui_submenu="compute", gui_advanced=.false.)
+        &'# of concurrent chunks{1}', .false., 1., gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         call particle_sieving%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
         ! add to ui_hash
-        call add_ui_program('particle_sieving', particle_sieving, prgtab)
+        call add_ui_program('particle_sieving', particle_sieving, prgtab, UI_CATEGORY)
     end subroutine new_particle_sieving
 
     subroutine new_pick( prgtab )
@@ -298,14 +299,14 @@ contains
         ! PROGRAM SPECIFICATION
         call pick%new(&
         &'pick', &                                                         ! name
-        &'Template-based particle picking',&                               ! descr_short
-        &'is a distributed workflow for template-based particle picking',& ! descr_long
+        &'Template-based particle picking',&                               ! summary
+        &'is a distributed workflow for template-based particle picking',& ! help
         &'simple_exec',&                                                   ! executable
         &.true.,&                                                          ! requires sp_project
-        &gui_advanced=.false., gui_submenu_list = "picking,compute")       ! GUI         
+        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "picking,compute")       ! GUI
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pick%add_input(UI_IMG, pickrefs, gui_submenu="picking", gui_advanced=.false.)
+        call pick%add_input(UI_IMG, pickrefs, gui_submenu="picking", gui_visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call pick%add_input(UI_PARM, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick', gui_submenu="picking")
         call pick%add_input(UI_PARM, pcontrast, gui_submenu="picking")
@@ -320,10 +321,10 @@ contains
         ! <empty>
         ! search controls
         call pick%add_input(UI_SRCH, 'ndev', 'num', '# of sigmas for outlier detection', '# of standard deviations threshold for outlier detection{2.5}',&
-        &'{2.5}', .false., 2.5, gui_submenu="picking", gui_advanced=.false.)
+        &'{2.5}', .false., 2.5, gui_submenu="picking", gui_visibility=UI_VIS_STANDARD)
         call pick%add_input(UI_SRCH, 'ncls', 'num', 'Cluster input pickrefs before template generation', &
         &'If >0, run cluster_cavgs on pickrefs and use medoids only for make_pickrefs{0}', &
-        &'# clusters{0}', .false., 0., gui_submenu="picking", gui_advanced=.true.)
+        &'# clusters{0}', .false., 0., gui_submenu="picking", gui_visibility=UI_VIS_ADVANCED)
         call pick%add_input(UI_SRCH, pick_roi, gui_submenu="picking")
         call pick%add_input(UI_SRCH, backgr_subtr, gui_submenu="picking")
         call pick%add_input(UI_SRCH, particle_density, gui_submenu="picking")
@@ -334,10 +335,10 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call pick%add_input(UI_COMP, nparts, gui_submenu="compute", gui_advanced=.false.)
-        call pick%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
+        call pick%add_input(UI_COMP, nparts, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call pick%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('pick', pick, prgtab)
+        call add_ui_program('pick', pick, prgtab, UI_CATEGORY)
     end subroutine new_pick
 
     subroutine new_preprocess( prgtab )
@@ -345,8 +346,8 @@ contains
         ! PROGRAM SPECIFICATION
         call preprocess%new(&
         &'preprocess', &                                                                    ! name
-        &'Preprocessing',&                                                                  ! descr_short
-        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
+        &'Run motion correction, CTF estimation, and particle picking',& ! summary
+        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! help
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
         &.true.)                                                                            ! requires sp_project
@@ -398,7 +399,7 @@ contains
         call preprocess%add_input(UI_COMP, nparts)
         call preprocess%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('preprocess', preprocess, prgtab)
+        call add_ui_program('preprocess', preprocess, prgtab, UI_CATEGORY)
     end subroutine new_preprocess
 
     subroutine new_reextract( prgtab )
@@ -406,7 +407,7 @@ contains
         ! PROGRAM SPECIFICATION
         call reextract%new(&
         &'reextract', &                                                         ! name
-        &'Re-extract particle images from integrated movies',&                  ! descr_short
+        &'Re-extract particle images from integrated movies',&                  ! summary
         &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
         &'simple_exec',&                                                        ! executable
         &.true.)                                                                ! requires sp_project
@@ -415,7 +416,7 @@ contains
         ! <empty>
         ! parameter input/output
         call reextract%add_input(UI_PARM, box,     required_override=.false.)
-        call reextract%add_input(UI_PARM, oritype, descr_placeholder_override = '(ptcl2D|ptcl3D){ptcl3D}')
+        call reextract%add_input(UI_PARM, oritype, placeholder_override = '(ptcl2D|ptcl3D){ptcl3D}')
         call reextract%add_input(UI_PARM, pcontrast)
         call reextract%add_input(UI_PARM, backgr_subtr)
         call reextract%add_input(UI_PARM, outside)
@@ -431,7 +432,7 @@ contains
         call reextract%add_input(UI_COMP, nparts)
         call reextract%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('reextract', reextract, prgtab)
+        call add_ui_program('reextract', reextract, prgtab, UI_CATEGORY)
     end subroutine new_reextract
 
 end module simple_ui_preproc

@@ -50,8 +50,8 @@
                         </div>
                         <div class="grid grid-cols-2 gap-4 text-[12px] mx-[20px]">
                             {% for input in section.inputs %}
-                                <div class="{% if input.advanced %}advancedinput hidden{% endif %}">{{ input.descr_short }}</div>
-                                <div class="bg-nice4bg rounded flex flex-row {% if input.advanced %}advancedinput hidden{% endif %}">
+                                <div class="{% if input.visibility != \"standard\" %}advancedinput hidden{% endif %}">{{ input.label }}</div>
+                                <div class="bg-nice4bg rounded flex flex-row {% if input.visibility != \"standard\" %}advancedinput hidden{% endif %}">
                                     {% if input.keytype == "int" %}
                                         {% if input.required and "default" in input %}
                                             <input name={{ input.key }} type="number" min=0 step=1 required placeholder={{ input.default }} {% if "value" in input %}value="{{ input.value }}"{% endif %} class="flex-1"></input>

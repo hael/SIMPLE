@@ -3,6 +3,7 @@ module simple_ui_mask
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('mask', 'Masking', 100)
 type(ui_program), target :: auto_spher_mask
 type(ui_program), target :: automask2D
 type(ui_program), target :: mask
@@ -30,8 +31,8 @@ contains
         ! PROGRAM SPECIFICATION
         call auto_spher_mask%new(&
         &'auto_spher_mask',&                              ! name
-        &'spherical masking with automatic diameter estimation',& ! descr_short
-        &'is a program for automated spherical masking',& ! descr_long
+        &'spherical masking with automatic diameter estimation',& ! summary
+        &'is a program for automated spherical masking',& ! help
         &'simple_exec',&                                  ! executable
         &.false.)                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -51,7 +52,7 @@ contains
         ! computer controls
         call auto_spher_mask%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('auto_spher_mask', auto_spher_mask, prgtab) 
+        call add_ui_program('auto_spher_mask', auto_spher_mask, prgtab, UI_CATEGORY)
     end subroutine new_auto_spher_mask
 
     subroutine new_automask2D( prgtab )
@@ -59,8 +60,8 @@ contains
         ! PROGRAM SPECIFICATION
         call automask2D%new(&
         &'automask2D',&                                        ! name
-        &'2D envelope masking',&                               ! descr_short
-        &'is a program for automated envelope masking in 2D',& ! descr_long
+        &'Create an automatic envelope mask for 2D images',& ! summary
+        &'is a program for automated envelope masking in 2D',& ! help
         &'simple_exec',&                                       ! executable
         &.false.)                                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -88,7 +89,7 @@ contains
         ! computer controls
         call automask2D%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('automask2D', automask2D, prgtab)
+        call add_ui_program('automask2D', automask2D, prgtab, UI_CATEGORY)
     end subroutine new_automask2D
 
     subroutine new_mask( prgtab )
@@ -96,9 +97,9 @@ contains
         ! PROGRAM SPECIFICATION
         call mask%new(&
         &'mask',&                                                        ! name
-        &'Mask images/volumes',&                                         ! descr_short
+        &'Apply masks to 2D images or 3D volumes',& ! summary
         &'is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft &
-        & falloff, set mskdiam to the diameter in A',&                   ! descr_long
+        & falloff, set mskdiam to the diameter in A',&                   ! help
         &'simple_exec',&                                                 ! executable
         &.false.)                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -129,7 +130,7 @@ contains
         ! computer controls
         call mask%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('mask', mask, prgtab)
+        call add_ui_program('mask', mask, prgtab, UI_CATEGORY)
     end subroutine new_mask
 
 end module simple_ui_mask

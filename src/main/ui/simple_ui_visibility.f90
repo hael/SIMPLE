@@ -7,20 +7,10 @@ integer, parameter, public :: UI_VIS_STANDARD  = 1
 integer, parameter, public :: UI_VIS_ADVANCED  = 2
 integer, parameter, public :: UI_VIS_DEVELOPER = 3
 
-public :: ui_visibility_from_advanced
 public :: ui_visibility_is_valid
 public :: ui_visibility_name
 
 contains
-
-    pure integer function ui_visibility_from_advanced( advanced ) result( visibility )
-        logical, intent(in) :: advanced
-        if( advanced )then
-            visibility = UI_VIS_ADVANCED
-        else
-            visibility = UI_VIS_STANDARD
-        endif
-    end function ui_visibility_from_advanced
 
     pure logical function ui_visibility_is_valid( visibility )
         integer, intent(in) :: visibility

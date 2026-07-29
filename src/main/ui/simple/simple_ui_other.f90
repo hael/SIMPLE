@@ -3,6 +3,7 @@ module simple_ui_other
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('other', 'Other Utilities', 190)
 type(ui_program), target :: cif2pdb
 type(ui_program), target :: fractionate_movies
 type(ui_program), target :: split_
@@ -32,8 +33,8 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call cif2pdb%new(&
         &'cif2pdb',&                                       ! name
-        &'convert PDBx/mmCIF to PDB',&                     ! descr_short
-        &'is a program for converting PDBx/mmCIF to PDB',& ! descr_long
+        &'Convert PDBx/mmCIF coordinate files to PDB format',& ! summary
+        &'is a program for converting PDBx/mmCIF to PDB',& ! help
         &'simple_exec',&                                   ! executable
         &.false.)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -50,7 +51,7 @@ contains
         ! mask controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('cif2pdb', cif2pdb, prgtab)
+        call add_ui_program('cif2pdb', cif2pdb, prgtab, UI_CATEGORY)
     end subroutine new_cif2pdb
 
     subroutine new_fractionate_movies( prgtab )
@@ -85,15 +86,15 @@ contains
         call fractionate_movies%add_input(UI_COMP, nparts)
         call fractionate_movies%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('fractionate_movies', fractionate_movies, prgtab)
+        call add_ui_program('fractionate_movies', fractionate_movies, prgtab, UI_CATEGORY)
     end subroutine new_fractionate_movies
 
     subroutine new_split_( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call split_%new(&
         &'split',&                                   ! name
-        &'Split stack into substacks',&              ! descr_short
-        &'is a program for splitting a stack into evenly partitioned substacks',& ! descr_long
+        &'Split a stack into evenly sized substacks',& ! summary
+        &'is a program for splitting a stack into evenly partitioned substacks',& ! help
         &'simple_exec',&                             ! executable
         &.false.)                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -112,7 +113,7 @@ contains
         ! mask controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('split', split_, prgtab)
+        call add_ui_program('split', split_, prgtab, UI_CATEGORY)
     end subroutine new_split_
 
     subroutine new_split_stack( prgtab )
@@ -120,8 +121,8 @@ contains
         ! PROGRAM SPECIFICATION
         call split_stack%new(&
         &'split_stack',&                                              ! name
-        &'split stack in project',&                                   ! descr_short
-        &'is a program for splitting a stack into nparts substacks',& ! descr_long
+        &'Split a project stack into a chosen number of substacks',& ! summary
+        &'is a program for splitting a stack into nparts substacks',& ! help
         &'simple_exec',&                                              ! executable
         &.true.)                                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -140,7 +141,7 @@ contains
         ! computer controls
         ! <empty>
         ! add to ui_hash
-        call add_ui_program('split_stack', split_stack, prgtab)
+        call add_ui_program('split_stack', split_stack, prgtab, UI_CATEGORY)
     end subroutine new_split_stack
 
 end module simple_ui_other

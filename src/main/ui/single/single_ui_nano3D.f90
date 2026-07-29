@@ -3,6 +3,7 @@ module single_ui_nano3D
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('nano3d', '3D Reconstruction', 40)
 type(ui_program), target :: autorefine3D_nano
 type(ui_program), target :: refine3D_nano
 type(ui_program), target :: abinitio3D_nano
@@ -30,10 +31,10 @@ contains
         ! PROGRAM SPECIFICATION
         call abinitio3D_nano%new(&
         &'abinitio3D_nano',&                                                                               ! name
-        &'ab initio 3D (nano defaults)',&                                                                  ! descr_short
-        &'is a wrapper around abinitio3D that applies nanoparticle-oriented defaults while allowing overrides',& ! descr_long
+        &'Build an initial 3D nanoparticle model with nano defaults',& ! summary
+        &'is a wrapper around abinitio3D that applies nanoparticle-oriented defaults while allowing overrides',& ! help
         &'single_exec',&                                                                                   ! executable
-        &.true., gui_advanced=.false.)                                                                     ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! search controls
         call abinitio3D_nano%add_input(UI_SRCH, nsample, required_override=.false.)
@@ -50,7 +51,7 @@ contains
         call abinitio3D_nano%add_input(UI_COMP, nparts, required_override=.false.)
         call abinitio3D_nano%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('abinitio3D_nano', abinitio3D_nano, prgtab)
+        call add_ui_program('abinitio3D_nano', abinitio3D_nano, prgtab, UI_CATEGORY)
     end subroutine new_abinitio3D_nano
 
     subroutine new_autorefine3D_nano( prgtab )
@@ -58,10 +59,10 @@ contains
         ! PROGRAM SPECIFICATION
         call autorefine3D_nano%new(&
         &'autorefine3D_nano',&                                                            ! name
-        &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
-        &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
+        &'auto 3D refinement of metallic nanoparticles',&                                 ! summary
+        &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! help
         &'single_exec',&                                                                  ! executable
-        &.true., gui_advanced=.false.)                                                    ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%add_input(UI_IMG, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -93,7 +94,7 @@ contains
         call autorefine3D_nano%add_input(UI_COMP, nthr)
         call autorefine3D_nano%add_input(UI_COMP, script)
         ! add to ui_hash
-        call add_ui_program('autorefine3D_nano', autorefine3D_nano, prgtab)
+        call add_ui_program('autorefine3D_nano', autorefine3D_nano, prgtab, UI_CATEGORY)
     end subroutine new_autorefine3D_nano
 
     subroutine new_refine3D_nano( prgtab )
@@ -101,10 +102,10 @@ contains
         ! PROGRAM SPECIFICATION
         call refine3D_nano%new(&
         &'refine3D_nano',&                                                                                                    ! name
-        &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
-        &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
+        &'3D refinement of metallic nanoparticles',&                                                                          ! summary
+        &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! help
         &'single_exec',&                                                                                                      ! executable
-        &.true., gui_advanced=.false.)                                                                                        ! requires sp_project
+        &.true., gui_visibility=UI_VIS_STANDARD)                                                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%add_input(UI_IMG, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -137,7 +138,7 @@ contains
         call refine3D_nano%add_input(UI_COMP, nparts, required_override=.false.)
         call refine3D_nano%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('refine3D_nano', refine3D_nano, prgtab)
+        call add_ui_program('refine3D_nano', refine3D_nano, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_nano
 
 end module single_ui_nano3D

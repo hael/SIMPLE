@@ -27,24 +27,6 @@ add_custom_target(simple_args
         "${SIMPLE_GEN_DIR}/simple_varlist.txt"
 )
 
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-file(GLOB_RECURSE UI_CATALOG_FILES CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/src/main/ui/catalog/*.toml"
-)
-add_custom_target(simple_ui_catalog_check
-    COMMAND "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/scripts/ui/generate_ui_description_catalog.py"
-            --catalog "${CMAKE_SOURCE_DIR}/src/main/ui/catalog"
-            --output "${CMAKE_CURRENT_SOURCE_DIR}/main/ui/generated/simple_ui_description_catalog.f90"
-            --check
-    DEPENDS
-        "${CMAKE_SOURCE_DIR}/scripts/ui/generate_ui_description_catalog.py"
-        "${CMAKE_CURRENT_SOURCE_DIR}/main/ui/generated/simple_ui_description_catalog.f90"
-        ${UI_CATALOG_FILES}
-    COMMENT "Checking generated UI description catalog"
-    VERBATIM
-)
-
 # Git commit hash insertion (side-effect script)
 add_custom_target(simple_git
     COMMAND SIMPLE_PATH=${CMAKE_BINARY_DIR}
@@ -113,7 +95,6 @@ set(SIMPLE_ALL_SOURCES
 add_library(${SIMPLELIB} STATIC ${SIMPLE_ALL_SOURCES})
 
 add_dependencies(${SIMPLELIB} simple_args simple_git)
-add_dependencies(${SIMPLELIB} simple_ui_catalog_check)
 if(SIMPLE_DEPENDENCY_TARGETS)
     add_dependencies(${SIMPLELIB} ${SIMPLE_DEPENDENCY_TARGETS})
 endif()

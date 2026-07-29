@@ -3,6 +3,7 @@ module simple_ui_validate
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('validate', 'Validation', 150)
 type(ui_program), target :: check_refpick
 type(ui_program), target :: mini_stream
 type(ui_program), target :: model_validate
@@ -30,8 +31,8 @@ contains
         ! PROGRAM SPECIFICATION
         call check_refpick%new(&
         &'check_refpick',&                                           ! name
-        &'validation of reference-based picking',&                   ! descr_short
-        &'is a program for validation of reference-based picking',&  ! descr_long
+        &'validation of reference-based picking',&                   ! summary
+        &'is a program for validation of reference-based picking',&  ! help
         &'simple_exec',&                                             ! executable
         &.false.)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -62,7 +63,7 @@ contains
         ! computer controls
         call check_refpick%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('check_refpick', check_refpick, prgtab)
+        call add_ui_program('check_refpick', check_refpick, prgtab, UI_CATEGORY)
     end subroutine new_check_refpick
 
     subroutine new_mini_stream( prgtab )
@@ -70,8 +71,8 @@ contains
         ! PROGRAM SPECIFICATION
         call mini_stream%new(&
         &'mini_stream',&                                ! name
-        &'standalone mini_stream for a quick look',&    ! descr_short
-        &'is a program for doing a standalone mini_stream for a quick look',&  ! descr_long
+        &'standalone mini_stream for a quick look',&    ! summary
+        &'is a program for doing a standalone mini_stream for a quick look',&  ! help
         &'simple_exec',&                                ! executable
         &.false.)                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -99,7 +100,7 @@ contains
         ! computer controls
         call mini_stream%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('mini_stream', mini_stream, prgtab)
+        call add_ui_program('mini_stream', mini_stream, prgtab, UI_CATEGORY)
     end subroutine new_mini_stream
 
     subroutine new_model_validate( prgtab )
@@ -107,7 +108,7 @@ contains
         ! PROGRAM SPECIFICATION
         call model_validate%new(&
         &'model_validate', &                                                                          ! name
-        &'Validation of atomic model',&                                                               ! descr_short
+        &'Validate an atomic model against an experimental density map',& ! summary
         &'is a program to validate the PDB atomic model given a 3D experimental density map in MRC',& ! descr long
         &'simple_exec',&                                                                              ! executable
         &.false.)                                                                                     ! requires sp_project
@@ -126,7 +127,7 @@ contains
         ! mask controls
         ! computer controls
         ! add to ui_hash
-        call add_ui_program('model_validate', model_validate, prgtab)
+        call add_ui_program('model_validate', model_validate, prgtab, UI_CATEGORY)
     end subroutine new_model_validate
 
 end module simple_ui_validate

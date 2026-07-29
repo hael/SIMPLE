@@ -3,6 +3,7 @@ module simple_ui_denoise
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('denoise', 'Denoising', 70)
 type(ui_program), target :: icm2D
 type(ui_program), target :: icm3D
 type(ui_program), target :: ppca_denoise
@@ -48,8 +49,8 @@ contains
         ! PROGRAM SPECIFICATION
         call icm2D%new(&
         &'icm2D',&                                                                  ! name
-        &'ICM 2D filter',&                                                          ! descr_short
-        &'is a program for 2D ICM denoising of even/odd image stacks',&             ! descr_long
+        &'Denoise paired 2D image stacks with ICM',& ! summary
+        &'is a program for 2D ICM denoising of even/odd image stacks',&             ! help
         &'simple_exec',&                                                            ! executable
         &.false.)                                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -69,7 +70,7 @@ contains
         ! computer controls
         call icm2D%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('icm2D', icm2D, prgtab)
+        call add_ui_program('icm2D', icm2D, prgtab, UI_CATEGORY)
     end subroutine new_icm2D
 
     subroutine new_icm3D( prgtab )
@@ -77,8 +78,8 @@ contains
         ! PROGRAM SPECIFICATION
         call icm3D%new(&
         &'icm3D',&                                                                  ! name
-        &'ICM 3D filter',&                                                          ! descr_short
-        &'is a program for 3D nonuniform filtering by Iterated Conditional Modes',& ! descr_long
+        &'Denoise a 3D volume with nonuniform ICM filtering',& ! summary
+        &'is a program for 3D nonuniform filtering by Iterated Conditional Modes',& ! help
         &'simple_exec',&                                                            ! executable
         &.false.)                                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -99,7 +100,7 @@ contains
         ! computer controls
         call icm3D%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('icm3D', icm3D, prgtab)
+        call add_ui_program('icm3D', icm3D, prgtab, UI_CATEGORY)
     end subroutine new_icm3D
 
     subroutine new_ppca_denoise( prgtab )
@@ -107,8 +108,8 @@ contains
         ! PROGRAM SPECIFICATION
         call ppca_denoise%new(&
         &'ppca_denoise',&                             ! name
-        &'Filter stack/volume',&                      ! descr_short
-        &'is a program for ppca-based denoising of an image stack',&  ! descr_long
+        &'Denoise an image stack with probabilistic PCA',& ! summary
+        &'is a program for ppca-based denoising of an image stack',&  ! help
         &'simple_exec',&                              ! executable
         &.false.)                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -150,7 +151,7 @@ contains
         ! computer controls
         call ppca_denoise%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('ppca_denoise', ppca_denoise, prgtab)
+        call add_ui_program('ppca_denoise', ppca_denoise, prgtab, UI_CATEGORY)
     end subroutine new_ppca_denoise
 
     subroutine new_ppca_denoise_classes( prgtab )
@@ -158,8 +159,8 @@ contains
         ! PROGRAM SPECIFICATION
         call ppca_denoise_classes%new(&
         &'ppca_denoise_classes',&                     ! name
-        &'Filter stack/volume',&                      ! descr_short
-        &'is a program for ppca-based denoising of image classes',&  ! descr_long
+        &'Denoise class averages with probabilistic PCA',& ! summary
+        &'is a program for ppca-based denoising of image classes',&  ! help
         &'all',&                                      ! executable
         &.true.)                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -185,7 +186,7 @@ contains
         ! computer controls
         call ppca_denoise_classes%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('ppca_denoise_classes', ppca_denoise_classes, prgtab)
+        call add_ui_program('ppca_denoise_classes', ppca_denoise_classes, prgtab, UI_CATEGORY)
     end subroutine new_ppca_denoise_classes
 
     subroutine new_ppca_volvar( prgtab )
@@ -193,8 +194,8 @@ contains
         ! PROGRAM SPECIFICATION
         call ppca_volvar%new(&
         &'ppca_volvar',&                                     ! name
-        &'Volume variability analysis using ppca',&          ! descr_short
-        &'is a program for ppca-based volume variability',&  ! descr_long
+        &'Volume variability analysis using ppca',&          ! summary
+        &'is a program for ppca-based volume variability',&  ! help
         &'simple_exec',&                                     ! executable
         &.false.)                                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -213,7 +214,7 @@ contains
         ! computer controls
         call ppca_volvar%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('ppca_volvar', ppca_volvar, prgtab)
+        call add_ui_program('ppca_volvar', ppca_volvar, prgtab, UI_CATEGORY)
     end subroutine new_ppca_volvar
 
     subroutine new_cls_split( prgtab )
@@ -270,17 +271,17 @@ contains
             'Diffusion-map density normalization (default 0)', &
             'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
             '0 <= alpha <= 1', .false., 0.0)
-        call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
-        call cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('cls_split', cls_split, prgtab)
+        call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
+        call cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call add_ui_program('cls_split', cls_split, prgtab, UI_CATEGORY)
     end subroutine new_cls_split
 
     subroutine new_denoise_project( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call denoise_project%new(&
         &'denoise_project',&
-        &'Create dual denoised project',&
+        &'Create paired raw and denoised particle representations',&
         &'is a workflow for creating a dual-representation project from existing 2D clustering by writing registered phase-flipped raw particles and denoised particle samples from diffusion maps',&
         &'all',&
         &.true.)
@@ -311,11 +312,11 @@ contains
             'SO3 mixture subspace size', 'SO3 mixture subspace size', &
             '# subspace directions', .false., 500.0)
         call denoise_project%add_input(UI_MASK, mskdiam, required_override=.false., &
-            gui_submenu="mask", gui_advanced=.false.)
+            gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
         call denoise_project%add_input(UI_COMP, nparts, required_override=.false., &
-            gui_submenu="compute", gui_advanced=.false.)
-        call denoise_project%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('denoise_project', denoise_project, prgtab)
+            gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call denoise_project%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call add_ui_program('denoise_project', denoise_project, prgtab, UI_CATEGORY)
     end subroutine new_denoise_project
 
     subroutine new_map_params_from_den( prgtab )
@@ -329,7 +330,7 @@ contains
         call map_params_from_den%add_input(UI_PARM, projfile_raw)
         call map_params_from_den%add_input(UI_PARM, projfile_den)
         call map_params_from_den%add_input(UI_PARM, projfile, required_override=.false.)
-        call add_ui_program('map_params_from_den', map_params_from_den, prgtab)
+        call add_ui_program('map_params_from_den', map_params_from_den, prgtab, UI_CATEGORY)
     end subroutine new_map_params_from_den
 
     subroutine new_flex_analysis( prgtab )
@@ -388,17 +389,17 @@ contains
             'Output project whose selected ptcl3D rows receive hard k-medoids state labels; only used when preimage_mode=discrete', &
             'output project e.g. flex_cluster_states.simple', .false., 'flex_cluster_states.simple')
         call flex_analysis%add_input(UI_FILT, lp, required_override=.false., &
-            descr_placeholder_override='Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered', &
-            gui_submenu="regularization", gui_advanced=.false.)
+            placeholder_override='Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered', &
+            gui_submenu="regularization", gui_visibility=UI_VIS_STANDARD)
         call flex_analysis%add_input(UI_ALT, 'oritype', 'str', &
             'Particle orientation segment', 'Particle orientation segment fixed to ptcl3D', &
             'ptcl3D', .false., 'ptcl3D')
         call flex_analysis%add_input(UI_MASK, mskdiam, required_override=.false., &
-            gui_submenu="mask", gui_advanced=.false.)
+            gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
         call flex_analysis%add_input(UI_COMP, nparts, required_override=.false., &
-            gui_submenu="compute", gui_advanced=.false.)
-        call flex_analysis%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('flex_analysis', flex_analysis, prgtab)
+            gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call flex_analysis%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call add_ui_program('flex_analysis', flex_analysis, prgtab, UI_CATEGORY)
     end subroutine new_flex_analysis
 
 end module simple_ui_denoise

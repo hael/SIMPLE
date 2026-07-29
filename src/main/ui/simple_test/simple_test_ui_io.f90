@@ -3,6 +3,7 @@ module simple_test_ui_io
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('io', 'Input/Output', 50)
 type(ui_program), target :: imgfile
 type(ui_program), target :: inside_write
 type(ui_program), target :: io
@@ -48,7 +49,7 @@ contains
         ! PROGRAM SPECIFICATION
         call imgfile%new(&
         &'imgfile',&                           ! name
-        &'imgfile ',&                          ! descr_short
+        &'imgfile ',&                          ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -68,7 +69,7 @@ contains
         ! computer controls
         !call imgfile%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('imgfile', imgfile, tsttab)
+        call add_ui_program('imgfile', imgfile, tsttab, UI_CATEGORY)
     end subroutine new_imgfile
 
     subroutine new_inside_write( tsttab )
@@ -76,7 +77,7 @@ contains
         ! PROGRAM SPECIFICATION
         call inside_write%new(&
         &'inside_write',&                      ! name
-        &'inside_write ',&                     ! descr_short
+        &'inside_write ',&                     ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -96,7 +97,7 @@ contains
         ! computer controls
         !call inside_write%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('inside_write', inside_write, tsttab)
+        call add_ui_program('inside_write', inside_write, tsttab, UI_CATEGORY)
     end subroutine new_inside_write
 
     subroutine new_io( tsttab )
@@ -104,7 +105,7 @@ contains
         ! PROGRAM SPECIFICATION
         call io%new(&
         &'io',&                                ! name
-        &'io ',&                               ! descr_short
+        &'io ',&                               ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -124,7 +125,7 @@ contains
         ! computer controls
         !call io%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('io', io, tsttab)
+        call add_ui_program('io', io, tsttab, UI_CATEGORY)
     end subroutine new_io
 
     subroutine new_io_parallel( tsttab )
@@ -132,7 +133,7 @@ contains
         ! PROGRAM SPECIFICATION
         call io_parallel%new(&
         &'io_parallel',&                       ! name
-        &'io_parallel ',&                      ! descr_short
+        &'io_parallel ',&                      ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -152,7 +153,7 @@ contains
         ! computer controls
         !call io_parallel%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('io_parallel', io_parallel, tsttab)
+        call add_ui_program('io_parallel', io_parallel, tsttab, UI_CATEGORY)
     end subroutine new_io_parallel
 
     subroutine new_mrc2jpeg( tsttab )
@@ -160,7 +161,7 @@ contains
         ! PROGRAM SPECIFICATION
         call mrc2jpeg%new(&
         &'mrc2jpeg',&                          ! name
-        &'mrc2jpeg ',&                         ! descr_short
+        &'mrc2jpeg ',&                         ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -180,15 +181,15 @@ contains
         ! computer controls
         !call mrc2jpeg%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('mrc2jpeg', mrc2jpeg, tsttab)
+        call add_ui_program('mrc2jpeg', mrc2jpeg, tsttab, UI_CATEGORY)
     end subroutine new_mrc2jpeg
 
     subroutine new_mrc_validate( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call mrc_validate%new(&
-        &'mrc_validate',&                    ! name
-        &'mrc_validate ',&                   ! descr_short
+        &'mrc_validate',&                       ! name
+        &'mrc_validate ',&                      ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -210,7 +211,7 @@ contains
         ! computer controls
         !call mrc_validate%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('mrc_validate', mrc_validate, tsttab)
+        call add_ui_program('mrc_validate', mrc_validate, tsttab, UI_CATEGORY)
     end subroutine new_mrc_validate
 
     subroutine new_stack_io( tsttab )
@@ -218,7 +219,7 @@ contains
         ! PROGRAM SPECIFICATION
         call stack_io%new(&
         &'stack_io',&                          ! name
-        &'stack_io ',&                         ! descr_short
+        &'stack_io ',&                         ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -238,7 +239,7 @@ contains
         ! computer controls
         !call stack_io%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('stack_io', stack_io, tsttab)
+        call add_ui_program('stack_io', stack_io, tsttab, UI_CATEGORY)
     end subroutine new_stack_io
 
     subroutine new_star_export( tsttab )
@@ -246,7 +247,7 @@ contains
         ! PROGRAM SPECIFICATION
         call star_export%new(&
         &'star_export',&                       ! name
-        &'star_export ',&                      ! descr_short
+        &'star_export ',&                      ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -266,7 +267,7 @@ contains
         ! computer controls
         !call star_export%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('star_export', star_export, tsttab)
+        call add_ui_program('star_export', star_export, tsttab, UI_CATEGORY)
     end subroutine new_star_export
 
     subroutine new_starfile_test( tsttab )
@@ -274,7 +275,7 @@ contains
         ! PROGRAM SPECIFICATION
         call starfile_test%new(&
         &'starfile_test',&                     ! name
-        &'starfile_test ',&                    ! descr_short
+        &'starfile_test ',&                    ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -294,7 +295,7 @@ contains
         ! computer controls
         !call starfile_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('starfile_test', starfile_test, tsttab)
+        call add_ui_program('starfile_test', starfile_test, tsttab, UI_CATEGORY)
     end subroutine new_starfile_test
 
 end module simple_test_ui_io

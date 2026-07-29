@@ -16459,12 +16459,14 @@ Uses:
 - `simple_core_module_api`
 - `simple_linked_list`
 - `simple_ui_hash`
+- `simple_ui_param`
 - `simple_ui_params_common`
 - `simple_ui_program`
 - `simple_ui_simple_group`
 - `simple_ui_single_group`
 - `simple_ui_stream_group`
 - `simple_ui_test_group`
+- `simple_ui_visibility`
 
 Public symbols:
 - `get_prg_ptr` — subroutine
@@ -16478,6 +16480,7 @@ Public symbols:
 - `print_stream_ui_json` — subroutine
 - `print_ui_json` — subroutine
 - `validate_ui_json` — subroutine
+- `validate_ui_presentation` — subroutine
 - `write_ui_json` — subroutine
 
 Private symbols:
@@ -16485,6 +16488,9 @@ Private symbols:
 - `create_program_entry` — subroutine
 - `create_section_list` — subroutine
 - `create_section_list` — subroutine
+- `print_registered_programs` — subroutine
+- `validate_category_metadata` — subroutine
+- `validate_input_list` — subroutine
 
 ---
 ## Module: simple_ui_abinitio3D
@@ -16565,6 +16571,21 @@ Public symbols:
 - `new_ppca_denoise_classes` — subroutine
 - `new_ppca_volvar` — subroutine
 - `print_denoise_programs` — subroutine
+
+---
+## Module: simple_ui_descriptor_types
+
+Files:
+- `main/ui/simple_ui_descriptor_types.f90`
+
+Uses:
+- `simple_string`
+
+Public symbols:
+- `ui_choices_from_legacy_placeholder` — subroutine
+
+Private symbols:
+- `ui_choice` — type
 
 ---
 ## Module: simple_ui_dock
@@ -16670,10 +16691,12 @@ Files:
 Uses:
 - `simple_ansi_ctrls`
 - `simple_core_module_api`
+- `simple_ui_descriptor_types`
 - `simple_ui_hash`
 - `simple_ui_params_common`
 - `simple_ui_program`
 - `simple_ui_utils`
+- `simple_ui_visibility`
 
 ---
 ## Module: simple_ui_ori
@@ -16716,13 +16739,18 @@ Files:
 - `main/ui/simple_ui_param.f90`
 
 Uses:
+- `simple_error`
 - `simple_string`
+- `simple_ui_descriptor_types`
+- `simple_ui_visibility`
 
 Public symbols:
 - `apply_gui_overrides` — subroutine
 - `finalize` — subroutine
+- `refresh_legacy_choices` — subroutine
 - `set_param_1` — subroutine
 - `set_param_2` — subroutine
+- `standardize_placeholder` — function
 
 ---
 ## Module: simple_ui_params_common
@@ -16789,23 +16817,28 @@ Uses:
 - `simple_core_module_api`
 - `simple_linked_list`
 - `simple_ui_param`
+- `simple_ui_visibility`
 
 Public symbols:
 - `add_input_num` — subroutine
 - `add_input_param` — subroutine
 - `add_input_str` — subroutine
 - `append_required_keys_from_list` — subroutine
+- `category_descriptor` — type
 - `create_section_from_list` — subroutine
+- `get_category` — function
+- `get_display_name` — function
 - `get_executable` — function
 - `get_name` — function
 - `get_required_keys` — function
 - `kill` — subroutine
 - `new` — subroutine
 - `print_cmdline` — subroutine
+- `print_help` — subroutine
 - `print_param_hash` — subroutine
 - `print_param_list` — subroutine
-- `print_prg_descr_long` — subroutine
 - `print_ui` — subroutine
+- `set_category` — subroutine
 - `ui_program` — type
 - `write2json` — subroutine
 
@@ -17054,6 +17087,15 @@ Public symbols:
 - `new_mini_stream` — subroutine
 - `new_model_validate` — subroutine
 - `print_validate_programs` — subroutine
+
+---
+## Module: simple_ui_visibility
+
+Files:
+- `main/ui/simple_ui_visibility.f90`
+
+Public symbols:
+- `ui_visibility_name` — function
 
 ---
 ## Module: simple_ui_volume

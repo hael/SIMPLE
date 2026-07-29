@@ -69,11 +69,11 @@ def _collect_programs(batchui, executable_name):
                     "inputs": section_inputs,
                 })
 
-        display_name = prg.replace("_", " ")
+        display_name = program_meta.get("display_name") or prg.replace("_", " ")
         programs.append({
             "prg": prg,
             "disp": display_name,
-            "desc": program_meta.get("descr_short", ""),
+            "desc": program_meta.get("summary", ""),
         })
         program_inputs.append({
             "prg": prg,

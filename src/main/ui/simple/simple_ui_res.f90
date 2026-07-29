@@ -3,6 +3,7 @@ module simple_ui_res
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('res', 'Resolution Estimation', 130)
 type(ui_program), target :: fsc
 type(ui_program), target :: fsc_area_score
 
@@ -27,8 +28,8 @@ contains
         ! PROGRAM SPECIFICATION
         call fsc%new(&
         &'fsc', &                                                               ! name
-        &'Calculate FSC between the two input volumes',&                        ! descr_short
-        &'is a program for calculating the FSC between the two input volumes',& ! descr_long
+        &'Calculate FSC between the two input volumes',&                        ! summary
+        &'is a program for calculating the FSC between the two input volumes',& ! help
         &'simple_exec',&                                                        ! executable
         &.false.)                                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -51,7 +52,7 @@ contains
         ! computer controls
         call fsc%add_input(UI_COMP, nthr)
         ! add to ui_hash
-        call add_ui_program('fsc', fsc, prgtab)
+        call add_ui_program('fsc', fsc, prgtab, UI_CATEGORY)
     end subroutine new_fsc
 
     subroutine new_fsc_area_score( prgtab )
@@ -75,7 +76,7 @@ contains
         call fsc_area_score%add_input(UI_PARM, 'fbody', 'string', 'Output file body', &
             &'File body for fsc_area_score output tables', 'file body{fsc_area_score}', .false., 'fsc_area_score')
         call fsc_area_score%add_input(UI_COMP, nthr)
-        call add_ui_program('fsc_area_score', fsc_area_score, prgtab)
+        call add_ui_program('fsc_area_score', fsc_area_score, prgtab, UI_CATEGORY)
     end subroutine new_fsc_area_score
 
 end module simple_ui_res

@@ -1,5 +1,0 @@
-id = "simple_stream"
-executable = "simple_stream"
-display_name = "SIMPLE stream"
-layout = "flat"
-order = 40
