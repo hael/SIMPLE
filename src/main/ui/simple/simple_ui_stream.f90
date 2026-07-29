@@ -150,11 +150,13 @@ contains
         call master%add_input(UI_IMG, 'dir_movies', 'dir',  'Input movies directory',   'Input movies directory',   '', .true.,  '')
         call master%add_input(UI_IMG, 'dir_meta',   'dir',  'Input metadata directory', 'Input metadata directory', '', .false., '')
         call master%add_input(UI_IMG, 'gainref',    'file', 'Gain reference',           'Gain reference',           '', .false., '')
+        call master%add_input(UI_IMG, 'flipgain',   'multi',  'Gain processing', 'Gain processing(none|flip_auto|flip_x|flip_y|flip_xy|generate){none}', '(none|flip_auto|flip_x|flip_y|flip_xy|generate){none}', .false., 'none')
         ! parameter input/output
         call master%add_input(UI_PARM, 'cs',             'float',  'Spherical aberration (mm)',   'Spherical aberration (mm)',   '2.7',                    .true.,  '')
         call master%add_input(UI_PARM, 'fraca',          'float',  'Amplitude contrast fraction', 'Amplitude contrast fraction', '0.1',                    .true.,  '')
         call master%add_input(UI_PARM, 'kv',             'int',    'Acceleration voltage (kV)',   'Acceleration voltage (kV)',   '300',                    .true.,  '')
         call master%add_input(UI_PARM, 'smpd',           'float',  'Pixel size (A)',              'Pixel size (A)',              '',                       .true.,  '')
+        call master%add_input(UI_PARM, 'fit_phshift',    'binary', 'Phase plate',                 'Phase plate presence (yes|no){no}',  '(yes|no){no}',    .false., 'no')
         call master%add_input(UI_PARM, 'smpd_downscale', 'hidden_float', 'Downscaled pixel size (A)',   'Downscaled pixel size (A)',   real2str(SMPD4DOWNSCALE), .false., '')
         call master%add_input(UI_PARM, 'total_dose',     'float',  'Total exposure dose (e/A2)',  'Total exposure dose (e/A2)',  '',                       .true.,  '')
         call master%add_input(UI_PARM, 'pickrefs',       'file',   '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)',    '', .false., '')

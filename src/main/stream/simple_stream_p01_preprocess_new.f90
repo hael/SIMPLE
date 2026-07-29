@@ -27,6 +27,9 @@ use simple_stream_state
 use simple_gui_metadata_utils,   only: max_metadata_size
 use simple_gui_metadata_api
 use simple_motion_correct_utils, only: flip_gain
+use simple_motion_gain_analysis, only: gain_flip_analyzer
+use simple_motion_gain_helpers,  only: read_movies_and_sum_frames, normalized_inverse_average_intensity
+use simple_image,                only: image
 use simple_histogram,            only: histogram
 implicit none
 
@@ -143,8 +146,6 @@ contains
         ! master project file
         call spproj_glob%read( params%projfile )
         if( spproj_glob%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
-        ! gain reference
-        call flip_gain(cline, params%gainref, params%flipgain)
         ! Sniffing for movies & subfolders: we have to wait for first movie/subfolder
         ! to know which directory structure we are working with
         l_dir_found = .false.
@@ -201,6 +202,23 @@ contains
         else
             call qenv%new(params, 1,stream=.true.)
         end if
+        ! gain reference
+        if( params%flipgain == 'flip_auto' )then
+            call auto_detect_gain_flip()
+        else if( params%flipgain == 'flip_x' )then
+            params%flipgain = 'x'
+        else if( params%flipgain == 'flip_y' )then
+            params%flipgain = 'y'
+        else if( params%flipgain == 'flip_xy' )then
+            params%flipgain = 'xy'
+        else if( params%flipgain == 'generate' )then
+            call generate_gain_from_movies()
+        else if( params%flipgain == 'none' )then
+            params%flipgain = 'no'
+        else
+            THROW_HARD('Unknown gain processing option: '//trim(params%flipgain))
+        endif
+        call flip_gain(cline, params%gainref, params%flipgain)
         ! Infinite loop
         last_injection = simple_gettime()
         prev_stacksz   = 0
@@ -491,7 +509,6 @@ contains
                                      cutoff_ice_score    = params%icefracthreshold,                                                                   & 
                                      cutoff_astigmatism  = params%astigthreshold)
             if( meta_preprocess%assigned() ) then
-                write(logfhandle,*) "SENDING"
                 call meta_preprocess%serialise(meta_buffer)
                 call send_to_preprocess_in_pipe(meta_buffer)
             endif
@@ -533,6 +550,199 @@ contains
         call simple_end('**** SIMPLE_STREAM_PREPROC NORMAL STOP ****')
 
         contains
+
+            subroutine auto_detect_gain_flip()
+                integer, parameter :: GAIN_BATCH_NMOVIES = 10
+                integer, parameter :: GAIN_MAX_BATCHES   = 8
+                integer, parameter :: GAIN_MAX_WAITS     = 180
+                type(stream_watcher)         :: gain_movie_buff
+                type(gain_flip_analyzer)     :: analyzer
+                type(image)                  :: sum_batch_img
+                type(string), allocatable    :: gain_movies(:), dirs_gain(:), batch_movies(:)
+                logical                      :: l_dirs_found, ran_analysis
+                integer                      :: nmovies_gain, imov, nvalid, gain_nwaits, nbatches
+                integer                      :: part_movies, part_frames
+
+                if( params%gainref == '' )then
+                    write(logfhandle,'(A)') '>>> GAIN AUTO: gainref is empty; defaulting to no flip'
+                    params%flipgain = 'no'
+                    return
+                endif
+                if( .not. file_exists(params%gainref) )then
+                    write(logfhandle,'(A)') '>>> GAIN AUTO: gainref not found; defaulting to no flip'
+                    params%flipgain = 'no'
+                    return
+                endif
+
+                write(logfhandle,'(A,I0,A)') '>>> GAIN AUTO: waiting for movie batches of ', GAIN_BATCH_NMOVIES, ' for orientation analysis'
+
+                if( SJ_directory_structure )then
+                    call sniff_folders_SJ(params%dir_movies, l_dirs_found, dirs_gain)
+                    if( .not. l_dirs_found )then
+                        write(logfhandle,'(A)') '>>> GAIN AUTO: no movie folders detected; defaulting to no flip'
+                        params%flipgain = 'no'
+                        return
+                    endif
+                    gain_movie_buff = stream_watcher(LONGTIME, dirs_gain(1), suffix_filter=string('_fractions'))
+                    call gain_movie_buff%detect_and_add_dirs(params%dir_movies, SJ_directory_structure)
+                    deallocate(dirs_gain)
+                else
+                    gain_movie_buff = stream_watcher(LONGTIME, params%dir_movies)
+                endif
+
+                call analyzer%new(params%gainref, params%smpd)
+
+                gain_nwaits = 0
+                nbatches = 0
+                do while( nbatches < GAIN_MAX_BATCHES )
+                    if( analyzer%get_converged() ) exit
+
+                    call gain_movie_buff%detect_and_add_dirs(params%dir_movies, SJ_directory_structure)
+                    call gain_movie_buff%watch(nmovies_gain, gain_movies, max_nmovies=5 * GAIN_BATCH_NMOVIES)
+
+                    if( nmovies_gain < GAIN_BATCH_NMOVIES )then
+                        gain_nwaits = gain_nwaits + 1
+                        if( gain_nwaits > GAIN_MAX_WAITS ) exit
+                        call sleep(SHORTWAIT)
+                        cycle
+                    endif
+
+                    allocate(batch_movies(GAIN_BATCH_NMOVIES))
+                    nvalid = 0
+                    do imov=1,nmovies_gain
+                        if( fname2format(gain_movies(imov)) == 'K' ) cycle
+                        nvalid = nvalid + 1
+                        batch_movies(nvalid) = gain_movies(imov)
+                        if( nvalid == GAIN_BATCH_NMOVIES ) exit
+                    enddo
+
+                    if( nvalid < GAIN_BATCH_NMOVIES )then
+                        deallocate(batch_movies)
+                        gain_nwaits = gain_nwaits + 1
+                        if( gain_nwaits > GAIN_MAX_WAITS ) exit
+                        call sleep(SHORTWAIT)
+                        cycle
+                    endif
+
+                    call read_movies_and_sum_frames(batch_movies, params%smpd, sum_batch_img, part_movies, part_frames)
+                    call analyzer%analyze_if_due(sum_batch_img, part_frames, part_movies, ran_analysis)
+                    call gain_movie_buff%add2history(batch_movies)
+                    call sum_batch_img%kill()
+                    deallocate(batch_movies)
+
+                    if( allocated(gain_movies) ) deallocate(gain_movies)
+                    gain_nwaits = 0
+                    nbatches = nbatches + 1
+                enddo
+
+                select case( analyzer%best_idx )
+                case(2)
+                    params%flipgain = 'x'
+                case(3)
+                    params%flipgain = 'y'
+                case(4)
+                    params%flipgain = 'xy'
+                case default
+                    params%flipgain = 'no'
+                end select
+                write(logfhandle,'(A,A)') '>>> GAIN AUTO: selected flip option = ', trim(params%flipgain)
+
+                if( allocated(gain_movies) ) deallocate(gain_movies)
+                if( allocated(batch_movies) ) deallocate(batch_movies)
+                if( allocated(dirs_gain) ) deallocate(dirs_gain)
+                call analyzer%kill()
+                call gain_movie_buff%kill()
+            end subroutine auto_detect_gain_flip
+
+            subroutine generate_gain_from_movies()
+                integer, parameter :: N_MOVIES_TARGET     = 1000
+                integer, parameter :: GAIN_BATCH_NMOVIES  = 10
+                integer, parameter :: GAIN_MAX_WAIT_CYCLES = 1200
+                type(stream_watcher)      :: gain_movie_buff
+                type(image)               :: gain_sum_img, batch_sum_img, gain_img
+                type(string), allocatable :: gain_movies(:), batch_movies(:), dirs_gain(:)
+                type(string)              :: gainref_out
+                logical                   :: l_dirs_found
+                integer                   :: nmovies_gain, imov, nvalid, gain_nwaits
+                integer                   :: part_movies, part_frames
+                integer                   :: movies_used, frames_used
+                real                      :: avg_value
+
+                write(logfhandle,'(A,I0,A)') '>>> GAIN GENERATION: waiting for ', N_MOVIES_TARGET, ' movies'
+
+                if( SJ_directory_structure )then
+                    call sniff_folders_SJ(params%dir_movies, l_dirs_found, dirs_gain)
+                    if( .not. l_dirs_found ) THROW_HARD('GAIN GENERATION: could not detect movie folders')
+                    gain_movie_buff = stream_watcher(LONGTIME, dirs_gain(1), suffix_filter=string('_fractions'))
+                    call gain_movie_buff%detect_and_add_dirs(params%dir_movies, SJ_directory_structure)
+                    deallocate(dirs_gain)
+                else
+                    gain_movie_buff = stream_watcher(LONGTIME, params%dir_movies)
+                endif
+
+                movies_used  = 0
+                frames_used  = 0
+                gain_nwaits  = 0
+                do while( movies_used < N_MOVIES_TARGET )
+                    call gain_movie_buff%detect_and_add_dirs(params%dir_movies, SJ_directory_structure)
+                    call gain_movie_buff%watch(nmovies_gain, gain_movies, max_nmovies=5 * GAIN_BATCH_NMOVIES)
+
+                    if( nmovies_gain < GAIN_BATCH_NMOVIES )then
+                        gain_nwaits = gain_nwaits + 1
+                        if( gain_nwaits > GAIN_MAX_WAIT_CYCLES ) THROW_HARD('GAIN GENERATION: timeout waiting for enough movies')
+                        call sleep(SHORTWAIT)
+                        cycle
+                    endif
+
+                    allocate(batch_movies(GAIN_BATCH_NMOVIES))
+                    nvalid = 0
+                    do imov=1,nmovies_gain
+                        if( fname2format(gain_movies(imov)) == 'K' ) cycle
+                        nvalid = nvalid + 1
+                        batch_movies(nvalid) = gain_movies(imov)
+                        if( nvalid == GAIN_BATCH_NMOVIES ) exit
+                    enddo
+
+                    if( nvalid < GAIN_BATCH_NMOVIES )then
+                        deallocate(batch_movies)
+                        gain_nwaits = gain_nwaits + 1
+                        if( gain_nwaits > GAIN_MAX_WAIT_CYCLES ) THROW_HARD('GAIN GENERATION: insufficient non-EER movies')
+                        call sleep(SHORTWAIT)
+                        cycle
+                    endif
+
+                    call read_movies_and_sum_frames(batch_movies, params%smpd, batch_sum_img, part_movies, part_frames)
+                    if( .not. gain_sum_img%exists() )then
+                        call gain_sum_img%copy(batch_sum_img)
+                    else
+                        call gain_sum_img%add_workshare(batch_sum_img)
+                    endif
+                    movies_used = movies_used + part_movies
+                    frames_used = frames_used + part_frames
+                    write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> GAIN GENERATION: movies collected ', movies_used, '/', N_MOVIES_TARGET, '; frames accumulated ', frames_used
+
+                    call gain_movie_buff%add2history(batch_movies)
+                    call batch_sum_img%kill()
+                    deallocate(batch_movies)
+                    if( allocated(gain_movies) ) deallocate(gain_movies)
+                    gain_nwaits = 0
+                enddo
+
+                call normalized_inverse_average_intensity(gain_sum_img, frames_used, gain_img, avg_value)
+                gainref_out = 'gainref_generated.mrc'
+                call gain_img%write(gainref_out, del_if_exists=.true.)
+                params%gainref  = simple_abspath('gainref_generated.mrc')
+                params%flipgain = 'no'
+                call cline%set('gainref', params%gainref)
+                write(logfhandle,'(A,A)') '>>> GAIN GENERATION: wrote generated gainref ', params%gainref%to_char()
+
+                if( allocated(gain_movies) ) deallocate(gain_movies)
+                if( allocated(batch_movies) ) deallocate(batch_movies)
+                if( allocated(dirs_gain) ) deallocate(dirs_gain)
+                if( gain_img%exists() ) call gain_img%kill()
+                if( gain_sum_img%exists() ) call gain_sum_img%kill()
+                call gain_movie_buff%kill()
+            end subroutine generate_gain_from_movies
 
             subroutine mics_window_stats(key, fromto, avg, sdev)
                 character(len=*), intent(in)    :: key
