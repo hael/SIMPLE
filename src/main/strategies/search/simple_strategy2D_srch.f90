@@ -1,5 +1,6 @@
 !@descr: common strategy2D methods and type specification for polymorphic strategy2D object creation are delegated to this class
 module simple_strategy2D_srch
+use simple_core_module_api, only: dp
 use simple_pftc_srch_api
 use simple_strategy2D_alloc, only: prep_strategy2D_thread, s2D, is_fresh_2D_start
 use simple_eul_prob_tab2D,   only: eul_prob_tab2D
@@ -44,7 +45,11 @@ type strategy2D_srch
     real                    :: xy_first_rot(2) =  0.  !< initial shifts identified by searching the previous best reference, rotated
     real                    :: prev_corr       = -1.  !< previous best correlation
     real                    :: best_corr       = -1.  !< best corr found by search
+    real(dp)                :: sgd_objective_initial = 0._dp  !< raw Euclidean objective at stream entry
+    real(dp)                :: sgd_objective_final   = 0._dp  !< raw Euclidean objective after stream steps
     real                    :: trs             =  0.  !< shift boundary
+    integer                 :: sgd_accepted_steps = 0  !< accepted bounded gradient steps
+    logical                 :: sgd_used          = .false. !< stream shift update was attempted
     logical                 :: l_sh_first      = .false. !< Whether to search the shifts on previous best reference
     logical                 :: l_fresh_start   = .false. !< Whether previous alignment parameters are intentionally ignored
   contains
@@ -85,7 +90,22 @@ contains
         lims(:,2)       =  self%p_ptr%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-        if( trim(self%p_ptr%tseries).eq.'yes' )then
+        if( self%p_ptr%l_sgd_streaming_active )then
+            ! The stream has already selected one discrete in-plane rotation.
+            ! Construct shift-only objects so minimize_direct differentiates
+            ! L(c,r,s) with respect to s=(sx,sy) at fixed (c,r), and do not
+            ! allocate the legacy particle-shift L-BFGS-B optimizer.
+            call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init,&
+            maxits=self%p_ptr%maxits_sh, opt_angle=.false., direct_only=.true.)
+            call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init,&
+            maxits=self%p_ptr%maxits_sh, opt_angle=.false., coarse_init=.true., direct_only=.true.)
+            if( .not. self%grad_shsrch_obj%is_direct_shift_only() )then
+                THROW_HARD('stream shift optimizer is not configured for fixed-angle direct descent')
+            endif
+            if( .not. self%grad_shsrch_first_obj%is_direct_shift_only() )then
+                THROW_HARD('stream seed-shift optimizer is not configured for fixed-angle direct descent')
+            endif
+        else if( trim(self%p_ptr%tseries).eq.'yes' )then
             ! shift only search
             call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init,&
             maxits=self%p_ptr%maxits_sh, opt_angle=.false.)
@@ -108,6 +128,10 @@ contains
         logical :: has_been_searched
         self%nrefs_eval = 0
         self%nsolns     = 0
+        self%sgd_objective_initial = 0.
+        self%sgd_objective_final   = 0.
+        self%sgd_accepted_steps    = 0
+        self%sgd_used              = .false.
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
         self%l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter)
@@ -120,7 +144,13 @@ contains
             self%prev_class_mi = nint(os%get(self%iptcl,'class'))            ! class index before any fallback
             self%prev_class    = self%prev_class_mi
             self%prev_rot      = self%b_ptr%pftc%get_roind(360.-os%e3get(self%iptcl)) ! in-plane angle index
-            if( self%prev_rot < 1 .or. self%prev_rot > self%nrots ) THROW_HARD('Invalid previous in-plane rotation index')
+        if( self%prev_rot < 1 .or. self%prev_rot > self%nrots )then
+            if( self%p_ptr%sgd_diagnostic )then
+                write(logfhandle,'(A,1X,I0,1X,A,I0)') &
+                    '>>> SEARCH SAFETY: invalid previous rotation=', self%prev_rot, 'nrots=', self%nrots
+            endif
+            THROW_HARD('Invalid previous in-plane rotation index')
+        endif
             self%prev_shvec = os%get_2Dshift(self%iptcl)                  ! shift vector
         endif
         self%best_shvec = 0.
@@ -145,8 +175,17 @@ contains
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better)
-        call self%b_ptr%pftc%gen_objfun_vals(self%prev_class, self%iptcl, [0.,0.], corrs)
-        if( self%p_ptr%cc_objfun == OBJFUN_CC )then
+        if( self%p_ptr%l_sgd_streaming_active )then
+            call self%b_ptr%pftc%gen_raw_euclid_vals(self%prev_class, self%iptcl, [0.,0.], corrs)
+            ! Search bookkeeping is historically score-like (larger is better).
+            ! Store -L internally while the stream selects argmin L.
+            self%prev_corr = -corrs(self%prev_rot)
+        else
+            call self%b_ptr%pftc%gen_objfun_vals(self%prev_class, self%iptcl, [0.,0.], corrs)
+        endif
+        if( self%p_ptr%l_sgd_streaming_active )then
+            ! already assigned from the finite raw loss above
+        else if( self%p_ptr%cc_objfun == OBJFUN_CC )then
             self%prev_corr  = max(0., corrs(self%prev_rot))
         else
             self%prev_corr  = corrs(self%prev_rot)
@@ -168,14 +207,23 @@ contains
         integer :: irot
         self%best_shvec = [0.,0.]
         if( .not. self%l_sh_first ) return
-        ! BFGS
+        ! Stream mode uses the previous discrete state only as a shift seed;
+        ! class and angle remain a discrete search and the two shifts are
+        ! refined by bounded analytical-gradient steps.
         irot = 0
         call self%grad_shsrch_first_obj%set_indices(self%prev_class, self%iptcl)
-        if( .not.self%grad_shsrch_first_obj%does_opt_angle() )then
-            ! shift-only optimization
+        if( self%p_ptr%l_sgd_streaming_active )then
             irot = self%prev_rot
+            cxy = self%grad_shsrch_first_obj%minimize_direct(irot=irot, xy_in=[0.,0.],&
+                &step_size=self%p_ptr%sgd_eta_shift, max_steps=self%p_ptr%sgd_shift_its,&
+                &sh_rot=.false., raw_euclid=.true.)
+        else
+            if( .not.self%grad_shsrch_first_obj%does_opt_angle() )then
+                ! shift-only optimization
+                irot = self%prev_rot
+            endif
+            cxy = self%grad_shsrch_first_obj%minimize(irot=irot, sh_rot=.false.)
         endif
-        cxy = self%grad_shsrch_first_obj%minimize(irot=irot, sh_rot=.false.)
         if( irot == 0 ) cxy(2:3) = 0.
         self%xy_first = cxy(2:3)
         self%xy_first_rot = 0.
@@ -184,7 +232,13 @@ contains
             call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
             self%xy_first_rot = matmul(cxy(2:3), rotmat)
             ! update best
-            self%best_corr  = cxy(1)
+            if( self%p_ptr%l_sgd_streaming_active )then
+                ! The direct raw-loss minimizer returns the merit -L, matching
+                ! the larger-is-better search bookkeeping used below.
+                self%best_corr = real(cxy(1))
+            else
+                self%best_corr = cxy(1)
+            endif
             self%best_rot   = irot
             self%best_shvec = self%xy_first_rot
         endif
@@ -197,19 +251,50 @@ contains
         irot = 0
         self%best_shvec = [0.,0.]
         if( s2D%do_inplsrch(self%iptcl_batch) )then
-            ! BFGS
+            ! Stream mode replaces particle-shift L-BFGS-B after the discrete
+            ! class/angle winner.  The direct minimizer retains the input state
+            ! when no tested bounded trial improves the loss.
             call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
-            if( .not.self%grad_shsrch_obj%does_opt_angle() )then
-                ! shift-only optimization
+            if( self%p_ptr%l_sgd_streaming_active )then
                 irot = self%best_rot
-            endif
-            if( self%l_sh_first )then
-                cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
+                self%sgd_used = .true.
+                if( self%l_sh_first )then
+                    ! Keep the no-improvement state in the particle frame,
+                    ! matching the legacy minimizer's handoff convention.
+                    self%best_shvec = self%xy_first_rot
+                    cxy = self%grad_shsrch_obj%minimize_direct(irot=irot, xy_in=self%xy_first,&
+                        &step_size=self%p_ptr%sgd_eta_shift, max_steps=self%p_ptr%sgd_shift_its,&
+                        &sh_rot=.true., raw_euclid=.true., &
+                        &accepted_steps=self%sgd_accepted_steps, &
+                        &objective_initial=self%sgd_objective_initial, &
+                        &objective_final=self%sgd_objective_final)
+                else
+                    cxy = self%grad_shsrch_obj%minimize_direct(irot=irot, xy_in=[0.,0.],&
+                        &step_size=self%p_ptr%sgd_eta_shift, max_steps=self%p_ptr%sgd_shift_its,&
+                        &sh_rot=.true., raw_euclid=.true., &
+                        &accepted_steps=self%sgd_accepted_steps, &
+                        &objective_initial=self%sgd_objective_initial, &
+                        &objective_final=self%sgd_objective_final)
+                endif
             else
-                cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                if( .not.self%grad_shsrch_obj%does_opt_angle() )then
+                    ! shift-only optimization
+                    irot = self%best_rot
+                endif
+                if( self%l_sh_first )then
+                    cxy = self%grad_shsrch_obj%minimize(irot=irot, xy_in=self%xy_first)
+                else
+                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                endif
             endif
             if( irot > 0 )then
-                self%best_corr  = cxy(1)
+                if( self%p_ptr%l_sgd_streaming_active )then
+                    ! cxy(1) is the raw-loss merit -L; retain that sign until
+                    ! the established upstream corr representation is written.
+                    self%best_corr = real(cxy(1))
+                else
+                    self%best_corr = cxy(1)
+                endif
                 self%best_rot   = irot
                 self%best_shvec = cxy(2:3)
             endif
@@ -226,6 +311,14 @@ contains
         saved_inpl_inds          = s2D%class_space_inplinds(:, self%ithr)
         sorted_cls_inds          = (/(iref,iref=1,self%nrefs)/)
         call hpsort(sorted_cls_corrs, sorted_cls_inds)
+        if( self%p_ptr%sgd_diagnostic )then
+            write(logfhandle,'(A,1X,I0,1X,A,I0,1X,A,I0)') &
+                '>>> SEARCH DIAG: inpl_srch_peaks entry; particle=', self%iptcl, &
+                'nsolns=', self%nsolns, 'npeaks=', npeaks_inpl
+            write(logfhandle,'(A,1X,I0,1X,A,I0)') &
+                '>>> SEARCH DIAG: saved valid rotations=', count(saved_inpl_inds > 0), &
+                'of=', self%nrefs
+        endif
         ! reset class-space arrays so only shift-refined entries will be valid
         s2D%class_space_corrs(   :,self%ithr) = -1.
         s2D%class_space_e3s(     :,self%ithr) = 0.
@@ -252,12 +345,25 @@ contains
             endif
             call self%store_solution(iref, inpl_ind, cxy(1))
         enddo
+        if( self%p_ptr%sgd_diagnostic )then
+            write(logfhandle,'(A,1X,I0,1X,A,I0)') &
+                '>>> SEARCH DIAG: inpl_srch_peaks exit valid rotations=', &
+                count(s2D%class_space_inplinds(:,self%ithr) > 0), 'of=', self%nrefs
+        endif
     end subroutine inpl_srch_peaks
 
     subroutine store_solution( self, ref, inpl_ind, corr )
         class(strategy2D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref, inpl_ind
         real,                   intent(in)    :: corr
+        if( inpl_ind < 1 .or. inpl_ind > self%nrots )then
+            if( self%p_ptr%sgd_diagnostic )then
+                write(logfhandle,'(A,1X,I0,1X,A,I0,1X,A,I0,1X,A,I0)') &
+                    '>>> SEARCH SAFETY: invalid stored rotation; particle=', self%iptcl, &
+                    'reference=', ref, 'rotation=', inpl_ind, 'nrots=', self%nrots
+            endif
+            return
+        endif
         if( s2D%class_space_corrs(ref, self%ithr) <= -huge(1.0)/2.0 )then
             self%nsolns = self%nsolns + 1
         elseif( corr <= s2D%class_space_corrs(ref, self%ithr) )then
@@ -280,8 +386,18 @@ contains
         ithr = self%ithr
         found_valid = .false.
         best_corr_local = -huge(1.0)
-        if( self%prev_rot   <= 0 ) THROW_HARD('Previous in-plane rotation index is invalid, cannot assign orientation.')
-        if( self%prev_class <= 0 ) THROW_HARD('Previous in-plane class index is invalid, cannot assign orientation.')
+        if( self%prev_rot   <= 0 )then
+            if( self%p_ptr%sgd_diagnostic )then
+                write(logfhandle,'(A,1X,I0)') '>>> SEARCH SAFETY: assign_ori invalid previous rotation=', self%prev_rot
+            endif
+            THROW_HARD('Previous in-plane rotation index is invalid, cannot assign orientation.')
+        endif
+        if( self%prev_class <= 0 )then
+            if( self%p_ptr%sgd_diagnostic )then
+                write(logfhandle,'(A,1X,I0)') '>>> SEARCH SAFETY: assign_ori invalid previous class=', self%prev_class
+            endif
+            THROW_HARD('Previous in-plane class index is invalid, cannot assign orientation.')
+        endif
         best_class_local = self%prev_class
         best_rot_local   = self%prev_rot
         do iref = 1, self%nrefs
@@ -325,7 +441,16 @@ contains
         call os%set(self%iptcl, 'shincarg',   arg(self%best_shvec))
         call os%set(self%iptcl, 'inpl',       real(best_rot_local))
         call os%set(self%iptcl, 'class',      real(best_class_local))
-        call os%set(self%iptcl, 'corr',       best_corr_local)
+        if( self%p_ptr%l_sgd_streaming_active )then
+            ! Selection/refinement stores the merit -L so all comparisons keep
+            ! their historical "larger is better" direction.  At the project
+            ! boundary restore SIMPLE's established Euclidean score S=exp(-L)
+            ! used by the legacy gen_euclids path; do not invent a stream-only
+            ! score representation.
+            call os%set(self%iptcl, 'corr',       exp(best_corr_local))
+        else
+            call os%set(self%iptcl, 'corr', best_corr_local)
+        endif
         call os%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call os%set(self%iptcl, 'mi_class',   mi_class)
         call os%set(self%iptcl, 'frac',       frac)

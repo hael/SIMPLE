@@ -151,7 +151,10 @@ contains
         call cline%set('startit',    params%startit)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
-        if( params%l_prob_align_mode )then
+        call apply_stream_iteration_policy(params)
+        call cline%set('sgd', merge('yes','no ',params%l_sgd_streaming_active))
+        call cline%set('sgd_path', 'stream')
+        if( params%l_prob_align_mode .and. .not. params%l_sgd_streaming_active )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
@@ -258,14 +261,19 @@ contains
         call cline%set('startit',    params%startit)
         call cline%set('which_iter', params%which_iter)
         call cline%set('extr_iter',  params%extr_iter)
+        call apply_stream_iteration_policy(params)
+        call cline%set('sgd', merge('yes','no ',params%l_sgd_streaming_active))
+        call cline%set('sgd_path', 'stream')
         call self%job_descr%set('refs',       params%refs)
         call self%job_descr%set('nparts',     int2str(params%nparts))
         call self%job_descr%set('startit',    int2str(params%startit))
         call self%job_descr%set('which_iter', int2str(params%which_iter))
         call self%job_descr%set('extr_iter',  int2str(params%extr_iter))
+        call self%job_descr%set('sgd', merge('yes','no ',params%l_sgd_streaming_active))
+        call self%job_descr%set('sgd_path', 'stream')
         call self%job_descr%set('frcs',       FRCS_FILE)
         call cleanup_distributed_iteration_artifacts(params)
-        if( params%l_prob_align_mode )then
+        if( params%l_prob_align_mode .and. .not. params%l_sgd_streaming_active )then
             cline_prob_align = cline
             call cline_prob_align%set('prg', 'prob_align2D')
             call cline_prob_align%set('which_iter', params%which_iter)
@@ -527,6 +535,35 @@ contains
             call xmake_cavgs%execute(cline_make_cavgs)
         endif
     end subroutine execute_make_cavgs
+
+    subroutine apply_stream_iteration_policy( params )
+        type(parameters), intent(inout) :: params
+        logical :: requested
+        ! The public mode controls activation. sgd/sgd_path are only
+        ! internal compatibility fields on the child command line.
+        requested = trim(params%sgd_stage4_mode) /= 'off'
+        select case(trim(params%sgd_stage4_mode))
+            case('alternate')
+                ! Stage 4 alternates at iteration granularity.  Global parity
+                ! is restart-stable: an interrupted run resumes with the same
+                ! legacy/stream choice for a given iteration number.
+                ! Stage-4 SGD is enabled on odd global iterations (17, 19, ...)
+                ! and the legacy path remains active on the intervening even
+                ! iterations (16, 18, ...).  Global parity makes restart
+                ! behavior deterministic.
+                params%l_sgd_streaming_active = requested .and. mod(params%which_iter, 2) == 1
+            case('on')
+                params%l_sgd_streaming_active = requested
+            case DEFAULT
+                params%l_sgd_streaming_active = .false.
+        end select
+        if( params%sgd_diagnostic )then
+            write(logfhandle,'(A,1X,A,I0,1X,A,1X,A,1X,A,L1,1X,A,L1)') &
+                '>>> SEARCH DIAG: SGD iteration policy:', 'iteration=', params%which_iter, &
+                'stage4_mode=', trim(params%sgd_stage4_mode), 'requested=', requested, &
+                'active=', params%l_sgd_streaming_active
+        endif
+    end subroutine apply_stream_iteration_policy
 
     subroutine gen_jpeg( which_iter ) 
         integer, intent(in) :: which_iter

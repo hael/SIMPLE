@@ -94,6 +94,12 @@ contains
         ! snhc_smpl
         s2D%snhc_smpl_ncls  = neighfrac2nsmpl(neigh_frac, params%ncls)
         s2D%snhc_smpl_ninpl = neighfrac2nsmpl(neigh_frac, nrots)
+        if( params%sgd_diagnostic )then
+            write(logfhandle,'(A,I0,1X,A,I0,1X,A,I0,1X,A,F8.4,1X,A,I0)') &
+                '>>> SEARCH DIAG: ncls=', params%ncls, 'nrots=', nrots, &
+                'snhc_ncls=', s2D%snhc_smpl_ncls, 'neigh_frac=', neigh_frac, &
+                'snhc_ninpl=', s2D%snhc_smpl_ninpl
+        endif
         select case(trim(params%refine))
         case('greedy_smpl','inpl_smpl')
             overlap        = spproj%os_ptcl2D%get_avg('mi_class', state=1)

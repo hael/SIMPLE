@@ -72,8 +72,32 @@ contains
         type(stage_params),          intent(in)    :: stage_parms(:)
         integer,                     intent(in)    :: maxits, istage
         type(cluster2D_stage_cfg) :: cfg
+        logical :: l_enable_sgd
         call build_cluster2D_stage_cfg( cfg, cline_cluster2D, cline, params, stage_parms, maxits, istage )
         call emit_cluster2D_stage_cfg( cline_cluster2D, cfg, stage_parms, istage )
+        ! sgd_stage4_mode is the sole public activation switch. The stream
+        ! implementation is passed only to stage 4 and later; stages 1-3
+        ! retain the ordinary SIMPLE path unchanged.
+        l_enable_sgd = trim(params%sgd_stage4_mode) /= 'off' .and. istage >= 4
+        if( params%sgd_diagnostic )then
+            write(logfhandle,'(A,1X,A,I0,1X,A,1X,A,1X,A,L1)') &
+                '>>> SEARCH DIAG: SGD stage dispatch:', 'stage=', istage, &
+                'stage4_mode=', trim(params%sgd_stage4_mode), 'enable=', l_enable_sgd
+        endif
+        if( l_enable_sgd )then
+            call cline_cluster2D%set('sgd', 'yes')
+            call cline_cluster2D%set('sgd_path', 'stream')
+            if( istage >= 5 )then
+                call cline_cluster2D%set('sgd_stage4_mode', 'on')
+            else
+                call cline_cluster2D%set('sgd_stage4_mode', params%sgd_stage4_mode)
+            endif
+        else
+            call cline_cluster2D%set('sgd', 'no')
+            ! Keep stages 1-3 on the ordinary path even when the user
+            ! enables SGD for stage 4 onward.
+            call cline_cluster2D%set('sgd_stage4_mode', 'off')
+        endif
     end subroutine set_cline_cluster2D_stage
 
     subroutine set_abinitio2D_sampling_policy( params, stage_parms, nstages, nptcls_eff, nsample_target_2D )

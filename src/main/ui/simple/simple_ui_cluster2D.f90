@@ -71,6 +71,20 @@ contains
         &'Sigma estimation method(group|global){global}', '(group|global){global}', .false., 'global', gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
         call abinitio2D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_advanced=.true.)
+        ! Minimal Design A SGD control. This is the sole user-facing switch;
+        ! the implementation is always the table-free streaming path.
+        call abinitio2D%add_input(UI_SRCH, 'sgd_stage4_mode', 'multi', 'Stage-4 SGD policy', &
+            &'Stage-4 stream policy(off|on|alternate){off}', '(off|on|alternate){off}', .false., 'off', &
+            gui_submenu="search", gui_advanced=.true.)
+        call abinitio2D%add_input(UI_SRCH, 'sgd_diagnostic', 'binary', 'SGD diagnostics', &
+            &'Emit SGD diagnostic and safety logs(yes|no){no}', '(yes|no){no}', .false., 'no', &
+            gui_submenu="search", gui_advanced=.true.)
+        call abinitio2D%add_input(UI_SRCH, 'sgd_eta_shift', 'num', 'SGD shift learning rate', &
+            &'Learning rate for bounded analytical shift updates{0.25}', 'learning rate{0.25}', .false., 0.25, &
+            gui_submenu="search", gui_advanced=.true.)
+        call abinitio2D%add_input(UI_SRCH, 'sgd_shift_its', 'num', 'SGD shift steps', &
+            &'Maximum bounded analytical shift steps per particle{4}', 'steps{4}', .false., 4., &
+            gui_submenu="search", gui_advanced=.true.)
         ! filter controls
         call abinitio2D%add_input(UI_FILT, hp, gui_submenu="filter")
         call abinitio2D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

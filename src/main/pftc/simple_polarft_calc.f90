@@ -193,6 +193,8 @@ type :: polarft_calc
     procedure, private :: gen_denoised_corr_for_rot_8_1, gen_denoised_corr_for_rot_8_2
     procedure, private :: hybrid_dist_from_score
     procedure          :: gen_corr_grad_for_rot_8
+    procedure          :: gen_raw_euclid_vals
+    procedure          :: gen_raw_euclid_grad_for_rot_8
     procedure, private :: gen_corr_cc_grad_for_rot_8
     procedure, private :: gen_euclid_grad_for_rot_8
     procedure, private :: gen_denoised_corr_grad_for_rot_8
@@ -674,6 +676,13 @@ interface
         real(sp),                    intent(out)   :: euclids(self%nrots)
     end subroutine gen_euclids
 
+    module subroutine gen_raw_euclid_vals(self, iref, iptcl, shift, losses)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: losses(self%nrots)
+    end subroutine gen_raw_euclid_vals
+
     module subroutine gen_hybrid_scores(self, iref, iptcl, shift, scores)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -847,6 +856,13 @@ interface
         real(dp),                    intent(in)    :: shvec(2)
         real(dp),                    intent(out)   :: f, grad(2)
     end subroutine gen_corr_grad_for_rot_8
+
+    module subroutine gen_raw_euclid_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        real(dp),                    intent(out)   :: f, grad(2)
+    end subroutine gen_raw_euclid_grad_for_rot_8
 
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self

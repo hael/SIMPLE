@@ -74,9 +74,35 @@ contains
                     call power_sampling( s2D%power, self%s%nrots, inpl_corrs, vec_nrots,&
                                         &s2D%snhc_smpl_ninpl, inpl_ind, order_ind, inpl_corr )
                 endif
+                if( inpl_ind < 1 .or. inpl_ind > self%s%nrots )then
+                    if( self%s%p_ptr%sgd_diagnostic )then
+                        write(logfhandle,'(A,1X,I0,1X,A,I0,1X,A,I0,1X,A,I0,1X,A,I0)') &
+                            '>>> SEARCH DIAG: initial sampler invalid rotation; particle=', self%s%iptcl, &
+                            'reference=', iref, 'rotation=', inpl_ind, &
+                            'ninpl=', s2D%snhc_smpl_ninpl, 'nrots=', self%s%nrots
+                    endif
+                endif
                 call self%s%store_solution(iref, inpl_ind, inpl_corr)
             end do
             ! Performs shift search for top scoring subset
+            if( self%s%p_ptr%sgd_diagnostic )then
+                write(logfhandle,'(A,1X,I0,1X,A,I0,1X,A,I0)') &
+                    '>>> SEARCH DIAG: before inpl_srch_peaks; particle=', self%s%iptcl, &
+                    'nsolns=', self%s%nsolns, 'npeaks=', min(s2D%snhc_smpl_ncls, self%s%nsolns)
+            endif
+            if( self%s%p_ptr%sgd_diagnostic .and. self%s%nsolns == 0 )then
+                write(logfhandle,'(A,1X,I0,1X,A,I0,1X,A,I0)') &
+                    '>>> SEARCH DIAG: zero-candidate state; particle=', self%s%iptcl, &
+                    'nrefs_bound=', s2D%snhc_nrefs_bound, 'nrefs=', self%s%nrefs
+                write(logfhandle,'(A,*(I0,1X))') &
+                    '>>> SEARCH DIAG: class populations:', s2D%cls_pops
+                write(logfhandle,'(A,*(I0,1X))') &
+                    '>>> SEARCH DIAG: search order:', s2D%srch_order(:,self%s%iptcl_batch)
+                write(logfhandle,'(A,1X,I0,1X,A,I0)') &
+                    '>>> SEARCH DIAG: eligible refs in bound=', &
+                    count(s2D%cls_pops(s2D%srch_order(1:min(s2D%snhc_nrefs_bound,self%s%nrefs),self%s%iptcl_batch)) > 0), &
+                    'bound=', min(s2D%snhc_nrefs_bound,self%s%nrefs)
+            endif
             call self%s%inpl_srch_peaks(min(s2D%snhc_smpl_ncls, self%s%nsolns))
             ! Class selection
             call power_sampling( s2D%power, self%s%nrefs, s2D%class_space_corrs(:, self%s%ithr), &
@@ -84,7 +110,33 @@ contains
                                 &self%s%best_class, class_rank, self%s%best_corr )
             self%s%nrefs_eval = nrefs_coarse_eval
             ! In-plane angle
+            if( self%s%best_class < 1 .or. self%s%best_class > self%s%nrefs )then
+                if( self%s%p_ptr%sgd_diagnostic )then
+                    write(logfhandle,'(A,1X,I0,1X,A,I0)') &
+                        '>>> SEARCH SAFETY: invalid selected class; particle=', self%s%iptcl, &
+                        'class=', self%s%best_class
+                endif
+                self%s%best_class = self%s%prev_class
+            endif
             self%s%best_rot = s2D%class_space_inplinds(self%s%best_class, self%s%ithr)
+            if( self%s%p_ptr%sgd_diagnostic )then
+                write(logfhandle,'(A,1X,I0,1X,A,I0,1X,A,I0,1X,A,I0)') &
+                    '>>> SEARCH DIAG: selected class/rotation; particle=', self%s%iptcl, &
+                    'class=', self%s%best_class, 'rotation=', self%s%best_rot, &
+                    'nsolns=', self%s%nsolns
+            endif
+            if( self%s%best_rot < 1 .or. self%s%best_rot > self%s%nrots )then
+                if( self%s%p_ptr%sgd_diagnostic )then
+                    write(logfhandle,'(A,1X,I0,1X,A,I0)') &
+                        '>>> SEARCH SAFETY: invalid selected rotation; particle=', self%s%iptcl, &
+                        'rotation=', self%s%best_rot
+                endif
+                ! No valid sampled rotation survived; retain the previous
+                ! valid discrete state rather than passing roind=0 downstream.
+                self%s%best_class = self%s%prev_class
+                self%s%best_rot   = self%s%prev_rot
+                self%s%best_corr   = self%s%prev_corr
+            endif
             ! In-plane search
             call self%s%inpl_srch ! needed because inpl_srch_peaks doesn't store shifts
             ! Updates solution

@@ -1,5 +1,7 @@
 !@descr: high-level search routines for the cluster2D and abinitio2D applications
 module simple_strategy2D_matcher
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+use simple_core_module_api,          only: dp
 use simple_pftc_srch_api
 use simple_classaverager
 use simple_binoris_io,               only: binwrite_oritab
@@ -30,6 +32,7 @@ implicit none
 
 public :: cluster2D_exec
 public :: set_b_p_ptrs2D
+public :: reset_sgd_stream_dispatch_count, get_sgd_stream_dispatch_count
 public :: ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
 private
 #include "simple_local_flags.inc"
@@ -43,6 +46,7 @@ real(timer_int_kind)       :: rt_cavg_interp_splat
 integer(timer_int_kind)    :: t, t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
 integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_tot
 type(string)               :: benchfname
+integer                    :: sgd_stream_dispatch_count = 0
 
 type :: cluster2D_ctrl
     character(len=:), allocatable :: refine_flag
@@ -52,6 +56,7 @@ type :: cluster2D_ctrl
     logical :: l_snhc
     logical :: l_stream
     logical :: l_greedy
+    logical :: l_sgd_stream
     logical :: l_np_cls_defined
     logical :: l_prob_align
     logical :: l_restore_cavgs
@@ -62,6 +67,14 @@ type :: cluster2D_ctrl
 end type cluster2D_ctrl
 
 contains
+
+    subroutine reset_sgd_stream_dispatch_count()
+        sgd_stream_dispatch_count = 0
+    end subroutine reset_sgd_stream_dispatch_count
+
+    integer function get_sgd_stream_dispatch_count()
+        get_sgd_stream_dispatch_count = sgd_stream_dispatch_count
+    end function get_sgd_stream_dispatch_count
 
     subroutine set_b_p_ptrs2D( params, build )
         class(parameters), target, intent(in) :: params
@@ -93,6 +106,22 @@ contains
         p_ptr => params
         b_ptr => build
         call init_ctrl()
+        if( p_ptr%sgd_diagnostic )then
+            write(logfhandle,'(A,1X,A,I0,1X,A,L1,1X,A,L1,1X,A,1X,A)') &
+                '>>> SEARCH DIAG: SGD matcher dispatch:', 'iteration=', p_ptr%which_iter, &
+                'requested=', p_ptr%l_sgd, 'active=', ctrl%l_sgd_stream, &
+                'refine=', trim(ctrl%refine_flag)
+        endif
+        if( ctrl%l_sgd_stream )then
+            sgd_stream_dispatch_count = sgd_stream_dispatch_count + 1
+            if( p_ptr%sgd_diagnostic )then
+                write(logfhandle,'(A)') '>>> JOINT2D SGD STREAM ACTIVE: assignment=hard_class_angle objective=raw_euclidean'
+                write(logfhandle,'(A)') '>>> JOINT2D SGD STREAM PATH: prob_align2D=off softmax=off topk=off optimizer=bounded_direct_gradient'
+                write(logfhandle,'(A,I0,1X,A,F8.4,1X,A,I0)') &
+                    '>>> JOINT2D SGD STREAM SETTINGS: iteration=', p_ptr%which_iter, &
+                    'eta_shift=', p_ptr%sgd_eta_shift, 'shift_steps=', p_ptr%sgd_shift_its
+            endif
+        endif
         if( ctrl%do_bench )then
             t_startup = tic()
             t_tot     = t_startup
@@ -162,6 +191,8 @@ contains
                 rt_align = rt_align + toc(t_align)
                 t_cavg   = tic()
             endif
+            if( ctrl%l_sgd_stream .and. p_ptr%sgd_diagnostic ) &
+                call report_stream_batch(ibatch, batch_start, batch_end, strategy2Dsrch)
             call restore_class_averages_for_batch()
             if( ctrl%do_bench ) rt_cavg = rt_cavg + toc(t_cavg)
         enddo
@@ -180,10 +211,18 @@ contains
             ctrl%refine_flag       = trim(p_ptr%refine)
             ctrl%l_snhc            = str_has_substr(ctrl%refine_flag, 'snhc')
             ctrl%l_greedy          = str_has_substr(ctrl%refine_flag, 'greedy')
+            ctrl%l_sgd_stream      = p_ptr%l_sgd_streaming_active
             ctrl%l_stream          = (trim(p_ptr%stream2d) == 'yes')
             ctrl%l_sample_updates  = p_ptr%l_update_frac
             ctrl%l_frac_restore    = ctrl%l_sample_updates
-            ctrl%l_prob_align      = p_ptr%l_prob_align_mode
+            ctrl%l_prob_align      = p_ptr%l_prob_align_mode .and. .not. p_ptr%l_sgd_streaming_active
+            if( p_ptr%l_sgd_streaming_active )then
+                ! Design A keeps the existing discrete class/angle search but
+                ! consumes each score immediately; no probabilistic table is
+                ! built and no SoftMax/top-K assignment is available here.
+                ctrl%refine_flag = 'greedy'
+                ctrl%l_greedy    = .true.
+            endif
             ctrl%l_restore_cavgs   = (trim(p_ptr%restore_cavgs) == 'yes')
             ctrl%l_require_full_assignment = cluster2D_requires_full_assignment(p_ptr)
             ctrl%l_np_cls_defined  = cline%defined('nptcls_per_cls')
@@ -200,15 +239,25 @@ contains
             if( ctrl%l_stream )then
                 ctrl%l_sample_updates = .false.
                 ctrl%l_frac_restore   = .false.
-                if( (which_iter > 1) .and. (p_ptr%update_frac < 0.99) )then
-                    p_ptr%l_update_frac   = .true.
-                    ctrl%l_sample_updates = .true.
-                    ctrl%l_frac_restore   = .true.
+                if( ctrl%l_sgd_stream )then
+                    ! SGD stream uses the controller's fractional-update
+                    ! request on every active iteration.
+                    if( p_ptr%l_update_frac .and. (p_ptr%update_frac < 0.99) )then
+                        ctrl%l_sample_updates = .true.
+                        ctrl%l_frac_restore   = .true.
+                    endif
                 else
-                    p_ptr%update_frac     = 1.0
-                    p_ptr%l_update_frac   = .false.
-                    ctrl%l_sample_updates = .false.
-                    ctrl%l_frac_restore   = .false.
+                    ! Preserve legacy stream behavior for non-SGD runs.
+                    if( (which_iter > 1) .and. (p_ptr%update_frac < 0.99) )then
+                        p_ptr%l_update_frac   = .true.
+                        ctrl%l_sample_updates = .true.
+                        ctrl%l_frac_restore   = .true.
+                    else
+                        p_ptr%update_frac     = 1.0
+                        p_ptr%l_update_frac   = .false.
+                        ctrl%l_sample_updates = .false.
+                        ctrl%l_frac_restore   = .false.
+                    endif
                 endif
                 if( trim(ctrl%refine_flag) == 'snhc' ) ctrl%refine_flag = 'snhc_smpl'
             endif
@@ -292,7 +341,12 @@ contains
             if( ctrl%l_prob_align )then
                 allocate(strategy2D_prob :: strategy2Dsrch(iptcl_batch)%ptr)
             else if( ctrl%l_stream )then
-                if( first_or_unsearched )then
+                if( ctrl%l_sgd_stream )then
+                    ! SGD stream uses a deterministic top-1 scan followed by
+                    ! bounded shift descent.  Preserve the legacy strategy
+                    ! dispatch for all other stream modes.
+                    allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr)
+                else if( first_or_unsearched )then
                     allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr)
                 else
                     select case(trim(ctrl%refine_flag))
@@ -484,11 +538,61 @@ contains
         write(logfhandle,'(a,l1)') 'l_snhc               : ', self%l_snhc
         write(logfhandle,'(a,l1)') 'l_stream             : ', self%l_stream
         write(logfhandle,'(a,l1)') 'l_greedy             : ', self%l_greedy
+        write(logfhandle,'(a,l1)') 'l_sgd_stream         : ', self%l_sgd_stream
         write(logfhandle,'(a,l1)') 'l_np_cls_defined     : ', self%l_np_cls_defined
         write(logfhandle,'(a,l1)') 'l_prob_align         : ', self%l_prob_align
         write(logfhandle,'(a,l1)') 'l_restore_cavgs      : ', self%l_restore_cavgs
         write(logfhandle,'(a,l1)') 'l_require_full_assignment : ', self%l_require_full_assignment
         write(logfhandle,'(a,l1)') 'do_bench             : ', self%do_bench
     end subroutine display
+
+    subroutine report_stream_batch(ibatch, batch_start, batch_end, strategy2Dsrch)
+        integer, intent(in) :: ibatch, batch_start, batch_end
+        type(strategy2D_per_ptcl), intent(in) :: strategy2Dsrch(:)
+        integer :: j, nused, naccepted, nimproved, nfinite, nbounded, nnonmonotonic
+        real(dp) :: initial_sum, final_sum, max_abs_shift
+        nused = 0
+        naccepted = 0
+        nimproved = 0
+        nfinite = 0
+        nbounded = 0
+        nnonmonotonic = 0
+        initial_sum = 0.
+        final_sum = 0.
+        max_abs_shift = 0.
+        do j = 1, batch_end - batch_start + 1
+            if( .not. associated(strategy2Dsrch(j)%ptr) ) cycle
+            if( .not. strategy2Dsrch(j)%ptr%s%sgd_used ) cycle
+            nused = nused + 1
+            naccepted = naccepted + strategy2Dsrch(j)%ptr%s%sgd_accepted_steps
+            initial_sum = initial_sum + strategy2Dsrch(j)%ptr%s%sgd_objective_initial
+            final_sum = final_sum + strategy2Dsrch(j)%ptr%s%sgd_objective_final
+            if( ieee_is_finite(strategy2Dsrch(j)%ptr%s%sgd_objective_initial) .and.&
+                &ieee_is_finite(strategy2Dsrch(j)%ptr%s%sgd_objective_final) ) nfinite = nfinite + 1
+            max_abs_shift = max(max_abs_shift, maxval(abs(real(strategy2Dsrch(j)%ptr%s%best_shvec,dp))))
+            if( maxval(abs(strategy2Dsrch(j)%ptr%s%best_shvec)) <= strategy2Dsrch(j)%ptr%s%trs + 10.*epsilon(1.) )then
+                nbounded = nbounded + 1
+            endif
+            if( strategy2Dsrch(j)%ptr%s%sgd_objective_final < &
+                strategy2Dsrch(j)%ptr%s%sgd_objective_initial ) nimproved = nimproved + 1
+            if( strategy2Dsrch(j)%ptr%s%sgd_objective_final > &
+                strategy2Dsrch(j)%ptr%s%sgd_objective_initial + &
+                100._dp*epsilon(1._dp)*max(1._dp,abs(strategy2Dsrch(j)%ptr%s%sgd_objective_initial)) )then
+                nnonmonotonic = nnonmonotonic + 1
+            endif
+        enddo
+        if( nused > 0 )then
+            write(logfhandle,'(A,I0,1X,A,I0,1X,A,I0,1X,A,I0,1X,A,I0,1X,A,I0,1X,A,I0,1X,A,I0,1X,A,ES12.4,1X,A,ES12.4,1X,A,ES12.4)') &
+                '>>> JOINT2D SGD STREAM BATCH: batch=', ibatch, 'particles=', batch_end-batch_start+1, &
+                'updates=', nused, 'finite=', nfinite, 'bounded=', nbounded, 'accepted_steps=', naccepted, &
+                'improved=', nimproved, 'nonmonotonic=', nnonmonotonic, &
+                'mean_initial=', initial_sum/real(nused), 'mean_final=', final_sum/real(nused), &
+                'max_abs_shift=', max_abs_shift
+        else
+            write(logfhandle,'(A,I0,1X,A,I0,1X,A)') &
+                '>>> JOINT2D SGD STREAM BATCH: batch=', ibatch, 'particles=', batch_end-batch_start+1, &
+                'updates=0'
+        endif
+    end subroutine report_stream_batch
 
 end module simple_strategy2D_matcher

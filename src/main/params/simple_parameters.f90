@@ -148,6 +148,8 @@ type :: parameters
     character(len=3)          :: transp_pca='no'
     character(len=3)          :: trust_header='no'    !< whether to trust the header information in the input files(yes|no){no}
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
+    character(len=3)          :: sgd='no'             !< internal stream child flag(yes|no){no}
+    character(len=3)          :: sgd_diagnostic_mode='no' !< emit SGD diagnostic and safety logs(yes|no){no}
     character(len=3)          :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)          :: single_pass='no'     !< only run coarse pass of sieving(yes|no){no}
     character(len=3)          :: skip_rejection='no'  !< skip class-average rejection/update path(yes|no){no}
@@ -319,6 +321,10 @@ type :: parameters
     character(len=STDLEN)     :: refine='shc'         !< refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh|prob_snhc){shc}
     character(len=STDLEN)     :: refine_type='3D'     !< refinement mode(3D|2D|hybrid){3D}
     character(len=STDLEN)     :: select_flag='cluster' !< which flag to use for cluster selection (cluster|class){cluster}
+    ! Internal compatibility value; the user-facing activation switch is
+    ! sgd_stage4_mode. The obsolete table path is no longer supported.
+    character(len=STDLEN)     :: sgd_path='stream'    !< internal SGD assignment path(stream){stream}
+    character(len=STDLEN)     :: sgd_stage4_mode='off' !< stage-4 stream policy(off|on|alternate){off}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -463,6 +469,7 @@ type :: parameters
     integer :: shift_stage=0
     integer :: split_stage=6       !< splitting stage when multivol_mode==docked
     integer :: startit=1           !< start iterating from here
+    integer :: sgd_shift_its=4     !< bounded direct-gradient shift steps per particle
     integer :: stage=0
     integer :: state=1             !< state to extract
     integer :: stepsz=1            !< size of step{1}
@@ -580,6 +587,7 @@ type :: parameters
     real    :: rtol=1.0e-3         !< PCG relative residual tolerance, reconstruct3D_pcg{0.001}
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale_movies=1.     !< movie scale factor
+    real    :: sgd_eta_shift=0.25  !< direct-gradient shift learning rate
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=1.3            !< sampling distance; same as EMANs apix(in A)
@@ -635,6 +643,9 @@ type :: parameters
     logical :: l_objfun_den      = .false.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.
+    logical :: l_sgd             = .false.
+    logical :: l_sgd_streaming_active = .false.
+    logical :: sgd_diagnostic    = .false.
     logical :: l_ptcl_src_den    = .false.
     logical :: l_sigma_glob      = .false.
     logical :: l_trail_rec       = .false.

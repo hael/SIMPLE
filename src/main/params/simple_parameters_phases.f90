@@ -690,6 +690,48 @@ contains
                 write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
                 THROW_HARD('unsupported objective function')
         end select
+        select case(trim(self%sgd))
+            case('yes')
+                self%l_sgd = .true.
+            case('no')
+                self%l_sgd = .false.
+            case DEFAULT
+                THROW_HARD('sgd must be yes or no')
+        end select
+        select case(trim(self%sgd_path))
+            case('stream')
+            case DEFAULT
+                THROW_HARD('sgd_path must be stream')
+        end select
+        select case(trim(self%sgd_stage4_mode))
+            case('off','on','alternate')
+            case DEFAULT
+                THROW_HARD('sgd_stage4_mode must be off, on, or alternate')
+        end select
+        select case(trim(self%sgd_diagnostic_mode))
+            case('yes')
+                self%sgd_diagnostic = .true.
+            case('no')
+                self%sgd_diagnostic = .false.
+            case DEFAULT
+                THROW_HARD('sgd_diagnostic must be yes or no')
+        end select
+        if( self%sgd_shift_its < 1 ) THROW_HARD('sgd_shift_its must be positive')
+        if( self%sgd_eta_shift <= 0. ) THROW_HARD('sgd_eta_shift must be positive')
+        ! sgd_stage4_mode is the sole public activation switch. The legacy
+        ! sgd flag remains parseable for internal child commands, but must not
+        ! be required by users and cannot re-enable an obsolete table path.
+        self%l_sgd = trim(self%sgd_stage4_mode) /= 'off'
+        self%l_sgd_streaming_active = self%l_sgd
+        if( self%sgd_diagnostic )then
+            write(logfhandle,'(A,1X,A,1X,A,1X,A,1X,A,1X,A,L1,1X,A,L1)') &
+                '>>> SEARCH DIAG: SGD parameter activation:', 'sgd=', trim(self%sgd), &
+                'stage4_mode=', trim(self%sgd_stage4_mode), 'requested=', self%l_sgd, &
+                'stream_active=', self%l_sgd_streaming_active
+        endif
+        if( self%l_sgd .and. self%cc_objfun /= OBJFUN_EUCLID )then
+            THROW_HARD('sgd_stage4_mode requires objfun=euclid')
+        endif
         self%l_dose_weight = cline%defined('total_dose')
         if( self%fraction_dose_target < 0.01 )then
             THROW_HARD('Invalid : fraction_dose_target'//real2str(self%fraction_dose_target))

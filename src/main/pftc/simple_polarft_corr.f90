@@ -370,6 +370,104 @@ contains
         euclids(1:self%nrots) = exp(-1. - self%crvec1(ithr)%r(1:self%nrots) / A_sp)
     end subroutine gen_euclids
 
+    module subroutine gen_raw_euclid_vals( self, iref, iptcl, shift, losses )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: losses(self%nrots)
+        complex(sp), pointer :: shmat(:,:)
+        complex(sp) :: c
+        real(dp)    :: ptcl_sqsum
+        real(sp)    :: A_sp, shift_mag_sq, wk
+        integer     :: k, i, ithr, kk, k0, p
+        logical     :: even
+        ithr         =  omp_get_thread_num() + 1
+        i            =  self%pinds(iptcl)
+        k0           =  self%kfromto(1)
+        even         =  self%iseven(i)
+        ptcl_sqsum   =  self%wsqsums_ptcls(i)
+        shmat        => self%heap_vars(ithr)%shmat
+        shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
+        if ( shift_mag_sq > SHERRSQ ) then
+            ! Reference is shifted first
+            call self%gen_shmat4aln(ithr, shift, shmat)
+            ! Shift reference
+            if (even) then
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_even(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
+                end do
+            else
+                do k = self%kfromto(1), self%kfromto(2)
+                    kk = k - k0 + 1
+                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_odd(:,k,iref)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
+                end do
+            endif
+            ! Calculate FT(S.REF)
+            call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+            ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*)
+            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+            if (even) then
+                do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
+                    kk = k - k0 + 1
+                    do p = 1,self%pftsz
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
+                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    enddo
+                end do
+            else
+                do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
+                    kk = k - k0 + 1
+                    do p = 1,self%pftsz
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
+                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    enddo
+                end do
+            endif
+        else
+            ! The reference is not shifted, memoized FT(REF) can be used
+            ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(REF)*)
+            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
+            if (even) then
+                do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
+                    do p = 1,self%pftsz
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
+                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    enddo
+                end do
+            else
+                do k = self%kfromto(1), self%kfromto(2)
+                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
+                    do p = 1,self%pftsz
+                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
+                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
+                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    enddo
+                end do
+            endif
+        endif
+        ! IFFT
+        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
+        ! Normalize the FFT-expanded residual.
+        A_sp = real(ptcl_sqsum * real(2*self%nrots, dp), sp)
+        ! For each discrete rotation r, expose the finite Gaussian loss
+        !
+        !   L_r = sum_k w_k |X_k - CTF_k R_r S_s A_k|^2 / wsqsum(X).
+        !
+        ! The leading one is the normalized particle-only term; crvec1 holds
+        ! the reference and cross terms.  Streaming selection takes argmin L_r
+        ! without SoftMax, top-K truncation, or an exponentiation.
+        losses(1:self%nrots) = 1. + self%crvec1(ithr)%r(1:self%nrots) / A_sp
+    end subroutine gen_raw_euclid_vals
+
     module subroutine gen_hybrid_scores( self, iref, iptcl, shift, scores )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -1388,7 +1486,11 @@ contains
         grad  = grad / denom
     end subroutine gen_corr_cc_grad_for_rot_8
 
-    module subroutine gen_euclid_grad_for_rot_8( self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready )
+    ! Shared weighted Fourier residual and shift-gradient accumulation.
+    ! This helper deliberately returns the unnormalized residual.  The legacy
+    ! routine below applies its established exp(-L) score conversion, while
+    ! the stream-only wrapper above applies the finite raw-loss normalization.
+    subroutine gen_euclid_residual_grad(self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready)
         class(polarft_calc),  target, intent(inout) :: self
         complex(dp),         pointer, intent(inout) :: pft_ref(:,:)
         integer,                      intent(in)    :: iptcl, irot
@@ -1398,27 +1500,25 @@ contains
         real(dp),    pointer :: argtransf(:,:)
         complex(dp), pointer :: shmat_8(:,:)
         complex(dp) :: crefctf, cdiff, cg
-        real(dp)    :: fk, wk, gkx, gky, denom
+        real(dp)    :: fk, wk, gkx, gky
         integer     :: k, i, ithr, p, rp
+
         ithr      = omp_get_thread_num() + 1
         i         = self%pinds(iptcl)
-        denom     = self%wsqsums_ptcls(i)
         f         = 0.d0
         grad      = 0.d0
         argtransf => self%argtransf
-        shmat_8   => self%heap_vars(ithr)%shmat_8
+        shmat_8 => self%heap_vars(ithr)%shmat_8
         if( present(shmat_8_ready) )then
             if( .not. shmat_8_ready ) call self%gen_shmat4aln_8(ithr, shvec, shmat_8)
         else
             call self%gen_shmat4aln_8(ithr, shvec, shmat_8)
         endif
-        ! splitting both the compute based on irot and the loop avoids branching,
-        ! and optimizes for memory access patterns & vectorization
+        ! Splitting both computations by irot avoids branching in the inner
+        ! loops and preserves the upstream memory-access/vectorization pattern.
         if( irot <= self%pftsz )then
             do k = self%kfromto(1),self%kfromto(2)
-                fk    = 0.d0
-                gkx   = 0.d0
-                gky   = 0.d0
+                fk = 0.d0; gkx = 0.d0; gky = 0.d0
                 do p = 1, irot-1
                     rp = p + self%pftsz - irot + 1
                     ! |Rot(Shift(REF)).CTF - PTCL|^2
@@ -1478,9 +1578,46 @@ contains
                 grad(2) = grad(2) + wk * gky
             enddo
         endif
+    end subroutine gen_euclid_residual_grad
+
+    module subroutine gen_euclid_grad_for_rot_8( self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready )
+        class(polarft_calc),  target, intent(inout) :: self
+        complex(dp),         pointer, intent(inout) :: pft_ref(:,:)
+        integer,                      intent(in)    :: iptcl, irot
+        real(dp),                     intent(in)    :: shvec(2)
+        real(dp),                     intent(out)   :: f, grad(2)
+        logical, optional,            intent(in)    :: shmat_8_ready
+        real(dp) :: denom
+        integer :: i
+        i = self%pinds(iptcl)
+        denom = self%wsqsums_ptcls(i)
+        call gen_euclid_residual_grad(self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready)
         f     = exp(-f / denom)
         grad  = -f * 2.d0 * grad / denom
     end subroutine gen_euclid_grad_for_rot_8
+
+    ! Candidate API for SGD: return the finite Gaussian loss L and grad(L).
+    ! The legacy score is exp(-L), which is monotonic but can underflow.
+    module subroutine gen_raw_euclid_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl, irot
+        real(dp),                    intent(in)    :: shvec(2)
+        real(dp),                    intent(out)   :: f, grad(2)
+        complex(dp), pointer :: pft_ref_8(:,:)
+        real(dp) :: denom
+        integer :: ithr
+        ithr = omp_get_thread_num() + 1
+        pft_ref_8 => self%heap_vars(ithr)%pft_ref_8
+        if (self%iseven(self%pinds(iptcl))) then
+            pft_ref_8 = self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2), iref)
+        else
+            pft_ref_8 = self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2), iref)
+        endif
+        call gen_euclid_residual_grad(self, pft_ref_8, iptcl, shvec, irot, f, grad)
+        denom = self%wsqsums_ptcls(self%pinds(iptcl))
+        f    = f / denom
+        grad = 2.d0 * grad / denom
+    end subroutine gen_raw_euclid_grad_for_rot_8
 
     module subroutine gen_denoised_corr_grad_for_rot_8( self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready )
         class(polarft_calc),  target, intent(inout) :: self
