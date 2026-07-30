@@ -29,10 +29,10 @@ type, extends(commander_base) :: commander_test_mrc2jpeg
     procedure :: execute      => exec_test_mrc2jpeg
 end type commander_test_mrc2jpeg
 
-type, extends(commander_base) :: commander_test_mrc_validation
+type, extends(commander_base) :: commander_test_mrc_validate
   contains
-    procedure :: execute      => exec_test_mrc_validation
-end type commander_test_mrc_validation
+    procedure :: execute      => exec_test_mrc_validate
+end type commander_test_mrc_validate
 
 type, extends(commander_base) :: commander_test_stack_io
   contains
@@ -391,35 +391,26 @@ subroutine exec_test_mrc2jpeg( self, cline )
     call simple_end('**** SIMPLE_TEST_MRC2JPEG_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_mrc2jpeg
 
-subroutine exec_test_mrc_validation( self, cline )
-    use simple_atoms, only: atoms
+subroutine exec_test_mrc_validate( self, cline )
     use simple_image, only: image
-    class(commander_test_mrc_validation), intent(inout) :: self
-    class(cmdline),                       intent(inout) :: cline
-    character(len=STDLEN)         :: vol_file
-    character(len=:), allocatable :: smpd_char
-    type(image)                   :: vol 
-    real                          :: smpd
-    integer                       :: ldim(3), ifoo, slen
-    if( command_argument_count() /= 2 )then
-        write(logfhandle,'(a)') 'ERROR! Usage: simple_test_mrc_validate vol.mrc smpd'
-        write(logfhandle,'(a)') 'vol.mrc : volume' 
-        write(logfhandle,'(a)') 'smpd    : SMPD value in Angstrom per voxel ' 
-    else
-        call get_command_argument(1, vol_file)
-        call get_command_argument(2, length=slen)
-        allocate(character(slen) :: smpd_char)
-        call get_command_argument(2, smpd_char)
-        read(smpd_char, *) smpd
-    endif
-    call find_ldim_nptcls(string(trim(vol_file)),  ldim, ifoo)
-    print *, trim(vol_file), ldim
+    class(commander_test_mrc_validate), intent(inout) :: self
+    class(cmdline),                     intent(inout) :: cline
+    type(image)        :: vol
+    type(string)       :: vol_file
+    real               :: smpd
+    integer            :: ldim(3), ifoo
+    if( .not. cline%defined('vol')  ) THROW_HARD('The vol keyword is required; expected vol=volume.mrc')
+    if( .not. cline%defined('smpd') ) THROW_HARD('The smpd keyword is required; expected smpd=<Angstrom per voxel>')
+    vol_file = cline%get_carg('vol')
+    smpd     = cline%get_rarg('smpd')
+    call find_ldim_nptcls(vol_file, ldim, ifoo)
+    write(logfhandle,'(a,3(1x,i0))') 'Input volume dimensions:', ldim
     call vol%new(ldim, smpd)
-    call vol%read(string(trim(vol_file)))
+    call vol%read(vol_file)
     call vol%write(string('vol_simple.mrc'))
     call vol%kill
-    call simple_end('**** SIMPLE_TEST_MRC_VALIDATION_WORKFLOW NORMAL STOP ****')
-end subroutine exec_test_mrc_validation
+    call simple_end('**** SIMPLE_TEST_MRC_VALIDATE_WORKFLOW NORMAL STOP ****')
+end subroutine exec_test_mrc_validate
 
 subroutine exec_test_stack_io( self, cline )
     use simple_stack_io, only: stack_io

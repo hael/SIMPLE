@@ -58,7 +58,7 @@
       - `simple_test_maxnloc.f90`
       - `simple_test_mini_stream.f90` — test for running the mini stream across multiple data sets
       - `simple_test_mrc2jpeg.f90`
-      - `simple_test_mrc_validation.f90`
+      - `simple_test_mrc_validate.f90`
       - `simple_test_msk_routines.f90`
       - `simple_test_multinomal.f90`
       - `simple_test_nano_mask.f90`

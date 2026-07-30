@@ -8,7 +8,7 @@ type(ui_program), target :: inside_write
 type(ui_program), target :: io
 type(ui_program), target :: io_parallel
 type(ui_program), target :: mrc2jpeg
-type(ui_program), target :: mrc_validation
+type(ui_program), target :: mrc_validate
 type(ui_program), target :: stack_io
 type(ui_program), target :: star_export
 type(ui_program), target :: starfile_test
@@ -22,7 +22,7 @@ contains
         call new_io(tsttab)
         call new_io_parallel(tsttab)
         call new_mrc2jpeg(tsttab)
-        call new_mrc_validation(tsttab)
+        call new_mrc_validate(tsttab)
         call new_stack_io(tsttab)
         call new_star_export(tsttab)
         call new_starfile_test(tsttab)
@@ -36,7 +36,7 @@ contains
         write(logfhandle,'(A)') io%name%to_char()
         write(logfhandle,'(A)') io_parallel%name%to_char()
         write(logfhandle,'(A)') mrc2jpeg%name%to_char()
-        write(logfhandle,'(A)') mrc_validation%name%to_char()
+        write(logfhandle,'(A)') mrc_validate%name%to_char()
         write(logfhandle,'(A)') stack_io%name%to_char()
         write(logfhandle,'(A)') star_export%name%to_char()
         write(logfhandle,'(A)') starfile_test%name%to_char()
@@ -183,33 +183,35 @@ contains
         call add_ui_program('mrc2jpeg', mrc2jpeg, tsttab)
     end subroutine new_mrc2jpeg
 
-    subroutine new_mrc_validation( tsttab )
+    subroutine new_mrc_validate( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
-        call mrc_validation%new(&
-        &'mrc_validation',&                    ! name
-        &'mrc_validation ',&                   ! descr_short
+        call mrc_validate%new(&
+        &'mrc_validate',&                    ! name
+        &'mrc_validate ',&                   ! descr_short
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !call mrc_validation%add_input(UI_IO, )
+        call mrc_validate%add_input(UI_IMG, 'vol', 'file', 'Input volume', &
+            &'MRC volume to validate', 'volume.mrc', .true., '')
         ! parameter input/output
-        !call mrc_validation%add_input(UI_IMG, )
+        call mrc_validate%add_input(UI_PARM, 'smpd', 'real', 'Sampling distance', &
+            &'Sampling distance in Angstrom per voxel', 'e.g. 1.3', .true., '')
         ! alternative inputs
-        !call mrc_validation%add_input(UI_PARM, )
+        !call mrc_validate%add_input(UI_PARM, )
         ! search controls
-        !call mrc_validation%add_input(UI_SRCH, )
+        !call mrc_validate%add_input(UI_SRCH, )
         ! filter controls
-        !call mrc_validation%add_input(UI_FILT, )
+        !call mrc_validate%add_input(UI_FILT, )
         ! mask controls
-        !call mrc_validation%add_input(UI_MASK, )
+        !call mrc_validate%add_input(UI_MASK, )
         ! computer controls
-        !call mrc_validation%add_input(UI_COMP, )
+        !call mrc_validate%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('mrc_validation', mrc_validation, tsttab)
-    end subroutine new_mrc_validation
+        call add_ui_program('mrc_validate', mrc_validate, tsttab)
+    end subroutine new_mrc_validate
 
     subroutine new_stack_io( tsttab )
         class(ui_hash), intent(inout) :: tsttab

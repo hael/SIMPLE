@@ -3594,7 +3594,7 @@
 | `exec_test_io` | subroutine | `simple_commanders_test_io` | main/commanders/test/simple_commanders_test_io.f90 | 136 | public |
 | `exec_test_io_parallel` | subroutine | `simple_commanders_test_io` | main/commanders/test/simple_commanders_test_io.f90 | 247 | public |
 | `exec_test_mrc2jpeg` | subroutine | `simple_commanders_test_io` | main/commanders/test/simple_commanders_test_io.f90 | 350 | public |
-| `exec_test_mrc_validation` | subroutine | `simple_commanders_test_io` | main/commanders/test/simple_commanders_test_io.f90 | 394 | public |
+| `exec_test_mrc_validate` | subroutine | `simple_commanders_test_io` | main/commanders/test/simple_commanders_test_io.f90 | 394 | public |
 | `exec_test_stack_io` | subroutine | `simple_commanders_test_io` | main/commanders/test/simple_commanders_test_io.f90 | 424 | public |
 | `exec_test_star_export` | subroutine | `simple_commanders_test_io` | main/commanders/test/simple_commanders_test_io.f90 | 466 | public |
 | `exec_test_starfile_test` | subroutine | `simple_commanders_test_io` | main/commanders/test/simple_commanders_test_io.f90 | 493 | public |
@@ -6962,7 +6962,7 @@
 | `new_io` | subroutine | `simple_test_ui_io` | main/ui/simple_test/simple_test_ui_io.f90 | 102 | public |
 | `new_io_parallel` | subroutine | `simple_test_ui_io` | main/ui/simple_test/simple_test_ui_io.f90 | 130 | public |
 | `new_mrc2jpeg` | subroutine | `simple_test_ui_io` | main/ui/simple_test/simple_test_ui_io.f90 | 158 | public |
-| `new_mrc_validation` | subroutine | `simple_test_ui_io` | main/ui/simple_test/simple_test_ui_io.f90 | 186 | public |
+| `new_mrc_validate` | subroutine | `simple_test_ui_io` | main/ui/simple_test/simple_test_ui_io.f90 | 186 | public |
 | `new_stack_io` | subroutine | `simple_test_ui_io` | main/ui/simple_test/simple_test_ui_io.f90 | 214 | public |
 | `new_star_export` | subroutine | `simple_test_ui_io` | main/ui/simple_test/simple_test_ui_io.f90 | 242 | public |
 | `new_starfile_test` | subroutine | `simple_test_ui_io` | main/ui/simple_test/simple_test_ui_io.f90 | 270 | public |

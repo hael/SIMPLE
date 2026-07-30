@@ -191,9 +191,9 @@ contains
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !call nano_mask%add_input(UI_IO, )
+        call nano_mask%add_input(UI_IMG, stk, required_override=.false.)
         ! parameter input/output
-        !call nano_mask%add_input(UI_IMG, )
+        call nano_mask%add_input(UI_PARM, smpd, required_override=.false.)
         ! alternative inputs
         !call nano_mask%add_input(UI_PARM, )
         ! search controls
@@ -201,7 +201,7 @@ contains
         ! filter controls
         !call nano_mask%add_input(UI_FILT, )
         ! mask controls
-        !call nano_mask%add_input(UI_MASK, )
+        call nano_mask%add_input(UI_MASK, mskdiam, required_override=.false.)
         ! computer controls
         !call nano_mask%add_input(UI_COMP, )
         ! add to ui_hash

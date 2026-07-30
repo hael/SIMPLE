@@ -1,7 +1,7 @@
 program simple_test_simd
 use simple_timer
 implicit none
-integer, parameter      :: N=1000000000
+integer, parameter      :: N=100000
 real                    :: a(N), b(N), c(N), t1, t2
 integer(timer_int_kind) :: t_loop, t_loop_simd
 real(timer_int_kind)    :: rt_loop, rt_loop_simd

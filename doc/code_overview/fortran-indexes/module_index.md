@@ -6516,7 +6516,7 @@ Public symbols:
 - `commander_test_io` — type
 - `commander_test_io_parallel` — type
 - `commander_test_mrc2jpeg` — type
-- `commander_test_mrc_validation` — type
+- `commander_test_mrc_validate` — type
 - `commander_test_stack_io` — type
 - `commander_test_star_export` — type
 - `commander_test_starfile_test` — type
@@ -6525,7 +6525,7 @@ Public symbols:
 - `exec_test_io` — subroutine
 - `exec_test_io_parallel` — subroutine
 - `exec_test_mrc2jpeg` — subroutine
-- `exec_test_mrc_validation` — subroutine
+- `exec_test_mrc_validate` — subroutine
 - `exec_test_stack_io` — subroutine
 - `exec_test_star_export` — subroutine
 - `exec_test_starfile_test` — subroutine
@@ -16117,7 +16117,7 @@ Public symbols:
 - `new_io` — subroutine
 - `new_io_parallel` — subroutine
 - `new_mrc2jpeg` — subroutine
-- `new_mrc_validation` — subroutine
+- `new_mrc_validate` — subroutine
 - `new_stack_io` — subroutine
 - `new_star_export` — subroutine
 - `new_starfile_test` — subroutine

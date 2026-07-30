@@ -3828,7 +3828,7 @@ simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,com
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,commander_test_io,type,public,17
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,commander_test_io_parallel,type,public,22
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,commander_test_mrc2jpeg,type,public,27
-simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,commander_test_mrc_validation,type,public,32
+simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,commander_test_mrc_validate,type,public,32
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,commander_test_stack_io,type,public,37
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,commander_test_star_export,type,public,42
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,commander_test_starfile_test,type,public,47
@@ -3837,7 +3837,7 @@ simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,exe
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,exec_test_io,subroutine,public,136
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,exec_test_io_parallel,subroutine,public,247
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,exec_test_mrc2jpeg,subroutine,public,350
-simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,exec_test_mrc_validation,subroutine,public,394
+simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,exec_test_mrc_validate,subroutine,public,394
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,exec_test_stack_io,subroutine,public,424
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,exec_test_star_export,subroutine,public,466
 simple_commanders_test_io,main/commanders/test/simple_commanders_test_io.f90,exec_test_starfile_test,subroutine,public,493
@@ -7526,7 +7526,7 @@ simple_test_ui_io,main/ui/simple_test/simple_test_ui_io.f90,new_inside_write,sub
 simple_test_ui_io,main/ui/simple_test/simple_test_ui_io.f90,new_io,subroutine,public,102
 simple_test_ui_io,main/ui/simple_test/simple_test_ui_io.f90,new_io_parallel,subroutine,public,130
 simple_test_ui_io,main/ui/simple_test/simple_test_ui_io.f90,new_mrc2jpeg,subroutine,public,158
-simple_test_ui_io,main/ui/simple_test/simple_test_ui_io.f90,new_mrc_validation,subroutine,public,186
+simple_test_ui_io,main/ui/simple_test/simple_test_ui_io.f90,new_mrc_validate,subroutine,public,186
 simple_test_ui_io,main/ui/simple_test/simple_test_ui_io.f90,new_stack_io,subroutine,public,214
 simple_test_ui_io,main/ui/simple_test/simple_test_ui_io.f90,new_star_export,subroutine,public,242
 simple_test_ui_io,main/ui/simple_test/simple_test_ui_io.f90,new_starfile_test,subroutine,public,270
