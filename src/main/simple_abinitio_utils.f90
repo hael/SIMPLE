@@ -23,6 +23,7 @@ logical          :: l_nonuniform      = .false.
 logical          :: l_state_continue_mode = .false.
 logical          :: l_refine3D_mode_override = .false.
 logical          :: l_refine3D_lp_override = .false.
+logical          :: l_cavgs_mode = .false.
 type(sym)        :: se1, se2
 type(cmdline)    :: cline_refine3D, cline_symmap, cline_reconstruct3D, cline_reproject
 type(string)     :: refine3D_mode_override
@@ -87,6 +88,10 @@ interface
     module function abinitio_nstages_ini3D_max() result(nstages_out)
         integer :: nstages_out
     end function abinitio_nstages_ini3D_max
+
+    module function abinitio_cavgs_early_nstages() result(nstages_out)
+        integer :: nstages_out
+    end function abinitio_cavgs_early_nstages
 
     module function abinitio_symsrch_stage() result(istage)
         integer :: istage
@@ -256,13 +261,17 @@ contains
         call vol_lp%kill
     end subroutine write_abinitio_lowpass_snapshot
 
-    real function abinitio_state_fsc_lowpass( state, box, smpd, fallback_lp ) result( lp )
+    real function abinitio_state_fsc_lowpass( state, box, smpd, fallback_lp, istage ) result( lp )
         integer, intent(in) :: state, box
         real,    intent(in) :: smpd, fallback_lp
+        integer, optional, intent(in) :: istage
         type(string) :: fsc_name
         real, allocatable :: fsc(:), res(:)
         real :: fsc05, fsc0143
         lp = fallback_lp
+        if( present(istage) )then
+            if( l_cavgs_mode .and. istage <= 2 ) return
+        endif
         fsc_name = refine3D_fsc_fname(state)
         if( file_exists(fsc_name) )then
             fsc = file2rarr(fsc_name)
@@ -310,6 +319,7 @@ contains
         real             :: lpfinal
         real             :: lpstart_bounds(2), lpstop_bounds(2)
         integer          :: filtsz, nstages
+        l_cavgs_mode = l_cavgs
         nstages = active_lp_schedule_nstages()
         if( trim(params%force_lp_range).eq.'yes' )then
             if( .not.(present(lpstart) .and. present(lpstop)) )then
@@ -318,7 +328,11 @@ contains
             if( allocated(lpinfo) ) deallocate(lpinfo)
             allocate(lpinfo(nstages))
             call lpstages_fast(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
-            call force_stage1_lowpass_limit(lpinfo)
+            if( l_cavgs )then
+                call force_initial_stage_downscaling(lpinfo, abinitio_cavgs_early_nstages())
+            else
+                call force_stage1_lowpass_limit(lpinfo)
+            endif
             return
         endif
         ! retrieve FRC info
@@ -344,7 +358,11 @@ contains
             call lpstages(params%box, nstages, frcs_avg, params%smpd,&
             &lpstart_bounds(1), lpstart_bounds(2), lpfinal, lpinfo, l_cavgs, verbose=.true.)
         endif
-        call force_stage1_lowpass_limit(lpinfo)
+        if( l_cavgs )then
+            call force_initial_stage_downscaling(lpinfo, abinitio_cavgs_early_nstages())
+        else
+            call force_stage1_lowpass_limit(lpinfo)
+        endif
         ! cleanup
         call clsfrcs%kill
         contains
@@ -369,6 +387,7 @@ contains
         class(sp_project), intent(in)    :: spproj
         real,              intent(in)    :: lpstart, lpstop
         integer :: nstages
+        l_cavgs_mode = .false.
         nstages = active_lp_schedule_nstages()
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(nstages))
@@ -381,6 +400,21 @@ contains
         if( nstages_refine3D > 0 ) nstages = min(nstages_refine3D, nstages)
         nstages = max(1, nstages)
     end function active_lp_schedule_nstages
+
+    subroutine force_initial_stage_downscaling( lpinfo_local, nfreeze )
+        type(lp_crop_inf), intent(inout) :: lpinfo_local(:)
+        integer,           intent(in)    :: nfreeze
+        integer :: istage, nfreeze_eff
+        if( size(lpinfo_local) < 1 ) return
+        nfreeze_eff = min(max(1, nfreeze), size(lpinfo_local))
+        do istage = 2, nfreeze_eff
+            lpinfo_local(istage)%box_crop    = lpinfo_local(1)%box_crop
+            lpinfo_local(istage)%smpd_crop   = lpinfo_local(1)%smpd_crop
+            lpinfo_local(istage)%scale       = lpinfo_local(1)%scale
+            lpinfo_local(istage)%trslim      = lpinfo_local(1)%trslim
+            lpinfo_local(istage)%l_autoscale = lpinfo_local(1)%l_autoscale
+        enddo
+    end subroutine force_initial_stage_downscaling
 
     subroutine exec_refine3D( params, istage, xrefine3D )
         class(parameters),     intent(inout) :: params
@@ -402,7 +436,7 @@ contains
             vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
             if( file_exists(vol_name) )then
                 lp_snapshot = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
-                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp, istage=istage)
                 call write_abinitio_lowpass_snapshot(vol_name, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
             endif
         enddo
@@ -483,7 +517,7 @@ contains
                 vol_stage    = add2fbody(vol_sym, string(MRC_EXT), stage)
                 vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
                 lp_snapshot  = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
-                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp, istage=istage)
                 call write_abinitio_lowpass_snapshot(vol_sym, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
                 call inject_refine3D_volume(params, state, vol_sym)
                 call vol_stage%kill
@@ -539,7 +573,7 @@ contains
             call simple_rename(src, dest_main)
             vol_diag = add2fbody(dest_main, MRC_EXT, LP_SUFFIX)
             lp_snapshot = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
-                &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+                &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp, istage=istage)
             call write_abinitio_lowpass_snapshot(dest_main, lp_snapshot, vol_diag, lpinfo(istage)%smpd_crop)
             vol_even = refine3D_state_halfvol_fname(state, 'even')
             if( file_exists(vol_even) )then

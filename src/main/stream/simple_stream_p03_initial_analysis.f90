@@ -41,7 +41,7 @@ use simple_stream_state,          only: ipc_pipe_initial_analysis_in, ipc_pipe_i
 use simple_commanders_pick,       only: commander_extract, commander_reextract
 use simple_commanders_cavgs,      only: commander_shape_rank_cavgs
 use simple_commanders_abinitio2D, only: commander_abinitio2D
-use simple_commanders_abinitio,   only: commander_abinitio3D_cavgs_reject, commander_abinitio3D_cavgs
+use simple_commanders_abinitio,   only: commander_abinitio3D_cavgs
 use simple_commanders_reproject,  only: commander_reproject
 use simple_commanders_denoise,    only: commander_cls_split
 use simple_commanders_mkcavgs,    only: commander_make_cavgs
@@ -98,7 +98,6 @@ contains
         type(gui_metadata_cavg2D)                  :: meta_cavg2D
         type(gui_metadata_cavg2D)                  :: meta_pickrefs
         type(commander_abinitio2D)                 :: xabinitio2D
-        type(commander_abinitio3D_cavgs_reject)    :: xabinitio3D_cavgs_reject
         type(commander_reproject)                  :: xreproject
         type(commander_cls_split)                  :: xcls_split
         type(commander_make_cavgs)                 :: xmake_cavgs
@@ -597,17 +596,6 @@ contains
                 call simple_copy_file(cluster_projfile, outdir//'/'//cluster_projfile) ! copy projfile to extract dir for partitioning
                 call simple_chdir(outdir)
                 call cline_abinitio3D%kill()
-            !     call cline_abinitio3D%set('prg',  'abinitio3D_cavgs_reject')
-            !     call cline_abinitio3D%set('mkdir',                     'no')
-            !     !call cline_abinitio3D%set('pgrp',                      'c1')
-            !     !call cline_abinitio3D%set('outdir',                  outdir)
-            !     call cline_abinitio3D%set('nstates',              NSTATES3D)
-            !     call cline_abinitio3D%set('lpstop',                LPSTOP2D)
-            !  !   call cline_abinitio3D%set('nstages',              NSTAGES3D)
-            !     call cline_abinitio3D%set('mskdiam',             mskdiam_in)
-            !     call cline_abinitio3D%set('nthr',                         16)
-            !  !   call cline_abinitio3D%set('nparts',                       4)
-            !     call cline_abinitio3D%set('projfile',      cluster_projfile)
 
                 call cline_abinitio3D%set('prg',  'abinitio3D_cavgs')
                 call cline_abinitio3D%set('mkdir',                     'no')

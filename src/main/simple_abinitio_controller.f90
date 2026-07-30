@@ -12,6 +12,9 @@ integer,          parameter :: NSTAGES_INI3D           = 4    ! # of ini3D stage
 integer,          parameter :: NSTAGES_INI3D_MAX       = 7
 integer,          parameter :: MAXITS(8)               = [20,20,17,15,12,12,12,25]
 integer,          parameter :: NSPACE(8)               = [1000,1000,1000,1000,2500,2500,5000,5000]
+integer,          parameter :: NSPACE_CAVGS_EARLY      = 500  ! nspace for the first CAVGS_EARLY_NSTAGES stages of abinitio3D_cavgs
+integer,          parameter :: MAXITS_CAVGS_EARLY      = 15   ! maxits for the first CAVGS_EARLY_NSTAGES stages of abinitio3D_cavgs
+integer,          parameter :: CAVGS_EARLY_NSTAGES     = 3    ! # of early abinitio3D_cavgs stages using NSPACE_CAVGS_EARLY
 integer,          parameter :: NSPACE_SUB              = 126
 integer,          parameter :: NSPACE_SUB_BASE         = 2500
 
@@ -132,6 +135,11 @@ contains
         nstages_out = NSTAGES_INI3D_MAX
     end function abinitio_nstages_ini3D_max
 
+    module function abinitio_cavgs_early_nstages() result(nstages_out)
+        integer :: nstages_out
+        nstages_out = CAVGS_EARLY_NSTAGES
+    end function abinitio_cavgs_early_nstages
+
     module function abinitio_symsrch_stage() result(istage)
         integer :: istage
         istage = SYMSRCH_STAGE
@@ -175,13 +183,13 @@ contains
         call init_refine3D_iteration( cfg )
         call set_refine3D_update_policy( cfg, params, istage )
         call set_refine3D_symmetry_policy( cfg, params, istage )
-        call set_refine3D_mode_policy( cfg, params, istage )
+        call set_refine3D_mode_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_balance_policy( cfg, params )
         call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
-        call set_refine3D_stage_controls( cfg, params, istage )
+        call set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
         call apply_refine3D_search_overrides( cfg, params, istage )
     end subroutine build_refine3D_stage_cfg
 
@@ -229,10 +237,11 @@ contains
         endif
     end subroutine set_refine3D_symmetry_policy
 
-    subroutine set_refine3D_mode_policy( cfg, params, istage )
+    subroutine set_refine3D_mode_policy( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
         cfg%prob_neigh_mode = ''
         if( l_refine3D_mode_override )then
             cfg%refine = refine3D_mode_override
@@ -241,7 +250,11 @@ contains
             endif
         else if( istage == 1 )then
             cfg%refine           = 'prob_neigh'
-            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_STAGE1
+            if( l_cavgs )then
+                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
+            else
+                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_STAGE1
+            endif
         else if( istage <  PROB_REFINE_STAGE )then
             cfg%refine           = 'prob_neigh'
             cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
@@ -332,13 +345,15 @@ contains
         if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
     end subroutine set_refine3D_automsk_policy
 
-    subroutine set_refine3D_stage_controls( cfg, params, istage )
+    subroutine set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
         integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
         integer :: stoch_stage
         stoch_stage = abinitio_stoch_sampl_stage(params)
         cfg%inspace = NSPACE(istage)
+        if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%inspace = NSPACE_CAVGS_EARLY
         cfg%greedy_sampling = 'yes'
         select case(istage)
             case(1,2)
@@ -388,6 +403,7 @@ contains
             case default
                 THROW_HARD('Invalid istage index in set_refine3D_stage_controls')
         end select
+        if( l_cavgs .and. istage <= CAVGS_EARLY_NSTAGES ) cfg%imaxits = MAXITS_CAVGS_EARLY
     end subroutine set_refine3D_stage_controls
 
     subroutine apply_refine3D_search_overrides( cfg, params, istage )

@@ -282,6 +282,7 @@ contains
         logical                       :: l_nonuniform_mode
         integer, allocatable          :: imat(:,:,:)
         integer, allocatable          :: state_pops(:)
+        logical, allocatable          :: l_state_dropped(:)
         real, allocatable             :: res0143s(:)
         real, allocatable             :: nu_align_lps(:)
         real, allocatable             :: update_frac_trail_recs(:)
@@ -304,7 +305,12 @@ contains
         if( L_BENCH_GLOB ) t_gridcorr = tic()
         call prepare_grid_correction()
         if( L_BENCH_GLOB ) rt_gridcorr = toc(t_gridcorr)
+        call determine_dropped_states()
         do state = 1, params%nstates
+            if( l_state_dropped(state) )then
+                call carry_forward_dropped_state()
+                cycle
+            endif
             call assemble_state()
         enddo
         call collect_restore_timings()
@@ -360,6 +366,61 @@ contains
                 state_pops(istate) = build%spproj_field%get_pop(istate, 'state')
             enddo
         end subroutine refresh_state_populations
+
+        subroutine determine_dropped_states()
+            ! Multi-state reconstruction can leave a state with zero particles
+            ! (e.g. independent mode where prob search reassigns all of a
+            ! state's particles). Such a state produces no partial
+            ! reconstructions, so re-assembling it would overwrite the previous,
+            ! still-valid volume with a blank one and compute a degenerate FSC.
+            ! Detect these states from the actual on-disk partial
+            ! reconstructions and drop them: skip re-assembly and carry the
+            ! previous volume forward as the reference.
+            logical :: l_has_partials(params%nstates)
+            integer :: istate
+            allocate(l_state_dropped(params%nstates), source=.false.)
+            if( params%nstates <= 1 ) return
+            do istate = 1, params%nstates
+                l_has_partials(istate) = state_has_partials(istate)
+            enddo
+            ! Only apply dropping in a normal iteration where at least one state
+            ! was reconstructed; never drop every state.
+            if( .not. any(l_has_partials) ) return
+            do istate = 1, params%nstates
+                if( .not. l_has_partials(istate) )then
+                    l_state_dropped(istate) = .true.
+                    write(logfhandle,'(A,I0,A)') &
+                        &'>>> VOLASSEMBLE: STATE ', istate, &
+                        &' HAS NO RECONSTRUCTED PARTICLES; DROPPING AND CARRYING PREVIOUS VOLUME FORWARD'
+                endif
+            enddo
+        end subroutine determine_dropped_states
+
+        logical function state_has_partials( istate ) result( l_has )
+            integer, intent(in) :: istate
+            type(string) :: fbody
+            integer      :: part
+            l_has = .false.
+            do part = 1, params%nparts
+                fbody = refine3D_partial_rec_fbody(istate, part, numlen_part)
+                if( file_exists(fbody//'_even'//MRC_EXT) .or. file_exists(fbody//'_odd'//MRC_EXT) )then
+                    l_has = .true.
+                    call fbody%kill
+                    return
+                endif
+                call fbody%kill
+            enddo
+        end function state_has_partials
+
+        subroutine carry_forward_dropped_state()
+            ! Preserve the existing on-disk volume, half-maps and FSC for a
+            ! dropped state so downstream reference preparation still resolves a
+            ! complete volume source. Nothing is written or overwritten here.
+            params%vols(state)      = refine3D_state_vol_fname(state)
+            params%vols_even(state) = refine3D_state_halfvol_fname(state, 'even')
+            params%vols_odd(state)  = refine3D_state_halfvol_fname(state, 'odd')
+            res0143s(state)         = 0.
+        end subroutine carry_forward_dropped_state
 
         subroutine determine_trailing_update_fraction()
             update_frac_trail_recs = 1.0
@@ -751,6 +812,7 @@ contains
             if( allocated(l_mask)                 ) deallocate(l_mask)
             if( allocated(imat)                   ) deallocate(imat)
             if( allocated(state_pops)             ) deallocate(state_pops)
+            if( allocated(l_state_dropped)        ) deallocate(l_state_dropped)
             if( allocated(res0143s)               ) deallocate(res0143s)
             if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
