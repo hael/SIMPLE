@@ -169,19 +169,20 @@ subroutine exec_test_gencorrs_fft( self, cline )
     class(cmdline),                     intent(inout) :: cline
     type(parameters)        :: p
     type(builder)           :: b
-    real,    allocatable    :: cc(:), cc_fft(:)
+    real,    allocatable    :: cc_fft(:)
     complex, allocatable    :: pft(:,:)
     integer                 :: iptcl, jptcl
     integer(timer_int_kind) :: tfft
     if( command_argument_count() < 3 )then
-        write(logfhandle,'(a)',advance='no') 'simple_test_srch stk=<particles.mrc> msk=<mask radius(in pixels)>'
-        write(logfhandle,'(a)') ' smpd=<sampling distance(in A)>'
+        write(logfhandle,'(a)',advance='no') 'simple_test_exec test=gencorrs_fft stk=<particles.mrc>'
+        write(logfhandle,'(a)') ' mskdiam=<mask diameter(in A)> smpd=<sampling distance(in A)>'
         stop
     endif
     call cline%parse_oldschool
-    call cline%checkvar('stk',  1)
-    call cline%checkvar('msk',  2)
-    call cline%checkvar('smpd', 3)
+    call cline%checkvar('stk',     1)
+    call cline%checkvar('mskdiam', 2)
+    call cline%checkvar('smpd',    3)
+    call cline%set('objfun', 'cc')
     call cline%check
     call p%new(cline)
     p%kfromto(1) = 2
@@ -199,7 +200,9 @@ subroutine exec_test_gencorrs_fft( self, cline )
         call b%img_crop%polarize(pft)
         call b%pftc%set_ptcl_pft(iptcl, pft)
     end do
-    allocate(cc(b%pftc%get_nrots()), cc_fft(b%pftc%get_nrots()))
+    call b%pftc%memoize_refs
+    call b%pftc%memoize_ptcls
+    allocate(cc_fft(b%pftc%get_nrots()))
 
     !### TIMING
 

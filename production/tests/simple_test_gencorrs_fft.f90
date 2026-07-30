@@ -7,19 +7,20 @@ type(parameters)        :: p
 type(polarft_calc)      :: pftc
 type(cmdline)           :: cline
 type(builder)           :: b
-real,    allocatable    :: cc(:), cc_fft(:)
+real,    allocatable    :: cc_fft(:)
 complex, allocatable    :: pft(:,:)
 integer                 :: iptcl, jptcl
 integer(timer_int_kind) :: tfft
 if( command_argument_count() < 3 )then
-    write(logfhandle,'(a)',advance='no') 'simple_test_srch stk=<particles.mrc> msk=<mask radius(in pixels)>'
-    write(logfhandle,'(a)') ' smpd=<sampling distance(in A)>'
+    write(logfhandle,'(a)',advance='no') 'simple_test_gencorrs_fft stk=<particles.mrc>'
+    write(logfhandle,'(a)') ' mskdiam=<mask diameter(in A)> smpd=<sampling distance(in A)>'
     stop
 endif
 call cline%parse_oldschool
-call cline%checkvar('stk',  1)
-call cline%checkvar('msk',  2)
-call cline%checkvar('smpd', 3)
+call cline%checkvar('stk',     1)
+call cline%checkvar('mskdiam', 2)
+call cline%checkvar('smpd',    3)
+call cline%set('objfun', 'cc')
 call cline%check
 call p%new(cline)
 p%kfromto(1) = 2
@@ -37,7 +38,9 @@ do iptcl=1,p%nptcls
     call b%img_crop%polarize(pft)
     call pftc%set_ptcl_pft(iptcl, pft)
 end do
-allocate(cc(pftc%get_nrots()), cc_fft(pftc%get_nrots()))
+call pftc%memoize_refs
+call pftc%memoize_ptcls
+allocate(cc_fft(pftc%get_nrots()))
 
 !### TIMING
 

@@ -119,9 +119,9 @@ contains
         &.false.)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        !call gencorrs_fft%add_input(UI_IO, )
+        call gencorrs_fft%add_input(UI_IMG, stk, required_override=.true.)
         ! parameter input/output
-        !call gencorrs_fft%add_input(UI_IMG, )
+        call gencorrs_fft%add_input(UI_PARM, smpd, required_override=.true.)
         ! alternative inputs
         !call gencorrs_fft%add_input(UI_PARM, )
         ! search controls
@@ -129,7 +129,7 @@ contains
         ! filter controls
         !call gencorrs_fft%add_input(UI_FILT, )
         ! mask controls
-        !call gencorrs_fft%add_input(UI_MASK, )
+        call gencorrs_fft%add_input(UI_MASK, mskdiam, required_override=.true.)
         ! computer controls
         !call gencorrs_fft%add_input(UI_COMP, )
         ! add to ui_hash
