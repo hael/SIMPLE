@@ -68,11 +68,15 @@ call ui_prg%add_input(UI_PARM, 'visibility_param', 'num', 'Visibility parameter'
     &[character(len=8) :: 'standard', 'expert']))
 call assert_input_visibility(ui_prg%parm_ios, 'visibility_param', UI_VIS_STANDARD)
 call assert_input_binding(ui_prg%parm_ios, 'visibility_param')
+call ui_prg%add_input(UI_PARM, 'developer_param', 'num', 'Developer parameter', &
+    &'Developer parameter help', 'e.g. 1', .false., 1., visibility=UI_VIS_DEVELOPER)
+call assert_input_visibility(ui_prg%parm_ios, 'developer_param', UI_VIS_DEVELOPER)
 call ui_prg%add_input(UI_PARM, param, choices_override=ui_choices([character(len=3) :: 'on', 'off']))
+call assert_input_visibility(ui_prg%parm_ios, 'binary_param', UI_VIS_STANDARD)
 call assert_input_choice(ui_prg%parm_ios, 'binary_param', 'off')
 call ui_prg%add_input(UI_FILE, 'input_a', 'file', 'Input A', 'First input source', 'e.g. input-a.mrc', .false., '')
 call ui_prg%add_input(UI_FILE, 'input_b', 'file', 'Input B', 'Second input source', 'e.g. input-b.mrc', .false., '')
-call assert_input_visibility(ui_prg%file_ios, 'input_a', UI_VIS_DEVELOPER)
+call assert_input_visibility(ui_prg%file_ios, 'input_a', UI_VIS_ADVANCED)
 call ui_prg%add_requirement('input_source', 'Input source', 'Supply exactly one input source.', &
     &[character(len=7) :: 'input_a', 'input_b'], max_selected=1)
 call assert_int(1, size(ui_prg%requirements), 'one requirement group is registered')

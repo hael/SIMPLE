@@ -42,7 +42,8 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call abinitio3D%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
-        & for particle matching', 'input starting volume e.g. vol.mrc', .false., '')
+        & for particle matching', 'input starting volume e.g. vol.mrc', .false., '', &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
         ! <empty>
         ! <no additional inputs>
@@ -50,11 +51,14 @@ contains
         ! search controls
         call abinitio3D%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){no}','', .false., 'no', group="model", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, pgrp, group="model", visibility=UI_VIS_STANDARD)
-        call abinitio3D%add_input(UI_SRCH, pgrp_start, group="model")
+        call abinitio3D%add_input(UI_SRCH, pgrp_start, group="model", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, 'cavg_ini_ext', 'binary', 'External class-average 3D initialization', &
             &'Use existing ptcl3D orientations and state assignments from a prior abinitio3D_cavgs run; skips the symmetry-search stage(yes|no){no}','', .false., 'no', group="model", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
@@ -68,24 +72,33 @@ contains
             &'State label to select from an existing multi-state abinitio3D project and continue as a single-state stage-5 search', &
             &'state label', .false., 1., group="search", visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}','', .false., 'single', &
-        &choices=ui_choices([character(len=11) :: 'single', 'independent', 'docked']))
-        call abinitio3D%add_input(UI_SRCH, objfun_den, group="search")
-        call abinitio3D%add_input(UI_SRCH, objfun_den_w, group="search")
-        call abinitio3D%add_input(UI_SRCH, ptcl_src, group="search")
+        &choices=ui_choices([character(len=11) :: 'single', 'independent', 'docked']), &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_SRCH, objfun_den, group="search", &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_SRCH, objfun_den_w, group="search", &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_SRCH, ptcl_src, group="search", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction reconstruction', &
             &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', group="search", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! filter controls
-        call abinitio3D%add_input(UI_FILT, hp, group="filter")
+        call abinitio3D%add_input(UI_FILT, hp, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., group="filter")
+        &Angstroms{30}', .false., 30., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
-            &'low-pass limit for the initial stage in Angstroms',  .false., 20., group="filter")
+            &'low-pass limit for the initial stage in Angstroms',  .false., 20., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the final stage in Angstroms; default is 6 for multivol_mode=independent &
-            &and 8 otherwise',    .false., 8., group="filter")
-        call abinitio3D%add_input(UI_FILT, lp, group="filter")
+            &and 8 otherwise',    .false., 8., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_FILT, lp, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, 'force_lp_range', 'binary', 'Force low-pass range', &
             &'Use lpstart/lpstop directly for abinitio3D low-pass stages instead of class-FRC-derived limits(yes|no){no}','', .false., 'no', group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
@@ -96,9 +109,11 @@ contains
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
         call abinitio3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
-            &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., group="filter")
+            &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, 'lpstop_ini3D',  'num', 'Final low-pass limit ini3D', 'Final low-pass limit ini3D',&
-            &'low-pass limit for the final stage of ini3D in Angstroms',    .false., 8., group="filter")
+            &'low-pass limit for the final stage of ini3D in Angstroms',    .false., 8., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call abinitio3D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
         call abinitio3D%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &
@@ -132,22 +147,30 @@ contains
         ! search controls
         call abinitio3D_cavgs%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call abinitio3D_cavgs%add_input(UI_SRCH, pgrp)
-        call abinitio3D_cavgs%add_input(UI_SRCH, pgrp_start)
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio3D_cavgs%add_input(UI_SRCH, pgrp, &
+        &visibility=UI_VIS_STANDARD)
+        call abinitio3D_cavgs%add_input(UI_SRCH, pgrp_start, &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D_cavgs%add_input(UI_SRCH, nstates, group="search", visibility=UI_VIS_STANDARD)
         call abinitio3D_cavgs%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume class-average ab initio mode', &
             &'Multi-volume class-average ab initio mode(single|independent|docked){single}','', .false., 'single', &
-        &choices=ui_choices([character(len=11) :: 'single', 'independent', 'docked']))
+        &choices=ui_choices([character(len=11) :: 'single', 'independent', 'docked']), &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call abinitio3D_cavgs%add_input(UI_FILT, hp, group="filter")
+        call abinitio3D_cavgs%add_input(UI_FILT, hp, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D_cavgs%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., group="filter")
+        &Angstroms{30}', .false., 30., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D_cavgs%add_input(UI_FILT, 'lpstart',  'num', 'Starting low-pass limit', 'Starting low-pass limit',&
-            &'low-pass limit for the initial stage in Angstroms', .false., 20., group="filter")
+            &'low-pass limit for the initial stage in Angstroms', .false., 20., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D_cavgs%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the final stage in Angstroms', .false., 8., group="filter")
+            &'low-pass limit for the final stage in Angstroms', .false., 8., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D_cavgs%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         ! mask controls
         call abinitio3D_cavgs%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
@@ -171,8 +194,10 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call estimate_lpstages%add_input(UI_FILE, projfile)
-        call estimate_lpstages%add_input(UI_PARM, 'nstages', 'num', 'Number of low-pass limit stages', 'Number of low-pass limit stages', '# stages', .true., 8.)
+        call estimate_lpstages%add_input(UI_FILE, projfile, &
+        &visibility=UI_VIS_STANDARD)
+        call estimate_lpstages%add_input(UI_PARM, 'nstages', 'num', 'Number of low-pass limit stages', 'Number of low-pass limit stages', '# stages', .true., 8., &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -195,14 +220,18 @@ contains
         &'Generate one or more white-noise volumes',& ! summary
         &'is a program for generating noise volume(s)',&
         &'simple_exec',&                      ! executable
-        &.false.)                             ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                             ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call noisevol%add_input(UI_PARM, smpd)
-        call noisevol%add_input(UI_PARM, box)
-        call noisevol%add_input(UI_PARM, 'nstates', 'num', 'Number states', 'Number states', '# states', .false., 1.0)
+        call noisevol%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call noisevol%add_input(UI_PARM, box, &
+        &visibility=UI_VIS_STANDARD)
+        call noisevol%add_input(UI_PARM, 'nstates', 'num', 'Number states', 'Number states', '# states', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

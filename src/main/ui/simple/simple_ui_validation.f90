@@ -37,31 +37,47 @@ contains
         &.false.)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call check_refpick%add_input(UI_FILE, 'filetab', 'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '')
-        call check_refpick%add_input(UI_IMG, pickrefs, required_override=.true.)
+        call check_refpick%add_input(UI_FILE, 'filetab', 'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call check_refpick%add_input(UI_IMG, pickrefs, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call check_refpick%add_input(UI_PARM, smpd,    required_override=.true.)
-        call check_refpick%add_input(UI_PARM, pcontrast)
-        call check_refpick%add_input(UI_PARM, kv,      required_override=.true.)
-        call check_refpick%add_input(UI_PARM, cs,      required_override=.true.)
-        call check_refpick%add_input(UI_PARM, fraca)
-        call check_refpick%add_input(UI_PARM, fit_phshift)
+        call check_refpick%add_input(UI_PARM, smpd,    required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call check_refpick%add_input(UI_PARM, pcontrast, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_PARM, kv,      required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call check_refpick%add_input(UI_PARM, cs,      required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call check_refpick%add_input(UI_PARM, fraca, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_PARM, fit_phshift, &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call check_refpick%add_input(UI_SRCH, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
-        call check_refpick%add_input(UI_SRCH, pick_roi)
-        call check_refpick%add_input(UI_SRCH, particle_density)
-        call check_refpick%add_input(UI_SRCH, nboxes_max)
-        call check_refpick%add_input(UI_SRCH, phshift_min)
-        call check_refpick%add_input(UI_SRCH, phshift_max)
-        call check_refpick%add_input(UI_SRCH, phshift_step)
+        call check_refpick%add_input(UI_SRCH, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200., &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_SRCH, pick_roi, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_SRCH, particle_density, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_SRCH, nboxes_max, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_SRCH, phshift_min, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_SRCH, phshift_max, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_SRCH, phshift_step, &
+        &visibility=UI_VIS_DEVELOPER)
         ! filter controls
         ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
-        call check_refpick%add_input(UI_COMP, nthr)
+        call check_refpick%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('check_refpick', check_refpick, prgtab, UI_CATEGORY)
     end subroutine new_check_refpick
@@ -74,31 +90,45 @@ contains
         &'standalone mini_stream for a quick look',&    ! summary
         &'is a program for doing a standalone mini_stream for a quick look',&  ! help
         &'simple_exec',&                                ! executable
-        &.false.)                                       ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call mini_stream%add_input(UI_FILE, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '')
+        call mini_stream%add_input(UI_FILE, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call mini_stream%add_input(UI_PARM, smpd, required_override=.true.)
-        call mini_stream%add_input(UI_PARM, pcontrast)
-        call mini_stream%add_input(UI_PARM, kv,   required_override=.true.)
-        call mini_stream%add_input(UI_PARM, cs,   required_override=.true.)
-        call mini_stream%add_input(UI_PARM, fraca)
-        call mini_stream%add_input(UI_PARM, moldiam_max)
-        call mini_stream%add_input(UI_PARM, fit_phshift)
+        call mini_stream%add_input(UI_PARM, smpd, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call mini_stream%add_input(UI_PARM, pcontrast, &
+        &visibility=UI_VIS_ADVANCED)
+        call mini_stream%add_input(UI_PARM, kv,   required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call mini_stream%add_input(UI_PARM, cs,   required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call mini_stream%add_input(UI_PARM, fraca, &
+        &visibility=UI_VIS_ADVANCED)
+        call mini_stream%add_input(UI_PARM, moldiam_max, &
+        &visibility=UI_VIS_ADVANCED)
+        call mini_stream%add_input(UI_PARM, fit_phshift, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call mini_stream%add_input(UI_SRCH, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
-        call mini_stream%add_input(UI_SRCH, phshift_min)
-        call mini_stream%add_input(UI_SRCH, phshift_max)
-        call mini_stream%add_input(UI_SRCH, phshift_step)
+        call mini_stream%add_input(UI_SRCH, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200., &
+        &visibility=UI_VIS_ADVANCED)
+        call mini_stream%add_input(UI_SRCH, phshift_min, &
+        &visibility=UI_VIS_ADVANCED)
+        call mini_stream%add_input(UI_SRCH, phshift_max, &
+        &visibility=UI_VIS_ADVANCED)
+        call mini_stream%add_input(UI_SRCH, phshift_step, &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
-        call mini_stream%add_input(UI_COMP, nthr)
+        call mini_stream%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('mini_stream', mini_stream, prgtab, UI_CATEGORY)
     end subroutine new_mini_stream
@@ -114,11 +144,15 @@ contains
         &.false.)                                                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call model_validate%add_input(UI_IMG, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
-        call model_validate%add_input(UI_FILE, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
+        call model_validate%add_input(UI_IMG, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call model_validate%add_input(UI_FILE, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call model_validate%add_input(UI_PARM, smpd)
-        call model_validate%add_input(UI_PARM, smpd_target)
+        call model_validate%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call model_validate%add_input(UI_PARM, smpd_target, &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls

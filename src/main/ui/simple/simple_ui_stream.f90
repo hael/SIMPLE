@@ -48,14 +48,15 @@ contains
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                       ! executable
         &.true.,&                                                                ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_DEVELOPER)
         ! image input/output
         ! <empty>
         ! parameter input/output
         call abinitio2D_stream%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
         &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', group="data", visibility=UI_VIS_STANDARD)
         call abinitio2D_stream%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
-        &'Directory where previous 2D analysis took place', 'e.g. 3_abinitio2D_stream', .false., '', group="data")
+        &'Directory where previous 2D analysis took place', 'e.g. 3_abinitio2D_stream', .false., '', group="data", &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -71,7 +72,8 @@ contains
         call abinitio2D_stream%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
         call abinitio2D_stream%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         call abinitio2D_stream%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
-        &'in seconds(29mins){1740}', .false., 1740., group="compute")
+        &'in seconds(29mins){1740}', .false., 1740., group="compute", &
+        &visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
         call add_ui_program('abinitio2D_stream', abinitio2D_stream, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D_stream
@@ -84,12 +86,14 @@ contains
         &'Assign optics groups from microscope metadata',& ! summary
         &'is a program to assign optics groups during streaming',&       ! descr long
         &'simple_stream',&                                               ! executable
-        &.true.)                                                         ! requires sp_project
+        &.true., &
+        &visibility=UI_VIS_DEVELOPER)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
         call assign_optics%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
+        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -112,16 +116,20 @@ contains
         &'Do a mini stream to create the opening 2D for generation of picking references',&  ! summary
         &'is a program to do a mini stream to create the opening 2D',&   ! descr long
         &'simple_stream',&                                               ! executable
-        &.true.)                                                         ! requires sp_project
+        &.true., &
+        &visibility=UI_VIS_ADVANCED)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
         call gen_pickrefs%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '')
+        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         call gen_pickrefs%add_input(UI_PARM, 'nmics', 'num', 'Number of micrographs to import',&
-        &'Number of micrographs to import for opening 2D', 'Number micrographs', .false., 100.)
+        &'Number of micrographs to import for opening 2D', 'Number micrographs', .false., 100., &
+        &visibility=UI_VIS_ADVANCED)
         call gen_pickrefs%add_input(UI_FILE, 'optics_dir', 'dir', 'Target directory for optics import',&
-        &'Directory where assign_optics application is running', 'e.g. optics_assignment', .false., '')
+        &'Directory where assign_optics application is running', 'e.g. optics_assignment', .false., '', &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -148,29 +156,37 @@ contains
         &.false.)                                                                     ! requires sp_project
         ! please note: globally declared inputs not used as allows custom descriptions for GUI
         ! image input/output
-        call master%add_input(UI_FILE, 'dir_movies', 'dir',  'Input movies directory',   'Input movies directory',   '', .true.,  '')
-        call master%add_input(UI_FILE, 'dir_meta',   'dir',  'Input metadata directory', 'Input metadata directory', '', .false., '')
-        call master%add_input(UI_FILE, 'gainref',    'file', 'Gain reference',           'Gain reference',           '', .false., '')
+        call master%add_input(UI_FILE, 'dir_movies', 'dir',  'Input movies directory',   'Input movies directory',   '', .true.,  '', &
+        &visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_FILE, 'dir_meta',   'dir',  'Input metadata directory', 'Input metadata directory', '', .false., '', &
+        &visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_FILE, 'gainref',    'file', 'Gain reference',           'Gain reference',           '', .false., '', &
+        &visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_IMG, 'flipgain',   'multi',  'Gain processing', 'Gain processing(none|flip_auto|flip_x|flip_y|flip_xy|generate){none}','', .false., 'none', &
-        &choices=ui_choices([character(len=9) :: 'none', 'flip_auto', 'flip_x', 'flip_y', 'flip_xy', 'generate']))
+        &choices=ui_choices([character(len=9) :: 'none', 'flip_auto', 'flip_x', 'flip_y', 'flip_xy', 'generate']), &
+        &visibility=UI_VIS_DEVELOPER)
         ! parameter input/output
-        call master%add_input(UI_PARM, 'cs',             'float',  'Spherical aberration (mm)',   'Spherical aberration (mm)',   '2.7',                    .true.,  '')
-        call master%add_input(UI_PARM, 'fraca',          'float',  'Amplitude contrast fraction', 'Amplitude contrast fraction', '0.1',                    .true.,  '')
-        call master%add_input(UI_PARM, 'kv',             'int',    'Acceleration voltage (kV)',   'Acceleration voltage (kV)',   '300',                    .true.,  '')
-        call master%add_input(UI_PARM, 'smpd',           'float',  'Pixel size (A)',              'Pixel size (A)',              '',                       .true.,  '')
+        call master%add_input(UI_PARM, 'cs',             'float',  'Spherical aberration (mm)',   'Spherical aberration (mm)',   '2.7',                    .true.,  '', &
+        &visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_PARM, 'fraca',          'float',  'Amplitude contrast fraction', 'Amplitude contrast fraction', '0.1',                    .true.,  '', &
+        &visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_PARM, 'kv',             'int',    'Acceleration voltage (kV)',   'Acceleration voltage (kV)',   '300',                    .true.,  '', &
+        &visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_PARM, 'smpd',           'float',  'Pixel size (A)',              'Pixel size (A)',              '',                       .true.,  '', &
+        &visibility=UI_VIS_STANDARD)
         call master%add_input(UI_PARM, 'fit_phshift',    'binary', 'Fit CTF phase shift', &
         &'Fit the additive phase shift during CTF estimation (yes|no){no}', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call master%add_input(UI_PARM, 'phshift_min',    'float',  'Minimum CTF phase shift',     'Minimum fitted additive phase shift in degrees, 0-360; a window narrower than 180 degrees fixes the sign of the fitted CTF', '0',   .false., '')
-        call master%add_input(UI_PARM, 'phshift_max',    'float',  'Maximum CTF phase shift',     'Maximum fitted additive phase shift in degrees, 0-360; fitting is blind to a 180-degree offset, so narrow the window around the expected phase', '180', .false., '')
-        call master%add_input(UI_PARM, 'phshift_step',   'float',  'CTF phase-shift step',        'Initial phase-shift grid step in degrees', '10',  .false., '')
-        call master%add_input(UI_PARM, 'smpd_downscale', 'hidden_float', 'Downscaled pixel size (A)',   'Downscaled pixel size (A)',   real2str(SMPD4DOWNSCALE), .false., '')
-        call master%add_input(UI_PARM, 'total_dose',     'float',  'Total exposure dose (e/A2)',  'Total exposure dose (e/A2)',  '',                       .true.,  '')
-        call master%add_input(UI_IMG, 'pickrefs', 'file',   '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)',    '', .false., '')
-        call master%add_input(UI_PARM, 'box_extract',    'int',    'Force box size (px, optional)',                        'force a box size (px) eg. to match an existing dataset"', '', .false., '')
-        call master%add_input(UI_FILE, 'dir_preprocess', 'hidden_dir',    'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '',                                    .false., '')
-        call master%add_input(UI_PARM, 'nicedispid',     'hidden_int',    'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '')
-        call master%add_input(UI_PARM, 'thres',          'hidden_float',  'Distance threshold for peak picking(A)', 'Distance threshold for peak picking(A)', '0', .false., '')
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'phshift_min',    'float',  'Minimum CTF phase shift',     'Minimum fitted additive phase shift in degrees, 0-360; a window narrower than 180 degrees fixes the sign of the fitted CTF', '0',   .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'phshift_max',    'float',  'Maximum CTF phase shift',     'Maximum fitted additive phase shift in degrees, 0-360; fitting is blind to a 180-degree offset, so narrow the window around the expected phase', '180', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'phshift_step',   'float',  'CTF phase-shift step',        'Initial phase-shift grid step in degrees', '10',  .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'smpd_downscale', 'hidden_float', 'Downscaled pixel size (A)',   'Downscaled pixel size (A)',   real2str(SMPD4DOWNSCALE), .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'total_dose',     'float',  'Total exposure dose (e/A2)',  'Total exposure dose (e/A2)',  '',                       .true.,  '', visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_IMG, 'pickrefs', 'file',   '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)',    '', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'box_extract',    'int',    'Force box size (px, optional)',                        'force a box size (px) eg. to match an existing dataset"', '', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_FILE, 'dir_preprocess', 'hidden_dir',    'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '',                                    .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'nicedispid',     'hidden_int',    'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'thres',          'hidden_float',  'Distance threshold for peak picking(A)', 'Distance threshold for peak picking(A)', '0', .false., '', visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! search controls
         ! filter controls
@@ -194,32 +210,44 @@ contains
         ! image input/output
         call pick_extract%add_input(UI_IMG, pickrefs, group="picking", visibility=UI_VIS_STANDARD)
         call pick_extract%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
-        &'Directory where a previous pick_extract application was run', 'e.g. 2_pick_extract', .false., '', group="data")
+        &'Directory where a previous pick_extract application was run', 'e.g. 2_pick_extract', .false., '', group="data", &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call pick_extract%add_input(UI_PARM, pcontrast,   group="picking")
-        call pick_extract%add_input(UI_PARM, box_extract, group="extract")
-        call pick_extract%add_input(UI_PARM, moldiam,     group="picking")
+        call pick_extract%add_input(UI_PARM, pcontrast,   group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick_extract%add_input(UI_PARM, box_extract, group="extract", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick_extract%add_input(UI_PARM, moldiam,     group="picking", &
+        &visibility=UI_VIS_ADVANCED)
         call pick_extract%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
-        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', group="data")
+        &'Directory where the preprocess_stream application is running', 'e.g. 1_preproc', .true., '', group="data", &
+        &visibility=UI_VIS_STANDARD)
         call pick_extract%add_input(UI_PARM, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested',&
-        &'e.g. 5', .false., 5., group="picking")
-        call pick_extract%add_input(UI_PARM, moldiam_max, group="picking")
+        &'e.g. 5', .false., 5., group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick_extract%add_input(UI_PARM, moldiam_max, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         call pick_extract%add_input(UI_SRCH, pgrp, required_override=.false., group="picking", visibility=UI_VIS_STANDARD)
         ! filter controls
-        call pick_extract%add_input(UI_FILT, lp_pick,          group="picking")
-        call pick_extract%add_input(UI_FILT, ctfresthreshold,  group="data")
-        call pick_extract%add_input(UI_FILT, icefracthreshold, group="data")
-        call pick_extract%add_input(UI_FILT, astigthreshold,   group="data")
+        call pick_extract%add_input(UI_FILT, lp_pick,          group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick_extract%add_input(UI_FILT, ctfresthreshold,  group="data", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick_extract%add_input(UI_FILT, icefracthreshold, group="data", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick_extract%add_input(UI_FILT, astigthreshold,   group="data", &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
         call pick_extract%add_input(UI_COMP, nthr,   group="compute", visibility=UI_VIS_STANDARD)
         call pick_extract%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
         call pick_extract%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
-        &'in seconds(29mins){1740}', .false., 1740., group="compute")
+        &'in seconds(29mins){1740}', .false., 1740., group="compute", &
+        &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
         call add_ui_program('pick_extract', pick_extract, prgtab, UI_CATEGORY)
     end subroutine new_pick_extract
@@ -239,36 +267,48 @@ contains
         call preproc%add_input(UI_FILE, dir_movies, group="data", visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_FILE, gainref,    group="data", visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_FILE, 'dir_prev', 'file', 'Previous run directory',&
-            &'Directory where a previous stream application was run', 'e.g. 2_preproc', .false., '', group="data")
+            &'Directory where a previous stream application was run', 'e.g. 2_preproc', .false., '', group="data", &
+        &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_FILE, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
             &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '', group="data", visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call preproc%add_input(UI_PARM, total_dose,                      group="data",              visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, fraction_dose_target,            group="data",              visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, smpd_downscale,                  group="motion correction", visibility=UI_VIS_STANDARD)
-        call preproc%add_input(UI_PARM, eer_fraction,                    group="motion correction")
-        call preproc%add_input(UI_PARM, max_dose,                        group="motion correction")
+        call preproc%add_input(UI_PARM, eer_fraction,                    group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_PARM, max_dose,                        group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, kv,    required_override=.true., group="data",              visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, cs,    required_override=.true., group="data",              visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, fraca, required_override=.true., group="data",              visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, smpd,  required_override=.true., group="data",              visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, fit_phshift, group="CTF estimation", visibility=UI_VIS_STANDARD)
-        call preproc%add_input(UI_PARM, flipgain, group="motion correction")
+        call preproc%add_input(UI_PARM, flipgain, group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, 'ninipick', 'num', 'Number of micrographs to perform initial picking preprocessing on',&
-        & 'Number of micrographs to perform initial picking preprocessing on', 'e.g 500', .false., 0.0)
+        & 'Number of micrographs to perform initial picking preprocessing on', 'e.g 500', .false., 0.0, &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call preproc%add_input(UI_SRCH, dfmin, group="CTF estimation")
-        call preproc%add_input(UI_SRCH, dfmax, group="CTF estimation")
-        call preproc%add_input(UI_SRCH, phshift_min, group="CTF estimation")
-        call preproc%add_input(UI_SRCH, phshift_max, group="CTF estimation")
-        call preproc%add_input(UI_SRCH, phshift_step, group="CTF estimation")
+        call preproc%add_input(UI_SRCH, dfmin, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_SRCH, dfmax, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_SRCH, phshift_min, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_SRCH, phshift_max, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_SRCH, phshift_step, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_SRCH, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
-        & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05, group="optics groups")
+        & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05, group="optics groups", &
+        &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_SRCH, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
         & 'Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}','', .false., 'no', group="optics groups", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
         ! filter controls
         ! <empty>
         ! mask controls
@@ -277,7 +317,8 @@ contains
         call preproc%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_COMP, nthr,   group="compute", visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
-        &'in seconds(29mins){1740}', .false., 1740., group="compute")
+        &'in seconds(29mins){1740}', .false., 1740., group="compute", &
+        &visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
         call add_ui_program('preproc', preproc, prgtab, UI_CATEGORY)
     end subroutine new_preproc
@@ -299,7 +340,8 @@ contains
         call sieve_cavgs%add_input(UI_FILE, 'dir_target', 'file', 'Target directory',&
         &'Directory where the pick_extract application is running', 'e.g. 2_pick_extract', .true., '', group="data", visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
-        &'Directory where previous 2D analysis took place', 'e.g. 3_sieve_cavgs', .false., '', group="data")
+        &'Directory where previous 2D analysis took place', 'e.g. 3_sieve_cavgs', .false., '', group="data", &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -316,7 +358,8 @@ contains
         call sieve_cavgs%add_input(UI_COMP, nparts, required_override=.true., group="compute", visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
-        &'in seconds(29mins){1740}', .false., 1740., group="compute")
+        &'in seconds(29mins){1740}', .false., 1740., group="compute", &
+        &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
         call add_ui_program('sieve_cavgs', sieve_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_sieve_cavgs

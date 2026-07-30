@@ -40,12 +40,12 @@ contains
         logical,                intent(in)    :: required
         real,                   intent(in)    :: default_value
         type(ui_choice), optional, intent(in)  :: choices(:)
-        self%key               = trim(key)
-        self%keytype           = trim(keytype)
+        self%key         = trim(key)
+        self%keytype     = trim(keytype)
         self%label       = trim(label)
         self%help        = trim(help)
         self%placeholder = trim(placeholder)
-        self%required = required
+        self%required    = required
         self%has_default = .not. self%required
         if( self%has_default ) self%rval_default = default_value
         call self%set_choices(choices)
@@ -57,12 +57,12 @@ contains
         logical,                intent(in)    :: required
         character(len=*),       intent(in)    :: default_value
         type(ui_choice), optional, intent(in)  :: choices(:)
-        self%key               = trim(key)
-        self%keytype           = trim(keytype)
+        self%key         = trim(key)
+        self%keytype     = trim(keytype)
         self%label       = trim(label)
         self%help        = trim(help)
         self%placeholder = trim(placeholder)
-        self%required = required
+        self%required    = required
         self%has_default = .not. self%required
         if( self%has_default ) self%cval_default = trim(default_value)
         call self%set_choices(choices)

@@ -49,36 +49,49 @@ contains
         ! <empty>
         ! parameter input/output
         call track_particles%add_input(UI_PARM, 'fbody', 'string', 'Template output tracked series',&
-        &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
+        &'Template output tracked series', 'e.g. tracked_ptcl', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         call track_particles%add_input(UI_FILE, 'boxfile', 'file', 'List of particle coordinates',&
-        &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
-        call track_particles%add_input(UI_PARM, neg)
+        &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call track_particles%add_input(UI_PARM, neg, &
+        &visibility=UI_VIS_ADVANCED)
         call track_particles%add_input(UI_PARM, 'tester', 'multi', 'Write periodic tester-mode outputs',&
         &'Periodically write masked reference images and registered particle chunks for debugging(no|yes){no}','', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'no', 'yes']))
-        call track_particles%add_input(UI_PARM, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0.)
+        &choices=ui_choices([character(len=3) :: 'no', 'yes']), &
+        &visibility=UI_VIS_ADVANCED)
+        call track_particles%add_input(UI_PARM, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         call track_particles%add_input(UI_SRCH, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
-        'pixels window halfwidth{20}', .false., 20.)
-        call track_particles%add_input(UI_SRCH, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{50}', '{50}', .false., 50.)
+        'pixels window halfwidth{20}', .false., 20., &
+        &visibility=UI_VIS_ADVANCED)
+        call track_particles%add_input(UI_SRCH, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{50}', '{50}', .false., 50., &
+        &visibility=UI_VIS_ADVANCED)
         ! <empty>
         ! filter controls
-        call track_particles%add_input(UI_FILT, lp_track)
+        call track_particles%add_input(UI_FILT, lp_track, &
+        &visibility=UI_VIS_ADVANCED)
         call track_particles%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
+        &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
         call track_particles%add_input(UI_FILT, 'filter', 'multi','Alternative filter for particle tracking',&
             &'Alternative filter for particle tracking(no|tv|nlmean){nlmean}','', .false., 'nlmean', &
-        &choices=ui_choices([character(len=6) :: 'no', 'tv', 'nlmean']))
-        call track_particles%add_input(UI_FILT, hp)
+        &choices=ui_choices([character(len=6) :: 'no', 'tv', 'nlmean']), &
+        &visibility=UI_VIS_ADVANCED)
+        call track_particles%add_input(UI_FILT, hp, &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
         call track_particles%add_input(UI_COMP, 'ncunits', 'num', 'Concurrent particle trackers',&
         &'Maximum number of independent particle tracking jobs to run at once',&
-        &'# simultaneous trackers', .true., 1.)
-        call track_particles%add_input(UI_COMP, nthr)
+        &'# simultaneous trackers', .true., 1., &
+        &visibility=UI_VIS_STANDARD)
+        call track_particles%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('track_particles', track_particles, prgtab, UI_CATEGORY)
     end subroutine new_track_particles
@@ -94,12 +107,17 @@ contains
         &.true., visibility=UI_VIS_STANDARD)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_import%add_input(UI_FILE, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
+        call tseries_import%add_input(UI_FILE, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call tseries_import%add_input(UI_PARM, smpd)
-        call tseries_import%add_input(UI_PARM, kv, required_override=.true.)
-        call tseries_import%add_input(UI_PARM, 'cs', 'num', 'Spherical aberration', 'Spherical aberration constant(in mm){0.0}', 'in mm{0.0}', .true., 0.0)
-        call tseries_import%add_input(UI_PARM, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.4}', 'fraction{0.4}', .true., 0.4)
+        call tseries_import%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call tseries_import%add_input(UI_PARM, kv, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call tseries_import%add_input(UI_PARM, 'cs', 'num', 'Spherical aberration', 'Spherical aberration constant(in mm){0.0}', 'in mm{0.0}', .true., 0.0, &
+        &visibility=UI_VIS_STANDARD)
+        call tseries_import%add_input(UI_PARM, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.4}', 'fraction{0.4}', .true., 0.4, &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -128,27 +146,39 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_make_pickavg%add_input(UI_PARM, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{100}', '{100}', .false., 100.)
-        call tseries_make_pickavg%add_input(UI_PARM, 'fromf',      'num', 'Frame to start averaging from', 'Frame to start averaging from', 'frame index', .false., 0.)
-        call tseries_make_pickavg%add_input(UI_PARM, 'period',     'num', 'Period for repeated averaging windows', 'If > 0, run align+denoise for a nframesgrp-sized window every period frames{0}', 'period in frames{0}', .false., 0.)
+        call tseries_make_pickavg%add_input(UI_PARM, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{100}', '{100}', .false., 100., &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_make_pickavg%add_input(UI_PARM, 'fromf',      'num', 'Frame to start averaging from', 'Frame to start averaging from', 'frame index', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_make_pickavg%add_input(UI_PARM, 'period',     'num', 'Period for repeated averaging windows', 'If > 0, run align+denoise for a nframesgrp-sized window every period frames{0}', 'period in frames{0}', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call tseries_make_pickavg%add_input(UI_SRCH, trs_mc)
-        call tseries_make_pickavg%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{5}', .false., 5.)
-        call tseries_make_pickavg%add_input(UI_SRCH, mcpatch)
-        call tseries_make_pickavg%add_input(UI_SRCH, nxpatch)
-        call tseries_make_pickavg%add_input(UI_SRCH, nypatch)
+        call tseries_make_pickavg%add_input(UI_SRCH, trs_mc, &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_make_pickavg%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_make_pickavg%add_input(UI_SRCH, mcpatch, &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_make_pickavg%add_input(UI_SRCH, nxpatch, &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_make_pickavg%add_input(UI_SRCH, nypatch, &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call tseries_make_pickavg%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
         call tseries_make_pickavg%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms){3}', 'in Angstroms{3}', .false., 3.)
-        call tseries_make_pickavg%add_input(UI_FILT, wcrit)
+        &iterations of movie alignment (in Angstroms){3}', 'in Angstroms{3}', .false., 3., &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_make_pickavg%add_input(UI_FILT, wcrit, &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_make_pickavg%add_input(UI_COMP, nthr)
+        call tseries_make_pickavg%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('tseries_make_pickavg', tseries_make_pickavg, prgtab, UI_CATEGORY)
     end subroutine new_tseries_make_pickavg
@@ -167,27 +197,40 @@ contains
         ! <empty>
         ! parameter input/output
         call tseries_motion_correct%add_input(UI_FILE, 'boxfile', 'file', 'List of particle coordinates',&
-        &'.txt file with EMAN-convention particle coordinates', 'e.g. coords.box', .false., '')        ! <no additional inputs>
+        &'.txt file with EMAN-convention particle coordinates', 'e.g. coords.box', .false., '', &
+        &visibility=UI_VIS_ADVANCED)        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call tseries_motion_correct%add_input(UI_SRCH, trs_mc)
-        call tseries_motion_correct%add_input(UI_SRCH, 'nframesgrp', 'num', '# frames in time moving time window', '# frames in time moving time window subjected to correction', '{5}', .false., 5.)
-        call tseries_motion_correct%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{5}', .false., 5.)
-        call tseries_motion_correct%add_input(UI_SRCH, mcpatch)
-        call tseries_motion_correct%add_input(UI_SRCH, nxpatch)
-        call tseries_motion_correct%add_input(UI_SRCH, nypatch)
-        call tseries_motion_correct%add_input(UI_SRCH, algorithm)
+        call tseries_motion_correct%add_input(UI_SRCH, trs_mc, &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_motion_correct%add_input(UI_SRCH, 'nframesgrp', 'num', '# frames in time moving time window', '# frames in time moving time window subjected to correction', '{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_motion_correct%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_motion_correct%add_input(UI_SRCH, mcpatch, &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_motion_correct%add_input(UI_SRCH, nxpatch, &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_motion_correct%add_input(UI_SRCH, nypatch, &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_motion_correct%add_input(UI_SRCH, algorithm, &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call tseries_motion_correct%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
         call tseries_motion_correct%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms){3}', 'in Angstroms{3}', .false., 3.)
-        call tseries_motion_correct%add_input(UI_FILT, wcrit)
+        &iterations of movie alignment (in Angstroms){3}', 'in Angstroms{3}', .false., 3., &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_motion_correct%add_input(UI_FILT, wcrit, &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_motion_correct%add_input(UI_COMP, nparts)
-        call tseries_motion_correct%add_input(UI_COMP, nthr)
+        call tseries_motion_correct%add_input(UI_COMP, nparts, &
+        &visibility=UI_VIS_STANDARD)
+        call tseries_motion_correct%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('tseries_motion_correct', tseries_motion_correct, prgtab, UI_CATEGORY)
     end subroutine new_tseries_motion_correct
@@ -200,7 +243,7 @@ contains
         &'Prepare time-series for particle tracking',&                                    ! summary
         &'is a program for preparing time-series for preparing particle tracking',&       ! help
         &'single_exec',&                                                                  ! executable
-        &.true., visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -215,7 +258,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_prep4tracking%add_input(UI_COMP, nthr)
+        call tseries_prep4tracking%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('tseries_prep4tracking', tseries_prep4tracking, prgtab, UI_CATEGORY)
     end subroutine new_tseries_prep4tracking
@@ -228,14 +272,16 @@ contains
         &'Extract particle trajectories from time-series',&                              ! summary
         &'is a program for extracting particle trajectories from time-series (movies) of nanoparticles.',& ! help
         &'single_exec',&                                                                  ! executable
-        &.true., visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call tseries_extractor%add_input(UI_FILE, 'infile', 'file', 'Selected particle trajectory', 'Text file (.txt) containing particle coordinates per frame',&
-        &'give .txt trajectory file', .true., '')
-        call tseries_extractor%add_input(UI_PARM, box_extract, required_override=.true.)
+        &'give .txt trajectory file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call tseries_extractor%add_input(UI_PARM, box_extract, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -245,7 +291,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_extractor%add_input(UI_COMP, nthr)
+        call tseries_extractor%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('tseries_extractor', tseries_extractor, prgtab, UI_CATEGORY)
     end subroutine new_tseries_extractor

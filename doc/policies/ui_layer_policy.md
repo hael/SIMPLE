@@ -272,8 +272,8 @@ category descriptor changes CLI listings and JSON together.
 
 ## Visibility
 
-Every program and every input must have exactly one of these visibility
-levels:
+Every program descriptor and every program-specific input binding must have
+exactly one of these visibility levels:
 
 - **Standard**: needed for the usual workflow and suitable for most users.
 - **Advanced**: useful for experienced users or less common workflows.
@@ -284,11 +284,17 @@ Fortran stores these as the constants `UI_VIS_STANDARD`,
 `UI_VIS_ADVANCED`, and `UI_VIS_DEVELOPER`. JSON stores the corresponding
 lowercase names.
 
-Visibility is a shared descriptor field, not a GUI add-on. Program constructors
-and program-input bindings use the client-neutral `visibility` argument. Until
-every descriptor is reviewed, an input or program without an explicit value
-defaults to Developer. This preserves the conservative migration: unreviewed
-controls are not exposed as ordinary Standard or Advanced controls.
+Visibility is shared descriptor data, not a GUI add-on. `ui_program` owns the
+program visibility and each `ui_program_input` owns the visibility of that
+parameter in that program. A reusable `ui_param`, input section, and input
+group do not own visibility; clients derive section and group presentation
+from the programs and parameter bindings they contain.
+
+Program constructors and program-input bindings use the client-neutral
+`visibility` argument. Required inputs are always Standard. Optional inputs
+start as Advanced but may explicitly select Standard, Advanced, or Developer
+according to their program context. Programs without an explicit value
+continue to default to Developer.
 
 Visibility changes presentation only. They must never change whether a CLI
 key is accepted or how a program executes.
@@ -427,12 +433,27 @@ second Boolean visibility flag.
 - Validate duplicate keys, visibility values, categories, choices, and JSON
   before merging descriptor changes.
 
-## Planned changes
+## Refactor status and remaining work
 
-1. **Consolidate JSON serialization.** Make `print_ui_json`,
-   `write_ui_json`, and `ui_program%write2json` call one descriptor-to-JSON
-   implementation, preserving the current JSON contract.
-2. **Complete generated-default coverage and auditing.** Extend the static
+### Completed in this refactor
+
+- **Consolidated JSON serialization.** `print_ui_json`, `write_ui_json`, and
+  `ui_program%write2json` use the shared descriptor-to-JSON implementation.
+- **Explicit descriptor visibility.** Programs and their individual input
+  bindings carry their own visibility. Required bindings are enforced as
+  Standard, while optional bindings have an explicit contextual assignment.
+- **Complete UI JSON build validation.** CMake runs
+  `simple_private_exec prg=print_ui_json` and validates the generated complete
+  registry before the validation target is considered built. The validator
+  parses JSON once with the Python standard library, checks duplicate JSON
+  object members and descriptor references, and is intentionally fast enough
+  for the ordinary build path. It validates all program descriptors, seven
+  input sections, bindings, visibility values, groups, activation references,
+  and requirement references.
+
+### Remaining work
+
+1. **Complete generated-default coverage and auditing.** Extend the static
    route analysis to the remaining stream-backed and helper-mediated routes.
    The current UI safely retains a program's validated choice default whenever
    a global baseline lies outside its choice set; replace that fallback with an
@@ -440,31 +461,34 @@ second Boolean visibility flag.
    knowable. Add a review report for unmatched routes, ambiguous routes, and
    UI defaults that differ from their generated source value. Keep commander
    and parameter code out of this work.
-3. **Extend requirement groups after audit.** The current groups cover
+2. **Extend requirement groups after audit.** The current groups cover
    unconditional key-presence cardinality and have replaced `alt_ios`. Add
    richer alternatives only when execution logic establishes a shared rule:
    for example, nested all-of/one-of conditions or value-dependent
    requirements. Do not restore the removed singleton `gui_exclusive_group`,
    and do not add an execution-context field unless a later audit finds an
    actual shared rule.
-4. **Use activation predicates for CLI applicability validation.** The current
+3. **Use activation predicates for CLI applicability validation.** The current
    binding and JSON carry `equals_any` activation data. Add validation only
    after defining how a supplied but inactive key should be reported, then
    extend the predicate form deliberately with explicit all/any/not
    composition rather than reintroducing expression strings.
-5. **Review visibility by owning module.** Give every program and input a
-   deliberate Standard, Advanced, or Developer value. Do not mechanically
-   promote the current conservative Developer defaults.
-6. **Remove obsolete listing routines.** The public listings already use
+4. **Review parameter visibility by program context.**
+   `ui_parameter_visibility_review.md` is the review inventory: each row is a
+   parameter-instance binding in its program context. Required inputs must
+   remain Standard; review every optional row and apply the approved values
+   back to the corresponding `add_input` call.
+5. **Remove obsolete listing routines.** The public listings already use
    registered category descriptors. Remove the now-unused module-local list
    printers after confirming no non-public caller remains.
-7. **Review titles and descriptions by category.** Replace the temporary
+6. **Review titles and descriptions by category.** Replace the temporary
    `display_name`-from-`summary` fallback with explicit concise titles, then
    review summaries, labels, help, units, and placeholders against this
    policy. A temporary exported Markdown sheet may help a domain review, but
    it is review evidence only: accepted text must be applied back to Fortran
    and the sheet must never become a source of metadata or build input.
-8. **Extend descriptor validation.** Validate bindings, groups, activation
-   rules, requirement-group member keys and cardinalities, choice integrity,
-   user-facing text limits, compact CLI output, and JSON equivalence to the
-   completed Fortran descriptors.
+7. **Broaden descriptor validation only with a defined shared contract.** The
+   current build validation covers generated JSON structure and cross-reference
+   integrity. Add new checks for semantic applicability, CLI presentation, or
+   execution behaviour only after their common rule is defined in this policy;
+   do not encode GUI-only assumptions in the validator.

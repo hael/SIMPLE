@@ -40,16 +40,20 @@ contains
         &'Print header metadata for an MRC or SPIDER image file',& ! summary
         &'is a program for printing header information in MRC and SPIDER stacks and volumes',& ! help
         &'simple_exec',&                                                                       ! executable
-        &.false.)                                                                              ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_STANDARD)                                                                              ! requires sp_project
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call info_image%add_input(UI_FILE, 'fname', 'file', 'Name of image file', 'Name of image file', 'xxx.mrc file', .true., '')
+        call info_image%add_input(UI_FILE, 'fname', 'file', 'Name of image file', 'Name of image file', 'xxx.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call info_image%add_input(UI_PARM, 'stats', 'binary', 'Output statistics', 'Output statistics(yes|no){no}','', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call info_image%add_input(UI_PARM, 'vis',   'binary', 'Visualize image',   'Visualize image with gnuplot(yes|no){yes}','', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -72,12 +76,14 @@ contains
         &'Print the contents of a stack-table file',& ! summary
         &'is a program for printing information about stktab (list of stacks)',& ! help
         &'simple_exec',&                                                         ! executable
-        &.false.)                                                                ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_STANDARD)                                                                ! requires sp_project
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         stktab%required = .true.
-        call info_stktab%add_input(UI_FILE, stktab)
+        call info_stktab%add_input(UI_FILE, stktab, &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
         ! <empty>
         ! <no additional inputs>
@@ -102,16 +108,22 @@ contains
         &'Print dose weights used in motion correction',&                         ! summary
         &'is a program for printing the dose weights used in motion correction',& ! help
         &'simple_exec',&                                                          ! executable
-        &.false.)                                                                 ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call print_dose_weights%add_input(UI_PARM, smpd)
-        call print_dose_weights%add_input(UI_PARM, box)
-        call print_dose_weights%add_input(UI_PARM, 'nframes',   'num', 'Number of frames', 'Number of movie frames', '# frames', .true., 0.)
-        call print_dose_weights%add_input(UI_PARM, kv)
-        call print_dose_weights%add_input(UI_PARM, total_dose, required_override=.true.)
+        call print_dose_weights%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call print_dose_weights%add_input(UI_PARM, box, &
+        &visibility=UI_VIS_STANDARD)
+        call print_dose_weights%add_input(UI_PARM, 'nframes',   'num', 'Number of frames', 'Number of movie frames', '# frames', .true., 0., &
+        &visibility=UI_VIS_STANDARD)
+        call print_dose_weights%add_input(UI_PARM, kv, &
+        &visibility=UI_VIS_ADVANCED)
+        call print_dose_weights%add_input(UI_PARM, total_dose, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -134,16 +146,21 @@ contains
         &'Print FSC file produced by REFINE3D',&                                 ! summary
         &'is a program for printing the binary FSC files produced by REFINE3D',& ! help
         &'simple_exec',&                                                         ! executable
-        &.false.)                                                                ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call print_fsc%add_input(UI_PARM, smpd, required_override=.false.)
-        call print_fsc%add_input(UI_PARM, box,  required_override=.false.)
+        call print_fsc%add_input(UI_PARM, smpd, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call print_fsc%add_input(UI_PARM, box,  required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         call print_fsc%add_input(UI_FILE, 'fsc', 'file', 'FSC file', 'Binary file with FSC info',&
-        'input binary file e.g. fsc_state01.bin', .false., 'fsc_state01.bin')
-        call print_fsc%add_input(UI_PARM, frcs)
+        'input binary file e.g. fsc_state01.bin', .false., 'fsc_state01.bin', &
+        &visibility=UI_VIS_ADVANCED)
+        call print_fsc%add_input(UI_PARM, frcs, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -171,9 +188,12 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call print_magic_boxes%add_input(UI_PARM, smpd)
-        call print_magic_boxes%add_input(UI_PARM, box)
-        call print_magic_boxes%add_input(UI_PARM, moldiam)
+        call print_magic_boxes%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call print_magic_boxes%add_input(UI_PARM, box, &
+        &visibility=UI_VIS_STANDARD)
+        call print_magic_boxes%add_input(UI_PARM, moldiam, &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls

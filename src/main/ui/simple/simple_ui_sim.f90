@@ -43,9 +43,11 @@ contains
         &.false., visibility=UI_VIS_STANDARD)                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cif2mrc%add_input(UI_FILE, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif')
+        call cif2mrc%add_input(UI_FILE, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call cif2mrc%add_input(UI_PARM, smpd,    required_override=.false.)
+        call cif2mrc%add_input(UI_PARM, smpd,    required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -68,13 +70,19 @@ contains
         &.false., visibility=UI_VIS_STANDARD)                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pdb2mrc%add_input(UI_FILE, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
+        call pdb2mrc%add_input(UI_FILE, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call pdb2mrc%add_input(UI_PARM, smpd,    required_override=.false.)
-        call pdb2mrc%add_input(UI_PARM, vol_dim, required_override=.false.)
-        call pdb2mrc%add_input(UI_IMG, outvol)
-        call pdb2mrc%add_input(UI_FILE, pdbout)
-        call pdb2mrc%add_input(UI_PARM, center_pdb)
+        call pdb2mrc%add_input(UI_PARM, smpd,    required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call pdb2mrc%add_input(UI_PARM, vol_dim, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call pdb2mrc%add_input(UI_IMG, outvol, &
+        &visibility=UI_VIS_ADVANCED)
+        call pdb2mrc%add_input(UI_FILE, pdbout, &
+        &visibility=UI_VIS_ADVANCED)
+        call pdb2mrc%add_input(UI_PARM, center_pdb, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -95,31 +103,45 @@ contains
         &'is a program for crude simulation of a DDD movie. Input is a set of projection images to place. &
         &Movie frames are then generated related by randomly shifting the base image and applying noise',& ! help
         &'simple_exec',&                                    ! executable
-        &.false.)                                           ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call simulate_movie%add_input(UI_IMG, stk)
+        call simulate_movie%add_input(UI_IMG, stk, &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call simulate_movie%add_input(UI_PARM, smpd)
-        call simulate_movie%add_input(UI_PARM, 'snr', 'num', 'SNR', 'Signal-to-noise ratio of movie frame', 'signal-to-noise ratio(0.)', .false., 0.)
-        call simulate_movie%add_input(UI_PARM, kv)
-        call simulate_movie%add_input(UI_PARM, cs)
-        call simulate_movie%add_input(UI_PARM, fraca)
-        call simulate_movie%add_input(UI_PARM, 'defocus',  'num', 'Underfocus', 'Underfocus(in microns)', 'in microns', .false., 2.)
-        call simulate_movie%add_input(UI_PARM, trs)
-        call simulate_movie%add_input(UI_PARM, 'nframes',  'num', 'Number of frames', 'Number of movie frames', '# frames', .false., 0.)
-        call simulate_movie%add_input(UI_PARM, 'xdim',  'num', 'x-dimension', 'Number of pixels in x-direction', '# pixels in x', .false., 0.)
-        call simulate_movie%add_input(UI_PARM, 'ydim',  'num', 'y-dimension', 'Number of pixels in y-direction', '# pixels in y', .false., 0.)
+        call simulate_movie%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call simulate_movie%add_input(UI_PARM, 'snr', 'num', 'SNR', 'Signal-to-noise ratio of movie frame', 'signal-to-noise ratio(0.)', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_movie%add_input(UI_PARM, kv, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_movie%add_input(UI_PARM, cs, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_movie%add_input(UI_PARM, fraca, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_movie%add_input(UI_PARM, 'defocus',  'num', 'Underfocus', 'Underfocus(in microns)', 'in microns', .false., 2., &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_movie%add_input(UI_PARM, trs, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_movie%add_input(UI_PARM, 'nframes',  'num', 'Number of frames', 'Number of movie frames', '# frames', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_movie%add_input(UI_PARM, 'xdim',  'num', 'x-dimension', 'Number of pixels in x-direction', '# pixels in x', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_movie%add_input(UI_PARM, 'ydim',  'num', 'y-dimension', 'Number of pixels in y-direction', '# pixels in y', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call simulate_movie%add_input(UI_FILT, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', 'B-factor in Angstroms^2(>0.0){0}', .false., 0.)
+        call simulate_movie%add_input(UI_FILT, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', 'B-factor in Angstroms^2(>0.0){0}', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call simulate_movie%add_input(UI_COMP, nthr)
+        call simulate_movie%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('simulate_movie', simulate_movie, prgtab, UI_CATEGORY)
     end subroutine new_simulate_movie
@@ -132,13 +154,16 @@ contains
         &'Generate white-noise images or volumes',& ! summary
         &'is a program for generating pure noise images',& ! help
         &'simple_exec',&                                   ! executable
-        &.false.)                                          ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call simulate_noise%add_input(UI_PARM, box)
-        call simulate_noise%add_input(UI_PARM, nptcls)
+        call simulate_noise%add_input(UI_PARM, box, &
+        &visibility=UI_VIS_STANDARD)
+        call simulate_noise%add_input(UI_PARM, nptcls, &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -167,40 +192,64 @@ contains
         & then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed&
         & before the remaining 80% of the noise (white noise) is added',& ! help
         &'simple_exec',&                                                  ! executable
-        &.false.)                                                         ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call simulate_particles%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .true., '')
+        call simulate_particles%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call simulate_particles%add_input(UI_PARM, smpd)
-        call simulate_particles%add_input(UI_PARM, nptcls)
-        call simulate_particles%add_input(UI_PARM, 'snr', 'num', 'SNR', 'Signal-to-noise ratio of particle images', 'signal-to-noise ratio(0.)', .true., 0.)
-        call simulate_particles%add_input(UI_FILE, oritab)
-        call simulate_particles%add_input(UI_FILE, outfile)
-        call simulate_particles%add_input(UI_IMG, outstk)
+        call simulate_particles%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call simulate_particles%add_input(UI_PARM, nptcls, &
+        &visibility=UI_VIS_STANDARD)
+        call simulate_particles%add_input(UI_PARM, 'snr', 'num', 'SNR', 'Signal-to-noise ratio of particle images', 'signal-to-noise ratio(0.)', .true., 0., &
+        &visibility=UI_VIS_STANDARD)
+        call simulate_particles%add_input(UI_FILE, oritab, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_FILE, outfile, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_IMG, outstk, &
+        &visibility=UI_VIS_ADVANCED)
         call simulate_particles%add_input(UI_PARM, 'even', 'binary', 'Generate even projections', 'Generate quasi-even projection directions(yes|no){no}','', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call simulate_particles%add_input(UI_PARM, sherr)
-        call simulate_particles%add_input(UI_PARM, kv)
-        call simulate_particles%add_input(UI_PARM, cs)
-        call simulate_particles%add_input(UI_PARM, fraca)
-        call simulate_particles%add_input(UI_FILE, deftab)
-        call simulate_particles%add_input(UI_PARM, 'defocus',  'num', 'Underfocus', 'Underfocus(in microns)', 'in microns', .false., 2.)
-        call simulate_particles%add_input(UI_PARM, dferr)
-        call simulate_particles%add_input(UI_PARM, 'astigerr', 'num', 'Astigmatism error', 'Uniform astigmatism error(in microns)', 'error in microns', .false., 0.)
-        call simulate_particles%add_input(UI_PARM, ctf)
-        call simulate_particles%add_input(UI_PARM, 'nframes', 'num', '# of particle frames', '# of lower SNR particle frames', '{1}', .false., 1.)
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, sherr, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, kv, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, cs, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, fraca, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_FILE, deftab, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, 'defocus',  'num', 'Underfocus', 'Underfocus(in microns)', 'in microns', .false., 2., &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, dferr, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, 'astigerr', 'num', 'Astigmatism error', 'Uniform astigmatism error(in microns)', 'error in microns', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_PARM, ctf, &
+        &visibility=UI_VIS_STANDARD)
+        call simulate_particles%add_input(UI_PARM, 'nframes', 'num', '# of particle frames', '# of lower SNR particle frames', '{1}', .false., 1., &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call simulate_particles%add_input(UI_SRCH, pgrp)
+        call simulate_particles%add_input(UI_SRCH, pgrp, &
+        &visibility=UI_VIS_STANDARD)
         ! filter controls
-        call simulate_particles%add_input(UI_FILT, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', 'B-factor in Angstroms^2(>0.0){0}', .false., 0.)
-        call simulate_particles%add_input(UI_FILT, 'bfacerr', 'num', 'B-factor error', 'Uniform B-factor error(in Angstroms^2)', 'error(in Angstroms^2)', .false., 50.)
+        call simulate_particles%add_input(UI_FILT, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', 'B-factor in Angstroms^2(>0.0){0}', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_particles%add_input(UI_FILT, 'bfacerr', 'num', 'B-factor error', 'Uniform B-factor error(in Angstroms^2)', 'error(in Angstroms^2)', .false., 50., &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call simulate_particles%add_input(UI_MASK, mskdiam)
+        call simulate_particles%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call simulate_particles%add_input(UI_COMP, nthr)
+        call simulate_particles%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('simulate_particles', simulate_particles, prgtab, UI_CATEGORY)
     end subroutine new_simulate_particles

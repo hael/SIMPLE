@@ -6,10 +6,8 @@ use simple_ansi_ctrls
 use simple_ui_params_common
 use simple_ui_hash,         only: ui_hash
 use simple_ui_program,      only: UI_DISPLAY_NAME_MAX_LEN, UI_SUMMARY_MIN_LEN, UI_SUMMARY_MAX_LEN, &
-    &category_descriptor, ui_program, ui_program_input, add_program_groups_json, add_program_requirements_json, &
-    &add_program_input_json
+    &category_descriptor, ui_program, ui_program_input
 use simple_ui_param,        only: UI_PLACEHOLDER_MAX_LEN, ui_placeholder_is_standard
-use simple_ui_visibility,   only: ui_visibility_name
 ! program table grouping helpers
 use simple_ui_simple_group, only: add_simple_programs
 use simple_ui_stream_group, only: add_stream_programs
@@ -224,9 +222,8 @@ contains
 
     subroutine print_ui_json
         use json_module
-        use simple_linked_list, only: linked_list, list_iterator
         type(json_core)           :: json
-        type(json_value), pointer :: all_programs
+        type(json_value), pointer :: all_programs, program_entry
         type(ui_program), pointer :: ptr2prg
         integer                   :: iprg
         ! JSON init
@@ -235,7 +232,8 @@ contains
         call json%create_object(all_programs, 'SIMPLE_UI')
         do iprg = 1, prgtab%count()
             call prgtab%get_ui_program(prgnames(iprg), ptr2prg)
-            call create_program_entry(json, ptr2prg, all_programs)
+            call ptr2prg%create_json_entry(json, program_entry, ptr2prg%name%to_char(), 'program')
+            call json%add(all_programs, program_entry)
         end do
         ! write & clean
         call json%print(all_programs, logfhandle)
@@ -243,81 +241,13 @@ contains
             THROW_HARD('json input/output error for simple_ui')
         endif
         call json%destroy(all_programs)
-
-    contains
-
-        subroutine create_program_entry(json, prg, all_programs)
-            type(json_core),           intent(inout) :: json
-            class(*),                  intent(in)    :: prg   ! we’ll select type below
-            type(json_value), pointer, intent(inout) :: all_programs
-            type(json_value), pointer :: program_entry, program
-            ! The actual program type is whatever ptr2prg points to.
-            ! We only need it to have the components you reference.
-            select type (p => prg)
-                class is (ui_program)
-                    call json%create_object(program_entry, p%name%to_char())
-                    call json%create_object(program, 'program')
-                    call json%add(program_entry, program)
-                    ! program section
-                    call json%add(program, 'name',        p%name%to_char())
-                    call json%add(program, 'category',    p%category%to_char())
-                    call json%add(program, 'category_display_name', p%category_display_name%to_char())
-                    call json%add(program, 'category_order', p%category_order)
-                    call json%add(program, 'display_name', p%display_name%to_char())
-                    call json%add(program, 'summary',     p%summary%to_char())
-                    call json%add(program, 'help',        p%help%to_char())
-                    call json%add(program, 'executable',  p%executable%to_char())
-                    call json%add(program, 'visibility',  trim(ui_visibility_name(p%visibility)))
-                    call add_program_groups_json(json, program, p%groups)
-                    call add_program_requirements_json(json, program, p%requirements)
-                    ! all sections (now linked_list)
-                    call create_section_list(json, program_entry, 'image input/output',     p%img_ios)
-                    call create_section_list(json, program_entry, 'file input/output',      p%file_ios)
-                    call create_section_list(json, program_entry, 'parameter input/output', p%parm_ios)
-                    call create_section_list(json, program_entry, 'search controls',        p%srch_ctrls)
-                    call create_section_list(json, program_entry, 'filter controls',        p%filt_ctrls)
-                    call create_section_list(json, program_entry, 'mask controls',          p%mask_ctrls)
-                    call create_section_list(json, program_entry, 'computer controls',      p%comp_ctrls)
-                    call json%add(all_programs, program_entry)
-                class default
-                    THROW_HARD('create_program_entry: unsupported prg dynamic type')
-            end select
-        end subroutine create_program_entry
-
-        subroutine create_section_list(json, program_entry, name, lst)
-            type(json_core),           intent(inout) :: json
-            type(json_value), pointer, intent(inout) :: program_entry
-            character(len=*),          intent(in)    :: name
-            type(linked_list),         intent(in)    :: lst
-            type(json_value), pointer :: entry, section
-            type(list_iterator)       :: it
-            class(*), allocatable     :: tmp
-            call json%create_array(section, trim(name))
-            it = lst%begin()
-            do while ( it%has_value() )
-                call it%getter(tmp)
-                select type (u => tmp)
-                type is (ui_program_input)
-                    call json%create_object(entry, u%param%key%to_char())
-                    call add_program_input_json(json, entry, u)
-                    call json%add(section, entry)
-                class default
-                    THROW_HARD('create_section_list: list item is not type(ui_program_input)')
-                end select
-                if (allocated(tmp)) deallocate(tmp)
-                call it%next()
-            end do
-            call json%add(program_entry, section)
-        end subroutine create_section_list
-
     end subroutine print_ui_json
 
     subroutine write_ui_json
         use json_module
-        use simple_linked_list, only: linked_list, list_iterator
         implicit none
         type(json_core)           :: json
-        type(json_value), pointer :: all_programs
+        type(json_value), pointer :: all_programs, program_entry
         type(ui_program), pointer :: ptr2prg
         integer :: iprg
         ! JSON init
@@ -326,7 +256,8 @@ contains
         call json%create_array(all_programs, 'SIMPLE User Interface')
         do iprg = 1, prgtab%count()
             call prgtab%get_ui_program(prgnames(iprg), ptr2prg)
-            call create_program_entry(json, ptr2prg, all_programs)
+            call ptr2prg%create_json_entry(json, program_entry, '', ptr2prg%name%to_char())
+            call json%add(all_programs, program_entry)
         end do
         ! write & clean
         call json%print(all_programs, UI_FNAME)
@@ -334,71 +265,6 @@ contains
             THROW_HARD('json input/output error for simple_ui')
         endif
         call json%destroy(all_programs)
-
-    contains
-
-        subroutine create_program_entry(json, prg, all_programs)
-            type(json_core),           intent(inout) :: json
-            class(*),                  intent(in)    :: prg   ! dynamic program object
-            type(json_value), pointer, intent(inout) :: all_programs
-            type(json_value), pointer :: program_entry, program
-            select type (p => prg)
-                class is (ui_program)
-                    call json%create_object(program_entry, '')
-                    call json%create_object(program, p%name%to_char())
-                    call json%add(program_entry, program)
-                    ! program section
-                    call json%add(program, 'name',        p%name%to_char())
-                    call json%add(program, 'category',    p%category%to_char())
-                    call json%add(program, 'category_display_name', p%category_display_name%to_char())
-                    call json%add(program, 'category_order', p%category_order)
-                    call json%add(program, 'display_name', p%display_name%to_char())
-                    call json%add(program, 'summary',     p%summary%to_char())
-                    call json%add(program, 'help',        p%help%to_char())
-                    call json%add(program, 'executable',  p%executable%to_char())
-                    call json%add(program, 'visibility',  trim(ui_visibility_name(p%visibility)))
-                    call add_program_groups_json(json, program, p%groups)
-                    call add_program_requirements_json(json, program, p%requirements)
-                    ! all sections (now linked_list)
-                    call create_section_list(json, program_entry, 'image input/output',     p%img_ios)
-                    call create_section_list(json, program_entry, 'file input/output',      p%file_ios)
-                    call create_section_list(json, program_entry, 'parameter input/output', p%parm_ios)
-                    call create_section_list(json, program_entry, 'search controls',        p%srch_ctrls)
-                    call create_section_list(json, program_entry, 'filter controls',        p%filt_ctrls)
-                    call create_section_list(json, program_entry, 'mask controls',          p%mask_ctrls)
-                    call create_section_list(json, program_entry, 'computer controls',      p%comp_ctrls)
-                    call json%add(all_programs, program_entry)
-                class default
-                    THROW_HARD('create_program_entry: unsupported prg dynamic type')
-            end select
-        end subroutine create_program_entry
-
-        subroutine create_section_list(json, program_entry, name, lst)
-            type(json_core),           intent(inout) :: json
-            type(json_value), pointer, intent(inout) :: program_entry
-            character(len=*),          intent(in)    :: name
-            type(linked_list),         intent(in)    :: lst
-            type(json_value), pointer :: entry, section
-            type(list_iterator)       :: it
-            class(*), allocatable     :: tmp
-            call json%create_array(section, trim(name))
-            it = lst%begin()
-            do while ( it%has_value() )
-                call it%getter(tmp)
-                select type (u => tmp)
-                type is (ui_program_input)
-                    call json%create_object(entry, u%param%key%to_char())
-                    call add_program_input_json(json, entry, u)
-                    call json%add(section, entry)
-                class default
-                    THROW_HARD('create_section_list: list item is not type(ui_program_input)')
-                end select
-                if (allocated(tmp)) deallocate(tmp)
-                call it%next()
-            end do
-            call json%add(program_entry, section)
-        end subroutine create_section_list
-
     end subroutine write_ui_json
 
     subroutine print_stream_ui_json

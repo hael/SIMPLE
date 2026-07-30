@@ -65,6 +65,33 @@ install(TARGETS ${SIMPLE_EXECUTABLES}
 )
 
 # ------------------------------------------------------------------------------
+# Complete UI JSON validation
+# ------------------------------------------------------------------------------
+# The UI descriptor is a client contract.  Regenerate and validate the complete
+# emitted registry whenever simple_private_exec is rebuilt, independently of
+# the optional CTest suite.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(UI_JSON_VALIDATION_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/simple_ui.json")
+set(UI_JSON_VALIDATION_STAMP "${CMAKE_CURRENT_BINARY_DIR}/simple_ui.json.valid")
+add_custom_command(
+  OUTPUT "${UI_JSON_VALIDATION_STAMP}"
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/validate_complete_ui_json.py"
+    --executable "$<TARGET_FILE:${SIMPLE_PRIVATE_EXE}>"
+    --output "${UI_JSON_VALIDATION_OUTPUT}"
+    --stamp "${UI_JSON_VALIDATION_STAMP}"
+  DEPENDS
+    ${SIMPLE_PRIVATE_EXE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/validate_complete_ui_json.py"
+  BYPRODUCTS "${UI_JSON_VALIDATION_OUTPUT}"
+  COMMENT "Generating and validating the complete UI JSON registry"
+  VERBATIM
+)
+add_custom_target(validate_complete_ui_json ALL
+  DEPENDS "${UI_JSON_VALIDATION_STAMP}"
+)
+
+# ------------------------------------------------------------------------------
 # Tests
 # ------------------------------------------------------------------------------
 if(BUILD_TESTS)
@@ -141,4 +168,5 @@ if(BUILD_TESTS)
       add_test(NAME ${test_name} COMMAND ${test_exe})
     endif()
   endforeach()
+
 endif()

@@ -35,9 +35,11 @@ set(SIMPLE_UI_DEFAULTS_FILE "${SIMPLE_GEN_DIR}/simple_ui_default_values.f90")
 file(GLOB_RECURSE SIMPLE_UI_DEFAULTS_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/production/simple_exec.f90"
     "${CMAKE_SOURCE_DIR}/production/single_exec.f90"
+    "${CMAKE_SOURCE_DIR}/production/simple_stream.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/params/*.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/exec/*.f90"
-    "${CMAKE_CURRENT_SOURCE_DIR}/main/commanders/*.f90")
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/commanders/*.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/*.f90")
 add_custom_command(
     OUTPUT "${SIMPLE_UI_DEFAULTS_FILE}"
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/default_audit.py"

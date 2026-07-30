@@ -63,17 +63,22 @@ contains
         call abinitio2D%add_input(UI_SRCH, ncls, group="search", visibility=UI_VIS_STANDARD)
         call abinitio2D%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their &
         &center of gravity and map shifts back to the particles(yes|no){no}','', .false., 'no', group="model", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','', .false., 'yes', group="model", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
         &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="search", &
-        &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']))
+        &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
         &'Sigma estimation method(group|global){global}','', .false., 'global', group="search", &
-        &choices=ui_choices([character(len=6) :: 'group', 'global']))
-        call abinitio2D%add_input(UI_SRCH, cls_init, group="search")
+        &choices=ui_choices([character(len=6) :: 'group', 'global']), &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio2D%add_input(UI_SRCH, cls_init, group="search", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_ADVANCED)
         ! Minimal Design A SGD control. This is the sole user-facing switch;
         ! the implementation is always the table-free streaming path.
@@ -93,15 +98,20 @@ contains
             &'Maximum bounded analytical shift steps per particle{4}', 'steps{4}', .false., 4., &
             &group="search", visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call abinitio2D%add_input(UI_FILT, hp, group="filter")
+        call abinitio2D%add_input(UI_FILT, hp, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., group="filter")
+        &Angstroms{30}', .false., 30., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
-            &'low-pass limit in Angstroms', .false., 30., group="filter")
+            &'low-pass limit in Angstroms', .false., 30., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., group="filter")
-        call abinitio2D%add_input(UI_FILT, lp, group="filter")
+            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., group="filter", &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio2D%add_input(UI_FILT, lp, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call abinitio2D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
         ! computer controls
@@ -120,7 +130,7 @@ contains
         &'splits a project into particle-balanced subsets and runs independent abinitio2D jobs',& ! help
         &'simple_exec',&                                                                          ! executable
         &.true.,&                                                                                 ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_ADVANCED)
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -128,23 +138,29 @@ contains
         call abinitio2D_chunks%add_input(UI_PARM, 'nchunks', 'num', 'Number of chunks', &
             &'Number of particle-balanced subset projects to run with independent abinitio2D jobs. &
             &Omit or set to 0 to target about 100 classes per chunk.', &
-            &'# of chunks (0=auto)', .false., 0.)
+            &'# of chunks (0=auto)', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, placeholder_override='# of particles per cluster{500}', group="cluster 2D", visibility=UI_VIS_STANDARD)
         call abinitio2D_chunks%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', group="cluster 2D", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D_chunks%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
         &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="cluster 2D", &
-        &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']))
+        &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call abinitio2D_chunks%add_input(UI_FILT, hp, group="cluster 2D")
-        call abinitio2D_chunks%add_input(UI_FILT, lp, group="cluster 2D")
+        call abinitio2D_chunks%add_input(UI_FILT, hp, group="cluster 2D", &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio2D_chunks%add_input(UI_FILT, lp, group="cluster 2D", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D_chunks%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., group="cluster 2D")
+        &Angstroms{30}', .false., 30., group="cluster 2D", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D_chunks%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
         &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.,&
         &group="filter", visibility=UI_VIS_ADVANCED)
@@ -154,7 +170,8 @@ contains
         call abinitio2D_chunks%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call abinitio2D_chunks%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         call abinitio2D_chunks%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
-        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., group="compute")
+        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., group="compute", &
+        &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
         call add_ui_program('abinitio2D_chunks', abinitio2D_chunks, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D_chunks
@@ -168,17 +185,23 @@ contains
         &'is a distributed workflow for generating class averages or initial random references&
         & for cluster2D execution',&               ! help
         &'simple_exec',&                           ! executable
-        &.true.)                                   ! requires sp_project
+        &.true., &
+        &visibility=UI_VIS_ADVANCED)                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%add_input(UI_IMG, 'refs', 'file', 'Output 2D references',&
-        &'Output 2D references', 'xxx.mrc file with references', .false., '')
+        &'Output 2D references', 'xxx.mrc file with references', .false., '', &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call make_cavgs%add_input(UI_PARM, ncls, required_override=.false.)
+        call make_cavgs%add_input(UI_PARM, ncls, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         call make_cavgs%add_input(UI_PARM, 'mul', 'num', 'Shift multiplication factor',&
-        &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
-        call make_cavgs%add_input(UI_PARM, remap_cls)
-        call make_cavgs%add_input(UI_PARM, nspace, required_override=.false.)
+        &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1., &
+        &visibility=UI_VIS_ADVANCED)
+        call make_cavgs%add_input(UI_PARM, remap_cls, &
+        &visibility=UI_VIS_ADVANCED)
+        call make_cavgs%add_input(UI_PARM, nspace, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -187,8 +210,10 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call make_cavgs%add_input(UI_COMP, nparts)
-        call make_cavgs%add_input(UI_COMP, nthr)
+        call make_cavgs%add_input(UI_COMP, nparts, &
+        &visibility=UI_VIS_STANDARD)
+        call make_cavgs%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('make_cavgs', make_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_make_cavgs
@@ -209,10 +234,12 @@ contains
         ! parameter input/output
         call bootstrap_cavgs%add_input(UI_PARM, 'osmpl_fac', 'num', 'Oversampling factor',&
         &'Integer factor for class-average oversampling; final class count is usable parent classes times osmpl_fac{2}',&
-        &'oversampling factor{2}', .false., 2.)
+        &'oversampling factor{2}', .false., 2., &
+        &visibility=UI_VIS_DEVELOPER)
         call bootstrap_cavgs%add_input(UI_PARM, 'frac_best', 'num', 'Anchor fraction',&
         &'Fraction used with the median class population to define the objective-ranked anchor set(0-1){0.5}',&
-        &'fraction{0.5}', .false., 0.5)
+        &'fraction{0.5}', .false., 0.5, &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -222,8 +249,10 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call bootstrap_cavgs%add_input(UI_COMP, nparts, required_override=.false.)
-        call bootstrap_cavgs%add_input(UI_COMP, nthr)
+        call bootstrap_cavgs%add_input(UI_COMP, nparts, required_override=.false., &
+        &visibility=UI_VIS_DEVELOPER)
+        call bootstrap_cavgs%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('bootstrap_cavgs', bootstrap_cavgs, prgtab, UI_CATEGORY)
     end subroutine new_bootstrap_cavgs
@@ -245,7 +274,8 @@ contains
         ! image input/output
         call unbootstrap_cavgs%add_input(UI_FILE, 'projfile_orig', 'file', 'Original project file', &
         &'Project file that was used as input to bootstrap_cavgs and should receive the mapped cls3D/ptcl3D parameters', &
-        &'e.g. original.simple', .true., '')
+        &'e.g. original.simple', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -268,13 +298,17 @@ contains
         &'Map class average selection to particles in project file',&    ! summary
         &'is a program for mapping selection based on class averages to the individual particles using correlation matching',& ! help
         &'all',&                                                         ! executable
-        &.true.)                                                         ! requires sp_project
+        &.true., &
+        &visibility=UI_VIS_ADVANCED)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call  map_cavgs_selection%add_input(UI_IMG, 'stk', 'file', 'Stack of cavgs to select from', 'Stack of cavgs to select from', 'e.g. cavgs_iter0XX.mrc', .false., '')
-        call  map_cavgs_selection%add_input(UI_IMG, 'stk2', 'file', 'Stack of selected cavgs', 'Stack of selected cavgs', 'e.g. selected.spi', .true., '')
+        call  map_cavgs_selection%add_input(UI_IMG, 'stk', 'file', 'Stack of cavgs to select from', 'Stack of cavgs to select from', 'e.g. cavgs_iter0XX.mrc', .false., '', &
+        &visibility=UI_VIS_ADVANCED)
+        call  map_cavgs_selection%add_input(UI_IMG, 'stk2', 'file', 'Stack of selected cavgs', 'Stack of selected cavgs', 'e.g. selected.spi', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call  map_cavgs_selection%add_input(UI_PARM, prune)
+        call  map_cavgs_selection%add_input(UI_PARM, prune, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -297,18 +331,25 @@ contains
         &'Probabilistic sampling of particles based on class statistics',&                  ! summary
         &'is a program for probabilistic sampling of particles based on class statistics',& ! help
         &'simple_exec',&                                                                    ! executable
-        &.true.)                                                                            ! requires sp_project
+        &.true., &
+        &visibility=UI_VIS_ADVANCED)                                                                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call sample_classes%add_input(UI_PARM, 'nptcls_per_part', 'num',    'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0)
+        call sample_classes%add_input(UI_PARM, 'nptcls_per_part', 'num',    'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
         call sample_classes%add_input(UI_PARM, 'greedy_sampling', 'binary', 'Greedy balanced selection', 'Greedy balanced selection(yes|no){yes}','', .false., 'yes', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call sample_classes%add_input(UI_PARM, 'nparts',          'num',    'Number of partitions in balancing', '# balanced parts', '# balanced parts', .false., 1.)
-        call sample_classes%add_input(UI_PARM, nsample)
-        call sample_classes%add_input(UI_PARM, 'frac_best',       'num',    'Fraction of best particles to sample from', 'Fraction of best particles to sample from(0-1)', '{0.5}', .false., 0.5)
-        call sample_classes%add_input(UI_PARM, 'frac_worst',      'num',    'Fraction of worst particles to sample from', 'Fraction of worst particles to sample from(0-1)', '{0.5}', .false., 0.5)
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call sample_classes%add_input(UI_PARM, 'nparts',          'num',    'Number of partitions in balancing', '# balanced parts', '# balanced parts', .false., 1., &
+        &visibility=UI_VIS_ADVANCED)
+        call sample_classes%add_input(UI_PARM, nsample, &
+        &visibility=UI_VIS_ADVANCED)
+        call sample_classes%add_input(UI_PARM, 'frac_best',       'num',    'Fraction of best particles to sample from', 'Fraction of best particles to sample from(0-1)', '{0.5}', .false., 0.5, &
+        &visibility=UI_VIS_ADVANCED)
+        call sample_classes%add_input(UI_PARM, 'frac_worst',      'num',    'Fraction of worst particles to sample from', 'Fraction of worst particles to sample from(0-1)', '{0.5}', .false., 0.5, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -318,7 +359,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call sample_classes%add_input(UI_COMP, nthr)
+        call sample_classes%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('sample_classes', sample_classes, prgtab, UI_CATEGORY)
     end subroutine new_sample_classes

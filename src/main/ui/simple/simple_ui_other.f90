@@ -36,10 +36,12 @@ contains
         &'Convert PDBx/mmCIF coordinate files to PDB format',& ! summary
         &'is a program for converting PDBx/mmCIF to PDB',& ! help
         &'simple_exec',&                                   ! executable
-        &.false.)                                          ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_STANDARD)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cif2pdb%add_input(UI_FILE, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif')
+        call cif2pdb%add_input(UI_FILE, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
         ! computer controls
         ! <no additional inputs>
@@ -61,19 +63,24 @@ contains
         &'Re-generate micrographs from selected movie frames',&
         &'is a distributed program for re-generating micrographs from a subset of movie frames',&
         &'simple_exec',&
-        &.true.)
+        &.true., &
+        &visibility=UI_VIS_ADVANCED)
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call fractionate_movies%add_input(UI_PARM, 'fromf', 'num', 'Starting frame', &
-        & 'Starting movie frame for micrograph re-generation', 'frame index{1}', .false., 1.0)
+        & 'Starting movie frame for micrograph re-generation', 'frame index{1}', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
         call fractionate_movies%add_input(UI_PARM, 'tof', 'num', 'Final frame', &
-        & 'Final movie frame for micrograph re-generation(0=all)', 'frame index{0}', .false., 0.0)
-        call fractionate_movies%add_input(UI_PARM, flipgain)
+        & 'Final movie frame for micrograph re-generation(0=all)', 'frame index{0}', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call fractionate_movies%add_input(UI_PARM, flipgain, &
+        &visibility=UI_VIS_ADVANCED)
         call fractionate_movies%add_input(UI_PARM, 'mcconvention', 'str', 'Movie alignment convention', &
         & 'Movie alignment and naming convention(simple|unblur|relion|motioncorr|cryosparc|cs){simple}', &
-        & '(simple|unblur|relion|motioncorr|cryosparc|cs){simple}', .false., 'simple')
+        & '(simple|unblur|relion|motioncorr|cryosparc|cs){simple}', .false., 'simple', &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -83,8 +90,10 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call fractionate_movies%add_input(UI_COMP, nparts)
-        call fractionate_movies%add_input(UI_COMP, nthr)
+        call fractionate_movies%add_input(UI_COMP, nparts, &
+        &visibility=UI_VIS_STANDARD)
+        call fractionate_movies%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('fractionate_movies', fractionate_movies, prgtab, UI_CATEGORY)
     end subroutine new_fractionate_movies
@@ -99,11 +108,14 @@ contains
         &.false.)                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call split_%add_input(UI_IMG, stk, required_override=.true.)
+        call split_%add_input(UI_IMG, stk, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call split_%add_input(UI_PARM, smpd)
+        call split_%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call split_%add_input(UI_COMP, nparts)
+        call split_%add_input(UI_COMP, nparts, &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -129,7 +141,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call split_stack%add_input(UI_PARM, 'nparts', 'num', 'Number of parts balanced splitting of the stack', '# parts', '# parts', .true., 1.0)
+        call split_stack%add_input(UI_PARM, 'nparts', 'num', 'Number of parts balanced splitting of the stack', '# parts', '# parts', .true., 1.0, &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls

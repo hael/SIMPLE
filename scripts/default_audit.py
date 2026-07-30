@@ -267,7 +267,7 @@ def extract_procedures(paths: Iterable[Path]) -> dict[str, Procedure]:
 
 def extract_commander_methods(commander_paths: Iterable[Path]) -> dict[str, str]:
     methods: dict[str, str] = {}
-    type_start = re.compile(r"^\s*type(?:\s*,[^:]*)?\s*::\s*(commander_[a-z0-9_]+)\b", re.IGNORECASE)
+    type_start = re.compile(r"^\s*type(?:\s*,[^:]*)?\s*::\s*((?:commander|stream)_[a-z0-9_]+)\b", re.IGNORECASE)
     execute = re.compile(r"\bprocedure\b.*::\s*execute\s*=>\s*([a-z_][a-z0-9_]*)", re.IGNORECASE)
     for path in commander_paths:
         statements = logical_lines(path)
@@ -373,7 +373,7 @@ def extract_router_routes(root: Path, procedures: dict[str, Procedure], routers:
             continue
         variable_types: dict[str, str] = {}
         for statement in logical_lines(router.path):
-            match = re.match(r"^\s*type\s*\(\s*(commander_[a-z0-9_]+)\s*\)\s*::\s*([a-z_][a-z0-9_]*)", statement.text, re.IGNORECASE)
+            match = re.match(r"^\s*type\s*\(\s*((?:commander|stream)_[a-z0-9_]+)\s*\)\s*::\s*([a-z_][a-z0-9_]*)", statement.text, re.IGNORECASE)
             if match:
                 variable_types[match.group(2).lower()] = match.group(1).lower()
         current_cases: list[str] = []
@@ -390,6 +390,47 @@ def extract_router_routes(root: Path, procedures: dict[str, Procedure], routers:
                 current_statements.append(statement)
         if current_cases:
             add_router_case(root, router, current_cases, current_statements, variable_types, routes, constants)
+    return routes
+
+
+def extract_stream_routes(root: Path) -> dict[str, list[dict]]:
+    """Extract direct simple_stream program-to-stage execute routes."""
+    path = root / "production" / "simple_stream.f90"
+    statements = logical_lines(path)
+    variable_types: dict[str, str] = {}
+    for statement in statements:
+        match = re.match(r"^\s*type\s*\(\s*(stream_[a-z0-9_]+)\s*\)\s*::\s*([a-z_][a-z0-9_]*)", statement.text, re.IGNORECASE)
+        if match:
+            variable_types[match.group(2).lower()] = match.group(1).lower()
+    routes: dict[str, list[dict]] = {}
+    current_cases: list[str] = []
+    current_statements: list[Statement] = []
+
+    def add_case() -> None:
+        execute = next((EXECUTE_CALL.search(statement.text) for statement in current_statements
+                        if EXECUTE_CALL.search(statement.text)), None)
+        if execute is None:
+            return
+        commander_type = variable_types.get(execute.group(1).lower())
+        for name in current_cases:
+            routes.setdefault(name, []).append({
+                "router": "simple_stream",
+                "commander_type": commander_type,
+                "source": source_location(root, path, current_statements[0].line),
+                "rules": [],
+            })
+
+    for statement in statements:
+        case = CASE_STMT.match(statement.text)
+        if case:
+            if current_cases:
+                add_case()
+            current_cases = re.findall(r"'([^']+)'", case.group(1))
+            current_statements = []
+        elif current_cases:
+            current_statements.append(statement)
+    if current_cases:
+        add_case()
     return routes
 
 
@@ -438,15 +479,21 @@ def make_records(root: Path, registry: dict[tuple[str, str], set[str]], bindings
     entry_cache: dict[str, tuple[list[str], list[dict]]] = {}
     router_cache: dict[str, dict[str, list[dict]]] = {}
     for (executable, program), ui_keys in sorted(registry.items()):
-        if executable not in {"simple_exec", "single_exec"}:
+        if executable not in {"simple_exec", "single_exec", "simple_stream"}:
             diagnostics.append({"severity": "info", "program": program, "message": f"{executable} is outside the command-default audit scope"})
             continue
-        if executable not in entry_cache:
-            entry_cache[executable] = extract_entry_rules(root, executable, constants)
-        routers, entry_rules = entry_cache[executable]
-        if executable not in router_cache:
-            router_cache[executable] = extract_router_routes(root, procedures, routers, constants)
-        candidates = router_cache[executable].get(program, [])
+        if executable == "simple_stream":
+            if executable not in router_cache:
+                router_cache[executable] = extract_stream_routes(root)
+            candidates = router_cache[executable].get(program, [])
+            entry_rules = []
+        else:
+            if executable not in entry_cache:
+                entry_cache[executable] = extract_entry_rules(root, executable, constants)
+            routers, entry_rules = entry_cache[executable]
+            if executable not in router_cache:
+                router_cache[executable] = extract_router_routes(root, procedures, routers, constants)
+            candidates = router_cache[executable].get(program, [])
         if len(candidates) != 1:
             diagnostics.append({
                 "severity": "error", "program": f"{executable}:{program}",
@@ -572,9 +619,13 @@ def collect_program_overrides(root: Path, procedures: dict[str, Procedure], comm
                               baselines: dict[str, dict]) -> dict[tuple[str, str], dict[str, str]]:
     """Collect only exact missing-key rules; unsupported routes stay absent."""
     result: dict[tuple[str, str], dict[str, str]] = {}
-    for executable in ("simple_exec", "single_exec"):
-        routers, entry_rules = extract_entry_rules(root, executable, constants)
-        routes = extract_router_routes(root, procedures, routers, constants)
+    for executable in ("simple_exec", "single_exec", "simple_stream"):
+        if executable == "simple_stream":
+            entry_rules = []
+            routes = extract_stream_routes(root)
+        else:
+            routers, entry_rules = extract_entry_rules(root, executable, constants)
+            routes = extract_router_routes(root, procedures, routers, constants)
         for program, candidates in routes.items():
             if len(candidates) != 1:
                 continue
@@ -629,7 +680,7 @@ def write_fortran_defaults(path: Path, baselines: dict[str, dict], bindings: dic
     for key, value in sorted(baseline_by_key.items()):
         lines += [f"        case({fortran_string(key)})", "            found = .true.", f"            value = {fortran_string(value)}"]
     lines += ["    end select", "    select case(trim(executable))"]
-    for executable in ("simple_exec", "single_exec"):
+    for executable in ("simple_exec", "single_exec", "simple_stream"):
         programs = [(program, values) for (exe, program), values in overrides.items() if exe == executable]
         if not programs:
             continue
@@ -657,12 +708,13 @@ def main() -> int:
     root = args.source_root.resolve()
     commander_paths = sorted((root / "src/main/commanders").rglob("*.f90"))
     exec_paths = sorted((root / "src/main/exec").rglob("*.f90"))
+    stream_paths = sorted((root / "src/main/stream").rglob("*.f90"))
     parameter_paths = [root / "src/main/params/simple_parameters.f90", root / "src/main/params/simple_parameters_core.f90"]
-    constants = extract_named_constants(parameter_paths)
+    constants = extract_named_constants(parameter_paths + stream_paths)
     baselines = extract_parameter_defaults(root, constants)
     bindings = extract_parameter_bindings(root)
-    procedures = extract_procedures(exec_paths + commander_paths)
-    commander_methods = extract_commander_methods(commander_paths)
+    procedures = extract_procedures(exec_paths + commander_paths + stream_paths)
+    commander_methods = extract_commander_methods(commander_paths + stream_paths)
     if args.output_fortran:
         overrides = collect_program_overrides(root, procedures, commander_methods, constants, bindings, baselines)
         write_fortran_defaults(args.output_fortran, baselines, bindings, overrides)
@@ -675,7 +727,7 @@ def main() -> int:
         records, diagnostics = make_records(root, registry, bindings, baselines, procedures, commander_methods, constants)
         output = {
             "schema_version": 1,
-            "scope": "simple_exec and single_exec programs emitted by the Fortran UI registry",
+            "scope": "simple_exec, single_exec, and simple_stream programs emitted by the Fortran UI registry",
             "records": records,
             "diagnostics": diagnostics,
         }

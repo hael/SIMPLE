@@ -42,18 +42,22 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call analysis2D_nano%add_input(UI_PARM, element)
+        call analysis2D_nano%add_input(UI_PARM, element, &
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call analysis2D_nano%add_input(UI_SRCH, nptcls_per_cls)
+        call analysis2D_nano%add_input(UI_SRCH, nptcls_per_cls, &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
-        call analysis2D_nano%add_input(UI_COMP, nthr)
-        call analysis2D_nano%add_input(UI_COMP, script)
+        call analysis2D_nano%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        call analysis2D_nano%add_input(UI_COMP, script, &
+        &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
         call add_ui_program('analysis2D_nano', analysis2D_nano, prgtab, UI_CATEGORY)
     end subroutine new_analysis2D_nano
@@ -67,7 +71,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after time-series tracking',&  ! help
         &'single_exec',&                                                        ! executable
-        &.true., visibility=UI_VIS_STANDARD)                                          ! requires sp_project
+        &.true., visibility=UI_VIS_ADVANCED)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -76,15 +80,19 @@ contains
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call center2D_nano%add_input(UI_SRCH, ncls, required_override=.true.)
-        call center2D_nano%add_input(UI_SRCH, trs)
+        call center2D_nano%add_input(UI_SRCH, ncls, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call center2D_nano%add_input(UI_SRCH, trs, &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
-        call center2D_nano%add_input(UI_COMP, nthr)
-        call center2D_nano%add_input(UI_COMP, script)
+        call center2D_nano%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        call center2D_nano%add_input(UI_COMP, script, &
+        &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
         call add_ui_program('center2D_nano', center2D_nano, prgtab, UI_CATEGORY)
     end subroutine new_center2D_nano
@@ -102,31 +110,46 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call cluster2D_nano%add_input(UI_PARM, moldiam)
+        call cluster2D_nano%add_input(UI_PARM, moldiam, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call cluster2D_nano%add_input(UI_SRCH, nptcls_per_cls)
+        call cluster2D_nano%add_input(UI_SRCH, nptcls_per_cls, &
+        &visibility=UI_VIS_ADVANCED)
         call cluster2D_nano%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call cluster2D_nano%add_input(UI_SRCH, 'winsz', 'num', 'Half-window size', 'Half-window size(frames)', 'winsz in # frames', .false., 3.0)
-        call cluster2D_nano%add_input(UI_SRCH, maxits)
-        call cluster2D_nano%add_input(UI_SRCH, trs)
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call cluster2D_nano%add_input(UI_SRCH, 'winsz', 'num', 'Half-window size', 'Half-window size(frames)', 'winsz in # frames', .false., 3.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call cluster2D_nano%add_input(UI_SRCH, maxits, &
+        &visibility=UI_VIS_ADVANCED)
+        call cluster2D_nano%add_input(UI_SRCH, trs, &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call cluster2D_nano%add_input(UI_FILT, hp)
+        call cluster2D_nano%add_input(UI_FILT, hp, &
+        &visibility=UI_VIS_ADVANCED)
         call cluster2D_nano%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{5.0}', .false., 5.)
-        call cluster2D_nano%add_input(UI_FILT, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit{1.0}', 'low-pass limit in Angstroms', .false., 1.)
-        call cluster2D_nano%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'initial low-pass limit in Angstroms', .false., 1.)
-        call cluster2D_nano%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Final low-pass limit{1.0}', 'final low-pass limit in Angstroms', .false., 1.)
+        &Angstroms{5.0}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
+        call cluster2D_nano%add_input(UI_FILT, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit{1.0}', 'low-pass limit in Angstroms', .false., 1., &
+        &visibility=UI_VIS_ADVANCED)
+        call cluster2D_nano%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'initial low-pass limit in Angstroms', .false., 1., &
+        &visibility=UI_VIS_ADVANCED)
+        call cluster2D_nano%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Final low-pass limit{1.0}', 'final low-pass limit in Angstroms', .false., 1., &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call cluster2D_nano%add_input(UI_MASK, mskdiam)
+        call cluster2D_nano%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call cluster2D_nano%add_input(UI_COMP, nparts, required_override=.false.)
-        call cluster2D_nano%add_input(UI_COMP, nthr)
-        call cluster2D_nano%add_input(UI_COMP, script)
+        call cluster2D_nano%add_input(UI_COMP, nparts, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call cluster2D_nano%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        call cluster2D_nano%add_input(UI_COMP, script, &
+        &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
         call add_ui_program('cluster2D_nano', cluster2D_nano, prgtab, UI_CATEGORY)
     end subroutine new_cluster2D_nano
@@ -139,24 +162,30 @@ contains
         &'Estimation of a suitable mask diameter for nanoparticle time-series',&                                        ! summary
         &'is a program for estimation of a suitable mask diameter for spherical masking of nanoparticle time-series ',& ! help
         &'single_exec',&                                                                                                ! executable
-        &.false., visibility=UI_VIS_STANDARD)                                                                                 ! requires sp_project
+        &.false., visibility=UI_VIS_ADVANCED)                                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call estimate_diam%add_input(UI_IMG, stk, required_override=.true.)
+        call estimate_diam%add_input(UI_IMG, stk, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call estimate_diam%add_input(UI_PARM, smpd)
+        call estimate_diam%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
         call estimate_diam%add_input(UI_PARM, 'roavg', 'binary', 'Rotationally average', 'Rotationally average before diam estimate(yes|no){no}','', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call estimate_diam%add_input(UI_FILT, lp, label_override='low-pass limit in Angstroms{7.}')
+        call estimate_diam%add_input(UI_FILT, lp, label_override='low-pass limit in Angstroms{7.}', &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call estimate_diam%add_input(UI_MASK, mskdiam)
+        call estimate_diam%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call estimate_diam%add_input(UI_COMP, nthr)
+        call estimate_diam%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('estimate_diam', estimate_diam, prgtab, UI_CATEGORY)
     end subroutine new_estimate_diam

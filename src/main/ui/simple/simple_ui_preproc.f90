@@ -57,16 +57,21 @@ contains
         ! image input/output
         ! parameter input/output
         call assign_optics_groups%add_input(UI_FILE, 'xmldir', 'dir', 'Directory containing per movie EPU XML files',&
-        & 'Directory containing per movie EPY XML files', 'e.g. /data/datasetid/xml', .false., '')
+        & 'Directory containing per movie EPY XML files', 'e.g. /data/datasetid/xml', .false., '', &
+        &visibility=UI_VIS_DEVELOPER)
         call assign_optics_groups%add_input(UI_PARM, 'maxpop', 'num', 'Maximum number of movies/micrographs/stacks in each optics group',&
-        & 'Maximum number of movies/micrographs/stacks in each optics group', 'e.g. 100', .false., '')
+        & 'Maximum number of movies/micrographs/stacks in each optics group', 'e.g. 100', .false., '', &
+        &visibility=UI_VIS_DEVELOPER)
         call assign_optics_groups%add_input(UI_PARM, 'optics_offset', 'num', 'Numbering offset to apply to optics groups',&
-        & 'Numbering offset to apply to optics groups. Aids with combining datasets', 'e.g. 10', .false., '')
+        & 'Numbering offset to apply to optics groups. Aids with combining datasets', 'e.g. 10', .false., '', &
+        &visibility=UI_VIS_DEVELOPER)
         call assign_optics_groups%add_input(UI_PARM, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
-        & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05)
+        & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05, &
+        &visibility=UI_VIS_DEVELOPER)
         call assign_optics_groups%add_input(UI_PARM, 'beamtilt', 'binary', 'Use beamtilts in optics group assignment',&
         &'Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}','', .false., 'yes', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -95,26 +100,39 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call ctf_estimate%add_input(UI_PARM, pspecsz, group="CTF estimation")
-        call ctf_estimate%add_input(UI_PARM, ctfpatch, group="CTF estimation")
-        call ctf_estimate%add_input(UI_PARM, fit_phshift, group="CTF estimation")
+        call ctf_estimate%add_input(UI_PARM, pspecsz, group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
+        call ctf_estimate%add_input(UI_PARM, ctfpatch, group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
+        call ctf_estimate%add_input(UI_PARM, fit_phshift, group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call ctf_estimate%add_input(UI_SRCH, dfmin, group="CTF estimation")
-        call ctf_estimate%add_input(UI_SRCH, dfmax, group="CTF estimation")
-        call ctf_estimate%add_input(UI_SRCH, astigtol, group="CTF estimation")
-        call ctf_estimate%add_input(UI_SRCH, phshift_min, group="CTF estimation")
-        call ctf_estimate%add_input(UI_SRCH, phshift_max, group="CTF estimation")
-        call ctf_estimate%add_input(UI_SRCH, phshift_step, group="CTF estimation")
+        call ctf_estimate%add_input(UI_SRCH, dfmin, group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
+        call ctf_estimate%add_input(UI_SRCH, dfmax, group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
+        call ctf_estimate%add_input(UI_SRCH, astigtol, group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
+        call ctf_estimate%add_input(UI_SRCH, phshift_min, group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
+        call ctf_estimate%add_input(UI_SRCH, phshift_max, group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
+        call ctf_estimate%add_input(UI_SRCH, phshift_step, group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call ctf_estimate%add_input(UI_FILT, lp, required_override=.false., group="CTF estimation")
-        call ctf_estimate%add_input(UI_FILT, hp, required_override=.false., group="CTF estimation")
+        call ctf_estimate%add_input(UI_FILT, lp, required_override=.false., group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
+        call ctf_estimate%add_input(UI_FILT, hp, required_override=.false., group="CTF estimation", &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call ctf_estimate%add_input(UI_COMP, nparts, group="compute")
-        call ctf_estimate%add_input(UI_COMP, nthr, group="compute")
+        call ctf_estimate%add_input(UI_COMP, nparts, group="compute", &
+        &visibility=UI_VIS_STANDARD)
+        call ctf_estimate%add_input(UI_COMP, nthr, group="compute", &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('ctf_estimate', ctf_estimate, prgtab, UI_CATEGORY)
     end subroutine new_ctf_estimate
@@ -132,12 +150,15 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call extract%add_input(UI_FILE, 'dir_box', 'dir', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '',&
-        &group="extract")
+        &group="extract", &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
         call extract%add_input(UI_PARM, box, required_override=.false., group="extract", visibility=UI_VIS_STANDARD)
         call extract%add_input(UI_PARM, pcontrast, group="extract", visibility=UI_VIS_STANDARD)
-        call extract%add_input(UI_PARM, outside, group="extract")
-        call extract%add_input(UI_PARM, backgr_subtr, group="extract")
+        call extract%add_input(UI_PARM, outside, group="extract", &
+        &visibility=UI_VIS_ADVANCED)
+        call extract%add_input(UI_PARM, backgr_subtr, group="extract", &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -167,7 +188,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call gen_pspecs_and_thumbs%add_input(UI_PARM, pspecsz)
+        call gen_pspecs_and_thumbs%add_input(UI_PARM, pspecsz, &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -177,8 +199,10 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call gen_pspecs_and_thumbs%add_input(UI_COMP, nparts)
-        call gen_pspecs_and_thumbs%add_input(UI_COMP, nthr)
+        call gen_pspecs_and_thumbs%add_input(UI_COMP, nparts, &
+        &visibility=UI_VIS_STANDARD)
+        call gen_pspecs_and_thumbs%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('gen_pspecs_and_thumbs', gen_pspecs_and_thumbs, prgtab, UI_CATEGORY)
     end subroutine new_gen_pspecs_and_thumbs
@@ -201,37 +225,57 @@ contains
         call motion_correct%add_input(UI_FILE, gainref, group="data", visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call motion_correct%add_input(UI_PARM, total_dose, group="data", visibility=UI_VIS_STANDARD)
-        call motion_correct%add_input(UI_PARM, fraction_dose_target, group="data")
-        call motion_correct%add_input(UI_PARM, max_dose, group="data")
-        call motion_correct%add_input(UI_PARM, smpd_downscale, group="data")
+        call motion_correct%add_input(UI_PARM, fraction_dose_target, group="data", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_PARM, max_dose, group="data", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_PARM, smpd_downscale, group="data", &
+        &visibility=UI_VIS_ADVANCED)
         call motion_correct%add_input(UI_PARM, 'fbody', 'string', 'Template output micrograph name',&
-        &'Template output integrated movie name', 'e.g. mic_', .false., '', group="data")
-        call motion_correct%add_input(UI_PARM, pspecsz, group="motion correction")
-        call motion_correct%add_input(UI_PARM, eer_fraction, group="data")
-        call motion_correct%add_input(UI_PARM, flipgain, group="motion correction")
+        &'Template output integrated movie name', 'e.g. mic_', .false., '', group="data", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_PARM, pspecsz, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_PARM, eer_fraction, group="data", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_PARM, flipgain, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call motion_correct%add_input(UI_SRCH, trs_mc, group ="motion correction")
+        call motion_correct%add_input(UI_SRCH, trs_mc, group ="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
         call motion_correct%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', &
-        &'in Angstroms^2{50}', .false., 50., group="motion correction")
-        call motion_correct%add_input(UI_SRCH, mcpatch, group="motion correction")
-        call motion_correct%add_input(UI_SRCH, nxpatch, group="motion correction")
-        call motion_correct%add_input(UI_SRCH, nypatch, group="motion correction")
-        call motion_correct%add_input(UI_SRCH, mcconvention, group="motion correction")
-        call motion_correct%add_input(UI_SRCH, algorithm, group="motion correction")
-        call motion_correct%add_input(UI_SRCH, mcpatch_thres, group="motion correction")
+        &'in Angstroms^2{50}', .false., 50., group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_SRCH, mcpatch, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_SRCH, nxpatch, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_SRCH, nypatch, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_SRCH, mcconvention, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_SRCH, algorithm, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_SRCH, mcpatch_thres, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call motion_correct%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8., group="motion correction")
+        &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8., group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
         call motion_correct%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5., group="motion correction")
-        call motion_correct%add_input(UI_FILT, wcrit, group="motion correction")
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5., group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
+        call motion_correct%add_input(UI_FILT, wcrit, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call motion_correct%add_input(UI_COMP, nparts, group="compute")
-        call motion_correct%add_input(UI_COMP, nthr, group="compute")
+        call motion_correct%add_input(UI_COMP, nparts, group="compute", &
+        &visibility=UI_VIS_STANDARD)
+        call motion_correct%add_input(UI_COMP, nthr, group="compute", &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('motion_correct', motion_correct, prgtab, UI_CATEGORY)
     end subroutine new_motion_correct
@@ -290,7 +334,8 @@ contains
         &itself runs shared-memory with nthr threads (per-chunk MPI partitioning is not used in offline sieving){1}', &
         &'# of concurrent chunks{1}', .false., 1., group="compute", visibility=UI_VIS_STANDARD)
         call particle_sieving%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
-        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., group="compute")
+        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., group="compute", &
+        &visibility=UI_VIS_ADVANCED)
         ! add to ui_hash
         call add_ui_program('particle_sieving', particle_sieving, prgtab, UI_CATEGORY)
     end subroutine new_particle_sieving
@@ -309,15 +354,22 @@ contains
         ! image input/output
         call pick%add_input(UI_IMG, pickrefs, group="picking", visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call pick%add_input(UI_FILE, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick', group="picking")
-        call pick%add_input(UI_PARM, pcontrast, group="picking")
-        call pick%add_input(UI_PARM, moldiam, group="picking")
-        call pick%add_input(UI_PARM, picker, group="picking")
+        call pick%add_input(UI_FILE, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick', group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick%add_input(UI_PARM, pcontrast, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick%add_input(UI_PARM, moldiam, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick%add_input(UI_PARM, picker, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
         call pick%add_input(UI_PARM, 'nmoldiams', 'num', 'Number of molecular diameters to investigate', 'Number of molecular diameters tested', 'e.g. 5',&
-        &.false., 5., group="picking")
-        call pick%add_input(UI_PARM, moldiam_max, group="picking")
+        &.false., 5., group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick%add_input(UI_PARM, moldiam_max, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
         call pick%add_input(UI_PARM, 'multi_moldiams', 'str', 'Comma-separated molecular diameters with which to execute multiple gaussian pick ',&
-        &'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '', group="picking")
+        &'Molecular diameters with which to execulte multiple gaussian pick', 'e.g. 100,150', .false., '', group="picking", &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -326,13 +378,19 @@ contains
         call pick%add_input(UI_SRCH, 'ncls', 'num', 'Cluster input pickrefs before template generation', &
         &'If >0, run cluster_cavgs on pickrefs and use medoids only for make_pickrefs{0}', &
         &'# clusters{0}', .false., 0., group="picking", visibility=UI_VIS_ADVANCED)
-        call pick%add_input(UI_SRCH, pick_roi, group="picking")
-        call pick%add_input(UI_SRCH, backgr_subtr, group="picking")
-        call pick%add_input(UI_SRCH, particle_density, group="picking")
-        call pick%add_input(UI_SRCH, 'winsz', 'num', 'Window size for sauvola', 'Window size for local sauvola binarisation', 'winsz in pixels ', .false., 32.)
-        call pick%add_input(UI_SRCH, nboxes_max, group="picking")
+        call pick%add_input(UI_SRCH, pick_roi, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick%add_input(UI_SRCH, backgr_subtr, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick%add_input(UI_SRCH, particle_density, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
+        call pick%add_input(UI_SRCH, 'winsz', 'num', 'Window size for sauvola', 'Window size for local sauvola binarisation', 'winsz in pixels ', .false., 32., &
+        &visibility=UI_VIS_ADVANCED)
+        call pick%add_input(UI_SRCH, nboxes_max, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call pick%add_input(UI_FILT, lp, group="picking")
+        call pick%add_input(UI_FILT, lp, group="picking", &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -351,54 +409,87 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! help
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &.true.)                                                                            ! requires sp_project
+        &.true., &
+        &visibility=UI_VIS_STANDARD)                                                                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess%add_input(UI_FILE, gainref)
+        call preprocess%add_input(UI_FILE, gainref, &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call preprocess%add_input(UI_PARM, total_dose)
-        call preprocess%add_input(UI_PARM, fraction_dose_target)
-        call preprocess%add_input(UI_PARM, max_dose)
-        call preprocess%add_input(UI_PARM, smpd_downscale)
-        call preprocess%add_input(UI_PARM, eer_fraction)
+        call preprocess%add_input(UI_PARM, total_dose, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_PARM, fraction_dose_target, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_PARM, max_dose, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_PARM, smpd_downscale, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_PARM, eer_fraction, &
+        &visibility=UI_VIS_ADVANCED)
         call preprocess%add_input(UI_PARM, 'fbody', 'string', 'Template output micrograph name',&
-        &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess%add_input(UI_PARM, pspecsz)
-        call preprocess%add_input(UI_PARM, numlen)
-        call preprocess%add_input(UI_PARM, ctfpatch, required_override=.false.)
-        call preprocess%add_input(UI_PARM, fit_phshift, required_override=.false.)
-        call preprocess%add_input(UI_PARM, flipgain)
+        &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_', &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_PARM, pspecsz, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_PARM, numlen, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_PARM, ctfpatch, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_PARM, fit_phshift, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_PARM, flipgain, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call preprocess%add_input(UI_SRCH, trs_mc)
-        call preprocess%add_input(UI_SRCH, dfmin)
-        call preprocess%add_input(UI_SRCH, dfmax)
-        call preprocess%add_input(UI_SRCH, astigtol)
-        call preprocess%add_input(UI_SRCH, phshift_min)
-        call preprocess%add_input(UI_SRCH, phshift_max)
-        call preprocess%add_input(UI_SRCH, phshift_step)
-        call preprocess%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
-        call preprocess%add_input(UI_SRCH, mcpatch)
-        call preprocess%add_input(UI_SRCH, nxpatch)
-        call preprocess%add_input(UI_SRCH, nypatch)
-        call preprocess%add_input(UI_SRCH, mcconvention)
-        call preprocess%add_input(UI_SRCH, algorithm)
-        call preprocess%add_input(UI_SRCH, mcpatch_thres)
+        call preprocess%add_input(UI_SRCH, trs_mc, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, dfmin, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, dfmax, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, astigtol, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, phshift_min, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, phshift_max, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, phshift_step, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50., &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, mcpatch, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, nxpatch, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, nypatch, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, mcconvention, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, algorithm, &
+        &visibility=UI_VIS_ADVANCED)
+        call preprocess%add_input(UI_SRCH, mcpatch_thres, &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call preprocess%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
+        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8., &
+        &visibility=UI_VIS_ADVANCED)
         call preprocess%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
+        &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
         call preprocess%add_input(UI_FILT, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
-        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
+        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5., &
+        &visibility=UI_VIS_ADVANCED)
         call preprocess%add_input(UI_FILT, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
-        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
+        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30., &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call preprocess%add_input(UI_COMP, nparts)
-        call preprocess%add_input(UI_COMP, nthr)
+        call preprocess%add_input(UI_COMP, nparts, &
+        &visibility=UI_VIS_STANDARD)
+        call preprocess%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('preprocess', preprocess, prgtab, UI_CATEGORY)
     end subroutine new_preprocess
@@ -411,17 +502,23 @@ contains
         &'Re-extract particle images from integrated movies',&                  ! summary
         &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
         &'simple_exec',&                                                        ! executable
-        &.true.)                                                                ! requires sp_project
+        &.true., &
+        &visibility=UI_VIS_STANDARD)                                                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call reextract%add_input(UI_PARM, box,     required_override=.false.)
+        call reextract%add_input(UI_PARM, box,     required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         call reextract%add_input(UI_PARM, oritype, &
-        &choices_override=ui_choices([character(len=6) :: 'ptcl2D', 'ptcl3D']))
-        call reextract%add_input(UI_PARM, pcontrast)
-        call reextract%add_input(UI_PARM, backgr_subtr)
-        call reextract%add_input(UI_PARM, outside)
+        &choices_override=ui_choices([character(len=6) :: 'ptcl2D', 'ptcl3D']), &
+        &visibility=UI_VIS_ADVANCED)
+        call reextract%add_input(UI_PARM, pcontrast, &
+        &visibility=UI_VIS_ADVANCED)
+        call reextract%add_input(UI_PARM, backgr_subtr, &
+        &visibility=UI_VIS_ADVANCED)
+        call reextract%add_input(UI_PARM, outside, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -431,8 +528,10 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call reextract%add_input(UI_COMP, nparts)
-        call reextract%add_input(UI_COMP, nthr)
+        call reextract%add_input(UI_COMP, nparts, &
+        &visibility=UI_VIS_STANDARD)
+        call reextract%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('reextract', reextract, prgtab, UI_CATEGORY)
     end subroutine new_reextract

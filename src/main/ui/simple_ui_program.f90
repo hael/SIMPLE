@@ -5,7 +5,8 @@ use simple_ansi_ctrls
 use simple_linked_list, only: linked_list, list_iterator
 use simple_ui_param,    only: ui_param
 use simple_ui_descriptor_types, only: ui_choice
-use simple_ui_visibility, only: UI_VIS_DEVELOPER, ui_visibility_is_valid, ui_visibility_name
+use simple_ui_visibility, only: UI_VIS_STANDARD, UI_VIS_ADVANCED, UI_VIS_DEVELOPER, &
+                               &ui_visibility_is_valid, ui_visibility_name
 use simple_ui_default_values, only: get_ui_default
 implicit none
 #include "simple_local_flags.inc"
@@ -89,6 +90,7 @@ type :: ui_program
     procedure          :: print_ui
     procedure          :: print_cmdline
     procedure          :: print_help
+    procedure          :: create_json_entry
     procedure          :: write2json
     procedure          :: get_name
     procedure          :: get_category
@@ -251,7 +253,19 @@ contains
             if( .not. ui_visibility_is_valid(visibility) )then
                 THROW_HARD('ui_program input received an invalid visibility level')
             endif
-            input%visibility = visibility
+        endif
+        ! Requiredness is final at this point and required inputs are always
+        ! part of the Standard interface. Optional inputs are context-specific.
+        if( input%param%required )then
+            if( present(visibility) )then
+                if( visibility /= UI_VIS_STANDARD )then
+                    THROW_HARD('required ui_program input must have Standard visibility')
+                endif
+            endif
+            input%visibility = UI_VIS_STANDARD
+        else
+            input%visibility = UI_VIS_ADVANCED
+            if( present(visibility) ) input%visibility = visibility
         endif
         if( present(group) ) call register_group(self, group, input%group)
         if( present(activation) ) input%activation = activation
@@ -570,32 +584,10 @@ contains
         use json_module
         class(ui_program), intent(in) :: self
         type(json_core)               :: json
-        type(json_value), pointer     :: program_entry, program
+        type(json_value), pointer     :: program_entry
         ! JSON init
         call json%initialize()
-        call json%create_object(program_entry,'')
-        call json%create_object(program, self%name%to_char())
-        call json%add(program_entry, program)
-        ! program section
-        call json%add(program, 'name',        self%name%to_char())
-        call json%add(program, 'category',    self%category%to_char())
-        call json%add(program, 'category_display_name', self%category_display_name%to_char())
-        call json%add(program, 'category_order', self%category_order)
-        call json%add(program, 'display_name', self%display_name%to_char())
-        call json%add(program, 'summary',     self%summary%to_char())
-        call json%add(program, 'help',        self%help%to_char())
-        call json%add(program, 'executable',  self%executable%to_char())
-        call json%add(program, 'visibility',  trim(ui_visibility_name(self%visibility)))
-        call add_program_groups_json(json, program, self%groups)
-        ! all sections (linked lists)
-        call create_section_from_list(json, program_entry, 'image input/output',     self%img_ios)
-        call create_section_from_list(json, program_entry, 'file input/output',      self%file_ios)
-        call create_section_from_list(json, program_entry, 'parameter input/output', self%parm_ios)
-        call create_section_from_list(json, program_entry, 'search controls',        self%srch_ctrls)
-        call create_section_from_list(json, program_entry, 'filter controls',        self%filt_ctrls)
-        call create_section_from_list(json, program_entry, 'mask controls',          self%mask_ctrls)
-        call create_section_from_list(json, program_entry, 'computer controls',      self%comp_ctrls)
-        call add_program_requirements_json(json, program, self%requirements)
+        call self%create_json_entry(json, program_entry, '', self%name%to_char(), .false.)
         ! write & clean
         call json%print(program_entry, self%name%to_char()//'.json')
         if( json%failed() )then
@@ -603,6 +595,42 @@ contains
         endif
         call json%destroy(program_entry)
     end subroutine write2json
+
+    subroutine create_json_entry(self, json, program_entry, entry_name, program_name, requirements_first)
+        use json_module
+        class(ui_program), intent(in) :: self
+        class(json_core), intent(inout) :: json
+        type(json_value), pointer, intent(out) :: program_entry
+        character(len=*), intent(in) :: entry_name, program_name
+        logical, optional, intent(in) :: requirements_first
+        type(json_value), pointer :: program
+        logical :: add_requirements_first
+
+        add_requirements_first = .true.
+        if (present(requirements_first)) add_requirements_first = requirements_first
+        call json%create_object(program_entry, entry_name)
+        call json%create_object(program, program_name)
+        call json%add(program_entry, program)
+        call json%add(program, 'name', self%name%to_char())
+        call json%add(program, 'category', self%category%to_char())
+        call json%add(program, 'category_display_name', self%category_display_name%to_char())
+        call json%add(program, 'category_order', self%category_order)
+        call json%add(program, 'display_name', self%display_name%to_char())
+        call json%add(program, 'summary', self%summary%to_char())
+        call json%add(program, 'help', self%help%to_char())
+        call json%add(program, 'executable', self%executable%to_char())
+        call json%add(program, 'visibility', trim(ui_visibility_name(self%visibility)))
+        call add_program_groups_json(json, program, self%groups)
+        if (add_requirements_first) call add_program_requirements_json(json, program, self%requirements)
+        call create_section_from_list(json, program_entry, 'image input/output', self%img_ios)
+        call create_section_from_list(json, program_entry, 'file input/output', self%file_ios)
+        call create_section_from_list(json, program_entry, 'parameter input/output', self%parm_ios)
+        call create_section_from_list(json, program_entry, 'search controls', self%srch_ctrls)
+        call create_section_from_list(json, program_entry, 'filter controls', self%filt_ctrls)
+        call create_section_from_list(json, program_entry, 'mask controls', self%mask_ctrls)
+        call create_section_from_list(json, program_entry, 'computer controls', self%comp_ctrls)
+        if (.not. add_requirements_first) call add_program_requirements_json(json, program, self%requirements)
+    end subroutine create_json_entry
 
     function get_name( self ) result( name )
         class(ui_program), intent(in) :: self

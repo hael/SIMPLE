@@ -41,12 +41,17 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call center%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to center', &
-        & 'input volume e.g. vol.mrc', .false., '')
-        call center%add_input(UI_IMG, stk)
+        & 'input volume e.g. vol.mrc', .false., '', &
+        &visibility=UI_VIS_DEVELOPER)
+        call center%add_input(UI_IMG, stk, &
+        &visibility=UI_VIS_DEVELOPER)
         ! parameter input/output
-        call center%add_input(UI_PARM, smpd)
-        call center%add_input(UI_FILE, oritab)
-        call center%add_input(UI_FILE, outfile)
+        call center%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call center%add_input(UI_FILE, oritab, &
+        &visibility=UI_VIS_DEVELOPER)
+        call center%add_input(UI_FILE, outfile, &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -54,11 +59,13 @@ contains
         ! filter controls
         call center%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
+        &Angstroms{30}', .false., 30., &
+        &visibility=UI_VIS_DEVELOPER)
         ! mask controls
         ! <empty>
         ! computer controls
-        call center%add_input(UI_COMP, nthr)
+        call center%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('center', center, prgtab, UI_CATEGORY)
     end subroutine new_center
@@ -78,27 +85,37 @@ contains
         &used to restrict the set of projections to within the asymmetric unit. &
         &neg inverts the contrast of the projections',&
         &'simple_exec',&                       ! executable
-        &.false.)                              ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                              ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call reproject%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume for creating 2D central &
-        & sections', 'input volume e.g. vol.mrc', .true., 'vol1.mrc')
-        call reproject%add_input(UI_IMG, outstk)
+        & sections', 'input volume e.g. vol.mrc', .true., 'vol1.mrc', &
+        &visibility=UI_VIS_STANDARD)
+        call reproject%add_input(UI_IMG, outstk, &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call reproject%add_input(UI_PARM, smpd)
-        call reproject%add_input(UI_FILE, oritab)
-        call reproject%add_input(UI_PARM, neg)
+        call reproject%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        call reproject%add_input(UI_FILE, oritab, &
+        &visibility=UI_VIS_ADVANCED)
+        call reproject%add_input(UI_PARM, neg, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        call reproject%add_input(UI_SRCH, nspace, required_override=.true.)
-        call reproject%add_input(UI_SRCH, pgrp,   required_override=.true.)
+        call reproject%add_input(UI_SRCH, nspace, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
+        call reproject%add_input(UI_SRCH, pgrp,   required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls
-        call reproject%add_input(UI_MASK, mskdiam, required_override=.false.)
+        call reproject%add_input(UI_MASK, mskdiam, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         ! computer controls
-        call reproject%add_input(UI_COMP, nthr)
+        call reproject%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('reproject', reproject, prgtab, UI_CATEGORY)
     end subroutine new_reproject
@@ -111,39 +128,60 @@ contains
         &'Edit, filter, transform, or resample a 3D volume',& ! summary
         &'is a program that provides standard single-particle image processing routines for MRC or SPIDER volumes',& ! help
         &'simple_exec',&                                                                          ! executable
-        &.false.)                                                                                 ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volops%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to mask', &
-        & 'input volume e.g. vol.mrc', .true., '')
-        call volops%add_input(UI_IMG, outvol)
+        & 'input volume e.g. vol.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call volops%add_input(UI_IMG, outvol, &
+        &visibility=UI_VIS_ADVANCED)
         ! ! parameter input/output
-        call volops%add_input(UI_PARM, smpd, required_override=.false.)
+        call volops%add_input(UI_PARM, smpd, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         call volops%add_input(UI_PARM, 'guinier', 'binary', 'Guinier plot','calculate Guinier plot(yes|no){no}','', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call volops%add_input(UI_PARM, neg)
-        call volops%add_input(UI_PARM, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal-to-noise ratio(0.)', .false., 0.)
-        call volops%add_input(UI_PARM, mirr)
-        call volops%add_input(UI_PARM, e1)
-        call volops%add_input(UI_PARM, e2)
-        call volops%add_input(UI_PARM, e3)
-        call volops%add_input(UI_PARM, 'xsh', 'num', 'Translation along x-axis','Shift along X in pixels', 'in pixels', .false., 0.)
-        call volops%add_input(UI_PARM, 'ysh', 'num', 'Translation along y-axis','Shift along Y in pixels', 'in pixels', .false., 0.)
-        call volops%add_input(UI_PARM, 'zsh', 'num', 'Translation along z-axis','Shift along Z in pixels', 'in pixels', .false., 0.)
-        call volops%add_input(UI_FILE, outfile)
-        call volops%add_input(UI_PARM, mul)
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, neg, &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal-to-noise ratio(0.)', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, mirr, &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, e1, &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, e2, &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, e3, &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, 'xsh', 'num', 'Translation along x-axis','Shift along X in pixels', 'in pixels', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, 'ysh', 'num', 'Translation along y-axis','Shift along Y in pixels', 'in pixels', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, 'zsh', 'num', 'Translation along z-axis','Shift along Z in pixels', 'in pixels', .false., 0., &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_FILE, outfile, &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_PARM, mul, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call volops%add_input(UI_FILT, lp, required_override=.false.)
-        call volops%add_input(UI_FILT, hp)
-        call volops%add_input(UI_FILT, bfac)
+        call volops%add_input(UI_FILT, lp, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_FILT, hp, &
+        &visibility=UI_VIS_ADVANCED)
+        call volops%add_input(UI_FILT, bfac, &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call volops%add_input(UI_MASK, mskdiam, required_override=.false.)
+        call volops%add_input(UI_MASK, mskdiam, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         ! computer controls
-        call volops%add_input(UI_COMP, nthr)
+        call volops%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('volops', volops, prgtab, UI_CATEGORY)
     end subroutine new_volops
@@ -170,10 +208,13 @@ contains
         ! above makes params%new auto-discover a unique *.simple in the cwd,
         ! exactly as reconstruct3D does. Declaring it would force the user to
         ! pass it and defeat that discovery.
-        call reconstruct3D_pcg%add_input(UI_PARM, oritype)
-        call reconstruct3D_pcg%add_input(UI_PARM, objfun)
+        call reconstruct3D_pcg%add_input(UI_PARM, oritype, &
+        &visibility=UI_VIS_DEVELOPER)
+        call reconstruct3D_pcg%add_input(UI_PARM, objfun, &
+        &visibility=UI_VIS_DEVELOPER)
         call reconstruct3D_pcg%add_input(UI_PARM, 'state', 'num', 'State to reconstruct', &
-            &'Index of the single state to reconstruct', 'state index{1}', .false., 1.)
+            &'Index of the single state to reconstruct', 'state index{1}', .false., 1., &
+        &visibility=UI_VIS_DEVELOPER)
         ! search controls
         call reconstruct3D_pcg%add_input(UI_SRCH, pgrp)
         call reconstruct3D_pcg%add_input(UI_SRCH, 'pcgop', 'multi', 'PCG normal operator', &
@@ -181,16 +222,21 @@ contains
             &'per-iteration cost is independent of particle count and is roughly 7x faster per '//&
             &'iteration; matrixfree is the exact reference operator, slower but free of the '//&
             &'kernel shift-invariance approximation(matrixfree|kernel){kernel}','', .false., 'kernel', &
-        &choices=ui_choices([character(len=10) :: 'matrixfree', 'kernel']))
+        &choices=ui_choices([character(len=10) :: 'matrixfree', 'kernel']), &
+        &visibility=UI_VIS_DEVELOPER)
         ! filter controls
-        call reconstruct3D_pcg%add_input(UI_FILT, maxits, required_override=.false.)
+        call reconstruct3D_pcg%add_input(UI_FILT, maxits, required_override=.false., &
+        &visibility=UI_VIS_DEVELOPER)
         call reconstruct3D_pcg%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
             &'Stop when the relative preconditioned residual falls below this', 'tolerance{0.001}', &
-            &.false., 0.001)
+            &.false., 0.001, &
+        &visibility=UI_VIS_DEVELOPER)
         ! mask controls
-        call reconstruct3D_pcg%add_input(UI_MASK, mskdiam, required_override=.false.)
+        call reconstruct3D_pcg%add_input(UI_MASK, mskdiam, required_override=.false., &
+        &visibility=UI_VIS_DEVELOPER)
         ! computer controls
-        call reconstruct3D_pcg%add_input(UI_COMP, nthr)
+        call reconstruct3D_pcg%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('reconstruct3D_pcg', reconstruct3D_pcg, prgtab, UI_CATEGORY)
     end subroutine new_reconstruct3D_pcg
