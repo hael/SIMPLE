@@ -880,9 +880,13 @@ contains
                     endif
                 endif
                 if( fallback_ref == 0 ) fallback_ref = pick_best_evaluated_ref(i)
-                if( fallback_ref == 0 ) fallback_ref = 1
-                candidate_pos = find_candidate_position(i, fallback_ref)
-                if( candidate_pos < 1 ) THROW_HARD('missing fallback candidate in sparse assignment')
+                candidate_pos = 0
+                if( fallback_ref > 0 ) candidate_pos = find_candidate_position(i, fallback_ref)
+                if( candidate_pos < 1 )then
+                    ! No valid evaluated candidate (e.g. a state emptied mid-run);
+                    ! leave this particle's orientation unchanged and move on.
+                    cycle
+                endif
                 call self%assign_candidate(i, self%candidate_store%candidates(candidate_pos))
                 call materialize_seed_shift(self%assgn_map(i), self%seed_shifts(:,i),&
                     &self%seed_has_sh(i), self%p_ptr%l_doshift, self%seed_nrots)
@@ -982,7 +986,12 @@ contains
                     endif
                 enddo
             endif
-            if( fallback_ref_loc == 0 ) fallback_ref_loc = 1
+            if( fallback_ref_loc == 0 )then
+                ! previous state is no longer active (e.g. a state emptied mid-run);
+                ! leave this particle unseeded so its orientation is kept unchanged
+                call o_prev%kill
+                return
+            endif
             candidate_pos = find_candidate_position(iptcl_loc, fallback_ref_loc)
             if( candidate_pos < 1 ) candidate_pos = int(self%candidate_store%offsets(iptcl_loc))
             if( self%candidate_store%candidates(candidate_pos)%inpl <= 0 )then

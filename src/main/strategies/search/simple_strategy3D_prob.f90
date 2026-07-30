@@ -49,6 +49,11 @@ contains
             self%s%nrefs_eval = self%s%nrefs
             iptcl_map = self%s%iptcl_map
             istate    =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%istate
+            if( istate < 1 )then
+                ! particle received no valid assignment (e.g. a state emptied mid-run);
+                ! keep its current orientation unchanged and move on
+                return
+            endif
             iproj     =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%iproj
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
