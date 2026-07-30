@@ -183,6 +183,35 @@ contains
     end subroutine require_close_direct
 end module base_sgd_direct_test
 
+module base_sgd_sampling_restore_test
+contains
+    subroutine run_sampling_and_restore_policy()
+        use simple_classaverager, only: cavger_zero_support_recovery
+        use simple_oris, only: oris
+        implicit none
+        type(oris) :: os
+        integer, allocatable :: inds(:)
+        integer :: nsamp
+        real :: frac
+
+        call os%new(10, .true.)
+        call os%set_all2single('state', 1.0)
+        frac = 0.6
+        call os%sample4update_rnd([1, 10], frac, nsamp, inds, .true.)
+        if( nsamp /= 6 ) error stop 'SGD mini-batch fraction regression failed'
+        if( any(inds < 1) .or. any(inds > 10) ) error stop 'SGD mini-batch index regression failed'
+        call os%kill()
+
+        if( .not. cavger_zero_support_recovery(0, .true.) ) &
+            error stop 'zero-support recovery regression failed'
+        if( cavger_zero_support_recovery(0, .false.) ) &
+            error stop 'zero-support first-restore regression failed'
+        if( cavger_zero_support_recovery(1, .true.) ) &
+            error stop 'supported-class restoration regression failed'
+        write(*,'(A)') 'SGD mini-batch and zero-support policy: PASS'
+    end subroutine run_sampling_and_restore_policy
+end module base_sgd_sampling_restore_test
+
 module base_sgd_v2_test
     use base_sgd_test_helpers, only: prepare_test_workspace, make_1jyx_volume, &
                                      simulate_1jyx_particles, check_stack_count, create_import_project
@@ -603,12 +632,16 @@ contains
 
         real :: smpd, mskdiam, snr, shift_limits(2, 2)
         integer :: nptcls, nthr, status, ldim(3), vol_dim(3)
-        integer :: iref, irot, best_ref, best_rot, truth_ref, truth_rot
+        integer :: iref, irot, candidate_rot, best_ref, best_rot, truth_ref, truth_rot
+        integer :: seed_size, iseed, candidate_count
+        integer, allocatable :: seed(:)
         integer :: pdim_srch(3)
         real :: truth_angle, applied_shift(2), expected_shift(2), recovered(3)
         real :: angle_err, angle_err_alt, recovered_angle
         real(dp) :: loss, grad(2), best_loss, objective_initial, objective_final
-        integer :: accepted_steps
+        real(dp) :: candidate_initial, candidate_final
+        real :: candidate_result(3)
+        integer :: accepted_steps, candidate_steps, best_steps
         logical :: pass_class, pass_angle, pass_loss, pass_shift, pass_all
         real, allocatable, target :: sigma2_noise(:, :)
         complex(sp), allocatable :: ref_pft_diag(:, :), ptcl_pft_diag(:, :)
@@ -625,6 +658,17 @@ contains
         type(string) :: cwd, root, project_path, clean_path, noisy_path, vol_path
 
         smpd = 1.3; mskdiam = 120.; snr = 10.; nptcls = 2; nthr = 4; vol_dim = [144, 144, 144]
+        ! Keep the truth-controlled fixture reproducible.  The same seed covers
+        ! the simulated orientations and the subsequent Gaussian noise, so a
+        ! failed candidate search is a repeatable numerical failure rather than
+        ! an accidental draw from the global RNG state.
+        call random_seed(size=seed_size)
+        allocate(seed(seed_size))
+        do iseed = 1, seed_size
+            seed(iseed) = 20260730 + 97 * (iseed - 1)
+        enddo
+        call random_seed(put=seed)
+        deallocate(seed)
         truth_ref = 2; truth_angle = 37.; applied_shift = [2., -1.5]
         ! rtsq applies the translation in the rotated image frame.  The production
         ! matcher returns the inverse (corrective) shift in that same frame, hence
@@ -685,21 +729,38 @@ contains
         call b%pftc%gen_raw_euclid_grad_for_rot_8(2, 1, [0._dp, 0._dp], 1, loss, grad)
         write (logfhandle, '(a,2es16.8,1x,l1)') '>>> V4 RAW PROBE REF2 (LOSS,GX): ', loss, grad(1), ieee_is_finite(loss)
 
-        write (logfhandle, '(a)') '>>> V4 STEP 3: discrete class/rotation search followed by shift SGD'
-        best_loss = huge(1._dp); best_ref = 0; best_rot = 0
+        write (logfhandle, '(a)') '>>> V4 STEP 3: joint class/rotation search with bounded shift SGD'
+        best_loss = huge(1._dp); best_ref = 0; best_rot = 0; best_steps = 0; candidate_count = 0
         write (logfhandle, '(a,i0)') '>>> V4 ROTATION COUNT: ', b%pftc%get_nrots()
+        shift_limits(:, 1) = -5.; shift_limits(:, 2) = 5.
+        call search%new(b, shift_limits, opt_angle=.false., direct_only=.true.)
         do iref = 1, 2; do irot = 1, b%pftc%get_nrots()
                 call b%pftc%gen_raw_euclid_grad_for_rot_8(iref, 1, [0._dp, 0._dp], irot, loss, grad)
                 if (ieee_is_finite(loss)) then
-                    if (loss < best_loss) then; best_loss = loss; best_ref = iref; best_rot = irot; end if
+                    candidate_count = candidate_count + 1
+                    call search%set_indices(iref, 1)
+                    candidate_rot = irot
+                    candidate_result = search%minimize_direct(candidate_rot, [0.0, 0.0], .5, 8, sh_rot=.false., &
+                        accepted_steps=candidate_steps, objective_initial=candidate_initial, &
+                        objective_final=candidate_final, raw_euclid=.true.)
+                    if (ieee_is_finite(candidate_final) .and. candidate_final < best_loss) then
+                        best_loss = candidate_final
+                        best_ref = iref
+                        best_rot = candidate_rot
+                        recovered = candidate_result
+                        objective_initial = candidate_initial
+                        objective_final = candidate_final
+                        best_steps = candidate_steps
+                    end if
                 end if
             end do; end do
         if (best_rot < 1) THROW_HARD('V4 discrete class/rotation search produced no finite candidate')
+        accepted_steps = best_steps
+        write (logfhandle, '(a,i0,a,es16.8)') '>>> V4 JOINT CANDIDATES: ', candidate_count, ' BEST FINAL LOSS: ', best_loss
         ! Alignment reports the corrective rotation, so compare against -truth_angle.
         truth_rot = b%pftc%get_roind(real(-truth_angle, sp))
-        shift_limits(:, 1) = -5.; shift_limits(:, 2) = 5.; call search%new(b, shift_limits, opt_angle=.false., direct_only=.true.); call search%set_indices(best_ref, 1)
-        irot = best_rot; recovered = search%minimize_direct(irot, [0.0, 0.0], .5, 8, sh_rot=.false., accepted_steps=accepted_steps, &
- objective_initial=objective_initial, objective_final=objective_final, raw_euclid=.true.)
+        call search%set_indices(best_ref, 1)
+        irot = best_rot
         write (logfhandle, '(a,2i8)') '>>> V4 CLASS TRUE/RECOVERED: ', truth_ref, best_ref
         write (logfhandle, '(a,2i8)') '>>> V4 ROTATION TRUE/RECOVERED: ', b%pftc%get_roind(real(truth_angle, sp)), irot
         write (logfhandle, '(a,2i8)') '>>> V4 ROTATION CORRECTIVE/RECOVERED: ', truth_rot, irot
@@ -852,6 +913,7 @@ end module base_sgd_baseline_test
 
 program simple_test_sgd_base_suite
     use base_sgd_direct_test, only: run_direct_shift
+    use base_sgd_sampling_restore_test, only: run_sampling_and_restore_policy
     use base_sgd_v2_test, only: run_abinitio_v2
     use base_sgd_v3_test, only: run_abinitio_v3
     use base_sgd_v4_test, only: run_abinitio_v4
@@ -861,6 +923,9 @@ program simple_test_sgd_base_suite
     write (*,'(a)') '>>> STARTING direct shift test'
     call run_direct_shift()
     write (*,'(a)') '>>> COMPLETED direct shift test'
+    write (*,'(a)') '>>> STARTING SGD sampling/restore policy test'
+    call run_sampling_and_restore_policy()
+    write (*,'(a)') '>>> COMPLETED SGD sampling/restore policy test'
     write (*,'(a)') '>>> STARTING abinitio2D V2 test'
     call run_abinitio_v2()
     write (*,'(a)') '>>> COMPLETED abinitio2D V2 test'
