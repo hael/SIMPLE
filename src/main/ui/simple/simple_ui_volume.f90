@@ -45,9 +45,9 @@ contains
         call center%add_input(UI_IMG, stk)
         ! parameter input/output
         call center%add_input(UI_PARM, smpd)
-        call center%add_input(UI_PARM, oritab)
-        call center%add_input(UI_PARM, outfile)
-        ! alternative inputs
+        call center%add_input(UI_FILE, oritab)
+        call center%add_input(UI_FILE, outfile)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -86,9 +86,9 @@ contains
         call reproject%add_input(UI_IMG, outstk)
         ! parameter input/output
         call reproject%add_input(UI_PARM, smpd)
-        call reproject%add_input(UI_PARM, oritab)
+        call reproject%add_input(UI_FILE, oritab)
         call reproject%add_input(UI_PARM, neg)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call reproject%add_input(UI_SRCH, nspace, required_override=.true.)
@@ -119,7 +119,8 @@ contains
         call volops%add_input(UI_IMG, outvol)
         ! ! parameter input/output
         call volops%add_input(UI_PARM, smpd, required_override=.false.)
-        call volops%add_input(UI_PARM, 'guinier', 'binary', 'Guinier plot','calculate Guinier plot(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call volops%add_input(UI_PARM, 'guinier', 'binary', 'Guinier plot','calculate Guinier plot(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call volops%add_input(UI_PARM, neg)
         call volops%add_input(UI_PARM, 'snr', 'num', 'SNR','Adds noise to the volume', 'signal-to-noise ratio(0.)', .false., 0.)
         call volops%add_input(UI_PARM, mirr)
@@ -129,9 +130,9 @@ contains
         call volops%add_input(UI_PARM, 'xsh', 'num', 'Translation along x-axis','Shift along X in pixels', 'in pixels', .false., 0.)
         call volops%add_input(UI_PARM, 'ysh', 'num', 'Translation along y-axis','Shift along Y in pixels', 'in pixels', .false., 0.)
         call volops%add_input(UI_PARM, 'zsh', 'num', 'Translation along z-axis','Shift along Z in pixels', 'in pixels', .false., 0.)
-        call volops%add_input(UI_PARM, outfile)
+        call volops%add_input(UI_FILE, outfile)
         call volops%add_input(UI_PARM, mul)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -179,8 +180,8 @@ contains
             &'Normal-operator implementation: kernel is the section-8.1 Toeplitz operator, whose '//&
             &'per-iteration cost is independent of particle count and is roughly 7x faster per '//&
             &'iteration; matrixfree is the exact reference operator, slower but free of the '//&
-            &'kernel shift-invariance approximation(matrixfree|kernel){kernel}', &
-            &'(matrixfree|kernel){kernel}', .false., 'kernel')
+            &'kernel shift-invariance approximation(matrixfree|kernel){kernel}','', .false., 'kernel', &
+        &choices=ui_choices([character(len=10) :: 'matrixfree', 'kernel']))
         ! filter controls
         call reconstruct3D_pcg%add_input(UI_FILT, maxits, required_override=.false.)
         call reconstruct3D_pcg%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &

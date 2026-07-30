@@ -2,8 +2,7 @@
 module simple_ui_param
 use simple_string, only: string
 use simple_error,  only: simple_exception
-use simple_ui_descriptor_types, only: ui_choice, ui_choices_from_legacy_placeholder
-use simple_ui_visibility, only: UI_VIS_DEVELOPER, ui_visibility_is_valid
+use simple_ui_descriptor_types, only: ui_choice, ui_choices_are_valid
 implicit none
 #include "simple_local_flags.inc"
 
@@ -19,32 +18,28 @@ type ui_param
     type(string) :: help
     type(string) :: placeholder
     type(string) :: units
-    type(string) :: gui_submenu
-    type(string) :: active_flags
-    type(string) :: exclusive_group
     type(string) :: cval_default
     real         :: rval_default = 0.
     logical      :: required = .true.
     logical      :: has_default = .false.
-    integer      :: visibility = UI_VIS_DEVELOPER
-    logical      :: online   = .false.
     type(ui_choice), allocatable :: choices(:)
 contains
     procedure, private :: set_param_1
     procedure, private :: set_param_2
     generic            :: set_param => set_param_1, set_param_2
-    procedure          :: apply_gui_overrides
-    procedure          :: refresh_legacy_choices
+    procedure          :: set_choices
+    procedure          :: set_generated_default
     final              :: finalize
 end type ui_param
 
 contains
 
-    subroutine set_param_1( self, key, keytype, label, help, placeholder, required, default_value )
+    subroutine set_param_1( self, key, keytype, label, help, placeholder, required, default_value, choices )
         class(ui_param), intent(inout) :: self
         character(len=*),       intent(in)    :: key, keytype, label, help, placeholder
         logical,                intent(in)    :: required
         real,                   intent(in)    :: default_value
+        type(ui_choice), optional, intent(in)  :: choices(:)
         self%key               = trim(key)
         self%keytype           = trim(keytype)
         self%label       = trim(label)
@@ -52,16 +47,16 @@ contains
         self%placeholder = trim(placeholder)
         self%required = required
         self%has_default = .not. self%required
-        self%visibility = UI_VIS_DEVELOPER
         if( self%has_default ) self%rval_default = default_value
-        call self%refresh_legacy_choices()
+        call self%set_choices(choices)
     end subroutine set_param_1
 
-    subroutine set_param_2( self, key, keytype, label, help, placeholder, required, default_value )
+    subroutine set_param_2( self, key, keytype, label, help, placeholder, required, default_value, choices )
         class(ui_param), intent(inout) :: self
         character(len=*),       intent(in)    :: key, keytype, label, help, placeholder
         logical,                intent(in)    :: required
         character(len=*),       intent(in)    :: default_value
+        type(ui_choice), optional, intent(in)  :: choices(:)
         self%key               = trim(key)
         self%keytype           = trim(keytype)
         self%label       = trim(label)
@@ -69,37 +64,73 @@ contains
         self%placeholder = trim(placeholder)
         self%required = required
         self%has_default = .not. self%required
-        self%visibility = UI_VIS_DEVELOPER
         if( self%has_default ) self%cval_default = trim(default_value)
-        call self%refresh_legacy_choices()
+        call self%set_choices(choices)
+        if( self%has_default .and. (self%keytype%to_char() == 'binary' .or. &
+            &self%keytype%to_char() == 'multi') )then
+            if( .not. choice_is_available(self%choices, self%cval_default%to_char()) )then
+                THROW_HARD('UI parameter default is not a declared choice: '//self%key%to_char())
+            endif
+        endif
     end subroutine set_param_2
 
-    subroutine apply_gui_overrides(p, gui_submenu, gui_exclusive_group, gui_active_flags, gui_online, gui_visibility)
-        class(ui_param),            intent(inout) :: p
-        character(len=*), optional, intent(in)    :: gui_submenu, gui_exclusive_group, gui_active_flags
-        logical,          optional, intent(in)    :: gui_online
-        integer,          optional, intent(in)    :: gui_visibility
-        if( present(gui_submenu))         p%gui_submenu     = trim(gui_submenu)
-        if( present(gui_exclusive_group)) p%exclusive_group = trim(gui_exclusive_group)
-        if( present(gui_active_flags))    p%active_flags    = trim(gui_active_flags)
-        if( present(gui_online))          p%online          = gui_online
-        if( present(gui_visibility) )then
-            if( .not. ui_visibility_is_valid(gui_visibility) )then
-                THROW_HARD('ui_param%apply_gui_overrides received an invalid visibility level')
-            endif
-            p%visibility = gui_visibility
-        endif
-    end subroutine apply_gui_overrides
-
-    subroutine refresh_legacy_choices( self )
+    subroutine set_choices( self, choices )
         class(ui_param), intent(inout) :: self
-        character(len=:), allocatable :: legacy_placeholder
-        logical :: valid
-        legacy_placeholder = self%placeholder%to_char()
-        call ui_choices_from_legacy_placeholder(self%keytype%to_char(), legacy_placeholder, &
-            &self%choices, valid)
+        type(ui_choice), optional, intent(in) :: choices(:)
+        if( allocated(self%choices) ) deallocate(self%choices)
+        if( present(choices) )then
+            allocate(self%choices(size(choices)))
+            self%choices = choices
+        else
+            allocate(self%choices(0))
+        endif
+        if( .not. ui_choices_are_valid(self%keytype%to_char(), self%choices) )then
+            THROW_HARD('Invalid choices for UI parameter: '//self%key%to_char())
+        endif
         self%placeholder = standardize_placeholder(self%keytype%to_char())
-    end subroutine refresh_legacy_choices
+    end subroutine set_choices
+
+    subroutine set_generated_default( self, value, found )
+        class(ui_param), intent(inout) :: self
+        character(len=*), intent(in)   :: value
+        logical,          intent(in)   :: found
+        integer :: ios
+        logical :: had_default
+        if( .not. found ) return
+        had_default = self%has_default
+        select case( trim(self%keytype%to_char()) )
+            case('num', 'int', 'float')
+                read(value, *, iostat=ios) self%rval_default
+                if( ios /= 0 )then
+                    THROW_HARD('Generated UI default is not numeric: '//self%key%to_char())
+                endif
+            case default
+                if( self%keytype%to_char() == 'binary' .or. self%keytype%to_char() == 'multi' )then
+                    if( .not. choice_is_available(self%choices, trim(value)) )then
+                        ! A baseline parameter value may be valid globally but outside
+                        ! this program's declared subset. Retain its validated local
+                        ! default; an input without one remains a descriptor error.
+                        if( had_default ) return
+                        THROW_HARD('Generated UI default is not a declared choice: '//self%key%to_char())
+                    endif
+                endif
+                self%cval_default = trim(value)
+        end select
+        self%has_default = .true.
+    end subroutine set_generated_default
+
+    pure logical function choice_is_available( choices, value )
+        type(ui_choice),  intent(in) :: choices(:)
+        character(len=*), intent(in) :: value
+        integer :: i
+        choice_is_available = .false.
+        do i = 1, size(choices)
+            if( choices(i)%value%to_char() == trim(value) )then
+                choice_is_available = .true.
+                return
+            endif
+        enddo
+    end function choice_is_available
 
     pure function standardize_placeholder( keytype ) result( placeholder )
         character(len=*), intent(in) :: keytype
@@ -133,9 +164,6 @@ contains
         call self%help%kill()
         call self%placeholder%kill()
         call self%units%kill()
-        call self%gui_submenu%kill()
-        call self%active_flags%kill()
-        call self%exclusive_group%kill()
         call self%cval_default%kill()
     end subroutine finalize
 

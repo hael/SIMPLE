@@ -10,67 +10,43 @@ type, public :: ui_choice
     type(string) :: help
 end type ui_choice
 
-public :: ui_choices_from_legacy_placeholder
+public :: ui_choices, ui_choices_are_valid
 
 contains
 
-    subroutine ui_choices_from_legacy_placeholder( keytype, placeholder, choices, valid )
-        character(len=*),              intent(in)  :: keytype, placeholder
-        type(ui_choice), allocatable,  intent(out) :: choices(:)
-        logical,                       intent(out) :: valid
-        integer :: first_delimiter, last_delimiter, choice_count, choice_index, start, finish
-        character(len=:), allocatable :: values
-
-        valid = .true.
-        if( trim(keytype) /= 'binary' .and. trim(keytype) /= 'multi' )then
-            allocate(choices(0))
-            return
-        endif
-
-        first_delimiter = index(placeholder, '(')
-        if( first_delimiter == 0 )then
-            valid = .false.
-            allocate(choices(0))
-            return
-        endif
-        last_delimiter = index(placeholder(first_delimiter+1:), ')')
-        if( last_delimiter == 0 )then
-            valid = .false.
-            allocate(choices(0))
-            return
-        endif
-        last_delimiter = last_delimiter + first_delimiter
-        values = placeholder(first_delimiter+1:last_delimiter-1)
-        if( len_trim(values) == 0 )then
-            valid = .false.
-            allocate(choices(0))
-            return
-        endif
-
-        choice_count = 1
-        do choice_index = 1, len_trim(values)
-            if( values(choice_index:choice_index) == '|' ) choice_count = choice_count + 1
+    function ui_choices( values ) result( choices )
+        character(len=*), intent(in) :: values(:)
+        type(ui_choice), allocatable :: choices(:)
+        integer :: i
+        allocate(choices(size(values)))
+        do i = 1, size(values)
+            choices(i)%value = trim(values(i))
+            choices(i)%label = trim(values(i))
+            choices(i)%help  = ''
         enddo
-        if( (trim(keytype) == 'binary' .and. choice_count /= 2) .or. &
-            &(trim(keytype) == 'multi' .and. choice_count < 2) )then
-            valid = .false.
-            allocate(choices(0))
-            return
-        endif
+    end function ui_choices
 
-        allocate(choices(choice_count))
-        start = 1
-        do choice_index = 1, choice_count
-            if( choice_index == choice_count )then
-                finish = len_trim(values)
-            else
-                finish = start + index(values(start:), '|') - 2
-            endif
-            choices(choice_index)%value = trim(values(start:finish))
-            choices(choice_index)%label = trim(values(start:finish))
-            choices(choice_index)%help  = ''
-            start = finish + 2
+    pure logical function ui_choices_are_valid( keytype, choices )
+        character(len=*), intent(in) :: keytype
+        type(ui_choice),  intent(in) :: choices(:)
+        integer :: i, j
+        ui_choices_are_valid = .false.
+        select case( trim(keytype) )
+            case('binary')
+                if( size(choices) /= 2 ) return
+            case('multi')
+                if( size(choices) < 2 ) return
+            case default
+                if( size(choices) == 0 ) ui_choices_are_valid = .true.
+                return
+        end select
+        do i = 1, size(choices)
+            if( len_trim(choices(i)%value%to_char()) == 0 ) return
+            do j = 1, i - 1
+                if( choices(i)%value%to_char() == choices(j)%value%to_char() ) return
+            enddo
         enddo
-    end subroutine ui_choices_from_legacy_placeholder
+        ui_choices_are_valid = .true.
+    end function ui_choices_are_valid
 
 end module simple_ui_descriptor_types

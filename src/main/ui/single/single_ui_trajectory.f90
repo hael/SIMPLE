@@ -46,16 +46,16 @@ contains
         &'extraction of a substack segment of time-series of metallic nanoparticles',&                                 ! summary
         &'is a shared-memory workflow for extraction of a substack segment of time-series of metallic nanoparticles',& ! help
         &'single_exec',&                                                                                               ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                                                 ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call extract_substk%add_input(UI_PARM, projfile)
+        call extract_substk%add_input(UI_FILE, projfile)
         call extract_substk%add_input(UI_PARM, 'fromp', 'num', 'From index', 'Start index for stack copy', 'start index', .false., 1.0)
         call extract_substk%add_input(UI_PARM, 'top',   'num', 'To index', 'Stop index for stack copy', 'stop index', .false., 1.0)
         call extract_substk%add_input(UI_PARM, 'state', 'num', 'State index', 'Only particles with this state are extracted{1}; use state<0 for legacy include-all behavior', 'state index', .false., 1.0)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -77,7 +77,7 @@ contains
         &'Removes graphene Fourier peaks in time-series',&   ! summary
         &'Removes graphene Fourier peaks in time-series',&   ! help
         &'single_exec',&                                     ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                      ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call graphene_subtr%add_input(UI_IMG, stk_traj)
@@ -86,7 +86,7 @@ contains
         ! parameter input/output
         call graphene_subtr%add_input(UI_PARM, smpd)
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -108,14 +108,14 @@ contains
         &'Imports time-series particles stack',&            ! summary
         &'is a workflow for importing time-series data',&   ! help
         &'single_exec',&                                    ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                      ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call import_trajectory%add_input(UI_IMG, stk, required_override=.true.)
         ! parameter input/output
         call import_trajectory%add_input(UI_PARM, smpd)
-        call import_trajectory%add_input(UI_PARM, deftab)
-        ! alternative inputs
+        call import_trajectory%add_input(UI_FILE, deftab)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -137,23 +137,26 @@ contains
         &'diffusion-map trajectory denoising',&                       ! summary
         &'is a program for diffusion-map denoising of an image stack',& ! help
         &'single_exec',&                                              ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                               ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call trajectory_denoise%add_input(UI_IMG, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '')
         call trajectory_denoise%add_input(UI_IMG, outstk)
         ! parameter input/output
         call trajectory_denoise%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
         call trajectory_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of diffusion-map components (0 => auto; default 0)', 'Number of diffusion-map components (0 => auto; default 0)', '# eigenvecs', .false., 0.0)
-        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: diffusion maps, PPCA, PPCA plus residual kPCA, standard SVD PCA, or kernel PCA', 'PCA methods', '(diffusion_maps|ppca|ppca_kpca_resid|pca_svd|kpca){diffusion_maps}', .false., 'diffusion_maps')
+        call trajectory_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: diffusion maps, PPCA, PPCA plus residual kPCA, standard SVD PCA, or kernel PCA', 'PCA methods','', .false., 'diffusion_maps', &
+        &choices=ui_choices([character(len=15) :: 'diffusion_maps', 'ppca', 'ppca_kpca_resid', 'pca_svd', 'kpca']))
         call trajectory_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Diffusion graph neighbors (default 5; try 5-30)', 'Local nearest neighbors used for pca_mode=diffusion_maps', '# neighbors', .false., 5.0)
-        call trajectory_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
-        call trajectory_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
+        call trajectory_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}','', .false., 'rbf', &
+        &choices=ui_choices([character(len=6) :: 'rbf', 'cosine']))
+        call trajectory_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}','', .false., 'nystrom', &
+        &choices=ui_choices([character(len=7) :: 'exact', 'nystrom']))
         call trajectory_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
         call trajectory_denoise%add_input(UI_FILT, 'ppca_kpca_resid_alpha', 'num', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'hybrid alpha', .false., 0.5)
         call trajectory_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
@@ -177,14 +180,14 @@ contains
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! help
         &'single_exec',&                                                                 ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                   ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call trajectory_make_projavgs%add_input(UI_PARM, nspace)
         call trajectory_make_projavgs%add_input(UI_PARM, 'athres', 'num', 'Angular threshold (degrees)', 'Angular threshold (degrees)', 'in degrees{10}', .false., 10.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -206,7 +209,7 @@ contains
         &'Time windowed 3D reconstruction from oriented particles',&     ! help
         &'Time windowed 3D reconstruction from oriented particles',&
         &'single_exec',&                                                 ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                   ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call trajectory_reconstruct3D%add_input(UI_IMG, 'vol1', 'file', 'Mean volume for latent chunking', &
@@ -216,8 +219,8 @@ contains
         call trajectory_reconstruct3D%add_input(UI_PARM, 'fromp', 'num', 'From particle index', 'Start index for 3D reconstruction', 'start index', .false., 1.0)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'top',   'num', 'To particle index', 'Stop index for 3D reconstruction', 'stop index', .false., 1.0)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_mode', 'multi', 'Trajectory chunking mode', &
-        &'Use balanced windows or time-constrained flex-latent segmentation(balanced|latent){balanced}', &
-        &'(balanced|latent){balanced}', .false., 'balanced')
+        &'Use balanced windows or time-constrained flex-latent segmentation(balanced|latent){balanced}','', .false., 'balanced', &
+        &choices=ui_choices([character(len=8) :: 'balanced', 'latent']))
         call trajectory_reconstruct3D%add_input(UI_PARM, 'nchunks', 'num', 'Number of temporal chunks', &
         &'Fixed number of contiguous chunks; overrides the automatic count range when positive', '# chunks', .false., 0.)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'nchunks_min', 'num', 'Minimum automatic chunk count', &
@@ -235,7 +238,7 @@ contains
         &'Maximum number of consecutive frames in a latent chunk; 0 uses twice the average chunk length', '# frames', .false., 0.)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_max_shift', 'num', 'Maximum boundary shift', &
         &'Maximum displacement from a balanced boundary; 0 uses half the average chunk length', '# frames', .false., 0.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call trajectory_reconstruct3D%add_input(UI_SRCH, pgrp)
@@ -261,13 +264,13 @@ contains
         &'Substitutes stack into an existing project',&                   ! summary
         &'is a program for substituting stack into an existing project',& ! help
         &'single_exec',&                                                  ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                    ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call trajectory_swap_stack%add_input(UI_IMG, stk, required_override=.true.)
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

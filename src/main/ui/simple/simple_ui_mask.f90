@@ -40,7 +40,7 @@ contains
         call auto_spher_mask%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
         ! parameter input/output
         call auto_spher_mask%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -69,7 +69,7 @@ contains
         call automask2D%add_input(UI_IMG, stk, required_override=.true.)
         ! parameter input/output
         call automask2D%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -85,7 +85,8 @@ contains
         call automask2D%add_input(UI_MASK, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
         call automask2D%add_input(UI_MASK, 'positive', 'binary', 'Consider only positive pixels',&
-        &'Consider only positive pixels for threshold determination(yes|no){no}', 'only positive(yes|no){no}', .false., 'no')
+        &'Consider only positive pixels for threshold determination(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! computer controls
         call automask2D%add_input(UI_COMP, nthr)
         ! add to ui_hash
@@ -107,15 +108,17 @@ contains
         ! <empty>
         ! parameter input/output
         call mask%add_input(UI_PARM, smpd)
-        call mask%add_input(UI_PARM, oritab)
-        call mask%add_input(UI_PARM, outfile)
-        ! alternative inputs
-        call mask%add_input(UI_ALT, stk)
-        call mask%add_input(UI_ALT, 'vol1', 'file', 'Volume', 'Volume to mask', &
+        call mask%add_input(UI_FILE, oritab)
+        call mask%add_input(UI_FILE, outfile)
+        call mask%add_input(UI_IMG, stk)
+        call mask%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to mask', &
         & 'input volume e.g. vol.mrc', .false., '')
+        call mask%add_requirement('input', 'Input data', 'Supply either a volume or an image stack.', &
+            [character(len=4) :: 'stk ', 'vol1'], max_selected=1)
         ! search controls
         call mask%add_input(UI_SRCH, 'center', 'binary', 'Center input volume', 'Center input volume by its &
-        &center of gravity(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &center of gravity(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! filter controls
         call mask%add_input(UI_FILT, lp_backgr)
         ! mask controls
@@ -124,7 +127,8 @@ contains
         call mask%add_input(UI_MASK, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false., 6.)
         call mask%add_input(UI_MASK, 'taper_edges', 'binary', 'Taper edges',&
-        &'Whether to taper the edges of image/volume(yes|no){no}', '(yes|no){no}', .false., 'no')
+        &'Whether to taper the edges of image/volume(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call mask%add_input(UI_MASK, 'pdbfile', 'file', 'PDB for 3D envelope masking',&
         &'PDB file used to determine the mask', 'e.g. molecule.pdb', .false., '')
         ! computer controls

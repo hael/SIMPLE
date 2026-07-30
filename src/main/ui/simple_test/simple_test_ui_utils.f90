@@ -67,7 +67,7 @@ contains
         !call ansi_colors%add_input(UI_IO, )
         ! parameter input/output
         !call ansi_colors%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call ansi_colors%add_input(UI_PARM, )
         ! search controls
         !call ansi_colors%add_input(UI_SRCH, )
@@ -95,7 +95,7 @@ contains
         !call binoris_test%add_input(UI_IO, )
         ! parameter input/output
         !call binoris_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call binoris_test%add_input(UI_PARM, )
         ! search controls
         !call binoris_test%add_input(UI_SRCH, )
@@ -123,7 +123,7 @@ contains
         !call binoris_io_test%add_input(UI_IO, )
         ! parameter input/output
         !call binoris_io_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call binoris_io_test%add_input(UI_PARM, )
         ! search controls
         !call binoris_io_test%add_input(UI_SRCH, )
@@ -151,7 +151,7 @@ contains
         !call cmdline%add_input(UI_IO, )
         ! parameter input/output
         !call cmdline%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call cmdline%add_input(UI_PARM, )
         ! search controls
         !call cmdline%add_input(UI_SRCH, )
@@ -179,7 +179,7 @@ contains
         !call cmdline%add_input(UI_IO, )
         ! parameter input/output
         !call cmdline%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call cmdline%add_input(UI_PARM, )
         ! search controls
         !call cmdline%add_input(UI_SRCH, )
@@ -207,7 +207,7 @@ contains
         !call cmdline%add_input(UI_IO, )
         ! parameter input/output
         !call cmdline%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call cmdline%add_input(UI_PARM, )
         ! search controls
         !call cmdline%add_input(UI_SRCH, )
@@ -235,7 +235,7 @@ contains
         !call install%add_input(UI_IO, )
         ! parameter input/output
         !call install%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call install%add_input(UI_PARM, )
         ! search controls
         !call install%add_input(UI_SRCH, )
@@ -263,7 +263,7 @@ contains
         !call nice%add_input(UI_IO, )
         ! parameter input/output
         !call nice%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call nice%add_input(UI_PARM, )
         ! search controls
         !call nice%add_input(UI_SRCH, )
@@ -291,7 +291,7 @@ contains
         !call pdb2mrc%add_input(UI_IO, )
         ! parameter input/output
         !call pdb2mrc%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call pdb2mrc%add_input(UI_PARM, )
         ! search controls
         !call pdb2mrc%add_input(UI_SRCH, )
@@ -319,7 +319,7 @@ contains
         !call serialize%add_input(UI_IO, )
         ! parameter input/output
         !call serialize%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call serialize%add_input(UI_PARM, )
         ! search controls
         !call serialize%add_input(UI_SRCH, )
@@ -360,7 +360,7 @@ contains
         !call stringmatch%add_input(UI_IO, )
         ! parameter input/output
         !call stringmatch%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call stringmatch%add_input(UI_PARM, )
         ! search controls
         !call stringmatch%add_input(UI_SRCH, )

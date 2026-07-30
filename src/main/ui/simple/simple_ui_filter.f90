@@ -44,24 +44,28 @@ contains
         call filter%add_input(UI_IMG, outvol)
         ! parameter input/output
         call filter%add_input(UI_PARM, smpd)
-        ! alternative inputs
-        call filter%add_input(UI_ALT, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. stk.mrcs',     .false., '')
-        call filter%add_input(UI_ALT, 'vol1', 'file', 'Volume to filter', 'Volume to filter',          'e.g. vol.mrc file', .false., '')
+        call filter%add_input(UI_IMG, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. stk.mrcs',     .false., '')
+        call filter%add_input(UI_IMG, 'vol1', 'file', 'Volume to filter', 'Volume to filter',          'e.g. vol.mrc file', .false., '')
+        call filter%add_requirement('input', 'Input data', 'Supply either a volume or an image stack.', &
+            [character(len=4) :: 'stk ', 'vol1'], max_selected=1)
         ! search controls
         ! <empty>
         ! filter controls
         call filter%add_input(UI_FILT, lp, required_override=.false.)
         call filter%add_input(UI_FILT, hp)
-        call filter%add_input(UI_FILT, 'phrand', 'binary', 'Phase randomization', 'Fouirer phase randomization by white noise substitution(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call filter%add_input(UI_FILT, 'phrand', 'binary', 'Phase randomization', 'Fouirer phase randomization by white noise substitution(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call filter%add_input(UI_FILT, 'bfac', 'num', 'B-factor of Gaussian low-/high-pass filter','B-factor of Gaussian low-/high-pass filter in Angstroms^2', 'B-factor in Angstroms^2{0}', .false., 0.)
         call filter%add_input(UI_FILT, 'winsz', 'num', 'Half-window size', 'Half-window size(in pixels)', 'winsz in pixels', .false., 1.0)
         call filter%add_input(UI_FILT, 'width', 'num', 'Cosine low-pass filter falloff',&
         &'Number of cosine edge pixels of Fourier low-pass filter in pixels', '# pixels cosine edge', .false., 10.)
         call filter%add_input(UI_FILT, 'real_filter', 'multi', 'Real-space filter',&
-        &'Real-space filter(median|average|stdev|bman|NLmean|no){no}', '(median|average|stdev|bman|NLmean|no){no}', .false., 'no')
+        &'Real-space filter(median|average|stdev|bman|NLmean|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=7) :: 'median', 'average', 'stdev', 'bman', 'NLmean', 'no']))
         call filter%add_input(UI_FILT, 'fsc', 'file', 'FSC file', 'FSC file',          'e.g. fsc_state01.bin file', .false., '')
         call filter%add_input(UI_FILT, frcs)
-        call filter%add_input(UI_FILT, 'filter', 'multi', 'Filter type(bs|nlmean|no){no}', 'Filter type(bs|nlmean|corr|no){no}', '(bs|nlmean|no){no}', .false., 'no')
+        call filter%add_input(UI_FILT, 'filter', 'multi', 'Filter type(bs|nlmean|no){no}', 'Filter type(bs|nlmean|corr|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=6) :: 'bs', 'nlmean', 'no']))
         call filter%add_input(UI_FILT, 'lambda', 'num', 'BS smoother lambda', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
         call filter%add_input(UI_FILT, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation(in pixels)', &
         & '{1.}', .false., 1.0)
@@ -88,7 +92,7 @@ contains
         call uniform_filter2D%add_input(UI_IMG, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
         ! parameter input/output
         call uniform_filter2D%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -118,7 +122,7 @@ contains
         call uniform_filter3D%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
         ! parameter input/output
         call uniform_filter3D%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -151,7 +155,7 @@ contains
         call nu_filt3D%add_input(UI_IMG, outvol, required_override=.false.)
         ! parameter input/output
         call nu_filt3D%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

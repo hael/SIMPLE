@@ -44,7 +44,7 @@ contains
         ! parameter input/output
         !call atoms_stats%add_input(UI_IMG, )
         call atoms_stats%add_input(UI_PARM, smpd,    required_override=.true.)
-        ! alternative inputs
+        ! <no additional inputs>
         !call atoms_stats%add_input(UI_PARM, )
         ! search controls
         !call atoms_stats%add_input(UI_SRCH, )
@@ -74,7 +74,7 @@ contains
         ! parameter input/output
         call detect_atoms%add_input(UI_PARM, smpd,    required_override=.true.)
         !call detect_atoms%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call detect_atoms%add_input(UI_PARM, )
         ! search controls
         !call detect_atoms%add_input(UI_SRCH, )
@@ -104,7 +104,7 @@ contains
         ! parameter input/output
         call simulate_nanoparticle%add_input(UI_PARM, smpd,    required_override=.true.)
         !call simulate_nanoparticle%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call simulate_nanoparticle%add_input(UI_PARM, )
         ! search controls
         !call simulate_nanoparticle%add_input(UI_SRCH, )
@@ -134,7 +134,7 @@ contains
         ! parameter input/output
         call single_workflow%add_input(UI_PARM, smpd,    required_override=.true.)
         !call single_workflow%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call single_workflow%add_input(UI_PARM, )
         ! search controls
         !call single_workflow%add_input(UI_SRCH, )

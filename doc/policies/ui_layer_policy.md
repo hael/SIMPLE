@@ -9,11 +9,10 @@ that code.
 
 The descriptor layer describes programs and their inputs. It does not execute
 programs, independently own scientific defaults, or replace validation
-performed by the parameters, commander, strategy, or domain layers. It does
-expose the effective user-visible defaults supplied by the parameter layer.
-
-The implementation work is tracked separately in
-[`../refactoring_notes/ui_descriptor_layer_refactoring.md`](../refactoring_notes/ui_descriptor_layer_refactoring.md).
+performed by the parameters, commander, strategy, or domain layers. CMake
+generates a read-only Fortran lookup module from the existing parameter and
+commander declarations; the UI uses that module only to expose display
+defaults.
 
 ## One source of truth
 
@@ -23,20 +22,20 @@ The Fortran backend is the only source of truth for UI descriptors.
   executable ownership, project requirements, and input membership.
 - Declaration-time initialization in `type(parameters)`, together with
   `init_dynamic_defaults`, defines the baseline parameter defaults.
-- `ui_param` objects define input names, types, descriptions, choices, units,
-  visibility, dependencies, and selection rules. They record a read-only snapshot of those
-  baseline parameter defaults; they do not maintain an independent default.
+- `ui_param` objects define reusable input names, types, descriptions, choices,
+  units, and display defaults. Program-specific semantics are stored in
+  `ui_program_input` bindings.
 - JSON is a serialization of the in-memory Fortran objects. JSON must not add,
   omit, reinterpret, or override descriptor data.
 - TOML, Markdown, spreadsheets, and other documents must not contain an
   independently maintained copy of UI metadata.
-- Python or other code generators must not generate program-specific UI
-  descriptor code.
+- Python or other code generators must not generate program metadata or UI
+  constructors. The CMake-generated Fortran default lookup is permitted
+  because it is derived only from the existing parameter and commander source
+  and contains no UI structure, descriptions, categories, or choices.
 
-The descriptor is not extended by GUI-specific overlays, overrides, or client
-metadata. A GUI consumes the same completed Fortran object as the CLI. If a
-field is needed to render, validate, or submit an input, it belongs in that
-shared descriptor with a client-neutral name and meaning.
+JSON and graphical clients do not apply a separate runtime overlay: they
+consume the Fortran descriptor registered for the CLI.
 
 Documentation may explain the model and the editing procedure, but the values
 rendered by the CLI and GUI must come from Fortran.
@@ -55,35 +54,40 @@ SIMPLE currently obtains missing input values from several places:
 - values derived at runtime from other inputs, project state, or input data.
 
 The initializations remain where they are. They are already the source used by
-the parameter lifecycle and are available before any program runs. The UI
-must obtain them through a read-only default snapshot: construct only the
-baseline `parameters` state and apply `init_dynamic_defaults`; do not call
-`parameters%new`, parse a command line, inspect a project, or run a commander.
+the parameter lifecycle and are available before any program runs. CMake runs
+`scripts/default_audit.py` to generate `simple_ui_default_values.f90` in the
+build tree. It extracts baseline values and only exact, statically verified
+missing-key commander overrides. `ui_program` consults the generated
+`get_ui_default` routine while constructing each input. Commanders and the
+parameter lifecycle never read this UI-only module.
+
+The generator preserves the parameter parser's scalar meaning before it emits
+a display value. Integer and real values are represented in the UI's
+real-valued numeric storage (for example, an integer `3` becomes `3.0`). The
+legacy numeric token `no` represents the command line's initialized numeric
+value and is exported as `0.0`. Any other nonnumeric value for a known numeric
+parameter is a generation error; an invalid value must never reach a UI
+descriptor.
+
+A global parameter baseline can be valid for the CLI but outside the narrower
+choice set declared by one program. Before applying a generated binary or
+multiple-choice value, `ui_param` checks the program's declared choices. An
+incompatible baseline leaves that program's already-validated local default in
+place; without such a default, descriptor construction fails. This is shared
+Fortran descriptor validation, not a GUI override.
 
 Conditional `if (.not. cline%defined(key)) call cline%set(key, value)` calls
 remain program execution behavior. They can legitimately override a baseline
 value for one workflow, and the GUI cannot treat them as its universal default
 without reimplementing commander logic.
 
-This gives two distinct meanings that must not be confused:
+The current implementation has two distinct meanings that must not be
+confused:
 
-- the UI and JSON publish the baseline value from `parameters` when one is
-  available;
+- the UI and JSON publish the generated baseline or verified program value
+  when one is available; and
 - the executed program may choose a different value when an optional key is
   omitted and its own command setup supplies a value.
-
-Consequently, a GUI must omit an untouched optional input from the submitted
-command line. It sends a value only when the user has deliberately changed it
-(or when the input is required). This preserves the CLI's program-specific
-default behavior. A GUI must not claim that a displayed baseline is always the
-final value used by every program.
-
-Runtime-derived values remain automatic; the UI omits a default when it cannot
-show a sensible baseline value. Defaults must not be encoded in `placeholder`.
-
-During migration, an existing literal default passed to `add_input` may be
-retained only as an assertion against the baseline snapshot. Once a category
-is validated, that literal must be removed.
 
 ## Current class design
 
@@ -95,14 +99,34 @@ ui_hash
 
 ui_program
   +-- program identity and presentation fields
-  +-- image input/output       -- linked_list of ui_param values
-  +-- parameter input/output   -- linked_list of ui_param values
-  +-- alternative inputs       -- linked_list of ui_param values
-  +-- search controls          -- linked_list of ui_param values
-  +-- filter controls          -- linked_list of ui_param values
-  +-- mask controls            -- linked_list of ui_param values
-  +-- computer controls        -- linked_list of ui_param values
+  +-- program-local groups     -- derived from input bindings
+  +-- image input/output       -- linked_list of ui_program_input values
+  +-- file input/output        -- linked_list of ui_program_input values
+  +-- parameter input/output   -- linked_list of ui_program_input values
+  +-- search controls          -- linked_list of ui_program_input values
+  +-- filter controls          -- linked_list of ui_program_input values
+  +-- mask controls            -- linked_list of ui_program_input values
+  +-- computer controls        -- linked_list of ui_program_input values
+
+ui_program_input
+  +-- reusable ui_param definition
+  +-- section, group, visibility, and activation semantics
+
+ui_requirement_group
+  +-- named key set and minimum/maximum selected counts
 ```
+
+`UI_ALT` and `alt_ios` have been removed. Inputs remain in their meaningful
+CLI sections—image input/output, file input/output, parameter input/output,
+search, filter, mask, or computer controls. A relationship between inputs is
+represented separately by a program-owned requirement group; it never creates
+another input section.
+
+`UI_IMG` is reserved for image stacks and volumes, including output stacks and
+output volumes. `UI_FILE` contains every other path-like input or output:
+project, STAR, orientation, CTF, coordinate, and table files, together with
+directories. A list *of* stacks or volumes is still a table file and therefore
+uses `UI_FILE`. `UI_PARM` is for non-path scalar, choice, and Boolean settings.
 
 `ui_hash` extends the generic `vrefhash` and supplies typed access to
 `ui_program` and `ui_param`. `ui_program` and `ui_param` do not inherit from
@@ -118,27 +142,70 @@ one another.
 | `keytype` | Input type used by CLI and GUI consumers. |
 | `label` | Short field label. |
 | `help` | Full help text. |
-| `placeholder` | Short example or entry hint. Legacy choice syntax may still be present during migration. |
+| `placeholder` | Short example or entry hint; empty for choice inputs. |
 | `cval_default`, `rval_default`, `has_default` | Current internal storage and presence flag for a display default. |
 | `units` | Display units, empty when not applicable. |
 | `choices` | Structured values accepted by binary and multiple-choice inputs. |
-| `visibility` | Standard, Advanced, or Developer. |
-| `gui_submenu`, `exclusive_group`, `active_flags`, `online` | Legacy presentation and interaction fields; scheduled for replacement by shared descriptor semantics. |
 
-The two `set_param` overloads construct numeric and character inputs.
-`refresh_legacy_choices` converts the existing placeholder choice syntax into
-structured Fortran choices. `apply_gui_overrides` is legacy compatibility
-machinery, not the target construction model.
+The two `set_param` overloads construct numeric and character inputs. Binary
+and multiple-choice inputs must pass `choices=ui_choices([...])`; this creates
+an explicit `ui_choice` array with exact CLI values and matching display labels.
+The descriptor rejects missing, empty, duplicate, or incorrectly sized choice
+lists, as well as an optional default that is not one of the declared values.
+`ui_param` deliberately contains no visibility, group, activation, or renderer
+field.
 
-Program modules must declare the final descriptor for each program input.
-Common parameter definitions may provide reusable starting values, but they
-must not be supplemented by renderer-only metadata or a GUI-specific overlay.
-Any program-specific difference belongs in the shared descriptor before it is
-registered.
+### `ui_program_input` and groups
+
+`ui_program_input` is the registered use of one `ui_param` in one program. It
+owns the input's CLI-help section, Standard/Advanced/Developer visibility,
+optional input group, and optional activation predicate. The three
+`ui_program%add_input` overloads construct this binding directly; their
+client-neutral optional arguments are `group=`, `visibility=`, and
+`activation=`.
+
+`group` creates or reuses a program-local `ui_input_group` with a stable id,
+plain-English label, and first-use order. `ui_program%groups` is derived while
+bindings are added, so no separate menu-list field can drift from actual input
+membership. JSON emits the ordered program group list and an input's group
+object.
+
+The current structured activation form is
+`ui_activation_equals_any(key, values)`. It records that a binding applies
+when the controlling CLI key equals one of explicit values. All former
+`quality_mode=...` pipe-delimited strings now use this form and JSON emits an
+`activation` object with `key` and `equals_any`. The predicate is descriptor
+data, not a renderer expression.
 
 The GUI needs one thing only: a sensible value to display before the user
 edits an optional input. It does not need to know how SIMPLE obtained that
 value. The default export therefore has no `default_kind` classification.
+
+### Requirement groups
+
+`ui_requirement_group` records an input condition in shared descriptor data.
+It has a stable id, a plain-English label and explanation, a set of registered
+CLI keys, and inclusive `min_selected` and `max_selected` cardinalities. For
+example, an image operation may require exactly one of `stk` and `vol1`.
+
+Requirement members remain in their normal sections and retain their own
+labels, help, visibility, activation, and defaults. A group is not a GUI-only
+radio widget: CLI, JSON, and GUI clients all receive the same cardinality
+rule. The registry rejects an empty group, duplicate member, duplicate group
+id, invalid cardinality, or member key that is not an input of that program.
+
+The command-line parser evaluates requirement groups after it has parsed all
+provided keys. It prints the program's command guidance only when a group is
+unsatisfied, including the plain-English rule, accepted keys, supplied count,
+and required cardinality. When the group is satisfied, normal parsing proceeds
+without printing usage. Requirement groups describe unconditional key presence
+only; dependent or value-specific rules remain in activation predicates and
+commander validation until a richer shared rule is defined.
+
+Requirement guidance is intentionally compact. `Accepted keys`, `Supplied`,
+and `Required` are each one trimmed line; fixed-length internal buffers must
+be trimmed before they are concatenated for CLI output. Do not print empty
+sections or padded lines.
 
 ### `ui_program`
 
@@ -156,12 +223,15 @@ value. The default export therefore has no `default_kind` classification.
 | `help` | Full program help. |
 | `executable` | Executable that accepts the program. |
 | `visibility` | Standard, Advanced, or Developer. |
+| `groups` | Program-local groups derived from input bindings. |
 | seven input lists | Inputs grouped into the existing CLI sections. |
+| `requirements` | Program-owned input cardinality rules. |
 | `sp_required` | Whether a SIMPLE project is required. |
 
 `ui_program%new` creates the program. Its `add_input` overloads create or copy
-`ui_param` values into one of the seven input lists. The same object supplies
-required-key checks, CLI help, program descriptions, and JSON.
+a `ui_param` into a `ui_program_input` binding in one of the seven input
+lists. The same object supplies required-key checks, CLI help, program
+descriptions, group metadata, and JSON.
 
 ### Construction and registration
 
@@ -175,6 +245,8 @@ make_ui / make_test_ui
       +-- simple_ui_* or single_ui_* constructor
           +-- ui_program%new
           +-- ui_program%add_input
+              +-- create ui_program_input binding
+              +-- derive program group metadata
           +-- add_ui_program
               +-- assign module category
               +-- register in ui_hash
@@ -212,11 +284,11 @@ Fortran stores these as the constants `UI_VIS_STANDARD`,
 `UI_VIS_ADVANCED`, and `UI_VIS_DEVELOPER`. JSON stores the corresponding
 lowercase names.
 
-Visibility is a shared descriptor field, not a GUI add-on. During migration,
-the legacy `gui_visibility` constructor keyword assigns that field. New APIs
-must use `visibility` instead. Until every descriptor is reviewed, an input or program without an explicit visibility defaults to
-Developer. This preserves the conservative migration: unreviewed controls
-are not exposed as ordinary Standard or Advanced controls.
+Visibility is a shared descriptor field, not a GUI add-on. Program constructors
+and program-input bindings use the client-neutral `visibility` argument. Until
+every descriptor is reviewed, an input or program without an explicit value
+defaults to Developer. This preserves the conservative migration: unreviewed
+controls are not exposed as ordinary Standard or Advanced controls.
 
 Visibility changes presentation only. They must never change whether a CLI
 key is accepted or how a program executes.
@@ -298,19 +370,25 @@ must be empty. Units, ranges, choice lists, default values, and explanatory
 prose belong respectively in `units`, `help`, `choices`, `default`, and
 `help`—never in a placeholder.
 
-The current Fortran declarations still pass legacy choice syntax into the
-constructor so it can initialize `ui_param%choices`. The constructor consumes
-that syntax and replaces it with the standard display placeholder before JSON
-or CLI help is rendered. The next choice-constructor refactoring will remove
-that legacy input syntax entirely.
+Choice values are declared explicitly with `ui_choices([...])`. They are never
+parsed from placeholders. The placeholder for a choice is empty before JSON or
+CLI help is rendered.
 
 ## JSON contract
 
 All JSON writers must serialize the same Fortran fields with the same meaning.
 At minimum, a program record includes its exact CLI `name`, `category`,
-`category_display_name`, `category_order`, `display_name`, descriptions, executable, and visibility. An input record includes its key, type,
-descriptions, required state, an optional display `default`, visibility, and any
-applicable units, choices, and GUI behavior.
+`category_display_name`, `category_order`, `display_name`, descriptions,
+executable, visibility, and its derived groups. An input record includes its
+key, type, descriptions, required state, an optional display `default`,
+visibility, and any applicable units, choices, group, and activation object.
+Each program record also includes its requirement groups with keys and
+minimum/maximum selection counts.
+
+Every serialized program includes all seven section arrays, including `image
+input/output` and `file input/output`, even when a section is empty. The CLI
+uses the same lists for its headings, so a client cannot reclassify a file
+independently of the command description.
 
 When present, `default` is a display value and may be serialized as a string
 regardless of the input's eventual CLI type. The normal CLI parser remains
@@ -328,18 +406,65 @@ second Boolean visibility flag.
 - Preserve the one-to-one relationship between registered programs and CLI
   programs, and between registered inputs and accepted CLI keys.
 - Do not rename a program or input as part of a wording cleanup.
+- Put every stack or volume path in `UI_IMG`; put every other file, table, or
+  directory path in `UI_FILE`. Do not use `UI_PARM` for a path-like value.
 - Define shared input metadata once in `simple_ui_params_common.f90`; override
   it in a program module only when that program genuinely differs.
 - Do not add GUI-only descriptor fields, client overlays, JSON patches, or
   renderer-side defaults. Add a shared semantic field only when both the CLI
   and GUI can interpret the same meaning.
 - Keep declaration-time and dynamic `parameters` initialization authoritative.
-  Do not add a literal UI default that duplicates it.
+  Do not add a literal UI default that duplicates a global baseline. An
+  explicit program default is permitted only when that program's declared
+  choice set narrows the global values and no exact routed commander default
+  has been generated; it must itself be one of the declared choices.
 - Keep conditional commander defaults, runtime-derived values, and fixed
   internal execution assignments distinct from baseline UI defaults.
 - Keep category ownership in the program module. Do not add a second category
   table in a renderer, JSON writer, or GUI.
-- Update all JSON paths when a descriptor field changes until serialization is
-  consolidated.
+- Update all JSON paths when a descriptor field changes. They are duplicated
+  today and must remain equivalent until serialization is consolidated.
 - Validate duplicate keys, visibility values, categories, choices, and JSON
   before merging descriptor changes.
+
+## Planned changes
+
+1. **Consolidate JSON serialization.** Make `print_ui_json`,
+   `write_ui_json`, and `ui_program%write2json` call one descriptor-to-JSON
+   implementation, preserving the current JSON contract.
+2. **Complete generated-default coverage and auditing.** Extend the static
+   route analysis to the remaining stream-backed and helper-mediated routes.
+   The current UI safely retains a program's validated choice default whenever
+   a global baseline lies outside its choice set; replace that fallback with an
+   exact routed default where the execution source makes one statically
+   knowable. Add a review report for unmatched routes, ambiguous routes, and
+   UI defaults that differ from their generated source value. Keep commander
+   and parameter code out of this work.
+3. **Extend requirement groups after audit.** The current groups cover
+   unconditional key-presence cardinality and have replaced `alt_ios`. Add
+   richer alternatives only when execution logic establishes a shared rule:
+   for example, nested all-of/one-of conditions or value-dependent
+   requirements. Do not restore the removed singleton `gui_exclusive_group`,
+   and do not add an execution-context field unless a later audit finds an
+   actual shared rule.
+4. **Use activation predicates for CLI applicability validation.** The current
+   binding and JSON carry `equals_any` activation data. Add validation only
+   after defining how a supplied but inactive key should be reported, then
+   extend the predicate form deliberately with explicit all/any/not
+   composition rather than reintroducing expression strings.
+5. **Review visibility by owning module.** Give every program and input a
+   deliberate Standard, Advanced, or Developer value. Do not mechanically
+   promote the current conservative Developer defaults.
+6. **Remove obsolete listing routines.** The public listings already use
+   registered category descriptors. Remove the now-unused module-local list
+   printers after confirming no non-public caller remains.
+7. **Review titles and descriptions by category.** Replace the temporary
+   `display_name`-from-`summary` fallback with explicit concise titles, then
+   review summaries, labels, help, units, and placeholders against this
+   policy. A temporary exported Markdown sheet may help a domain review, but
+   it is review evidence only: accepted text must be applied back to Fortran
+   and the sheet must never become a source of metadata or build input.
+8. **Extend descriptor validation.** Validate bindings, groups, activation
+   rules, requirement-group member keys and cardinalities, choice integrity,
+   user-facing text limits, compact CLI output, and JSON equivalence to the
+   completed Fortran descriptors.

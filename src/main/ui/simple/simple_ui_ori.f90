@@ -48,15 +48,16 @@ contains
         ! parameter input/output
         call make_oris%add_input(UI_PARM, 'nptcls', 'num', 'Number of per-particle orientations', 'Number of per-particle orientations to produce', '# per-ptcl oris', .true., 1.0)
         call make_oris%add_input(UI_PARM, 'ncls', 'num', 'Number of random class labels', 'Number of random class labels to produce', '# classes', .false., 0.)
-        call make_oris%add_input(UI_PARM, outfile)
+        call make_oris%add_input(UI_FILE, outfile)
         call make_oris%add_input(UI_PARM, 'nstates', 'num', 'Number of random state labels', 'Number of random state labels to produce', '# states', .false., 0.0)
         call make_oris%add_input(UI_PARM, pgrp, required_override=.false.)
         call make_oris%add_input(UI_PARM, sherr)
         call make_oris%add_input(UI_PARM, angerr)
-        call make_oris%add_input(UI_PARM, 'even', 'binary', 'Generate even projections', 'Generate quasi-even projection directions(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call make_oris%add_input(UI_PARM, 'even', 'binary', 'Generate even projections', 'Generate quasi-even projection directions(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call make_oris%add_input(UI_PARM, 'ndiscrete', 'num', 'Number of discrete projection directions', 'Number of discrete projection directions to sample from', '# discrete projs', .false., 0.)
         call make_oris%add_input(UI_PARM, oritype)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -92,8 +93,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call oriops%add_input(UI_PARM, oritab, required_override=.true.)
-        call oriops%add_input(UI_PARM, outfile)
+        call oriops%add_input(UI_FILE, oritab, required_override=.true.)
+        call oriops%add_input(UI_FILE, outfile)
         call oriops%add_input(UI_PARM, e1)
         call oriops%add_input(UI_PARM, e2)
         call oriops%add_input(UI_PARM, e3)
@@ -103,17 +104,20 @@ contains
         call oriops%add_input(UI_PARM, angerr)
         call oriops%add_input(UI_PARM, sherr)
         call oriops%add_input(UI_PARM, dferr)
-        call oriops%add_input(UI_PARM, 'zero', 'binary', 'Zero shifts', 'Zero shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call oriops%add_input(UI_PARM, 'zero', 'binary', 'Zero shifts', 'Zero shifts(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call oriops%add_input(UI_PARM, 'ndiscrete', 'num', 'Number of discrete projection directions',&
         &'Number of projection directions to use for discretization of input orientations', '# discrete projs', .false., 0.)
         call oriops%add_input(UI_PARM, 'state', 'num', 'State to modify', 'Index of state to modify', 'give state index', .false., 1.)
         call oriops%add_input(UI_PARM, 'mul', 'num', 'Shift multiplication factor',&
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
-        call oriops%add_input(UI_PARM, 'mirr', 'multi', 'Mirror orientations', 'Mirror orientations(2d|3d|no){no}', '(2d|3d|no){no}', .false., 'no')
+        call oriops%add_input(UI_PARM, 'mirr', 'multi', 'Mirror orientations', 'Mirror orientations(2d|3d|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=2) :: '2d', '3d', 'no']))
         call oriops%add_input(UI_PARM, 'symrnd', 'binary', 'Randomize over subgroubs of point-group', 'Expand orientations over entire unit sphere by &
-        &permutation according to randomly selected subgroup symmetry(yes|no){no}', '(yes|no){no}', .false., 'no')
+        &permutation according to randomly selected subgroup symmetry(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call oriops%add_input(UI_PARM, oritype)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -142,16 +146,20 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call oristats%add_input(UI_PARM, oritab, required_override=.true.)
-        call oristats%add_input(UI_PARM, oritab2)
+        call oristats%add_input(UI_FILE, oritab, required_override=.true.)
+        call oristats%add_input(UI_FILE, oritab2)
         call oristats%add_input(UI_PARM, pgrp, required_override=.false.)
         call oristats%add_input(UI_PARM, nspace)
         call oristats%add_input(UI_PARM, oritype)
-        call oristats%add_input(UI_PARM, 'ctfstats',  'binary', 'CTF statistics',        'Provide statistics about CTF(yes|no){no}',                      '(yes|no){no}', .false., 'no')
-        call oristats%add_input(UI_PARM, 'classtats', 'binary', 'Class statistics',      'Provide statistics about 2D clusters(yes|no){no}',              '(yes|no){no}', .false., 'no')
-        call oristats%add_input(UI_PARM, 'projstats', 'binary', 'Projection statistics', 'Provide statistics about projection directions(yes|no){no}',    '(yes|no){no}', .false., 'no')
-        call oristats%add_input(UI_PARM, 'trsstats',  'binary', 'Shift statistics',      'Provide statistics about rotational origin shifts(yes|no){no}', '(yes|no){no}', .false., 'no')
-        ! alternative inputs
+        call oristats%add_input(UI_PARM, 'ctfstats',  'binary', 'CTF statistics',        'Provide statistics about CTF(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call oristats%add_input(UI_PARM, 'classtats', 'binary', 'Class statistics',      'Provide statistics about 2D clusters(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call oristats%add_input(UI_PARM, 'projstats', 'binary', 'Projection statistics', 'Provide statistics about projection directions(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call oristats%add_input(UI_PARM, 'trsstats',  'binary', 'Shift statistics',      'Provide statistics about rotational origin shifts(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -178,12 +186,13 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call vizoris%add_input(UI_PARM, oritab, required_override=.true.)
+        call vizoris%add_input(UI_FILE, oritab, required_override=.true.)
         call vizoris%add_input(UI_PARM, nspace)
         call vizoris%add_input(UI_PARM, pgrp)
         call vizoris%add_input(UI_PARM, oritype)
-        call vizoris%add_input(UI_PARM, 'tseries', 'binary', 'Time series analysis', 'Orientations originate from analysis of a time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
-        ! alternative inputs
+        call vizoris%add_input(UI_PARM, 'tseries', 'binary', 'Time series analysis', 'Orientations originate from analysis of a time-series(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

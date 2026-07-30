@@ -59,7 +59,7 @@ contains
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self )
         class(cmdline), intent(inout)  :: self
-        type(string), allocatable      :: keys_required(:)
+        type(string), allocatable      :: keys_required(:), defined_keys(:)
         type(args)                     :: allowed_args
         type(ui_program), pointer      :: ptr2prg => null()
         type(string)                   :: prgname, exec_cmd_ui, exec_cmd, executable
@@ -180,13 +180,20 @@ contains
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
+        if (.not. skip_required_keys) then
+            defined_keys = self%get_keys()
+            if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
+                call ptr2prg%print_cmdline(defined_keys)
+                stop
+            endif
+        endif
         if( sz_keys_req > 0 ) call self%check
     end subroutine parse
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse_private( self )
         class(cmdline), intent(inout) :: self
-        type(string), allocatable     :: keys_required(:)
+        type(string), allocatable     :: keys_required(:), defined_keys(:)
         type(args)                    :: allowed_args
         character(len=XLONGSTRLEN)     :: arg
         type(ui_program), pointer :: ptr2prg => null()
@@ -269,6 +276,13 @@ contains
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
+        if (associated(ptr2prg) .and. .not. skip_required_keys) then
+            defined_keys = self%get_keys()
+            if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
+                call ptr2prg%print_cmdline(defined_keys)
+                stop
+            endif
+        endif
         if( sz_keys_req > 0 ) call self%check
     end subroutine parse_private
 
@@ -278,7 +292,7 @@ contains
     subroutine parse_private_line( self, line )
         class(cmdline),   intent(inout) :: self
         character(len=*), intent(in)    :: line
-        type(string), allocatable       :: keys_required(:)
+        type(string), allocatable       :: keys_required(:), defined_keys(:)
         type(args)                      :: allowed_args
         character(len=XLONGSTRLEN)      :: arg(MAX_CMDARGS)
         type(ui_program), pointer       :: ptr2prg => null()
@@ -346,6 +360,13 @@ contains
         do i=1,self%argcnt
             call self%parse_command_line_value(i, arg(i), allowed_args)
         end do
+        if (associated(ptr2prg) .and. .not. skip_required_keys) then
+            defined_keys = self%get_keys()
+            if (.not. ptr2prg%requirements_satisfied(defined_keys)) then
+                call ptr2prg%print_cmdline(defined_keys)
+                stop
+            endif
+        endif
         if( sz_keys_req > 0 ) call self%check
     end subroutine parse_private_line
 

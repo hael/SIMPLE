@@ -58,7 +58,7 @@ contains
         !call imgfile%add_input(UI_IO, )
         ! parameter input/output
         !call imgfile%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call imgfile%add_input(UI_PARM, )
         ! search controls
         !call imgfile%add_input(UI_SRCH, )
@@ -86,7 +86,7 @@ contains
         !call inside_write%add_input(UI_IO, )
         ! parameter input/output
         !call inside_write%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call inside_write%add_input(UI_PARM, )
         ! search controls
         !call inside_write%add_input(UI_SRCH, )
@@ -114,7 +114,7 @@ contains
         !call io%add_input(UI_IO, )
         ! parameter input/output
         !call io%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call io%add_input(UI_PARM, )
         ! search controls
         !call io%add_input(UI_SRCH, )
@@ -142,7 +142,7 @@ contains
         !call io_parallel%add_input(UI_IO, )
         ! parameter input/output
         !call io_parallel%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call io_parallel%add_input(UI_PARM, )
         ! search controls
         !call io_parallel%add_input(UI_SRCH, )
@@ -170,7 +170,7 @@ contains
         !call mrc2jpeg%add_input(UI_IO, )
         ! parameter input/output
         !call mrc2jpeg%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call mrc2jpeg%add_input(UI_PARM, )
         ! search controls
         !call mrc2jpeg%add_input(UI_SRCH, )
@@ -202,6 +202,7 @@ contains
             &'Sampling distance in Angstrom per voxel', 'e.g. 1.3', .true., '')
         ! alternative inputs
         !call mrc_validate%add_input(UI_PARM, )
+        ! <no additional inputs>
         ! search controls
         !call mrc_validate%add_input(UI_SRCH, )
         ! filter controls
@@ -228,7 +229,7 @@ contains
         !call stack_io%add_input(UI_IO, )
         ! parameter input/output
         !call stack_io%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call stack_io%add_input(UI_PARM, )
         ! search controls
         !call stack_io%add_input(UI_SRCH, )
@@ -256,7 +257,7 @@ contains
         !call star_export%add_input(UI_IO, )
         ! parameter input/output
         !call star_export%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call star_export%add_input(UI_PARM, )
         ! search controls
         !call star_export%add_input(UI_SRCH, )
@@ -284,7 +285,7 @@ contains
         !call starfile_test%add_input(UI_IO, )
         ! parameter input/output
         !call starfile_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call starfile_test%add_input(UI_PARM, )
         ! search controls
         !call starfile_test%add_input(UI_SRCH, )

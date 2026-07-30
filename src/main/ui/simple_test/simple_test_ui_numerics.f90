@@ -43,7 +43,7 @@ contains
         !call eigh_test%add_input(UI_IO, )
         ! parameter input/output
         !call eigh_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call eigh_test%add_input(UI_PARM, )
         ! search controls
         !call eigh_test%add_input(UI_SRCH, )
@@ -71,7 +71,7 @@ contains
         !call kbinterpol_fast%add_input(UI_IO, )
         ! parameter input/output
         !call kbinterpol_fast%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call kbinterpol_fast%add_input(UI_PARM, )
         ! search controls
         !call kbinterpol_fast%add_input(UI_SRCH, )
@@ -99,7 +99,7 @@ contains
         !call maxnloc_test%add_input(UI_IO, )
         ! parameter input/output
         !call maxnloc_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call maxnloc_test%add_input(UI_PARM, )
         ! search controls
         !call maxnloc_test%add_input(UI_SRCH, )
@@ -127,7 +127,7 @@ contains
         !call neigh%add_input(UI_IO, )
         ! parameter input/output
         !call neigh%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call neigh%add_input(UI_PARM, )
         ! search controls
         !call neigh%add_input(UI_SRCH, )

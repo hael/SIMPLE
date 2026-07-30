@@ -53,7 +53,7 @@ contains
         call automask%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
         ! parameter input/output
         call automask%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -91,7 +91,7 @@ contains
         call postprocess%add_input(UI_PARM, 'state', 'num', 'State to postprocess', 'State to postprocess{1}', 'Input state{1}', .false., 1.0)
         call postprocess%add_input(UI_PARM, 'imgkind', 'str', 'Volume kind', 'Project output volume kind{vol}', &
             &'project output kind: vol or vol_cavg', .false., 'vol')
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -125,18 +125,19 @@ contains
         ! <empty>
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call reconstruct3D%add_input(UI_SRCH, pgrp)
         call reconstruct3D%add_input(UI_SRCH, ptcl_src)
         call reconstruct3D%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction reconstruction',&
-        &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}',&
-        &'(yes|no){no}', .false., 'no')
+        &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! filter controls
         call reconstruct3D%add_input(UI_FILT, envfsc)
         call reconstruct3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
-        &'Postprocess reconstructed volumes using the generated FSC curves', '(yes|no){yes}', .false., 'yes')
+        &'Postprocess reconstructed volumes using the generated FSC curves','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! mask controls
         call reconstruct3D%add_input(UI_MASK, mskdiam)
         ! computer controls
@@ -162,17 +163,18 @@ contains
         ! parameter input/output
         call bootstrap_rec3D%add_input(UI_PARM, 'which_iter', 'num', 'Sigma iteration index',&
         &'Iteration index used for the generated sigma2_groups file{1}', 'iteration{1}', .false., 1.0)
-        call bootstrap_rec3D%add_input(UI_PARM, 'outfile', 'file', 'Resolution output prefix',&
+        call bootstrap_rec3D%add_input(UI_FILE, 'outfile', 'file', 'Resolution output prefix',&
         &'Optional FSC/resolution text output prefix; state tags are appended', 'prefix.txt{RESOLUTION_FINAL.txt}',&
         &.false., 'RESOLUTION_FINAL.txt')
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call bootstrap_rec3D%add_input(UI_SRCH, pgrp)
         call bootstrap_rec3D%add_input(UI_SRCH, nstates)
         ! filter controls
         call bootstrap_rec3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
-        &'Postprocess ML-regularized reconstructed volumes using the generated FSC curves', '(yes|no){yes}', .false., 'yes')
+        &'Postprocess ML-regularized reconstructed volumes using the generated FSC curves','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! mask controls
         call bootstrap_rec3D%add_input(UI_MASK, mskdiam)
         ! computer controls
@@ -191,62 +193,66 @@ contains
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "search,filter,mask,compute")                     ! GUI
+        &visibility=UI_VIS_STANDARD)
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%add_input(UI_IMG, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
         & sections for particle image matching', 'input volume e.g. vol.mrc', .false., 'vol1.mrc')
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call refine3D%add_input(UI_SRCH, nspace, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, trs, gui_submenu="search")
+        call refine3D%add_input(UI_SRCH, nspace, group="search")
+        call refine3D%add_input(UI_SRCH, trs, group="search")
         call refine3D%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, maxits, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, update_frac, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, pgrp, gui_submenu="search", gui_visibility=UI_VIS_STANDARD)
-        call refine3D%add_input(UI_SRCH, nstates, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, objfun, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, objfun_den, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, objfun_den_w, gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
+        &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call refine3D%add_input(UI_SRCH, maxits, group="search")
+        call refine3D%add_input(UI_SRCH, update_frac, group="search")
+        call refine3D%add_input(UI_SRCH, pgrp, group="search", visibility=UI_VIS_STANDARD)
+        call refine3D%add_input(UI_SRCH, nstates, group="search")
+        call refine3D%add_input(UI_SRCH, objfun, group="search")
+        call refine3D%add_input(UI_SRCH, objfun_den, group="search")
+        call refine3D%add_input(UI_SRCH, objfun_den_w, group="search")
+        call refine3D%add_input(UI_SRCH, ptcl_src, group="search")
         call refine3D%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction reconstruction',&
-        &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}',&
-        &'(yes|no){no}', .false., 'no', gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}', '(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}',&
-        &.false., 'shc', gui_submenu="search")
+        &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', group="search", visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call refine3D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|shc|neigh|shc_neigh|prob|prob_state|prob_neigh){shc}','',&
+        &.false., 'shc', group="search", &
+        &choices=ui_choices([character(len=10) :: 'snhc', 'shc', 'neigh', 'shc_neigh', 'prob', 'prob_state', 'prob_neigh']))
         call refine3D%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
-        &'Prob-neigh neighborhood mode(state|geom|shc|snhc){state}', '(state|geom|shc|snhc){state}', .false., 'state', &
-        &gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
-        &'no', gui_submenu="search")
-        call refine3D%add_input(UI_SRCH, sigma_est, gui_submenu="search")
+        &'Prob-neigh neighborhood mode(state|geom|shc|snhc){state}','', .false., 'state', &
+        &group="search", &
+        &choices=ui_choices([character(len=5) :: 'state', 'geom', 'shc', 'snhc']))
+        call refine3D%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}','', .false.,&
+        &'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call refine3D%add_input(UI_SRCH, sigma_est, group="search")
         ! filter controls
-        call refine3D%add_input(UI_FILT, hp, gui_submenu="filter")
+        call refine3D%add_input(UI_FILT, hp, group="filter")
         call refine3D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="filter")
-        call refine3D%add_input(UI_FILT, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20., gui_submenu="filter")
+        &Angstroms{30}', .false., 30., group="filter")
+        call refine3D%add_input(UI_FILT, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20., group="filter")
         call refine3D%add_input(UI_FILT, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
-        &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0, gui_submenu="filter")
-        call refine3D%add_input(UI_FILT, lplim_crit, gui_submenu="filter")
-        call refine3D%add_input(UI_FILT, lp_backgr, gui_submenu="filter")
-        call refine3D%add_input(UI_FILT, envfsc, gui_submenu="filter")
+        &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0, group="filter")
+        call refine3D%add_input(UI_FILT, lplim_crit, group="filter")
+        call refine3D%add_input(UI_FILT, lp_backgr, group="filter")
+        call refine3D%add_input(UI_FILT, envfsc, group="filter")
         call refine3D%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., gui_submenu="filter")
-        call refine3D%add_input(UI_FILT, ml_reg, gui_submenu="filter")
-        call refine3D%add_input(UI_FILT, conical_fsc, gui_submenu="filter", gui_visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_FILT, nu_refine, gui_submenu="filter")
-        call refine3D%add_input(UI_FILT, combine_eo, gui_submenu="filter")
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., group="filter")
+        call refine3D%add_input(UI_FILT, ml_reg, group="filter")
+        call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_FILT, nu_refine, group="filter")
+        call refine3D%add_input(UI_FILT, combine_eo, group="filter")
         ! mask controls
-        call refine3D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
-        call refine3D%add_input(UI_MASK, automsk, gui_submenu="mask")
+        call refine3D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
+        call refine3D%add_input(UI_MASK, automsk, group="mask")
         ! computer controls
-        call refine3D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
-        call refine3D%add_input(UI_COMP, nthr,                              gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call refine3D%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call refine3D%add_input(UI_COMP, nthr,                              group="compute", visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('refine3D', refine3D, prgtab, UI_CATEGORY)
     end subroutine new_refine3D
@@ -260,40 +266,42 @@ contains
         &'is an automated workflow for single-state 3D refinement based on probabilistic projection matching',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "search,filter,mask,compute")                     ! GUI
+        &visibility=UI_VIS_STANDARD)
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_auto%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
         & for particle matching', 'input starting volume e.g. vol.mrc', .false., '')
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., gui_submenu="search")
-        call refine3D_auto%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_visibility=UI_VIS_STANDARD)
-        call refine3D_auto%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
+        call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., group="search")
+        call refine3D_auto%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
+        call refine3D_auto%add_input(UI_SRCH, ptcl_src, group="search")
         call refine3D_auto%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
-        call refine3D_auto%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
-        &'no', gui_submenu="search")
+        &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call refine3D_auto%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}','', .false.,&
+        &'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! filter controls
         call refine3D_auto%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., gui_submenu="filter")
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12., group="filter")
         call refine3D_auto%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
-        &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}', &
-        &'(none|nonuniform|nonuniform_lpset){nonuniform}', .false., 'nonuniform', gui_submenu="filter")
+        &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}','', .false., 'nonuniform', group="filter", &
+        &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
         call refine3D_auto%add_input(UI_FILT, 'nu_refine', 'binary', 'NU resolution expansion refinement', &
-        & 'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){yes}', &
-        & '(yes|no){yes}', .false., 'yes', gui_submenu="filter")
-        call refine3D_auto%add_input(UI_FILT, combine_eo, gui_submenu="filter")
+        & 'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){yes}','', .false., 'yes', group="filter", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call refine3D_auto%add_input(UI_FILT, combine_eo, group="filter")
         call refine3D_auto%add_input(UI_FILT, 'res_target', 'num', 'Resolution target (in A)',&
-        & 'Resolution target in Angstroms', 'Resolution target in Angstroms', .false., 3., gui_submenu="filter")
+        & 'Resolution target in Angstroms', 'Resolution target in Angstroms', .false., 3., group="filter")
         ! mask controls
-        call refine3D_auto%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
+        call refine3D_auto%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
         ! computer controls
-        call refine3D_auto%add_input(UI_COMP, nparts, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
-        call refine3D_auto%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call refine3D_auto%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
+        call refine3D_auto%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('refine3D_auto', refine3D_auto, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_auto
@@ -307,39 +315,43 @@ contains
         &'is an automated workflow for multi-state 3D refinement from project state labels or command-line nstates',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "search,filter,mask,compute")                     ! GUI
+        &visibility=UI_VIS_STANDARD)
         ! search controls
-        call refine3D_multi%add_input(UI_SRCH, maxits,      required_override=.false., gui_submenu="search")
-        call refine3D_multi%add_input(UI_SRCH, nstates,     required_override=.false., gui_submenu="search")
+        call refine3D_multi%add_input(UI_SRCH, maxits,      required_override=.false., group="search")
+        call refine3D_multi%add_input(UI_SRCH, nstates,     required_override=.false., group="search")
         call refine3D_multi%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume refinement mode', &
-        &'Multi-volume refinement mode(input_oris_refine|input_oris_fixed){input_oris_refine}', &
-        &'(input_oris_refine|input_oris_fixed){input_oris_refine}', .false., 'input_oris_refine', &
-        &gui_submenu="search")
+        &'Multi-volume refinement mode(input_oris_refine|input_oris_fixed){input_oris_refine}','', .false., 'input_oris_refine', &
+        &group="search", &
+        &choices=ui_choices([character(len=17) :: 'input_oris_refine', 'input_oris_fixed']))
         call refine3D_multi%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
-        &'Prob-neigh neighborhood mode(state|geom){geom}', '(state|geom){geom}', .false., 'geom', &
-        &gui_submenu="search")
-        call refine3D_multi%add_input(UI_SRCH, pgrp,                                  gui_submenu="search", gui_visibility=UI_VIS_STANDARD)
-        call refine3D_multi%add_input(UI_SRCH, ptcl_src, gui_submenu="search")
+        &'Prob-neigh neighborhood mode(state|geom){geom}','', .false., 'geom', &
+        &group="search", &
+        &choices=ui_choices([character(len=5) :: 'state', 'geom']))
+        call refine3D_multi%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
+        call refine3D_multi%add_input(UI_SRCH, ptcl_src, group="search")
         call refine3D_multi%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="search")
+        &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call refine3D_multi%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', &
-        &'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false.,&
-        &'no', gui_submenu="search")
+        &'Continue previous refinement(yes|no){no}','', .false.,&
+        &'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! filter controls
         call refine3D_multi%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
-        &'Filtering mode(fsc|nonuniform_lpset|none){nonuniform_lpset}', &
-        &'(fsc|nonuniform_lpset|none){nonuniform_lpset}', .false., 'nonuniform_lpset', gui_submenu="filter")
+        &'Filtering mode(fsc|nonuniform_lpset|none){nonuniform_lpset}','', .false., 'nonuniform_lpset', group="filter", &
+        &choices=ui_choices([character(len=16) :: 'fsc', 'nonuniform_lpset', 'none']))
         call refine3D_multi%add_input(UI_FILT, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', &
         &'Low-pass limit used to limit the resolution during refinement', 'low-pass limit in Angstroms', .false., 6., &
-        &gui_submenu="filter")
-        call refine3D_multi%add_input(UI_FILT, ml_reg, gui_submenu="filter")
+        &group="filter")
+        call refine3D_multi%add_input(UI_FILT, ml_reg, group="filter")
         ! mask controls
-        call refine3D_multi%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
+        call refine3D_multi%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
         call refine3D_multi%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &
-        &'Perform envelope masking(yes|tight|no){no}', '(yes|tight|no){no}', .false., 'no', gui_submenu="mask")
+        &'Perform envelope masking(yes|tight|no){no}','', .false., 'no', group="mask", &
+        &choices=ui_choices([character(len=5) :: 'yes', 'tight', 'no']))
         ! computer controls
-        call refine3D_multi%add_input(UI_COMP, nparts, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
-        call refine3D_multi%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call refine3D_multi%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
+        call refine3D_multi%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('refine3D_multi', refine3D_multi, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_multi

@@ -31,14 +31,14 @@ contains
         &'Denoise atomic-resolution nanoparticle map through atom convolution',& ! summary
         &'is a program for denoising atomic-resolution nanoparticle maps exactly as in detect_atoms',& ! descr long
         &'single_exec',&                                                         ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                                          ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call conv_atom_denoise%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
         & 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         call conv_atom_denoise%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -60,14 +60,14 @@ contains
         &'For doing radial averaging of the core of docked 3D time-segment maps of NPs',& ! summary
         &'is a program that analyses docked time-series density maps',&                   ! descr long
         &'single_exec',&                                                                  ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                                                   ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tsegmaps_core_finder%add_input(UI_IMG, 'filetab', 'file', 'Volumes list',&
+        call tsegmaps_core_finder%add_input(UI_FILE, 'filetab', 'file', 'Volumes list',&
         &'List of volumes to analyze', 'list input e.g. voltab.txt', .true., '')
         ! parameter input/output
         call tsegmaps_core_finder%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

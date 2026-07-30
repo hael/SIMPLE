@@ -53,14 +53,16 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call binarize%add_input(UI_PARM, 'fill_holes', 'binary', 'Fill holes', 'Fill holes(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call binarize%add_input(UI_PARM, 'fill_holes', 'binary', 'Fill holes', 'Fill holes(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call binarize%add_input(UI_PARM, 'ndev', 'num', 'Binarization threshold', 'Binarization threshold in # sigmas', '# sigmas', .false., 0.)
         call binarize%add_input(UI_PARM, 'winsz', 'num', 'Half-window size', 'Half-window size(in pixels)', 'winsz in pixels', .false., 15.0)
-        ! alternative inputs
-        call binarize%add_input(UI_ALT, 'vol1', 'file', 'Volume', 'Volume to binarize',&
+        call binarize%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to binarize',&
         & 'input volume e.g. vol.mrc', .false., '')
-        call binarize%add_input(UI_ALT, 'stk', 'file', 'Stack', 'Stack to binarize',&
+        call binarize%add_input(UI_IMG, 'stk', 'file', 'Stack', 'Stack to binarize',&
         & 'input stack e.g. imgs.mrcs', .false., '')
+        call binarize%add_requirement('input', 'Input data', 'Supply either a volume or an image stack.', &
+            [character(len=4) :: 'vol1', 'stk'], max_selected=1)
         ! search controls
         ! <empty>
         ! filter controls
@@ -89,11 +91,12 @@ contains
         call convert%add_input(UI_IMG, outstk)
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
-        call convert%add_input(UI_ALT, 'vol1', 'file', 'Volume', 'Volume to convert', &
+        call convert%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume to convert', &
         & 'input volume e.g. vol.spi', .false., '')
-        call convert%add_input(UI_ALT, 'stk', 'file', 'Stack', 'Stack to convert',&
+        call convert%add_input(UI_IMG, 'stk', 'file', 'Stack', 'Stack to convert',&
         & 'input stack e.g. imgs.spi', .false., '')
+        call convert%add_requirement('input', 'Input data', 'Supply either a volume or an image stack.', &
+            [character(len=4) :: 'vol1', 'stk'], max_selected=1)
         ! search controls
         ! <empty>
         ! filter controls
@@ -121,8 +124,9 @@ contains
         ! parameter input/output
         call ctf_correct%add_input(UI_PARM, smpd)
         call ctf_correct%add_input(UI_PARM, 'ctf_correct_mode', 'multi', 'CTF correction mode', &
-            &'CTF correction operation(phaseflip|wiener){phaseflip}', '(phaseflip|wiener){phaseflip}', .false., 'phaseflip')
-        ! alternative inputs
+            &'CTF correction operation(phaseflip|wiener){phaseflip}','', .false., 'phaseflip', &
+        &choices=ui_choices([character(len=9) :: 'phaseflip', 'wiener']))
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -153,9 +157,9 @@ contains
         ! parameter input/output
         call ctfops%add_input(UI_PARM, smpd)
         call ctfops%add_input(UI_PARM, neg)
-        call ctfops%add_input(UI_PARM, oritab)
-        call ctfops%add_input(UI_PARM, deftab)
-        ! alternative inputs
+        call ctfops%add_input(UI_FILE, oritab)
+        call ctfops%add_input(UI_FILE, deftab)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -185,11 +189,14 @@ contains
         ! <empty>
         ! parameter input/output
         call normalize_%add_input(UI_PARM, smpd)
-        call normalize_%add_input(UI_PARM, 'norm',       'binary', 'Normalize',       'Statistical normalization: avg=zero, var=1(yes|no){no}',    '(yes|no){no}', .false., 'no')
-        call normalize_%add_input(UI_PARM, 'noise_norm', 'binary', 'Noise normalize', 'Statistical normalization based on background(yes|no){no}', '(yes|no){no}', .false., 'no')
-        ! alternative inputs
-        call normalize_%add_input(UI_ALT, 'stk',  'file', 'Stack to normalize',  'Stack of images to normalize', 'e.g. imgs.mrc', .false., '')
-        call normalize_%add_input(UI_ALT, 'vol1', 'file', 'Volume to normalize', 'Volume to normalize',          'e.g. vol.mrc',  .false., '')
+        call normalize_%add_input(UI_PARM, 'norm',       'binary', 'Normalize',       'Statistical normalization: avg=zero, var=1(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call normalize_%add_input(UI_PARM, 'noise_norm', 'binary', 'Noise normalize', 'Statistical normalization based on background(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call normalize_%add_input(UI_IMG, 'stk',  'file', 'Stack to normalize',  'Stack of images to normalize', 'e.g. imgs.mrc', .false., '')
+        call normalize_%add_input(UI_IMG, 'vol1', 'file', 'Volume to normalize', 'Volume to normalize',          'e.g. vol.mrc',  .false., '')
+        call normalize_%add_requirement('input', 'Input data', 'Supply either a volume or an image stack.', &
+            [character(len=4) :: 'stk ', 'vol1'], max_selected=1)
         ! search controls
         ! <empty>
         ! filter controls
@@ -219,14 +226,21 @@ contains
         call scale%add_input(UI_PARM, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
         call scale%add_input(UI_PARM, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1+)', '(0-1+)', .false., 1.)
         call scale%add_input(UI_PARM, clip)
-        call scale%add_input(UI_PARM, outvol)
-        call scale%add_input(UI_PARM, outstk)
-        ! alternative inputs
-        call scale%add_input(UI_ALT, stk, required_override=.false.)
-        call scale%add_input(UI_ALT, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
+        call scale%add_input(UI_IMG, outvol)
+        call scale%add_input(UI_IMG, outstk)
+        call scale%add_input(UI_FILE, projfile, required_override=.false.)
+        call scale%add_input(UI_PARM, 'fromp', 'num', 'First stack index', &
+            'First project stack index to scale.', 'e.g. 1', .false., 1.)
+        call scale%add_input(UI_PARM, 'top', 'num', 'Last stack index', &
+            'Last project stack index to scale.', 'e.g. 1', .false., 1.)
+        call scale%add_input(UI_IMG, stk, required_override=.false.)
+        call scale%add_input(UI_IMG, 'vol1', 'file', 'Input volume', 'Input volume to re-scale',&
         &'input volume e.g. vol.mrc', .false., '')
-        call scale%add_input(UI_ALT, 'filetab', 'file', 'Stacks list',&
+        call scale%add_input(UI_FILE, 'filetab', 'file', 'Stacks list',&
         &'List of stacks of images to rescale', 'list input e.g. stktab.txt', .false., '')
+        call scale%add_requirement('input', 'Input data', &
+            'Supply one image stack, volume, stack list, or project input.', &
+            [character(len=8) :: 'stk', 'vol1', 'filetab', 'projfile'], max_selected=1)
         ! search controls
         ! <empty>
         ! filter controls
@@ -250,13 +264,13 @@ contains
         &.false.)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call stack%add_input(UI_IMG, 'filetab', 'file', 'Stacks list',&
+        call stack%add_input(UI_FILE, 'filetab', 'file', 'Stacks list',&
         &'List of stacks of images to stack into one', 'list input e.g. stktab.txt', .true., '')
         call stack%add_input(UI_IMG, outstk)
         ! parameter input/output
         call stack%add_input(UI_PARM, smpd)
         call stack%add_input(UI_PARM, clip)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -292,26 +306,32 @@ contains
         call stackops%add_input(UI_IMG, outstk)
         ! parameter input/output
         call stackops%add_input(UI_PARM, smpd)
-        call stackops%add_input(UI_PARM, oritab)
+        call stackops%add_input(UI_FILE, oritab)
         call stackops%add_input(UI_PARM, mirr)
         call stackops%add_input(UI_PARM, nran)
         call stackops%add_input(UI_PARM, 'state', 'num', 'State index', 'Index of state to extract', 'give state index', .false., 1.)
         call stackops%add_input(UI_PARM, 'class', 'num', 'Class index', 'Index of class to extract', 'give class index', .false., 1.)
         call stackops%add_input(UI_PARM, neg)
-        call stackops%add_input(UI_PARM, 'acf',   'binary', 'Autocorrelation, A * conjg(A)', 'Generate autocorrelation function: A * conjg(A)(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call stackops%add_input(UI_PARM, 'avg',   'binary', 'Average stack', 'Generate global stack average(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%add_input(UI_PARM, 'acf',   'binary', 'Autocorrelation, A * conjg(A)', 'Generate autocorrelation function: A * conjg(A)(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call stackops%add_input(UI_PARM, 'avg',   'binary', 'Average stack', 'Generate global stack average(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call stackops%add_input(UI_PARM, 'nframesgrp', 'num', 'Number of stack entries to group & average', 'Number of stack entries to group & average{0}', '# frames', .false., 0.)
-        call stackops%add_input(UI_PARM, 'vis',   'binary', 'Visualize stack images', 'Visualize stack images with gnuplot(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%add_input(UI_PARM, 'vis',   'binary', 'Visualize stack images', 'Visualize stack images with gnuplot(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call stackops%add_input(UI_PARM, 'snr',   'num', 'Apply noise to give SNR', 'Apply noise to give this signal-to-noise ratio of output', 'signal-to-noise ratio(0.)', .false., 0.)
         call stackops%add_input(UI_PARM, 'fromp', 'num', 'From particle index', 'Start index for stack copy', 'start index', .false., 1.0)
         call stackops%add_input(UI_PARM, 'top',   'num', 'To particle index', 'Stop index for stack copy', 'stop index', .false., 1.0)
-        call stackops%add_input(UI_PARM, outfile)
-        call stackops%add_input(UI_PARM, 'stats', 'binary', 'Provide statistics', 'Provide statistics about images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call stackops%add_input(UI_PARM, 'roavg', 'binary', 'Rotationally average', 'Rotationally average images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%add_input(UI_FILE, outfile)
+        call stackops%add_input(UI_PARM, 'stats', 'binary', 'Provide statistics', 'Provide statistics about images in stack(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call stackops%add_input(UI_PARM, 'roavg', 'binary', 'Rotationally average', 'Rotationally average images in stack(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call stackops%add_input(UI_PARM, 'angstep', 'num', 'Angular stepsize', 'Angular stepsize for rotational averaging(in degrees)', 'give degrees', .false., 5.)
-        call stackops%add_input(UI_PARM, 'makemovie', 'binary', 'Whether to make a movie', 'Generates images and script to make a movie with FFmpeg(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%add_input(UI_PARM, 'makemovie', 'binary', 'Whether to make a movie', 'Generates images and script to make a movie with FFmpeg(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call stackops%add_input(UI_PARM, 'winsz', 'num', 'Window size for local sdev estimation', 'Window size for local sdev estimation(in pixels)', 'winsz in pixels', .false., 5.0)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

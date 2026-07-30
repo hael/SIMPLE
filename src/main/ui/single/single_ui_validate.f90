@@ -37,13 +37,13 @@ contains
         &'Analysis of even and odd class averages along nanocrystal time-series',& ! summary
         &'is a program to analyze the core/surface dynamics of nanocrystals using even and odd class averages',& ! help
         &'single_exec',&                                                ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                  ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                  ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cavgseoproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         call cavgseoproc_nano%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call cavgseoproc_nano%add_input(UI_SRCH, pgrp)
@@ -66,13 +66,13 @@ contains
         &'Analysis of class averages along nanocrystal time-series',& ! summary
         &'is a program to analyze the core/surface dynamics of nanocrystals using class averages and re-projections',& ! help
         &'single_exec',&                                              ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cavgsproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         call cavgsproc_nano%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call cavgsproc_nano%add_input(UI_SRCH, pgrp)
@@ -95,12 +95,12 @@ contains
         &'Analyze radial core and surface changes in nanoparticle class images',& ! summary
         &'is a program to analyze the core/surface dynamics of nanocrystals using particle images inside a class',& ! help
         &'single_exec',&                                              ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
         call ptclsproc_nano%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call ptclsproc_nano%add_input(UI_SRCH, pgrp)
@@ -123,13 +123,13 @@ contains
         &'Validation of class averages against model projections',&                                        ! summary
         &'is a program to validate the class averages against model projections using cross-correlation',& ! help
         &'single_exec',&                                                                                   ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                                     ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call validate_cavgs_vs_model%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         call validate_cavgs_vs_model%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call validate_cavgs_vs_model%add_input(UI_SRCH, pgrp)

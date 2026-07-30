@@ -40,13 +40,13 @@ contains
         &'Simulate an MRC density map from PDBx/mmCIF coordinates',& ! summary
         &'is a program to simulate a 3D density map in MRC format using a PDBx/mmCIF format coordinates file',& ! descr long
         &'all',&                                           ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                    ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cif2mrc%add_input(UI_IMG, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif')
+        call cif2mrc%add_input(UI_FILE, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif')
         ! parameter input/output
         call cif2mrc%add_input(UI_PARM, smpd,    required_override=.false.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -65,17 +65,17 @@ contains
         &'Simulate an MRC density map from PDB coordinates',& ! summary
         &'is a program to simulate a 3D density map in MRC format using a PDB format coordinates file',& ! descr long
         &'all',&                                           ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                    ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pdb2mrc%add_input(UI_IMG, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
+        call pdb2mrc%add_input(UI_FILE, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
         ! parameter input/output
         call pdb2mrc%add_input(UI_PARM, smpd,    required_override=.false.)
         call pdb2mrc%add_input(UI_PARM, vol_dim, required_override=.false.)
-        call pdb2mrc%add_input(UI_PARM, outvol)
-        call pdb2mrc%add_input(UI_PARM, pdbout)
+        call pdb2mrc%add_input(UI_IMG, outvol)
+        call pdb2mrc%add_input(UI_FILE, pdbout)
         call pdb2mrc%add_input(UI_PARM, center_pdb)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -110,7 +110,7 @@ contains
         call simulate_movie%add_input(UI_PARM, 'nframes',  'num', 'Number of frames', 'Number of movie frames', '# frames', .false., 0.)
         call simulate_movie%add_input(UI_PARM, 'xdim',  'num', 'x-dimension', 'Number of pixels in x-direction', '# pixels in x', .false., 0.)
         call simulate_movie%add_input(UI_PARM, 'ydim',  'num', 'y-dimension', 'Number of pixels in y-direction', '# pixels in y', .false., 0.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -139,7 +139,7 @@ contains
         ! parameter input/output
         call simulate_noise%add_input(UI_PARM, box)
         call simulate_noise%add_input(UI_PARM, nptcls)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -175,21 +175,22 @@ contains
         call simulate_particles%add_input(UI_PARM, smpd)
         call simulate_particles%add_input(UI_PARM, nptcls)
         call simulate_particles%add_input(UI_PARM, 'snr', 'num', 'SNR', 'Signal-to-noise ratio of particle images', 'signal-to-noise ratio(0.)', .true., 0.)
-        call simulate_particles%add_input(UI_PARM, oritab)
-        call simulate_particles%add_input(UI_PARM, outfile)
-        call simulate_particles%add_input(UI_PARM, outstk)
-        call simulate_particles%add_input(UI_PARM, 'even', 'binary', 'Generate even projections', 'Generate quasi-even projection directions(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call simulate_particles%add_input(UI_FILE, oritab)
+        call simulate_particles%add_input(UI_FILE, outfile)
+        call simulate_particles%add_input(UI_IMG, outstk)
+        call simulate_particles%add_input(UI_PARM, 'even', 'binary', 'Generate even projections', 'Generate quasi-even projection directions(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call simulate_particles%add_input(UI_PARM, sherr)
         call simulate_particles%add_input(UI_PARM, kv)
         call simulate_particles%add_input(UI_PARM, cs)
         call simulate_particles%add_input(UI_PARM, fraca)
-        call simulate_particles%add_input(UI_PARM, deftab)
+        call simulate_particles%add_input(UI_FILE, deftab)
         call simulate_particles%add_input(UI_PARM, 'defocus',  'num', 'Underfocus', 'Underfocus(in microns)', 'in microns', .false., 2.)
         call simulate_particles%add_input(UI_PARM, dferr)
         call simulate_particles%add_input(UI_PARM, 'astigerr', 'num', 'Astigmatism error', 'Uniform astigmatism error(in microns)', 'error in microns', .false., 0.)
         call simulate_particles%add_input(UI_PARM, ctf)
         call simulate_particles%add_input(UI_PARM, 'nframes', 'num', '# of particle frames', '# of lower SNR particle frames', '{1}', .false., 1.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call simulate_particles%add_input(UI_SRCH, pgrp)

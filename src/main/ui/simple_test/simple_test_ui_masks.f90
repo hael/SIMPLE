@@ -55,7 +55,7 @@ contains
         !call bounds_from_mask3D_test%add_input(UI_IO, )
         ! parameter input/output
         !call bounds_from_mask3D_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call bounds_from_mask3D_test%add_input(UI_PARM, )
         ! search controls
         !call bounds_from_mask3D_test%add_input(UI_SRCH, )
@@ -83,7 +83,7 @@ contains
         !call graphene_mask%add_input(UI_IO, )
         ! parameter input/output
         !call graphene_mask%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call graphene_mask%add_input(UI_PARM, )
         ! search controls
         !call graphene_mask%add_input(UI_SRCH, )
@@ -111,7 +111,7 @@ contains
         !call image_bin%add_input(UI_IO, )
         ! parameter input/output
         !call image_bin%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call image_bin%add_input(UI_PARM, )
         ! search controls
         !call image_bin%add_input(UI_SRCH, )
@@ -139,7 +139,7 @@ contains
         !call mask%add_input(UI_IO, )
         ! parameter input/output
         !call mask%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call mask%add_input(UI_PARM, )
         ! search controls
         !call mask%add_input(UI_SRCH, )
@@ -167,7 +167,7 @@ contains
         !call msk_routines%add_input(UI_IO, )
         ! parameter input/output
         !call msk_routines%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call msk_routines%add_input(UI_PARM, )
         ! search controls
         !call msk_routines%add_input(UI_SRCH, )
@@ -196,6 +196,7 @@ contains
         ! parameter input/output
         call nano_mask%add_input(UI_PARM, smpd, required_override=.false.)
         ! alternative inputs
+        ! <no additional inputs>
         !call nano_mask%add_input(UI_PARM, )
         ! search controls
         !call nano_mask%add_input(UI_SRCH, )
@@ -223,7 +224,7 @@ contains
         !call otsu_test%add_input(UI_IO, )
         ! parameter input/output
         !call otsu_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call otsu_test%add_input(UI_PARM, )
         ! search controls
         !call otsu_test%add_input(UI_SRCH, )
@@ -251,7 +252,7 @@ contains
         !call ptcl_center%add_input(UI_IO, )
         ! parameter input/output
         !call ptcl_center%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call ptcl_center%add_input(UI_PARM, )
         ! search controls
         !call ptcl_center%add_input(UI_SRCH, )

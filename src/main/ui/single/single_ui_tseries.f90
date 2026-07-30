@@ -43,20 +43,21 @@ contains
         &'Track particles in time-series',&                                      ! summary
         &'is a distributed workflow for particle tracking in time-series data',& ! help
         &'single_exec',&                                                         ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                           ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call track_particles%add_input(UI_PARM, 'fbody', 'string', 'Template output tracked series',&
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
-        call track_particles%add_input(UI_PARM, 'boxfile', 'file', 'List of particle coordinates',&
+        call track_particles%add_input(UI_FILE, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
         call track_particles%add_input(UI_PARM, neg)
         call track_particles%add_input(UI_PARM, 'tester', 'multi', 'Write periodic tester-mode outputs',&
-        &'Periodically write masked reference images and registered particle chunks for debugging(no|yes){no}', '(no|yes){no}', .false., 'no')
+        &'Periodically write masked reference images and registered particle chunks for debugging(no|yes){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'no', 'yes']))
         call track_particles%add_input(UI_PARM, 'fromf', 'num', 'Frame to start tracking from', 'Frame to start tracking from', 'frame index', .false., 0.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call track_particles%add_input(UI_SRCH, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
@@ -68,7 +69,8 @@ contains
         call track_particles%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
         call track_particles%add_input(UI_FILT, 'filter', 'multi','Alternative filter for particle tracking',&
-            &'Alternative filter for particle tracking(no|tv|nlmean){nlmean}', '(no|tv|nlmean){nlmean}', .false., 'nlmean')
+            &'Alternative filter for particle tracking(no|tv|nlmean){nlmean}','', .false., 'nlmean', &
+        &choices=ui_choices([character(len=6) :: 'no', 'tv', 'nlmean']))
         call track_particles%add_input(UI_FILT, hp)
         ! mask controls
         ! <empty>
@@ -89,16 +91,16 @@ contains
         &'Import nanoparticle time-series data into a SIMPLE project',& ! summary
         &'is a workflow for importing time-series data',&   ! help
         &'single_exec',&                                    ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                      ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_import%add_input(UI_IMG, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
+        call tseries_import%add_input(UI_FILE, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
         ! parameter input/output
         call tseries_import%add_input(UI_PARM, smpd)
         call tseries_import%add_input(UI_PARM, kv, required_override=.true.)
         call tseries_import%add_input(UI_PARM, 'cs', 'num', 'Spherical aberration', 'Spherical aberration constant(in mm){0.0}', 'in mm{0.0}', .true., 0.0)
         call tseries_import%add_input(UI_PARM, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.4}', 'fraction{0.4}', .true., 0.4)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -121,7 +123,7 @@ contains
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! help
         &'single_exec',&                                                                 ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -129,7 +131,7 @@ contains
         call tseries_make_pickavg%add_input(UI_PARM, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{100}', '{100}', .false., 100.)
         call tseries_make_pickavg%add_input(UI_PARM, 'fromf',      'num', 'Frame to start averaging from', 'Frame to start averaging from', 'frame index', .false., 0.)
         call tseries_make_pickavg%add_input(UI_PARM, 'period',     'num', 'Period for repeated averaging windows', 'If > 0, run align+denoise for a nframesgrp-sized window every period frames{0}', 'period in frames{0}', .false., 0.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call tseries_make_pickavg%add_input(UI_SRCH, trs_mc)
@@ -159,13 +161,13 @@ contains
         &'Anisotropic motion correction of time-series of nanoparticles',&                                         ! summary
         &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.',& ! help
         &'single_exec',&                                                                                           ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                                             ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                                             ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_motion_correct%add_input(UI_PARM, 'boxfile', 'file', 'List of particle coordinates',&
-        &'.txt file with EMAN-convention particle coordinates', 'e.g. coords.box', .false., '')        ! alternative inputs
+        call tseries_motion_correct%add_input(UI_FILE, 'boxfile', 'file', 'List of particle coordinates',&
+        &'.txt file with EMAN-convention particle coordinates', 'e.g. coords.box', .false., '')        ! <no additional inputs>
         ! <empty>
         ! search controls
         call tseries_motion_correct%add_input(UI_SRCH, trs_mc)
@@ -198,13 +200,13 @@ contains
         &'Prepare time-series for particle tracking',&                                    ! summary
         &'is a program for preparing time-series for preparing particle tracking',&       ! help
         &'single_exec',&                                                                  ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -226,15 +228,15 @@ contains
         &'Extract particle trajectories from time-series',&                              ! summary
         &'is a program for extracting particle trajectories from time-series (movies) of nanoparticles.',& ! help
         &'single_exec',&                                                                  ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_extractor%add_input(UI_PARM, 'infile', 'file', 'Selected particle trajectory', 'Text file (.txt) containing particle coordinates per frame',&
+        call tseries_extractor%add_input(UI_FILE, 'infile', 'file', 'Selected particle trajectory', 'Text file (.txt) containing particle coordinates per frame',&
         &'give .txt trajectory file', .true., '')
         call tseries_extractor%add_input(UI_PARM, box_extract, required_override=.true.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

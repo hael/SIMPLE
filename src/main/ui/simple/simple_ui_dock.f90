@@ -44,8 +44,8 @@ contains
         call dock_volpair%add_input(UI_IMG, outvol)
         ! parameter input/output
         call dock_volpair%add_input(UI_PARM, smpd)
-        call dock_volpair%add_input(UI_PARM, outfile)
-        ! alternative inputs
+        call dock_volpair%add_input(UI_FILE, outfile)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call dock_volpair%add_input(UI_SRCH, trs)
@@ -71,12 +71,12 @@ contains
         &.false.)                                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call volanalyze%add_input(UI_IMG, 'filetab', 'file', 'Volumes list',&
+        call volanalyze%add_input(UI_FILE, 'filetab', 'file', 'Volumes list',&
         &'List of volumes to analyze', 'list input e.g. voltab.txt', .true., '')
         ! parameter input/output
         call volanalyze%add_input(UI_PARM, smpd)
         call volanalyze%add_input(UI_PARM, 'ref_ind', 'num', 'Reference volume index', 'Index of volume in voltab to use as reference', 'ref idx', .false., 0.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -103,13 +103,13 @@ contains
         &.false.)                                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call volcluster%add_input(UI_IMG, 'filetab', 'file', 'Volumes list',&
+        call volcluster%add_input(UI_FILE, 'filetab', 'file', 'Volumes list',&
         &'List of docked volumes to cluster', 'list input e.g. voltab.txt', .true., '')
         ! parameter input/output
         call volcluster%add_input(UI_PARM, smpd)
-        call volcluster%add_input(UI_PARM, outfile)
+        call volcluster%add_input(UI_FILE, outfile)
         call volcluster%add_input(UI_PARM, ncls, required_override=.false.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

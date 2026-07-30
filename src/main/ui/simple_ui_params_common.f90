@@ -2,6 +2,7 @@
 module simple_ui_params_common
 use simple_core_module_api
 use simple_ui_param, only: ui_param
+use simple_ui_descriptor_types, only: ui_choices
 implicit none
 ! declare common params here, with name same as flag
 type(ui_param) :: algorithm
@@ -181,8 +182,8 @@ contains
 
 subroutine set_ui_params
     call algorithm%set_param(      'algorithm',       'multi',  'Algorithm for motion correction', &
-                                   'Algorithm for motion correction(iso|patch|patch_refine){patch}', &
-                                   '(iso|patch|patch_refine){patch}', .false., 'patch')
+                                   'Algorithm for motion correction(iso|patch|patch_refine){patch}','', .false., 'patch', &
+    &choices=ui_choices([character(len=12) :: 'iso', 'patch', 'patch_refine']))
 
     call angerr%set_param(         'angerr',          'num',    'Rotation angle error half-width', &
                                    'Uniform rotation angle shift error half-width(in degrees)', &
@@ -197,12 +198,12 @@ subroutine set_ui_params
                                    'in microns{0.05}', .false., 0.05)
 
     call automsk%set_param(        'automsk',         'multi',  'Perform envelope masking', &
-                                   'Whether to generate/apply an envelope mask(yes|tight|no){no}', &
-                                   '(yes|tight|no){no}', .false., 'no')
+                                   'Whether to generate/apply an envelope mask(yes|tight|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=5) :: 'yes', 'tight', 'no']))
 
     call backgr_subtr%set_param(   'backgr_subtr',    'binary', 'Perform micrograph background subtraction(new picker only)', &
-                                   'Perform micrograph background subtraction before picking/extraction(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Perform micrograph background subtraction before picking/extraction(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call bfac%set_param(           'bfac',            'num',    'B-factor for sharpening', &
                                    'B-factor for sharpening in Angstroms^2', &
@@ -221,20 +222,20 @@ subroutine set_ui_params
                                    'Extracted particle image size', .false., 0.)
 
     call center_pdb%set_param(     'center_pdb',      'binary', 'Whether to move the PDB atomic center to the center of the box', &
-                                   'Whether to move the PDB atomic center to the center of the box (yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Whether to move the PDB atomic center to the center of the box (yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call clip%set_param(           'clip',            'num',    'Clipped box size', &
                                    'Target box size for clipping in pixels', &
                                    'in pixels', .false., 0.)
 
     call cls_init%set_param(       'cls_init',        'multi',  'Scheme for initial class generation', &
-                                   'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}', &
-                                   '(ptcl|randcls|rand){ptcl}', .false., 'rand')
+                                   'Initiate 2D analysis from raw images|random classes|noise images(ptcl|randcls|rand){ptcl}','', .false., 'rand', &
+    &choices=ui_choices([character(len=7) :: 'ptcl', 'randcls', 'rand']))
 
     call clust_crit%set_param(     'clust_crit',      'multi',  'Clustering criterion', &
-                                   'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}', &
-                                   '(sig|sig_clust|cc|res|hybrid){hybrid}', .false., 'hybrid')
+                                   'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}','', .false., 'hybrid', &
+    &choices=ui_choices([character(len=9) :: 'sig', 'sig_clust', 'cc', 'res', 'hybrid']))
 
     call cn%set_param(             'cn',              'num',    'Fixed std coordination number', &
                                    'Minimum std cn to consider for dipole calc ', &
@@ -249,24 +250,24 @@ subroutine set_ui_params
                                    '4', .false., 4.)
 
     call combine_eo%set_param(     'combine_eo',      'binary', 'Whether e/o references are combined for final alignment(yes|no){no}', &
-                                   'whether e/o references are combined for final alignment(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'whether e/o references are combined for final alignment(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call cs%set_param(             'cs',              'num',    'Spherical aberration', &
                                    'Spherical aberration constant(in mm){2.7}', &
                                    'in mm{2.7}', .false., 2.7)
 
     call ctf%set_param(            'ctf',             'multi',  'CTF status', &
-                                   'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}', &
-                                   '(yes|no|flip){no}', .true., 'no')
+                                   'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}','', .true., 'no', &
+    &choices=ui_choices([character(len=4) :: 'yes', 'no', 'flip']))
 
     call ctf_yes%set_param(        'ctf',             'multi',  'CTF status', &
-                                   'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}', &
-                                   '(yes|no|flip){yes}', .false., 'yes')
+                                   'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}','', .false., 'yes', &
+    &choices=ui_choices([character(len=4) :: 'yes', 'no', 'flip']))
 
     call ctfpatch%set_param(       'ctfpatch',        'binary', 'Patch CTF estimation', &
-                                   'Whether to perform patch CTF estimation(yes|no){yes}', &
-                                   '(yes|no){yes}', .false., 'yes')
+                                   'Whether to perform patch CTF estimation(yes|no){yes}','', .false., 'yes', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call ctfresthreshold%set_param('ctfresthreshold', 'num',    'CTF Resolution rejection threshold', &
                                    'Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{6.}', &
@@ -313,16 +314,16 @@ subroutine set_ui_params
                                    'atom composition e.g. Pt', .true., '  ')
 
     call envfsc%set_param(         'envfsc',          'binary', 'Envelope mask e/o maps for FSC', &
-                                   'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call eo%set_param(             'eo',              'binary', 'Gold-standard FSC for filtering and resolution estimation', &
-                                   'Gold-standard FSC for filtering and resolution estimation(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Gold-standard FSC for filtering and resolution estimation(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call flipgain%set_param(       'flipgain',        'multi',  'Flip the gain reference', &
-                                   'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}', &
-                                   '(no|x|y|xy|yx){no}', .false., 'no')
+                                   'Flip the gain reference along the provided axis(no|x|y|xy|yx){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=2) :: 'no', 'x', 'y', 'xy', 'yx']))
 
     call fraca%set_param(          'fraca',           'num',    'Amplitude contrast fraction', &
                                    'Fraction of amplitude contrast used for fitting CTF{0.1}', &
@@ -341,8 +342,8 @@ subroutine set_ui_params
                                    'input image e.g. gainref.mrc', .false., '')
 
     call graphene_filt%set_param(  'graphene_filt',   'binary', 'Omit graphene bands from corr calc', &
-                                   'Omit graphene bands from corr calc(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Omit graphene bands from corr calc(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call hp%set_param(             'hp',              'num',    'High-pass limit', &
                                    'High-pass resolution limit', &
@@ -353,8 +354,8 @@ subroutine set_ui_params
                                     'Ice fraction threshold{1.0}', .false., 1.0)
 
     call icm%set_param(            'icm',             'binary', 'Whether to perform ICM filtering of reference(s)', &
-                                   'Whether to perform ICM filtering of reference(s)(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Whether to perform ICM filtering of reference(s)(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call job_memory_per_task%set_param('job_memory_per_task','str', 'Memory per computing node', &
                                        'Memory in MB per part/computing node in distributed execution{16000}', &
@@ -402,8 +403,8 @@ subroutine set_ui_params
                                    'Max # iterations', .false., 100.)
 
     call ptcl_src%set_param(       'ptcl_src',        'multi',  'Particle source', &
-                                   'Particle source for matching and 3D reconstruction(raw|den){raw}', &
-                                   '(raw|den){raw}', .false., 'raw')
+                                   'Particle source for matching and 3D reconstruction(raw|den){raw}','', .false., 'raw', &
+    &choices=ui_choices([character(len=3) :: 'raw', 'den']))
 
     call maxnchunks%set_param(     'maxnchunks',      'num',    'Number of subsets after which 2D analysis ends', &
                                    'After this number of subsets has been classified all processing will stop(0=no end){0}', &
@@ -414,36 +415,36 @@ subroutine set_ui_params
                                    '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
 
     call mcpatch%set_param(        'mcpatch',         'binary', 'Patch-based motion correction', &
-                                   'Whether to perform Patch-based motion correction(yes|no){yes}', &
-                                   '(yes|no){yes}', .false., 'yes')
+                                   'Whether to perform Patch-based motion correction(yes|no){yes}','', .false., 'yes', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call mcpatch_thres%set_param(  'mcpatch_thres',   'binary', 'Use motion correction patch threshold', &
-                                   'Whether to use the threshold for motion correction patch solution(yes|no){yes}', &
-                                   '(yes|no){yes}', .false., 'yes')
+                                   'Whether to use the threshold for motion correction patch solution(yes|no){yes}','', .false., 'yes', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call min_rad%set_param(        'min_rad',         'num',    'Minimum radius in A', &
                                    'Minimum radius in A {50.} ', &
                                    '{50.}', .true., 50.)
 
     call mirr%set_param(           'mirr',            'multi',  'Perform mirroring', &
-                                   'Whether to mirror and along which axis(no|x|y){no}', &
-                                   '(no|x|y){no}', .false., 'no')
+                                   'Whether to mirror and along which axis(no|x|y){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=2) :: 'no', 'x', 'y']))
 
     call conical_fsc%set_param(    'conical_fsc',     'binary', 'Conical FSC regularization', &
-                                   'Use conical FSC curves when ML regularization is active(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Use conical FSC curves when ML regularization is active(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call ml_reg%set_param(         'ml_reg',          'binary', 'ML regularization', &
-                                   'Regularization (ML-style) based on the signal power(yes|no){yes}', &
-                                   '(yes|no){yes}', .false., 'yes')
+                                   'Regularization (ML-style) based on the signal power(yes|no){yes}','', .false., 'yes', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call ml_reg_chunk%set_param(   'ml_reg_chunk',    'binary', 'Subset ML regularization', &
-                                   'Subset Regularization (ML-style) based on the signal power(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'yes')
+                                   'Subset Regularization (ML-style) based on the signal power(yes|no){no}','', .false., 'yes', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call ml_reg_pool%set_param(    'ml_reg_pool',     'binary', 'Pool ML regularization', &
-                                   'Pool Regularization (ML-style) based on the signal power(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'yes')
+                                   'Pool Regularization (ML-style) based on the signal power(yes|no){no}','', .false., 'yes', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call moldiam%set_param(        'moldiam',         'num',    'Molecular diameter', &
                                    'Molecular diameter(in Angstroms)', &
@@ -482,8 +483,8 @@ subroutine set_ui_params
                                    '# 2D clusters / subset', .true., 50.)
 
     call neg%set_param(            'neg',             'binary', 'Invert contrast', &
-                                   'Invert contrast(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Invert contrast(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call nparts%set_param(         'nparts',          'num',    'Number of computing nodes', &
                                    'Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', &
@@ -546,12 +547,12 @@ subroutine set_ui_params
                                    '# y-patches{3}', .false., 3.)
 
     call objfun%set_param(         'objfun',          'multi',  'Objective function', &
-                                   'Objective function(euclid|cc|prob){euclid}', &
-                                   '(euclid|cc|prob){euclid}', .false., 'euclid')
+                                   'Objective function(euclid|cc|prob){euclid}','', .false., 'euclid', &
+    &choices=ui_choices([character(len=6) :: 'euclid', 'cc', 'prob']))
 
     call objfun_den%set_param(     'objfun_den',      'binary', 'Denoised objective', &
-                                   'Augment raw Euclidean objective with denoised-particle correlation(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Augment raw Euclidean objective with denoised-particle correlation(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call objfun_den_w%set_param(   'objfun_den_w',    'num',    'Denoised objective weight', &
                                    'Weight for denoised-particle correlation in hybrid objective(0-1){0.5}', &
@@ -566,16 +567,16 @@ subroutine set_ui_params
                                    '.simple|.txt parameter file', .false., 'oritab2'//trim(METADATA_EXT))
 
     call oritype%set_param(        'oritype',         'multi',  'Oritype segment in project', &
-                                   'Oritype segment in project(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}', &
-                                   '(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}', .false., 'ptcl3D')
+                                   'Oritype segment in project(mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}','', .false., 'ptcl3D', &
+    &choices=ui_choices([character(len=8) :: 'mic', 'stk', 'ptcl2D', 'cls2D', 'cls3D', 'ptcl3D', 'out', 'projinfo', 'jobproc', 'compenv']))
 
     call outfile%set_param(        'outfile',         'file',   'Output orientation and CTF parameter file', &
                                    'Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format', &
                                    '.simple|.txt parameter file', .false., 'outfile'//trim(METADATA_EXT))
 
     call outside%set_param(        'outside',         'binary', 'Extract outside stage boundaries', &
-                                   'Extract boxes outside the micrograph boundaries(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Extract boxes outside the micrograph boundaries(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call outstk%set_param(         'outstk',          'file',   'Output stack name', &
                                    'Output images stack name', &
@@ -586,16 +587,16 @@ subroutine set_ui_params
                                    'e.g. outvol.mrc', .false., '')
 
     call nu_refine%set_param(      'nu_refine',       'binary', 'NU resolution expansion refinement', &
-                                   'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call particle_density%set_param('particle_density','multi', 'Particle density in micrographs', &
-                                    'Particle density in micrographs(low|optimal|high){optimal}', &
-                                    '(low|optimal|high){optimal}', .false., 'optimal')
+                                    'Particle density in micrographs(low|optimal|high){optimal}','', .false., 'optimal', &
+    &choices=ui_choices([character(len=7) :: 'low', 'optimal', 'high']))
 
     call pcontrast%set_param(      'pcontrast',       'multi',  'Input particle contrast', &
-                                   'Input particle contrast(black|white){black}', &
-                                   '(black|white){black}', .false., 'black')
+                                   'Input particle contrast(black|white){black}','', .false., 'black', &
+    &choices=ui_choices([character(len=5) :: 'black', 'white']))
 
     call pdbout%set_param(         'pdbout',          'file',   'Output PDB volume-centered molecule', &
                                    'Output coordinates file in PDB format for the volume-centered molecule', &
@@ -610,8 +611,8 @@ subroutine set_ui_params
                                    'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
 
     call fit_phshift%set_param(    'fit_phshift',     'binary', 'Fit CTF phase shift', &
-                                   'Fit the additive phase shift during CTF estimation(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Fit the additive phase shift during CTF estimation(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call phshift_min%set_param(    'phshift_min',     'num', 'Minimum CTF phase shift', &
                                    'Minimum fitted additive phase shift in degrees, 0-360; a window narrower &
@@ -628,12 +629,12 @@ subroutine set_ui_params
                                    'in degrees{10}', .false., 10.)
 
     call pick_roi%set_param(       'pick_roi',        'binary', 'Artefactual regions exclusion(new picker only)', &
-                                   'Whether to exclude regions of disinterest(carbon, thick ice, new picker only)(yes|no){yes}', &
-                                   '(yes|no){yes}', .false., 'yes')
+                                   'Whether to exclude regions of disinterest(carbon, thick ice, new picker only)(yes|no){yes}','', .false., 'yes', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call picker%set_param(         'picker',          'multi',  'Which picker to use', &
-                                   'Which picker to use(old|new|segdiam){new}', &
-                                   '(old|new|segdiam){new}', .false., 'new')
+                                   'Which picker to use(old|new|segdiam){new}','', .false., 'new', &
+    &choices=ui_choices([character(len=7) :: 'old', 'new', 'segdiam']))
 
     call pickrefs%set_param(       'pickrefs',        'file',   'Stack of class-averages/reprojections for picking', &
                                    'Stack of class-averages/reprojections for picking', &
@@ -672,8 +673,8 @@ subroutine set_ui_params
                                    'e.g. projtab.txt', .true., '')
 
     call prune%set_param(          'prune',           'binary', 'Automated particles pruning', &
-                                   'Whether to prune deselected particles(yes|no){no}', &
-                                   'Automated particles pruning(yes|no){no}', .false., 'no')
+                                   'Whether to prune deselected particles(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call pspecsz%set_param(        'pspecsz',         'num',    'Size of power spectrum', &
                                    'Size of power spectrum in pixels{512}', &
@@ -681,22 +682,22 @@ subroutine set_ui_params
 
     call quality_mode%set_param(   'quality_mode',    'multi',  'Class-average quality mode', &
                                    'Whether to apply selection, analyze it, learn, or emit promotion code'//&
-                                   '(apply|analyze|learn|evaluate|promote){apply}', &
-                                   'Class-average quality mode(apply|analyze|learn|evaluate|promote){apply}', .false., 'apply')
+                                   '(apply|analyze|learn|evaluate|promote){apply}','', .false., 'apply', &
+    &choices=ui_choices([character(len=8) :: 'apply', 'analyze', 'learn', 'evaluate', 'promote']))
 
     call quality_context%set_param('quality_context', 'multi',  'Class-average quality context', &
-                                   'Hard-gate context for class-average quality rejection(chunk|pool|sieve){chunk}', &
-                                   'Class-average quality context(chunk|pool|sieve){chunk}', .false., 'chunk')
+                                   'Hard-gate context for class-average quality rejection(chunk|pool|sieve){chunk}','', .false., 'chunk', &
+    &choices=ui_choices([character(len=5) :: 'chunk', 'pool', 'sieve']))
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
                                    'Built-in class-average quality model preset'//&
-                                   '(chunk100mics|sieve|pool){chunk100mics}', &
-                                   'Quality model(chunk100mics|sieve|pool){chunk100mics}', &
-                                   .false., 'chunk100mics')
+                                   '(chunk100mics|sieve|pool){chunk100mics}','', &
+                                   .false., 'chunk100mics', &
+    &choices=ui_choices([character(len=12) :: 'chunk100mics', 'sieve', 'pool']))
 
     call qsys_name%set_param(      'qsys_name',       'multi',  'Queue system kind', &
-                                   'Queue system kind(local|coarray|slurm|pbs|lsf|sge)', &
-                                   '(local|coarray|slurm|pbs|lsf|sge)', .false., 'local')
+                                   'Queue system kind(local|coarray|slurm|pbs|lsf|sge)','', .false., 'local', &
+    &choices=ui_choices([character(len=7) :: 'local', 'coarray', 'slurm', 'pbs', 'lsf', 'sge']))
 
     call qsys_partition%set_param( 'qsys_partition',  'str',    'Name of SLURM/PBS/LSF partition', &
                                    'Name of target partition of distributed computer system (SLURM/PBS/LSF)', &
@@ -711,28 +712,28 @@ subroutine set_ui_params
                                     'give your part', .false., '')
 
     call remap_cls%set_param(      'remap_cls',       'binary', 'Whether to remap 2D clusters', &
-                                   'Whether to remap the number of 2D clusters(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Whether to remap the number of 2D clusters(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call remove_chunks%set_param(  'remove_chunks',   'binary', 'Whether to remove subsets', &
-                                   'Whether to remove subsets after completion(yes|no){yes}', &
-                                   '(yes|no){yes}', .false., 'yes')
+                                   'Whether to remove subsets after completion(yes|no){yes}','', .false., 'yes', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call script%set_param(         'script',          'binary', 'Generate script for shared-mem exec on cluster', &
-                                   'Generate script for shared-mem exec on cluster(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Generate script for shared-mem exec on cluster(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call skip_rejection%set_param( 'skip_rejection',  'binary', 'Skip class-average rejection', &
-                                   'Skip class-average rejection and leave project selections unchanged(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Skip class-average rejection and leave project selections unchanged(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call sherr%set_param(          'sherr',           'num',    'Shift error half-width', &
                                    'Uniform rotational origin shift error half-width(in pixels)', &
                                    'shift error in pixels', .false., 0.)
 
     call sigma_est%set_param(      'sigma_est',       'multi',  'Sigma estimation method', &
-                                   'Sigma estimation method(group|global){group}', &
-                                   '(group|global){group}', .false., 'group')
+                                   'Sigma estimation method(group|global){group}','', .false., 'group', &
+    &choices=ui_choices([character(len=6) :: 'group', 'global']))
 
     call smpd%set_param(           'smpd',            'num',    'Sampling distance', &
                                    'Distance between neighbouring pixels in Angstroms', &
@@ -825,8 +826,8 @@ subroutine set_ui_params
                                    'max shift per iter in pixels{10}', .false., 10.0)
 
     call tseries%set_param(        'tseries',         'binary', 'Stack is time-series', &
-                                   'Stack is time-series(yes|no){no}', &
-                                   '(yes|no){no}', .false., 'no')
+                                   'Stack is time-series(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call update_frac%set_param(    'update_frac',     'num',    'Fractional update per iteration', &
                                    'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence rate(0.1-0.5){1.}', &
@@ -853,8 +854,8 @@ subroutine set_ui_params
                                    'in seconds(23h59mins){86340}', .false., 86340.)
 
     call wcrit%set_param(          'wcrit',           'multi',  'Correlation to weights conversion scheme', &
-                                   'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}', &
-                                   '(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}', .false., 'softmax')
+                                   'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|uniform|no){softmax}','', .false., 'softmax', &
+    &choices=ui_choices([character(len=7) :: 'softmax', 'zscore', 'sum', 'cen', 'exp', 'inv', 'uniform', 'no']))
 
     call width%set_param(          'width',           'num',    'Falloff of inner mask', &
                                    'Number of cosine edge pixels of inner mask in pixels', &

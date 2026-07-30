@@ -43,7 +43,7 @@ contains
         !call coarrays%add_input(UI_IO, )
         ! parameter input/output
         !call coarrays%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call coarrays%add_input(UI_PARM, )
         ! search controls
         !call coarrays%add_input(UI_SRCH, )
@@ -74,7 +74,7 @@ contains
         !call openacc%add_input(UI_IO, )
         ! parameter input/output
         !call openacc%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call openacc%add_input(UI_PARM, )
         ! search controls
         !call openacc%add_input(UI_SRCH, )
@@ -102,7 +102,7 @@ contains
         !call openmp%add_input(UI_IO, )
         ! parameter input/output
         !call openmp%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call openmp%add_input(UI_PARM, )
         ! search controls
         !call openmp%add_input(UI_SRCH, )
@@ -130,7 +130,7 @@ contains
         !call simd%add_input(UI_IO, )
         ! parameter input/output
         !call simd%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call simd%add_input(UI_PARM, )
         ! search controls
         !call simd%add_input(UI_SRCH, )

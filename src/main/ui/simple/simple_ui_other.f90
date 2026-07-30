@@ -39,10 +39,10 @@ contains
         &.false.)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cif2pdb%add_input(UI_IMG, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif')
+        call cif2pdb%add_input(UI_FILE, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif')
         ! parameter input/output
         ! computer controls
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>               
@@ -74,7 +74,7 @@ contains
         call fractionate_movies%add_input(UI_PARM, 'mcconvention', 'str', 'Movie alignment convention', &
         & 'Movie alignment and naming convention(simple|unblur|relion|motioncorr|cryosparc|cs){simple}', &
         & '(simple|unblur|relion|motioncorr|cryosparc|cs){simple}', .false., 'simple')
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -104,7 +104,7 @@ contains
         call split_%add_input(UI_PARM, smpd)
         ! computer controls
         call split_%add_input(UI_COMP, nparts)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>               
@@ -130,7 +130,7 @@ contains
         ! <empty>
         ! parameter input/output
         call split_stack%add_input(UI_PARM, 'nparts', 'num', 'Number of parts balanced splitting of the stack', '# parts', '# parts', .true., 1.0)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

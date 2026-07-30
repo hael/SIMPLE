@@ -44,11 +44,13 @@ contains
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call info_image%add_input(UI_IMG, 'fname', 'file', 'Name of image file', 'Name of image file', 'xxx.mrc file', .true., '')
+        call info_image%add_input(UI_FILE, 'fname', 'file', 'Name of image file', 'Name of image file', 'xxx.mrc file', .true., '')
         ! parameter input/output
-        call info_image%add_input(UI_PARM, 'stats', 'binary', 'Output statistics', 'Output statistics(yes|no){no}',             '(yes|no){no}', .false., 'no')
-        call info_image%add_input(UI_PARM, 'vis',   'binary', 'Visualize image',   'Visualize image with gnuplot(yes|no){yes}', '(yes|no){no}', .false., 'no')
-        ! alternative inputs
+        call info_image%add_input(UI_PARM, 'stats', 'binary', 'Output statistics', 'Output statistics(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call info_image%add_input(UI_PARM, 'vis',   'binary', 'Visualize image',   'Visualize image with gnuplot(yes|no){yes}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -75,10 +77,10 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         stktab%required = .true.
-        call info_stktab%add_input(UI_IMG, stktab)
+        call info_stktab%add_input(UI_FILE, stktab)
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -110,7 +112,7 @@ contains
         call print_dose_weights%add_input(UI_PARM, 'nframes',   'num', 'Number of frames', 'Number of movie frames', '# frames', .true., 0.)
         call print_dose_weights%add_input(UI_PARM, kv)
         call print_dose_weights%add_input(UI_PARM, total_dose, required_override=.true.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -139,10 +141,10 @@ contains
         ! parameter input/output
         call print_fsc%add_input(UI_PARM, smpd, required_override=.false.)
         call print_fsc%add_input(UI_PARM, box,  required_override=.false.)
-        call print_fsc%add_input(UI_PARM, 'fsc', 'file', 'FSC file', 'Binary file with FSC info',&
+        call print_fsc%add_input(UI_FILE, 'fsc', 'file', 'FSC file', 'Binary file with FSC info',&
         'input binary file e.g. fsc_state01.bin', .false., 'fsc_state01.bin')
         call print_fsc%add_input(UI_PARM, frcs)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -172,7 +174,7 @@ contains
         call print_magic_boxes%add_input(UI_PARM, smpd)
         call print_magic_boxes%add_input(UI_PARM, box)
         call print_magic_boxes%add_input(UI_PARM, moldiam)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

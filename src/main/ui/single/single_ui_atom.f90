@@ -46,12 +46,12 @@ contains
         &'Registration of two nanoparticles',&                                                        ! summary
         &'is a program that registers two nanoparticles given the maps and the atom position maps.',& ! descr long
         &'single_exec',&                                                                              ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                                                               ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call atoms_register%add_input(UI_IMG, 'fname', 'file', 'PDB file list', 'PDB file list', 'e.g. pdb_files.txt', .true., '')
+        call atoms_register%add_input(UI_FILE, 'fname', 'file', 'PDB file list', 'PDB file list', 'e.g. pdb_files.txt', .true., '')
         ! parameter input/output
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -72,15 +72,15 @@ contains
         &'Analysis of results obtained with trajectory_reconstruct3D and detect_atoms',& ! summary
         &'is a program that analyzes atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                                               ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call atoms_rmsd%add_input(UI_PARM, smpd)
-        call atoms_rmsd%add_input(UI_PARM, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
+        call atoms_rmsd%add_input(UI_FILE, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
         call atoms_rmsd%add_input(UI_PARM, 'frac_diam', 'num',  'Fraction of atomic diameter', 'Fraction of atomic diameter used for thresholding{0.5}', '{0.5}', .false., 0.5)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -102,7 +102,7 @@ contains
         &'Statistical test for radial dependent symmetry',&                                           ! summary
         &'is a program that generates statistics at different radii and across the whole nano map.',& ! descr long
         &'single_exec',&                                                                              ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                                                               ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atoms_stats%add_input(UI_IMG, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
@@ -113,10 +113,10 @@ contains
         & 'input volume 4 lattice fit e.g. vol3.mrc', .false., '')
         ! parameter input/output
         call atoms_stats%add_input(UI_PARM, smpd)
-        call atoms_stats%add_input(UI_PARM, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format', 'Input coords file in PDB format', .true., '')
-        call atoms_stats%add_input(UI_PARM, 'pdbfile2', 'file', 'PDB', 'subset coords for stats calc', 'subset coords file in PDB format for stats calc', .false., '')
-        call atoms_stats%add_input(UI_PARM, 'rmsd_file','file', 'bin', 'per-atom e/o rmsd:s', 'per-atom e/o rmsd:s from CS model building', .false., '')
-        ! alternative inputs
+        call atoms_stats%add_input(UI_FILE, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format', 'Input coords file in PDB format', .true., '')
+        call atoms_stats%add_input(UI_FILE, 'pdbfile2', 'file', 'PDB', 'subset coords for stats calc', 'subset coords file in PDB format for stats calc', .false., '')
+        call atoms_stats%add_input(UI_FILE, 'rmsd_file','file', 'bin', 'per-atom e/o rmsd:s', 'per-atom e/o rmsd:s from CS model building', .false., '')
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -138,15 +138,15 @@ contains
         &'Analysis of results obtianed with trajectory_reconstruct3D and detect_atoms',& ! summary
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'single_exec',&                                                              ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                                               ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                                               ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call core_atoms_analysis%add_input(UI_PARM, smpd)
-        call core_atoms_analysis%add_input(UI_PARM, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
+        call core_atoms_analysis%add_input(UI_FILE, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
         call core_atoms_analysis%add_input(UI_PARM, 'frac_diam', 'num',  'Fraction of atomic diameter', 'Fraction of atomic diameter used for thresholding{0.5}', '{0.5}', .false., 0.5)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -168,14 +168,14 @@ contains
         &'Calculate the crystal score for a nanoparticle map',& ! summary
         &'is a program that computes crystal score.',&                  ! descr long
         &'single_exec',&                                                ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                                 ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call crys_score%add_input(UI_IMG, 'fname', 'file', 'PDB file list', 'PDB file list', 'e.g. np_pdbs.txt', .true., '')
+        call crys_score%add_input(UI_FILE, 'fname', 'file', 'PDB file list', 'PDB file list', 'e.g. np_pdbs.txt', .true., '')
         ! parameter input/output
         call crys_score%add_input(UI_PARM, smpd)
         call crys_score%add_input(UI_PARM, box)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -197,14 +197,14 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! summary
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-components map',& ! descr long
         &'single_exec',&                                        ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                         ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
         & 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         call detect_atoms%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -226,17 +226,17 @@ contains
         &'Simulate nanoparticle for lattice density',&                          ! summary
         &'is a program for simulation of nanoparticle for lattice density',&    ! help
         &'single_exec',&                                                        ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                                         ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call simulate_nanoparticle%add_input(UI_IMG, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '')
+        call simulate_nanoparticle%add_input(UI_FILE, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '')
         call simulate_nanoparticle%add_input(UI_IMG, outvol)
         ! parameter input/output
         call simulate_nanoparticle%add_input(UI_PARM, smpd)
         call simulate_nanoparticle%add_input(UI_PARM, box)
         call simulate_nanoparticle%add_input(UI_PARM, element, required_override=.false.)
         call simulate_nanoparticle%add_input(UI_PARM, moldiam)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

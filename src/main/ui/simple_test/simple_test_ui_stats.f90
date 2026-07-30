@@ -58,7 +58,7 @@ contains
         !call class_sample_test%add_input(UI_IO, )
         ! parameter input/output
         !call class_sample_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call class_sample_test%add_input(UI_PARM, )
         ! search controls
         !call class_sample_test%add_input(UI_SRCH, )
@@ -86,7 +86,7 @@ contains
         !call clustering%add_input(UI_IO, )
         ! parameter input/output
         !call clustering%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call clustering%add_input(UI_PARM, )
         ! search controls
         !call clustering%add_input(UI_SRCH, )
@@ -114,7 +114,7 @@ contains
         !call ctf_test%add_input(UI_IO, )
         ! parameter input/output
         !call ctf_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call ctf_test%add_input(UI_PARM, )
         ! search controls
         !call ctf_test%add_input(UI_SRCH, )
@@ -142,7 +142,7 @@ contains
         !call eo_diff%add_input(UI_IO, )
         ! parameter input/output
         !call eo_diff%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call eo_diff%add_input(UI_PARM, )
         ! search controls
         !call eo_diff%add_input(UI_SRCH, )
@@ -170,7 +170,7 @@ contains
         !call extr_frac%add_input(UI_IO, )
         ! parameter input/output
         !call extr_frac%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call extr_frac%add_input(UI_PARM, )
         ! search controls
         !call extr_frac%add_input(UI_SRCH, )
@@ -198,7 +198,7 @@ contains
         !call multinomal_test%add_input(UI_IO, )
         ! parameter input/output
         !call multinomal_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call multinomal_test%add_input(UI_PARM, )
         ! search controls
         !call multinomal_test%add_input(UI_SRCH, )
@@ -226,7 +226,7 @@ contains
         !call pca_all%add_input(UI_IO, )
         ! parameter input/output
         !call pca_all%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call pca_all%add_input(UI_PARM, )
         ! search controls
         !call pca_all%add_input(UI_SRCH, )
@@ -254,7 +254,7 @@ contains
         !call pca_imgvar%add_input(UI_IO, )
         ! parameter input/output
         !call pca_imgvar%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call pca_imgvar%add_input(UI_PARM, )
         ! search controls
         !call pca_imgvar%add_input(UI_SRCH, )
@@ -282,7 +282,7 @@ contains
         !call sp_project%add_input(UI_IO, )
         ! parameter input/output
         !call sp_project%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call sp_project%add_input(UI_PARM, )
         ! search controls
         !call sp_project%add_input(UI_SRCH, )

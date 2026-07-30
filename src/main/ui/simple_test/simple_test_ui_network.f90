@@ -43,7 +43,7 @@ contains
         !call socket_client%add_input(UI_IO, )
         ! parameter input/output
         !call socket_client%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call socket_client%add_input(UI_PARM, )
         ! search controls
         !call socket_client%add_input(UI_SRCH, )
@@ -71,7 +71,7 @@ contains
         !call socket_comm_distr%add_input(UI_IO, )
         ! parameter input/output
         !call socket_comm_distr%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call socket_comm_distr%add_input(UI_PARM, )
         ! search controls
         !call socket_comm_distr%add_input(UI_SRCH, )
@@ -99,7 +99,7 @@ contains
         !call socket_io%add_input(UI_IO, )
         ! parameter input/output
         !call socket_io%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call socket_io%add_input(UI_PARM, )
         ! search controls
         !call socket_io%add_input(UI_SRCH, )
@@ -127,7 +127,7 @@ contains
         !call socket_server%add_input(UI_IO, )
         ! parameter input/output
         !call socket_server%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call socket_server%add_input(UI_PARM, )
         ! search controls
         !call socket_server%add_input(UI_SRCH, )

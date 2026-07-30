@@ -46,7 +46,7 @@ contains
         !call lbfgsb%add_input(UI_IO, )
         ! parameter input/output
         !call lbfgsb%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call lbfgsb%add_input(UI_PARM, )
         ! search controls
         !call lbfgsb%add_input(UI_SRCH, )
@@ -74,7 +74,7 @@ contains
         !call lbfgsb_cosine%add_input(UI_IO, )
         ! parameter input/output
         !call lbfgsb_cosine%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call lbfgsb_cosine%add_input(UI_PARM, )
         ! search controls
         !call lbfgsb_cosine%add_input(UI_SRCH, )
@@ -102,7 +102,7 @@ contains
         !call lplims%add_input(UI_IO, )
         ! parameter input/output
         !call lplims%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call lplims%add_input(UI_PARM, )
         ! search controls
         !call lplims%add_input(UI_SRCH, )
@@ -130,7 +130,7 @@ contains
         !call lpstages_test%add_input(UI_IO, )
         ! parameter input/output
         !call lpstages_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call lpstages_test%add_input(UI_PARM, )
         ! search controls
         !call lpstages_test%add_input(UI_SRCH, )
@@ -158,7 +158,7 @@ contains
         !call opt_lp%add_input(UI_IO, )
         ! parameter input/output
         !call opt_lp%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call opt_lp%add_input(UI_PARM, )
         ! search controls
         !call opt_lp%add_input(UI_SRCH, )

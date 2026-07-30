@@ -34,7 +34,7 @@ contains
         &'Build an initial 3D nanoparticle model with nano defaults',& ! summary
         &'is a wrapper around abinitio3D that applies nanoparticle-oriented defaults while allowing overrides',& ! help
         &'single_exec',&                                                                                   ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                                     ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! search controls
         call abinitio3D_nano%add_input(UI_SRCH, nsample, required_override=.false.)
@@ -62,7 +62,7 @@ contains
         &'auto 3D refinement of metallic nanoparticles',&                                 ! summary
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! help
         &'single_exec',&                                                                  ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%add_input(UI_IMG, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -70,13 +70,14 @@ contains
         ! parameter input/output
         call autorefine3D_nano%add_input(UI_PARM, smpd)
         call autorefine3D_nano%add_input(UI_PARM, element)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call autorefine3D_nano%add_input(UI_SRCH, nspace)
         call autorefine3D_nano%add_input(UI_SRCH, trs)
         call autorefine3D_nano%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call autorefine3D_nano%add_input(UI_SRCH, 'maxits', 'num', 'Max iterations', 'Maximum number of iterations', 'Max # iterations{5}', .false., 5.)
         call autorefine3D_nano%add_input(UI_SRCH, pgrp)
         call autorefine3D_nano%add_input(UI_SRCH, nrestarts)
@@ -105,7 +106,7 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! summary
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! help
         &'single_exec',&                                                                                                      ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                                                        ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%add_input(UI_IMG, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -114,17 +115,19 @@ contains
         call refine3D_nano%add_input(UI_IMG, 'vol_even', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .false., '')
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call refine3D_nano%add_input(UI_SRCH, nspace)
         call refine3D_nano%add_input(UI_SRCH, trs)
         call refine3D_nano%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
-        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &center of gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call refine3D_nano%add_input(UI_SRCH, maxits)
         call refine3D_nano%add_input(UI_SRCH, update_frac)
         call refine3D_nano%add_input(UI_SRCH, pgrp)
-        call refine3D_nano%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call refine3D_nano%add_input(UI_SRCH, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! filter controls
         call refine3D_nano%add_input(UI_FILT, hp)
         call refine3D_nano%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

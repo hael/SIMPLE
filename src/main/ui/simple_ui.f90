@@ -5,8 +5,10 @@ use simple_core_module_api
 use simple_ansi_ctrls
 use simple_ui_params_common
 use simple_ui_hash,         only: ui_hash
-use simple_ui_program,      only: UI_DISPLAY_NAME_MAX_LEN, UI_SUMMARY_MIN_LEN, UI_SUMMARY_MAX_LEN, category_descriptor, ui_program
-use simple_ui_param,        only: ui_param, UI_PLACEHOLDER_MAX_LEN, ui_placeholder_is_standard
+use simple_ui_program,      only: UI_DISPLAY_NAME_MAX_LEN, UI_SUMMARY_MIN_LEN, UI_SUMMARY_MAX_LEN, &
+    &category_descriptor, ui_program, ui_program_input, add_program_groups_json, add_program_requirements_json, &
+    &add_program_input_json
+use simple_ui_param,        only: UI_PLACEHOLDER_MAX_LEN, ui_placeholder_is_standard
 use simple_ui_visibility,   only: ui_visibility_name
 ! program table grouping helpers
 use simple_ui_simple_group, only: add_simple_programs
@@ -76,8 +78,8 @@ contains
                 THROW_HARD('ui_program display_name must contain 1-100 characters: '//ptr2prg%name%to_char())
             endif
             call validate_input_list(ptr2prg%img_ios)
+            call validate_input_list(ptr2prg%file_ios)
             call validate_input_list(ptr2prg%parm_ios)
-            call validate_input_list(ptr2prg%alt_ios)
             call validate_input_list(ptr2prg%srch_ctrls)
             call validate_input_list(ptr2prg%filt_ctrls)
             call validate_input_list(ptr2prg%mask_ctrls)
@@ -92,12 +94,15 @@ contains
             do while( iterator%has_value() )
                 call iterator%getter(item)
                 select type( input => item )
-                    type is( ui_param )
-                        if( len_trim(input%placeholder%to_char()) > UI_PLACEHOLDER_MAX_LEN .or. &
-                            &.not. ui_placeholder_is_standard(input%keytype%to_char(), input%placeholder%to_char()) )then
-                            THROW_HARD('ui_param placeholder is not standardized: '//input%key%to_char())
+                    type is( ui_program_input )
+                        if( len_trim(input%param%placeholder%to_char()) > UI_PLACEHOLDER_MAX_LEN .or. &
+                            &.not. ui_placeholder_is_standard(input%param%keytype%to_char(), &
+                            &input%param%placeholder%to_char()) )then
+                            THROW_HARD('ui_param placeholder is not standardized: '//input%param%key%to_char())
                         endif
                 end select
+                if( allocated(item) ) deallocate(item)
+                call iterator%next()
             enddo
         end subroutine validate_input_list
     end subroutine validate_ui_presentation
@@ -263,13 +268,12 @@ contains
                     call json%add(program, 'help',        p%help%to_char())
                     call json%add(program, 'executable',  p%executable%to_char())
                     call json%add(program, 'visibility',  trim(ui_visibility_name(p%visibility)))
-                    if( p%gui_submenu_list%is_allocated() ) then
-                        call json%add(program, 'gui_submenu_list', p%gui_submenu_list%to_char())
-                    endif
+                    call add_program_groups_json(json, program, p%groups)
+                    call add_program_requirements_json(json, program, p%requirements)
                     ! all sections (now linked_list)
                     call create_section_list(json, program_entry, 'image input/output',     p%img_ios)
+                    call create_section_list(json, program_entry, 'file input/output',      p%file_ios)
                     call create_section_list(json, program_entry, 'parameter input/output', p%parm_ios)
-                    call create_section_list(json, program_entry, 'alternative inputs',     p%alt_ios)
                     call create_section_list(json, program_entry, 'search controls',        p%srch_ctrls)
                     call create_section_list(json, program_entry, 'filter controls',        p%filt_ctrls)
                     call create_section_list(json, program_entry, 'mask controls',          p%mask_ctrls)
@@ -285,55 +289,20 @@ contains
             type(json_value), pointer, intent(inout) :: program_entry
             character(len=*),          intent(in)    :: name
             type(linked_list),         intent(in)    :: lst
-            type(json_value), pointer :: entry, section, options
+            type(json_value), pointer :: entry, section
             type(list_iterator)       :: it
             class(*), allocatable     :: tmp
-            integer                   :: j
             call json%create_array(section, trim(name))
             it = lst%begin()
             do while ( it%has_value() )
                 call it%getter(tmp)
                 select type (u => tmp)
-                type is (ui_param)
-                    call json%create_object(entry, u%key%to_char())
-                    call json%add(entry, 'key',               u%key%to_char())
-                    call json%add(entry, 'keytype',           u%keytype%to_char())
-                    call json%add(entry, 'label',       u%label%to_char())
-                    call json%add(entry, 'help',        u%help%to_char())
-                    call json%add(entry, 'placeholder', u%placeholder%to_char())
-                    call json%add(entry, 'required',          u%required)
-                    call json%add(entry, 'has_default',       u%has_default)
-                    if (len_trim(u%units%to_char()) > 0) then
-                        call json%add(entry, 'units', u%units%to_char())
-                    endif
-                    if ( u%gui_submenu%is_allocated() ) then
-                        call json%add(entry, 'gui_submenu', u%gui_submenu%to_char())
-                    endif
-                    if ( u%exclusive_group%is_allocated() ) then
-                        call json%add(entry, 'exclusive_group', u%exclusive_group%to_char())
-                    endif
-                    if ( u%active_flags%is_allocated() ) then
-                        call json%add(entry, 'active_flags', u%active_flags%to_char())
-                    endif
-                    if (u%has_default) then
-                        if (u%keytype%to_char() == "num") then
-                            call json%add(entry, 'default', dble(u%rval_default))
-                        else
-                            call json%add(entry, 'default', u%cval_default%to_char())
-                        endif
-                    endif
-                    call json%add(entry, 'visibility', trim(ui_visibility_name(u%visibility)))
-                    call json%add(entry, 'online',   u%online)
-                    if (allocated(u%choices)) then
-                        call json%create_array(options, 'options')
-                        do j = 1, size(u%choices)
-                            call json%add(options, '', u%choices(j)%value%to_char())
-                        enddo
-                        call json%add(entry, options)
-                    endif
+                type is (ui_program_input)
+                    call json%create_object(entry, u%param%key%to_char())
+                    call add_program_input_json(json, entry, u)
                     call json%add(section, entry)
                 class default
-                    THROW_HARD('create_section_list: list item is not type(ui_param)')
+                    THROW_HARD('create_section_list: list item is not type(ui_program_input)')
                 end select
                 if (allocated(tmp)) deallocate(tmp)
                 call it%next()
@@ -388,13 +357,12 @@ contains
                     call json%add(program, 'help',        p%help%to_char())
                     call json%add(program, 'executable',  p%executable%to_char())
                     call json%add(program, 'visibility',  trim(ui_visibility_name(p%visibility)))
-                    if ( p%gui_submenu_list%is_allocated() ) then
-                        call json%add(program, 'gui_submenu_list', p%gui_submenu_list%to_char())
-                    endif
+                    call add_program_groups_json(json, program, p%groups)
+                    call add_program_requirements_json(json, program, p%requirements)
                     ! all sections (now linked_list)
                     call create_section_list(json, program_entry, 'image input/output',     p%img_ios)
+                    call create_section_list(json, program_entry, 'file input/output',      p%file_ios)
                     call create_section_list(json, program_entry, 'parameter input/output', p%parm_ios)
-                    call create_section_list(json, program_entry, 'alternative inputs',     p%alt_ios)
                     call create_section_list(json, program_entry, 'search controls',        p%srch_ctrls)
                     call create_section_list(json, program_entry, 'filter controls',        p%filt_ctrls)
                     call create_section_list(json, program_entry, 'mask controls',          p%mask_ctrls)
@@ -410,55 +378,20 @@ contains
             type(json_value), pointer, intent(inout) :: program_entry
             character(len=*),          intent(in)    :: name
             type(linked_list),         intent(in)    :: lst
-            type(json_value), pointer :: entry, section, options
+            type(json_value), pointer :: entry, section
             type(list_iterator)       :: it
             class(*), allocatable     :: tmp
-            integer                   :: j
             call json%create_array(section, trim(name))
             it = lst%begin()
             do while ( it%has_value() )
                 call it%getter(tmp)
                 select type (u => tmp)
-                type is (ui_param)
-                    call json%create_object(entry, u%key%to_char())
-                    call json%add(entry, 'key',               u%key%to_char())
-                    call json%add(entry, 'keytype',           u%keytype%to_char())
-                    call json%add(entry, 'label',       u%label%to_char())
-                    call json%add(entry, 'help',        u%help%to_char())
-                    call json%add(entry, 'placeholder', u%placeholder%to_char())
-                    call json%add(entry, 'required',          u%required)
-                    call json%add(entry, 'has_default',       u%has_default)
-                    if (len_trim(u%units%to_char()) > 0) then
-                        call json%add(entry, 'units', u%units%to_char())
-                    endif
-                    if ( u%gui_submenu%is_allocated() ) then
-                        call json%add(entry, 'gui_submenu', u%gui_submenu%to_char())
-                    endif
-                    if ( u%exclusive_group%is_allocated() ) then
-                        call json%add(entry, 'exclusive_group', u%exclusive_group%to_char())
-                    endif
-                    if ( u%active_flags%is_allocated() ) then
-                        call json%add(entry, 'active_flags', u%active_flags%to_char())
-                    endif
-                    call json%add(entry, 'visibility', trim(ui_visibility_name(u%visibility)))
-                    call json%add(entry, 'online',   u%online)
-                    if (u%has_default) then
-                        if (u%keytype%to_char() == "num") then
-                            call json%add(entry, 'default', dble(u%rval_default))
-                        else
-                            call json%add(entry, 'default', u%cval_default%to_char())
-                        endif
-                    endif
-                    if (allocated(u%choices)) then
-                        call json%create_array(options, 'options')
-                        do j = 1, size(u%choices)
-                            call json%add(options, '', u%choices(j)%value%to_char())
-                        enddo
-                        call json%add(entry, options)
-                    endif
+                type is (ui_program_input)
+                    call json%create_object(entry, u%param%key%to_char())
+                    call add_program_input_json(json, entry, u)
                     call json%add(section, entry)
                 class default
-                    THROW_HARD('create_section_list: list item is not type(ui_param)')
+                    THROW_HARD('create_section_list: list item is not type(ui_program_input)')
                 end select
                 if (allocated(tmp)) deallocate(tmp)
                 call it%next()

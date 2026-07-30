@@ -40,7 +40,7 @@ contains
         !call units%add_input(UI_IO, )
         ! parameter input/output
         !call units%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call units%add_input(UI_PARM, )
         ! search controls
         !call units%add_input(UI_SRCH, )
@@ -68,7 +68,7 @@ contains
         !call units%add_input(UI_IO, )
         ! parameter input/output
         !call units%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call units%add_input(UI_PARM, )
         ! search controls
         !call units%add_input(UI_SRCH, )
@@ -96,7 +96,7 @@ contains
         !call units%add_input(UI_IO, )
         ! parameter input/output
         !call units%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call units%add_input(UI_PARM, )
         ! search controls
         !call units%add_input(UI_SRCH, )

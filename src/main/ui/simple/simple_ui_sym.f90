@@ -43,12 +43,13 @@ contains
         & 'input volume e.g. vol_C1.mrc', .true., '')
         ! parameter input/output
         call symaxis_search%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call symaxis_search%add_input(UI_SRCH, pgrp)
         call symaxis_search%add_input(UI_SRCH, 'center', 'binary', 'Center input volume', 'Center input volume by its &
-        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &center of gravity before symmetry axis search(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! filter controls
         call symaxis_search%add_input(UI_FILT, lp)
         call symaxis_search%add_input(UI_FILT, hp)
@@ -80,12 +81,13 @@ contains
         call symmetrize_map%add_input(UI_IMG, outvol)
         ! parameter input/output
         call symmetrize_map%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call symmetrize_map%add_input(UI_SRCH, pgrp)
         call symmetrize_map%add_input(UI_SRCH, 'center', 'binary', 'Center input volume', 'Center input volume by its &
-        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &center of gravity before symmetry axis search(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! filter controls
         call symmetrize_map%add_input(UI_FILT, lp)
         call symmetrize_map%add_input(UI_FILT, hp)
@@ -116,13 +118,15 @@ contains
         & 'input volume e.g. vol_C1.mrc', .true., '')
         ! parameter input/output
         call symmetry_test%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call symmetry_test%add_input(UI_SRCH, 'cn_stop',  'num', 'Rotational symmetry order stop index',  'Rotational symmetry order stop index',  'give stop index',  .false., 10.)
         call symmetry_test%add_input(UI_SRCH, 'center', 'binary', 'Center input volume', 'Center input volume by its &
-        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call symmetry_test%add_input(UI_SRCH, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &center of gravity before symmetry axis search(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call symmetry_test%add_input(UI_SRCH, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! filter controls
         call symmetry_test%add_input(UI_FILT, lp)
         call symmetry_test%add_input(UI_FILT, hp)

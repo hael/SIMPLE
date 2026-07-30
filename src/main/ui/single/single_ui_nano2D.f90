@@ -37,13 +37,13 @@ contains
         &'2D analysis (centering, diameter estimation & clustering) for nanocrystal time-series',& ! summary
         &'is a program for 2D analysis for nanycrystal time-series',& ! descr long
         &'single_exec',&                                              ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call analysis2D_nano%add_input(UI_PARM, element)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call analysis2D_nano%add_input(UI_SRCH, nptcls_per_cls)
@@ -67,13 +67,13 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after time-series tracking',&  ! help
         &'single_exec',&                                                        ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                          ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call center2D_nano%add_input(UI_SRCH, ncls, required_override=.true.)
@@ -97,18 +97,19 @@ contains
         &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! summary
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! help
         &'single_exec',&                                                                    ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                      ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call cluster2D_nano%add_input(UI_PARM, moldiam)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call cluster2D_nano%add_input(UI_SRCH, nptcls_per_cls)
         call cluster2D_nano%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call cluster2D_nano%add_input(UI_SRCH, 'winsz', 'num', 'Half-window size', 'Half-window size(frames)', 'winsz in # frames', .false., 3.0)
         call cluster2D_nano%add_input(UI_SRCH, maxits)
         call cluster2D_nano%add_input(UI_SRCH, trs)
@@ -138,14 +139,15 @@ contains
         &'Estimation of a suitable mask diameter for nanoparticle time-series',&                                        ! summary
         &'is a program for estimation of a suitable mask diameter for spherical masking of nanoparticle time-series ',& ! help
         &'single_exec',&                                                                                                ! executable
-        &.false., gui_visibility=UI_VIS_STANDARD)                                                                                 ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD)                                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call estimate_diam%add_input(UI_IMG, stk, required_override=.true.)
         ! parameter input/output
         call estimate_diam%add_input(UI_PARM, smpd)
-        call estimate_diam%add_input(UI_PARM, 'roavg', 'binary', 'Rotationally average', 'Rotationally average before diam estimate(yes|no){no}', '(yes|no){no}', .false., 'no')
-        ! alternative inputs
+        call estimate_diam%add_input(UI_PARM, 'roavg', 'binary', 'Rotationally average', 'Rotationally average before diam estimate(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

@@ -100,7 +100,7 @@ contains
             'Sub-divide beamtilt/optics groups', '0', .false., 0.0)
         call export_relion%add_input(UI_PARM, 'reliongroups', 'num', 'Number of Relion groups based on defocus', &
             'Divide particles into X groups based on defocus for relion', '# micrographs', .false., 0.0)
-        call export_relion%add_input(UI_PARM, 'xmlloc', 'file', 'Pathname of EPU XML files',&
+        call export_relion%add_input(UI_FILE, 'xmlloc', 'file', 'Pathname of EPU XML files',&
             'Pathname of EPU XML files ', 'e.g. /data/xml', .false., 'NONE')
         call export_relion%add_input(UI_PARM, 'tilt_thres', 'num', 'Distance threshold',&
             'Distance threshold for hierarchical clustering of beamtilt/shift groups ', '{0.05}', .false., 0.05)
@@ -132,7 +132,7 @@ contains
         ! image input/output
         ! call export_starproject%set_input('parm_ios', 1, projfile)
         ! parameter input/output
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -156,10 +156,10 @@ contains
         &.true.)                                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call export_manifoldem_starproject%add_input(UI_PARM, starfile, required_override=.false.)
+        call export_manifoldem_starproject%add_input(UI_FILE, starfile, required_override=.false.)
         ! parameter input/output
-        call export_manifoldem_starproject%add_input(UI_PARM, projfile)
-        ! alternative inputs
+        call export_manifoldem_starproject%add_input(UI_FILE, projfile)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -180,19 +180,18 @@ contains
         &'extraction of a subproject of time-series of metallic nanoparticles',&                                 ! summary
         &'is a shared-memory workflow for extraction of a subproject of time-series of metallic nanoparticles',& ! help
         &'all',&                                                                                                 ! executable
-        &.true., gui_visibility=UI_VIS_STANDARD)                                                                           ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD)                                                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call extract_subproj%add_input(UI_PARM, projfile)
+        call extract_subproj%add_input(UI_FILE, projfile)
         call extract_subproj%add_input(UI_PARM, 'subprojname', 'str', 'Subproject name', 'Name of subproject to create ./myproject/myproject.simple',&
         &'e.g. to create ./myproject/myproject.simple', .true., '')
-        ! alternative inputs
-        call extract_subproj%add_input(UI_ALT, 'fromp',    'num', 'From index',     'Start index for extraction', 'start index', .false., 1.0)
-        call extract_subproj%add_input(UI_ALT, 'top',      'num', 'To index',       'Stop index for extraction',  'stop index',  .false., 1.0)
-        call extract_subproj%add_input(UI_ALT, 'clustind', 'num', 'Cluster index',  'Cluster index',              'e.g. 5',      .false., 0.)
-        call extract_subproj%add_input(UI_ALT, 'class',    'num', '2D class index', '2D classs index',            'e.g. 5',      .false., 0.)
+        call extract_subproj%add_input(UI_PARM, 'fromp',    'num', 'From index',     'Start index for extraction', 'start index', .false., 1.0)
+        call extract_subproj%add_input(UI_PARM, 'top',      'num', 'To index',       'Stop index for extraction',  'stop index',  .false., 1.0)
+        call extract_subproj%add_input(UI_PARM, 'clustind', 'num', 'Cluster index',  'Cluster index',              'e.g. 5',      .false., 0.)
+        call extract_subproj%add_input(UI_PARM, 'class',    'num', '2D class index', '2D classs index',            'e.g. 5',      .false., 0.)
         ! search controls
         ! <empty>
         ! filter controls
@@ -218,9 +217,9 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call import_boxes%add_input(UI_PARM, 'boxtab', 'file', 'List of box files', &
+        call import_boxes%add_input(UI_FILE, 'boxtab', 'file', 'List of box files', &
             'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '')
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -264,18 +263,18 @@ contains
         &.true.)                                                 ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call import_movies%add_input(UI_IMG, 'filetab',    'file', 'List of movie files',    'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .false., '')
-        call import_movies%add_input(UI_IMG, 'dir_movies', 'dir',  'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .false., 'preprocess/')
+        call import_movies%add_input(UI_FILE, 'filetab',    'file', 'List of movie files',    'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .false., '')
+        call import_movies%add_input(UI_FILE, 'dir_movies', 'dir',  'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .false., 'preprocess/')
         ! parameter input/output
         call import_movies%add_input(UI_PARM, smpd)
         call import_movies%add_input(UI_PARM, kv,    required_override=.true.)
         call import_movies%add_input(UI_PARM, cs,    required_override=.true.)
         call import_movies%add_input(UI_PARM, fraca, required_override=.true.)
         call import_movies%add_input(UI_PARM, ctf_yes)
-        call import_movies%add_input(UI_PARM, 'boxtab', 'file', 'List of box files', 'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
-        call import_movies%add_input(UI_PARM, 'deftab', 'file','Pre-determined per-micrograph CTF parameters',&
+        call import_movies%add_input(UI_FILE, 'boxtab', 'file', 'List of box files', 'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
+        call import_movies%add_input(UI_FILE, 'deftab', 'file','Pre-determined per-micrograph CTF parameters',&
         &'List of CTF parmeters for micrographs import only', 'e.g. deftab.txt', .false., '')
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -307,22 +306,27 @@ contains
         call import_particles%add_input(UI_PARM, cs,    required_override=.true.)
         call import_particles%add_input(UI_PARM, fraca, required_override=.true.)
         call import_particles%add_input(UI_PARM, ctf_yes)
-        call import_particles%add_input(UI_PARM, oritab)
-        call import_particles%add_input(UI_PARM, deftab)
-        call import_particles%add_input(UI_PARM, 'plaintexttab', 'file', 'Plain text file of input parameters',&
+        call import_particles%add_input(UI_FILE, oritab)
+        call import_particles%add_input(UI_FILE, deftab)
+        call import_particles%add_input(UI_FILE, 'plaintexttab', 'file', 'Plain text file of input parameters',&
         'Plain text file of tabulated per-particle input parameters: dfx, dfy, angast, phshift', 'e.g. params.txt', .false., '')
-        call import_particles%add_input(UI_PARM, 'dfunit', 'multi', 'Underfocus unit', 'Underfocus unit(A|microns){microns}', '(A|microns){microns}', .false., 'microns')
-        call import_particles%add_input(UI_PARM, 'angastunit', 'multi', 'Angle of astigmatism unit', 'Angle of astigmatism unit(radians|degrees){degrees}', '(radians|degrees){degrees}', .false., 'degrees')
-        call import_particles%add_input(UI_PARM, 'phshiftunit', 'multi', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){radians}', '(radians|degrees){radians}', .false., 'degrees')
-        ! alternative inputs
-        call import_particles%add_input(UI_ALT, 'stktab', 'file', 'List of per-micrograph particle stacks',&
+        call import_particles%add_input(UI_PARM, 'dfunit', 'multi', 'Underfocus unit', 'Underfocus unit(A|microns){microns}','', .false., 'microns', &
+        &choices=ui_choices([character(len=7) :: 'A', 'microns']))
+        call import_particles%add_input(UI_PARM, 'angastunit', 'multi', 'Angle of astigmatism unit', 'Angle of astigmatism unit(radians|degrees){degrees}','', .false., 'degrees', &
+        &choices=ui_choices([character(len=7) :: 'radians', 'degrees']))
+        call import_particles%add_input(UI_PARM, 'phshiftunit', 'multi', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){radians}','', .false., 'degrees', &
+        &choices=ui_choices([character(len=7) :: 'radians', 'degrees']))
+        call import_particles%add_input(UI_FILE, 'stktab', 'file', 'List of per-micrograph particle stacks',&
         &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '')
-        call import_particles%add_input(UI_ALT, stktab_den)
-        call import_particles%add_input(UI_ALT, 'stk', 'file', 'Stack of particles',&
+        call import_particles%add_input(UI_FILE, stktab_den)
+        call import_particles%add_input(UI_IMG, 'stk', 'file', 'Stack of particles',&
         &'Stack of particle images to import', 'e.g. stk.mrcs', .false., '')
-        call import_particles%add_input(UI_ALT, stk_den)
-        call import_particles%add_input(UI_ALT, 'starfile', 'file', 'Particles Metadata starfile', 'Path to starfile containing particle metadata',&
-        &'e.g. shiny.star', .false., '', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
+        call import_particles%add_input(UI_IMG, stk_den)
+        call import_particles%add_input(UI_FILE, 'starfile', 'file', 'Particles Metadata starfile', 'Path to starfile containing particle metadata',&
+        &'e.g. shiny.star', .false., '', group="data", visibility=UI_VIS_STANDARD)
+        call import_particles%add_requirement('particle_input', 'Particle data', &
+            'Supply one particle stack source or a STAR metadata file.', &
+            [character(len=8) :: 'stktab', 'stk', 'starfile'], max_selected=1)
         ! search controls
         ! <empty>
         ! filter controls
@@ -345,7 +349,7 @@ contains
         &'all',&                                                   ! executable
         &.true.)                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
-        call reimport_particles%add_input(UI_PARM, 'stk', 'file', 'Denoised particle stack',&
+        call reimport_particles%add_input(UI_IMG, 'stk', 'file', 'Denoised particle stack',&
         &'Denoised particle stack to replace the project stack', 'e.g. denoised.mrcs', .true., '')
         call reimport_particles%add_input(UI_PARM, ctf_yes)
         ! add to ui_hash
@@ -361,16 +365,17 @@ contains
         &'is a program to import a SIMPLE projectfile from star format',&       ! descr long
         &'simple_exec',&                                                        ! executable
         &.false.,&                                                              ! requires sp_project
-        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "data")                       ! GUI
+        &visibility=UI_VIS_STANDARD)
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
-        call import_starproject%add_input(UI_PARM, 'import_dir',  'dir',   'Import directory', 'Directory to import data from. In auto mode should be output &
-        &from an external job e.g. relion', 'e.g. MotionCorr/job001', .true., '', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
-        call import_starproject%add_input(UI_PARM, 'starfile',    'file',  'Metadata starfile', 'Path to starfile containing micrograph/particle metadata. Only &
-        &required when not using auto mode', 'e.g. micrographs.star', .false., '', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
+        call import_starproject%add_input(UI_FILE, 'import_dir',  'dir',   'Import directory', 'Directory to import data from. In auto mode should be output &
+        &from an external job e.g. relion', 'e.g. MotionCorr/job001', .true., '', group="data", visibility=UI_VIS_STANDARD)
+        call import_starproject%add_input(UI_FILE, 'starfile',    'file',  'Metadata starfile', 'Path to starfile containing micrograph/particle metadata. Only &
+        &required when not using auto mode', 'e.g. micrographs.star', .false., '', group="data", visibility=UI_VIS_STANDARD)
         call import_starproject%add_input(UI_PARM, 'import_type', 'multi', 'Import type', 'Type of data contained in starfile (auto|mic|ptcl2D|ptcl3D){auto}. &
-        &Auto mode (default) will attempt to determine this automatically', '(auto|mic|ptcl2D|ptcl3D){auto}', .false., 'auto', gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
+        &Auto mode (default) will attempt to determine this automatically','', .false., 'auto', group="data", visibility=UI_VIS_STANDARD, &
+        &choices=ui_choices([character(len=6) :: 'auto', 'mic', 'ptcl2D', 'ptcl3D']))
         ! <empty>
         ! search controls
         ! <empty>
@@ -395,16 +400,16 @@ contains
         &.false.)                                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call merge_projects%add_input(UI_PARM, projtab,&
+        call merge_projects%add_input(UI_FILE, projtab,&
         &help_override        = 'Text file listing SIMPLE project files (*.simple) to merge',&
         &placeholder_override = 'e.g. projtab.txt',&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
+        &group="data", visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call merge_projects%add_input(UI_PARM, projfile_merged,&
+        call merge_projects%add_input(UI_FILE, projfile_merged,&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
-        ! alternative inputs
+        &group="data", visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -430,23 +435,23 @@ contains
         &.false.)                                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call ptcl3D_state_consensus%add_input(UI_PARM, projtab,&
+        call ptcl3D_state_consensus%add_input(UI_FILE, projtab,&
         &help_override        = 'Text file listing SIMPLE project files (*.simple) containing ptcl3D state assignments',&
         &placeholder_override = 'e.g. projtab.txt',&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
+        &group="data", visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call ptcl3D_state_consensus%add_input(UI_PARM, projfile,&
+        call ptcl3D_state_consensus%add_input(UI_FILE, projfile,&
         &help_override        = 'Target SIMPLE project file that receives the consensus ptcl3D state assignment',&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
+        &group="data", visibility=UI_VIS_STANDARD)
         call ptcl3D_state_consensus%add_input(UI_SRCH, nstates,&
         &help_override        = 'Number of state labels to match; inferred from projtab when omitted',&
         &required_override          = .false.,&
-        &gui_submenu="state", gui_visibility=UI_VIS_ADVANCED)
+        &group="state", visibility=UI_VIS_ADVANCED)
         call ptcl3D_state_consensus%add_input(UI_PARM, prune,&
-        &gui_submenu="data", gui_visibility=UI_VIS_ADVANCED)
-        ! alternative inputs
+        &group="data", visibility=UI_VIS_ADVANCED)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -473,10 +478,10 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call validate_projfile%add_input(UI_PARM, projfile,&
+        call validate_projfile%add_input(UI_FILE, projfile,&
         &required_override          = .true.,&
-        &gui_submenu="data", gui_visibility=UI_VIS_STANDARD)
-        ! alternative inputs
+        &group="data", visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -509,10 +514,12 @@ contains
         ! <empty>
         ! parameter input/output
         call new_project%add_input(UI_PARM, user_email)
-        call new_project%add_input(UI_PARM, projfile, required_override=.false.)
-        ! alternative inputs
-        call new_project%add_input(UI_ALT, projname, required_override=.false.)
-        call new_project%add_input(UI_ALT, 'dir', 'dir', 'Project directory', 'Project directory', 'give dir', .false., '')
+        call new_project%add_input(UI_FILE, projfile, required_override=.false.)
+        call new_project%add_input(UI_PARM, projname, required_override=.false.)
+        call new_project%add_input(UI_FILE, 'dir', 'dir', 'Project directory', 'Project directory', 'give dir', .false., '')
+        call new_project%add_requirement('project_location', 'Project location', &
+            'Supply a project name, a project directory, or both.', &
+            [character(len=8) :: 'projname', 'dir'], max_selected=2)
         ! <empty>
         ! search controls
         ! <empty>
@@ -548,11 +555,13 @@ contains
         ! <empty>
         ! parameter input/output
         call print_project_field%add_input(UI_PARM, oritype, required_override=.true.)
-        call print_project_field%add_input(UI_PARM, 'json',     'binary', 'output in JSON format', 'output in JSON format', '(yes|no){no}', .false., 'no')
-        call print_project_field%add_input(UI_PARM, 'boxes',    'binary', 'output coordinates in JSON format', 'output coordinates in JSON format', '(yes|no){no}', .false., 'no')
+        call print_project_field%add_input(UI_PARM, 'json',     'binary', 'output in JSON format', 'output in JSON format','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call print_project_field%add_input(UI_PARM, 'boxes',    'binary', 'output coordinates in JSON format', 'output coordinates in JSON format','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call print_project_field%add_input(UI_PARM, 'sort',     'string', 'sort oris on key', 'sort oris on key', 'e.g. ctfres', .false., '')
         call print_project_field%add_input(UI_PARM, 'plot_key', 'string', 'plot plot_key on , sort on x', 'plot plot_key on , sort on x', 'e.g. dfx', .false., '')
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -580,7 +589,7 @@ contains
         ! <empty>
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -608,7 +617,7 @@ contains
         ! <empty>
         ! parameter input/output
         call prune_project%add_input(UI_PARM, 'state', 'num', 'State index', 'Index of state to extract', 'give state index', .false., 1.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -635,10 +644,10 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call replace_project_field%add_input(UI_PARM, projfile)
-        call replace_project_field%add_input(UI_PARM, projfile_target)
+        call replace_project_field%add_input(UI_FILE, projfile)
+        call replace_project_field%add_input(UI_FILE, projfile_target)
         call replace_project_field%add_input(UI_PARM, oritype, required_override=.true.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -665,25 +674,31 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call selection%add_input(UI_PARM, projfile)
+        call selection%add_input(UI_FILE, projfile)
         call selection%add_input(UI_PARM, oritype)
         call selection%add_input(UI_PARM, 'state',           'num',    'State number', 'Map selection to oris with this state only', '{1}', .false., 1.0)
         call selection%add_input(UI_PARM, prune)
-        call selection%add_input(UI_PARM, 'append',          'binary', 'Append selection to existing', 'Previously deselected particles will stay deselected(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call selection%add_input(UI_PARM, 'balance',         'binary', 'Balanced selection of particles across classes', 'Balanced selection(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call selection%add_input(UI_PARM, 'append',          'binary', 'Append selection to existing', 'Previously deselected particles will stay deselected(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call selection%add_input(UI_PARM, 'balance',         'binary', 'Balanced selection of particles across classes', 'Balanced selection(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call selection%add_input(UI_PARM, 'nptcls_per_part', 'num',    'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0)
-        call selection%add_input(UI_PARM, 'greedy_sampling', 'binary', 'Greedy balanced selection', 'Greedy balanced selection(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call selection%add_input(UI_PARM, 'greedy_sampling', 'binary', 'Greedy balanced selection', 'Greedy balanced selection(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call selection%add_input(UI_PARM, 'nparts',          'num',    'Number of partitions in balancing', '# balanced parts', '# balanced parts', .false., 1.)
         call selection%add_input(UI_PARM, dfmin)
-        ! alternative inputs
-        call selection%add_input(UI_ALT, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
+        call selection%add_input(UI_FILE, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
         &'give .txt selection file', .false., '')
-        call selection%add_input(UI_ALT, 'deselfile', 'file', 'File with deselection indices', 'Plain text file (.txt) with deselection indices',&
+        call selection%add_input(UI_FILE, 'deselfile', 'file', 'File with deselection indices', 'Plain text file (.txt) with deselection indices',&
         &'give .txt deselection file', .false., '')
-        call selection%add_input(UI_ALT, nran)
-        call selection%add_input(UI_ALT, ctfresthreshold)
-        call selection%add_input(UI_ALT, icefracthreshold)
+        call selection%add_input(UI_PARM, nran)
+        call selection%add_input(UI_PARM, ctfresthreshold)
+        call selection%add_input(UI_PARM, icefracthreshold)
         call selection%add_input(UI_PARM, 'res_threshold',   'num',    'Class resolution threshold', 'Select classes based on resolution threshold(oritype=cls2D only)', '{-1}', .false., -1.0)
+        call selection%add_requirement('selection_source', 'Selection source', &
+            'Supply a selection method or a state to select.', &
+            [character(len=16) :: 'infile', 'deselfile', 'nran', 'ctfresthreshold', 'icefracthreshold', &
+                'dfmin', 'res_threshold', 'state'])
         ! <empty>
         ! search controls
         ! <empty>
@@ -710,9 +725,9 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call update_project%add_input(UI_PARM, projfile)
+        call update_project%add_input(UI_FILE, projfile)
         call update_project%add_input(UI_PARM, user_email)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -748,7 +763,7 @@ contains
         ! <empty>
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -773,10 +788,10 @@ contains
         &.true.)                                                          ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call write_mic_filetab%add_input(UI_IMG, 'fname', 'file', 'Filename micrograph list', 'Filename for list of micrograph files (*.mrc)', 'e.g. mics.txt', .true., '')
+        call write_mic_filetab%add_input(UI_FILE, 'fname', 'file', 'Filename micrograph list', 'Filename for list of micrograph files (*.mrc)', 'e.g. mics.txt', .true., '')
         ! parameter input/output
-        call write_mic_filetab%add_input(UI_PARM, projfile)
-        ! alternative inputs
+        call write_mic_filetab%add_input(UI_FILE, projfile)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

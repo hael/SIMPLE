@@ -37,7 +37,7 @@ contains
         &.false.)                                                    ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call check_refpick%add_input(UI_IMG, 'filetab', 'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '')
+        call check_refpick%add_input(UI_FILE, 'filetab', 'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '')
         call check_refpick%add_input(UI_IMG, pickrefs, required_override=.true.)
         ! parameter input/output
         call check_refpick%add_input(UI_PARM, smpd,    required_override=.true.)
@@ -46,7 +46,7 @@ contains
         call check_refpick%add_input(UI_PARM, cs,      required_override=.true.)
         call check_refpick%add_input(UI_PARM, fraca)
         call check_refpick%add_input(UI_PARM, fit_phshift)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call check_refpick%add_input(UI_SRCH, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
@@ -77,7 +77,7 @@ contains
         &.false.)                                       ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call mini_stream%add_input(UI_IMG, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '')
+        call mini_stream%add_input(UI_FILE, 'filetab',    'file', 'List of files', 'List of files (*.mrcs) to process', 'e.g. mics.txt', .true., '')
         ! parameter input/output
         call mini_stream%add_input(UI_PARM, smpd, required_override=.true.)
         call mini_stream%add_input(UI_PARM, pcontrast)
@@ -86,7 +86,7 @@ contains
         call mini_stream%add_input(UI_PARM, fraca)
         call mini_stream%add_input(UI_PARM, moldiam_max)
         call mini_stream%add_input(UI_PARM, fit_phshift)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         call mini_stream%add_input(UI_SRCH, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200.)
@@ -115,11 +115,11 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call model_validate%add_input(UI_IMG, 'vol1', 'file', 'Experimental volume',  'Experimental volume',  'vol.mrc file', .true., '')
-        call model_validate%add_input(UI_IMG, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
+        call model_validate%add_input(UI_FILE, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb')
         ! parameter input/output
         call model_validate%add_input(UI_PARM, smpd)
         call model_validate%add_input(UI_PARM, smpd_target)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

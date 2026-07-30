@@ -49,7 +49,7 @@ contains
         !call angres%add_input(UI_IO, )
         ! parameter input/output
         !call angres%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call angres%add_input(UI_PARM, )
         ! search controls
         !call angres%add_input(UI_SRCH, )
@@ -77,7 +77,7 @@ contains
         !call ori_test%add_input(UI_IO, )
         ! parameter input/output
         !call ori_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call ori_test%add_input(UI_PARM, )
         ! search controls
         !call ori_test%add_input(UI_SRCH, )
@@ -105,7 +105,7 @@ contains
         !call oris_test%add_input(UI_IO, )
         ! parameter input/output
         !call oris_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call oris_test%add_input(UI_PARM, )
         ! search controls
         !call oris_test%add_input(UI_SRCH, )
@@ -133,7 +133,7 @@ contains
         !call sym_test%add_input(UI_IO, )
         ! parameter input/output
         !call sym_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call sym_test%add_input(UI_PARM, )
         ! search controls
         !call sym_test%add_input(UI_SRCH, )
@@ -161,7 +161,7 @@ contains
         !call uniform_euler%add_input(UI_IO, )
         ! parameter input/output
         !call uniform_euler%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call uniform_euler%add_input(UI_PARM, )
         ! search controls
         !call uniform_euler%add_input(UI_SRCH, )
@@ -189,7 +189,7 @@ contains
         !call uniform_rot%add_input(UI_IO, )
         ! parameter input/output
         !call uniform_rot%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call uniform_rot%add_input(UI_PARM, )
         ! search controls
         !call uniform_rot%add_input(UI_SRCH, )

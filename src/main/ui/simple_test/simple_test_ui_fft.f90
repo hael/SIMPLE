@@ -67,7 +67,7 @@ contains
         !call eval_polarftcc%add_input(UI_IO, )
         ! parameter input/output
         !call eval_polarftcc%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call eval_polarftcc%add_input(UI_PARM, )
         ! search controls
         !call eval_polarftcc%add_input(UI_SRCH, )
@@ -95,7 +95,7 @@ contains
         !call ft_expanded%add_input(UI_IO, )
         ! parameter input/output
         !call ft_expanded%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call ft_expanded%add_input(UI_PARM, )
         ! search controls
         !call ft_expanded%add_input(UI_SRCH, )
@@ -124,6 +124,7 @@ contains
         ! parameter input/output
         call gencorrs_fft%add_input(UI_PARM, smpd, required_override=.true.)
         ! alternative inputs
+        ! <no additional inputs>
         !call gencorrs_fft%add_input(UI_PARM, )
         ! search controls
         !call gencorrs_fft%add_input(UI_SRCH, )
@@ -151,7 +152,7 @@ contains
         !call order_corr%add_input(UI_IO, )
         ! parameter input/output
         !call order_corr%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call order_corr%add_input(UI_PARM, )
         ! search controls
         !call order_corr%add_input(UI_SRCH, )
@@ -179,7 +180,7 @@ contains
         !call phasecorr%add_input(UI_IO, )
         ! parameter input/output
         !call phasecorr%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call phasecorr%add_input(UI_PARM, )
         ! search controls
         !call phasecorr%add_input(UI_SRCH, )
@@ -207,7 +208,7 @@ contains
         !call rank_weights%add_input(UI_IO, )
         ! parameter input/output
         !call rank_weights%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call rank_weights%add_input(UI_PARM, )
         ! search controls
         !call rank_weights%add_input(UI_SRCH, )
@@ -235,7 +236,7 @@ contains
         !call rotate_ref%add_input(UI_IO, )
         ! parameter input/output
         !call rotate_ref%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call rotate_ref%add_input(UI_PARM, )
         ! search controls
         !call rotate_ref%add_input(UI_SRCH, )

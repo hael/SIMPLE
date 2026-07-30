@@ -51,59 +51,62 @@ contains
         &'is a distributed workflow for generating 2D class averages from particles',& ! help                                                           ! help
         &'simple_exec',&                                                               ! executable
         &.true.,&                                                                      ! requires sp_project
-        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "model,filter,mask,compute"  )       ! GUI
+        &visibility=UI_VIS_STANDARD  )
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call abinitio2D%add_input(UI_SRCH, ncls, gui_submenu="search", gui_visibility=UI_VIS_STANDARD)
+        call abinitio2D%add_input(UI_SRCH, ncls, group="search", visibility=UI_VIS_STANDARD)
         call abinitio2D%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their &
-        &center of gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no', gui_submenu="model")
+        &center of gravity and map shifts back to the particles(yes|no){no}','', .false., 'no', group="model", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call abinitio2D%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated computation(yes|no){yes}','(yes|no){yes}', .false., 'yes', gui_submenu="model")
+        &for accelerated computation(yes|no){yes}','', .false., 'yes', group="model", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call abinitio2D%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
-        &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}',&
-        &'(prob_snhc|prob|snhc_smpl){prob_snhc}', .false., 'prob_snhc', gui_submenu="search")
+        &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="search", &
+        &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']))
         call abinitio2D%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
-        &'Sigma estimation method(group|global){global}', '(group|global){global}', .false., 'global', gui_submenu="search")
-        call abinitio2D%add_input(UI_SRCH, cls_init, gui_submenu="search")
-        call abinitio2D%add_input(UI_SRCH, nsample, gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+        &'Sigma estimation method(group|global){global}','', .false., 'global', group="search", &
+        &choices=ui_choices([character(len=6) :: 'group', 'global']))
+        call abinitio2D%add_input(UI_SRCH, cls_init, group="search")
+        call abinitio2D%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_ADVANCED)
         ! Minimal Design A SGD control. This is the sole user-facing switch;
         ! the implementation is always the table-free streaming path.
         call abinitio2D%add_input(UI_SRCH, 'sgd_stage4_mode', 'multi', 'Stage-4 SGD policy', &
-            &'Stage-4 stream policy(off|on|alternate){off}', '(off|on|alternate){off}', .false., 'off', &
-            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+            &'Stage-4 stream policy(off|on|alternate){off}', '', .false., 'off', group="search", &
+            &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=9) :: 'off', 'on', 'alternate']))
         call abinitio2D%add_input(UI_SRCH, 'sgd_diagnostic', 'binary', 'SGD diagnostics', &
-            &'Emit SGD diagnostic and safety logs(yes|no){no}', '(yes|no){no}', .false., 'no', &
-            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+            &'Emit SGD diagnostic and safety logs(yes|no){no}', '', .false., 'no', group="search", &
+            &visibility=UI_VIS_ADVANCED, choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call abinitio2D%add_input(UI_SRCH, 'sgd_eta_shift', 'num', 'SGD shift learning rate', &
             &'Learning rate for bounded analytical shift updates{0.25}', 'learning rate{0.25}', .false., 0.25, &
-            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+            &group="search", visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'sgd_update_frac', 'num', 'SGD mini-batch fraction', &
             &'Fraction of active particles sampled afresh on each SGD iteration{0.6}', 'fraction{0.6}', .false., 0.6, &
-            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+            &group="search", visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'sgd_shift_its', 'num', 'SGD shift steps', &
             &'Maximum bounded analytical shift steps per particle{4}', 'steps{4}', .false., 4., &
-            gui_submenu="search", gui_visibility=UI_VIS_ADVANCED)
+            &group="search", visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call abinitio2D%add_input(UI_FILT, hp, gui_submenu="filter")
+        call abinitio2D%add_input(UI_FILT, hp, group="filter")
         call abinitio2D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="filter")
+        &Angstroms{30}', .false., 30., group="filter")
         call abinitio2D%add_input(UI_FILT, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
-            &'low-pass limit in Angstroms', .false., 30., gui_submenu="filter")
+            &'low-pass limit in Angstroms', .false., 30., group="filter")
         call abinitio2D%add_input(UI_FILT, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
-            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., gui_submenu="filter")
-        call abinitio2D%add_input(UI_FILT, lp, gui_submenu="filter")
+            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 6., group="filter")
+        call abinitio2D%add_input(UI_FILT, lp, group="filter")
         ! mask controls
-        call abinitio2D%add_input(UI_MASK, mskdiam, gui_submenu="mask", gui_visibility=UI_VIS_STANDARD)
+        call abinitio2D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
         ! computer controls
-        call abinitio2D%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
-        call abinitio2D%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call abinitio2D%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call abinitio2D%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         ! add to ui_hash
         call add_ui_program('abinitio2D', abinitio2D, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D
@@ -117,7 +120,7 @@ contains
         &'splits a project into particle-balanced subsets and runs independent abinitio2D jobs',& ! help
         &'simple_exec',&                                                                          ! executable
         &.true.,&                                                                                 ! requires sp_project
-        &gui_visibility=UI_VIS_STANDARD, gui_submenu_list = "cluster 2D,compute")                           ! GUI
+        &visibility=UI_VIS_STANDARD)
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -126,31 +129,32 @@ contains
             &'Number of particle-balanced subset projects to run with independent abinitio2D jobs. &
             &Omit or set to 0 to target about 100 classes per chunk.', &
             &'# of chunks (0=auto)', .false., 0.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, placeholder_override='# of particles per cluster{500}', gui_submenu="cluster 2D", gui_visibility=UI_VIS_STANDARD)
+        call abinitio2D_chunks%add_input(UI_SRCH, nptcls_per_cls, placeholder_override='# of particles per cluster{500}', group="cluster 2D", visibility=UI_VIS_STANDARD)
         call abinitio2D_chunks%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-            &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes', gui_submenu="cluster 2D")
+            &gravity and map shifts back to the particles(yes|no){yes}','', .false., 'yes', group="cluster 2D", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call abinitio2D_chunks%add_input(UI_SRCH, 'refine', 'multi', 'Refinement mode',&
-        &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}',&
-        &'(prob_snhc|prob|snhc_smpl){prob_snhc}', .false., 'prob_snhc', gui_submenu="cluster 2D")
+        &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="cluster 2D", &
+        &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']))
         ! filter controls
-        call abinitio2D_chunks%add_input(UI_FILT, hp, gui_submenu="cluster 2D")
-        call abinitio2D_chunks%add_input(UI_FILT, lp, gui_submenu="cluster 2D")
+        call abinitio2D_chunks%add_input(UI_FILT, hp, group="cluster 2D")
+        call abinitio2D_chunks%add_input(UI_FILT, lp, group="cluster 2D")
         call abinitio2D_chunks%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30., gui_submenu="cluster 2D")
+        &Angstroms{30}', .false., 30., group="cluster 2D")
         call abinitio2D_chunks%add_input(UI_FILT, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
         &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.,&
-        &gui_submenu="filter", gui_visibility=UI_VIS_ADVANCED)
+        &group="filter", visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call abinitio2D_chunks%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_visibility=UI_VIS_STANDARD)
+        call abinitio2D_chunks%add_input(UI_MASK, mskdiam, group="cluster 2D", visibility=UI_VIS_STANDARD)
         ! computer controls
-        call abinitio2D_chunks%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
-        call abinitio2D_chunks%add_input(UI_COMP, nthr, gui_submenu="compute", gui_visibility=UI_VIS_STANDARD)
+        call abinitio2D_chunks%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call abinitio2D_chunks%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         call abinitio2D_chunks%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
-        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")
+        &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., group="compute")
         ! add to ui_hash
         call add_ui_program('abinitio2D_chunks', abinitio2D_chunks, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D_chunks
@@ -175,7 +179,7 @@ contains
         &'Origin shift multiplication factor{1}','1/scale in pixels{1}', .false., 1.)
         call make_cavgs%add_input(UI_PARM, remap_cls)
         call make_cavgs%add_input(UI_PARM, nspace, required_override=.false.)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -209,7 +213,7 @@ contains
         call bootstrap_cavgs%add_input(UI_PARM, 'frac_best', 'num', 'Anchor fraction',&
         &'Fraction used with the median class population to define the objective-ranked anchor set(0-1){0.5}',&
         &'fraction{0.5}', .false., 0.5)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -239,10 +243,10 @@ contains
         ! parameter input/output
         ! <empty>
         ! image input/output
-        call unbootstrap_cavgs%add_input(UI_IMG, 'projfile_orig', 'file', 'Original project file', &
+        call unbootstrap_cavgs%add_input(UI_FILE, 'projfile_orig', 'file', 'Original project file', &
         &'Project file that was used as input to bootstrap_cavgs and should receive the mapped cls3D/ptcl3D parameters', &
         &'e.g. original.simple', .true., '')
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -271,7 +275,7 @@ contains
         call  map_cavgs_selection%add_input(UI_IMG, 'stk2', 'file', 'Stack of selected cavgs', 'Stack of selected cavgs', 'e.g. selected.spi', .true., '')
         ! parameter input/output
         call  map_cavgs_selection%add_input(UI_PARM, prune)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -299,12 +303,13 @@ contains
         ! <empty>
         ! parameter input/output
         call sample_classes%add_input(UI_PARM, 'nptcls_per_part', 'num',    'Number of ptcls per part to select when balancing', '# ptcls per part after balancing', '{100000}', .false., 0.0)
-        call sample_classes%add_input(UI_PARM, 'greedy_sampling', 'binary', 'Greedy balanced selection', 'Greedy balanced selection(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call sample_classes%add_input(UI_PARM, 'greedy_sampling', 'binary', 'Greedy balanced selection', 'Greedy balanced selection(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call sample_classes%add_input(UI_PARM, 'nparts',          'num',    'Number of partitions in balancing', '# balanced parts', '# balanced parts', .false., 1.)
         call sample_classes%add_input(UI_PARM, nsample)
         call sample_classes%add_input(UI_PARM, 'frac_best',       'num',    'Fraction of best particles to sample from', 'Fraction of best particles to sample from(0-1)', '{0.5}', .false., 0.5)
         call sample_classes%add_input(UI_PARM, 'frac_worst',      'num',    'Fraction of worst particles to sample from', 'Fraction of worst particles to sample from(0-1)', '{0.5}', .false., 0.5)
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
@@ -332,7 +337,7 @@ contains
         ! <empty>
         ! parameter input/output
         ! <empty>
-        ! alternative inputs
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>

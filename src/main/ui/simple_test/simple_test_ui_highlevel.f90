@@ -51,7 +51,7 @@ contains
         !call mini_stream%add_input(UI_IO, )
         ! parameter input/output
         !call mini_stream%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call mini_stream%add_input(UI_PARM, )
         ! search controls
         !call mini_stream%add_input(UI_SRCH, )
@@ -105,9 +105,9 @@ contains
         !call simulated_workflow%add_input(UI_IO, )
         ! parameter input/output
         call simulated_workflow%add_input(UI_PARM, 'system', 'multi', 'Embedded molecular system', &
-            &'Embedded coordinates used to generate the simulated data(6vxx|1jxy)', &
-            &'(6vxx|1jxy)', .true., '')
-        ! alternative inputs
+            &'Embedded coordinates used to generate the simulated data(6vxx|1jxy)','', .true., '', &
+        &choices=ui_choices([character(len=4) :: '6vxx', '1jxy']))
+        ! <no additional inputs>
         !call simulated_workflow%add_input(UI_PARM, )
         ! search controls
         !call simulated_workflow%add_input(UI_SRCH, )
@@ -145,7 +145,7 @@ contains
         &.false.)   
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call ptcls_ppca_subproject_distr%add_input(UI_IMG, 'filetab', 'file', 'List of individual particle files', 'List of particle files (*.mrcs) to import', 'e.g. particle_frames.txt', .true., '')
+        call ptcls_ppca_subproject_distr%add_input(UI_FILE, 'filetab', 'file', 'List of individual particle files', 'List of particle files (*.mrcs) to import', 'e.g. particle_frames.txt', .true., '')
         call ptcls_ppca_subproject_distr%add_input(UI_PARM, 'smpd', 'real', 'SMPD', 'SMPD parameter', 'e.g. 1.3', .true., '')
         call ptcls_ppca_subproject_distr%add_input(UI_COMP, 'nparts', 'integer', 'Number of parts', 'Number of parts to split the particle files into', 'e.g. 4', .true., '')
         call add_ui_program('ptcls_ppca_subproject_distr', ptcls_ppca_subproject_distr, tsttab)
