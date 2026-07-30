@@ -41,7 +41,7 @@ contains
         ! Commander-level defaults (apply to both modes)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)     ! to assure that shifts are being used
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         ! Select and run strategy
         strategy = create_rec3D_strategy(cline)
@@ -63,7 +63,7 @@ contains
         type(string)          :: sigma_star
         integer               :: state, which_iter
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('oritype')     ) call cline%set('oritype', 'ptcl3D')
+        call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('nstates')     ) call cline%set('nstates',          1)
         call warn_for_forced_bootstrap_overrides(cline)
         call cline%set('sigma_est', 'global')
@@ -382,7 +382,7 @@ contains
         type(commander_rec3D) :: xrec3D
         type(parameters)      :: params
         type(builder)         :: build
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes'   )
         call build%init_params_and_build_spproj(cline, params)
         call build%spproj%os_ptcl3D%rnd_oris

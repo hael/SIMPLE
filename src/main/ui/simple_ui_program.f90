@@ -15,6 +15,7 @@ integer, parameter :: UI_IMG=1, UI_PARM=2, UI_FILE=3, UI_SRCH=4, UI_FILT=5, UI_M
 integer, parameter :: UI_SUMMARY_MIN_LEN = 30
 integer, parameter :: UI_SUMMARY_MAX_LEN = 100
 integer, parameter :: UI_DISPLAY_NAME_MAX_LEN = 100
+character(len=*), parameter :: UI_JSON_REAL_FORMAT = '(ss,G0.6)'
 
 type :: category_descriptor
     character(len=32) :: id = ''
@@ -144,7 +145,7 @@ contains
     end subroutine new
 
     subroutine add_input_num( self, which, key, keytype, label, help, placeholder, required, default_value, &
-                            group, visibility, activation, choices )
+                            group, visibility, activation, choices, preserve_default )
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         character(len=*),           intent(in)    :: key, keytype, label, help, placeholder
@@ -154,16 +155,17 @@ contains
         integer,          optional, intent(in)    :: visibility
         type(ui_activation), optional, intent(in) :: activation
         type(ui_choice), optional, intent(in) :: choices(:)
+        logical, optional, intent(in) :: preserve_default
         type(ui_param)         :: p
         type(ui_program_input) :: input
         call p%set_param(key, keytype, label, help, placeholder, required, default_value, choices)
-        call apply_generated_default(self, p)
+        call apply_generated_default(self, p, preserve_default)
         call bind_input(self, input, which, p, group, visibility, activation)
         call append_input(self, input)
     end subroutine add_input_num
 
     subroutine add_input_str( self, which, key, keytype, label, help, placeholder, required, default_value, &
-                            group, visibility, activation, choices )
+                            group, visibility, activation, choices, preserve_default )
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         character(len=*),           intent(in)    :: key, keytype, label, help, placeholder
@@ -173,16 +175,17 @@ contains
         integer,          optional, intent(in)    :: visibility
         type(ui_activation), optional, intent(in) :: activation
         type(ui_choice), optional, intent(in) :: choices(:)
+        logical, optional, intent(in) :: preserve_default
         type(ui_param)         :: p
         type(ui_program_input) :: input
         call p%set_param(key, keytype, label, help, placeholder, required, default_value, choices)
-        call apply_generated_default(self, p)
+        call apply_generated_default(self, p, preserve_default)
         call bind_input(self, input, which, p, group, visibility, activation)
         call append_input(self, input)
     end subroutine add_input_str
 
     subroutine add_input_param( self, which, param, label_override, help_override, placeholder_override,&
-    &required_override, group, visibility, activation, choices_override )
+    &required_override, group, visibility, activation, choices_override, preserve_default )
         class(ui_program),          intent(inout) :: self
         integer,                    intent(in)    :: which
         type(ui_param),             intent(in)    :: param
@@ -192,28 +195,32 @@ contains
         integer,          optional, intent(in)    :: visibility
         type(ui_activation), optional, intent(in) :: activation
         type(ui_choice), optional, intent(in) :: choices_override(:)
+        logical, optional, intent(in) :: preserve_default
         type(ui_param)         :: p
         type(ui_program_input) :: input
         p = param
         if( present(label_override)       ) p%label       = label_override
         if( present(help_override)        ) p%help        = help_override
-        ! Placeholders are type-standardized by ui_param.  Legacy per-program
-        ! example text is not descriptor data and must not override that policy.
         if( present(choices_override) ) call p%set_choices(choices_override)
+        if( present(placeholder_override) ) call p%set_placeholder(placeholder_override)
         if( present(required_override) )then
             p%required = required_override
             if( p%required ) p%has_default = .false.
         endif
-        call apply_generated_default(self, p)
+        call apply_generated_default(self, p, preserve_default)
         call bind_input(self, input, which, p, group, visibility, activation)
         call append_input(self, input)
     end subroutine add_input_param
 
-    subroutine apply_generated_default(self, param)
+    subroutine apply_generated_default(self, param, preserve_default)
         class(ui_program), intent(in)    :: self
         type(ui_param),    intent(inout) :: param
+        logical, optional,  intent(in)    :: preserve_default
         character(len=128) :: value
         logical            :: found
+        if( present(preserve_default) )then
+            if( preserve_default ) return
+        endif
         call get_ui_default(self%executable%to_char(), self%name%to_char(), param%key%to_char(), found, value)
         call param%set_generated_default(value, found)
     end subroutine apply_generated_default
@@ -586,7 +593,7 @@ contains
         type(json_core)               :: json
         type(json_value), pointer     :: program_entry
         ! JSON init
-        call json%initialize()
+        call json%initialize(real_format=UI_JSON_REAL_FORMAT)
         call self%create_json_entry(json, program_entry, '', self%name%to_char(), .false.)
         ! write & clean
         call json%print(program_entry, self%name%to_char()//'.json')
@@ -917,7 +924,8 @@ contains
             endif
             write(logfhandle,'(a)') trim(self%requirements(i)%label%to_char())//': '// &
                 trim(self%requirements(i)%help%to_char())
-            write(logfhandle,'(a)') '  Accepted keys: '//trim(requirement_keys_text(self%requirements(i)))
+            write(logfhandle,'(a)') '  Accepted inputs:'
+            call print_requirement_inputs(self, self%requirements(i))
             if (nselected >= 0) then
                 write(logfhandle,'(a)') '  Supplied: '//int2str(nselected)//'; required: '// &
                     trim(cardinality_text(self%requirements(i)))
@@ -976,16 +984,64 @@ contains
         enddo
     end function key_is_defined
 
-    function requirement_keys_text(requirement) result(text)
+    subroutine print_requirement_inputs(self, requirement)
+        class(ui_program), intent(in) :: self
         type(ui_requirement_group), intent(in) :: requirement
-        character(len=XLONGSTRLEN) :: text
+        type(chash) :: inputs
         integer :: i
-        text = ''
+        call inputs%new(size(requirement%keys))
         do i = 1, size(requirement%keys)
-            if (i > 1) text = trim(text)//', '
-            text = trim(text)//requirement%keys(i)%to_char()
+            call inputs%push(requirement%keys(i)%to_char(), &
+                &input_text_for_key(self, requirement%keys(i)%to_char()))
         enddo
-    end function requirement_keys_text
+        call inputs%print_key_val_pairs(logfhandle)
+        call inputs%kill()
+    end subroutine print_requirement_inputs
+
+    function input_text_for_key(self, key) result(text)
+        class(ui_program), intent(in) :: self
+        character(len=*), intent(in) :: key
+        character(len=XLONGSTRLEN) :: text
+        logical :: found
+        text = ''
+        found = .false.
+        call find_input_text(self%img_ios, key, text, found)
+        if (.not. found) call find_input_text(self%file_ios, key, text, found)
+        if (.not. found) call find_input_text(self%parm_ios, key, text, found)
+        if (.not. found) call find_input_text(self%srch_ctrls, key, text, found)
+        if (.not. found) call find_input_text(self%filt_ctrls, key, text, found)
+        if (.not. found) call find_input_text(self%mask_ctrls, key, text, found)
+        if (.not. found) call find_input_text(self%comp_ctrls, key, text, found)
+        if (.not. found) THROW_HARD('requirement key is not registered: '//trim(key))
+    end function input_text_for_key
+
+    subroutine find_input_text(lst, key, text, found)
+        class(linked_list), intent(in) :: lst
+        character(len=*), intent(in) :: key
+        character(len=*), intent(out) :: text
+        logical, intent(inout) :: found
+        type(list_iterator) :: it
+        class(*), allocatable :: item
+        if (found .or. lst%is_empty()) return
+        it = lst%begin()
+        do while (it%has_value())
+            call it%getter(item)
+            select type(input => item)
+                type is(ui_program_input)
+                    if (input%param%key%to_char() == trim(key)) then
+                        text = input%param%label%to_char()//'; '//input%param%placeholder%to_char()
+                        found = .true.
+                        if (allocated(item)) deallocate(item)
+                        return
+                    endif
+                class default
+                    if (allocated(item)) deallocate(item)
+                    THROW_HARD('find_input_text: list element is not ui_program_input')
+            end select
+            if (allocated(item)) deallocate(item)
+            call it%next()
+        enddo
+    end subroutine find_input_text
 
     function cardinality_text(requirement) result(text)
         type(ui_requirement_group), intent(in) :: requirement

@@ -19,17 +19,7 @@ contains
         call new_single_workflow(tsttab)
     end subroutine construct_test_single_programs
 
-    subroutine print_test_single_programs( logfhandle )
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('SINGLE:', C_UNDERLINED)
-        write(logfhandle,'(A)') atoms_stats%name%to_char()
-        write(logfhandle,'(A)') detect_atoms%name%to_char()
-        write(logfhandle,'(A)') simulate_nanoparticle%name%to_char()
-        write(logfhandle,'(A)') single_workflow%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_single_programs
- 
-    subroutine new_atoms_stats( tsttab )
+subroutine new_atoms_stats( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call atoms_stats%new(&

@@ -17,16 +17,7 @@ contains
         call new_mask(prgtab)
     end subroutine construct_mask_programs
 
-    subroutine print_mask_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('MASKING:', C_UNDERLINED)
-        write(logfhandle,'(A)') auto_spher_mask%name%to_char()
-        write(logfhandle,'(A)') automask2D%name%to_char()
-        write(logfhandle,'(A)') mask%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_mask_programs
-
-    subroutine new_auto_spher_mask( prgtab )
+subroutine new_auto_spher_mask( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call auto_spher_mask%new(&

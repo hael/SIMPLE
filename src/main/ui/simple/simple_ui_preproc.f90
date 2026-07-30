@@ -29,22 +29,7 @@ contains
         call new_reextract(prgtab)
     end subroutine construct_preproc_programs
 
-    subroutine print_preproc_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('PRE-PROCESSING:', C_UNDERLINED)
-        write(logfhandle,'(A)') assign_optics_groups%name%to_char()
-        write(logfhandle,'(A)') ctf_estimate%name%to_char()
-        write(logfhandle,'(A)') extract%name%to_char()
-        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name%to_char()
-        write(logfhandle,'(A)') motion_correct%name%to_char()
-        write(logfhandle,'(A)') particle_sieving%name%to_char()
-        write(logfhandle,'(A)') pick%name%to_char()
-        write(logfhandle,'(A)') preprocess%name%to_char()
-        write(logfhandle,'(A)') reextract%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_preproc_programs
-
-    subroutine new_assign_optics_groups( prgtab )
+subroutine new_assign_optics_groups( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call assign_optics_groups%new(&
@@ -91,11 +76,11 @@ contains
         ! PROGRAM SPECIFICATION
         call ctf_estimate%new(&
         &'ctf_estimate', &                                                  ! name
-        &'Estimate CTF parameters from micrographs',& ! summary
+        &'Fit CTF parameters from micrograph power spectra',& ! summary
         &'is a distributed SIMPLE workflow for CTF parameter fitting',&     ! help
         &'simple_exec',&                                                    ! executable
         &.true.,&                                                           ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Estimate CTF')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -142,11 +127,11 @@ contains
         ! PROGRAM SPECIFICATION
         call extract%new(&
         &'extract', &                                                           ! name
-        &'Extract particle images from integrated movies',&                     ! summary
+        &'Extract particle images from integrated micrographs',&                 ! summary
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                        ! executable
         &.true.,&                                                               ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Extract Particle Images')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call extract%add_input(UI_FILE, 'dir_box', 'dir', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '',&
@@ -212,14 +197,14 @@ contains
         ! PROGRAM SPECIFICATION
         call motion_correct%new(&
         &'motion_correct', &                                                            ! name
-        &'Anisotropic motion correction of movies',&                                    ! summary
+        &'Correct anisotropic motion and optionally dose-weight movie frames',&           ! summary
         &'is a distributed workflow for anisotropic motion correction of movies.&
         & If then total dose is given the individual frames will be filtered accordingly&
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
         & the down-scaling factor (for super-resolution movies).',&                     ! help
         &'simple_exec',&                                                                ! executable
         &.true.,&                                                                       ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Correct Movie Motion')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%add_input(UI_FILE, gainref, group="data", visibility=UI_VIS_STANDARD)
@@ -285,11 +270,11 @@ contains
         ! PROGRAM SPECIFICATION
         call particle_sieving%new(&
         &'particle_sieving', &                                               ! name
-        &'Select particles automatically using a sieving workflow',& ! summary
+        &'Automatically retain high-quality particles with the sieving workflow',& ! summary
         &'workflow for automated particle sieving',& ! help
         &'simple_exec',&                                                   ! executable
         &.true.,&                                                          ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Select Particles')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -333,6 +318,9 @@ contains
         &'Number of particle-subset (chunk) abinitio2D jobs run concurrently on the local machine. Each chunk job &
         &itself runs shared-memory with nthr threads (per-chunk MPI partitioning is not used in offline sieving){1}', &
         &'# of concurrent chunks{1}', .false., 1., group="compute", visibility=UI_VIS_STANDARD)
+        call particle_sieving%add_input(UI_COMP, 'nchunks', 'num', 'Legacy concurrent-chunk alias', &
+        &'Backward-compatible alias for nparts: number of chunk jobs run concurrently', '# concurrent chunks{1}', .false., 1., group="compute", &
+        &visibility=UI_VIS_DEVELOPER)
         call particle_sieving%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., group="compute", &
         &visibility=UI_VIS_ADVANCED)
@@ -345,11 +333,11 @@ contains
         ! PROGRAM SPECIFICATION
         call pick%new(&
         &'pick', &                                                         ! name
-        &'Template-based particle picking',&                               ! summary
+        &'Find particles in micrographs using 2D reference templates',&     ! summary
         &'is a distributed workflow for template-based particle picking',& ! help
         &'simple_exec',&                                                   ! executable
         &.true.,&                                                          ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Pick Particles from Micrographs')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pick%add_input(UI_IMG, pickrefs, group="picking", visibility=UI_VIS_STANDARD)
@@ -405,12 +393,12 @@ contains
         ! PROGRAM SPECIFICATION
         call preprocess%new(&
         &'preprocess', &                                                                    ! name
-        &'Run motion correction, CTF estimation, and particle picking',& ! summary
+        &'Run motion correction, CTF estimation, and particle picking in sequence',& ! summary
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! help
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD)                                                                            ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Preprocess Micrographs') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%add_input(UI_FILE, gainref, &
@@ -499,11 +487,11 @@ contains
         ! PROGRAM SPECIFICATION
         call reextract%new(&
         &'reextract', &                                                         ! name
-        &'Re-extract particle images from integrated movies',&                  ! summary
+        &'Re-extract particles using refined positions from integrated micrographs',& ! summary
         &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
         &'simple_exec',&                                                        ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD)                                                                ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Re-extract Particle Images') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

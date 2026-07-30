@@ -35,25 +35,7 @@ contains
         call new_stringmatch(tsttab)
     end subroutine construct_test_utils_programs
 
-    subroutine print_test_utils_programs( logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('UTILS:', C_UNDERLINED)
-        write(logfhandle,'(A)') ansi_colors%name%to_char()
-        write(logfhandle,'(A)') binoris_test%name%to_char()
-        write(logfhandle,'(A)') binoris_io_test%name%to_char()
-        write(logfhandle,'(A)') cif2mrc%name%to_char()
-        write(logfhandle,'(A)') cif2pdb%name%to_char()
-        write(logfhandle,'(A)') cmdline%name%to_char()
-        write(logfhandle,'(A)') install%name%to_char()
-        write(logfhandle,'(A)') nice%name%to_char()
-        write(logfhandle,'(A)') pdb2mrc%name%to_char()
-        write(logfhandle,'(A)') peak_thres_fdr%name%to_char()
-        write(logfhandle,'(A)') serialize%name%to_char()
-        write(logfhandle,'(A)') stringmatch%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_utils_programs
-
-    subroutine new_ansi_colors( tsttab )
+subroutine new_ansi_colors( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call ansi_colors%new(&

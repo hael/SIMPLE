@@ -91,6 +91,71 @@ add_custom_target(validate_complete_ui_json ALL
   DEPENDS "${UI_JSON_VALIDATION_STAMP}"
 )
 
+# The stream interface is a reviewed acquisition-facing screen. Its exact
+# snapshot is deliberately opt-in: ordinary builds verify valid JSON without
+# blocking routine wording or layout work on a separate approval step.
+set(STREAM_UI_CONTRACT_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/simple_stream_ui_contract.json")
+set(STREAM_UI_CONTRACT_STAMP "${CMAKE_CURRENT_BINARY_DIR}/simple_stream_ui_contract.valid")
+set(STREAM_UI_CONTRACT_UPDATE_STAMP "${CMAKE_CURRENT_BINARY_DIR}/simple_stream_ui_contract.updated")
+set(STREAM_UI_CONTRACT_REFERENCE "${CMAKE_CURRENT_SOURCE_DIR}/stream_ui_contract.json")
+add_custom_command(
+  OUTPUT "${STREAM_UI_CONTRACT_STAMP}"
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/validate_complete_ui_json.py"
+    --executable "$<TARGET_FILE:${SIMPLE_PRIVATE_EXE}>"
+    --output "${STREAM_UI_CONTRACT_OUTPUT}"
+    --stamp "${STREAM_UI_CONTRACT_STAMP}"
+    --check-stream-contract
+  DEPENDS
+    ${SIMPLE_PRIVATE_EXE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/validate_complete_ui_json.py"
+    "${STREAM_UI_CONTRACT_REFERENCE}"
+  BYPRODUCTS "${STREAM_UI_CONTRACT_OUTPUT}"
+  COMMENT "Reviewing the stream UI snapshot"
+  VERBATIM
+)
+add_custom_target(validate_stream_ui_contract
+  DEPENDS "${STREAM_UI_CONTRACT_STAMP}"
+)
+add_custom_target(update_stream_ui_contract
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/validate_complete_ui_json.py"
+    --executable "$<TARGET_FILE:${SIMPLE_PRIVATE_EXE}>"
+    --output "${STREAM_UI_CONTRACT_OUTPUT}"
+    --stamp "${STREAM_UI_CONTRACT_UPDATE_STAMP}"
+    --update-stream-contract
+  DEPENDS
+    ${SIMPLE_PRIVATE_EXE}
+    "${CMAKE_CURRENT_SOURCE_DIR}/validate_complete_ui_json.py"
+  COMMENT "Updating the reviewed stream UI JSON reference"
+  VERBATIM
+)
+
+# ------------------------------------------------------------------------------
+# UI display-default audit
+# ------------------------------------------------------------------------------
+# This is intentionally opt-in: it is review evidence, not a runtime artifact,
+# and it reports ambiguities for human resolution without failing normal builds.
+set(UI_DEFAULT_AUDIT_JSON "${CMAKE_CURRENT_BINARY_DIR}/simple_ui_default_audit.json")
+set(UI_DEFAULT_AUDIT_MARKDOWN "${CMAKE_CURRENT_BINARY_DIR}/simple_ui_default_audit.md")
+add_custom_command(
+  OUTPUT "${UI_DEFAULT_AUDIT_JSON}" "${UI_DEFAULT_AUDIT_MARKDOWN}"
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_SOURCE_DIR}/scripts/default_audit.py"
+    --source-root "${CMAKE_SOURCE_DIR}"
+    --ui-executable "$<TARGET_FILE:${SIMPLE_PRIVATE_EXE}>"
+    --output-json "${UI_DEFAULT_AUDIT_JSON}"
+    --output-markdown "${UI_DEFAULT_AUDIT_MARKDOWN}"
+  DEPENDS
+    ${SIMPLE_PRIVATE_EXE}
+    "${CMAKE_SOURCE_DIR}/scripts/default_audit.py"
+  COMMENT "Generating UI display-default audit report"
+  VERBATIM
+)
+add_custom_target(audit_ui_defaults
+  DEPENDS "${UI_DEFAULT_AUDIT_JSON}" "${UI_DEFAULT_AUDIT_MARKDOWN}"
+)
+
 # ------------------------------------------------------------------------------
 # Tests
 # ------------------------------------------------------------------------------

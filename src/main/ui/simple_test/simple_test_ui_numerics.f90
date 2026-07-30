@@ -19,17 +19,7 @@ contains
         call new_neigh(tsttab)
     end subroutine construct_test_numerics_programs
 
-    subroutine print_test_numerics_programs( logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('NUMERICS:', C_UNDERLINED)
-        write(logfhandle,'(A)') eigh_test%name%to_char()
-        write(logfhandle,'(A)') kbinterpol_fast%name%to_char()
-        write(logfhandle,'(A)') maxnloc_test%name%to_char()
-        write(logfhandle,'(A)') neigh%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_numerics_programs
-
-    subroutine new_eigh_test( tsttab )
+subroutine new_eigh_test( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call eigh_test%new(&

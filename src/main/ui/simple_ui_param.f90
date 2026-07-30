@@ -28,6 +28,7 @@ contains
     procedure, private :: set_param_2
     generic            :: set_param => set_param_1, set_param_2
     procedure          :: set_choices
+    procedure          :: set_placeholder
     procedure          :: set_generated_default
     final              :: finalize
 end type ui_param
@@ -44,11 +45,11 @@ contains
         self%keytype     = trim(keytype)
         self%label       = trim(label)
         self%help        = trim(help)
-        self%placeholder = trim(placeholder)
         self%required    = required
         self%has_default = .not. self%required
         if( self%has_default ) self%rval_default = default_value
         call self%set_choices(choices)
+        call self%set_placeholder(placeholder)
     end subroutine set_param_1
 
     subroutine set_param_2( self, key, keytype, label, help, placeholder, required, default_value, choices )
@@ -61,11 +62,11 @@ contains
         self%keytype     = trim(keytype)
         self%label       = trim(label)
         self%help        = trim(help)
-        self%placeholder = trim(placeholder)
         self%required    = required
         self%has_default = .not. self%required
         if( self%has_default ) self%cval_default = trim(default_value)
         call self%set_choices(choices)
+        call self%set_placeholder(placeholder)
         if( self%has_default .and. (self%keytype%to_char() == 'binary' .or. &
             &self%keytype%to_char() == 'multi') )then
             if( .not. choice_is_available(self%choices, self%cval_default%to_char()) )then
@@ -87,8 +88,37 @@ contains
         if( .not. ui_choices_are_valid(self%keytype%to_char(), self%choices) )then
             THROW_HARD('Invalid choices for UI parameter: '//self%key%to_char())
         endif
-        self%placeholder = standardize_placeholder(self%keytype%to_char())
     end subroutine set_choices
+
+    subroutine set_placeholder( self, placeholder )
+        class(ui_param), intent(inout) :: self
+        character(len=*), intent(in)   :: placeholder
+        character(len=:), allocatable  :: keytype
+        character(len=UI_PLACEHOLDER_MAX_LEN) :: standard_placeholder
+        keytype = trim(self%keytype%to_char())
+        standard_placeholder = standardize_placeholder(self%key%to_char(), keytype)
+        select case( keytype )
+            case('file')
+                if( trim(standard_placeholder) /= 'e.g. input.file' )then
+                    self%placeholder = trim(standard_placeholder)
+                else if( len_trim(placeholder) > 0 )then
+                    self%placeholder = trim(placeholder)
+                else
+                    self%placeholder = trim(standard_placeholder)
+                endif
+            case('dir')
+                if( len_trim(placeholder) > 0 )then
+                    self%placeholder = trim(placeholder)
+                else
+                    self%placeholder = trim(standard_placeholder)
+                endif
+            case default
+                self%placeholder = trim(standard_placeholder)
+        end select
+        if( len_trim(self%placeholder%to_char()) > UI_PLACEHOLDER_MAX_LEN )then
+            THROW_HARD('UI parameter placeholder exceeds 40 characters: '//self%key%to_char())
+        endif
+    end subroutine set_placeholder
 
     subroutine set_generated_default( self, value, found )
         class(ui_param), intent(inout) :: self
@@ -132,16 +162,133 @@ contains
         enddo
     end function choice_is_available
 
-    pure function standardize_placeholder( keytype ) result( placeholder )
-        character(len=*), intent(in) :: keytype
+    pure function standardize_placeholder( key, keytype ) result( placeholder )
+        character(len=*), intent(in) :: key, keytype
         character(len=UI_PLACEHOLDER_MAX_LEN) :: placeholder
+        ! Project files are a semantic subset of generic files.  Keep their
+        ! format visible in every UI context rather than suggesting an MRC.
+        if( index(trim(key), 'projfile') == 1 )then
+            placeholder = 'e.g. input.simple'
+            return
+        endif
+        if( trim(key) == 'projtab' )then
+            placeholder = 'e.g. projtab.txt'
+            return
+        endif
+        select case( trim(key) )
+            case('blocktree')
+                placeholder = 'e.g. pool_block_tree.bin'
+                return
+            case('boxfile')
+                placeholder = 'e.g. coords.box'
+                return
+            case('boxtab')
+                placeholder = 'e.g. boxes.txt'
+                return
+            case('ciffile')
+                placeholder = 'e.g. molecule.cif'
+                return
+            case('deftab')
+                placeholder = 'e.g. deftab.txt'
+                return
+            case('filetab')
+                placeholder = 'e.g. input_files.txt'
+                return
+            case('fsc')
+                placeholder = 'e.g. fsc.bin'
+                return
+            case('gainref')
+                placeholder = 'e.g. gainref.mrc'
+                return
+            case('oritab')
+                placeholder = 'e.g. oritab.txt'
+                return
+            case('oritab2')
+                placeholder = 'e.g. oritab2.txt'
+                return
+            case('outstk')
+                placeholder = 'e.g. output.mrcs'
+                return
+            case('outvol')
+                placeholder = 'e.g. volume.mrc'
+                return
+            case('pdbfile', 'pdbfile2')
+                placeholder = 'e.g. molecule.pdb'
+                return
+            case('pdbfiles')
+                placeholder = 'e.g. pdb_files.txt'
+                return
+            case('pdbout')
+                placeholder = 'e.g. output.pdb'
+                return
+            case('pickrefs')
+                placeholder = 'e.g. pickrefs.mrc'
+                return
+            case('plaintexttab')
+                placeholder = 'e.g. params.txt'
+                return
+            case('refs')
+                placeholder = 'e.g. references.mrc'
+                return
+            case('rmsd_file')
+                placeholder = 'e.g. atom_rmsd.bin'
+                return
+            case('star_mic')
+                placeholder = 'e.g. micrographs.star'
+                return
+            case('star_model')
+                placeholder = 'e.g. model.star'
+                return
+            case('star_ptcl')
+                placeholder = 'e.g. particles.star'
+                return
+            case('starfile')
+                placeholder = 'e.g. input.star'
+                return
+            case('stk')
+                placeholder = 'e.g. particles.mrcs'
+                return
+            case('stk2')
+                placeholder = 'e.g. particles2.mrcs'
+                return
+            case('stk_backgr')
+                placeholder = 'e.g. background_pspec.mrcs'
+                return
+            case('stk_den')
+                placeholder = 'e.g. denoised.mrcs'
+                return
+            case('stk_traj')
+                placeholder = 'e.g. trajectory.mrcs'
+                return
+            case('stktab')
+                placeholder = 'e.g. stktab.txt'
+                return
+            case('stktab_den')
+                placeholder = 'e.g. stktab_den.txt'
+                return
+            case('vol1')
+                placeholder = 'e.g. volume.mrc'
+                return
+            case('vol2')
+                placeholder = 'e.g. volume2.mrc'
+                return
+            case('vol3')
+                placeholder = 'e.g. volume3.mrc'
+                return
+            case('vol_odd')
+                placeholder = 'e.g. odd.mrc'
+                return
+            case('vol_even')
+                placeholder = 'e.g. even.mrc'
+                return
+        end select
         select case( trim(keytype) )
             case('binary', 'multi', 'hidden_dir', 'hidden_float', 'hidden_int')
                 placeholder = ''
             case('dir')
                 placeholder = 'e.g. /path/to/folder'
             case('file')
-                placeholder = 'e.g. input.mrc'
+                placeholder = 'e.g. input.file'
             case('num', 'int', 'float')
                 placeholder = 'e.g. 10'
             case('str', 'string')
@@ -151,9 +298,15 @@ contains
         end select
     end function standardize_placeholder
 
-    pure logical function ui_placeholder_is_standard( keytype, placeholder )
-        character(len=*), intent(in) :: keytype, placeholder
-        ui_placeholder_is_standard = trim(placeholder) == trim(standardize_placeholder(keytype))
+    pure logical function ui_placeholder_is_standard( key, keytype, placeholder )
+        character(len=*), intent(in) :: key, keytype, placeholder
+        select case( trim(keytype) )
+            case('file', 'dir')
+                ui_placeholder_is_standard = len_trim(placeholder) > 0 .and. &
+                    &len_trim(placeholder) <= UI_PLACEHOLDER_MAX_LEN
+            case default
+                ui_placeholder_is_standard = trim(placeholder) == trim(standardize_placeholder(key, keytype))
+        end select
     end function ui_placeholder_is_standard
 
     subroutine finalize(self)

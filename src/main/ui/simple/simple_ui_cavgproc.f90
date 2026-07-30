@@ -25,20 +25,7 @@ contains
         call new_select_clusters(prgtab)
     end subroutine construct_cavgproc_programs
 
-    subroutine print_cavgproc_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('CLASS AVERAGE PROCESSING:', C_UNDERLINED)
-        write(logfhandle,'(A)') cluster_cavgs%name%to_char()
-        write(logfhandle,'(A)') model_cavgs_rejection%name%to_char()
-        write(logfhandle,'(A)') cluster_cavgs_selection%name%to_char()
-        write(logfhandle,'(A)') cluster_stack%name%to_char()
-        write(logfhandle,'(A)') match_cavgs%name%to_char()
-        write(logfhandle,'(A)') match_stacks%name%to_char()
-        write(logfhandle,'(A)') select_clusters%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_cavgproc_programs
-
-    subroutine new_cluster_cavgs( prgtab )
+subroutine new_cluster_cavgs( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cluster_cavgs%new(&
@@ -60,6 +47,8 @@ contains
         ! <no additional inputs>
         ! <empty>
         ! search controls
+        call cluster_cavgs%add_input(UI_SRCH, trs, &
+        &visibility=UI_VIS_ADVANCED)
         call cluster_cavgs%add_input(UI_SRCH, clust_crit, &
         &visibility=UI_VIS_ADVANCED)
         call cluster_cavgs%add_input(UI_SRCH, skip_rejection, &
@@ -112,13 +101,13 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call model_cavgs_rejection%add_input(UI_FILE, 'infile', 'file', 'Quality model input', &
         &'Optional learned quality model file for apply/analyze/evaluate or promotion-code generation', &
-        &'e.g. cavgs_quality_model_chunk_learned.txt', .false., '', &
+        &'e.g. cavgs_quality_model.txt', .false., '', &
         &activation=ui_activation_equals_any('quality_mode', &
         &[character(len=8) :: 'apply', 'analyze', 'evaluate', 'promote']), &
         &visibility=UI_VIS_ADVANCED)
         call model_cavgs_rejection%add_input(UI_FILE, 'fname', 'file', 'Quality model output', &
         &'Output quality model file, evaluation report, or promotion-code snippet for quality_mode=learn|evaluate|promote', &
-        &'e.g. cavgs_quality_model_chunk_learned.txt, cavgs_quality_evaluate_report.txt, or cavgs_quality_model_builtin_code.txt', &
+        &'e.g. cavgs_quality_output.txt', &
         &.false., '', activation=ui_activation_equals_any('quality_mode', &
         &[character(len=8) :: 'learn', 'evaluate', 'promote']), &
         &visibility=UI_VIS_ADVANCED)
@@ -153,6 +142,8 @@ contains
         ! <no additional inputs>
         ! <empty>
         ! search controls
+        call cluster_cavgs_selection%add_input(UI_SRCH, trs, &
+        &visibility=UI_VIS_ADVANCED)
         call cluster_cavgs_selection%add_input(UI_SRCH, clust_crit, &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
@@ -190,6 +181,8 @@ contains
         ! <no additional inputs>
         ! <empty>
         ! search controls
+        call cluster_stack%add_input(UI_SRCH, trs, &
+        &visibility=UI_VIS_ADVANCED)
         call cluster_stack%add_input(UI_SRCH, clust_crit, &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
@@ -229,6 +222,8 @@ contains
         ! <no additional inputs>
         ! <empty>
         ! search controls
+        call match_cavgs%add_input(UI_SRCH, trs, &
+        &visibility=UI_VIS_ADVANCED)
         call match_cavgs%add_input(UI_SRCH, clust_crit, &
         &visibility=UI_VIS_DEVELOPER)
         ! filter controls
@@ -266,6 +261,8 @@ contains
         ! <no additional inputs>
         ! <empty>
         ! search controls
+        call match_stacks%add_input(UI_SRCH, trs, &
+        &visibility=UI_VIS_ADVANCED)
         call match_stacks%add_input(UI_SRCH, 'clust_crit', 'multi', 'Clustering criterion', 'Clustering criterion(sig|sig_clust|cc|res|hybrid){hybrid}','', .false., 'cc', &
         &choices=ui_choices([character(len=9) :: 'sig', 'sig_clust', 'cc', 'res', 'hybrid']), &
         &visibility=UI_VIS_DEVELOPER)

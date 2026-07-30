@@ -19,25 +19,15 @@ contains
         call new_split_stack(prgtab)
     end subroutine construct_other_programs
 
-    subroutine print_other_programs( logfhandle )
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('OTHER UTILITIES:', C_UNDERLINED)
-        write(logfhandle,'(A)') cif2pdb%name%to_char()
-        write(logfhandle,'(A)') fractionate_movies%name%to_char()
-        write(logfhandle,'(A)') split_%name%to_char()
-        write(logfhandle,'(A)') split_stack%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_other_programs
-
-    subroutine new_cif2pdb( prgtab )
+subroutine new_cif2pdb( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call cif2pdb%new(&
         &'cif2pdb',&                                       ! name
-        &'Convert PDBx/mmCIF coordinate files to PDB format',& ! summary
+        &'Convert PDBx/mmCIF atomic coordinates into PDB format',& ! summary
         &'is a program for converting PDBx/mmCIF to PDB',& ! help
         &'simple_exec',&                                   ! executable
         &.false., &
-        &visibility=UI_VIS_STANDARD)                                          ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Convert mmCIF to PDB') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cif2pdb%add_input(UI_FILE, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif', &

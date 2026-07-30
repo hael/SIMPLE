@@ -19,26 +19,16 @@ contains
         call new_noisevol(prgtab)
     end subroutine construct_abinitio3D_programs
 
-    subroutine print_abinitio3D_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('AB INITIO 3D RECONSTRUCTION:', C_UNDERLINED)
-        write(logfhandle,'(A)') abinitio3D%name%to_char()
-        write(logfhandle,'(A)') abinitio3D_cavgs%name%to_char()
-        write(logfhandle,'(A)') estimate_lpstages%name%to_char()
-        write(logfhandle,'(A)') noisevol%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_abinitio3D_programs
-
-    subroutine new_abinitio3D( prgtab )
+subroutine new_abinitio3D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call abinitio3D%new(&
         &'abinitio3D',&                                                                    ! name
-        &'3D ab initio model generation from particles',&                                  ! summary
+        &'Generate an initial 3D model from particle images',&                             ! summary
         &'is a distributed workflow for generating an ab initio 3D model from particles',& ! help
         &'simple_exec',&                                                                   ! executable
         &.true.,&                                                                          ! requires sp_project
-        &visibility=UI_VIS_STANDARD  )
+        &visibility=UI_VIS_STANDARD, display_name='Create Initial 3D Model')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call abinitio3D%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
@@ -74,6 +64,12 @@ contains
         call abinitio3D%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume ab initio mode', 'Multi-volume ab initio mode(single|independent|docked){single}','', .false., 'single', &
         &choices=ui_choices([character(len=11) :: 'single', 'independent', 'docked']), &
         &visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_SRCH, 'split_stage', 'num', 'Docked-state split stage', &
+        &'Stage at which docked multi-volume ab-initio reconstruction splits into state-specific volumes', &
+        &'stage number', .false., 6., group="search", visibility=UI_VIS_DEVELOPER)
+        call abinitio3D%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
+        &'Required overlap of particle assignments for ab-initio convergence', 'overlap fraction', .false., .95, &
+        &group="search", visibility=UI_VIS_DEVELOPER)
         call abinitio3D%add_input(UI_SRCH, objfun_den, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, objfun_den_w, group="search", &
@@ -133,10 +129,10 @@ contains
         ! PROGRAM SPECIFICATION
         call abinitio3D_cavgs%new(&
         &'abinitio3D_cavgs',&                                                                   ! name
-        &'3D ab initio model generation from class averages',&                                  ! summary
+        &'Generate an initial 3D model from 2D class averages',&                               ! summary
         &'is a distributed workflow for generating an ab initio 3D model from class averages',& ! help
         &'simple_exec',&                                                                        ! executable
-        &.true., visibility=UI_VIS_STANDARD)                                                          ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Create Initial 3D Model from Classes') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -158,6 +154,12 @@ contains
             &'Multi-volume class-average ab initio mode(single|independent|docked){single}','', .false., 'single', &
         &choices=ui_choices([character(len=11) :: 'single', 'independent', 'docked']), &
         &visibility=UI_VIS_ADVANCED)
+        call abinitio3D_cavgs%add_input(UI_SRCH, 'split_stage', 'num', 'Docked-state split stage', &
+        &'Stage at which docked multi-volume class-average ab-initio reconstruction splits into state-specific volumes', &
+        &'stage number', .false., 6., group="search", visibility=UI_VIS_DEVELOPER)
+        call abinitio3D_cavgs%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
+        &'Required overlap of class-average assignments for ab-initio convergence', 'overlap fraction', .false., .95, &
+        &group="search", visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call abinitio3D_cavgs%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)

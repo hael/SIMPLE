@@ -28,30 +28,16 @@ contains
         call new_write_classes(prgtab)
     end subroutine construct_cluster2D_programs
 
-    subroutine print_cluster2D_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('CLUSTER2D WORKFLOWS:', C_UNDERLINED)
-        write(logfhandle,'(A)') abinitio2D%name%to_char()
-        write(logfhandle,'(A)') abinitio2D_chunks%name%to_char()
-        write(logfhandle,'(A)') make_cavgs%name%to_char()
-        write(logfhandle,'(A)') bootstrap_cavgs%name%to_char()
-        write(logfhandle,'(A)') unbootstrap_cavgs%name%to_char()
-        write(logfhandle,'(A)') map_cavgs_selection%name%to_char()
-        write(logfhandle,'(A)') sample_classes%name%to_char()
-        write(logfhandle,'(A)') write_classes%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_cluster2D_programs
-
-    subroutine new_abinitio2D( prgtab )
+subroutine new_abinitio2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call abinitio2D%new(&
         &'abinitio2D',&                                                                ! name
-        &'ab initio 2D analysis from particles',&                                      ! summary
+        &'Generate reference-free 2D class averages from particle images',&            ! summary
         &'is a distributed workflow for generating 2D class averages from particles',& ! help                                                           ! help
         &'simple_exec',&                                                               ! executable
         &.true.,&                                                                      ! requires sp_project
-        &visibility=UI_VIS_STANDARD  )
+        &visibility=UI_VIS_STANDARD, display_name='Create 2D Class Averages')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -97,8 +83,24 @@ contains
         call abinitio2D%add_input(UI_SRCH, 'sgd_shift_its', 'num', 'SGD shift steps', &
             &'Maximum bounded analytical shift steps per particle{4}', 'steps{4}', .false., 4., &
             &group="search", visibility=UI_VIS_ADVANCED)
+        call abinitio2D%add_input(UI_SRCH, 'stats', 'binary', 'Write class-average statistics', &
+        &'Write class-average statistics during ab-initio 2D analysis(yes|no){no}', '', .false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
+        call abinitio2D%add_input(UI_SRCH, 'extr_lim', 'num', 'Extreme-particle iteration limit', &
+        &'Iteration limit used to identify and exclude extreme particles during ab-initio 2D analysis', &
+        &'iteration limit', .false., 20., group="search", visibility=UI_VIS_DEVELOPER)
+        call abinitio2D%add_input(UI_SRCH, 'nits_per_stage', 'num', 'Iterations per stage', &
+        &'Number of ab-initio 2D iterations added at each frequency-marching stage', &
+        &'iterations per stage', .false., 5., group="search", visibility=UI_VIS_DEVELOPER)
+        call abinitio2D%add_input(UI_SRCH, 'eo_stage', 'binary', 'Use even/odd stage', &
+         &'Run the final ab-initio 2D frequency-marching stage with even/odd class averages(yes|no){yes}', '', &
+         &.false., 'yes', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+         &visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call abinitio2D%add_input(UI_FILT, hp, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio2D%add_input(UI_FILT, ml_reg, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
@@ -239,6 +241,9 @@ contains
         call bootstrap_cavgs%add_input(UI_PARM, 'frac_best', 'num', 'Anchor fraction',&
         &'Fraction used with the median class population to define the objective-ranked anchor set(0-1){0.5}',&
         &'fraction{0.5}', .false., 0.5, &
+        &visibility=UI_VIS_DEVELOPER)
+        call bootstrap_cavgs%add_input(UI_IMG, 'refs', 'file', 'Bootstrap reference class averages', &
+        &'Reference class-average stack written for bootstrap processing', 'e.g. cavgs_bootstrap_001.mrc', .false., 'cavgs_bootstrap_001.mrc', &
         &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>

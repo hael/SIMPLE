@@ -19,17 +19,7 @@ contains
         call new_validate_cavgs_vs_model(prgtab)
     end subroutine construct_single_validate_programs
 
-    subroutine print_single_validate_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('VALIDATION:', C_UNDERLINED)
-        write(logfhandle,'(A)') cavgseoproc_nano%name%to_char()
-        write(logfhandle,'(A)') cavgsproc_nano%name%to_char()
-        write(logfhandle,'(A)') ptclsproc_nano%name%to_char()
-        write(logfhandle,'(A)') validate_cavgs_vs_model%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_single_validate_programs
-
-    subroutine new_cavgseoproc_nano( prgtab )
+subroutine new_cavgseoproc_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cavgseoproc_nano%new(&

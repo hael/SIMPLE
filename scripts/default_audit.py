@@ -41,11 +41,47 @@ SET_CALL = re.compile(
     r"^\s*call\s+cline%set\s*\(\s*'([^']+)'\s*,\s*(.+?)\s*\)\s*$", re.IGNORECASE
 )
 NEW_CALL = re.compile(r"\b[a-z_][a-z0-9_]*%new\s*\(\s*cline\s*\)", re.IGNORECASE)
+PARAMS_INITIALIZER_CALL = re.compile(
+    r"\b[a-z_][a-z0-9_]*%init_params_and_build_[a-z0-9_]*\s*\(\s*cline\b", re.IGNORECASE
+)
 ROUTER_CALL = re.compile(r"\bcall\s+(exec_[a-z0-9_]+_commander)\s*\(", re.IGNORECASE)
 EXECUTE_CALL = re.compile(r"\bcall\s+([a-z_][a-z0-9_]*)%execute\s*\(\s*cline\s*\)", re.IGNORECASE)
 CASE_STMT = re.compile(r"^\s*case\s*\((.+)\)\s*$", re.IGNORECASE)
 SUBROUTINE_START = re.compile(r"^\s*(?:module\s+)?subroutine\s+([a-z_][a-z0-9_]*)\b", re.IGNORECASE)
 SUBROUTINE_END = re.compile(r"^\s*end\s*(?:module\s+)?subroutine\s*([a-z_][a-z0-9_]*)?", re.IGNORECASE)
+CLINE_HELPER_CALL = re.compile(r"^\s*call\s+([a-z_][a-z0-9_]*)\s*\(.*\bcline\b", re.IGNORECASE)
+
+# These helpers are deliberately small command-default bundles.  Their direct
+# missing-key assignments are part of the caller's display-default evidence.
+TRACED_DEFAULT_HELPERS = {"set_automask2d_defaults"}
+
+# These helpers inspect or report the command line but do not assign defaults.
+READ_ONLY_CLINE_HELPERS = {"warn_for_forced_bootstrap_overrides"}
+
+# Stream project creation only supplies internal project identity and scheduler
+# metadata when a caller did not provide a project file.
+INTERNAL_CLINE_HELPERS = {
+    "create_stream_project": "stream-generated project metadata is not a GUI default",
+    "run_make_cavgs_workflow": "runtime-selected strategy derives defaults from project and execution mode",
+}
+
+# These defaults are deliberate execution contracts, not GUI choices.  Keep
+# them in the audit as explicit informational evidence rather than creating
+# descriptors that could override project- or workflow-derived state.
+INTENTIONAL_NON_UI_DEFAULTS = {
+    ("simple_exec", "abinitio3D_cavgs", "imgkind"):
+        "class-average routing is internal to abinitio3D_cavgs",
+    ("simple_exec", "abinitio3D_cavgs", "noise_norm"):
+        "noise normalization is exposed only by the normalize workflow",
+    ("simple_exec", "ctfops", "box"):
+        "image geometry is inferred from supplied data; the no-stack fallback is internal setup",
+    ("simple_exec", "reconstruct3D_pcg", "nspace"):
+        "the PCG operator ignores the setup grid; this is an internal even placeholder",
+    ("simple_exec", "volcluster", "box"):
+        "box is derived from the first input volume",
+    ("simple_stream", "abinitio2D_stream", "projfile_optics"):
+        "the optics project filename is a stream-generated artifact",
+}
 
 
 @dataclass(frozen=True)
@@ -240,8 +276,9 @@ def extract_parameter_bindings(root: Path) -> dict[str, dict]:
     return bindings
 
 
-def extract_procedures(paths: Iterable[Path]) -> dict[str, Procedure]:
-    procedures: dict[str, Procedure] = {}
+def extract_procedures(paths: Iterable[Path]) -> dict[str, list[Procedure]]:
+    """Return every procedure, retaining same-named procedures in distinct modules."""
+    procedures: dict[str, list[Procedure]] = {}
     for path in paths:
         statements = logical_lines(path)
         start_index = 0
@@ -260,7 +297,9 @@ def extract_procedures(paths: Iterable[Path]) -> dict[str, Procedure]:
             if end_index == len(statements):
                 start_index += 1
                 continue
-            procedures[name] = Procedure(name, path, statements[start_index].line, tuple(statements[start_index + 1:end_index]))
+            procedures.setdefault(name, []).append(
+                Procedure(name, path, statements[start_index].line, tuple(statements[start_index + 1:end_index]))
+            )
             start_index = end_index + 1
     return procedures
 
@@ -357,39 +396,45 @@ def parse_set_rule(root: Path, path: Path, statement: Statement, phase: str, con
 
 def make_rule(root: Path, path: Path, line: int, key: str, raw_value: str, rule: str, phase: str, constants: dict[str, str]) -> dict:
     value, value_kind = is_literal(raw_value, constants)
+    if value is None and rule == "forced":
+        # An unconditional computed assignment is command orchestration, not a
+        # default presented to a user.  Keep computed missing-key assignments
+        # unresolved: those can still require a context-dependent UI default.
+        rule = "derived"
     return {
         "key": key.lower(), "value": value, "value_kind": value_kind,
-        "rule": rule if value is not None else "unresolved", "phase": phase,
+        "rule": rule if value is not None or rule == "derived" else "unresolved", "phase": phase,
         "source": source_location(root, path, line),
         "note": "" if value is not None else f"unsupported assigned value: {raw_value.strip()}",
     }
 
 
-def extract_router_routes(root: Path, procedures: dict[str, Procedure], routers: Iterable[str], constants: dict[str, str]) -> dict[str, list[dict]]:
+def extract_router_routes(root: Path, procedures: dict[str, list[Procedure]], executable: str,
+                          routers: Iterable[str], constants: dict[str, str]) -> dict[str, list[dict]]:
     routes: dict[str, list[dict]] = {}
     for router_name in routers:
-        router = procedures.get(router_name)
-        if router is None:
-            continue
-        variable_types: dict[str, str] = {}
-        for statement in logical_lines(router.path):
-            match = re.match(r"^\s*type\s*\(\s*((?:commander|stream)_[a-z0-9_]+)\s*\)\s*::\s*([a-z_][a-z0-9_]*)", statement.text, re.IGNORECASE)
-            if match:
-                variable_types[match.group(2).lower()] = match.group(1).lower()
-        current_cases: list[str] = []
-        current_statements: list[Statement] = []
-        for statement in router.statements:
-            case = CASE_STMT.match(statement.text)
-            if case:
-                if current_cases:
-                    add_router_case(root, router, current_cases, current_statements, variable_types, routes, constants)
-                current_cases = re.findall(r"'([^']+)'", case.group(1))
-                current_statements = []
+        for router in procedures.get(router_name, []):
+            if not router.path.stem.startswith(f"{executable}_"):
                 continue
+            variable_types: dict[str, str] = {}
+            for statement in logical_lines(router.path):
+                match = re.match(r"^\s*type\s*\(\s*((?:commander|stream)_[a-z0-9_]+)\s*\)\s*::\s*([a-z_][a-z0-9_]*)", statement.text, re.IGNORECASE)
+                if match:
+                    variable_types[match.group(2).lower()] = match.group(1).lower()
+            current_cases: list[str] = []
+            current_statements: list[Statement] = []
+            for statement in router.statements:
+                case = CASE_STMT.match(statement.text)
+                if case:
+                    if current_cases:
+                        add_router_case(root, router, current_cases, current_statements, variable_types, routes, constants)
+                    current_cases = re.findall(r"'([^']+)'", case.group(1))
+                    current_statements = []
+                    continue
+                if current_cases:
+                    current_statements.append(statement)
             if current_cases:
-                current_statements.append(statement)
-        if current_cases:
-            add_router_case(root, router, current_cases, current_statements, variable_types, routes, constants)
+                add_router_case(root, router, current_cases, current_statements, variable_types, routes, constants)
     return routes
 
 
@@ -449,20 +494,49 @@ def add_router_case(root: Path, router: Procedure, names: list[str], statements:
         })
 
 
-def commander_rules(root: Path, procedure: Procedure, constants: dict[str, str]) -> list[dict]:
+def commander_rules(root: Path, procedure: Procedure, constants: dict[str, str],
+                    helper_procedures: dict[str, list[Procedure]]) -> list[dict]:
     rules: list[dict] = []
     before_constructor = True
+    forced_keys: set[str] = set()
     for statement in procedure.statements:
-        if NEW_CALL.search(statement.text):
+        if NEW_CALL.search(statement.text) or PARAMS_INITIALIZER_CALL.search(statement.text):
             before_constructor = False
             continue
         direct = parse_set_rule(root, procedure.path, statement, "commander" if before_constructor else "runtime", constants)
         if direct:
-            direct["rule"] = direct["rule"] if before_constructor else "runtime"
-            if direct["value_kind"] == "expression":
+            if not before_constructor:
+                direct["rule"] = "runtime"
+            elif direct["value_kind"] == "expression" and direct["rule"] != "derived":
                 direct["rule"] = "unresolved"
+            elif direct["rule"] == "forced":
+                forced_keys.add(direct["key"])
+            elif direct["rule"] == "missing_key" and direct["key"] in forced_keys:
+                # A direct forced assignment above this fallback makes the
+                # missing-key branch unreachable on this command path.
+                direct["rule"] = "shadowed"
             rules.append(direct)
             continue
+        helper_call = CLINE_HELPER_CALL.match(statement.text)
+        if before_constructor and helper_call:
+            helper_name = helper_call.group(1).lower()
+            if helper_name in READ_ONLY_CLINE_HELPERS:
+                continue
+            if helper_name in INTERNAL_CLINE_HELPERS:
+                rules.append({
+                    "key": None, "value": None, "value_kind": "internal", "rule": "internal_helper",
+                    "phase": "commander", "source": source_location(root, procedure.path, statement.line),
+                    "note": INTERNAL_CLINE_HELPERS[helper_name],
+                })
+                continue
+            helper_candidates = helper_procedures.get(helper_name, [])
+            if helper_name in TRACED_DEFAULT_HELPERS and len(helper_candidates) == 1:
+                for helper_statement in helper_candidates[0].statements:
+                    helper_rule = parse_set_rule(root, helper_candidates[0].path, helper_statement,
+                                                 "helper", constants)
+                    if helper_rule:
+                        rules.append(helper_rule)
+                continue
         if before_constructor and re.search(r"\bcall\s+[a-z_][a-z0-9_]*\s*\(.*\bcline\b", statement.text, re.IGNORECASE):
             rules.append({
                 "key": None, "value": None, "value_kind": "expression", "rule": "unresolved",
@@ -472,10 +546,18 @@ def commander_rules(root: Path, procedure: Procedure, constants: dict[str, str])
     return rules
 
 
+def resolve_execute_method(procedures: dict[str, list[Procedure]], method_name: str | None) -> Procedure | None:
+    """Return a uniquely identifiable commander execute method."""
+    candidates = procedures.get(method_name or "", [])
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def make_records(root: Path, registry: dict[tuple[str, str], set[str]], bindings: dict[str, dict], baselines: dict[str, dict],
-                 procedures: dict[str, Procedure], commander_methods: dict[str, str], constants: dict[str, str]) -> tuple[list[dict], list[dict]]:
+                 procedures: dict[str, list[Procedure]], helper_procedures: dict[str, list[Procedure]],
+                 commander_methods: dict[str, str], constants: dict[str, str]) -> tuple[list[dict], list[dict]]:
     records: list[dict] = []
     diagnostics: list[dict] = []
+    ui_keys_anywhere = set().union(*registry.values()) if registry else set()
     entry_cache: dict[str, tuple[list[str], list[dict]]] = {}
     router_cache: dict[str, dict[str, list[dict]]] = {}
     for (executable, program), ui_keys in sorted(registry.items()):
@@ -492,7 +574,7 @@ def make_records(root: Path, registry: dict[tuple[str, str], set[str]], bindings
                 entry_cache[executable] = extract_entry_rules(root, executable, constants)
             routers, entry_rules = entry_cache[executable]
             if executable not in router_cache:
-                router_cache[executable] = extract_router_routes(root, procedures, routers, constants)
+                router_cache[executable] = extract_router_routes(root, procedures, executable, routers, constants)
             candidates = router_cache[executable].get(program, [])
         if len(candidates) != 1:
             diagnostics.append({
@@ -502,17 +584,21 @@ def make_records(root: Path, registry: dict[tuple[str, str], set[str]], bindings
             continue
         route = candidates[0]
         method_name = commander_methods.get(route["commander_type"] or "")
-        if not method_name or method_name not in procedures:
+        execute_method = resolve_execute_method(procedures, method_name)
+        if execute_method is None:
             diagnostics.append({
                 "severity": "error", "program": f"{executable}:{program}",
                 "message": f"could not locate execute method for {route['commander_type'] or 'router case'}",
             })
             continue
-        evidence = list(entry_rules) + list(route["rules"]) + commander_rules(root, procedures[method_name], constants)
+        evidence = list(entry_rules) + list(route["rules"]) + commander_rules(
+            root, execute_method, constants, helper_procedures
+        )
         evidence_by_key: dict[str, list[dict]] = {}
         for item in evidence:
             if item["key"] is None:
-                diagnostics.append({"severity": "warning", "program": f"{executable}:{program}", "source": item["source"], "message": item["note"]})
+                severity = "info" if item["rule"] == "internal_helper" else "warning"
+                diagnostics.append({"severity": severity, "program": f"{executable}:{program}", "source": item["source"], "message": item["note"]})
                 continue
             evidence_by_key.setdefault(item["key"], []).append(item)
         for key in sorted(ui_keys):
@@ -539,11 +625,40 @@ def make_records(root: Path, registry: dict[tuple[str, str], set[str]], bindings
                 "evidence": key_evidence,
             })
         for key, items in sorted(evidence_by_key.items()):
-            severity = "warning" if key in bindings else "error"
+            rules = {item["rule"] for item in items}
+            intentional_reason = INTENTIONAL_NON_UI_DEFAULTS.get((executable, program, key))
+            if intentional_reason:
+                severity = "info"
+                message = f"intentional non-UI default: {intentional_reason}"
+            elif "missing_key" in rules:
+                if key not in bindings:
+                    severity = "error"
+                    message = "default rule has no parameter binding"
+                elif key in ui_keys_anywhere:
+                    severity = "warning"
+                    message = "default rule is not exposed by this UI program"
+                else:
+                    severity = "info"
+                    message = "default key is not represented in the UI registry"
+            elif "unresolved" in rules:
+                severity = "warning"
+                message = "unresolved command-line assignment requires manual audit"
+            elif rules == {"derived"}:
+                severity = "info"
+                message = "derived command setting is not a UI display default"
+            elif rules == {"shadowed"}:
+                severity = "info"
+                message = "missing-key fallback is shadowed by a forced command setting"
+            elif rules == {"runtime"}:
+                severity = "info"
+                message = "runtime command-line output is not a UI input"
+            else:
+                severity = "info"
+                message = "forced command setting is not a UI display default"
             diagnostics.append({
                 "severity": severity, "program": f"{executable}:{program}", "key": key,
                 "source": items[0]["source"],
-                "message": "default rule is not exposed by this UI program" if key in bindings else "default rule has no parameter binding",
+                "message": message,
             })
     return records, diagnostics
 
@@ -614,9 +729,9 @@ def normalize_ui_default(key: str, value: str, bindings: dict[str, dict], baseli
     return normalized
 
 
-def collect_program_overrides(root: Path, procedures: dict[str, Procedure], commander_methods: dict[str, str],
+def collect_program_overrides(root: Path, procedures: dict[str, list[Procedure]], commander_methods: dict[str, str],
                               constants: dict[str, str], bindings: dict[str, dict],
-                              baselines: dict[str, dict]) -> dict[tuple[str, str], dict[str, str]]:
+                              baselines: dict[str, dict], helper_procedures: dict[str, list[Procedure]]) -> dict[tuple[str, str], dict[str, str]]:
     """Collect only exact missing-key rules; unsupported routes stay absent."""
     result: dict[tuple[str, str], dict[str, str]] = {}
     for executable in ("simple_exec", "single_exec", "simple_stream"):
@@ -625,15 +740,18 @@ def collect_program_overrides(root: Path, procedures: dict[str, Procedure], comm
             routes = extract_stream_routes(root)
         else:
             routers, entry_rules = extract_entry_rules(root, executable, constants)
-            routes = extract_router_routes(root, procedures, routers, constants)
+            routes = extract_router_routes(root, procedures, executable, routers, constants)
         for program, candidates in routes.items():
             if len(candidates) != 1:
                 continue
             route = candidates[0]
             method_name = commander_methods.get(route["commander_type"] or "")
-            if not method_name or method_name not in procedures:
+            execute_method = resolve_execute_method(procedures, method_name)
+            if execute_method is None:
                 continue
-            evidence = list(entry_rules) + list(route["rules"]) + commander_rules(root, procedures[method_name], constants)
+            evidence = list(entry_rules) + list(route["rules"]) + commander_rules(
+                root, execute_method, constants, helper_procedures
+            )
             overrides: dict[str, str] = {}
             for rule in evidence:
                 if rule["rule"] == "missing_key" and rule["key"] and rule["value"] is not None:
@@ -709,14 +827,16 @@ def main() -> int:
     commander_paths = sorted((root / "src/main/commanders").rglob("*.f90"))
     exec_paths = sorted((root / "src/main/exec").rglob("*.f90"))
     stream_paths = sorted((root / "src/main/stream").rglob("*.f90"))
+    helper_paths = [root / "src/defs/simple_default_clines.f90"]
     parameter_paths = [root / "src/main/params/simple_parameters.f90", root / "src/main/params/simple_parameters_core.f90"]
     constants = extract_named_constants(parameter_paths + stream_paths)
     baselines = extract_parameter_defaults(root, constants)
     bindings = extract_parameter_bindings(root)
     procedures = extract_procedures(exec_paths + commander_paths + stream_paths)
+    helper_procedures = extract_procedures(helper_paths)
     commander_methods = extract_commander_methods(commander_paths + stream_paths)
     if args.output_fortran:
-        overrides = collect_program_overrides(root, procedures, commander_methods, constants, bindings, baselines)
+        overrides = collect_program_overrides(root, procedures, commander_methods, constants, bindings, baselines, helper_procedures)
         write_fortran_defaults(args.output_fortran, baselines, bindings, overrides)
         print(f"generated UI defaults: {len(baselines)} baselines, {len(overrides)} program override sets")
     audit_args = (args.ui_executable, args.output_json, args.output_markdown)
@@ -724,7 +844,9 @@ def main() -> int:
         parser.error("--ui-executable, --output-json, and --output-markdown must be supplied together")
     if all(audit_args):
         registry = load_ui_registry(args.ui_executable.resolve())
-        records, diagnostics = make_records(root, registry, bindings, baselines, procedures, commander_methods, constants)
+        records, diagnostics = make_records(
+            root, registry, bindings, baselines, procedures, helper_procedures, commander_methods, constants
+        )
         output = {
             "schema_version": 1,
             "scope": "simple_exec, single_exec, and simple_stream programs emitted by the Fortran UI registry",

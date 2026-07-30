@@ -7,7 +7,8 @@ logical(LK),intent(in),optional :: compact_reals
 logical(LK),intent(in),optional :: print_signs
   !! always print numeric sign (default is false)
 character(kind=CDK,len=*),intent(in),optional :: real_format
-  !! Real number format: 'E' [default], '*', 'G', 'EN', or 'ES'
+  !! Real number format: 'E' [default], '*', 'G', 'EN', or 'ES'. A complete
+  !! parenthesized Fortran format is also accepted for an explicit contract.
 integer(IK),intent(in),optional :: spaces_per_tab
   !! number of spaces per tab for indenting (default is 2)
 logical(LK),intent(in),optional :: strict_type_checking

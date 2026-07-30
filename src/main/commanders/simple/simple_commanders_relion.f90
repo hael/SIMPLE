@@ -19,10 +19,8 @@ contains
         type(sp_project)     :: spproj
         type(relion_project) :: relionproj
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('tiltgroups')   ) call cline%set('tiltgroups', 'no')
         if( .not. cline%defined('reliongroups') ) call cline%set('reliongroups', 'no')
         if( .not. cline%defined('tiltgroupmax') ) call cline%set('tiltgroupmax', '0')
-        if( .not. cline%defined('tiltcount')    ) call cline%set('tiltcount', '0')
         if( .not. cline%defined('xmlloc')       ) call cline%set('xmlloc', '')
         call params%new(cline)
         if( file_exists(params%projfile) )then

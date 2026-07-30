@@ -31,6 +31,18 @@ call assert_true(len_trim(param%placeholder%to_char()) <= UI_PLACEHOLDER_MAX_LEN
 call assert_true(param%has_default, 'optional numeric parameter has a default')
 call assert_int(0, size(param%choices), 'numeric parameter has no choices')
 
+call param%set_param('projfile', 'file', 'Project file', 'SIMPLE project file', 'e.g. any-file', .true., '')
+call assert_char('e.g. input.simple', param%placeholder%to_char(), &
+    &'project-file placeholder advertises the SIMPLE project format')
+
+call param%set_param('plaintexttab', 'file', 'Plain-text parameter table', 'Text parameters', 'e.g. any-file', .true., '')
+call assert_char('e.g. params.txt', param%placeholder%to_char(), &
+    &'plain-text table placeholder advertises a text file')
+
+call param%set_param('stktab', 'file', 'Stack table', 'List of image stacks', 'e.g. any-file', .true., '')
+call assert_char('e.g. stktab.txt', param%placeholder%to_char(), &
+    &'stack-table placeholder advertises a text file')
+
 call param%set_param('choice_param', 'multi', 'Choice parameter', 'Choice parameter help', &
     &'', .false., 'second', choices=ui_choices([character(len=6) :: 'first', 'second', 'third']))
 call assert_true(param%has_default, 'optional multi parameter has a default')
@@ -77,6 +89,10 @@ call assert_input_choice(ui_prg%parm_ios, 'binary_param', 'off')
 call ui_prg%add_input(UI_FILE, 'input_a', 'file', 'Input A', 'First input source', 'e.g. input-a.mrc', .false., '')
 call ui_prg%add_input(UI_FILE, 'input_b', 'file', 'Input B', 'Second input source', 'e.g. input-b.mrc', .false., '')
 call assert_input_visibility(ui_prg%file_ios, 'input_a', UI_VIS_ADVANCED)
+call assert_input_placeholder(ui_prg%file_ios, 'input_a', 'e.g. input-a.mrc')
+call param%set_param('table', 'file', 'Input table', 'Input table help', 'e.g. table.txt', .false., '')
+call ui_prg%add_input(UI_FILE, param, placeholder_override='e.g. context.csv')
+call assert_input_placeholder(ui_prg%file_ios, 'table', 'e.g. context.csv')
 call ui_prg%add_requirement('input_source', 'Input source', 'Supply exactly one input source.', &
     &[character(len=7) :: 'input_a', 'input_b'], max_selected=1)
 call assert_int(1, size(ui_prg%requirements), 'one requirement group is registered')
@@ -199,6 +215,32 @@ contains
         enddo
         call assert_int(1, 0, 'UI input exists')
     end subroutine assert_input_choice
+
+    subroutine assert_input_placeholder( inputs, key, expected_placeholder )
+        type(linked_list), intent(in) :: inputs
+        character(len=*),  intent(in) :: key, expected_placeholder
+        type(list_iterator)   :: iterator
+        class(*), allocatable :: value
+
+        iterator = inputs%begin()
+        do while( iterator%has_value() )
+            call iterator%getter(value)
+            select type( input => value )
+                type is( ui_program_input )
+                    if( input%param%key%to_char() == key )then
+                        call assert_char(expected_placeholder, input%param%placeholder%to_char(), &
+                            &'contextual input placeholder')
+                        if( allocated(value) ) deallocate(value)
+                        return
+                    endif
+                class default
+                    call assert_int(1, 0, 'UI input is a ui_program_input')
+            end select
+            if( allocated(value) ) deallocate(value)
+            call iterator%next()
+        enddo
+        call assert_int(1, 0, 'UI input placeholder exists')
+    end subroutine assert_input_placeholder
 
     subroutine assert_input_binding( inputs, key )
         type(linked_list), intent(in) :: inputs

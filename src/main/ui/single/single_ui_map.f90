@@ -15,15 +15,7 @@ contains
         call new_tsegmaps_core_finder(prgtab)
     end subroutine construct_single_map_programs
 
-    subroutine print_single_map_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('MAP ANALYSIS:', C_UNDERLINED)
-        write(logfhandle,'(A)') conv_atom_denoise%name%to_char()
-        write(logfhandle,'(A)') tsegmaps_core_finder%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_single_map_programs
-
-    subroutine new_conv_atom_denoise( prgtab )
+subroutine new_conv_atom_denoise( prgtab )
         class(ui_hash), intent(inout) :: prgtab           
         ! PROGRAM SPECIFICATION
         call conv_atom_denoise%new(&
@@ -37,6 +29,8 @@ contains
         call conv_atom_denoise%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
         & 'input volume e.g. vol.mrc', .true., '', &
         &visibility=UI_VIS_STANDARD)
+        call conv_atom_denoise%add_input(UI_IMG, outvol, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
         call conv_atom_denoise%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)

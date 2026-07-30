@@ -23,6 +23,7 @@ private
 #include "simple_local_flags.inc"
 
 character(len=26), parameter :: UI_FNAME = 'simple_ui.json'
+character(len=*),  parameter :: UI_JSON_REAL_FORMAT = '(ss,G0.6)'
 logical,           parameter :: DEBUG    = .false.
 type(ui_hash)                :: prgtab, tsttab
 type(string), allocatable    :: prgnames(:)
@@ -94,7 +95,7 @@ contains
                 select type( input => item )
                     type is( ui_program_input )
                         if( len_trim(input%param%placeholder%to_char()) > UI_PLACEHOLDER_MAX_LEN .or. &
-                            &.not. ui_placeholder_is_standard(input%param%keytype%to_char(), &
+                            &.not. ui_placeholder_is_standard(input%param%key%to_char(), input%param%keytype%to_char(), &
                             &input%param%placeholder%to_char()) )then
                             THROW_HARD('ui_param placeholder is not standardized: '//input%param%key%to_char())
                         endif
@@ -227,7 +228,7 @@ contains
         type(ui_program), pointer :: ptr2prg
         integer                   :: iprg
         ! JSON init
-        call json%initialize()
+        call json%initialize(real_format=UI_JSON_REAL_FORMAT)
         ! create object of program entries
         call json%create_object(all_programs, 'SIMPLE_UI')
         do iprg = 1, prgtab%count()
@@ -251,7 +252,7 @@ contains
         type(ui_program), pointer :: ptr2prg
         integer :: iprg
         ! JSON init
-        call json%initialize()
+        call json%initialize(real_format=UI_JSON_REAL_FORMAT)
         ! create array of program entries
         call json%create_array(all_programs, 'SIMPLE User Interface')
         do iprg = 1, prgtab%count()
@@ -274,7 +275,7 @@ contains
         type(json_value), pointer :: input, user_inputs, ui
         type(json_value), pointer :: processes, process, process_inputs
         ! JSON init
-        call json%initialize()
+        call json%initialize(real_format=UI_JSON_REAL_FORMAT)
         ! create object of program entries
         call json%create_object(ui, 'STREAM_UI')
         ! master inputs

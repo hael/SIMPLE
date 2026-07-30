@@ -21,18 +21,7 @@ contains
         call new_opt_lp(tsttab)
     end subroutine construct_test_optimize_programs
 
-    subroutine print_test_optimize_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('OPTIMIZE:', C_UNDERLINED)
-        write(logfhandle,'(A)') lbfgsb%name%to_char()
-        write(logfhandle,'(A)') lbfgsb_cosine%name%to_char()
-        write(logfhandle,'(A)') lplims%name%to_char()
-        write(logfhandle,'(A)') lpstages_test%name%to_char()
-        write(logfhandle,'(A)') opt_lp%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_optimize_programs
-
-    subroutine new_lbfgsb( tsttab )
+subroutine new_lbfgsb( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call lbfgsb%new(&

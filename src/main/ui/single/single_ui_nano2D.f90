@@ -19,25 +19,15 @@ contains
         call new_estimate_diam(prgtab)
     end subroutine construct_single_nano2D_programs
 
-    subroutine print_single_nano2D_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('2D ANALYSIS:', C_UNDERLINED)
-        write(logfhandle,'(A)') analysis2D_nano%name%to_char()
-        write(logfhandle,'(A)') center2D_nano%name%to_char()
-        write(logfhandle,'(A)') cluster2D_nano%name%to_char()
-        write(logfhandle,'(A)') estimate_diam%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_single_nano2D_programs
-
-    subroutine new_analysis2D_nano( prgtab )
+subroutine new_analysis2D_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call analysis2D_nano%new(&
         &'analysis2D_nano', &                                         ! name
-        &'2D analysis (centering, diameter estimation & clustering) for nanocrystal time-series',& ! summary
+        &'Center, size, and cluster nanoparticle images across a time series',& ! summary
         &'is a program for 2D analysis for nanycrystal time-series',& ! descr long
         &'single_exec',&                                              ! executable
-        &.true., visibility=UI_VIS_STANDARD)                                ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Analyze Nanoparticle Time Series') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -82,6 +72,10 @@ contains
         ! search controls
         call center2D_nano%add_input(UI_SRCH, ncls, required_override=.true., &
         &visibility=UI_VIS_STANDARD)
+        call center2D_nano%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', &
+        &'Center class averages by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call center2D_nano%add_input(UI_SRCH, trs, &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
@@ -102,10 +96,10 @@ contains
         ! PROGRAM SPECIFICATION
         call cluster2D_nano%new(&
         &'cluster2D_nano',&                                                                 ! name
-        &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! summary
+        &'Align and cluster nanoparticle images across a time series',&                    ! summary
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! help
         &'single_exec',&                                                                    ! executable
-        &.true., visibility=UI_VIS_STANDARD)                                                      ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Cluster Nanoparticle Time Series') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -180,9 +174,14 @@ contains
         ! filter controls
         call estimate_diam%add_input(UI_FILT, lp, label_override='low-pass limit in Angstroms{7.}', &
         &visibility=UI_VIS_ADVANCED)
+        call estimate_diam%add_input(UI_FILT, 'amsklp', 'num', 'Automask low-pass limit', &
+        &'Low-pass limit for automask generation; set 0 to follow the selected low-pass limit', &
+        &'low-pass limit in Angstroms (0=lp)', .false., 0., visibility=UI_VIS_ADVANCED, preserve_default=.true.)
         ! mask controls
         call estimate_diam%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)
+        call estimate_diam%add_input(UI_MASK, automsk, &
+        &visibility=UI_VIS_ADVANCED)
         ! computer controls
         call estimate_diam%add_input(UI_COMP, nthr, &
         &visibility=UI_VIS_STANDARD)

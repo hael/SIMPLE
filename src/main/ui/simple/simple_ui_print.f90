@@ -21,31 +21,20 @@ contains
         call new_print_magic_boxes(prgtab)
     end subroutine construct_print_programs
 
-    subroutine print_print_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('PRINT INFO:', C_UNDERLINED)
-        write(logfhandle,'(A)') info_image%name%to_char()
-        write(logfhandle,'(A)') info_stktab%name%to_char()
-        write(logfhandle,'(A)') print_dose_weights%name%to_char()
-        write(logfhandle,'(A)') print_fsc%name%to_char()
-        write(logfhandle,'(A)') print_magic_boxes%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_print_programs
-
-    subroutine new_info_image( prgtab ) 
+subroutine new_info_image( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call info_image%new(&
         &'info_image', &                                                                       ! name
-        &'Print header metadata for an MRC or SPIDER image file',& ! summary
+        &'Display header metadata for an MRC or SPIDER image file',& ! summary
         &'is a program for printing header information in MRC and SPIDER stacks and volumes',& ! help
         &'simple_exec',&                                                                       ! executable
         &.false., &
-        &visibility=UI_VIS_STANDARD)                                                                              ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Inspect Image Metadata') ! requires sp_project
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call info_image%add_input(UI_FILE, 'fname', 'file', 'Name of image file', 'Name of image file', 'xxx.mrc file', .true., '', &
+        call info_image%add_input(UI_FILE, 'fname', 'file', 'Name of image file', 'Name of image file', 'e.g. image.mrc', .true., '', &
         &visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call info_image%add_input(UI_PARM, 'stats', 'binary', 'Output statistics', 'Output statistics(yes|no){no}','', .false., 'no', &
@@ -73,11 +62,11 @@ contains
         ! PROGRAM SPECIFICATION
         call info_stktab%new(&
         &'info_stktab', &                                                        ! name
-        &'Print the contents of a stack-table file',& ! summary
+        &'Display the particle-stack entries listed in a stack-table file',& ! summary
         &'is a program for printing information about stktab (list of stacks)',& ! help
         &'simple_exec',&                                                         ! executable
         &.false., &
-        &visibility=UI_VIS_STANDARD)                                                                ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Inspect Stack Table') ! requires sp_project
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output

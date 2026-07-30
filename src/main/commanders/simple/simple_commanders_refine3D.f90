@@ -602,7 +602,11 @@ contains
         if( .not. cline%defined('prob_inpl')       ) call cline%set('prob_inpl',        'yes')
         if( .not. cline%defined('prob_neigh_mode') ) call cline%set('prob_neigh_mode', 'geom')
         call validate_refine3D_multi_prob_neigh_mode()
-        if( .not. cline%defined('nsample')     ) call cline%set('nsample', default_refine3D_multi_nsample())
+        if( .not. cline%defined('nsample') )then
+            call cline%set('nsample', default_refine3D_multi_nsample())
+        else if( cline%get_iarg('nsample') <= 0 )then
+            call cline%set('nsample', default_refine3D_multi_nsample())
+        endif
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',            'yes')
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',               'yes')
         if( .not. cline%defined('lpstop')      ) call cline%set('lpstop',  LPSTOP_REFINE3D_MULTI)
@@ -1280,7 +1284,7 @@ contains
         ! local defaults (kept consistent with previous distributed master)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call cline%set('oritype', 'ptcl3D')
         call cline%set('prg', 'refine3D')
         ! Select execution strategy (shared-memory vs distributed master)
         strategy = create_refine3D_strategy(cline)

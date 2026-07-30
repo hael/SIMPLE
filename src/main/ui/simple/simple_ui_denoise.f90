@@ -29,22 +29,7 @@ contains
         call new_ppca_volvar(prgtab)
     end subroutine construct_denoise_programs
 
-    subroutine print_denoise_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('DENOISING:', C_UNDERLINED)
-        write(logfhandle,'(A)') icm2D%name%to_char()
-        write(logfhandle,'(A)') icm3D%name%to_char()
-        write(logfhandle,'(A)') ppca_denoise%name%to_char()
-        write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
-        write(logfhandle,'(A)') cls_split%name%to_char()
-        write(logfhandle,'(A)') denoise_project%name%to_char()
-        write(logfhandle,'(A)') map_params_from_den%name%to_char()
-        write(logfhandle,'(A)') flex_analysis%name%to_char()
-        write(logfhandle,'(A)') ppca_volvar%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_denoise_programs
-
-    subroutine new_icm2D( prgtab )
+subroutine new_icm2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call icm2D%new(&
@@ -253,6 +238,8 @@ contains
         ! image input/output
         call ppca_volvar%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume for creating 2D central sections', 'input volume e.g. vol.mrc', .true., 'vol1.mrc', &
         &visibility=UI_VIS_STANDARD)
+        call ppca_volvar%add_input(UI_IMG, outstk, &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
         call ppca_volvar%add_input(UI_PARM, smpd, &
         &visibility=UI_VIS_STANDARD)
@@ -420,11 +407,11 @@ contains
         class(ui_hash), intent(inout) :: prgtab
         call flex_analysis%new(&
         &'flex_analysis',&
-        &'Diffusion-manifold representative 3D states',&
+        &'Identify representative 3D states from conformational variability',&
         &'builds a sparse diffusion map, selects k-medoids, fits a coupled projection-aware residual basis, and synthesizes Nyström 3D pre-images around the fixed mean',&
         &'simple_exec',&
         &.true., &
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Analyze Conformational Variability')
         call flex_analysis%add_input(UI_IMG, 'vol1', 'file', &
             'Mean volume', 'Fixed mean volume used by the projection-aware residual model', &
             'input volume e.g. vol1.mrc', .true., '', &
@@ -484,7 +471,7 @@ contains
         call flex_analysis%add_input(UI_FILE, 'outfile', 'file', &
             'Discrete-state project', &
             'Output project whose selected ptcl3D rows receive hard k-medoids state labels; only used when preimage_mode=discrete', &
-            'output project e.g. flex_cluster_states.simple', .false., 'flex_cluster_states.simple', &
+            'e.g. flex_cluster_states.simple', .false., 'flex_cluster_states.simple', &
         &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, lp, required_override=.false., &
             placeholder_override='Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered', &

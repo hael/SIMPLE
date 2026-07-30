@@ -29,22 +29,7 @@ contains
         call new_sp_project(tsttab)
     end subroutine construct_test_stats_programs
 
-    subroutine print_test_stats_programs( logfhandle )
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('STATISTICS:', C_UNDERLINED)
-        write(logfhandle,'(A)') class_sample_test%name%to_char()
-        write(logfhandle,'(A)') clustering%name%to_char()
-        write(logfhandle,'(A)') ctf_test%name%to_char()
-        write(logfhandle,'(A)') eo_diff%name%to_char()
-        write(logfhandle,'(A)') extr_frac%name%to_char()
-        write(logfhandle,'(A)') multinomal_test%name%to_char()
-        write(logfhandle,'(A)') pca_all%name%to_char()
-        write(logfhandle,'(A)') pca_imgvar%name%to_char()
-        write(logfhandle,'(A)') sp_project%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_stats_programs
-
-    subroutine new_class_sample_test( tsttab )
+subroutine new_class_sample_test( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call class_sample_test%new(&

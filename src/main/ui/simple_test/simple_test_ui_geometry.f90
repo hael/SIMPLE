@@ -23,19 +23,7 @@ contains
         call new_uniform_rot(tsttab)
     end subroutine construct_test_geometry_programs
 
-    subroutine print_test_geometry_programs( logfhandle )
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('GEOMETRY:', C_UNDERLINED)
-        write(logfhandle,'(A)') angres%name%to_char()
-        write(logfhandle,'(A)') ori_test%name%to_char()
-        write(logfhandle,'(A)') oris_test%name%to_char()
-        write(logfhandle,'(A)') sym_test%name%to_char()
-        write(logfhandle,'(A)') uniform_euler%name%to_char()
-        write(logfhandle,'(A)') uniform_rot%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_geometry_programs
-
-    subroutine new_angres( tsttab )
+subroutine new_angres( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call angres%new(&

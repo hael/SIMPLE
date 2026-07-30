@@ -25,20 +25,7 @@ contains
         call new_trajectory_swap_stack(prgtab)
     end subroutine construct_single_trajectory_programs
 
-    subroutine print_single_trajectory_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('TRAJECTORY ANALYSIS:', C_UNDERLINED)
-        write(logfhandle,'(A)') extract_substk%name%to_char()
-        write(logfhandle,'(A)') graphene_subtr%name%to_char()
-        write(logfhandle,'(A)') import_trajectory%name%to_char()
-        write(logfhandle,'(A)') trajectory_denoise%name%to_char()
-        write(logfhandle,'(A)') trajectory_make_projavgs%name%to_char()
-        write(logfhandle,'(A)') trajectory_reconstruct3D%name%to_char()
-        write(logfhandle,'(A)') trajectory_swap_stack%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_single_trajectory_programs
-
-    subroutine new_extract_substk( prgtab )
+subroutine new_extract_substk( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call extract_substk%new(&
@@ -78,10 +65,10 @@ contains
         ! PROGRAM SPECIFICATION
         call graphene_subtr%new(&
         &'graphene_subtr',&                                  ! name
-        &'Removes graphene Fourier peaks in time-series',&   ! summary
+        &'Suppress graphene Fourier peaks in nanoparticle time-series images',& ! summary
         &'Removes graphene Fourier peaks in time-series',&   ! help
         &'single_exec',&                                     ! executable
-        &.false., visibility=UI_VIS_STANDARD)                      ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD, display_name='Remove Graphene Signal') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call graphene_subtr%add_input(UI_IMG, stk_traj, &
@@ -114,10 +101,10 @@ contains
         ! PROGRAM SPECIFICATION
         call import_trajectory%new(&
         &'import_trajectory',&                    ! name
-        &'Imports time-series particles stack',&            ! summary
+        &'Import particle-image time-series data for trajectory analysis',& ! summary
         &'is a workflow for importing time-series data',&   ! help
         &'single_exec',&                                    ! executable
-        &.true., visibility=UI_VIS_STANDARD)                      ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Import Particle Time Series') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call import_trajectory%add_input(UI_IMG, stk, required_override=.true., &
@@ -146,10 +133,10 @@ contains
         ! PROGRAM SPECIFICATION
         call trajectory_denoise%new(&
         &'trajectory_denoise',&                                       ! name
-        &'diffusion-map trajectory denoising',&                       ! summary
+        &'Denoise time-series particle images with diffusion-map analysis',& ! summary
         &'is a program for diffusion-map denoising of an image stack',& ! help
         &'single_exec',&                                              ! executable
-        &.false., visibility=UI_VIS_STANDARD)                               ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD, display_name='Denoise Particle Trajectories') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call trajectory_denoise%add_input(UI_IMG, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '', &
@@ -247,6 +234,9 @@ contains
         call trajectory_reconstruct3D%add_input(UI_IMG, 'vol1', 'file', 'Mean volume for latent chunking', &
         &'Mean volume used by flex_analysis when chunk_mode=latent', 'input mean volume e.g. vol.mrc', .false., '', &
         &visibility=UI_VIS_DEVELOPER)
+        call trajectory_reconstruct3D%add_input(UI_IMG, outvol, required_override=.false., &
+        &activation=ui_activation_equals_any('chunk_mode', [character(len=6) :: 'latent']), &
+        &visibility=UI_VIS_DEVELOPER)
         ! parameter input/output
         call trajectory_reconstruct3D%add_input(UI_PARM, 'stepsz',  'num', 'Time window size (# frames){500}', 'Time window size (# frames) for windowed 3D rec{500}', 'give # frames',  .false., 500., &
         &visibility=UI_VIS_DEVELOPER)
@@ -290,7 +280,20 @@ contains
         call trajectory_reconstruct3D%add_input(UI_SRCH, 'neigs', 'num', 'Flex latent dimensions', &
         &'Maximum flex_analysis latent dimensions used for chunking{20}', '# modes', .false., 20., &
         &visibility=UI_VIS_DEVELOPER)
+        call trajectory_reconstruct3D%add_input(UI_SRCH, 'k_nn', 'num', 'Nearest neighbors', &
+        &'Registered-residual neighbors retained per particle for latent chunking', '# neighbors{100}', .false., 100., &
+        &activation=ui_activation_equals_any('chunk_mode', [character(len=6) :: 'latent']), &
+        &visibility=UI_VIS_DEVELOPER)
+        call trajectory_reconstruct3D%add_input(UI_SRCH, 'nang_nbrs', 'num', 'Angular candidate cap', &
+        &'Maximum orientation-gated candidate particles compared per particle for latent chunking', '# candidates{1000}', .false., 1000., &
+        &activation=ui_activation_equals_any('chunk_mode', [character(len=6) :: 'latent']), &
+        &visibility=UI_VIS_DEVELOPER)
+        call trajectory_reconstruct3D%add_input(UI_SRCH, nstates, required_override=.false., &
+        &activation=ui_activation_equals_any('chunk_mode', [character(len=6) :: 'latent']), &
+        &visibility=UI_VIS_DEVELOPER)
         call trajectory_reconstruct3D%add_input(UI_SRCH, maxits, required_override=.false., &
+        &visibility=UI_VIS_DEVELOPER)
+        call trajectory_reconstruct3D%add_input(UI_SRCH, trs, &
         &visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call trajectory_reconstruct3D%add_input(UI_FILT, lp, required_override=.false., &

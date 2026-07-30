@@ -17,16 +17,7 @@ contains
         call new_strategy2D(tsttab)
     end subroutine construct_test_class_programs
 
-    subroutine print_test_class_programs( logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('CLASS:', C_UNDERLINED)
-        write(logfhandle,'(A)') strategy2D%name%to_char()
-        write(logfhandle,'(A)') ui_hash_test%name%to_char()
-        write(logfhandle,'(A)') units%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_class_programs
-
-    subroutine new_strategy2D( tsttab )
+subroutine new_strategy2D( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call strategy2D%new(&

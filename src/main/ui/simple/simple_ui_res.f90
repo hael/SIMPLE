@@ -15,15 +15,7 @@ contains
         call new_fsc_area_score(prgtab)
     end subroutine construct_res_programs
 
-    subroutine print_res_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('RESOLUTION ESTIMATION:', C_UNDERLINED)
-        write(logfhandle,'(A)') fsc%name%to_char()
-        write(logfhandle,'(A)') fsc_area_score%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_res_programs
-
-    subroutine new_fsc( prgtab )
+subroutine new_fsc( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call fsc%new(&

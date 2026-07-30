@@ -27,21 +27,7 @@ contains
         call new_rotate_ref(tsttab)
     end subroutine construct_test_fft_programs
 
-    subroutine print_test_fft_programs( logfhandle )
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('FFT:', C_UNDERLINED)
-        write(logfhandle,'(A)') corrs2weights_test%name%to_char()
-        write(logfhandle,'(A)') eval_polarftcc%name%to_char()
-        write(logfhandle,'(A)') ft_expanded%name%to_char()
-        write(logfhandle,'(A)') gencorrs_fft%name%to_char()
-        write(logfhandle,'(A)') order_corr%name%to_char()
-        write(logfhandle,'(A)') phasecorr%name%to_char()
-        write(logfhandle,'(A)') rank_weights%name%to_char()
-        write(logfhandle,'(A)') rotate_ref%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_fft_programs
-
-    subroutine new_corrs2weights_test( tsttab )
+subroutine new_corrs2weights_test( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call corrs2weights_test%new(&

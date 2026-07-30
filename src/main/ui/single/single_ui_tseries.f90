@@ -23,27 +23,15 @@ contains
         call new_tseries_extractor(prgtab)
     end subroutine construct_single_tseries_programs
 
-    subroutine print_single_tseries_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('TIME-SERIES PRE-PROCESSING:', C_UNDERLINED)
-        write(logfhandle,'(A)') track_particles%name%to_char()
-        write(logfhandle,'(A)') tseries_import%name%to_char()
-        write(logfhandle,'(A)') tseries_make_pickavg%name%to_char()
-        write(logfhandle,'(A)') tseries_motion_correct%name%to_char()
-        write(logfhandle,'(A)') tseries_prep4tracking%name%to_char()
-        write(logfhandle,'(A)') tseries_extractor%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_single_tseries_programs
-
-    subroutine new_track_particles( prgtab )
+subroutine new_track_particles( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call track_particles%new(&
         &'track_particles',&                                                     ! name
-        &'Track particles in time-series',&                                      ! summary
+        &'Track particle positions through a nanoparticle time series',&         ! summary
         &'is a distributed workflow for particle tracking in time-series data',& ! help
         &'single_exec',&                                                         ! executable
-        &.true., visibility=UI_VIS_STANDARD)                                           ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Track Particles') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -101,10 +89,10 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_import%new(&
         &'tseries_import',&                                 ! name
-        &'Import nanoparticle time-series data into a SIMPLE project',& ! summary
+        &'Add nanoparticle time-series data to a SIMPLE project',&       ! summary
         &'is a workflow for importing time-series data',&   ! help
         &'single_exec',&                                    ! executable
-        &.true., visibility=UI_VIS_STANDARD)                      ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Import Nanoparticle Time Series') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_import%add_input(UI_FILE, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '', &
@@ -137,11 +125,11 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_make_pickavg%new(&
         &'tseries_make_pickavg',&                                                        ! name
-        &'Align & average the first few frames of the time-series',&                     ! summary
+        &'Align and average early time-series frames for particle identification',&       ! summary
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! help
         &'single_exec',&                                                                 ! executable
-        &.true., visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Create Time-series Picking Average') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -188,10 +176,10 @@ contains
         ! PROGRAM SPECIFICATION
         call tseries_motion_correct%new(&
         &'tseries_motion_correct', &                                                                               ! name
-        &'Anisotropic motion correction of time-series of nanoparticles',&                                         ! summary
+        &'Correct anisotropic motion in nanoparticle time-series movies',&                                        ! summary
         &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.',& ! help
         &'single_exec',&                                                                                           ! executable
-        &.true., visibility=UI_VIS_STANDARD)                                                                             ! requires sp_project
+        &.true., visibility=UI_VIS_STANDARD, display_name='Correct Time-series Motion') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -278,10 +266,15 @@ contains
         ! <empty>
         ! parameter input/output
         call tseries_extractor%add_input(UI_FILE, 'infile', 'file', 'Selected particle trajectory', 'Text file (.txt) containing particle coordinates per frame',&
-        &'give .txt trajectory file', .true., '', &
+        &'e.g. trajectory.txt', .true., '', &
         &visibility=UI_VIS_STANDARD)
         call tseries_extractor%add_input(UI_PARM, box_extract, required_override=.true., &
         &visibility=UI_VIS_STANDARD)
+        call tseries_extractor%add_input(UI_PARM, neg, &
+        &visibility=UI_VIS_ADVANCED)
+        call tseries_extractor%add_input(UI_PARM, 'fbody', 'string', 'Output file body', &
+        &'File body for extracted trajectory outputs', 'file body{trajectory}', .false., 'trajectory', &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

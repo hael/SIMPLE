@@ -669,7 +669,7 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp', 20.)
         if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
+        call cline%set('oritype', 'cls3D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         call build%vol%read(params%vols(1))
         ! center volume

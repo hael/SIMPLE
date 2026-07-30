@@ -93,7 +93,7 @@ contains
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10)
         if( .not. cline%defined('overlap')        ) call cline%set('overlap',      0.98)
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',      0.9)
-        if( .not. cline%defined('objfun')         ) call cline%set('objfun',       'cc') ! needs to be here to avoid ERROR! file sigma2_it_10.star does not exist; simple_fileio.f90; line:   932
+        call cline%set('objfun', 'cc') ! avoids a missing sigma2_it_10.star file
         if( .not. cline%defined('trail_rec')      ) call cline%set('trail_rec',   'yes') 
         if( .not. cline%defined('ufrac_trec')     ) call cline%set('ufrac_trec',    0.5)
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
@@ -293,10 +293,10 @@ contains
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',          0.5)
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',           30)
         if( .not. cline%defined('refine')         ) call cline%set('refine',      'neigh')
-        if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl3D')
+        call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.0)
-        if( .not. cline%defined('objfun')         ) call cline%set('objfun',         'cc') ! best objfun for this kind of data
-        if( .not. cline%defined('ml_reg')         ) call cline%set('ml_reg',         'no') ! ml_reg=yes -> too few atoms 
+        call cline%set('objfun', 'cc') ! best objfun for this kind of data
+        call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms
         if( .not. cline%defined('sigma_est')      ) call cline%set('sigma_est',  'global') ! only sensible option for this kind of data
         if( .not. cline%defined('icm')            ) call cline%set('icm',           'yes') ! ICM regualrization works 
         if( .not. cline%defined('lambda')         ) call cline%set('lambda',          0.1) ! this is an empirically determined regularization parameter
@@ -328,9 +328,9 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
         if( .not. cline%defined('stepsz')  ) call cline%set('stepsz',      500.)
-        if( .not. cline%defined('objfun')  ) call cline%set('objfun',      'cc') ! best objfun
-        if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg',      'no') ! ml_reg=yes -> too few atoms 
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call cline%set('objfun', 'cc') ! best objfun
+        call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms
+        call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('chunk_mode') ) call cline%set('chunk_mode', 'balanced')
         chunk_mode_arg = cline%get_carg('chunk_mode')
         select case(chunk_mode_arg%to_char())

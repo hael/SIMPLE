@@ -19,17 +19,7 @@ contains
         call new_socket_server(tsttab)
     end subroutine construct_test_network_programs
 
-    subroutine print_test_network_programs( logfhandle )
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('NETWORK:', C_UNDERLINED)
-        write(logfhandle,'(A)') socket_client%name%to_char()
-        write(logfhandle,'(A)') socket_comm_distr%name%to_char()
-        write(logfhandle,'(A)') socket_io%name%to_char()
-        write(logfhandle,'(A)') socket_server%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_network_programs
-
-    subroutine new_socket_client( tsttab )
+subroutine new_socket_client( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call socket_client%new(&

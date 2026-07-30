@@ -19,17 +19,7 @@ contains
         call new_simd(tsttab)
     end subroutine construct_test_parallel_programs
 
-    subroutine print_test_parallel_programs( logfhandle )
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('PARALLEL:', C_UNDERLINED)
-        write(logfhandle,'(A)') coarrays%name%to_char()
-        write(logfhandle,'(A)') openacc%name%to_char()
-        write(logfhandle,'(A)') openmp%name%to_char()
-        write(logfhandle,'(A)') simd%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_parallel_programs
-
-    subroutine new_coarrays( tsttab )
+subroutine new_coarrays( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call coarrays%new(&

@@ -17,16 +17,7 @@ contains
         call new_model_validate(prgtab)
     end subroutine construct_validate_programs
 
-    subroutine print_validate_programs( logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('VALIDATION:', C_UNDERLINED)
-        write(logfhandle,'(A)') check_refpick%name%to_char()
-        write(logfhandle,'(A)') mini_stream%name%to_char()
-        write(logfhandle,'(A)') model_validate%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_validate_programs
-
-    subroutine new_check_refpick( prgtab )
+subroutine new_check_refpick( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call check_refpick%new(&
@@ -54,6 +45,10 @@ contains
         &visibility=UI_VIS_DEVELOPER)
         call check_refpick%add_input(UI_PARM, fit_phshift, &
         &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_PARM, pspecsz, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_PARM, ctfpatch, &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -62,6 +57,10 @@ contains
         call check_refpick%add_input(UI_SRCH, pick_roi, &
         &visibility=UI_VIS_DEVELOPER)
         call check_refpick%add_input(UI_SRCH, particle_density, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_SRCH, dfmin, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_SRCH, dfmax, &
         &visibility=UI_VIS_DEVELOPER)
         call check_refpick%add_input(UI_SRCH, nboxes_max, &
         &visibility=UI_VIS_DEVELOPER)
@@ -72,7 +71,10 @@ contains
         call check_refpick%add_input(UI_SRCH, phshift_step, &
         &visibility=UI_VIS_DEVELOPER)
         ! filter controls
-        ! <empty>
+        call check_refpick%add_input(UI_FILT, hp, &
+        &visibility=UI_VIS_DEVELOPER)
+        call check_refpick%add_input(UI_FILT, lp, &
+        &visibility=UI_VIS_DEVELOPER)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -111,11 +113,21 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call mini_stream%add_input(UI_PARM, fit_phshift, &
         &visibility=UI_VIS_ADVANCED)
+        call mini_stream%add_input(UI_PARM, pspecsz, &
+        &visibility=UI_VIS_DEVELOPER)
+        call mini_stream%add_input(UI_PARM, ctfpatch, &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         call mini_stream%add_input(UI_SRCH, 'nptcls_per_cls','num',   'Number of particles per class', 'Number of particles per class{200}', '# particles per class{200}', .false., 200., &
         &visibility=UI_VIS_ADVANCED)
+        call mini_stream%add_input(UI_SRCH, pick_roi, &
+        &visibility=UI_VIS_DEVELOPER)
+        call mini_stream%add_input(UI_SRCH, dfmin, &
+        &visibility=UI_VIS_DEVELOPER)
+        call mini_stream%add_input(UI_SRCH, dfmax, &
+        &visibility=UI_VIS_DEVELOPER)
         call mini_stream%add_input(UI_SRCH, phshift_min, &
         &visibility=UI_VIS_ADVANCED)
         call mini_stream%add_input(UI_SRCH, phshift_max, &
@@ -123,7 +135,10 @@ contains
         call mini_stream%add_input(UI_SRCH, phshift_step, &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        ! <empty>
+        call mini_stream%add_input(UI_FILT, hp, &
+        &visibility=UI_VIS_DEVELOPER)
+        call mini_stream%add_input(UI_FILT, lp, &
+        &visibility=UI_VIS_DEVELOPER)
         ! mask controls
         ! <empty>
         ! computer controls

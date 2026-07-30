@@ -25,20 +25,7 @@ contains
         call new_sieve_cavgs(prgtab)
     end subroutine construct_stream_programs
 
-    subroutine print_stream_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('STREAM WORKFLOWS:', C_UNDERLINED)
-        write(logfhandle,'(A)') abinitio2D_stream%name%to_char()
-        write(logfhandle,'(A)') assign_optics%name%to_char()
-        write(logfhandle,'(A)') gen_pickrefs%name%to_char()
-        write(logfhandle,'(A)') master%name%to_char()
-        write(logfhandle,'(A)') pick_extract%name%to_char()
-        write(logfhandle,'(A)') preproc%name%to_char()
-        write(logfhandle,'(A)') sieve_cavgs%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_stream_programs
-
-    subroutine new_abinitio2D_stream( prgtab )
+subroutine new_abinitio2D_stream( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call abinitio2D_stream%new(&
@@ -63,6 +50,10 @@ contains
         call abinitio2D_stream%add_input(UI_SRCH, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200., group="cluster 2D",&
         &visibility=UI_VIS_STANDARD)
+        call abinitio2D_stream%add_input(UI_SRCH, 'center', 'binary', 'Center class averages', &
+        &'Center class averages by their center of gravity and map shifts back to the particles(yes|no){yes}', '', .false., 'yes', group="cluster 2D", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         ! <empty>
         ! mask controls
@@ -127,17 +118,30 @@ contains
         call gen_pickrefs%add_input(UI_PARM, 'nmics', 'num', 'Number of micrographs to import',&
         &'Number of micrographs to import for opening 2D', 'Number micrographs', .false., 100., &
         &visibility=UI_VIS_ADVANCED)
+        call gen_pickrefs%add_input(UI_SRCH, nptcls_per_cls, group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
         call gen_pickrefs%add_input(UI_FILE, 'optics_dir', 'dir', 'Target directory for optics import',&
         &'Directory where assign_optics application is running', 'e.g. optics_assignment', .false., '', &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
-        ! <empty>
+        call gen_pickrefs%add_input(UI_SRCH, pick_roi, group="picking", &
+        &visibility=UI_VIS_DEVELOPER)
         ! filter controls
-        ! <empty>
+        call gen_pickrefs%add_input(UI_FILT, 'amsklp', 'num', 'Automask low-pass limit', &
+        &'Low-pass limit used before opening-2D automask generation', 'low-pass limit in Angstroms{20}', .false., 20., group="picking", &
+        &visibility=UI_VIS_DEVELOPER)
         ! mask controls
-        ! <empty>
+        call gen_pickrefs%add_input(UI_MASK, 'ngrow', 'num', 'Automask growth layers', &
+        &'Number of binary-image layers grown during opening-2D automasking', '# layers{3}', .false., 3., group="picking", &
+        &visibility=UI_VIS_DEVELOPER)
+        call gen_pickrefs%add_input(UI_MASK, 'winsz', 'num', 'Automask window size', &
+        &'Window size used during opening-2D automask estimation', 'window size{5}', .false., 5., group="picking", &
+        &visibility=UI_VIS_DEVELOPER)
+        call gen_pickrefs%add_input(UI_MASK, 'edge', 'num', 'Automask soft edge', &
+        &'Cosine edge width used to soften the opening-2D automask', '# pixels{6}', .false., 6., group="picking", &
+        &visibility=UI_VIS_DEVELOPER)
         ! computer controls
         call gen_pickrefs%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
         ! add to ui_hash
@@ -201,12 +205,12 @@ contains
         ! PROGRAM SPECIFICATION
         call pick_extract%new(&
         &'pick_extract', &                                                               ! name
-        &'Preprocessing in streaming mode',&                                             ! summary
+        &'Pick particles and extract images as new microscope data arrive',&             ! summary
         &'is a distributed workflow that executes picking and extraction'//&             ! help
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                               ! executable
         &.true.,&                                                                        ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Pick and Extract During Acquisition')
         ! image input/output
         call pick_extract%add_input(UI_IMG, pickrefs, group="picking", visibility=UI_VIS_STANDARD)
         call pick_extract%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
@@ -227,10 +231,17 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call pick_extract%add_input(UI_PARM, moldiam_max, group="picking", &
         &visibility=UI_VIS_ADVANCED)
+        call pick_extract%add_input(UI_PARM, backgr_subtr, group="picking", &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         call pick_extract%add_input(UI_SRCH, pgrp, required_override=.false., group="picking", visibility=UI_VIS_STANDARD)
+        call pick_extract%add_input(UI_SRCH, pick_roi, group="picking", &
+        &visibility=UI_VIS_DEVELOPER)
+        call pick_extract%add_input(UI_SRCH, 'thres', 'num', 'Peak-picking distance threshold', &
+        &'Distance threshold in Angstroms for peak picking; 0 uses the picker default', 'distance threshold{0}', .false., 0., group="picking", &
+        &visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call pick_extract%add_input(UI_FILT, lp_pick,          group="picking", &
         &visibility=UI_VIS_ADVANCED)
@@ -284,7 +295,19 @@ contains
         call preproc%add_input(UI_PARM, fraca, required_override=.true., group="data",              visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, smpd,  required_override=.true., group="data",              visibility=UI_VIS_STANDARD)
         call preproc%add_input(UI_PARM, fit_phshift, group="CTF estimation", visibility=UI_VIS_STANDARD)
+        call preproc%add_input(UI_PARM, pspecsz, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_PARM, ctfpatch, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, flipgain, group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_PARM, algorithm, group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_PARM, mcconvention, group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_PARM, mcpatch, group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_PARM, mcpatch_thres, group="motion correction", &
         &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_PARM, 'ninipick', 'num', 'Number of micrographs to perform initial picking preprocessing on',&
         & 'Number of micrographs to perform initial picking preprocessing on', 'e.g 500', .false., 0.0, &
@@ -292,6 +315,8 @@ contains
         ! <no additional inputs>
         ! <empty>
         ! search controls
+        call preproc%add_input(UI_SRCH, trs_mc, group="motion correction", &
+        &visibility=UI_VIS_ADVANCED)
         call preproc%add_input(UI_SRCH, dfmin, group="CTF estimation", &
         &visibility=UI_VIS_DEVELOPER)
         call preproc%add_input(UI_SRCH, dfmax, group="CTF estimation", &
@@ -310,7 +335,22 @@ contains
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_DEVELOPER)
         ! filter controls
-        ! <empty>
+        call preproc%add_input(UI_FILT, 'lpstart', 'num', 'Motion-correction low-pass start', &
+        &'Starting low-pass limit for motion correction', 'low-pass limit in Angstroms{8}', .false., 8., group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_FILT, 'lpstop', 'num', 'Motion-correction low-pass stop', &
+        &'Final low-pass limit for motion correction', 'low-pass limit in Angstroms{5}', .false., 5., group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_FILT, bfac, group="motion correction", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_FILT, 'hp_ctf_estimate', 'num', 'CTF estimation high-pass limit', &
+        &'High-pass limit for CTF parameter estimation', 'high-pass limit in Angstroms{30}', .false., 30., group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_FILT, 'lp_ctf_estimate', 'num', 'CTF estimation low-pass limit', &
+        &'Low-pass limit for CTF parameter estimation', 'low-pass limit in Angstroms{5}', .false., 5., group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
+        call preproc%add_input(UI_FILT, ctfresthreshold, group="CTF estimation", &
+        &visibility=UI_VIS_DEVELOPER)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -328,12 +368,12 @@ contains
         ! PROGRAM SPECIFICATION
         call sieve_cavgs%new(&
         &'sieve_cavgs', &                                                       ! name
-        &'Run streaming 2D analysis as new data arrive',& ! summary
+        &'Run 2D particle analysis automatically as new data arrive',& ! summary
         &'is a distributed workflow that executes 2D analysis'//&               ! help
         &' in streaming mode as the microscope collects the data',&
         &'simple_stream',&                                                      ! executable
         &.true.,&                                                               ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Analyze Streaming 2D Data')
         ! image input/output
         ! <empty>
         ! parameter input/output
@@ -342,14 +382,59 @@ contains
         call sieve_cavgs%add_input(UI_FILE, 'dir_exec', 'file', 'Previous run directory',&
         &'Directory where previous 2D analysis took place', 'e.g. 3_sieve_cavgs', .false., '', group="data", &
         &visibility=UI_VIS_ADVANCED)
+        call sieve_cavgs%add_input(UI_PARM, 'nmics', 'num', 'Micrographs per sieve cycle', &
+        &'Number of micrographs imported before each streaming sieving cycle', '# micrographs{100}', .false., 100., group="data", &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         call sieve_cavgs%add_input(UI_SRCH, ncls,                                     group="cluster 2D", visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_SRCH, nptcls_per_cls, required_override=.true., group="cluster 2D", visibility=UI_VIS_STANDARD)
         call sieve_cavgs%add_input(UI_SRCH, nchunksperset,                                                      visibility=UI_VIS_STANDARD)
+        call sieve_cavgs%add_input(UI_SRCH, 'nptcls_coarse', 'num', 'Target coarse-pass particle count', &
+        &'Target number of particles in each coarse sieving chunk', '# particles{5000}', .false., 5000., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, 'nptcls_fine', 'num', 'Target fine-pass particle count', &
+        &'Target number of particles in each fine sieving chunk', '# particles{10000}', .false., 10000., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, 'box_coarse', 'num', 'Coarse-pass box size', &
+        &'Box size used during coarse streaming sieving', '# pixels{128}', .false., 128., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, 'box_fine', 'num', 'Fine-pass box size', &
+        &'Box size used during fine streaming sieving', '# pixels{128}', .false., 128., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, 'nsample_coarse', 'num', 'Coarse-pass sample count', &
+        &'Number of particles sampled during coarse streaming sieving', '# particles{2000}', .false., 2000., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, 'nsample_fine', 'num', 'Fine-pass sample count', &
+        &'Number of particles sampled during fine streaming sieving', '# particles{2000}', .false., 2000., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, 'ncls_coarse', 'num', 'Coarse-pass class count', &
+        &'Number of 2D classes used during coarse streaming sieving', '# classes{100}', .false., 100., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, 'ncls_fine', 'num', 'Fine-pass class count', &
+        &'Number of 2D classes used during fine streaming sieving', '# classes{100}', .false., 100., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, maxnchunks, group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, 'use_model', 'binary', 'Use class-average rejection model', &
+        &'Use the class-average rejection model during streaming sieving(yes|no){yes}', '', .false., 'yes', group="cluster 2D", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_SRCH, 'single_pass', 'binary', 'Run coarse sieving pass only', &
+        &'Run only the coarse pass of streaming sieving(yes|no){no}', '', .false., 'no', group="cluster 2D", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
         ! filter controls
-        ! <empty>
+        call sieve_cavgs%add_input(UI_FILT, 'lpstart', 'num', 'Initial sieving low-pass limit', &
+        &'Low-pass limit used to initialize streaming sieving', 'low-pass limit in Angstroms{15}', .false., 15., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_FILT, 'lpstop_coarse', 'num', 'Coarse-pass low-pass limit', &
+        &'Final low-pass limit for coarse streaming sieving', 'low-pass limit in Angstroms{15}', .false., 15., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
+        call sieve_cavgs%add_input(UI_FILT, 'lpstop_fine', 'num', 'Fine-pass low-pass limit', &
+        &'Final low-pass limit for fine streaming sieving', 'low-pass limit in Angstroms{10}', .false., 10., group="cluster 2D", &
+        &visibility=UI_VIS_DEVELOPER)
         ! mask controls
         call sieve_cavgs%add_input(UI_MASK, 'mskdiam', 'num', 'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to &
         &remove background noise', 'mask diameter in A', .false., 0., group="cluster 2D", visibility=UI_VIS_STANDARD)

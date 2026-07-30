@@ -21,26 +21,15 @@ contains
         call new_simulate_particles(prgtab)
     end subroutine construct_sim_programs
 
-    subroutine print_sim_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('SIMULATION:', C_UNDERLINED)
-        write(logfhandle,'(A)') cif2mrc%name%to_char()
-        write(logfhandle,'(A)') pdb2mrc%name%to_char()
-        write(logfhandle,'(A)') simulate_movie%name%to_char()
-        write(logfhandle,'(A)') simulate_noise%name%to_char()
-        write(logfhandle,'(A)') simulate_particles%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_sim_programs
-
-    subroutine new_cif2mrc( prgtab )
+subroutine new_cif2mrc( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cif2mrc%new(&
         &'cif2mrc', &                                      ! name
-        &'Simulate an MRC density map from PDBx/mmCIF coordinates',& ! summary
+        &'Simulate an MRC density map from PDBx/mmCIF atomic coordinates',& ! summary
         &'is a program to simulate a 3D density map in MRC format using a PDBx/mmCIF format coordinates file',& ! descr long
         &'all',&                                           ! executable
-        &.false., visibility=UI_VIS_STANDARD)                    ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD, display_name='Create Density Map from mmCIF') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cif2mrc%add_input(UI_FILE, 'ciffile', 'file', 'PDBx/mmCIF input coordinates file', 'Input coordinates file in PDBx/mmCIF format', 'PDBx/mmCIF file e.g. molecule.cif', .true., 'molecule.cif', &
@@ -64,10 +53,10 @@ contains
         ! PROGRAM SPECIFICATION
         call pdb2mrc%new(&
         &'pdb2mrc', &                                      ! name
-        &'Simulate an MRC density map from PDB coordinates',& ! summary
+        &'Simulate an MRC density map from PDB atomic coordinates',& ! summary
         &'is a program to simulate a 3D density map in MRC format using a PDB format coordinates file',& ! descr long
         &'all',&                                           ! executable
-        &.false., visibility=UI_VIS_STANDARD)                    ! requires sp_project
+        &.false., visibility=UI_VIS_STANDARD, display_name='Create Density Map from PDB') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pdb2mrc%add_input(UI_FILE, 'pdbfile', 'file', 'PDB input coordinates file', 'Input coordinates file in PDB format', 'PDB file e.g. molecule.pdb', .true., 'molecule.pdb', &
@@ -119,6 +108,8 @@ contains
         call simulate_movie%add_input(UI_PARM, cs, &
         &visibility=UI_VIS_ADVANCED)
         call simulate_movie%add_input(UI_PARM, fraca, &
+        &visibility=UI_VIS_ADVANCED)
+        call simulate_movie%add_input(UI_PARM, ctf_yes, &
         &visibility=UI_VIS_ADVANCED)
         call simulate_movie%add_input(UI_PARM, 'defocus',  'num', 'Underfocus', 'Underfocus(in microns)', 'in microns', .false., 2., &
         &visibility=UI_VIS_ADVANCED)

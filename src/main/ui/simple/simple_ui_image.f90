@@ -27,21 +27,7 @@ contains
         call new_stackops(prgtab)
     end subroutine construct_image_programs
 
-    subroutine print_image_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('GENERAL IMAGE PROCESSING:', C_UNDERLINED)
-        write(logfhandle,'(A)') binarize%name%to_char()
-        write(logfhandle,'(A)') convert%name%to_char()
-        write(logfhandle,'(A)') ctf_correct%name%to_char()
-        write(logfhandle,'(A)') ctfops%name%to_char()
-        write(logfhandle,'(A)') normalize_%name%to_char()
-        write(logfhandle,'(A)') scale%name%to_char()
-        write(logfhandle,'(A)') stack%name%to_char()
-        write(logfhandle,'(A)') stackops%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_image_programs
-
-    subroutine new_binarize( prgtab )
+subroutine new_binarize( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call binarize%new(&
         &'binarize',&                                     ! name
@@ -51,7 +37,8 @@ contains
         &.false.)                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call ctf_correct%add_input(UI_IMG, outstk, &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
         call binarize%add_input(UI_PARM, 'fill_holes', 'binary', 'Fill holes', 'Fill holes(yes|no){no}','', .false., 'no', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -87,11 +74,11 @@ contains
         ! PROGRAM SPECIFICATION
         call convert%new(&
         &'convert',&                                                    ! name
-        &'Convert between SPIDER and MRC formats',&                     ! summary
+        &'Convert image data between SPIDER and MRC formats',&          ! summary
         &'is a program for converting between SPIDER and MRC formats',& ! help
         &'simple_exec',&                                                ! executable
         &.false., &
-        &visibility=UI_VIS_STANDARD)                                                       ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Convert Image Files') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call convert%add_input(UI_IMG, outvol, &

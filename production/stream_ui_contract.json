@@ -1,0 +1,2249 @@
+{
+  "abinitio2D_stream": {
+    "computer controls": [
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity",
+        "key": "nparts",
+        "keytype": "num",
+        "label": "Number of computing nodes",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket.",
+        "key": "nthr",
+        "keytype": "num",
+        "label": "Number of threads per computing node, give 0 if unsure",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1740.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Maximum execution time for job scheduling and management in seconds{1740}(29mins)",
+        "key": "walltime",
+        "keytype": "num",
+        "label": "Walltime",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "file input/output": [
+      {
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": false,
+        "help": "Directory where the pick_extract application is running",
+        "key": "dir_target",
+        "keytype": "file",
+        "label": "Target directory",
+        "options": [],
+        "placeholder": "e.g. 2_pick_extract",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "",
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Directory where previous 2D analysis took place",
+        "key": "dir_exec",
+        "keytype": "file",
+        "label": "Previous run directory",
+        "options": [],
+        "placeholder": "e.g. 3_abinitio2D_stream",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "filter controls": [],
+    "image input/output": [],
+    "mask controls": [
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise",
+        "key": "mskdiam",
+        "keytype": "num",
+        "label": "Mask diameter",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "standard"
+      }
+    ],
+    "parameter input/output": [],
+    "program": {
+      "category": "stream",
+      "category_display_name": "Stream Workflows",
+      "category_order": 10,
+      "display_name": "Run streaming 2D analysis as new data arrive",
+      "executable": "simple_stream",
+      "groups": [
+        {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        }
+      ],
+      "help": "is a distributed workflow that executes 2D analysis in streaming mode as the microscope collects the data",
+      "name": "abinitio2D_stream",
+      "requirements": [],
+      "summary": "Run streaming 2D analysis as new data arrive",
+      "visibility": "developer"
+    },
+    "search controls": [
+      {
+        "default": 200.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Maximum number of 2D class averages for the pooled particles subsets",
+        "key": "ncls",
+        "keytype": "num",
+        "label": "Maximum number of 2D clusters",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "yes",
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Center class averages by their center of gravity and map shifts back to the particles(yes|no){yes}",
+        "key": "center",
+        "keytype": "binary",
+        "label": "Center class averages",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "advanced"
+      }
+    ]
+  },
+  "assign_optics": {
+    "computer controls": [
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket.",
+        "key": "nthr",
+        "keytype": "num",
+        "label": "Number of threads per computing node, give 0 if unsure",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      }
+    ],
+    "file input/output": [
+      {
+        "has_default": false,
+        "help": "Directory where the preprocess_stream application is running",
+        "key": "dir_target",
+        "keytype": "file",
+        "label": "Target directory",
+        "options": [],
+        "placeholder": "e.g. 1_preproc",
+        "required": true,
+        "visibility": "standard"
+      }
+    ],
+    "filter controls": [],
+    "image input/output": [],
+    "mask controls": [],
+    "parameter input/output": [],
+    "program": {
+      "category": "stream",
+      "category_display_name": "Stream Workflows",
+      "category_order": 10,
+      "display_name": "Assign optics groups from microscope metadata",
+      "executable": "simple_stream",
+      "groups": [
+        {
+          "id": "compute",
+          "label": "Compute",
+          "order": 1
+        }
+      ],
+      "help": "is a program to assign optics groups during streaming",
+      "name": "assign_optics",
+      "requirements": [],
+      "summary": "Assign optics groups from microscope metadata",
+      "visibility": "developer"
+    },
+    "search controls": []
+  },
+  "gen_pickrefs": {
+    "computer controls": [
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket.",
+        "key": "nthr",
+        "keytype": "num",
+        "label": "Number of threads per computing node, give 0 if unsure",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      }
+    ],
+    "file input/output": [
+      {
+        "has_default": false,
+        "help": "Directory where the preprocess_stream application is running",
+        "key": "dir_target",
+        "keytype": "file",
+        "label": "Target directory",
+        "options": [],
+        "placeholder": "e.g. 1_preproc",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "",
+        "has_default": true,
+        "help": "Directory where assign_optics application is running",
+        "key": "optics_dir",
+        "keytype": "dir",
+        "label": "Target directory for optics import",
+        "options": [],
+        "placeholder": "e.g. optics_assignment",
+        "required": false,
+        "visibility": "advanced"
+      }
+    ],
+    "filter controls": [
+      {
+        "default": 20.0,
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Low-pass limit used before opening-2D automask generation",
+        "key": "amsklp",
+        "keytype": "num",
+        "label": "Automask low-pass limit",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "image input/output": [],
+    "mask controls": [
+      {
+        "default": 3.0,
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Number of binary-image layers grown during opening-2D automasking",
+        "key": "ngrow",
+        "keytype": "num",
+        "label": "Automask growth layers",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 5.0,
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Window size used during opening-2D automask estimation",
+        "key": "winsz",
+        "keytype": "num",
+        "label": "Automask window size",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 6.0,
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Cosine edge width used to soften the opening-2D automask",
+        "key": "edge",
+        "keytype": "num",
+        "label": "Automask soft edge",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "parameter input/output": [
+      {
+        "default": 0.0,
+        "has_default": true,
+        "help": "Number of micrographs to import for opening 2D",
+        "key": "nmics",
+        "keytype": "num",
+        "label": "Number of micrographs to import",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      }
+    ],
+    "program": {
+      "category": "stream",
+      "category_display_name": "Stream Workflows",
+      "category_order": 10,
+      "display_name": "Do a mini stream to create the opening 2D for generation of picking references",
+      "executable": "simple_stream",
+      "groups": [
+        {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 1
+        },
+        {
+          "id": "picking",
+          "label": "Picking",
+          "order": 2
+        },
+        {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        }
+      ],
+      "help": "is a program to do a mini stream to create the opening 2D",
+      "name": "gen_pickrefs",
+      "requirements": [],
+      "summary": "Do a mini stream to create the opening 2D for generation of picking references",
+      "visibility": "advanced"
+    },
+    "search controls": [
+      {
+        "default": 100.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Initial number of particles per cluster{35}",
+        "key": "nptcls_per_cls",
+        "keytype": "num",
+        "label": "Number of particles per cluster",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "yes",
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Whether to exclude regions of disinterest(carbon, thick ice, new picker only)(yes|no){yes}",
+        "key": "pick_roi",
+        "keytype": "binary",
+        "label": "Artefactual regions exclusion(new picker only)",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      }
+    ]
+  },
+  "master": {
+    "computer controls": [],
+    "file input/output": [
+      {
+        "has_default": false,
+        "help": "Input movies directory",
+        "key": "dir_movies",
+        "keytype": "dir",
+        "label": "Input movies directory",
+        "options": [],
+        "placeholder": "e.g. /path/to/folder",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "",
+        "has_default": true,
+        "help": "Input metadata directory",
+        "key": "dir_meta",
+        "keytype": "dir",
+        "label": "Input metadata directory",
+        "options": [],
+        "placeholder": "e.g. /path/to/folder",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "",
+        "has_default": true,
+        "help": "Gain reference",
+        "key": "gainref",
+        "keytype": "file",
+        "label": "Gain reference",
+        "options": [],
+        "placeholder": "e.g. gainref.mrc",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "",
+        "has_default": true,
+        "help": "Pre-existing preprocessing directory",
+        "key": "dir_preprocess",
+        "keytype": "hidden_dir",
+        "label": "Pre-existing preprocessing directory",
+        "options": [],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "filter controls": [],
+    "image input/output": [
+      {
+        "default": "none",
+        "has_default": true,
+        "help": "Gain processing(none|flip_auto|flip_x|flip_y|flip_xy|generate){none}",
+        "key": "flipgain",
+        "keytype": "multi",
+        "label": "Gain processing",
+        "options": [
+          "none",
+          "flip_auto",
+          "flip_x",
+          "flip_y",
+          "flip_xy",
+          "generate"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "",
+        "has_default": true,
+        "help": "2D averages for use as picking references (optional)",
+        "key": "pickrefs",
+        "keytype": "file",
+        "label": "2D averages for use as picking references (optional)",
+        "options": [],
+        "placeholder": "e.g. pickrefs.mrc",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "mask controls": [],
+    "parameter input/output": [
+      {
+        "default": 2.7,
+        "has_default": true,
+        "help": "Spherical aberration (mm)",
+        "key": "cs",
+        "keytype": "float",
+        "label": "Spherical aberration (mm)",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 0.1,
+        "has_default": true,
+        "help": "Amplitude contrast fraction",
+        "key": "fraca",
+        "keytype": "float",
+        "label": "Amplitude contrast fraction",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 300.0,
+        "has_default": true,
+        "help": "Acceleration voltage (kV)",
+        "key": "kv",
+        "keytype": "int",
+        "label": "Acceleration voltage (kV)",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.3,
+        "has_default": true,
+        "help": "Pixel size (A)",
+        "key": "smpd",
+        "keytype": "float",
+        "label": "Pixel size (A)",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "no",
+        "has_default": true,
+        "help": "Phase plate presence (yes|no){no}",
+        "key": "fit_phshift",
+        "keytype": "binary",
+        "label": "Phase plate",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "",
+        "has_default": true,
+        "help": "Downscaled pixel size (A)",
+        "key": "smpd_downscale",
+        "keytype": "hidden_float",
+        "label": "Downscaled pixel size (A)",
+        "options": [],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "has_default": false,
+        "help": "Total exposure dose (e/A2)",
+        "key": "total_dose",
+        "keytype": "float",
+        "label": "Total exposure dose (e/A2)",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 0.0,
+        "has_default": true,
+        "help": "force a box size (px) eg. to match an existing dataset\"",
+        "key": "box_extract",
+        "keytype": "int",
+        "label": "Force box size (px, optional)",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "0.0",
+        "has_default": true,
+        "help": "Optics group offset delta multiplier",
+        "key": "nicedispid",
+        "keytype": "hidden_int",
+        "label": "Optics group offset delta multiplier",
+        "options": [],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "0.",
+        "has_default": true,
+        "help": "Distance threshold for peak picking(A)",
+        "key": "thres",
+        "keytype": "hidden_float",
+        "label": "Distance threshold for peak picking(A)",
+        "options": [],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "program": {
+      "category": "stream",
+      "category_display_name": "Stream Workflows",
+      "category_order": 10,
+      "display_name": "Coordinate streaming jobs, metadata, and NICE communication",
+      "executable": "simple_stream",
+      "help": "master process that forks streaming programs, collates metadata,communicates with Nice and provides job control",
+      "name": "master",
+      "requirements": [],
+      "summary": "Coordinate streaming jobs, metadata, and NICE communication",
+      "visibility": "developer"
+    },
+    "search controls": []
+  },
+  "pick_extract": {
+    "computer controls": [
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 4
+        },
+        "has_default": true,
+        "help": "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket.",
+        "key": "nthr",
+        "keytype": "num",
+        "label": "Number of threads per computing node, give 0 if unsure",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 4
+        },
+        "has_default": true,
+        "help": "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity",
+        "key": "nparts",
+        "keytype": "num",
+        "label": "Number of computing nodes",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1740.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 4
+        },
+        "has_default": true,
+        "help": "Maximum execution time for job scheduling and management in seconds{1740}(29mins)",
+        "key": "walltime",
+        "keytype": "num",
+        "label": "Walltime",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      }
+    ],
+    "file input/output": [
+      {
+        "default": "",
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Directory where a previous pick_extract application was run",
+        "key": "dir_exec",
+        "keytype": "file",
+        "label": "Previous run directory",
+        "options": [],
+        "placeholder": "e.g. 2_pick_extract",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 2
+        },
+        "has_default": false,
+        "help": "Directory where the preprocess_stream application is running",
+        "key": "dir_target",
+        "keytype": "file",
+        "label": "Target directory",
+        "options": [],
+        "placeholder": "e.g. 1_preproc",
+        "required": true,
+        "visibility": "standard"
+      }
+    ],
+    "filter controls": [
+      {
+        "default": 20.0,
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Low-pass limit for picking in Angstroms{20}",
+        "key": "lp_pick",
+        "keytype": "num",
+        "label": "Low-pass limit for picking",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "default": 6.0,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{6.}",
+        "key": "ctfresthreshold",
+        "keytype": "num",
+        "label": "CTF Resolution rejection threshold",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "default": 1.0,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Micrographs with an ice ring/1st pspec maxima fraction above the threshold will be ignored from further processing{1.0}",
+        "key": "icefracthreshold",
+        "keytype": "num",
+        "label": "Ice Fraction rejection threshold",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "default": 10.0,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Micrographs with astigmatism (%) above the threshold will be ignored from further processing{10.0}",
+        "key": "astigthreshold",
+        "keytype": "num",
+        "label": "Astigmatism rejection threshold",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      }
+    ],
+    "image input/output": [
+      {
+        "default": "",
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Stack of class-averages/reprojections for picking",
+        "key": "pickrefs",
+        "keytype": "file",
+        "label": "Stack of class-averages/reprojections for picking",
+        "options": [],
+        "placeholder": "e.g. pickrefs.mrc",
+        "required": false,
+        "visibility": "standard"
+      }
+    ],
+    "mask controls": [],
+    "parameter input/output": [
+      {
+        "default": "black",
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Input particle contrast(black|white){black}",
+        "key": "pcontrast",
+        "keytype": "multi",
+        "label": "Input particle contrast",
+        "options": [
+          "black",
+          "white"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "extract",
+          "label": "Extract",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Extracted particle image size(in pixels)",
+        "key": "box_extract",
+        "keytype": "num",
+        "label": "Extracted particle image size",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "default": 140.0,
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Molecular diameter(in Angstroms)",
+        "key": "moldiam",
+        "keytype": "num",
+        "label": "Molecular diameter",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "default": 1.0,
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Number of molecular diameters tested",
+        "key": "nmoldiams",
+        "keytype": "num",
+        "label": "Number of molecular diameters to investigate",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "default": 500.0,
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Max molecular diameter(in Angstroms)",
+        "key": "moldiam_max",
+        "keytype": "num",
+        "label": "Max molecular diameter",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "default": "no",
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Perform micrograph background subtraction before picking/extraction(yes|no){no}",
+        "key": "backgr_subtr",
+        "keytype": "binary",
+        "label": "Perform micrograph background subtraction(new picker only)",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "program": {
+      "category": "stream",
+      "category_display_name": "Stream Workflows",
+      "category_order": 10,
+      "display_name": "Pick and Extract During Acquisition",
+      "executable": "simple_stream",
+      "groups": [
+        {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        {
+          "id": "data",
+          "label": "Data",
+          "order": 2
+        },
+        {
+          "id": "extract",
+          "label": "Extract",
+          "order": 3
+        },
+        {
+          "id": "compute",
+          "label": "Compute",
+          "order": 4
+        }
+      ],
+      "help": "is a distributed workflow that executes picking and extraction in streaming mode as the microscope collects the data",
+      "name": "pick_extract",
+      "requirements": [],
+      "summary": "Pick particles and extract images as new microscope data arrive",
+      "visibility": "standard"
+    },
+    "search controls": [
+      {
+        "default": "c1",
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Point-group symmetry of particle(cn|dn|t|o|i){c1}",
+        "key": "pgrp",
+        "keytype": "str",
+        "label": "Point-group symmetry",
+        "options": [],
+        "placeholder": "e.g. value",
+        "required": false,
+        "visibility": "standard"
+      },
+      {
+        "default": "yes",
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Whether to exclude regions of disinterest(carbon, thick ice, new picker only)(yes|no){yes}",
+        "key": "pick_roi",
+        "keytype": "binary",
+        "label": "Artefactual regions exclusion(new picker only)",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "picking",
+          "label": "Picking",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Distance threshold in Angstroms for peak picking; 0 uses the picker default",
+        "key": "thres",
+        "keytype": "num",
+        "label": "Peak-picking distance threshold",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ]
+  },
+  "preproc": {
+    "computer controls": [
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 5
+        },
+        "has_default": true,
+        "help": "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity",
+        "key": "nparts",
+        "keytype": "num",
+        "label": "Number of computing nodes",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 5
+        },
+        "has_default": true,
+        "help": "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket.",
+        "key": "nthr",
+        "keytype": "num",
+        "label": "Number of threads per computing node, give 0 if unsure",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1740.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 5
+        },
+        "has_default": true,
+        "help": "Maximum execution time for job scheduling and management in seconds{1740}(29mins)",
+        "key": "walltime",
+        "keytype": "num",
+        "label": "Walltime",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "file input/output": [
+      {
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": false,
+        "help": "Where the movies to process are located or will squentially appear",
+        "key": "dir_movies",
+        "keytype": "dir",
+        "label": "Input movies directory",
+        "options": [],
+        "placeholder": "e.g. /cryodata/",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "",
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Gain reference image",
+        "key": "gainref",
+        "keytype": "file",
+        "label": "Gain reference",
+        "options": [],
+        "placeholder": "e.g. gainref.mrc",
+        "required": false,
+        "visibility": "standard"
+      },
+      {
+        "default": "",
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Directory where a previous stream application was run",
+        "key": "dir_prev",
+        "keytype": "file",
+        "label": "Previous run directory",
+        "options": [],
+        "placeholder": "e.g. 2_preproc",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "",
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Directory containing per-movie metadata XML files from EPU",
+        "key": "dir_meta",
+        "keytype": "dir",
+        "label": "Directory containing per-movie metadata in XML format",
+        "options": [],
+        "placeholder": "e.g. /dataset/metadata",
+        "required": false,
+        "visibility": "standard"
+      }
+    ],
+    "filter controls": [
+      {
+        "default": 8.0,
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Starting low-pass limit for motion correction",
+        "key": "lpstart",
+        "keytype": "num",
+        "label": "Motion-correction low-pass start",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 5.0,
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Final low-pass limit for motion correction",
+        "key": "lpstop",
+        "keytype": "num",
+        "label": "Motion-correction low-pass stop",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 50.0,
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "B-factor for sharpening in Angstroms^2",
+        "key": "bfac",
+        "keytype": "num",
+        "label": "B-factor for sharpening",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 30.0,
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "High-pass limit for CTF parameter estimation",
+        "key": "hp_ctf_estimate",
+        "keytype": "num",
+        "label": "CTF estimation high-pass limit",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 5.0,
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Low-pass limit for CTF parameter estimation",
+        "key": "lp_ctf_estimate",
+        "keytype": "num",
+        "label": "CTF estimation low-pass limit",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 6.0,
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Micrographs with a CTF resolution above the threshold (in Angs) will be ignored from further processing{6.}",
+        "key": "ctfresthreshold",
+        "keytype": "num",
+        "label": "CTF Resolution rejection threshold",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "image input/output": [],
+    "mask controls": [],
+    "parameter input/output": [
+      {
+        "default": 50.0,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Total exposure dose (e/Ang^2)",
+        "key": "total_dose",
+        "keytype": "num",
+        "label": "Total exposure dose (e/Ang^2)",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.0,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "EER fraction dose target, used to determine how many EER frames are included in each movie fraction(e/Ang^2)",
+        "key": "fraction_dose_target",
+        "keytype": "num",
+        "label": "EER fraction dose target (e/Ang^2)",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.3,
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Distance between neighbouring pixels in Angstroms after downscale",
+        "key": "smpd_downscale",
+        "keytype": "num",
+        "label": "Sampling distance after downscale",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "standard"
+      },
+      {
+        "default": 20.0,
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Number of raw EER frames in a movie fraction",
+        "key": "eer_fraction",
+        "keytype": "num",
+        "label": "# of EER frames to fraction together",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}",
+        "key": "max_dose",
+        "keytype": "num",
+        "label": "Maximum dose threshold(e/A2)",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 300.0,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Acceleration voltage in kV{300}",
+        "key": "kv",
+        "keytype": "num",
+        "label": "Acceleration voltage",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 2.7,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Spherical aberration constant(in mm){2.7}",
+        "key": "cs",
+        "keytype": "num",
+        "label": "Spherical aberration",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 0.1,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Fraction of amplitude contrast used for fitting CTF{0.1}",
+        "key": "fraca",
+        "keytype": "num",
+        "label": "Amplitude contrast fraction",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.3,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Distance between neighbouring pixels in Angstroms",
+        "key": "smpd",
+        "keytype": "num",
+        "label": "Sampling distance",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "no",
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Fit the additive phase shift during CTF estimation(yes|no){no}",
+        "key": "fit_phshift",
+        "keytype": "binary",
+        "label": "Fit CTF phase shift",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "standard"
+      },
+      {
+        "default": 512.0,
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Size of power spectrum in pixels{512}",
+        "key": "pspecsz",
+        "keytype": "num",
+        "label": "Size of power spectrum",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "yes",
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Whether to perform patch CTF estimation(yes|no){yes}",
+        "key": "ctfpatch",
+        "keytype": "binary",
+        "label": "Patch CTF estimation",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "no",
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Flip the gain reference along the provided axis(no|x|y|xy|yx){no}",
+        "key": "flipgain",
+        "keytype": "multi",
+        "label": "Flip the gain reference",
+        "options": [
+          "no",
+          "x",
+          "y",
+          "xy",
+          "yx"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "patch",
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Algorithm for motion correction(iso|patch|patch_refine){patch}",
+        "key": "algorithm",
+        "keytype": "multi",
+        "label": "Algorithm for motion correction",
+        "options": [
+          "iso",
+          "patch",
+          "patch_refine"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "simple",
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}",
+        "key": "mcconvention",
+        "keytype": "str",
+        "label": "Frame of reference during movie alignment",
+        "options": [],
+        "placeholder": "e.g. value",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "yes",
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Whether to perform Patch-based motion correction(yes|no){yes}",
+        "key": "mcpatch",
+        "keytype": "binary",
+        "label": "Patch-based motion correction",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "yes",
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Whether to use the threshold for motion correction patch solution(yes|no){yes}",
+        "key": "mcpatch_thres",
+        "keytype": "binary",
+        "label": "Use motion correction patch threshold",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "has_default": true,
+        "help": "Number of micrographs to perform initial picking preprocessing on",
+        "key": "ninipick",
+        "keytype": "num",
+        "label": "Number of micrographs to perform initial picking preprocessing on",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "program": {
+      "category": "stream",
+      "category_display_name": "Stream Workflows",
+      "category_order": 10,
+      "display_name": "Run streaming preprocessing as new data arrive",
+      "executable": "simple_stream",
+      "groups": [
+        {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        {
+          "id": "optics groups",
+          "label": "Optics Groups",
+          "order": 4
+        },
+        {
+          "id": "compute",
+          "label": "Compute",
+          "order": 5
+        }
+      ],
+      "help": "is a distributed workflow that executes motion_correct, ctf_estimate and pick in sequence",
+      "name": "preproc",
+      "requirements": [],
+      "summary": "Run streaming preprocessing as new data arrive",
+      "visibility": "developer"
+    },
+    "search controls": [
+      {
+        "default": 20.0,
+        "group": {
+          "id": "motion correction",
+          "label": "Motion Correction",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Maximum half-width for bund-constrained search of movie frame shifts",
+        "key": "trs",
+        "keytype": "num",
+        "label": "Max shift per iter in pixels{10.}",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      },
+      {
+        "default": 0.2,
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Expected minimum defocus in microns{0.2}",
+        "key": "dfmin",
+        "keytype": "num",
+        "label": "Expected minimum defocus",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 5.0,
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Expected maximum defocus in microns{5.0}",
+        "key": "dfmax",
+        "keytype": "num",
+        "label": "Expected maximum defocus",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Minimum fitted additive phase shift in degrees{0}",
+        "key": "phshift_min",
+        "keytype": "num",
+        "label": "Minimum CTF phase shift",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 180.0,
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Maximum fitted additive phase shift in degrees; 180 is the exclusive pi boundary{180}",
+        "key": "phshift_max",
+        "keytype": "num",
+        "label": "Maximum CTF phase shift",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 10.0,
+        "group": {
+          "id": "CTF estimation",
+          "label": "CTF Estimation",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Initial phase-shift grid step in degrees{10}",
+        "key": "phshift_step",
+        "keytype": "num",
+        "label": "CTF phase-shift step",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.05,
+        "group": {
+          "id": "optics groups",
+          "label": "Optics Groups",
+          "order": 4
+        },
+        "has_default": true,
+        "help": "Threshold for hierarchical clustering of beamtilts",
+        "key": "tilt_thres",
+        "keytype": "num",
+        "label": "Threshold for hierarchical clustering of beamtilts",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "no",
+        "group": {
+          "id": "optics groups",
+          "label": "Optics Groups",
+          "order": 4
+        },
+        "has_default": true,
+        "help": "Use beamtilt values (if found in EPU filenames) during optics group assignment(yes|no){yes}",
+        "key": "beamtilt",
+        "keytype": "binary",
+        "label": "Use beamtilts in optics group assignment",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      }
+    ]
+  },
+  "sieve_cavgs": {
+    "computer controls": [
+      {
+        "default": 0.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Maximum number of particles subsets (chunks) to classify simultaneously",
+        "key": "nchunks",
+        "keytype": "num",
+        "label": "Number of subsets to classify simultaneously",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity",
+        "key": "nparts",
+        "keytype": "num",
+        "label": "Number of computing nodes",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of logical threads in a socket.",
+        "key": "nthr",
+        "keytype": "num",
+        "label": "Number of threads per computing node, give 0 if unsure",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 1740.0,
+        "group": {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        },
+        "has_default": true,
+        "help": "Maximum execution time for job scheduling and management in seconds{1740}(29mins)",
+        "key": "walltime",
+        "keytype": "num",
+        "label": "Walltime",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "advanced"
+      }
+    ],
+    "file input/output": [
+      {
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": false,
+        "help": "Directory where the pick_extract application is running",
+        "key": "dir_target",
+        "keytype": "file",
+        "label": "Target directory",
+        "options": [],
+        "placeholder": "e.g. 2_pick_extract",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": "",
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Directory where previous 2D analysis took place",
+        "key": "dir_exec",
+        "keytype": "file",
+        "label": "Previous run directory",
+        "options": [],
+        "placeholder": "e.g. 3_sieve_cavgs",
+        "required": false,
+        "visibility": "advanced"
+      }
+    ],
+    "filter controls": [
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Low-pass limit used to initialize streaming sieving",
+        "key": "lpstart",
+        "keytype": "num",
+        "label": "Initial sieving low-pass limit",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Final low-pass limit for coarse streaming sieving",
+        "key": "lpstop_coarse",
+        "keytype": "num",
+        "label": "Coarse-pass low-pass limit",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Final low-pass limit for fine streaming sieving",
+        "key": "lpstop_fine",
+        "keytype": "num",
+        "label": "Fine-pass low-pass limit",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "image input/output": [],
+    "mask controls": [
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Mask diameter (in A) for application of a soft-edged circular mask to remove background noise",
+        "key": "mskdiam",
+        "keytype": "num",
+        "label": "Mask diameter",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "standard"
+      }
+    ],
+    "parameter input/output": [
+      {
+        "default": 100.0,
+        "group": {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        "has_default": true,
+        "help": "Number of micrographs imported before each streaming sieving cycle",
+        "key": "nmics",
+        "keytype": "num",
+        "label": "Micrographs per sieve cycle",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      }
+    ],
+    "program": {
+      "category": "stream",
+      "category_display_name": "Stream Workflows",
+      "category_order": 10,
+      "display_name": "Analyze Streaming 2D Data",
+      "executable": "simple_stream",
+      "groups": [
+        {
+          "id": "data",
+          "label": "Data",
+          "order": 1
+        },
+        {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        {
+          "id": "compute",
+          "label": "Compute",
+          "order": 3
+        }
+      ],
+      "help": "is a distributed workflow that executes 2D analysis in streaming mode as the microscope collects the data",
+      "name": "sieve_cavgs",
+      "requirements": [],
+      "summary": "Run 2D particle analysis automatically as new data arrive",
+      "visibility": "standard"
+    },
+    "search controls": [
+      {
+        "default": 500.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR",
+        "key": "ncls",
+        "keytype": "num",
+        "label": "Number of 2D clusters",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 500.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Initial number of particles per cluster{35}",
+        "key": "nptcls_per_cls",
+        "keytype": "num",
+        "label": "Number of particles per cluster",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": true,
+        "visibility": "standard"
+      },
+      {
+        "default": 0.0,
+        "has_default": true,
+        "help": "Number of particles subsets (chunks) to group into a independent set",
+        "key": "nchunksperset",
+        "keytype": "num",
+        "label": "Number of subsets to group",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "standard"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Target number of particles in each coarse sieving chunk",
+        "key": "nptcls_coarse",
+        "keytype": "num",
+        "label": "Target coarse-pass particle count",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Target number of particles in each fine sieving chunk",
+        "key": "nptcls_fine",
+        "keytype": "num",
+        "label": "Target fine-pass particle count",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Box size used during coarse streaming sieving",
+        "key": "box_coarse",
+        "keytype": "num",
+        "label": "Coarse-pass box size",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Box size used during fine streaming sieving",
+        "key": "box_fine",
+        "keytype": "num",
+        "label": "Fine-pass box size",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Number of particles sampled during coarse streaming sieving",
+        "key": "nsample_coarse",
+        "keytype": "num",
+        "label": "Coarse-pass sample count",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Number of particles sampled during fine streaming sieving",
+        "key": "nsample_fine",
+        "keytype": "num",
+        "label": "Fine-pass sample count",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Number of 2D classes used during coarse streaming sieving",
+        "key": "ncls_coarse",
+        "keytype": "num",
+        "label": "Coarse-pass class count",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Number of 2D classes used during fine streaming sieving",
+        "key": "ncls_fine",
+        "keytype": "num",
+        "label": "Fine-pass class count",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": 0.0,
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "After this number of subsets has been classified all processing will stop(0=no end){0}",
+        "key": "maxnchunks",
+        "keytype": "num",
+        "label": "Number of subsets after which 2D analysis ends",
+        "options": [],
+        "placeholder": "e.g. 10",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "yes",
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Use the class-average rejection model during streaming sieving(yes|no){yes}",
+        "key": "use_model",
+        "keytype": "binary",
+        "label": "Use class-average rejection model",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      },
+      {
+        "default": "no",
+        "group": {
+          "id": "cluster 2D",
+          "label": "2D Clustering",
+          "order": 2
+        },
+        "has_default": true,
+        "help": "Run only the coarse pass of streaming sieving(yes|no){no}",
+        "key": "single_pass",
+        "keytype": "binary",
+        "label": "Run coarse sieving pass only",
+        "options": [
+          "yes",
+          "no"
+        ],
+        "placeholder": "",
+        "required": false,
+        "visibility": "developer"
+      }
+    ]
+  }
+}

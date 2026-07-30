@@ -25,20 +25,7 @@ contains
         call new_refine3D_multi(prgtab)
     end subroutine construct_refine3D_programs
 
-    subroutine print_refine3D_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('REFINE 3D WORKFLOWS:', C_UNDERLINED)
-        write(logfhandle,'(A)') automask%name%to_char()
-        write(logfhandle,'(A)') postprocess%name%to_char()
-        write(logfhandle,'(A)') reconstruct3D%name%to_char()
-        write(logfhandle,'(A)') bootstrap_rec3D%name%to_char()
-        write(logfhandle,'(A)') refine3D%name%to_char()
-        write(logfhandle,'(A)') refine3D_auto%name%to_char()
-        write(logfhandle,'(A)') refine3D_multi%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_refine3D_programs
-
-    subroutine new_automask( prgtab )
+subroutine new_automask( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call automask%new(&
@@ -89,11 +76,11 @@ contains
         ! PROGRAM SPECIFICATION
         call postprocess%new(&
         &'postprocess',&                                                      ! name
-        &'Post-process a reconstructed volume with filtering and sharpening',& ! summary
+        &'Filter and sharpen a reconstructed density map for interpretation',& ! summary
         &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! help
         &'simple_exec',&                                                      ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD)                                                              ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Post-process Density Map') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call postprocess%add_input(UI_IMG, 'vol1', 'file', 'Volume override', 'Volume override for selected state', &
@@ -149,6 +136,8 @@ contains
         ! <no additional inputs>
         ! <empty>
         ! search controls
+        call reconstruct3D%add_input(UI_SRCH, trs, &
+        &visibility=UI_VIS_ADVANCED)
         call reconstruct3D%add_input(UI_SRCH, pgrp, &
         &visibility=UI_VIS_STANDARD)
         call reconstruct3D%add_input(UI_SRCH, ptcl_src, &
@@ -194,7 +183,7 @@ contains
         &'Iteration index used for the generated sigma2_groups file{1}', 'iteration{1}', .false., 1.0, &
         &visibility=UI_VIS_DEVELOPER)
         call bootstrap_rec3D%add_input(UI_FILE, 'outfile', 'file', 'Resolution output prefix',&
-        &'Optional FSC/resolution text output prefix; state tags are appended', 'prefix.txt{RESOLUTION_FINAL.txt}',&
+        &'Optional FSC/resolution text output prefix; state tags are appended', 'e.g. resolution',&
         &.false., 'RESOLUTION_FINAL.txt', &
         &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
@@ -208,6 +197,8 @@ contains
         call bootstrap_rec3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
         &'Postprocess ML-regularized reconstructed volumes using the generated FSC curves','', .false., 'yes', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_DEVELOPER)
+        call bootstrap_rec3D%add_input(UI_FILT, combine_eo, &
         &visibility=UI_VIS_DEVELOPER)
         ! mask controls
         call bootstrap_rec3D%add_input(UI_MASK, mskdiam, &
@@ -226,11 +217,11 @@ contains
         ! PROGRAM SPECIFICATION
         call refine3D%new(&
         &'refine3D',&                                                                               ! name
-        &'Refine a 3D structure from particles by projection matching',& ! summary
+        &'Refine a 3D structure from particle images by projection matching',& ! summary
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Refine 3D Structure')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%add_input(UI_IMG, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -326,11 +317,11 @@ contains
         ! PROGRAM SPECIFICATION
         call refine3D_auto%new(&
         &'refine3D_auto',&                                                                          ! name
-        &'automated single-state 3D refinement',&                                                   ! summary
+        &'Automatically refine a single 3D structure from particle images',&                         ! summary
         &'is an automated workflow for single-state 3D refinement based on probabilistic projection matching',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Automated 3D Refinement')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_auto%add_input(UI_IMG, 'vol1', 'file', 'Starting template volume', 'Starting reference volume &
@@ -343,8 +334,20 @@ contains
         ! search controls
         call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., group="search", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'minits', 'num', 'Minimum automatic iterations', &
+        &'Minimum number of iterations used when automatic refinement calculates its iteration budget', &
+        &'minimum iterations', .false., 10., group="search", visibility=UI_VIS_DEVELOPER)
+        call refine3D_auto%add_input(UI_SRCH, 'nsample', 'num', 'Projection samples', &
+        &'Number of projection samples used by automatic refinement', 'number of samples', .false., 25000., &
+        &group="search", visibility=UI_VIS_DEVELOPER)
         call refine3D_auto%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
         call refine3D_auto%add_input(UI_SRCH, ptcl_src, group="search", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, sigma_est, group="search", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
+        &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
@@ -373,6 +376,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call refine3D_auto%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
+        call refine3D_auto%add_input(UI_MASK, automsk, group="mask", &
+        &visibility=UI_VIS_ADVANCED)
         ! computer controls
         call refine3D_auto%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
         call refine3D_auto%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
@@ -385,15 +390,20 @@ contains
         ! PROGRAM SPECIFICATION
         call refine3D_multi%new(&
         &'refine3D_multi',&                                                                         ! name
-        &'automated multi-state 3D refinement',&                                                    ! summary
+        &'Refine multiple 3D states from particle images or project state labels',&                 ! summary
         &'is an automated workflow for multi-state 3D refinement from project state labels or command-line nstates',& ! help
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Multi-state 3D Refinement')
         ! search controls
         call refine3D_multi%add_input(UI_SRCH, maxits,      required_override=.false., group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_multi%add_input(UI_SRCH, nstates,     required_override=.false., group="search", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_multi%add_input(UI_SRCH, 'nsample', 'num', 'Particle sample target', &
+        &'Particles sampled per iteration; set 0 to derive the automatic target from the number of states', &
+        &'particles (0=automatic)', .false., 0., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call refine3D_multi%add_input(UI_SRCH, sigma_est, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_multi%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume refinement mode', &
         &'Multi-volume refinement mode(input_oris_refine|input_oris_fixed){input_oris_refine}','', .false., 'input_oris_refine', &
@@ -408,6 +418,10 @@ contains
         call refine3D_multi%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
         call refine3D_multi%add_input(UI_SRCH, ptcl_src, group="search", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_multi%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
+        &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call refine3D_multi%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -417,6 +431,9 @@ contains
         &'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_multi%add_input(UI_SRCH, 'overlap', 'num', 'State-overlap convergence target', &
+        &'Required overlap of state assignments for convergence in the probabilistic-neighborhood stage', &
+        &'overlap fraction', .false., .99, group="search", visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call refine3D_multi%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
         &'Filtering mode(fsc|nonuniform_lpset|none){nonuniform_lpset}','', .false., 'nonuniform_lpset', group="filter", &

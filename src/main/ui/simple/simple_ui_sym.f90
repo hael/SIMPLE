@@ -17,16 +17,7 @@ contains
         call new_symmetry_test(prgtab)
     end subroutine construct_symmetry_programs
 
-    subroutine print_symmetry_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('SYMMETRY:', C_UNDERLINED)
-        write(logfhandle,'(A)') symaxis_search%name%to_char()
-        write(logfhandle,'(A)') symmetrize_map%name%to_char()
-        write(logfhandle,'(A)') symmetry_test%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_symmetry_programs
-
-    subroutine new_symaxis_search( prgtab )
+subroutine new_symaxis_search( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call symaxis_search%new(&
@@ -79,12 +70,12 @@ contains
         ! PROGRAM SPECIFICATION
         call symmetrize_map%new(&
         &'symmetrize_map',&                                                                                          ! name
-        &'Align and symmetrize a density map by point group',& ! summary
+        &'Align a density map and apply the selected point-group symmetry',& ! summary
         &'is a program that implements symmetrization of the input density map. &
         &Input is a volume and point-group symmetry, output is the volume aligned to the principal symmetry axis and averaged over the symmetry operations',& ! descr long
         &'simple_exec',&                                                                                             ! executable
         &.false., &
-        &visibility=UI_VIS_STANDARD)                                                                                                    ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Symmetrize Density Map') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symmetrize_map%add_input(UI_IMG, 'vol1', 'file', 'Volume to symmetrize', 'Volume to symmetrize', &
@@ -128,12 +119,12 @@ contains
         ! PROGRAM SPECIFICATION
         call symmetry_test%new(&
         &'symmetry_test',&                                                                                           ! name
-        &'Test the most likely point-group symmetry of a C1 volume',& ! summary
+        &'Identify the most likely point-group symmetry of a C1 density map',& ! summary
         &'is a program that implements a statistical test for point-group symmetry. &
         &Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry',& ! descr long
         &'simple_exec',&                                                                                             ! executable
         &.false., &
-        &visibility=UI_VIS_STANDARD)                                                                                                    ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Test Map Symmetry') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symmetry_test%add_input(UI_IMG, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &

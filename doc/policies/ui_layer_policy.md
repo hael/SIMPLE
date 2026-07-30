@@ -63,7 +63,10 @@ parameter lifecycle never read this UI-only module.
 
 The generator preserves the parameter parser's scalar meaning before it emits
 a display value. Integer and real values are represented in the UI's
-real-valued numeric storage (for example, an integer `3` becomes `3.0`). The
+real-valued numeric storage (for example, an integer `3` becomes `3.0`). JSON
+serialization rounds numeric UI defaults to at most six significant digits;
+this removes single-precision binary residue while retaining a practical,
+scientifically meaningful input value. The
 legacy numeric token `no` represents the command line's initialized numeric
 value and is exported as `0.0`. Any other nonnumeric value for a known numeric
 parameter is a generation error; an invalid value must never reach a UI
@@ -202,10 +205,12 @@ without printing usage. Requirement groups describe unconditional key presence
 only; dependent or value-specific rules remain in activation predicates and
 commander validation until a richer shared rule is defined.
 
-Requirement guidance is intentionally compact. `Accepted keys`, `Supplied`,
-and `Required` are each one trimmed line; fixed-length internal buffers must
-be trimmed before they are concatenated for CLI output. Do not print empty
-sections or padded lines.
+Requirement guidance is intentionally compact but must be self-explanatory.
+Show every accepted alternative with the same aligned `key = label;
+placeholder` formatter used for ordinary CLI inputs, then print `Supplied` and
+`Required` as trimmed lines. The text must come from the registered input
+binding in that program, rather than from an independently maintained
+requirement description. Do not print empty sections or padded lines.
 
 ### `ui_program`
 
@@ -360,13 +365,15 @@ compatibility path, not another source of metadata.
 ### Input placeholder
 
 `placeholder` is a compact entry hint, not a second label or help paragraph.
-It must contain at most 40 characters; the descriptor constructor enforces a
-single standard representation for every rendered input.
+It must contain at most 40 characters. Scalar and choice inputs use a standard
+representation; file and directory inputs use a concise example that identifies
+the accepted artifact.
 
 | Input kind | Rendered placeholder |
 | --- | --- |
 | number (`num`, `int`, `float`) | `e.g. 10` |
-| file | `e.g. input.mrc` |
+| image or volume file | `e.g. volume.mrc` or another accepted image format |
+| other file | a concise example matching the accepted format |
 | directory | `e.g. /path/to/folder` |
 | free text | `e.g. value` |
 | choice, binary, or hidden input | empty |
@@ -375,6 +382,20 @@ Choice widgets already render their accepted values, so their placeholder
 must be empty. Units, ranges, choice lists, default values, and explanatory
 prose belong respectively in `units`, `help`, `choices`, `default`, and
 `help`—never in a placeholder.
+
+`file` describes the transport type, not the file content. Do not use
+`e.g. input.mrc` as a catch-all: project files, tabular files, STAR files,
+plain-text parameter tables, and other typed artifacts must advertise an
+example with their actual accepted extension or format. A parameter key may
+use a different placeholder in different program contexts when the accepted
+artifact differs.
+
+Every file and directory placeholder begins with `e.g. `. The complete UI
+validator rejects empty examples, the generic `e.g. input.mrc` and
+`e.g. input.file` fallbacks, embedded defaults or alternatives, and a known
+artifact key whose example has the wrong extension. Program-specific
+`placeholder_override=` values are part of the registered descriptor and must
+be preserved.
 
 Choice values are declared explicitly with `ui_choices([...])`. They are never
 parsed from placeholders. The placeholder for a choice is empty before JSON or
@@ -407,6 +428,40 @@ placeholder again. Choice values remain exact CLI values.
 Visibility is the sole presentation classification. JSON must not serialize a
 second Boolean visibility flag.
 
+### Stream GUI contract update procedure
+
+The ordinary build checks that the complete UI JSON can be generated and read
+correctly. It does **not** reject a wording or layout change merely because a
+stream screen looks different. That separate review is run explicitly with:
+
+```text
+cmake --build <build-dir> --target validate_stream_ui_contract
+```
+
+This command protects the acquisition-facing `simple_stream` screens from an
+unreviewed change. It is a review step, not a routine JSON-format check.
+
+When the validator reports a stream-contract mismatch, the developer must:
+
+1. Inspect the Fortran descriptor change and the readable generated JSON diff.
+2. Confirm with the change owner that every affected title, summary, input,
+   default, visibility, or group change is intended for the stream GUI.
+3. Update the reviewed reference with:
+
+   ```text
+   cmake --build <build-dir> --target update_stream_ui_contract
+   ```
+
+4. Commit the descriptor changes and
+   `production/stream_ui_contract.json` in the same commit.
+5. Run `cmake --build <build-dir> --target validate_stream_ui_contract` again.
+   A passing result confirms that the reviewed screen is the one generated by
+   the executable.
+
+If the change was not intentional, restore or correct the descriptor instead
+of updating the reference file. The update target is used only after review;
+the normal build never changes the reference automatically.
+
 ## Change rules
 
 - Preserve the one-to-one relationship between registered programs and CLI
@@ -433,62 +488,40 @@ second Boolean visibility flag.
 - Validate duplicate keys, visibility values, categories, choices, and JSON
   before merging descriptor changes.
 
-## Refactor status and remaining work
+## Refactor status
 
-### Completed in this refactor
+### Current phase: complete
 
-- **Consolidated JSON serialization.** `print_ui_json`, `write_ui_json`, and
-  `ui_program%write2json` use the shared descriptor-to-JSON implementation.
-- **Explicit descriptor visibility.** Programs and their individual input
-  bindings carry their own visibility. Required bindings are enforced as
-  Standard, while optional bindings have an explicit contextual assignment.
-- **Complete UI JSON build validation.** CMake runs
-  `simple_private_exec prg=print_ui_json` and validates the generated complete
-  registry before the validation target is considered built. The validator
-  parses JSON once with the Python standard library, checks duplicate JSON
-  object members and descriptor references, and is intentionally fast enough
-  for the ordinary build path. It validates all program descriptors, seven
-  input sections, bindings, visibility values, groups, activation references,
-  and requirement references.
+The UI-layer refactor is complete for the current scope:
 
-### Remaining work
+- Programs and individual parameter bindings have explicit, context-dependent
+  visibility. Required parameters are always Standard; sections and groups do
+  not carry redundant visibility.
+- The registered Fortran descriptors are the single source for CLI help,
+  program listings, and JSON. Obsolete module-local listings have been removed.
+- Alternative input requirements replace `alt_ios` and describe accepted
+  inputs using the registered labels and placeholders.
+- Routed defaults have been audited against execution setup. The optional
+  `audit_ui_defaults` report currently contains no errors or warnings, and
+  numeric JSON defaults are rendered without binary floating-point residue.
+- Standard programs have concise display names and informative summaries.
+  Advanced and Developer programs may continue to use the documented summary
+  fallback until their text is worth reviewing.
+- Every registered file and directory input has a format-appropriate example.
+  The complete JSON validator prevents generic path examples and checks known
+  artifact extensions.
+- The ordinary build validates the complete UI JSON structure and references.
+  The exact stream GUI is protected separately by the readable
+  `production/stream_ui_contract.json` review workflow.
+- Program visibility, parameter-instance visibility, placeholders, and CLI
+  output can be exported as review evidence without becoming runtime metadata
+  or slowing the ordinary build.
 
-1. **Complete generated-default coverage and auditing.** Extend the static
-   route analysis to the remaining stream-backed and helper-mediated routes.
-   The current UI safely retains a program's validated choice default whenever
-   a global baseline lies outside its choice set; replace that fallback with an
-   exact routed default where the execution source makes one statically
-   knowable. Add a review report for unmatched routes, ambiguous routes, and
-   UI defaults that differ from their generated source value. Keep commander
-   and parameter code out of this work.
-2. **Extend requirement groups after audit.** The current groups cover
-   unconditional key-presence cardinality and have replaced `alt_ios`. Add
-   richer alternatives only when execution logic establishes a shared rule:
-   for example, nested all-of/one-of conditions or value-dependent
-   requirements. Do not restore the removed singleton `gui_exclusive_group`,
-   and do not add an execution-context field unless a later audit finds an
-   actual shared rule.
-3. **Use activation predicates for CLI applicability validation.** The current
-   binding and JSON carry `equals_any` activation data. Add validation only
-   after defining how a supplied but inactive key should be reported, then
-   extend the predicate form deliberately with explicit all/any/not
-   composition rather than reintroducing expression strings.
-4. **Review parameter visibility by program context.**
-   `ui_parameter_visibility_review.md` is the review inventory: each row is a
-   parameter-instance binding in its program context. Required inputs must
-   remain Standard; review every optional row and apply the approved values
-   back to the corresponding `add_input` call.
-5. **Remove obsolete listing routines.** The public listings already use
-   registered category descriptors. Remove the now-unused module-local list
-   printers after confirming no non-public caller remains.
-6. **Review titles and descriptions by category.** Replace the temporary
-   `display_name`-from-`summary` fallback with explicit concise titles, then
-   review summaries, labels, help, units, and placeholders against this
-   policy. A temporary exported Markdown sheet may help a domain review, but
-   it is review evidence only: accepted text must be applied back to Fortran
-   and the sheet must never become a source of metadata or build input.
-7. **Broaden descriptor validation only with a defined shared contract.** The
-   current build validation covers generated JSON structure and cross-reference
-   integrity. Add new checks for semantic applicability, CLI presentation, or
-   execution behaviour only after their common rule is defined in this policy;
-   do not encode GUI-only assumptions in the validator.
+### Deferred review
+
+These are maintenance opportunities, not blockers for this refactor:
+
+- Give Advanced and Developer programs distinct display names and summaries
+  when those programs are promoted or otherwise exposed to users.
+- Extend requirement expressions, activation validation, or semantic JSON
+  checks only when a concrete shared CLI/GUI execution rule requires them.

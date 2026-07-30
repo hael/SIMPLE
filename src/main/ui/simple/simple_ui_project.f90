@@ -55,35 +55,7 @@ contains
         call new_write_mic_filetab(prgtab)
     end subroutine construct_project_programs
 
-    subroutine print_project_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('PROJECT MANAGEMENT:', C_UNDERLINED)
-        write(logfhandle,'(A)') export_relion%name%to_char()
-        write(logfhandle,'(A)') export_starproject%name%to_char()
-        write(logfhandle,'(A)') export_manifoldem_starproject%name%to_char()
-        write(logfhandle,'(A)') extract_subproj%name%to_char()
-        write(logfhandle,'(A)') import_boxes%name%to_char()
-        write(logfhandle,'(A)') import_cavgs%name%to_char()
-        write(logfhandle,'(A)') import_movies%name%to_char()
-        write(logfhandle,'(A)') import_particles%name%to_char()
-        write(logfhandle,'(A)') reimport_particles%name%to_char()
-        write(logfhandle,'(A)') import_starproject%name%to_char()
-        write(logfhandle,'(A)') merge_projects%name%to_char()
-        write(logfhandle,'(A)') new_project%name%to_char()
-        write(logfhandle,'(A)') print_project_field%name%to_char()
-        write(logfhandle,'(A)') print_project_info%name%to_char()
-        write(logfhandle,'(A)') ptcl3D_state_consensus%name%to_char()
-        write(logfhandle,'(A)') prune_project%name%to_char()
-        write(logfhandle,'(A)') replace_project_field%name%to_char()
-        write(logfhandle,'(A)') selection%name%to_char()
-        write(logfhandle,'(A)') update_project%name%to_char()
-        write(logfhandle,'(A)') validate_projfile%name%to_char()
-        write(logfhandle,'(A)') zero_project_shifts%name%to_char()
-        write(logfhandle,'(A)') write_mic_filetab%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_project_programs
-
-    subroutine new_export_relion( prgtab )
+subroutine new_export_relion( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call export_relion%new(&
@@ -129,11 +101,11 @@ contains
         ! PROGRAM SPECIFICATION
         call export_starproject%new(&
         &'export_starproject', &                                                ! name
-        &'Export projectfile in star format',&                                  ! summary
+        &'Export a SIMPLE project and its metadata in STAR format',&             ! summary
         &'is a program to export a SIMPLE projectfile in star format',&         ! descr long
         &'simple_exec',&                                                        ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD)                                                                ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Export Project to STAR') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! call export_starproject%set_input('parm_ios', 1, projfile)
@@ -223,11 +195,11 @@ contains
         ! PROGRAM SPECIFICATION
         call import_boxes%new(&
         &'import_boxes',&                                  ! name
-        &'Import EMAN box coordinates to SIMPLE project',& ! summary
+        &'Import EMAN box coordinates into a SIMPLE project',& ! summary
         &'is a program for importing EMAN1.9 box coordinates to the project. The *box (text) files should be listed in boxtab',&
         &'simple_exec',&                                   ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD)                                           ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Import Particle Coordinates') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -254,11 +226,11 @@ contains
         ! PROGRAM SPECIFICATION
         call import_cavgs%new(&
         &'import_cavgs',&                                        ! name
-        &'Import class averages to SIMPLE project',&             ! summary
+        &'Import 2D class averages into a SIMPLE project',&       ! summary
         &'is a program for importing class averages movies to the project',&
         &'simple_exec',&                                         ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD)                                                 ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Import 2D Class Averages') ! requires sp_project
         call import_cavgs%add_input(UI_IMG, 'stk', 'file', 'Stack of class averages',&
         &'Stack of class average images to import', 'e.g. cavgs.mrcs', .true., '', &
         &visibility=UI_VIS_STANDARD)
@@ -274,13 +246,13 @@ contains
         ! PROGRAM SPECIFICATION
         call import_movies%new(&
         &'import_movies',&                                       ! name
-        &'Import movies to SIMPLE project',&                     ! summary
+        &'Add movie data and optional box coordinates to a SIMPLE project',& ! summary
         &'is a program for importing DDD movies to the project. The movies can be located in any read-only location&
         & accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected&
         & and integrated. Box files (in EMAN format) can be imported along with the movies',&
         &'simple_exec',&                                         ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD)                                                 ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Import Movie Data') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call import_movies%add_input(UI_FILE, 'filetab',    'file', 'List of movie files',    'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .false., '', &
@@ -322,11 +294,11 @@ contains
         ! PROGRAM SPECIFICATION
         call import_particles%new(&
         &'import_particles',&                                       ! name
-        &'Import particles to SIMPLE project',&                     ! summary
+        &'Add extracted particle images and metadata to a SIMPLE project',& ! summary
         &'is a program for importing extracted particle images to the project',&
         &'all',&                                                    ! executable
         &.true., &
-        &visibility=UI_VIS_STANDARD)                                                    ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Import Particle Images') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -408,11 +380,11 @@ contains
         ! PROGRAM SPECIFICATION
         call import_starproject%new(&
         &'import_starproject', &                                                ! name
-        &'Import project in in star format',&                                   ! summary
+        &'Import project metadata from a STAR file into a SIMPLE project',&     ! summary
         &'is a program to import a SIMPLE projectfile from star format',&       ! descr long
         &'simple_exec',&                                                        ! executable
         &.false.,&                                                              ! requires sp_project
-        &visibility=UI_VIS_STANDARD)
+        &visibility=UI_VIS_STANDARD, display_name='Import Project from STAR')
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
@@ -548,7 +520,7 @@ contains
         ! PROGRAM SPECIFICATION
         call new_project%new(&
         &'new_project',&                     ! name
-        &'Create a SIMPLE project directory and project file',& ! summary
+        &'Create a project directory and initialize its SIMPLE metadata file',& ! summary
         &'is a program for creating a new project. SIMPLE3.0 relies on a monolithic project file for controlling &
         &execution on distributed and shared-memory systems and for unified meta-data management. This program &
         &creates a directory named projname and a file projname.simple inside that directory that contains all &
@@ -557,7 +529,7 @@ contains
         &meta-data I/O required for execution of SIMPLE',& ! help
         &'all',&                             ! executable
         &.false., &
-        &visibility=UI_VIS_STANDARD)                            ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Create SIMPLE Project') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -568,7 +540,7 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call new_project%add_input(UI_PARM, projname, required_override=.false., &
         &visibility=UI_VIS_ADVANCED)
-        call new_project%add_input(UI_FILE, 'dir', 'dir', 'Project directory', 'Project directory', 'give dir', .false., '', &
+        call new_project%add_input(UI_FILE, 'dir', 'dir', 'Project directory', 'Project directory', 'e.g. project/', .false., '', &
         &visibility=UI_VIS_ADVANCED)
         call new_project%add_requirement('project_location', 'Project location', &
             'Supply a project name, a project directory, or both.', &
@@ -771,10 +743,10 @@ contains
         call selection%add_input(UI_PARM, dfmin, &
         &visibility=UI_VIS_ADVANCED)
         call selection%add_input(UI_FILE, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
-        &'give .txt selection file', .false., '', &
+        &'e.g. selection.txt', .false., '', &
         &visibility=UI_VIS_ADVANCED)
         call selection%add_input(UI_FILE, 'deselfile', 'file', 'File with deselection indices', 'Plain text file (.txt) with deselection indices',&
-        &'give .txt deselection file', .false., '', &
+        &'e.g. deselected.txt', .false., '', &
         &visibility=UI_VIS_ADVANCED)
         call selection%add_input(UI_PARM, nran, &
         &visibility=UI_VIS_ADVANCED)

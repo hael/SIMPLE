@@ -377,7 +377,7 @@ subroutine set_ui_params
                                    'Low-pass limit for picking in Angstroms{20}', &
                                    'in Angstroms{20}', .false., 20.)
 
-    call lp_track%set_param(       'lp_pick',         'num',    'Low-pass limit in Angs', &
+    call lp_track%set_param(       'lp',              'num',    'Low-pass limit in Angs', &
                                    'Low-pass limit in Angs{2.3}', &
                                    'lp in Angs{2.3}', .false., 2.3)
 
@@ -572,7 +572,7 @@ subroutine set_ui_params
 
     call outfile%set_param(        'outfile',         'file',   'Output orientation and CTF parameter file', &
                                    'Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format', &
-                                   '.simple|.txt parameter file', .false., 'outfile'//trim(METADATA_EXT))
+                                   'e.g. orientations.txt', .false., 'outfile'//trim(METADATA_EXT))
 
     call outside%set_param(        'outside',         'binary', 'Extract outside stage boundaries', &
                                    'Extract boxes outside the micrograph boundaries(yes|no){no}','', .false., 'no', &
