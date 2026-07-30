@@ -465,6 +465,7 @@ contains
         call reg%add_real('defocus', self%defocus)
         call reg%add_real('dferr', self%dferr)
         call reg%add_real('sgd_eta_shift', self%sgd_eta_shift)
+        call reg%add_real('sgd_update_frac', self%sgd_update_frac)
         call reg%add_real('dfmax', self%dfmax)
         call reg%add_real('dfmin', self%dfmin)
         call reg%add_real('dfsdev', self%dfsdev)

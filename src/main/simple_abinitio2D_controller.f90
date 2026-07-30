@@ -6,7 +6,7 @@ implicit none
 
 public :: stage_params, determine_abinitio2D_stages, mskdiam2lplimits_cluster2D, set_cline_cluster2D_stage
 public :: set_abinitio2D_sampling_policy
-public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE
+public :: SMPD_TARGET, MINBOXSZ, NSTAGES_CLS, ITS_INCR, PHASES, EXTR_LIM_LOCAL, EO_STAGE, NSAMPLE_DEFAULT_2D
 public :: PROBREFINE_STAGE, STOCH_SAMPL_STAGE, STICKY_SAMPL_STAGE, FRAC_UPDATE_STAGE
 private
 #include "simple_local_flags.inc"
@@ -79,10 +79,16 @@ contains
         ! implementation is passed only to stage 4 and later; stages 1-3
         ! retain the ordinary SIMPLE path unchanged.
         l_enable_sgd = trim(params%sgd_stage4_mode) /= 'off' .and. istage >= 4
+        if( l_enable_sgd .and. istage == 4 .and. trim(params%sgd_stage4_mode) == 'alternate' )then
+            ! cfg%iter is the global iteration that this stage invocation will run.
+            ! Alternate mode deliberately uses SGD on odd stage-4 iterations
+            ! (for example 17 and 19) and the unchanged matcher on even ones.
+            l_enable_sgd = mod(cfg%iter, 2) == 1
+        endif
         if( params%sgd_diagnostic )then
-            write(logfhandle,'(A,1X,A,I0,1X,A,1X,A,1X,A,L1)') &
+            write(logfhandle,'(A,1X,A,I0,1X,A,I0,1X,A,1X,A,1X,A,L1)') &
                 '>>> SEARCH DIAG: SGD stage dispatch:', 'stage=', istage, &
-                'stage4_mode=', trim(params%sgd_stage4_mode), 'enable=', l_enable_sgd
+                'iteration=', cfg%iter, 'stage4_mode=', trim(params%sgd_stage4_mode), 'enable=', l_enable_sgd
         endif
         if( l_enable_sgd )then
             call cline_cluster2D%set('sgd', 'yes')

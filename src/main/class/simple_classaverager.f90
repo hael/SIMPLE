@@ -19,6 +19,7 @@ public :: cavger_read_euclid_sigma2, cavger_kill
 ! Interpolation & restoration
 public :: cavger_init_online, cavger_update_sums, cavger_dealloc_online
 public :: cavger_assemble_sums, cavger_restore_cavgs
+public :: cavger_zero_support_recovery
 ! I/O & handling of distributed sums
 public :: cavger_write_eo, cavger_write_all, cavger_write_merged, cavger_read_all
 public :: cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts
@@ -133,6 +134,8 @@ type(image), target, allocatable :: cavgs_odd(:)              !< Odd class avera
 type(image), target, allocatable :: cavgs_merged(:)           !< Merged class averages for reading
 type(image),         allocatable :: tmp_pad_imgs(:)           !< Temporary images for on-the-fly classes update
 type(cavgs_set)                  :: cavgs                     !< Class averages
+type(cavgs_set)                  :: cavgs_prev                !< Previous averages for zero-support recovery
+logical                          :: have_prev_cavgs = .false. !< Previous averages are available for recovery
 type(builder),        pointer    :: b_ptr  => null()          !< active builder instance
 class(parameters),    pointer    :: p_ptr => null()           !< active parameters instance
 integer,             allocatable :: eo_pops(:,:)              !< Even/odd class populations
@@ -439,6 +442,12 @@ interface
         type(image), optional, allocatable, intent(inout) :: imgs_ori(:)
         integer,     optional,              intent(in)    :: pinds_in(:)
     end subroutine transform_ptcls
+
+    module pure function cavger_zero_support_recovery( pop, have_previous ) result(l_restore)
+        integer, intent(in) :: pop
+        logical, intent(in) :: have_previous
+        logical :: l_restore
+    end function cavger_zero_support_recovery
 
 end interface
 

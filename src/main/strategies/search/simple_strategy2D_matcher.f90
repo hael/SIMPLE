@@ -230,6 +230,12 @@ contains
             if( p_ptr%startit == 1 )then
                 ctrl%l_frac_restore = .false.
             endif
+            if( ctrl%l_sgd_stream )then
+                ! SGD uses its own mini-batch fraction, including the first
+                ! active iteration; do not inherit update_frac or sticky sampling.
+                ctrl%l_sample_updates = .true.
+                ctrl%l_frac_restore   = .true.
+            endif
             if( p_ptr%extr_iter == 1 )then
                 ctrl%l_greedy       = .true.
                 ctrl%l_snhc         = .false.
@@ -240,12 +246,10 @@ contains
                 ctrl%l_sample_updates = .false.
                 ctrl%l_frac_restore   = .false.
                 if( ctrl%l_sgd_stream )then
-                    ! SGD stream uses the controller's fractional-update
-                    ! request on every active iteration.
-                    if( p_ptr%l_update_frac .and. (p_ptr%update_frac < 0.99) )then
-                        ctrl%l_sample_updates = .true.
-                        ctrl%l_frac_restore   = .true.
-                    endif
+                    ! sample_ptcls4update2D applies sgd_update_frac and the
+                    ! existing NSAMPLE_DEFAULT_2D cap on every active iteration.
+                    ctrl%l_sample_updates = .true.
+                    ctrl%l_frac_restore   = .true.
                 else
                     ! Preserve legacy stream behavior for non-SGD runs.
                     if( (which_iter > 1) .and. (p_ptr%update_frac < 0.99) )then

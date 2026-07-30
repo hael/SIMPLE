@@ -718,6 +718,8 @@ contains
         end select
         if( self%sgd_shift_its < 1 ) THROW_HARD('sgd_shift_its must be positive')
         if( self%sgd_eta_shift <= 0. ) THROW_HARD('sgd_eta_shift must be positive')
+        if( self%sgd_update_frac <= 0. .or. self%sgd_update_frac > 1. ) &
+            THROW_HARD('sgd_update_frac must be in (0,1]')
         ! sgd_stage4_mode is the sole public activation switch. The legacy
         ! sgd flag remains parseable for internal child commands, but must not
         ! be required by users and cannot re-enable an obsolete table path.

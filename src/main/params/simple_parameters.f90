@@ -588,6 +588,7 @@ type :: parameters
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale_movies=1.     !< movie scale factor
     real    :: sgd_eta_shift=0.25  !< direct-gradient shift learning rate
+    real    :: sgd_update_frac=0.6 !< fraction of active particles in each SGD mini-batch
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=1.3            !< sampling distance; same as EMANs apix(in A)

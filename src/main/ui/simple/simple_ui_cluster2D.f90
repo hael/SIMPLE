@@ -82,6 +82,9 @@ contains
         call abinitio2D%add_input(UI_SRCH, 'sgd_eta_shift', 'num', 'SGD shift learning rate', &
             &'Learning rate for bounded analytical shift updates{0.25}', 'learning rate{0.25}', .false., 0.25, &
             gui_submenu="search", gui_advanced=.true.)
+        call abinitio2D%add_input(UI_SRCH, 'sgd_update_frac', 'num', 'SGD mini-batch fraction', &
+            &'Fraction of active particles sampled afresh on each SGD iteration{0.6}', 'fraction{0.6}', .false., 0.6, &
+            gui_submenu="search", gui_advanced=.true.)
         call abinitio2D%add_input(UI_SRCH, 'sgd_shift_its', 'num', 'SGD shift steps', &
             &'Maximum bounded analytical shift steps per particle{4}', 'steps{4}', .false., 4., &
             gui_submenu="search", gui_advanced=.true.)
