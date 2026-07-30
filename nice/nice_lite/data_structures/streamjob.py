@@ -320,7 +320,7 @@ class StreamJob(Job):
         if self.jobmodel is None:
             print_error("jobmodel is none")
             return False
-        if self.jobmodel.master_status != "running":
+        if self.jobmodel.master_status != "running" and self.jobmodel.master_status != "error":
             print_error("master is not running")
             return False
         self.jobmodel.master_status = "terminating"
@@ -330,7 +330,7 @@ class StreamJob(Job):
         self.jobmodel.save()
         return True
 
-    def terminate_process(self, term_preprocess, term_optics_assignment, term_generate_pickrefs):
+    def terminate_process(self, term_preprocess, term_optics_assignment, term_generate_pickrefs, term_reference_picking, term_particle_sieving, term_pool2D):
         """
         Signal one or more sub-processes to terminate.
         Flags are boolean; only flagged processes are affected.
@@ -345,11 +345,17 @@ class StreamJob(Job):
             master_update["terminate_optics_assignment"] = True
         if term_generate_pickrefs:
             master_update["terminate_opening2D"] = True
+        if term_reference_picking:
+            master_update["terminate_reference_picking"] = True
+        if term_particle_sieving:
+            master_update["terminate_particle_sieving"] = True
+        if term_pool2D:
+            master_update["terminate_pool2D"] = True
         self.jobmodel.master_update = master_update
         self.jobmodel.save()
         return True
 
-    def restart_process(self, restart_preprocess, restart_optics_assignment, restart_generate_pickrefs):
+    def restart_process(self, restart_preprocess, restart_optics_assignment, restart_generate_pickrefs, restart_reference_picking, restart_particle_sieving, restart_pool2D):
         """
         Signal one or more terminated sub-processes to restart.
         Clears the corresponding terminate flag before setting the restart flag.
@@ -368,6 +374,15 @@ class StreamJob(Job):
         if restart_generate_pickrefs:
             master_update.pop("terminate_opening2D", None)
             master_update["restart_opening2D"] = True
+        if restart_reference_picking:
+            master_update.pop("terminate_reference_picking", None)
+            master_update["restart_reference_picking"] = True
+        if restart_particle_sieving:
+            master_update.pop("terminate_particle_sieving", None)
+            master_update["restart_particle_sieving"] = True
+        if restart_pool2D:
+            master_update.pop("terminate_pool2D", None)
+            master_update["restart_pool2D"] = True
         self.jobmodel.master_update = master_update
         self.jobmodel.save()
         return True

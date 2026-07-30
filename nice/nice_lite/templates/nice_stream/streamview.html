@@ -12,6 +12,7 @@
   Context variables:
     disp  — human-readable stream number / display name
     jobid — primary key of the job, appended as ?selected_job_id= on all iframes
+    desc  — optional user-supplied job description; shown alongside disp when non-empty
     args  — dict of stream launch parameters (smpd, cs, kv, fraca, etc.)
 {% endcomment %}
 {% load static %}
@@ -32,7 +33,7 @@
         </a>
         <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">simple stream</span>
         <span class="text-streamlabel text-[10px]">/</span>
-        <span class="text-[12px] font-medium text-streamtext">{{ disp }} · stream</span>
+        <span class="text-[12px] font-medium text-streamtext">{{ disp }} · stream{% if desc %} · {{ desc }}{% endif %}</span>
     </div>
     
     <!-- Scrollable stage-card grid -->

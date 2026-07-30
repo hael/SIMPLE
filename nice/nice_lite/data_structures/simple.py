@@ -246,7 +246,12 @@ class SIMPLEStream:
         except IOError:
             print_error("File '%s' can not be written")
             return False
-        os.chmod(dispatch_script_path, stat.S_IRWXU)
+        
+        try:
+            os.chmod(dispatch_script_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+        except OSError as e:
+            print_error(str(e))
+            return False
 
         if shutil.which(dispatchmodel.scmd) is None:
             print_error("dispatch command doesnt exist")
@@ -396,7 +401,11 @@ class SIMPLEBatch:
         except IOError:
             print_error("File '%s' can not be written" % dispatch_script_path)
             return False
-        os.chmod(dispatch_script_path, stat.S_IRWXU)
+        try:
+            os.chmod(dispatch_script_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+        except OSError as e:
+            print_error(str(e))
+            return False
 
         if shutil.which(dispatchmodel.scmd) is None:
             return False

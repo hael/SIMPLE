@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
-    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='initial picking' %}
+    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='initial picking' desc=desc %}
     <div class="w-full flex flex-row p-[10px] max-h-[320px]">
         <div class="flex flex-col h-full gap-2.5">
             <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
@@ -46,7 +46,7 @@
         {% include 'nice_stream/includes/_zoom_help_panel.html' %}
     </div>
     <div class="w-full flex-1 flex-row mb-[10px] overflow-hidden">
-        <div class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
+        <div id="micrographs_panel" class="flex mx-[10px] flex-1 flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
             <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
                 <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">latest micrographs</p>
             </div>
@@ -54,9 +54,9 @@
                 <div class="flex flex-col flex-1 overflow-y-auto">
                     <div class="flex flex-row items-center m-auto">
                         {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
-                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[512] mx-2 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden relative">
+                        <div id="micrographs_slider" oncontextmenu="showMenu(this, event)" class="flex flex-row w-[512px] mx-2 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden relative">
                             {% for micrograph in jobstats.latest_micrographs %}
-                                <div class="miccontainer snap-center slider_micrograph rounded" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
+                                <div class="miccontainer snap-start slider_micrograph rounded mx-2" data-xdim={{ micrograph.xdim }} data-ydim={{ micrograph.ydim }} data-boxes='{{ micrograph.boxes}}'>
                                     <canvas class="boxes-overlay absolute hover:animate-pulse z-1" height="512" width="512"></canvas>
                                     <div class=" w-[512px] h-[512px] m-auto">
                                         <div style="filter:contrast(var(--inipick-contrast)) brightness(var(--inipick-brightness)); background: url({% url 'nice_lite:image' micrograph.path %}); background-size:200% 100%; background-position:100% 0%" class="h-[512px] w-[512px] rounded"></div>
@@ -93,8 +93,20 @@
 
     <script>
         let lastinteraction = Date.now();
+        let currentMicWidth = 512;
 
         const parseAttr = (raw, fallback = "[]") => JSON.parse((raw || fallback).replaceAll("'", '"'));
+
+        const updateMicSliderWidth = () => {
+            const slider = document.getElementById("micrographs_slider");
+            const panel = document.getElementById("micrographs_panel");
+            if (!slider || !panel) return;
+            const micSlot = currentMicWidth + 16; // miccontainer width + its mx-2 margins
+            const reserved = (2 * 24) + 16; // two scroll buttons + slider's mx-2 margins
+            const available = panel.clientWidth - reserved;
+            const count = Math.max(1, Math.floor(available / micSlot));
+            slider.style.width = (count * micSlot) + "px";
+        };
 
         const scrlRight = (element, event) => {
             event.preventDefault();
@@ -180,10 +192,7 @@
         };
 
         const updateScale = (element) => {
-            const micrographsSlider = document.getElementById("micrographs_slider");
-            if (micrographsSlider) {
-                micrographsSlider.style.width = element.value + "px";
-            }
+            currentMicWidth = Number(element.value);
 
             for (const miccontainer of document.getElementsByClassName("miccontainer")) {
                 miccontainer.style.height = element.value + "px";
@@ -202,6 +211,7 @@
             }
 
             drawPerMicrographOverlays();
+            updateMicSliderWidth();
         };
 
         window.addEventListener("load", () => {
@@ -210,12 +220,15 @@
             root.style.setProperty("--inipick-brightness", 1.0);
 
             drawPerMicrographOverlays();
+            updateMicSliderWidth();
 
             const logtext = document.querySelector(".logtext");
             if (logtext) {
                 logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight;
             }
         }, false);
+
+        window.addEventListener("resize", updateMicSliderWidth);
 
         window.addEventListener("visibilitychange", () => {
             if (document.visibilityState !== "hidden") {

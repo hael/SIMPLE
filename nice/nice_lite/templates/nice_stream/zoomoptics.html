@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
-    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='optics assignment' %}
+    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='optics assignment' desc=desc %}
     <div class="w-full flex flex-row p-[10px] max-h-[320px]">
         {% if "optics_groups_assigned" in jobstats%}
             <div class="flex flex-col h-full gap-2.5">

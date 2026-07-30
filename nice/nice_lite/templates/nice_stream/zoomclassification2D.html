@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
-    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='2D classification' %}
+    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='2D classification' desc=desc %}
     <div class="w-full flex flex-row p-[10px] max-h-[320px]">
         <div class="flex flex-col h-full gap-2.5">
             <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
@@ -88,8 +88,8 @@
                                     </div>
                                 {% endfor %}
                             </div>
-                            <div name="selectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                                <div name="selectmenubox" class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
+                            <div name="selectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu(this, event)" oncontextmenu="hideMenu(this, event)"></div>
+                                <div name="selectmenubox" class="fixed flex flex-col gap-1 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
                                     <div class="flex flex-col">
                                         <div class="text-[10px] text-streamlabel">contrast</div>
                                         <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
@@ -106,6 +106,9 @@
                                     <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
                                     <div id="selectabove" class="userbutton w-auto text-center">select above</div>
                                     <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
+                                    <div id="selectall" class="userbutton w-auto text-center">select all</div>
+                                    <div id="deselectall" class="userbutton w-auto text-center">deselect all</div>
+                                    <div id="invertselection" class="userbutton w-auto text-center">invert selection</div>
                                 </div>
                             </div>
                         </div> 
@@ -137,8 +140,8 @@
                                     </div>
                                 {% endfor %}
                             </div>
-                            <div name="selectmenu" class="hidden absolute w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu()">
-                                <div name="selectmenubox" class="absolute flex flex-col gap-2 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
+                            <div name="selectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu(this, event)" oncontextmenu="hideMenu(this, event)">
+                                <div name="selectmenubox" class="fixed flex flex-col gap-1 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
                                     <div class="flex flex-col">
                                         <div class="text-[10px] text-streamlabel">contrast</div>
                                         <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
@@ -155,6 +158,9 @@
                                     <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
                                     <div id="selectabove" class="userbutton w-auto text-center">select above</div>
                                     <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
+                                    <div id="selectall" class="userbutton w-auto text-center">select all</div>
+                                    <div id="deselectall" class="userbutton w-auto text-center">deselect all</div>
+                                    <div id="invertselection" class="userbutton w-auto text-center">invert selection</div>
                                 </div>
                             </div>
                         </div> 
@@ -331,36 +337,48 @@
         const showMenu = (element, event) => {
             event.preventDefault();
             currentMenuContainer = element.closest("#accepted_cls2D_slider");
-            const selectmenu = element.parentElement.parentElement.querySelector("[name='selectmenu']");
+            const selectmenu = element.parentElement.parentElement.parentElement.querySelector("[name='selectmenu']");
             if (!selectmenu) return;
-
             const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
             const sortpop = selectmenu.querySelector("#sortpop");
             const sortres = selectmenu.querySelector("#sortres");
             const selectabove = selectmenu.querySelector("#selectabove");
             const selectbelow = selectmenu.querySelector("#selectbelow");
+            const selectall = selectmenu.querySelector("#selectall");
+            const deselectall = selectmenu.querySelector("#deselectall");
+            const invertselection = selectmenu.querySelector("#invertselection");
 
-            selectmenubox.style.top = event.pageY + "px";
-            selectmenubox.style.left = event.pageX + "px";
+            selectmenubox.style.top = event.clientY + "px";
+            selectmenubox.style.left = event.clientX + "px";
             selectmenu.style.display = "flex";
             if (sortpop) sortpop.onclick = sortPop;
             if (sortres) sortres.onclick = sortRes;
             if (selectabove) selectabove.onclick = () => selectAbove(element);
             if (selectbelow) selectbelow.onclick = () => selectBelow(element);
+            if (selectall) selectall.onclick = () => selectAll(element);
+            if (deselectall) deselectall.onclick = () => deselectAll(element);
+            if (invertselection) invertselection.onclick = () => invertSelection(element);
             lastinteraction = Date.now();
         };
 
-        const hideMenu = () => {
+        const hideMenu = (element, event) => {
+            event.preventDefault();
             for (const selectmenu of document.querySelectorAll("[name='selectmenu']")) {
                 const sortpop = selectmenu.querySelector("#sortpop");
                 const sortres = selectmenu.querySelector("#sortres");
                 const selectabove = selectmenu.querySelector("#selectabove");
                 const selectbelow = selectmenu.querySelector("#selectbelow");
+                const selectall = selectmenu.querySelector("#selectall");
+                const deselectall = selectmenu.querySelector("#deselectall");
+                const invertselection = selectmenu.querySelector("#invertselection");
                 selectmenu.style.display = "none";
                 if (sortpop) sortpop.onclick = null;
                 if (sortres) sortres.onclick = null;
                 if (selectabove) selectabove.onclick = null;
                 if (selectbelow) selectbelow.onclick = null;
+                if (selectall) selectall.onclick = null;
+                if (deselectall) deselectall.onclick = null;
+                if (invertselection) invertselection.onclick = null;
             }
             lastinteraction = Date.now();
         };
@@ -423,6 +441,47 @@
                     clscontainer.classList.add("disabledbutton");
                 }
 
+                if (clscontainer.classList.contains("disabledbutton")) {
+                    if (mskcanvas) mskcanvas.classList.add("hidden");
+                    if (xmark) xmark.classList.remove("hidden");
+                } else {
+                    if (xmark) xmark.classList.add("hidden");
+                    if (mskcanvas) mskcanvas.classList.remove("hidden");
+                }
+            }
+            updateCounts();
+            hideMenu();
+        };
+
+        const selectAll = (element) => {
+            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+                const mskcanvas = clscontainer.querySelector(".mskcanvas");
+                const xmark = clscontainer.querySelector(".xmark");
+                clscontainer.classList.remove("disabledbutton");
+                if (xmark) xmark.classList.add("hidden");
+                if (mskcanvas) mskcanvas.classList.remove("hidden");
+            }
+            updateCounts();
+            hideMenu();
+        };
+
+        const deselectAll = (element) => {
+            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+                const mskcanvas = clscontainer.querySelector(".mskcanvas");
+                const xmark = clscontainer.querySelector(".xmark");
+                clscontainer.classList.add("disabledbutton");
+                if (mskcanvas) mskcanvas.classList.add("hidden");
+                if (xmark) xmark.classList.remove("hidden");
+            }
+            updateCounts();
+            hideMenu();
+        };
+
+        const invertSelection = (element) => {
+            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+                const mskcanvas = clscontainer.querySelector(".mskcanvas");
+                const xmark = clscontainer.querySelector(".xmark");
+                clscontainer.classList.toggle("disabledbutton");
                 if (clscontainer.classList.contains("disabledbutton")) {
                     if (mskcanvas) mskcanvas.classList.add("hidden");
                     if (xmark) xmark.classList.remove("hidden");

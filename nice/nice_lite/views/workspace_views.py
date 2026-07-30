@@ -55,16 +55,36 @@ def _is_workspace_accessible(workspace_obj, project_id, username=None):
     return owner == username
 
 
+def _filter_by_selection(stats, latest):
+    """Reduce ``latest`` to entries whose ``idx`` is in ``stats["selection"]``, when present."""
+    selection = stats.get("selection")
+    if isinstance(selection, list):
+        selected_idxs = set(selection)
+        latest = [entry for entry in latest if isinstance(entry, dict) and entry.get("idx") in selected_idxs]
+    return latest
+
+
 def _normalize_latest_cls2d(jobs):
-    """Sort ``latest_cls2D`` by population when classification stats are well-formed."""
+    """Sort ``latest_cls2D`` by population when classification stats are well-formed.
+
+    When ``stats`` carries a ``selection`` array of indices, ``latest_cls2D`` is
+    first reduced to only the entries whose ``idx`` is in that selection.
+    """
     for jobmodel in jobs:
+        # sort latest_cls2D in classification_2D_stats
         stats = jobmodel.classification_2D_stats
-        if not isinstance(stats, dict):
-            continue
-        latest = stats.get("latest_cls2D")
-        if not isinstance(latest, list):
-            continue
-        stats["latest_cls2D"] = sorted(latest, key=lambda entry: entry.get("pop", 0) if isinstance(entry, dict) else 0, reverse=True)
+        if isinstance(stats, dict):
+            latest = stats.get("latest_cls2D")
+            if isinstance(latest, list):
+                latest = _filter_by_selection(stats, latest)
+                stats["latest_cls2D"] = sorted(latest, key=lambda entry: entry.get("res", 0) if isinstance(entry, dict) else 0, reverse=False)
+        # sort latest_cls2D in particle_sieving_stats
+        stats = jobmodel.particle_sieving_stats
+        if isinstance(stats, dict):
+            latest = stats.get("latest_cls2D")
+            if isinstance(latest, list):
+                latest = _filter_by_selection(stats, latest)
+                stats["latest_cls2D"] = sorted(latest, key=lambda entry: entry.get("res", 0) if isinstance(entry, dict) else 0, reverse=False)
 
 # ------------------------------------------------------------------
 # Views
@@ -121,10 +141,10 @@ def view_workspace(request):
 @login_required(login_url="/login")
 def view_workspace_jobs(request):
     """Render jobs iframe payload, or return 204 when unchanged."""
-    workspace_id = get_workspace_id(request)
-    project_id = get_project_id(request)
+    workspace_id  = get_workspace_id(request)
+    project_id    = get_project_id(request)
     workspace_obj = Workspace(workspace_id)
-    response = HttpResponseNoContent()
+    response      = HttpResponseNoContent()
 
     if not _is_workspace_accessible(workspace_obj, project_id, request.user.username):
         return render(request, "jobs.html", {"jobs": []})

@@ -34,15 +34,19 @@
 
             <!-- Count tiles -->
             <div class="grid grid-cols-2 gap-2">
-                {% if ms.movies_processed|add:ms.movies_rejected == ms.movies_imported %}
-                    {% include 'nice_stream/includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" %}
-                {% else %}
-                    {% include 'nice_stream/includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" variant="action" %}
+                {% if ms.movies_imported > 0 %}
+                    {% if ms.movies_processed == ms.movies_imported %} 
+                        {% include 'nice_stream/includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" %}
+                    {% else %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=ms.movies_processed label="movies processed" sublabel=ms.movies_imported sublabel_sep="/" variant="action" %}
+                    {% endif %}
                 {% endif %}
-                 {% if cs.particles_processed|add:cs.particles_rejected == cs.particles_imported %}
-                    {% include 'nice_stream/includes/_count_tile.html' with count=cs.particles_processed label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" %}
-                {% else %}
-                    {% include 'nice_stream/includes/_count_tile.html' with count=cs.particles_processed label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" variant="action" %}
+                {% if cs.particles_imported > 0 %}
+                    {% if cs.particles_accepted == cs.particles_imported %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=cs.particles_accepted label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" %}
+                    {% else %}
+                        {% include 'nice_stream/includes/_count_tile.html' with count=cs.particles_accepted label="particles processed" sublabel=cs.particles_imported sublabel_sep="/" variant="action" %}
+                    {% endif %}
                 {% endif %}
             </div>
 
@@ -145,7 +149,7 @@
                 </button>
             </form>   
         <!-- Terminate (running/alarm) -->
-        {% elif job.status == "running" or job.status == "alarm" %}
+        {% elif job.status == "running" or job.status == "alarm" or job.status == "error" %}
             <form method="POST" action="{% url 'nice_lite:terminate_stream' %}" target="_parent">
                 {% csrf_token %}
                 <input type="hidden" name="selected_job_id" value="{{ job.id }}">

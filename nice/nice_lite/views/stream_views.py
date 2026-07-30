@@ -202,18 +202,26 @@ def view_stream_terminate_stream_process(request):
     term_preprocess = string_present(request.POST, "terminate_preprocess", silent=True)
     term_optics_assignment = string_present(request.POST, "terminate_optics_assignment", silent=True)
     term_generate_pickrefs = string_present(request.POST, "terminate_generate_pickrefs", silent=True)
-    streamjob.terminate_process(term_preprocess, term_optics_assignment, term_generate_pickrefs)
+    term_reference_picking = string_present(request.POST, "terminate_reference_picking", silent=True)
+    term_particle_sieving  = string_present(request.POST, "terminate_particle_sieving", silent=True)
+    term_pool2D            = string_present(request.POST, "terminate_pool2D", silent=True)
+    streamjob.terminate_process(term_preprocess, term_optics_assignment, term_generate_pickrefs, term_reference_picking, term_particle_sieving, term_pool2D)
     if term_preprocess:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_preprocess", query={"selected_job_id": jobid}))
     elif term_optics_assignment:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_optics", query={"selected_job_id": jobid}))
     elif term_generate_pickrefs:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_generate_pickrefs", query={"selected_job_id": jobid}))
+    elif term_reference_picking:
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_reference_picking", query={"selected_job_id": jobid}))
+    elif term_particle_sieving:
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_sieve_particles", query={"selected_job_id": jobid}))
+    elif term_pool2D:
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_classification_2D", query={"selected_job_id": jobid}))
     else:
         print_error(f"terminate_stream_process: no process flag provided for job {jobid}")
         response = redirect("nice_lite:view_stream", jobid=jobid)
     return response
-
 
 @login_required(login_url="/login")
 @require_POST
@@ -227,13 +235,22 @@ def view_stream_restart_stream_process(request):
     restart_preprocess = string_present(request.POST, "restart_preprocess", silent=True)
     restart_optics_assignment = string_present(request.POST, "restart_optics_assignment", silent=True)
     restart_generate_pickrefs = string_present(request.POST, "restart_generate_pickrefs", silent=True)
-    streamjob.restart_process(restart_preprocess, restart_optics_assignment, restart_generate_pickrefs)
+    restart_reference_picking = string_present(request.POST, "restart_reference_picking", silent=True)
+    restart_particle_sieving  = string_present(request.POST, "restart_particle_sieving", silent=True)
+    restart_pool2D            = string_present(request.POST, "restart_pool2D", silent=True)
+    streamjob.restart_process(restart_preprocess, restart_optics_assignment, restart_generate_pickrefs, restart_reference_picking, restart_particle_sieving, restart_pool2D)
     if restart_preprocess:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_preprocess", query={"selected_job_id": jobid}))
     elif restart_optics_assignment:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_optics", query={"selected_job_id": jobid}))
     elif restart_generate_pickrefs:
         response = HttpResponseRedirect(reverse("nice_lite:view_stream_generate_pickrefs", query={"selected_job_id": jobid}))
+    elif restart_reference_picking:
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_reference_picking", query={"selected_job_id": jobid}))
+    elif restart_particle_sieving:
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_sieve_particles", query={"selected_job_id": jobid}))
+    elif restart_pool2D:
+        response = HttpResponseRedirect(reverse("nice_lite:view_stream_classification_2D", query={"selected_job_id": jobid}))
     else:
         print_error(f"restart_stream_process: no process flag provided for job {jobid}")
         response = HttpResponseRedirect(reverse("nice_lite:view_stream", query={"selected_job_id": jobid}))
@@ -283,6 +300,7 @@ def view_stream(request, jobid):
     context = {
         "jobid": jobmodel.id,
         "disp": jobmodel.disp,
+        "desc": jobmodel.desc,
         "proj": jobmodel.dset.proj.name,
         "dset": jobmodel.dset.name,
         "args": jobmodel.args,
@@ -347,6 +365,7 @@ def view_stream_preprocess_zoom(request):
     context = {
         "jobid": jobmodel.id,
         "displayid": jobmodel.disp,
+        "desc": jobmodel.desc,
         "jobstats": jobmodel.preprocessing_stats,
         "status": jobmodel.preprocessing_status,
         "log": [],
@@ -402,6 +421,7 @@ def view_stream_optics_zoom(request):
     context = {
         "jobid": jobmodel.id,
         "displayid": jobmodel.disp,
+        "desc": jobmodel.desc,
         "jobstats": jobmodel.optics_assignment_stats,
         "status": jobmodel.optics_assignment_status,
         "log": [],
@@ -457,6 +477,7 @@ def view_stream_initial_pick_zoom(request):
     context = {
         "jobid": jobmodel.id,
         "displayid": jobmodel.disp,
+        "desc": jobmodel.desc,
         "jobstats": jobmodel.initial_picking_stats,
         "status": jobmodel.initial_picking_status,
         "log": [],
@@ -521,6 +542,7 @@ def view_stream_generate_pickrefs_zoom(request):
     context = {
         "jobid": jobmodel.id,
         "displayid": jobmodel.disp,
+        "desc": jobmodel.desc,
         "jobstats": stats,
         "status": jobmodel.generate_pickrefs_status,
         "log": [],
@@ -587,6 +609,8 @@ def view_stream_reference_picking_zoom(request):
 
     context = {
         "jobid": jobmodel.id,
+        "displayid": jobmodel.disp,
+        "desc": jobmodel.desc,
         "jobstats": jobmodel.reference_picking_stats,
         "status": jobmodel.reference_picking_status,
         "log": [],
@@ -685,6 +709,8 @@ def view_stream_sieve_particles_zoom(request):
 
     context = {
         "jobid": jobmodel.id,
+        "displayid": jobmodel.disp,
+        "desc": jobmodel.desc,
         "jobstats": jobmodel.particle_sieving_stats,
         "status": jobmodel.particle_sieving_status,
         "log": [],
@@ -774,6 +800,8 @@ def view_stream_classification_2D_zoom(request):
 
     context = {
         "jobid": jobmodel.id,
+        "displayid": jobmodel.disp,
+        "desc": jobmodel.desc,
         "jobstats": jobmodel.classification_2D_stats,
         "status": jobmodel.classification_2D_status,
         "log": [],

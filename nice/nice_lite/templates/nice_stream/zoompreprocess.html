@@ -9,7 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 <body class="w-full h-screen flex flex-col bg-streambg text-streamtext font-sans">
-    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='preprocessing' %}
+    {% include 'nice_stream/includes/_zoom_back_header.html' with page_title='preprocessing' desc=desc %}
     <div class="w-full flex flex-row p-[10px] max-h-[320px]">
         <div class="flex flex-col h-full bg-streambar rounded-xl text-streamtext border border-streamline">
             {% if "movies_imported" in jobstats and "movies_processed" in jobstats and "movies_rejected" in jobstats and jobstats.movies_imported > 0 %}
