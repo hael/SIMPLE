@@ -131,7 +131,6 @@ contains
                 l_cavgs_mode = .true.
                 allocate(lpinfo(nstages_ini3D))
                 call lpstages_fast(params%box, nstages_ini3D, params%smpd, params%lpstart_ini3D, params%lpstop_ini3D, lpinfo)
-                call force_initial_stage_downscaling(lpinfo, abinitio_cavgs_early_nstages())
             else
                 THROW_HARD('Both lpstart_ini3D & lpstop_ini3D must be inputted')
             endif

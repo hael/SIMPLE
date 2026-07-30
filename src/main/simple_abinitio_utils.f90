@@ -328,9 +328,7 @@ contains
             if( allocated(lpinfo) ) deallocate(lpinfo)
             allocate(lpinfo(nstages))
             call lpstages_fast(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
-            if( l_cavgs )then
-                call force_initial_stage_downscaling(lpinfo, abinitio_cavgs_early_nstages())
-            else
+            if( .not. l_cavgs )then
                 call force_stage1_lowpass_limit(lpinfo)
             endif
             return
@@ -358,9 +356,7 @@ contains
             call lpstages(params%box, nstages, frcs_avg, params%smpd,&
             &lpstart_bounds(1), lpstart_bounds(2), lpfinal, lpinfo, l_cavgs, verbose=.true.)
         endif
-        if( l_cavgs )then
-            call force_initial_stage_downscaling(lpinfo, abinitio_cavgs_early_nstages())
-        else
+        if( .not. l_cavgs )then
             call force_stage1_lowpass_limit(lpinfo)
         endif
         ! cleanup
@@ -400,21 +396,6 @@ contains
         if( nstages_refine3D > 0 ) nstages = min(nstages_refine3D, nstages)
         nstages = max(1, nstages)
     end function active_lp_schedule_nstages
-
-    subroutine force_initial_stage_downscaling( lpinfo_local, nfreeze )
-        type(lp_crop_inf), intent(inout) :: lpinfo_local(:)
-        integer,           intent(in)    :: nfreeze
-        integer :: istage, nfreeze_eff
-        if( size(lpinfo_local) < 1 ) return
-        nfreeze_eff = min(max(1, nfreeze), size(lpinfo_local))
-        do istage = 2, nfreeze_eff
-            lpinfo_local(istage)%box_crop    = lpinfo_local(1)%box_crop
-            lpinfo_local(istage)%smpd_crop   = lpinfo_local(1)%smpd_crop
-            lpinfo_local(istage)%scale       = lpinfo_local(1)%scale
-            lpinfo_local(istage)%trslim      = lpinfo_local(1)%trslim
-            lpinfo_local(istage)%l_autoscale = lpinfo_local(1)%l_autoscale
-        enddo
-    end subroutine force_initial_stage_downscaling
 
     subroutine exec_refine3D( params, istage, xrefine3D )
         class(parameters),     intent(inout) :: params
