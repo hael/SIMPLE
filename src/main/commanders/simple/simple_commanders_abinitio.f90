@@ -333,6 +333,8 @@ contains
         if( nstages_ini3D == abinitio_nstages_ini3D_max() )then
             if( trim(params%rank_cavgs).eq.'yes' ) call rank_cavgs
         endif
+        ! remove postprocessed (pproc) volumes; with bfac=0 they add nothing in cavgs mode
+        call del_pproc_vols
         ! end gracefully
         call img%kill
         call spproj%kill
@@ -345,6 +347,13 @@ contains
         call simple_end('**** SIMPLE_ABINITIO3D_CAVGS NORMAL STOP ****', &
             verbose_exit=trim(params%verbose_exit).eq.'yes', verbose_exit_fname=params%verbose_exit_fname)
         contains
+
+            subroutine del_pproc_vols
+                type(string), allocatable :: pproc_list(:)
+                ! covers per-state, per-iteration and mirrored pproc volumes
+                call simple_list_files(VOL_FBODY//'*'//PPROC_SUFFIX//'*'//MRC_EXT, pproc_list)
+                if( allocated(pproc_list) ) call del_files(pproc_list)
+            end subroutine del_pproc_vols
 
             subroutine rndstart( cline )
                 class(cmdline), intent(inout) :: cline
