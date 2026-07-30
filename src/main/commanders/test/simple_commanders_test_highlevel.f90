@@ -396,16 +396,16 @@ subroutine exec_test_reproject( self, cline )
     integer                         :: ldim(3), nptcls_stk, nlines_ori
     real                            :: smpd_stk
     logical                         :: all_ok
-    ! ---- generate 6VXX volume from built-in molecule data ----
-    write(logfhandle,'(a)') '>>> TEST_REPROJECT: generating 6VXX.mrc volume'
-    mol = sars_cov2_spkgp_6vxx()
-    call molecule%pdb2mrc(smpd=SMPD, mol=mol)
-    call params%new(cline)
-    all_ok = .true.
-    ! ---- define expected output file names ----
+        ! ---- define expected output file names ----
     vol_file = '6VXX.mrc'
     outstk   = 'reprojs.mrcs'
     outori   = 'reproject_oris'//trim(TXT_EXT)
+    ! ---- generate 6VXX volume from built-in molecule data ----
+    write(logfhandle,'(a)') '>>> TEST_REPROJECT: generating 6VXX.mrc volume'
+    mol = sars_cov2_spkgp_6vxx()
+    call molecule%pdb2mrc(smpd=SMPD, volfile=vol_file, mol=mol)
+    call params%new(cline)
+    all_ok = .true.
     ! ---- check volume was generated ----
     write(logfhandle,'(a)') '>>> CHECK: volume file exists'
     if( .not. file_exists(vol_file) )then
