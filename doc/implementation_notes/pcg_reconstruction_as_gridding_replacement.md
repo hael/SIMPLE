@@ -274,11 +274,11 @@ so a zero-tolerance solve driven to convergence loses positive-definiteness --
 that is stages 5-7's concern, not this stage's.) The lattice-exact permutation
 optimization (2.2) and the asymmetry diagnostic (2.4) remain future work.
 
-The policy note's section 10 leaves this open -- symmetry "must be handled
-either by expanding the particle set over the asymmetric unit or by symmetrising
-inside the operator; the choice interacts with the kernelized operator's
-shift-invariance assumption and needs its own design pass". This section is that
-design pass, and it picks the first option.
+At the time this section was written the policy note left the choice open --
+expand the particle set over the asymmetric unit, or symmetrize inside the
+operator -- and flagged that it interacts with the kernelized operator's
+shift-invariance assumption. This section is that design pass; it picks the
+first option. The policy note now records the outcome in its section 6.
 
 Scatter each plane pixel at all `M` orientations `S_g R_i` inside
 `accumulate_absT2`, and symmetrize `b` the same way in `apply_adjoint_all`.
@@ -991,7 +991,9 @@ data with assigned orientations; it does **not** include fractional update.
    *Not originally scoped but done here:* the colouring race and its fix, the
    merged `test=pcg_recon`, and a `dx/x` early-stop in `solve_core`
    (`PCG_XTOL = 1.5e-2`, exits alongside `rtol`; fired at iter 27 in the stage-8
-   run). See "Where this stands".
+   run). The early-stop is **suppressed by `rtol <= 0`**: stage 7 passes
+   `rtol=0.0` precisely to force a fixed iteration count, and an unconditional
+   `dx/x` exit silently defeated that. See "Where this stands".
 3. **Symmetry** (2). Coordinate replication **DONE** (see 2.3): implemented in
    `reconstructor_pcg`, wired into `reconstruct3D_pcg` (guard lifted), and gated
    by `test=pcg_recon` stage 9 (in-operator c2 build produces the same `Khat`

@@ -263,9 +263,13 @@ contains
     !!          build_transfer would otherwise recompute per particle: spatial
     !!          frequency squared, the astigmatism angle (atan2) and the
     !!          resolution shell (sqrt). The lims2 disk is fixed for the life of
-    !!          the object, so these are particle-independent. Expressions are
-    !!          bit-identical to the inlined ones they replace, so the residual
-    !!          trace is unchanged.
+    !!          the object, so these are particle-independent. These three
+    !!          expressions are bit-identical to the inlined ones they replace.
+    !!          The CTF form that consumes them is NOT: absT2_plane and
+    !!          build_transfer factor half_wl2_cs = 0.5*wl*wl*Cs out of the
+    !!          per-pixel product, which reassociates. So the residual trace is
+    !!          NOT a valid regression signal across that change -- the operator
+    !!          stages of test=pcg_recon are (see note 5.4).
     subroutine build_hk_luts( self )
         class(reconstructor_pcg), intent(inout) :: self
         integer :: h, k, R
@@ -2068,7 +2072,10 @@ contains
         ! diminishing-returns stop: relative model-update tolerance dx/x. On
         ! noisy real data |r|/|b| plateaus above rtol while dx/x keeps falling,
         ! so this is what actually terminates a real solve. Internal default;
-        ! raise to stop sooner, lower to iterate longer.
+        ! raise to stop sooner, lower to iterate longer. Suppressed by rtol <= 0,
+        ! which is the caller's way of saying "run exactly maxits iterations, no
+        ! early exits" -- test=pcg_recon stage 7 depends on that, since comparing
+        ! two solves stopped by a data-dependent criterion tests nothing.
         real, parameter :: PCG_XTOL = 1.5e-2
         real, allocatable :: r(:,:,:), p(:,:,:), hp(:,:,:), z(:,:,:), hist(:)
         real, allocatable :: rtr(:,:,:)
@@ -2147,7 +2154,7 @@ contains
             ! per iteration the residual has plateaued (semi-convergence on noisy
             ! normal equations) and further iters mostly fit noise. dx/x is
             ! monotone-ish where |r|/|b| oscillates, so it is the reliable signal.
-            if( dxx <= real(PCG_XTOL,dp) )then
+            if( rrtol > 0.0 .and. dxx <= real(PCG_XTOL,dp) )then
                 write(logfhandle,'(a,i0,a,es10.3,a,es10.3)') '>>> PCG: early stop at iter ', iter, &
                     &', dx/x = ', real(dxx), ' <= xtol = ', PCG_XTOL
                 call flush(logfhandle)

@@ -87,7 +87,7 @@ Directly relevant, and the closest match to the architecture proposed here.
 Their Algorithm 1 alternates an ADMM update of the density map with a gradient
 step on continuous poses. Points that transfer:
 
-- The alternating (block-coordinate) shape, which the policy note's section 10
+- The alternating (block-coordinate) shape, which the policy note's section 11
   already specifies.
 - The choice of KBWF for the basis, for the same stated reasons this codebase
   uses `kbinterpol`: compact support, isotropy, closed-form transforms.
@@ -153,7 +153,7 @@ iterations at 1.53 s each. Replacing a converged preconditioned solve with
 preconditioned first-order steps is a downgrade, not a modernization.
 
 **(c) Do not replace the discrete orientation search.** Argued in section 5.1.
-This agrees with the policy note's section 10, and disagrees with the
+This agrees with the policy note's section 11, and disagrees with the
 brief's section 7.1, which lists "the entire probabilistic orientation
 assignment machinery ... must be replaced" as required work.
 
@@ -163,7 +163,7 @@ Parameterizing the *update* in the Lie algebra needs three unconstrained
 parameters, has a trivial derivative at the origin, and -- decisively for this
 codebase -- **requires no change to how orientations are stored**.
 `prep_particles` already caches `rotmats(3,3,nptcls)`; only the update rule is
-new. The policy note's section 10 already specifies this.
+new. The policy note's section 11 already specifies this.
 
 The brief is right that a resolution curriculum is essential -- it directly
 mitigates the local-minimum failure Zehni et al. report -- but its prescription
@@ -353,7 +353,7 @@ never assembled.
 
 The pose refinement must use **the same forward model as the reconstruction**,
 or it will optimize alignment under one convention and reconstruct under
-another -- the exact failure the policy note's section 10 warns about.
+another -- the exact failure the policy note's section 11 warns about.
 Concretely:
 
 - **Deapodization.** The reconstruction solves with `A = Ã·E⁻¹`. The predicted
@@ -397,7 +397,7 @@ Consequences, and what to do:
 - The objective is **piecewise smooth**, not smooth. Naive line searches and
   strict Wolfe conditions will misbehave.
 - This is a positive argument for the trust-region accept/reject step that
-  the policy note's section 10 already mandates: acceptance is decided on a
+  the policy note's section 11 already mandates: acceptance is decided on a
   recomputed
   objective, which is robust to a non-differentiable point being crossed.
 - **Oversampling is a real mitigant.** On the `padf`-times lattice `V̂` is
@@ -528,7 +528,7 @@ Implications for this work:
 ### 5.4 Why not SGD, yet
 
 The full volume solve is ~53 s for 5000 particles. For typical datasets a batch
-alternating scheme may simply be fast enough, and the policy note's section 10
+alternating scheme may simply be fast enough, and the policy note's section 11
 already sets out that minibatch stochastic optimisation is a later option with
 PCG remaining the reference volume solver. Minibatching adds step-size schedules, variance
 control, and stratification requirements (half sets, orientation coverage,
@@ -545,7 +545,7 @@ This comes first and is not optional. At present there is *no quantitative way
 to tell whether any change helps* -- every judgement so far has been visual
 inspection in Chimera. Before adding thousands of free parameters to the fit, a
 gold-standard resolution curve must exist. This is also a prerequisite for the
-real-space priors sketched in the policy note's section 10 and for the half-set
+real-space priors sketched in the policy note's section 11 and for the half-set
 discipline in section 7.
 *Gate:* two independent half-set volumes and an FSC curve, reproducing a
 sensible resolution on a known dataset.
@@ -583,7 +583,7 @@ Volume solve (existing) alternating with pose polish. This is Zehni's Algorithm
 improves over the fixed-pose baseline; no drift in particle rejection.
 
 **Stage 5 -- minibatching, only if a measured need exists.**
-See section 5.3 above and the policy note's section 10.
+See section 5.3 above and the policy note's section 11.
 
 ## 7. Validation and identifiability
 

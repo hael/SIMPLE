@@ -1134,7 +1134,6 @@ end subroutine exec_test_ptcls_ppca_subproject_distr
 subroutine exec_test_pcg_recon( self, cline )
     use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
     use simple_sym,               only: sym
-    use simple_ori_utils,         only: m2euler
     class(commander_test_pcg_recon), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
     integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4, NCTF = 5
@@ -1183,7 +1182,6 @@ subroutine exec_test_pcg_recon( self, cline )
     complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:), y_exp(:,:,:)
     integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, c, niters, iseed_n
     integer :: R, margin, lo, hi, ifrom, nb, nsym
-    real    :: Sg(3,3), Mig(3,3)
     integer, allocatable :: iseed(:)
     real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
     real    :: err_all, err_int, den_all, den_int, kdiff, stream_err, rhs_err, kscale
@@ -1637,6 +1635,7 @@ subroutine exec_test_pcg_recon( self, cline )
         call c2sym%new('c2')
         nsym = c2sym%get_nsym()
         call pcgop%set_op_mode(PCG_OP_KERNEL)
+        call pcgop%set_deapod(.true.)   ! stage 8 leaves it OFF; test the shipped config
         ! fresh, well-conditioned data: spiral projections of the phantom, T = 1
         call projdirs%new(NPROJS, .false.)
         call projdirs%spiral
@@ -1653,10 +1652,14 @@ subroutine exec_test_pcg_recon( self, cline )
         call pcgop%build_operators(.true.)
         khat_a = pcgop%apply_normal_kernel(p_probe)
         b_mono = pcgop%apply_adjoint_all(y_planes)
-        ! Path B: explicit c1 build of the c2-expanded particle set. Mate
-        ! orientation R_i*S_g is composed the SAME way the reconstructor does it
-        ! internally, so the two normal systems are identical up to the euler
-        ! round-trip below.
+        ! Path B: explicit c1 build of the c2-expanded particle set. The mate
+        ! orientation is composed through sym%apply -- production's own symmetry
+        ! adaptor, the one commander_reconstruct3D reaches through insert_fplane
+        ! -- NOT by repeating the reconstructor's internal matmul(R_i, S_g). That
+        ! is the point: composing both paths the same way would make this stage
+        ! agree under a transposed or reversed composition too, and prove
+        ! nothing. Going through sym%apply makes the stage an assertion that the
+        ! operator's convention IS production's.
         call projdirs_exp%new(NPROJS*nsym, .false.)
         allocate(y_exp(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS*nsym))
         c = 0
@@ -1664,10 +1667,7 @@ subroutine exec_test_pcg_recon( self, cline )
             call projdirs%get_ori(i, e)
             do g = 1, nsym
                 c = c + 1
-                call c2sym%get_sym_rmat(g, Sg)
-                Mig = matmul(e%get_mat(), Sg)
-                call e_exp%new(.false.)
-                call e_exp%set_euler(m2euler(Mig))
+                call c2sym%apply(e, g, e_exp)
                 call projdirs_exp%set_ori(c, e_exp)
                 y_exp(:,:,c) = y_planes(:,:,i)
             end do
