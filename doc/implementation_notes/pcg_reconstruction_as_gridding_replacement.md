@@ -113,9 +113,38 @@ and setup should be instrumented per phase rather than guessed at a third time.
 
 ### Next
 
-`absT2` `(h,k)` lookup-table hoist (5.4) completes phase A item 2; then
-symmetry (section 2), which is phase A item 3 and the first with scientific
-content.
+Re-run box-256 setup timing to quantify the `ft_map_ctf_kernel` form now adopted
+in `absT2_plane` / `build_transfer` (5.4). Per-phase profiling (added to the
+commander) already localized the cost: on a box-256, 3000-particle `objfun=cc`
+run, setup 23.6 s splits as accumulation 17.4 s (of which **`scatter |T|^2`
+15.1 s**, read I/O 0.17 s, prep 1.8 s), `end_accum` 4.2 s, operator alloc 1.7 s
+-- so OQ2 is answered: the scatter is the whole story. The post-CTF-form re-run
+is now in: `scatter |T|^2` = 15.9 s vs the 15.1 s pre-form baseline (setup
+25.1 vs 23.6 s), i.e. **no measurable win** -- within run-to-run noise. The CTF
+form removes call/arithmetic overhead but that was never the bottleneck: the
+15.9 s is the KB-window lattice scatter (`apod_mat_3d_fast` + 27-tap
+`scatter_window`), which 2b does not touch. That is now firmly the next target.
+Phase A item 2 is complete. Then symmetry (section 2), phase A item 3 and the
+first with scientific content.
+
+First bit-identical pass at the scatter is in: the interior (non-wrapping)
+colour sweeps of `accumulate_absT2` and `scatter_plane` now call
+`scatter_window_nowrap` / `scatter_window_cmplx_nowrap`, which index the
+accumulator directly instead of through `self%wrap`. `win_wraps` has already
+proven the window cannot wrap there, so `self%wrap` is the identity over its
+whole span -- the direct form is bit-identical and makes the inner run
+contiguous (stride-1, vectorizable); the `|T|^2` variant also applies its real
+weight at half the FMAs of the complex path. The wrapping rim keeps the
+`self%wrap` scatter, and the matrix-free reference path is untouched. Measured:
+**no win.** `scatter |T|^2` = 15.1 s, identical to the 15.1 s baseline (the
+three runs -- pre-CTF, post-CTF, post-nowrap -- are all 15.1-15.9 s, one noise
+band). The cost is cache-miss traffic writing into the ~1 GB accumulator at
+rotated locations, not index arithmetic; removing the `wrap` indirection cannot
+move a memory-bandwidth wall. Reducing it would need a structural change
+(cache-blocked scatter, a smaller working set, or a different accumulation
+order) -- out of scope for phase A. The nowrap scatter stays because it is
+bit-identical (`test=pcg_recon` green, deapod-OFF corr `0.97155` unchanged) and
+strictly cheaper in instruction count; the scatter cost is "it is what it is".
 
 ## 1. Sufficient statistics
 
@@ -230,6 +259,21 @@ and coordinate replication is the fallback.
 
 ### 2.3 Decision: coordinate replication at scatter time
 
+**DONE.** Coordinate replication is implemented in `reconstructor_pcg`
+(`symmats(3,3,nsym)` cached at `set_sym` time; `g`-loop replication in
+`accumulate_absT2`, `scatter_plane`/`apply_adjoint_all`, and
+`apply_normal_matrixfree`) and wired into `reconstruct3D_pcg` (the `pgrp/=c1`
+hard-error is lifted; `set_sym(build%pgrpsyms)` is called after `pcgop%new`).
+`nsym=1` (c1) is bit-identical to the pre-symmetry path because `symmats(:,:,1)`
+is exactly the identity. Validated by `test=pcg_recon` stage 9: an in-operator
+c2 build produces the same normal system -- kernel `Khat` and RHS `b` -- as a c1
+build of the c2-expanded particle set, to accumulator round-off
+(`rel_err(Khat) = 1.3e-6`, `rel_err(b) = 1.3e-7`). (Compared at the operator
+level, not through a solve: the kernelized operator is only approximately SPD,
+so a zero-tolerance solve driven to convergence loses positive-definiteness --
+that is stages 5-7's concern, not this stage's.) The lattice-exact permutation
+optimization (2.2) and the asymmetry diagnostic (2.4) remain future work.
+
 The policy note's section 10 leaves this open -- symmetry "must be handled
 either by expanding the particle set over the asymmetric unit or by symmetrising
 inside the operator; the choice interacts with the kernelized operator's
@@ -336,6 +380,8 @@ write `M` footprints each, and separation must hold for every pair `(g, g')`,
 not just `g = g'`. It does not in general. Options: hoist the `g` loop outside
 the `!$omp do` (one colour sweep per symmetry element), or serialize `g`.
 **Hoisting the `g` loop outside the colour sweep is the safe default.**
+**DONE** -- the `g` loop is hoisted outside the colour sweep in
+`accumulate_absT2` and `scatter_plane`.
 
 **Axial views.** Particles whose central section is invariant under a subgroup
 produce coincident replicas, which `rho` counts as independent. This affects
@@ -420,8 +466,11 @@ Estimated per outer iteration at `update_frac = 0.1`, 5000 particles, box 256:
 | solve | ~25 s (15 it) | ~5 s (3 it) |
 | **total** | **~52 s** | **~10 s** |
 
-Estimates, not measurements. `finalize_khat` is the only phase that does not
-shrink with `update_frac` and will dominate at small subsets.
+Estimates, not measurements, and the cold column predates the section 1.1
+kernel-calibration change: the measured cold solve is now 13.4 s / 8 iterations
+(see Status), not the ~25 s / 15 iterations estimated here. `finalize_khat` is
+the only phase that does not shrink with `update_frac` and will dominate at
+small subsets.
 
 ### 3.4 Artifact contract
 
@@ -461,7 +510,7 @@ acc_new(h,k,m) = acc_old(h,k,m)   for |index| within the old lattice
 ```
 
 **Index-for-index copy, zeros outside, and no scale factor.** This resolves what
-was open question 6. There is no rescaling because the plane sample spacing in
+was open question 8. There is no rescaling because the plane sample spacing in
 *frequency* is also `1/extent` in both boxes -- the larger box samples the same
 frequencies plus additional higher ones -- and `padf`, `padsc` and the KB
 stencil are all box-independent.
@@ -570,18 +619,20 @@ Splitting accumulate from solve in time is what keeps peak memory at one
 | Array | Size | Phase |
 | --- | --- | --- |
 | `acc` full-range complex | 1.08 GB | accumulate only |
+| `b_accum` full-range complex | 1.08 GB | accumulate only |
 | `wimg` padded image | ~0.54 GB | both |
 | `Khat` real packed | 269 MB | solve |
 | `precond` real packed | 269 MB | solve |
 | `get_cmat()` copy | 539 MB | transient, per call |
-| CG vectors `b,r,p,hp,z,x,rtr` | 7 x 67 MB = 470 MB | solve |
+| CG vectors `b,r,p,hp,z,x` | 6 x 67 MB = 402 MB | solve |
 
-Accumulate peak ~2.7 GB, solve peak ~2.1 GB. Matches the measured ~3 GB.
+Accumulate peak ~3.0 GB (two full-range complex accumulators, see 5.1), solve
+peak ~2.1 GB. Matches the measured ~3 GB.
 
 Two reduction opportunities, both optional:
 
-- **`acc` as packed real instead of full-range complex** would save ~800 MB and
-  is the single largest win. **A previous attempt at a packed accumulator was
+- **`acc` and `b_accum` as packed real instead of full-range complex** would
+  save ~1.6 GB and is the single largest win. **A previous attempt at a packed accumulator was
   implemented and reverted**: production's `expand_cmat` materializes the
   periodic extension up front so its gather and scatter are consistent by
   construction, whereas this operator wraps on the fly, and a non-wrapping
@@ -610,15 +661,17 @@ reduce exactly like gridding's partial reconstructions. The solve does not
 partition -- and does not need to: once reduced, it is particle-independent and
 runs on one node with a serial tail that does not grow with `nptcls`.
 
-Per-part memory is the accumulate peak (~2.7 GB at box 256), one `(state, eo)`
+Per-part memory is the accumulate peak (~3.0 GB at box 256), one `(state, eo)`
 at a time, matching production's per-part footprint.
 
 ## 5. Particle I/O and preprocessing
 
 ### 5.1 `y_planes` must go -- this is the blocking defect -- DONE
 
-`simple_commanders_reconstruct3D_pcg.f90` allocates
-`y_planes(lims2, lims2, nptcls)` and holds every particle's Fourier plane
+(Historical; the defect below has been fixed -- see the DONE marker above and
+the Status section. The commander now streams a bounded `y_batch` through the
+accumulate/solve split.) The original commander allocated
+`y_planes(lims2, lims2, nptcls)` and held every particle's Fourier plane
 resident for the whole run:
 
 | `nptcls` | `y_planes` |
@@ -797,6 +850,25 @@ production's kernel form: `gen_fplane4rec` precomputes `shell_lut` and
 `sum_df / diff_df / angast / amp_contr_const / wl / half_wl2_cs` per particle,
 then evaluates `ft_map_ctf_kernel` with no per-pixel transcendentals.
 
+**DONE.** The LUT hoist (`build_hk_luts`: `spafreqsq_lut`, `ang_lut`,
+`shell_lut`) and the kernel form are both in the tree. `absT2_plane` and
+`build_transfer` now hoist the per-particle CTF constants via `get_ctfvars` and
+evaluate the flat `ft_map_ctf_kernel` expression (one `cos` + one `sin`, no
+3-deep type-bound dispatch, no per-pixel `canonical_phshift`). `ft_map_ctf_kernel`
+is **inlined, not called**: its memoized `(h,k)` maps (`memoize_ft_maps`) span the
+`h >= 0` non-redundant half only, but `lims2` is a full both-sign-h disk, so the
+library routine would index its maps out of bounds for every `h < 0`; the LUTs
+are ranged over `lims2` and carry no such restriction. The kernel form is
+numerically-equivalent-not-bit-identical (one FP reassociation in
+`half_wl2_cs = 0.5*wl*wl*Cs`, factored out of the per-pixel product), so it is
+validated by the operator stages, **not** the residual trace: `test=pcg_recon`
+stage-4 corr `0.97559` vs prior `0.97560`, stage-5 interior rel_err `2.10e-2`,
+stage-6 shift-invariance `0.0`, all eight stages PASS. Transcendental *count* is
+unchanged, so the win is call/arithmetic overhead only -- and the setup re-run
+confirms that overhead was never the bottleneck: `scatter |T|^2` = 15.9 s
+post-form vs 15.1 s pre-form (within noise). The 15.9 s is the KB-window lattice
+scatter (`apod_mat_3d_fast` + 27-tap `scatter_window`), the next target.
+
 Note what this settles: the CTF part `C_i^2` is genuinely invariant across
 outer iterations (defocus does not change during refinement), so it looks like a
 caching candidate. It is not -- storing it costs 258 kB per particle, the same
@@ -900,15 +972,32 @@ data with assigned orientations; it does **not** include fractional update.
    fuse the accumulate into the batch loop (5.1). Blocking defect: nothing runs
    at real dataset size until this is done, and it is also the accumulate/solve
    split everything later needs.
-2. **Cheap prerequisites.** [1.1 DONE; 5.4 outstanding] Remove
+2. **Cheap prerequisites.** [1.1 DONE; 5.4 DONE incl. `ft_map_ctf_kernel` form,
+   `test=pcg_recon` green; setup re-run done -- no win, see below] Remove
    `calibrate_kernel`'s particle pass (1.1) and hoist the `absT2` `(h,k)` lookup
-   tables (5.4). Both pay for themselves immediately and 1.1 is a hard
-   prerequisite for phase B.
-   *Not originally scoped but done here:* the colouring race and its fix, plus
-   the merged `test=pcg_recon`. See "Where this stands".
-3. **Symmetry** (2). [NEXT] Coordinate replication first as the reference, then
-   the lattice-exact permutation path gated against it, then the asymmetry
-   diagnostic. Requires lifting the `pgrp=c1` guard.
+   tables plus adopt the transcendental-free CTF form (5.4). Both pay for
+   themselves immediately and 1.1 is a hard prerequisite for phase B. The 5.4
+   hoist precomputes `spafreqsq`, `ang` (`atan2`) and `shell` (`sqrt`) once over
+   the fixed `lims2` disk in `build_hk_luts`, shared by `absT2_plane` and
+   `build_transfer`; the LUT expressions are bit-identical but the adopted
+   `ft_map_ctf_kernel` form is numerically-equivalent-not-bit-identical (see
+   5.4), so it is validated by the operator stages (stage-4 corr `0.97559`,
+   stage-5/6 agreements), not the residual trace. Per-phase setup
+   instrumentation and a 3-way accumulation sub-split (read / prep / scatter)
+   were added to the commander to localize the cost: `scatter |T|^2` is ~15.9 s
+   of ~25 s setup, and the post-CTF-form re-run shows no measurable change
+   (15.9 vs 15.1 s, within noise) -- the cost is the KB-window lattice scatter,
+   not CTF eval, so that is the next target.
+   *Not originally scoped but done here:* the colouring race and its fix, the
+   merged `test=pcg_recon`, and a `dx/x` early-stop in `solve_core`
+   (`PCG_XTOL = 1.5e-2`, exits alongside `rtol`; fired at iter 27 in the stage-8
+   run). See "Where this stands".
+3. **Symmetry** (2). Coordinate replication **DONE** (see 2.3): implemented in
+   `reconstructor_pcg`, wired into `reconstruct3D_pcg` (guard lifted), and gated
+   by `test=pcg_recon` stage 9 (in-operator c2 build produces the same `Khat`
+   and `b` as a c1 build of the expanded set).
+   Still open: the lattice-exact permutation path gated against replication, and
+   the asymmetry diagnostic (2.2, 2.4).
 
 At the end of phase A the command reconstructs symmetric particles from a real
 project at real dataset sizes, and can be compared against production

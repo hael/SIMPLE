@@ -44,13 +44,21 @@ type :: reconstructor_pcg
     real             :: lambda     = 0.0
     ! ---- per-particle inputs, cached once by prep_particles ----
     integer                       :: nptcls = 0
+    integer                       :: nsym   = 1   !< point-group order; 1 = c1 (no replication)
     logical                       :: l_use_ctf = .false.
     real,            allocatable  :: rotmats(:,:,:)  !< (3,3,nptcls)
+    real,            allocatable  :: symmats(:,:,:)  !< (3,3,nsym) point-group operators, symmats(:,:,1)=I
     type(ctfparams), allocatable  :: ctfparms(:)     !< (nptcls)
     real,            allocatable  :: shifts(:,:)     !< (2,nptcls), pixels
     real,            allocatable  :: sig2(:,:)       !< (0:R,nptcls) per-particle noise power
     ! ---- lookup tables / work buffers ----
     integer, allocatable :: wrap(:)                  !< precomputed cyci_1d over the whole reachable range
+    ! (h,k)-only quantities absT2_plane and build_transfer would otherwise
+    ! recompute per particle; built once over the fixed lims2 disk, shared by
+    ! all particles. ~258 kB each at box 256. See build_hk_luts.
+    real,    allocatable :: spafreqsq_lut(:,:)       !< spatial frequency squared
+    real,    allocatable :: ang_lut(:,:)             !< atan2(k,h) astigmatism angle
+    integer, allocatable :: shell_lut(:,:)           !< resolution shell index, capped at Rnat
     real,    allocatable :: env(:,:,:)               !< measured KB instrument envelope, see build_env
     real,    allocatable :: invenv(:,:,:)            !< its guarded reciprocal, for deapodization
     logical              :: l_deapod = .true.        !< correct the KB roll-off, see deapod_mul
@@ -95,6 +103,7 @@ type :: reconstructor_pcg
     procedure :: kill
     ! SETUP
     procedure :: prep_particles
+    procedure :: set_sym
     procedure :: build_precond
     procedure :: build_kernel
     procedure :: build_operators
@@ -110,6 +119,7 @@ type :: reconstructor_pcg
     procedure :: set_deapod
     procedure :: set_mask
     procedure, private :: build_env
+    procedure, private :: build_hk_luts
     procedure, private :: deapod_mul
     procedure, private :: mask_mul
     procedure, private :: calibrate_kernel
@@ -238,9 +248,39 @@ contains
         do i = lo, hi
             self%wrap(i) = cyci_1d(self%wlims, i)
         end do
+        call self%build_hk_luts
         call self%build_env
+        ! Default point group is c1: a single identity operator. set_sym
+        ! replaces this when the caller requests replication.
+        self%nsym = 1
+        if( allocated(self%symmats) ) deallocate(self%symmats)
+        allocate(self%symmats(3,3,1), source=0.0)
+        self%symmats(1,1,1) = 1.0; self%symmats(2,2,1) = 1.0; self%symmats(3,3,1) = 1.0
         self%exists = .true.
     end subroutine new
+
+    !>  \brief  precomputes the (h,k)-only quantities absT2_plane and
+    !!          build_transfer would otherwise recompute per particle: spatial
+    !!          frequency squared, the astigmatism angle (atan2) and the
+    !!          resolution shell (sqrt). The lims2 disk is fixed for the life of
+    !!          the object, so these are particle-independent. Expressions are
+    !!          bit-identical to the inlined ones they replace, so the residual
+    !!          trace is unchanged.
+    subroutine build_hk_luts( self )
+        class(reconstructor_pcg), intent(inout) :: self
+        integer :: h, k, R
+        R = self%Rnat
+        allocate(self%spafreqsq_lut(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
+        allocate(self%ang_lut(      self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
+        allocate(self%shell_lut(    self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                self%spafreqsq_lut(h,k) = (real(h)/real(self%box))**2 + (real(k)/real(self%box))**2
+                self%ang_lut(h,k)       = atan2(real(k), real(h))
+                self%shell_lut(h,k)     = min(nint(sqrt(real(h*h+k*k))), R)
+            end do
+        end do
+    end subroutine build_hk_luts
 
     !>  \brief  Separable real-space Kaiser-Bessel instrument envelope.
     !!
@@ -465,7 +505,11 @@ contains
         if( allocated(self%ctfparms) ) deallocate(self%ctfparms)
         if( allocated(self%shifts)   ) deallocate(self%shifts)
         if( allocated(self%sig2)     ) deallocate(self%sig2)
+        if( allocated(self%symmats)  ) deallocate(self%symmats)
         if( allocated(self%wrap)     ) deallocate(self%wrap)
+        if( allocated(self%spafreqsq_lut) ) deallocate(self%spafreqsq_lut)
+        if( allocated(self%ang_lut)  ) deallocate(self%ang_lut)
+        if( allocated(self%shell_lut)) deallocate(self%shell_lut)
         if( allocated(self%env)      ) deallocate(self%env)
         if( allocated(self%invenv)   ) deallocate(self%invenv)
         if( allocated(self%mask)     ) deallocate(self%mask)
@@ -483,6 +527,7 @@ contains
         self%sq_rim = 0
         self%lambda = 0.0
         self%nptcls = 0
+        self%nsym   = 1
         self%l_use_ctf   = .false.
         self%l_mask      = .false.
         self%l_precond   = .false.
@@ -538,6 +583,26 @@ contains
         endif
         call self%ensure_wimg
     end subroutine prep_particles
+
+    !>  \brief  caches the point-group operators for coordinate replication.
+    !!
+    !!          Symmetry is applied at scatter time by replicating each plane
+    !!          pixel at all M orientations R_i . S_g (2.3 in the pcg note):
+    !!          absT2_plane is still evaluated once per particle, only the KB
+    !!          weight and the 27-tap scatter are replicated. symmats(:,:,1) is
+    !!          the identity, so g=1 reproduces the c1 pass exactly. Call after
+    !!          new (which installs the c1 default) and before begin_accum.
+    subroutine set_sym( self, pgrpsyms )
+        class(reconstructor_pcg), intent(inout) :: self
+        class(sym),               intent(in)    :: pgrpsyms
+        integer :: g
+        if( allocated(self%symmats) ) deallocate(self%symmats)
+        self%nsym = pgrpsyms%get_nsym()
+        allocate(self%symmats(3,3,self%nsym), source=0.0)
+        do g = 1, self%nsym
+            call pgrpsyms%get_sym_rmat(g, self%symmats(:,:,g))
+        end do
+    end subroutine set_sym
 
     subroutine set_op_mode( self, op_mode )
         class(reconstructor_pcg), intent(inout) :: self
@@ -667,8 +732,9 @@ contains
         real,                      intent(in) :: shift(2)
         real,            optional, intent(in) :: sig2arr(0:)
         complex   :: T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
-        type(ctf) :: tfun
-        real      :: spafreqsq, ang, cval, arg, sw
+        type(ctf)     :: tfun
+        type(ctfvars) :: ctfvals
+        real      :: cval, arg, sw, sum_df, diff_df, angast, wl, half_wl2_cs, accc, phc, cterm, df, phsh, s2
         integer   :: h, k, shell
         logical   :: l_ctf, l_flip
         ! ctfflag, exactly as image%gen_fplane4rec reads it: CTFFLAG_NO means the
@@ -682,18 +748,30 @@ contains
         if( l_ctf )then
             tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
             call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
+            ! see absT2_plane: flat, call-free CTF form of ft_map_ctf_kernel,
+            ! inlined to run over the both-sign-h disk via the LUTs.
+            ctfvals     = tfun%get_ctfvars(ctfparms%phshift)
+            wl          = ctfvals%wl
+            half_wl2_cs = 0.5 * wl * wl * ctfvals%cs
+            sum_df      = ctfvals%dfx + ctfvals%dfy
+            diff_df     = ctfvals%dfx - ctfvals%dfy
+            angast      = ctfvals%angast
+            accc        = ctfvals%amp_contr_const
+            phc         = ctfvals%phshift
         endif
         T = cmplx(0.,0.)
         !$omp parallel do collapse(2) default(shared) &
-        !$omp private(h,k,spafreqsq,ang,cval,arg,shell,sw) schedule(static) proc_bind(close)
+        !$omp private(h,k,cval,arg,shell,sw,cterm,df,phsh,s2) schedule(static) proc_bind(close)
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
                 if( h*h + k*k > self%sqlp ) cycle
                 cval = 1.0
                 if( l_ctf )then
-                    spafreqsq = (real(h)/real(self%box))**2 + (real(k)/real(self%box))**2
-                    ang       = atan2(real(k), real(h))
-                    cval      = tfun%eval(spafreqsq, ang, ctfparms%phshift)
+                    s2    = self%spafreqsq_lut(h,k)
+                    cterm = cos( 2.0 * (self%ang_lut(h,k) - angast) )
+                    df    = 0.5 * ( sum_df + cterm * diff_df )
+                    phsh  = PI * wl * s2 * (df - half_wl2_cs * s2)
+                    cval  = sin( phsh + phc + accc )
                     if( l_flip ) cval = abs(cval)
                 endif
                 ! SIGN. apply_adjoint_all forms conjg(T)*y, and production applies
@@ -706,7 +784,7 @@ contains
                 arg       = 2.0*PI * (real(h)*shift(1) + real(k)*shift(2)) / real(self%box)
                 sw        = 1.0
                 if( present(sig2arr) )then
-                    shell = min(nint(sqrt(real(h*h+k*k))), ubound(sig2arr,1))
+                    shell = min(self%shell_lut(h,k), ubound(sig2arr,1))
                     sw    = 1.0 / sqrt(sig2arr(shell))
                 endif
                 T(h,k) = cval * cmplx(cos(arg), sin(arg)) * sw
@@ -799,7 +877,7 @@ contains
         real,    allocatable :: absT2(:,:)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
         complex :: comp
-        integer :: i, h, k, l, i0(3)
+        integer :: i, g, h, k, l, i0(3)
         integer(timer_int_kind) :: tp
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; apply_normal_matrixfree')
         call self%ensure_wimg
@@ -823,48 +901,53 @@ contains
                           &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
         allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
         if( self%l_profile ) tp = tic()
-        !$omp parallel default(shared) private(i,h,k,l,loc,i0,w,comp,rot) proc_bind(close)
+        !$omp parallel default(shared) private(i,g,h,k,l,loc,i0,w,comp,rot) proc_bind(close)
         do i = 1, self%nptcls
-            rot = self%rotmats(:,:,i)
             ! per-particle real weight |T_i|^2, shared across threads. The
             ! worksharing inside absT2_plane is orphaned and binds to THIS
             ! region, so the CTF evaluation is spread across the team; its
             ! trailing barrier is what makes absT2 safe to read below.
             call self%absT2_plane(i, absT2)
-            ! fused gather -> weight -> scatter, h-strided for scatter safety
-            do l = 0, self%stride-1
-                !$omp do schedule(static,1)
-                do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
+            ! coordinate replication: gather and scatter at every R_i.S_g, with g
+            ! outside the h-strided colour sweep so the reference matches the
+            ! kernel built by accumulate_absT2. symmats(:,:,1)=I gives the c1 op.
+            do g = 1, self%nsym
+                rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,g))
+                ! fused gather -> weight -> scatter, h-strided for scatter safety
+                do l = 0, self%stride-1
+                    !$omp do schedule(static,1)
+                    do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
+                        do k = self%lims2(2,1), self%lims2(2,2)
+                            if( h*h + k*k > self%sqlp ) cycle
+                            loc  = real(self%padf) * matmul(real([h,k,0]), rot)
+                            i0   = nint(loc) - self%iwinsz
+                            if( win_wraps(self, i0) ) cycle  ! rim: serial pass below
+                            call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                            comp = self%padsc * gather_window(self, cmat, i0, w)
+                            comp = comp * absT2(h,k) * self%padsc
+                            call scatter_window(self, i0, w, comp, vol_accum)
+                        end do
+                    end do
+                    !$omp end do
+                end do
+                ! wrapping rim, serialized: the colouring's separation guarantee does
+                ! not survive folding, see win_wraps
+                !$omp single
+                do h = self%lims2(1,1), self%lims2(1,2)
                     do k = self%lims2(2,1), self%lims2(2,2)
-                        if( h*h + k*k > self%sqlp ) cycle
+                        if( h*h + k*k > self%sqlp   ) cycle
+                        if( h*h + k*k <= self%sq_rim ) cycle   ! provably cannot wrap
                         loc  = real(self%padf) * matmul(real([h,k,0]), rot)
                         i0   = nint(loc) - self%iwinsz
-                        if( win_wraps(self, i0) ) cycle  ! rim: serial pass below
+                        if( .not. win_wraps(self, i0) ) cycle
                         call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
                         comp = self%padsc * gather_window(self, cmat, i0, w)
                         comp = comp * absT2(h,k) * self%padsc
                         call scatter_window(self, i0, w, comp, vol_accum)
                     end do
                 end do
-                !$omp end do
+                !$omp end single
             end do
-            ! wrapping rim, serialized: the colouring's separation guarantee does
-            ! not survive folding, see win_wraps
-            !$omp single
-            do h = self%lims2(1,1), self%lims2(1,2)
-                do k = self%lims2(2,1), self%lims2(2,2)
-                    if( h*h + k*k > self%sqlp   ) cycle
-                    if( h*h + k*k <= self%sq_rim ) cycle   ! provably cannot wrap
-                    loc  = real(self%padf) * matmul(real([h,k,0]), rot)
-                    i0   = nint(loc) - self%iwinsz
-                    if( .not. win_wraps(self, i0) ) cycle
-                    call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                    comp = self%padsc * gather_window(self, cmat, i0, w)
-                    comp = comp * absT2(h,k) * self%padsc
-                    call scatter_window(self, i0, w, comp, vol_accum)
-                end do
-            end do
-            !$omp end single
         end do
         !$omp end parallel
         if( self%l_profile ) self%t_ploop = self%t_ploop + real(toc(tp),dp)
@@ -1166,47 +1249,53 @@ contains
         integer,          optional, intent(in)    :: ifrom, ito
         real,    allocatable :: absT2(:,:)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
-        integer :: i, h, k, l, i0(3), ii_from, ii_to
+        integer :: i, g, h, k, l, i0(3), ii_from, ii_to
         ii_from = 1
         ii_to   = self%nptcls
         if( present(ifrom) ) ii_from = ifrom
         if( present(ito)   ) ii_to   = ito
         if( ii_to < ii_from ) return
         allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        !$omp parallel default(shared) private(i,h,k,l,loc,i0,w,rot) proc_bind(close)
+        !$omp parallel default(shared) private(i,g,h,k,l,loc,i0,w,rot) proc_bind(close)
         do i = ii_from, ii_to
-            rot = self%rotmats(:,:,i)
             call self%absT2_plane(i, absT2)
-            do l = 0, self%stride-1
-                !$omp do schedule(static,1)
-                do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
+            ! coordinate replication: scatter |T_i|^2 at every symmetry-related
+            ! orientation R_i.S_g. g is OUTSIDE the h-strided colour sweep so the
+            ! scatter's separation guarantee still holds per orientation (2.7).
+            ! symmats(:,:,1)=I, so nsym=1 reproduces the c1 pass bit-for-bit.
+            do g = 1, self%nsym
+                rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,g))
+                do l = 0, self%stride-1
+                    !$omp do schedule(static,1)
+                    do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
+                        do k = self%lims2(2,1), self%lims2(2,2)
+                            if( h*h + k*k > self%sqlp ) cycle
+                            if( absT2(h,k) == 0. ) cycle
+                            loc = real(self%padf) * matmul(real([h,k,0]), rot)
+                            i0  = nint(loc) - self%iwinsz
+                            if( win_wraps(self, i0) ) cycle  ! rim: serial pass below
+                            call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                            call scatter_window_nowrap(self, i0, w, absT2(h,k), acc)
+                        end do
+                    end do
+                    !$omp end do
+                end do
+                ! wrapping rim, serialized: see win_wraps
+                !$omp single
+                do h = self%lims2(1,1), self%lims2(1,2)
                     do k = self%lims2(2,1), self%lims2(2,2)
-                        if( h*h + k*k > self%sqlp ) cycle
+                        if( h*h + k*k > self%sqlp   ) cycle
+                        if( h*h + k*k <= self%sq_rim ) cycle   ! provably cannot wrap
                         if( absT2(h,k) == 0. ) cycle
                         loc = real(self%padf) * matmul(real([h,k,0]), rot)
                         i0  = nint(loc) - self%iwinsz
-                        if( win_wraps(self, i0) ) cycle  ! rim: serial pass below
+                        if( .not. win_wraps(self, i0) ) cycle
                         call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
                         call scatter_window(self, i0, w, cmplx(absT2(h,k),0.), acc)
                     end do
                 end do
-                !$omp end do
+                !$omp end single
             end do
-            ! wrapping rim, serialized: see win_wraps
-            !$omp single
-            do h = self%lims2(1,1), self%lims2(1,2)
-                do k = self%lims2(2,1), self%lims2(2,2)
-                    if( h*h + k*k > self%sqlp   ) cycle
-                    if( h*h + k*k <= self%sq_rim ) cycle   ! provably cannot wrap
-                    if( absT2(h,k) == 0. ) cycle
-                    loc = real(self%padf) * matmul(real([h,k,0]), rot)
-                    i0  = nint(loc) - self%iwinsz
-                    if( .not. win_wraps(self, i0) ) cycle
-                    call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                    call scatter_window(self, i0, w, cmplx(absT2(h,k),0.), acc)
-                end do
-            end do
-            !$omp end single
         end do
         !$omp end parallel
     end subroutine accumulate_absT2
@@ -1517,9 +1606,10 @@ contains
         integer,                    intent(in)  :: iptcl
         real,                       intent(out) :: absT2(self%lims2(1,1):self%lims2(1,2),&
                                                           &self%lims2(2,1):self%lims2(2,2))
-        type(ctf) :: tfun
-        real      :: spafreqsq, ang, cval
-        integer   :: h, k, shell, R
+        type(ctf)     :: tfun
+        type(ctfvars) :: ctfvals
+        real      :: cval, sum_df, diff_df, angast, wl, half_wl2_cs, accc, phc, cterm, df, phsh, s2
+        integer   :: h, k, shell
         logical   :: l_ctf, l_flip
         if( .not. self%l_use_ctf )then
             !$omp do collapse(2) schedule(static)
@@ -1531,7 +1621,6 @@ contains
             !$omp end do
             return
         endif
-        R = self%lims2(1,2)
         ! same ctfflag semantics as build_transfer; note |CTF|^2 == CTF^2, so the
         ! FLIP case only matters for the complex T, not here -- but the NO case
         ! does, and applying a CTF the images never saw would be wrong.
@@ -1541,8 +1630,20 @@ contains
             tfun = ctf(self%ctfparms(iptcl)%smpd, self%ctfparms(iptcl)%kv, &
                 &self%ctfparms(iptcl)%cs, self%ctfparms(iptcl)%fraca)
             call tfun%init(self%ctfparms(iptcl)%dfx, self%ctfparms(iptcl)%dfy, self%ctfparms(iptcl)%angast)
+            ! hoist the per-particle CTF constants and evaluate with the flat,
+            ! call-free transcendental form of simple_math_ctf::ft_map_ctf_kernel.
+            ! Its memoized (h,k) maps cover only the h>=0 half, so the kernel is
+            ! inlined here to run over this full both-sign-h disk via the LUTs.
+            ctfvals     = tfun%get_ctfvars(self%ctfparms(iptcl)%phshift)
+            wl          = ctfvals%wl
+            half_wl2_cs = 0.5 * wl * wl * ctfvals%cs
+            sum_df      = ctfvals%dfx + ctfvals%dfy
+            diff_df     = ctfvals%dfx - ctfvals%dfy
+            angast      = ctfvals%angast
+            accc        = ctfvals%amp_contr_const
+            phc         = ctfvals%phshift
         endif
-        !$omp do collapse(2) schedule(static) private(spafreqsq,ang,cval,shell)
+        !$omp do collapse(2) schedule(static) private(cval,shell,cterm,df,phsh,s2)
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
                 if( h*h + k*k > self%sqlp )then
@@ -1550,12 +1651,14 @@ contains
                 else
                     cval = 1.0
                     if( l_ctf )then
-                        spafreqsq = (real(h)/real(self%box))**2 + (real(k)/real(self%box))**2
-                        ang       = atan2(real(k), real(h))
-                        cval      = tfun%eval(spafreqsq, ang, self%ctfparms(iptcl)%phshift)
+                        s2    = self%spafreqsq_lut(h,k)
+                        cterm = cos( 2.0 * (self%ang_lut(h,k) - angast) )
+                        df    = 0.5 * ( sum_df + cterm * diff_df )
+                        phsh  = PI * wl * s2 * (df - half_wl2_cs * s2)
+                        cval  = sin( phsh + phc + accc )
                         if( l_flip ) cval = abs(cval)
                     endif
-                    shell      = min(nint(sqrt(real(h*h+k*k))), R)
+                    shell      = self%shell_lut(h,k)
                     absT2(h,k) = cval * cval / self%sig2(shell,iptcl)
                 endif
             end do
@@ -1759,6 +1862,60 @@ contains
         end do
     end subroutine scatter_window
 
+    !>  \brief  Interior-only scatter for windows the caller has already proven
+    !!          cannot wrap (win_wraps == .false.). There the period-box lookup
+    !!          self%wrap is the identity over the whole window span, so indexing
+    !!          vol_accum directly is bit-identical -- and it makes the inner run
+    !!          contiguous (stride-1) and vectorizable, unlike the gathered
+    !!          self%wrap form. val is real (|T|^2), applied to the complex
+    !!          accumulator's real part at half the FMAs of the complex path.
+    pure subroutine scatter_window_nowrap( self, i0, w, val, vol_accum )
+        class(reconstructor_pcg), intent(in)    :: self
+        integer,                    intent(in)    :: i0(3)
+        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim)
+        real,                       intent(in)    :: val
+        complex,                    intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                                &self%lims3(2,1):self%lims3(2,2),&
+                                                                &self%lims3(3,1):self%lims3(3,2))
+        integer :: di, dj, dk, h0, kk, mm
+        h0 = i0(1)
+        do dk = 1, self%wdim
+            mm = i0(3) + dk - 1
+            do dj = 1, self%wdim
+                kk = i0(2) + dj - 1
+                do di = 1, self%wdim
+                    vol_accum(h0+di-1,kk,mm) = vol_accum(h0+di-1,kk,mm) + w(di,dj,dk) * val
+                end do
+            end do
+        end do
+    end subroutine scatter_window_nowrap
+
+    !>  \brief  Complex-valued counterpart of scatter_window_nowrap, for the RHS
+    !!          scatter where the transfer sample is complex. Same interior-only
+    !!          contract: the caller has ruled out wrapping, so direct indexing
+    !!          is bit-identical to the self%wrap form and the inner run is
+    !!          contiguous.
+    pure subroutine scatter_window_cmplx_nowrap( self, i0, w, val, vol_accum )
+        class(reconstructor_pcg), intent(in)    :: self
+        integer,                    intent(in)    :: i0(3)
+        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim)
+        complex,                    intent(in)    :: val
+        complex,                    intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                                &self%lims3(2,1):self%lims3(2,2),&
+                                                                &self%lims3(3,1):self%lims3(3,2))
+        integer :: di, dj, dk, h0, kk, mm
+        h0 = i0(1)
+        do dk = 1, self%wdim
+            mm = i0(3) + dk - 1
+            do dj = 1, self%wdim
+                kk = i0(2) + dj - 1
+                do di = 1, self%wdim
+                    vol_accum(h0+di-1,kk,mm) = vol_accum(h0+di-1,kk,mm) + w(di,dj,dk) * val
+                end do
+            end do
+        end do
+    end subroutine scatter_window_cmplx_nowrap
+
     !>  \brief  scatter a whole plane, h-strided so it is safe to call from
     !!          inside an OpenMP parallel region (used by the non-fused paths:
     !!          adjoint_plane_add, apply_adjoint_all, build_precond).
@@ -1770,23 +1927,29 @@ contains
         complex,                    intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
                                                                 &self%lims3(2,1):self%lims3(2,2),&
                                                                 &self%lims3(3,1):self%lims3(3,2))
-        real    :: loc(3), w(self%wdim,self%wdim,self%wdim)
-        integer :: h, k, l, i0(3)
-        !$omp parallel default(shared) private(h,k,l,loc,i0,w) proc_bind(close)
-        do l = 0, self%stride-1
-            !$omp do schedule(static,1)
-            do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
-                do k = self%lims2(2,1), self%lims2(2,2)
-                    if( h*h + k*k > self%sqlp ) cycle
-                    if( plane(h,k) == cmplx(0.,0.) ) cycle
-                    loc = real(self%padf) * matmul(real([h,k,0]), rot)
-                    i0  = nint(loc) - self%iwinsz
-                    if( win_wraps(self, i0) ) cycle   ! rim: deferred to the serial pass
-                    call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                    call scatter_window(self, i0, w, self%padsc * plane(h,k), vol_accum)
+        real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot_g(3,3)
+        integer :: h, k, l, g, i0(3)
+        ! coordinate replication over the point group: scatter the plane at every
+        ! R_i.S_g. g is outside the h-strided colour sweep so the scatter stays
+        ! race-free per orientation (2.7); symmats(:,:,1)=I gives the c1 pass.
+        !$omp parallel default(shared) private(h,k,l,g,loc,i0,w,rot_g) proc_bind(close)
+        do g = 1, self%nsym
+            rot_g = matmul(rot, self%symmats(:,:,g))
+            do l = 0, self%stride-1
+                !$omp do schedule(static,1)
+                do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
+                    do k = self%lims2(2,1), self%lims2(2,2)
+                        if( h*h + k*k > self%sqlp ) cycle
+                        if( plane(h,k) == cmplx(0.,0.) ) cycle
+                        loc = real(self%padf) * matmul(real([h,k,0]), rot_g)
+                        i0  = nint(loc) - self%iwinsz
+                        if( win_wraps(self, i0) ) cycle   ! rim: deferred to the serial pass
+                        call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                        call scatter_window_cmplx_nowrap(self, i0, w, self%padsc * plane(h,k), vol_accum)
+                    end do
                 end do
+                !$omp end do
             end do
-            !$omp end do
         end do
         !$omp end parallel
         ! Serial pass over the wrapping rim, where the colouring's separation
@@ -1794,16 +1957,19 @@ contains
         ! outermost shell, so the cost is negligible, and being serial it is also
         ! reproducible -- which an atomic would not be, since the summation order
         ! would still vary.
-        do h = self%lims2(1,1), self%lims2(1,2)
-            do k = self%lims2(2,1), self%lims2(2,2)
-                if( h*h + k*k > self%sqlp   ) cycle
-                if( h*h + k*k <= self%sq_rim ) cycle       ! provably cannot wrap
-                if( plane(h,k) == cmplx(0.,0.) ) cycle
-                loc = real(self%padf) * matmul(real([h,k,0]), rot)
-                i0  = nint(loc) - self%iwinsz
-                if( .not. win_wraps(self, i0) ) cycle
-                call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                call scatter_window(self, i0, w, self%padsc * plane(h,k), vol_accum)
+        do g = 1, self%nsym
+            rot_g = matmul(rot, self%symmats(:,:,g))
+            do h = self%lims2(1,1), self%lims2(1,2)
+                do k = self%lims2(2,1), self%lims2(2,2)
+                    if( h*h + k*k > self%sqlp   ) cycle
+                    if( h*h + k*k <= self%sq_rim ) cycle       ! provably cannot wrap
+                    if( plane(h,k) == cmplx(0.,0.) ) cycle
+                    loc = real(self%padf) * matmul(real([h,k,0]), rot_g)
+                    i0  = nint(loc) - self%iwinsz
+                    if( .not. win_wraps(self, i0) ) cycle
+                    call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                    call scatter_window(self, i0, w, self%padsc * plane(h,k), vol_accum)
+                end do
             end do
         end do
     end subroutine scatter_plane
@@ -1899,10 +2065,15 @@ contains
         ! audit at a long interval rather than a correction -- reporting ||r||_2
         ! from the recurrence is only legitimate because this check backs it up.
         integer, parameter :: RESID_REPLACE = 25
+        ! diminishing-returns stop: relative model-update tolerance dx/x. On
+        ! noisy real data |r|/|b| plateaus above rtol while dx/x keeps falling,
+        ! so this is what actually terminates a real solve. Internal default;
+        ! raise to stop sooner, lower to iterate longer.
+        real, parameter :: PCG_XTOL = 1.5e-2
         real, allocatable :: r(:,:,:), p(:,:,:), hp(:,:,:), z(:,:,:), hist(:)
         real, allocatable :: rtr(:,:,:)
         real(dp) :: rho, rho_new, rho0, alpha, beta, pHp, nrec, ntru
-        real(dp) :: bnorm, rnorm, xnorm, dxnorm, mnorm
+        real(dp) :: bnorm, rnorm, xnorm, dxnorm, mnorm, dxx
         integer  :: mmaxits, iter, n_done
         real     :: rrtol
         integer(timer_int_kind) :: t_it
@@ -1961,16 +2132,27 @@ contains
             xnorm      = sqrt(self%dot_real_volume(x,x))
             dxnorm     = abs(alpha) * sqrt(self%dot_real_volume(p,p))
             mnorm      = sqrt(abs(rho_new)/rho0)
+            dxx        = dxnorm / max(xnorm, epsilon(1.0_dp))
             hist(iter) = real(rnorm / bnorm)
             rt_it      = toc(t_it)
             ! Per-iteration progress. Without this the solver is silent between
             ! setup and completion, which on a real data set is indistinguishable
             ! from a hang.
             write(logfhandle,'(a,i4,a,es11.4,a,es10.3,a,es10.3,a,f7.2,a)') '>>> PCG iter ', iter, &
-                &'  |r|/|b| = ', hist(iter), '  dx/x = ', real(dxnorm/max(xnorm,epsilon(1.0_dp))), &
+                &'  |r|/|b| = ', hist(iter), '  dx/x = ', real(dxx), &
                 &'  (M-norm ', real(mnorm), ')  (', rt_it, ' s)'
             call flush(logfhandle)
             if( rnorm / bnorm <= real(rrtol,dp) ) exit
+            ! diminishing-returns stop: once the map moves by less than PCG_XTOL
+            ! per iteration the residual has plateaued (semi-convergence on noisy
+            ! normal equations) and further iters mostly fit noise. dx/x is
+            ! monotone-ish where |r|/|b| oscillates, so it is the reliable signal.
+            if( dxx <= real(PCG_XTOL,dp) )then
+                write(logfhandle,'(a,i0,a,es10.3,a,es10.3)') '>>> PCG: early stop at iter ', iter, &
+                    &', dx/x = ', real(dxx), ' <= xtol = ', PCG_XTOL
+                call flush(logfhandle)
+                exit
+            endif
             beta = rho_new / rho
             p    = z + real(beta) * p
             rho  = rho_new

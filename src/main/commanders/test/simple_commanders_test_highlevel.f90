@@ -1119,6 +1119,9 @@ end subroutine exec_test_ptcls_ppca_subproject_distr
 !                                               reproduce solve() exactly
 !    8. deapodization                        -- the only stage without an
 !                                               inverse crime (see below)
+!    9. symmetry by coordinate replication   -- in-operator point-group
+!                                               replication must equal a c1
+!                                               solve of the expanded set
 !
 !  INVERSE CRIME, deliberately. Stages 1-7 generate observations with
 !  forward_plane, so the operator's own KB envelope appears identically in the
@@ -1129,7 +1132,9 @@ end subroutine exec_test_ptcls_ppca_subproject_distr
 !
 !  Does not touch reconstructor, reconstructor_eo, or volassemble.
 subroutine exec_test_pcg_recon( self, cline )
-    use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_MATRIXFREE
+    use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
+    use simple_sym,               only: sym
+    use simple_ori_utils,         only: m2euler
     class(commander_test_pcg_recon), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
     integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4, NCTF = 5
@@ -1163,9 +1168,10 @@ subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
     real,             parameter :: ANGAST_VALS(NCTF) = [0., 20., 40., 60., 80.]
     type(reconstructor_pcg) :: pcgop
-    type(oris)              :: projdirs
-    type(ori)               :: e
+    type(oris)              :: projdirs, projdirs_exp
+    type(ori)               :: e, e_exp
     type(ctfparams)         :: ctfparms
+    type(sym)               :: c1sym, c2sym
     real,    allocatable    :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
     real,    allocatable    :: hp(:,:,:), hq(:,:,:), hm(:,:,:), hk(:,:,:)
     real,    allocatable    :: recon(:,:,:), recon_str(:,:,:), rel_res_hist(:)
@@ -1174,9 +1180,10 @@ subroutine exec_test_pcg_recon( self, cline )
     real,    allocatable    :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
     real,    allocatable    :: qplane_re(:,:), qplane_im(:,:), sig2arr(:), sig2_2d(:,:)
     complex, allocatable    :: gx_plane(:,:), qplane(:,:), mplane(:,:), wplane(:,:), Ti(:,:)
-    complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:)
+    complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:), y_exp(:,:,:)
     integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, c, niters, iseed_n
-    integer :: R, margin, lo, hi, ifrom, nb
+    integer :: R, margin, lo, hi, ifrom, nb, nsym
+    real    :: Sg(3,3), Mig(3,3)
     integer, allocatable :: iseed(:)
     real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
     real    :: err_all, err_int, den_all, den_int, kdiff, stream_err, rhs_err, kscale
@@ -1614,9 +1621,85 @@ subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a)') '>>> STAGE 8 SKIPPED: an earlier stage failed'
     endif
 
+    ! ============ STAGE 9: symmetry by coordinate replication ============
+    ! Coordinate replication over a point group must produce the SAME normal
+    ! system -- kernel Khat AND RHS b -- as reconstructing the symmetry-EXPANDED
+    ! particle set at c1: the M symmetry mates are one measurement written M
+    ! times (note section 2). Compared at the operator level, not through a
+    ! solve: the kernelized operator is only approximately SPD, so a
+    ! zero-tolerance solve driven to convergence loses positive-definiteness
+    ! (that approximation is stages 5-7's business, not this stage's). c2 is
+    ! lattice-exact, so the two builds agree to accumulator round-off plus the
+    ! euler round-trip used to compose the expanded orientation set.
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 9: symmetry replication == particle-set expansion (c2, kernel)'
+        call c1sym%new('c1')
+        call c2sym%new('c2')
+        nsym = c2sym%get_nsym()
+        call pcgop%set_op_mode(PCG_OP_KERNEL)
+        ! fresh, well-conditioned data: spiral projections of the phantom, T = 1
+        call projdirs%new(NPROJS, .false.)
+        call projdirs%spiral
+        if( allocated(y_planes) ) deallocate(y_planes)
+        allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
+        call pcgop%set_volume(phantom)
+        do i = 1, NPROJS
+            call projdirs%get_ori(i, e)
+            call pcgop%forward_plane(e, y_planes(:,:,i))
+        end do
+        ! Path A: in-operator replication over c2 on NPROJS particles
+        call pcgop%set_sym(c2sym)
+        call pcgop%prep_particles(projdirs)
+        call pcgop%build_operators(.true.)
+        khat_a = pcgop%apply_normal_kernel(p_probe)
+        b_mono = pcgop%apply_adjoint_all(y_planes)
+        ! Path B: explicit c1 build of the c2-expanded particle set. Mate
+        ! orientation R_i*S_g is composed the SAME way the reconstructor does it
+        ! internally, so the two normal systems are identical up to the euler
+        ! round-trip below.
+        call projdirs_exp%new(NPROJS*nsym, .false.)
+        allocate(y_exp(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS*nsym))
+        c = 0
+        do i = 1, NPROJS
+            call projdirs%get_ori(i, e)
+            do g = 1, nsym
+                c = c + 1
+                call c2sym%get_sym_rmat(g, Sg)
+                Mig = matmul(e%get_mat(), Sg)
+                call e_exp%new(.false.)
+                call e_exp%set_euler(m2euler(Mig))
+                call projdirs_exp%set_ori(c, e_exp)
+                y_exp(:,:,c) = y_planes(:,:,i)
+            end do
+        end do
+        call pcgop%set_sym(c1sym)          ! back to no replication
+        call pcgop%prep_particles(projdirs_exp)
+        call pcgop%build_operators(.true.)
+        khat_b = pcgop%apply_normal_kernel(p_probe)
+        b_str  = pcgop%apply_adjoint_all(y_exp)
+        kdiff      = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
+        stream_err = sqrt(sum((b_str -b_mono)**2)) / max(1.0, sqrt(sum(b_mono*b_mono)))
+        write(logfhandle,'(a,es14.6,a,es14.6)') '    rel_err(Khat) = ', kdiff, '   rel_err(b) = ', stream_err
+        if( kdiff > 5.0e-3 .or. stream_err > 5.0e-3 )then
+            write(logfhandle,'(a)') '    FAIL: symmetry replication does not match the expanded-set build'
+            all_ok = .false.
+        else if( sqrt(sum(khat_a*khat_a)) <= TINY )then
+            write(logfhandle,'(a)') '    FAIL: replicated kernel is trivially zero'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: symmetry replication equals the expanded-set build'
+        endif
+    else
+        write(logfhandle,'(a)') '>>> STAGE 9 SKIPPED: an earlier stage failed'
+    endif
+
     call pcgop%kill
     call projdirs%kill
+    call projdirs_exp%kill
     call e%kill
+    call e_exp%kill
+    call c1sym%kill
+    call c2sym%kill
     if( all_ok )then
         call simple_end('**** SIMPLE_TEST_PCG_RECON NORMAL STOP ****')
     else

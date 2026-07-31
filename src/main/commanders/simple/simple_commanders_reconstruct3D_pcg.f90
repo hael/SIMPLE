@@ -5,7 +5,8 @@
 !  assignments, using the matrix-free (or, optionally, kernelized) PCG operator
 !  in simple_reconstructor_pcg. Fixed-input contract:
 !  orientations/shifts are inputs, not optimized; single state; nparts=1, no
-!  even/odd split, no symmetry, no distributed execution; writes to a new
+!  even/odd split, no distributed execution; point-group symmetry is applied by
+!  coordinate replication (c1 is a no-op); writes to a new
 !  experimental execution directory; never writes anything back to the project;
 !  does not enter through commander_volassemble or reuse its output filenames.
 !  Kept in its own file, deliberately separate from production reconstruction.
@@ -50,8 +51,12 @@ contains
         integer :: lims2(2,2), R, niters, funit, cnt, maxits, kfromto(2), nspace_dummy
         real    :: rtol, sdev_noise, edge_mean
         logical :: l_use_ctf, l_kernel, l_sig_loaded, l_norm_noise
-        integer(timer_int_kind) :: t0, t1
+        integer(timer_int_kind) :: t0, t1, t_acc
         real(timer_int_kind)    :: rt_tot, rt_setup, rt_solve
+        ! cumulative setup checkpoints, differenced into a per-phase profile
+        real(timer_int_kind)    :: c_build, c_sel, c_opnew, c_sigma, c_prep, c_accum
+        ! accumulation sub-split: I/O read vs per-particle prep vs |T|^2 scatter
+        real(timer_int_kind)    :: rt_read, rt_prep, rt_scatter
 
         t0 = tic()
         ! ---- cline defaults, mirroring exec_rec3D's shape. NOTE: projfile is
@@ -77,13 +82,13 @@ contains
             write(logfhandle,'(a,i0)') '>>> RECONSTRUCT3D_PCG: adjusted odd nspace to even placeholder=', nspace_dummy
         endif
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        c_build = toc(t0)
 
         ! ---- fixed-input contract: reject the inputs
         !      this path deliberately does not support, rather than silently
         !      ignoring them and returning a volume that does not match what the
         !      user asked for ----
         if( params%nparts > 1 ) THROW_HARD('reconstruct3D_pcg is single-part; nparts>1 is not supported')
-        if( trim(params%pgrp) /= 'c1' ) THROW_HARD('reconstruct3D_pcg does not apply symmetry; use pgrp=c1')
 
         maxits = MAXITS_DEFAULT
         if( cline%defined('maxits') ) maxits = nint(cline%get_rarg('maxits'))
@@ -129,10 +134,20 @@ contains
         deallocate(tmpinds)
         write(logfhandle,'(a,i0,a,i0)') '>>> RECONSTRUCT3D_PCG: particles selected = ', nptcls, &
             &' for state ', params%state
+        c_sel = toc(t0)
 
         call pcgop%new(params%box, params%smpd, LAMBDA)
         lims2 = pcgop%get_lims2()
         R     = lims2(1,2)
+        ! Point-group symmetry by coordinate replication: each plane pixel is
+        ! scattered at all M operators R_i.S_g inside the accumulators. c1
+        ! (nsym=1, identity) reproduces the asymmetric pass bit-for-bit; see
+        ! simple_reconstructor_pcg%set_sym and pcg note section 2.
+        call pcgop%set_sym(build%pgrpsyms)
+        if( build%pgrpsyms%get_nsym() > 1 )then
+            write(logfhandle,'(a,a,a,i0,a)') '>>> RECONSTRUCT3D_PCG: applying point group ', &
+                &trim(params%pgrp), ' (', build%pgrpsyms%get_nsym(), ' operators) by coordinate replication'
+        endif
         ! Solve for the density INSIDE mskdiam only. This is a constraint on the
         ! normal equations, not a mask applied to the output -- see
         ! reconstructor_pcg%set_mask. Skipped when mskdiam is absent, in which
@@ -142,6 +157,7 @@ contains
             write(logfhandle,'(a,f7.1,a)') '>>> RECONSTRUCT3D_PCG: solving inside a soft sphere of radius ', &
                 &params%msk, ' pixels'
         endif
+        c_opnew = toc(t0)
 
         ! ---- sigma2, fetched the way flex_analysis does: euclid_sigma2 over
         !      the group star file, giving per-particle-per-shell spectra.
@@ -168,6 +184,7 @@ contains
         else
             write(logfhandle,'(a)') '>>> RECONSTRUCT3D_PCG: objfun=cc, no sigma weighting'
         endif
+        c_sigma = toc(t0)
 
         ! ---- per-particle orientation/CTF/shift onto a selection oris. This is
         !      metadata only and needs no image I/O, so it runs as its own cheap
@@ -184,6 +201,7 @@ contains
             call selection%set_ori(i, e)
         end do
         call pcgop%prep_particles(selection, use_ctf=l_use_ctf, sig2=sig2)
+        c_prep = toc(t0)
 
         ! ---- streaming accumulation: read a batch, fold it into the two Fourier
         !      accumulators, discard it. The observed planes are needed for one
@@ -198,10 +216,14 @@ contains
         edge_mean  = 0.
         call pcgop%begin_accum
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        rt_read = 0.; rt_prep = 0.; rt_scatter = 0.
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch+MAXIMGBATCHSZ-1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
+            t_acc = tic()
             call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+            rt_read = rt_read + toc(t_acc)
+            t_acc = tic()
             do ii = 1, batchsz
                 ! Normalize, TAPER, then transform -- the same three steps, in the
                 ! same order, that production fuses into
@@ -234,12 +256,16 @@ contains
                 call build%imgbatch(ii)%fft()
                 y_batch(:,:,ii) = pcgop%extract_native_plane(build%imgbatch(ii))
             end do
+            rt_prep = rt_prep + toc(t_acc)
             ! one call folds this batch into BOTH accumulators: the RHS (which
             ! needs the planes) and the |T|^2 sampling density (which does not)
+            t_acc = tic()
             call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
+            rt_scatter = rt_scatter + toc(t_acc)
         end do
         call killimgbatch(build)
         deallocate(y_batch)
+        c_accum = toc(t0)
 
         ! ---- close accumulation: folds the RHS once and derives the
         !      preconditioner and, when requested, the Gram kernel. Both come
@@ -249,6 +275,19 @@ contains
         if( l_kernel ) call pcgop%set_op_mode(PCG_OP_KERNEL)
         rt_setup = toc(t0)
         write(logfhandle,'(a,f9.2,a)') '>>> RECONSTRUCT3D_PCG: setup time = ', rt_setup, ' s'
+        ! per-phase profile: the absT2/rim work the win_wraps and LUT changes
+        ! touched lives entirely in the accumulation line -- watch that one
+        write(logfhandle,'(a)')      '>>> RECONSTRUCT3D_PCG: setup profile (s)'
+        write(logfhandle,'(a,f9.2)') '    build_general_tbox   : ', c_build
+        write(logfhandle,'(a,f9.2)') '    particle selection   : ', c_sel   - c_build
+        write(logfhandle,'(a,f9.2)') '    operator allocation  : ', c_opnew - c_sel
+        write(logfhandle,'(a,f9.2)') '    sigma2 load          : ', c_sigma - c_opnew
+        write(logfhandle,'(a,f9.2)') '    prep_particles       : ', c_prep  - c_sigma
+        write(logfhandle,'(a,f9.2)') '    accumulation (absT2) : ', c_accum - c_prep
+        write(logfhandle,'(a,f9.2)') '      read I/O           : ', rt_read
+        write(logfhandle,'(a,f9.2)') '      prep (norm/tap/fft): ', rt_prep
+        write(logfhandle,'(a,f9.2)') '      scatter |T|^2      : ', rt_scatter
+        write(logfhandle,'(a,f9.2)') '    end_accum (FFT+kern)  : ', rt_setup - c_accum
 
         ! ---- solve ----
         t1 = tic()

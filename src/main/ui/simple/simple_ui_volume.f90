@@ -157,7 +157,8 @@ contains
         &'reconstruct3D_pcg_policy.md). Reads a project and reconstructs one volume for one '//&
         &'state from its current particle orientations, CTF, and shifts; orientations are inputs, not '//&
         &'optimized. objfun=euclid requires sigma2 files and weights the fit by them; objfun=cc runs '//&
-        &'unweighted. nparts=1, no even/odd split, no symmetry, no distributed execution. Writes to a new '//&
+        &'unweighted. nparts=1, no even/odd split, no distributed execution. Point-group symmetry '//&
+        &'is applied by coordinate replication (pgrp=c1 is a no-op). Writes to a new '//&
         &'experimental output directory and never modifies the project.',&
         &'simple_exec',&                       ! executable
         &.true.)                                ! requires sp_project
@@ -172,6 +173,7 @@ contains
         call reconstruct3D_pcg%add_input(UI_PARM, 'state', 'num', 'State to reconstruct', &
             &'Index of the single state to reconstruct', 'state index{1}', .false., 1.)
         ! search controls
+        call reconstruct3D_pcg%add_input(UI_SRCH, pgrp)
         call reconstruct3D_pcg%add_input(UI_SRCH, 'pcgop', 'multi', 'PCG normal operator', &
             &'Normal-operator implementation: kernel is the section-8.1 Toeplitz operator, whose '//&
             &'per-iteration cost is independent of particle count and is roughly 7x faster per '//&
