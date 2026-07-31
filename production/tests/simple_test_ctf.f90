@@ -10,7 +10,9 @@ integer, parameter :: LDIM(3) = [64,64,1]
 integer, parameter :: H = 5, K = 3
 real,    parameter :: SMPD = 1.0, DFX = 2.0, DFY = 2.3, ANGAST = 27.
 real,    parameter :: KV = 300., CS = 2.0, AC = 0.1, TOL = 2.e-6
-real,    parameter :: PHASES(3) = [0., PI/4., PIO2]
+! 3.0 rad ~ 172 deg exercises the near-pi regime typical of a laser phase plate,
+! where an erroneous fold at pi would flip the sign of the transfer function
+real,    parameter :: PHASES(4) = [0., PI/4., PIO2, 3.0]
 type(image)        :: img
 type(ctf)          :: tfun
 type(ctfparams)    :: ctfparms
@@ -25,17 +27,25 @@ call memoize_ft_maps(LDIM, SMPD)
 spa_freq_sq = (real(H)/real(LDIM(1)))**2 + (real(K)/real(LDIM(2)))**2
 ang         = atan2(real(K),real(H))
 
-call assert_real(0., canonical_phshift(PI), TOL, &
-    &'phase canonicalization maps pi to zero')
-call assert_real(3.*PI/4., canonical_phshift(-PI/4.), TOL, &
-    &'phase canonicalization maps negative values into [0,pi)')
+! Canonicalization is modulo 2*pi, which is an identity for the transfer function.
+! It must never be modulo pi: a pi offset negates the CTF, so folding at pi would
+! split a physically homogeneous phase population into two sign-opposite groups.
+call assert_real(PI, canonical_phshift(PI), TOL, &
+    &'phase canonicalization leaves pi alone; it is a distinct, sign-flipped CTF')
+call assert_real(0., canonical_phshift(TWOPI), TOL, &
+    &'phase canonicalization maps 2*pi to zero')
+call assert_real(TWOPI - PI/4., canonical_phshift(-PI/4.), TOL, &
+    &'phase canonicalization maps negative values into [0,2pi)')
 call tfun%init(DFX, DFY, ANGAST)
-ctfvals = tfun%get_ctfvars(PI + PI/4.)
+ctfvals = tfun%get_ctfvars(TWOPI + PI/4.)
 call assert_real(PI/4., ctfvals%phshift, TOL, &
     &'ctfvars carries the canonical additive phase shift')
 call assert_real(tfun%eval(spa_freq_sq, ang, PI/4.), &
-    &tfun%eval(spa_freq_sq, ang, PI + PI/4.), TOL, &
-    &'scalar CTF evaluation consumes the canonical phase')
+    &-tfun%eval(spa_freq_sq, ang, PI + PI/4.), TOL, &
+    &'a pi phase offset negates the transfer function')
+call assert_real(tfun%eval(spa_freq_sq, ang, PI/4.), &
+    &tfun%eval(spa_freq_sq, ang, TWOPI + PI/4.), TOL, &
+    &'scalar CTF evaluation is invariant under a 2*pi phase offset')
 call assert_real(tfun%eval(spa_freq_sq, ang, PI/4.), &
     &tfun%eval_canonical(spa_freq_sq, ang, PI/4.), TOL, &
     &'canonical-input fast evaluator agrees with the defensive scalar API')

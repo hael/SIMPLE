@@ -433,8 +433,16 @@ contains
         lims = self%loop_lims(2)
         call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
         phshift    = canonical_phshift(ctfparms%phshift)
-        start_freq = sqrt(tfun%SpaFreqSqAtNthZero(1, phshift, deg2rad(ctfparms%angast)))
-        end_freq   = sqrt(tfun%SpaFreqSqAtNthZero(2, phshift, deg2rad(ctfparms%angast)))
+        ! A large phase shift can push the first zeros below zero frequency, or make
+        ! the quadratic have no positive root, in which case SpaFreqSqAtNthZero
+        ! returns a non-positive value. Guard the square root and bail out rather
+        ! than propagating a NaN into the score.
+        start_freq = tfun%SpaFreqSqAtNthZero(1, phshift, deg2rad(ctfparms%angast))
+        end_freq   = tfun%SpaFreqSqAtNthZero(2, phshift, deg2rad(ctfparms%angast))
+        if( start_freq <= 0. .or. end_freq <= 0. ) return
+        start_freq = sqrt(start_freq)
+        end_freq   = sqrt(end_freq)
+        if( end_freq <= start_freq ) return
         ice_maxind = get_find_at_res(res, ICE_BAND1)
         start_find = max(1,     ice_maxind - 3)
         end_find   = min(box/2, ice_maxind + 3)

@@ -70,7 +70,11 @@ contains
         if( ctfparamfile%has_substr('.bin') )then
             THROW_HARD('this method does not support binary files; read_ctfparams_state_eo')
         endif
-        call os_tmp%new(self%n, self%o(1)%is_particle())
+        ! Parse into a hash-backed container regardless of the destination typing.
+        ! Particle oris keep these keys in fixed slots that always report present, so
+        ! reading into one would make every presence test below unconditionally true
+        ! and a file lacking a column would overwrite the stored value with zero.
+        call os_tmp%new(self%n, is_ptcl=.false.)
         call os_tmp%read(ctfparamfile)
         params_are_there(1)  = os_tmp%isthere('smpd')
         params_are_there(2)  = os_tmp%isthere('kv')

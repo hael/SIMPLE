@@ -670,6 +670,26 @@ contains
         if( self%scale < 0.00001 )then
             THROW_HARD('scale out if range, should be > 0')
         endif
+        ! CTF phase-shift search window, in degrees. The fitting objective is |CTF|,
+        ! which is periodic in the phase with period 180 degrees, so a window spanning
+        ! 180 degrees or more admits two solutions 180 degrees apart that score
+        ! identically but give transfer functions of opposite sign. Which one is found
+        ! is then decided by noise, and mixing both across a data set makes 2D class
+        ! averages cancel. A narrower window contains a single branch.
+        if( self%phshift_min < 0. .or. self%phshift_min >= 360. )then
+            THROW_HARD('phshift_min must be in [0,360) degrees')
+        endif
+        if( self%phshift_max < 0. .or. self%phshift_max > 360. )then
+            THROW_HARD('phshift_max must be in [0,360] degrees')
+        endif
+        if( self%phshift_min > self%phshift_max ) THROW_HARD('phshift_min must not exceed phshift_max')
+        if( self%phshift_step <= 0. ) THROW_HARD('phshift_step must be positive')
+        if( trim(self%fit_phshift) .eq. 'yes' .and. (self%phshift_max - self%phshift_min) >= 180. )then
+            THROW_WARN('phshift search window spans >= 180 degrees, so the sign of the fitted CTF &
+                &is ambiguous and may differ between micrographs. Narrow phshift_min/phshift_max to &
+                &less than 180 degrees around the expected phase (e.g. 120 to 179 for a phase near 180).')
+        endif
+
         if( cline%defined('msk') )then
             THROW_HARD('msk (mask radius in pixels) is deprecated! Use mskdiam (mask diameter in A)')
         endif

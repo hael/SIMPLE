@@ -814,7 +814,11 @@ contains
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: line
         type(ori) :: o_tmp
-        call o_tmp%str2ori(line, self%o(1)%is_particle())
+        ! Parse into a hash-backed ori regardless of the destination typing, so that
+        ! the presence tests below reflect what the record actually carried. Particle
+        ! oris keep these keys in fixed slots that always report present, which would
+        ! make a record lacking a key overwrite the stored value with zero.
+        call o_tmp%str2ori(line, is_ptcl=.false.)
         if( o_tmp%isthere('smpd')    ) call self%o(i)%set('smpd',    o_tmp%get('smpd'))
         if( o_tmp%isthere('kv')      ) call self%o(i)%set('kv',      o_tmp%get('kv'))
         if( o_tmp%isthere('cs')      ) call self%o(i)%set('cs',      o_tmp%get('cs'))

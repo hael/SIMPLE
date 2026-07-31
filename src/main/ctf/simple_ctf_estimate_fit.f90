@@ -126,19 +126,21 @@ contains
         self%parms%fraca        = parms%fraca
         self%parms%phshift      = canonical_phshift(parms%phshift)
         self%parms%l_fit_phshift= parms%l_fit_phshift
-        if( phshift_lims(1) < 0. .or. phshift_lims(1) >= PI )then
-            THROW_HARD('Phase-shift minimum must be in [0,pi); new')
+        if( phshift_lims(1) < 0. .or. phshift_lims(1) >= TWOPI )then
+            THROW_HARD('Phase-shift minimum must be in [0,2pi); new')
         endif
-        if( phshift_lims(2) < 0. .or. phshift_lims(2) > PI )then
-            THROW_HARD('Phase-shift maximum must be in [0,pi]; new')
+        if( phshift_lims(2) < 0. .or. phshift_lims(2) > TWOPI )then
+            THROW_HARD('Phase-shift maximum must be in [0,2pi]; new')
         endif
         if( phshift_lims(1) > phshift_lims(2) ) THROW_HARD('Invalid phase-shift range; new')
         if( phshift_step <= 0. ) THROW_HARD('Phase-shift step must be positive; new')
         self%phshift_lims = phshift_lims
-        ! PI is equivalent to zero for power-spectrum fitting and is not part
-        ! of the canonical interval. Keep the UI's 180-degree upper bound but
-        ! make the optimizer's numerical interval strictly half-open.
-        if( self%phshift_lims(2) >= PI ) self%phshift_lims(2) = nearest(PI, -1.)
+        ! Keep the interval half-open so the two ends never denote the same phase.
+        ! The fitting objective is |CTF|, which is pi-periodic, so a window spanning
+        ! pi or more admits two solutions a pi apart that score identically but give
+        ! transfer functions of opposite sign; a narrower window pins the branch.
+        ! The window is validated once per run in simple_parameters.
+        if( self%phshift_lims(2) >= TWOPI ) self%phshift_lims(2) = nearest(TWOPI, -1.)
         self%phshift_step = phshift_step
         self%micrograph => micrograph
         call self%micrograph%ifft
@@ -712,7 +714,9 @@ contains
         best_phases = self%parms%phshift
         nphases     = 1
         if( self%parms%l_fit_phshift )then
-            nphases = max(1, floor((self%phshift_lims(2)-self%phshift_lims(1))/self%phshift_step)+1)
+            ! the tolerance keeps a requested upper bound that lands on a grid node from
+            ! being dropped by single-precision rounding of the quotient
+            nphases = max(1, floor((self%phshift_lims(2)-self%phshift_lims(1))/self%phshift_step + 1.e-4)+1)
         endif
         !$omp parallel do default(shared) private(i,iph,phase,phase_cost) schedule(static) proc_bind(close)
         do i = 1,NSTEPS

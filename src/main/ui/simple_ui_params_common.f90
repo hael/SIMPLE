@@ -614,11 +614,13 @@ subroutine set_ui_params
                                    '(yes|no){no}', .false., 'no')
 
     call phshift_min%set_param(    'phshift_min',     'num', 'Minimum CTF phase shift', &
-                                   'Minimum fitted additive phase shift in degrees{0}', &
+                                   'Minimum fitted additive phase shift in degrees, 0-360; a window narrower &
+                                   &than 180 degrees fixes the sign of the fitted CTF{0}', &
                                    'in degrees{0}', .false., 0.)
 
     call phshift_max%set_param(    'phshift_max',     'num', 'Maximum CTF phase shift', &
-                                   'Maximum fitted additive phase shift in degrees; 180 is the exclusive pi boundary{180}', &
+                                   'Maximum fitted additive phase shift in degrees, 0-360; fitting is blind to &
+                                   &a 180-degree offset, so narrow the window around the expected phase{180}', &
                                    'in degrees{180}', .false., 180.)
 
     call phshift_step%set_param(   'phshift_step',    'num', 'CTF phase-shift step', &

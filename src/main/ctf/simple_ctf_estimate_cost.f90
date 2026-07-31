@@ -501,7 +501,7 @@ contains
                 parms%angast  = rad2deg(self%ospec%x(3)) ! radians to degrees
             case(4)
                 parms%angast  = rad2deg(self%ospec%x(3)) ! radians to degrees
-                parms%phshift = canonical_phshift(self%ospec%x(4)) ! radians in [0,pi)
+                parms%phshift = canonical_phshift(self%ospec%x(4)) ! radians in [0,2pi)
         end select
     end subroutine minimize4Dcont
 

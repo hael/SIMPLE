@@ -1107,33 +1107,15 @@ contains
     subroutine ensure_phase_shift_fields( self )
         class(sp_project), intent(inout) :: self
         integer :: i
+        ! Only the hash-backed segments can genuinely lack the field. In os_ptcl2D and
+        ! os_ptcl3D the phase occupies a fixed particle slot that is already
+        ! materialized as zero, so walking those segments here would cost a pass over
+        ! every particle on every segment write to achieve nothing.
         do i = 1,self%os_mic%get_noris()
-            if( self%os_mic%isthere(i, 'phshift') )then
-                call self%os_mic%set(i, 'phshift', self%os_mic%get(i, 'phshift'))
-            else
-                call self%os_mic%set(i, 'phshift', 0.)
-            endif
+            if( .not. self%os_mic%isthere(i, 'phshift') ) call self%os_mic%set(i, 'phshift', 0.)
         enddo
         do i = 1,self%os_stk%get_noris()
-            if( self%os_stk%isthere(i, 'phshift') )then
-                call self%os_stk%set(i, 'phshift', self%os_stk%get(i, 'phshift'))
-            else
-                call self%os_stk%set(i, 'phshift', 0.)
-            endif
-        enddo
-        do i = 1,self%os_ptcl2D%get_noris()
-            if( self%os_ptcl2D%isthere(i, 'phshift') )then
-                call self%os_ptcl2D%set(i, 'phshift', self%os_ptcl2D%get(i, 'phshift'))
-            else
-                call self%os_ptcl2D%set(i, 'phshift', 0.)
-            endif
-        enddo
-        do i = 1,self%os_ptcl3D%get_noris()
-            if( self%os_ptcl3D%isthere(i, 'phshift') )then
-                call self%os_ptcl3D%set(i, 'phshift', self%os_ptcl3D%get(i, 'phshift'))
-            else
-                call self%os_ptcl3D%set(i, 'phshift', 0.)
-            endif
+            if( .not. self%os_stk%isthere(i, 'phshift') ) call self%os_stk%set(i, 'phshift', 0.)
         enddo
     end subroutine ensure_phase_shift_fields
 

@@ -11,7 +11,7 @@ contains
         &amp_contr_const, wl, half_wl2_cs ) result( tval )
         integer, intent(in) :: h, k
         real,    intent(in) :: sum_df, diff_df, angast, phshift, amp_contr_const, wl, half_wl2_cs
-        ! phshift is canonical radians in [0,pi); canonicalize once before entering this hot kernel.
+        ! phshift is canonical radians in [0,2pi); canonicalize once before entering this hot kernel.
         real :: df, PhSh, cterm, pi_wl_s2
         ! Defocus term: exactly the same expression as eval_df,
         ! but factored the sum & difference terms are memoized

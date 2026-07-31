@@ -8,8 +8,8 @@ integer, parameter :: NMICS = 87
 integer, parameter :: NPTCLS = 5646
 type(sp_project)   :: project1, project2, project3, zero_phase_project, mapped_phase_project
 type(sp_project)   :: missing_phase_project, normalized_phase_project, read_phase_project
-type(sp_project)   :: heterogeneous_phase_project
-type(ctfparams)    :: zero_phase_ctf, mapped_phase_ctf, mapped_phase_result
+type(sp_project)   :: heterogeneous_phase_project, wrapped_phase_project
+type(ctfparams)    :: zero_phase_ctf, mapped_phase_ctf, mapped_phase_result, wrapped_phase_ctf
 type(image)        :: zero_phase_img
 type(oris)         :: heterogeneous_phase_oris
 type(string)       :: template, str1, str2, cwd_orig, probe_dir, proj_abs, projinfo_before, projinfo_after
@@ -59,23 +59,33 @@ call heterogeneous_phase_oris%kill
 call heterogeneous_phase_project%kill
 call zero_phase_img%kill
 call zero_phase_project%kill
+! A phase beyond pi must survive every mapping boundary unchanged. Folding it into
+! [0,pi) would negate the transfer function, which is what makes particles fitted
+! either side of the pi wrap cancel each other in 2D class averages.
 mapped_phase_ctf = zero_phase_ctf
 mapped_phase_ctf%phshift = PI + PI/4.
 call mapped_phase_project%add_single_movie(string('zero_phase_record.mrc'), mapped_phase_ctf)
 call mapped_phase_project%add_stk(string('zero_phase_record.mrc'), mapped_phase_ctf)
-call assert_phase_record(mapped_phase_project%os_mic,    'os_mic',    PI/4.)
-call assert_phase_record(mapped_phase_project%os_stk,    'os_stk',    PI/4.)
-call assert_phase_record(mapped_phase_project%os_ptcl2D, 'os_ptcl2D', PI/4.)
-call assert_phase_record(mapped_phase_project%os_ptcl3D, 'os_ptcl3D', PI/4.)
+call assert_phase_record(mapped_phase_project%os_mic,    'os_mic',    PI + PI/4.)
+call assert_phase_record(mapped_phase_project%os_stk,    'os_stk',    PI + PI/4.)
+call assert_phase_record(mapped_phase_project%os_ptcl2D, 'os_ptcl2D', PI + PI/4.)
+call assert_phase_record(mapped_phase_project%os_ptcl3D, 'os_ptcl3D', PI + PI/4.)
 mapped_phase_result = mapped_phase_project%get_micparams(1)
-call assert_phase_value(mapped_phase_result%phshift, 'os_mic -> ctfparams', PI/4.)
+call assert_phase_value(mapped_phase_result%phshift, 'os_mic -> ctfparams', PI + PI/4.)
 mapped_phase_result = mapped_phase_project%get_ctfparams('stk', 1)
-call assert_phase_value(mapped_phase_result%phshift, 'os_stk -> ctfparams', PI/4.)
+call assert_phase_value(mapped_phase_result%phshift, 'os_stk -> ctfparams', PI + PI/4.)
 mapped_phase_result = mapped_phase_project%get_ctfparams('ptcl2D', 1)
-call assert_phase_value(mapped_phase_result%phshift, 'os_ptcl2D -> ctfparams', PI/4.)
+call assert_phase_value(mapped_phase_result%phshift, 'os_ptcl2D -> ctfparams', PI + PI/4.)
 mapped_phase_result = mapped_phase_project%get_ctfparams('ptcl3D', 1)
-call assert_phase_value(mapped_phase_result%phshift, 'os_ptcl3D -> ctfparams', PI/4.)
+call assert_phase_value(mapped_phase_result%phshift, 'os_ptcl3D -> ctfparams', PI + PI/4.)
 call mapped_phase_project%kill
+! Only a full turn is the identity, and it must reduce rather than accumulate.
+wrapped_phase_ctf = zero_phase_ctf
+wrapped_phase_ctf%phshift = TWOPI + PI + PI/4.
+call wrapped_phase_project%add_single_movie(string('zero_phase_record.mrc'), wrapped_phase_ctf)
+call wrapped_phase_project%add_stk(string('zero_phase_record.mrc'), wrapped_phase_ctf)
+call assert_phase_record(wrapped_phase_project%os_ptcl2D, 'wrapped os_ptcl2D', PI + PI/4.)
+call wrapped_phase_project%kill
 ! Serialization is the final schema boundary: even partially assembled project
 ! records materialize the identity phase rather than persisting an absent field.
 call missing_phase_project%os_mic%new(1, is_ptcl=.false.)

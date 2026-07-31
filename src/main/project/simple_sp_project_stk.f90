@@ -88,6 +88,8 @@ contains
         class(oris),       intent(inout) :: os      ! parameters associated with stk (dfx,dfy,angast,phshift)
         type(string) :: stk_abspath, projname, fbody
         integer      :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls, pind
+        real         :: stack_phase
+        logical      :: l_phase_from_os
         call self%projinfo%getter(1, 'projname', projname)
         if( stk%has_substr('mrc') )then
             fbody = get_fbody(basename(stk), string('mrc'))
@@ -118,6 +120,13 @@ contains
             call os%set(pind, 'pind',   pind)
             call os%set(pind, 'indstk', pind)
         end do
+        ! Resolve the phase source on the caller's input, before it is copied into the
+        ! particle segments. Once copied there, phshift occupies a fixed particle slot
+        ! that is always present, so isthere() can no longer tell an unset phase from a
+        ! stored zero and any guard against the copy would be unreachable. A particle-
+        ! typed input therefore carries an authoritative phase for every row by
+        ! construction, including a legitimate zero, and must not be overwritten.
+        l_phase_from_os = os%isthere('phshift')
         ! copy os
         call self%os_ptcl2D%copy(os, is_ptcl=.true.)
         call self%os_ptcl3D%copy(os, is_ptcl=.true.)
@@ -125,14 +134,10 @@ contains
         call self%os_ptcl3D%set_all2single('stkind', 1)
         if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1) ! default on import
         if( .not. self%os_ptcl3D%isthere('state') ) call self%os_ptcl3D%set_all2single('state',  1) ! default on import
-        do pind = 1,self%os_ptcl2D%get_noris()
-            if( .not.self%os_ptcl2D%isthere(pind, 'phshift') )then
-                call self%os_ptcl2D%set(pind, 'phshift', ctfvars%phshift)
-            endif
-            if( .not.self%os_ptcl3D%isthere(pind, 'phshift') )then
-                call self%os_ptcl3D%set(pind, 'phshift', ctfvars%phshift)
-            endif
-        enddo
+        if( .not. l_phase_from_os )then
+            call self%os_ptcl2D%set_all2single('phshift', ctfvars%phshift)
+            call self%os_ptcl3D%set_all2single('phshift', ctfvars%phshift)
+        endif
         ! full path and existence check
         stk_abspath = simple_abspath(stk)
         ! find dimension of inputted stack
@@ -156,7 +161,19 @@ contains
         call self%os_stk%set(1, 'kv',         ctfvars%kv)
         call self%os_stk%set(1, 'cs',         ctfvars%cs)
         call self%os_stk%set(1, 'fraca',      ctfvars%fraca)
-        call self%os_stk%set(1, 'phshift',    ctfvars%phshift)
+        ! Same rule as add_stktab_2: the stack row records the particles' common
+        ! phase, or an explicit zero when the stack is heterogeneous.
+        stack_phase = canonical_phshift(ctfvars%phshift)
+        if( self%os_ptcl2D%get_noris() > 0 )then
+            stack_phase = canonical_phshift(self%os_ptcl2D%get(1, 'phshift'))
+            do pind = 2,self%os_ptcl2D%get_noris()
+                if( .not.is_equal(canonical_phshift(self%os_ptcl2D%get(pind, 'phshift')), stack_phase) )then
+                    stack_phase = 0.
+                    exit
+                endif
+            enddo
+        endif
+        call self%os_stk%set(1, 'phshift',    stack_phase)
         call self%os_stk%set(1, 'state',      1) ! default on import
         select case(ctfvars%ctfflag)
             case(CTFFLAG_NO)
@@ -300,10 +317,14 @@ contains
         type(ori)             :: o_ptcl, o_stk
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
         integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind, os_ind
-        real      :: stack_phase, particle_phase
-        logical   :: heterogeneous_phase
+        real      :: stack_phase, particle_phase, default_phase
+        logical   :: heterogeneous_phase, l_phase_from_os
         nstks = size(stkfnames)
         n_os  = os%get_noris()
+        ! Resolve the phase source once, on the caller's input. For a particle-typed
+        ! input phshift occupies a fixed slot that is always present, so every row
+        ! carries an authoritative phase, including a legitimate zero.
+        l_phase_from_os = os%isthere('phshift')
         ! first pass for sanity check and determining dimensions
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
@@ -363,11 +384,15 @@ contains
             stk_ind = n_os_stk + istk
             ! The particle rows are authoritative. A stack row records their
             ! common phase, or zero when the stack contains mixed phases.
+            ! default_phase is kept separate from the running baseline: reusing one
+            ! variable for both let a row without a phase inherit row 1's value and
+            ! then compare equal to it, so a genuinely mixed stack read as uniform.
             heterogeneous_phase = .false.
-            stack_phase = canonical_phshift(ctfvars%phshift)
+            default_phase = canonical_phshift(ctfvars%phshift)
+            stack_phase   = default_phase
             do i=1,nptcls_arr(istk)
-                particle_phase = stack_phase
-                if( os%isthere(os_ind+i, 'phshift') )then
+                particle_phase = default_phase
+                if( l_phase_from_os )then
                     particle_phase = canonical_phshift(os%get(os_ind+i, 'phshift'))
                 endif
                 if( i == 1 )then
@@ -411,7 +436,7 @@ contains
                 call o_ptcl%set_stkind(stk_ind)
                 call o_ptcl%set('pind',   pind) ! to keep track of particle indices
                 call o_ptcl%set('indstk', i)    ! physical particle index in stack
-                if( .not. o_ptcl%isthere('phshift') ) call o_ptcl%set('phshift', ctfvars%phshift)
+                if( .not. l_phase_from_os ) call o_ptcl%set('phshift', default_phase)
                 istate = 1
                 if( o_ptcl%isthere('state') ) istate = o_ptcl%get_state()
                 call o_ptcl%set_state(istate)

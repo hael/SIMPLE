@@ -215,10 +215,9 @@ contains
         call self%read_starheaders()
         call self%populate_opticsmap(spproj%os_optics)
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
+        ! A STAR file without rlnPhaseShift needs no fixup: phshift occupies a fixed
+        ! particle slot that is materialized as zero, which is the identity phase.
         call self%import_stardata(self%starfile%particles2D, spproj%os_ptcl2D, .true.)
-        do i = 1,spproj%os_ptcl2D%get_noris()
-            if( .not.spproj%os_ptcl2D%isthere(i, 'phshift') ) call spproj%os_ptcl2D%set(i, 'phshift', 0.)
-        enddo
     end subroutine import_ptcls2D
 
     subroutine import_cls2D(self, cline, spproj, filename)
@@ -261,10 +260,9 @@ contains
         call self%read_starheaders()
         call self%populate_opticsmap(spproj%os_optics)
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
+        ! A STAR file without rlnPhaseShift needs no fixup: phshift occupies a fixed
+        ! particle slot that is materialized as zero, which is the identity phase.
         call self%import_stardata(self%starfile%particles3D, spproj%os_ptcl3D, .true.)
-        do i = 1,spproj%os_ptcl3D%get_noris()
-            if( .not.spproj%os_ptcl3D%isthere(i, 'phshift') ) call spproj%os_ptcl3D%set(i, 'phshift', 0.)
-        enddo
     end subroutine import_ptcls3D
 
     ! imports into 2D & 3D, preserves poses
@@ -281,11 +279,9 @@ contains
         call self%read_starheaders()
         call self%populate_opticsmap(spproj%os_optics)
         call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
-        ! 3D field
+        ! 3D field. A STAR file without rlnPhaseShift needs no fixup: phshift occupies
+        ! a fixed particle slot that is materialized as zero, the identity phase.
         call self%import_stardata(self%starfile%particles3D, spproj%os_ptcl3D, .true.)
-        do i = 1,spproj%os_ptcl3D%get_noris()
-            if( .not.spproj%os_ptcl3D%isthere(i, 'phshift') ) call spproj%os_ptcl3D%set(i, 'phshift', 0.)
-        enddo
         ! CTF
         select case(lowercase(ctfflag%to_char()))
             case('no')

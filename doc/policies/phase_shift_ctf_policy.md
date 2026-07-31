@@ -3,7 +3,13 @@
 Status: implemented; code-level validation complete; scientific data
 validation pending.
 
-Last reviewed: 2026-07-20
+Last reviewed: 2026-07-31
+
+Revision 2026-07-31: canonicalization changed from modulo `pi` to modulo `2*pi`.
+The earlier interval was justified by power-spectrum fitting ambiguity but was
+applied to the signed transfer function, where a `pi` fold is a sign inversion.
+On laser-phase-plate data whose phase sits near `pi` this split the population
+across the wrap and made 2D class averages cancel. See sections 3, 3.1 and 3.2.
 
 ## 1. Purpose and scope
 
@@ -48,17 +54,39 @@ Internal and project units are radians:
 
 | Boundary | Unit and range |
 |---|---|
-| `ctfparams` | canonical radians in `[0, pi)` |
-| `ctfvars` | canonical radians in `[0, pi)` |
-| `ori`/`oris` and SIMPLE project fields | canonical radians in `[0, pi)` |
-| optimized and scalar CTF routines | canonical radians in `[0, pi)` |
+| `ctfparams` | canonical radians in `[0, 2*pi)` |
+| `ctfvars` | canonical radians in `[0, 2*pi)` |
+| `ori`/`oris` and SIMPLE project fields | canonical radians in `[0, 2*pi)` |
+| optimized and scalar CTF routines | canonical radians in `[0, 2*pi)` |
 | RELION `rlnPhaseShift` | degrees on input and output |
 | CTF-fit UI controls | degrees |
 | plaintext particle import | controlled by `phshiftunit` |
 
-The common orientation setter canonicalizes numerical phase modulo `pi`.
+The common orientation setter canonicalizes numerical phase modulo `2*pi`.
 Values outside the canonical interval are normalized at the domain boundary,
 not repeatedly inside optimized pixel loops.
+
+Canonicalization is modulo `2*pi` and never modulo `pi`. Because the transfer
+function is `sin(chi + phi_amplitude_contrast + phshift)`, a `pi` offset negates
+it. Reducing modulo `pi` is therefore a sign inversion rather than an identity,
+and it splits a phase population sitting near `pi` into two groups whose CTFs
+have opposite sign. Such groups cancel in class-average and 3D numerators while
+their `CTF^2` denominators keep accumulating, which destroys the restoration.
+
+### 3.1 The branch ambiguity and how it is resolved
+
+Power-spectrum CTF fitting scores `|CTF|`, which is periodic in the phase with
+period `pi`. A fit therefore determines `phshift` only modulo `pi`, while every
+consumer that uses the signed transfer function -- phase flipping, class-average
+restoration, and 3D Fourier-plane generation -- needs it modulo `2*pi`. The
+missing branch is not recoverable from the power spectrum.
+
+SIMPLE resolves the branch through the search window. A window narrower than 180
+degrees contains exactly one branch, so the fit is unambiguous by construction.
+A window spanning 180 degrees or more leaves the branch undetermined; parameter
+validation warns when `fit_phshift=yes` and the window is that wide. Only
+consistency across a data set matters: a uniformly wrong branch inverts map
+contrast but is otherwise harmless, whereas a mixed branch is not recoverable.
 
 The supported fit controls and defaults are:
 
@@ -69,12 +97,43 @@ phshift_max=180 degrees
 phshift_step=10 degrees
 ```
 
-The 0--180-degree interval reflects the phase ambiguity of power-spectrum CTF
-fitting and agrees with the established RELION/cisTEM approach. The grid is an
-initial search, not an assertion that a laser or Volta phase must be exactly
-90 degrees. The user-facing 180-degree maximum denotes the ambiguity boundary;
-the estimator excludes the exact endpoint from its grid and maps the continuous
-optimizer's upper limit to the largest representable value below `pi`.
+The default 0--180-degree window spans exactly one period of the fitting
+objective and matches the established RELION and cisTEM defaults. Within such a
+window the fit is unique for any true phase, so this default is retained.
+
+No default window is safe for every phase plate. On a window exactly one period
+wide the two ends score identically, so a true phase sitting at an end splits
+between the two roughly at random, and those two answers differ by a sign. Both
+0 and 180 degrees are populated regimes, so wherever the boundary is placed some
+regime sits on it. The window must therefore be chosen for the data:
+
+| Regime | Typical phase | Recommended window |
+|---|---|---|
+| conventional | 0 | `fit_phshift=no` |
+| Volta, charged | 60--140 | default 0--180 |
+| laser plate near 90 | 80--100 | default 0--180, or 30--150 |
+| Volta, early/low charge | 0--30 | 300--60 is not expressible; use `fit_phshift=no` until charged |
+| laser plate near 180 | 165--195 | 120--240 |
+
+The window may straddle 180 degrees, which is what makes the last row work and
+is only possible because storage is modulo `2*pi`. The grid is an initial
+search, not an assertion that a laser or Volta phase must be exactly 90 degrees.
+
+Because no default can cover every regime, the estimator additionally reports
+any fitted phase that lands within one grid step of an edge of a window that is
+a full period wide. That warning is the operational signal that the window is
+badly placed for the data at hand.
+
+### 3.2 External conventions
+
+RELION never wraps `rlnPhaseShift`. The value flows verbatim from the fitter
+into `K5 = DEG2RAD(phase_shift)` and then into the signed `-sin(gamma)`, and its
+even-Zernike aberration fit can move a constant gamma offset into that column,
+producing values outside `[0, 180)`. SIMPLE's modulo-`2*pi` storage matches this
+and preserves such values on import and export. cisTEM wraps modulo `pi` in
+`CTF::SetAdditionalPhaseShift` but not in `CTF::Init`, so the same numerical
+phase can be stored two different ways within one program; SIMPLE does not
+reproduce that behavior.
 
 ## 4. In-memory CTF contract
 
@@ -360,7 +419,8 @@ os_mic -> os_stk -> os_ptcl2D -> os_ptcl3D -> get_ctfparams
 Confirm that:
 
 - every relevant row contains `phshift`
-- values agree modulo `pi` at every mapping boundary
+- values agree exactly at every mapping boundary; agreement only modulo `pi`
+  indicates a sign-inverting fold and is a failure
 - a true fitted zero remains present as zero
 - project write/read preserves the value
 - subset, merge, and distributed project assembly preserve the value
@@ -528,6 +588,9 @@ Future changes must not:
 - condition downstream phase use on `fit_phshift`
 - perform STAR degree/radian conversion inside numerical kernels
 - replace heterogeneous particle phases with an aggregate stack default
+- canonicalize the numerical phase modulo `pi`, or fold it in any other way that
+  changes the sign of the transfer function
+- assume a stored phase lies below `pi`, or clamp an imported phase into `[0, pi)`
 
 ## 13. Change-control checklist
 
@@ -536,9 +599,11 @@ translation, class restoration, or reconstruction must verify:
 
 - zero-phase scalar and optimized results remain within current tolerance
 - nonzero phase reaches every affected numerical consumer
+- a phase beyond `pi` survives every mapping boundary without a sign fold
+- canonicalization remains modulo `2*pi`
 - `ctfparams` and `ctfvars` remain consistent
 - all four project fields retain phase through write/read and mapping
-- RELION STAR conversion remains degrees <-> radians
+- RELION STAR conversion remains degrees <-> radians, without range clamping
 - all five fitting UI surfaces remain synchronized
 - raw and phase-flipped restoration retain their numerator/density contracts
 - no phase-plate-specific postprocessing branch has been introduced

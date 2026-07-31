@@ -31,6 +31,8 @@ contains
         type(ctf_estimate_fit) :: ctffit
         type(string) :: fname_diag, moviename_thumb, docname, tmpl_fname
         integer      :: nframes, ldim(3)
+        real         :: phlim_lo, phlim_hi
+        character(len=STDLEN) :: phmsg
         if( .not. file_exists(moviename_forctf) )&
         & write(logfhandle,*) 'inputted micrograph does not exist: ', moviename_forctf%to_char()
         call find_ldim_nptcls(moviename_forctf, ldim, nframes)
@@ -69,6 +71,26 @@ contains
             &[deg2rad(params%phshift_min),deg2rad(params%phshift_max)], deg2rad(params%phshift_step))
         call ctffit%fit(ctfvars, params%ctfresthreshold)
         ctfvars%phshift = canonical_phshift(ctfvars%phshift)
+        ! The fitting objective is |CTF|, which has period pi, so the two ends of a
+        ! pi-wide window score identically. A phase landing within a grid step of an
+        ! edge cannot be told from its partner half a turn away, and micrographs will
+        ! scatter between the two, yielding transfer functions of opposite sign that
+        ! cancel in class averages. Report it: no window is safe for every phase
+        ! plate, so this is the only way to catch a badly placed one on real data.
+        if( ctfvars%l_fit_phshift )then
+            phlim_lo = deg2rad(params%phshift_min)
+            phlim_hi = deg2rad(params%phshift_max)
+            if( phlim_hi - phlim_lo >= PI - deg2rad(params%phshift_step) )then
+                if( min(ctfvars%phshift - phlim_lo, phlim_hi - ctfvars%phshift) < deg2rad(params%phshift_step) )then
+                    write(phmsg,'(A,F7.2,A,F7.2,A,F7.2,A)') 'fitted CTF phase ', rad2deg(ctfvars%phshift), &
+                        &' deg sits at the edge of the search window [', params%phshift_min, ',', &
+                        &params%phshift_max, '] deg'
+                    THROW_WARN(trim(phmsg)//'. Its 180-degree partner fits equally well, so micrographs may split &
+                        &between the two and their CTFs will then have opposite sign. Re-centre the window on the &
+                        &expected phase.')
+                endif
+            endif
+        endif
         if( l_gen_thumb )then
             call self%gen_thumbnail( ctffit, params%pspecsz )
             call self%img_jpg%write_jpg(moviename_thumb, norm=.true., quality=92)

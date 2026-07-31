@@ -1,6 +1,6 @@
 !@descr: type and enumerator definitions
 module simple_type_defs
-use simple_defs,   only: SP, DP, PI, DPI
+use simple_defs,   only: SP, DP, TWOPI, DTWOPI
 use simple_string, only: string
 implicit none
 
@@ -79,7 +79,7 @@ type ctfvars
     real    :: dfx     = 0.
     real    :: dfy     = 0.
     real    :: angast  = 0.
-    real    :: phshift = 0. !< canonical additive CTF phase shift in [0,pi), radians
+    real    :: phshift = 0. !< canonical additive CTF phase shift in [0,2pi), radians
 end type ctfvars
 
 type stats_struct
@@ -150,14 +150,19 @@ end type sigma_array
 
 contains
 
+    ! The CTF is sin(chi + amp_contr_const + phshift), so shifting the phase by pi
+    ! negates the transfer function. Canonicalization must therefore be modulo 2*pi,
+    ! which is a true identity, and never modulo pi, which silently flips the sign.
+    ! Power-spectrum fitting only determines the phase modulo pi; the remaining
+    ! branch is fixed by the estimator's search window, not by this reduction.
     pure elemental real(SP) function canonical_phshift_sp( phshift ) result( canonical )
         real(SP), intent(in) :: phshift
-        canonical = modulo(phshift, PI)
+        canonical = modulo(phshift, TWOPI)
     end function canonical_phshift_sp
 
     pure elemental real(DP) function canonical_phshift_dp( phshift ) result( canonical )
         real(DP), intent(in) :: phshift
-        canonical = modulo(phshift, DPI)
+        canonical = modulo(phshift, DTWOPI)
     end function canonical_phshift_dp
 
     pure integer(kind(ENUM_CENTYPE)) function get_centype( str )
