@@ -20,12 +20,13 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Confirmed the legacy Euclidean score, raw FFT loss, and scalar gradient route are checked for every discrete rotation by the harness.
   - Compile/link verification passed with the Windows MSYS2 UCRT64 workflow.
   - Runtime validation passed on Oracle Linux 8.10 with 288 rotations: legacy-score error `2.97e-08`, scalar-gradient error `1.82e-07`, tolerance `8.50e-04`.
-- [ ] Phase 1: parabolic sub-grid interpolation.
+- [x] Phase 1: parabolic sub-grid interpolation.
   - Implemented a Euclidean-only three-point parabolic peak offset with periodic neighbors and a safeguarded fallback.
   - Preserved discrete selection for non-Euclidean objectives and retained the integer `cur_inpl_idx` compatibility output.
   - Added the continuous grid-index angle output used for shift-frame rotation and optional downstream propagation.
   - Added a focused synthetic parabola check to `simple_test_euclid_route_identity`.
-  - Windows UCRT64 compile/link verification passed; Oracle Linux runtime validation is pending.
+  - Windows UCRT64 compile/link verification passed.
+  - Oracle Linux 8.10 runtime validation passed with 288 rotations: legacy-score error `2.91e-08`, scalar-gradient error `3.60e-07`, tolerance `1.11e-03`; the focused parabolic check also passed.
 - [ ] Phase 2: continuous angular refinement.
 - [ ] Stage 1 validation: route identity, gradients, aliasing, and synthetic recovery.
 - [ ] Phase 3: joint `(sx, sy, theta)` refinement.
