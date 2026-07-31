@@ -3,6 +3,7 @@ module simple_ui_denoise
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('denoise', 'Denoising', 70)
 type(ui_program), target :: icm2D
 type(ui_program), target :: icm3D
 type(ui_program), target :: ppca_denoise
@@ -28,48 +29,39 @@ contains
         call new_ppca_volvar(prgtab)
     end subroutine construct_denoise_programs
 
-    subroutine print_denoise_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('DENOISING:', C_UNDERLINED)
-        write(logfhandle,'(A)') icm2D%name%to_char()
-        write(logfhandle,'(A)') icm3D%name%to_char()
-        write(logfhandle,'(A)') ppca_denoise%name%to_char()
-        write(logfhandle,'(A)') ppca_denoise_classes%name%to_char()
-        write(logfhandle,'(A)') cls_split%name%to_char()
-        write(logfhandle,'(A)') denoise_project%name%to_char()
-        write(logfhandle,'(A)') map_params_from_den%name%to_char()
-        write(logfhandle,'(A)') flex_analysis%name%to_char()
-        write(logfhandle,'(A)') ppca_volvar%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_denoise_programs
-
-    subroutine new_icm2D( prgtab )
+subroutine new_icm2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call icm2D%new(&
         &'icm2D',&                                                                  ! name
-        &'ICM 2D filter',&                                                          ! descr_short
-        &'is a program for 2D ICM denoising of even/odd image stacks',&             ! descr_long
+        &'Denoise paired 2D image stacks with ICM',& ! summary
+        &'is a program for 2D ICM denoising of even/odd image stacks',&             ! help
         &'simple_exec',&                                                            ! executable
-        &.false.)                                                                   ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call icm2D%add_input(UI_IMG, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
-        call icm2D%add_input(UI_IMG, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
+        call icm2D%add_input(UI_IMG, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call icm2D%add_input(UI_IMG, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call icm2D%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call icm2D%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call icm2D%add_input(UI_FILT, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0)
+        call icm2D%add_input(UI_FILT, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call icm2D%add_input(UI_COMP, nthr)
+        call icm2D%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('icm2D', icm2D, prgtab)
+        call add_ui_program('icm2D', icm2D, prgtab, UI_CATEGORY)
     end subroutine new_icm2D
 
     subroutine new_icm3D( prgtab )
@@ -77,29 +69,35 @@ contains
         ! PROGRAM SPECIFICATION
         call icm3D%new(&
         &'icm3D',&                                                                  ! name
-        &'ICM 3D filter',&                                                          ! descr_short
-        &'is a program for 3D nonuniform filtering by Iterated Conditional Modes',& ! descr_long
+        &'Denoise a 3D volume with nonuniform ICM filtering',& ! summary
+        &'is a program for 3D nonuniform filtering by Iterated Conditional Modes',& ! help
         &'simple_exec',&                                                            ! executable
-        &.false.)                                                                   ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call icm3D%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call icm3D%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        call icm3D%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call icm3D%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call icm3D%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call icm3D%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call icm3D%add_input(UI_FILT, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0)
+        call icm3D%add_input(UI_FILT, 'lambda', 'num', 'ICM lambda regularization parameter', 'Strength of noise reduction', '(0.01-3.0){1.0}', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! call icm3D%set_input('mask_ctrls', 1, mskdiam)
         ! call icm3D%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
-        call icm3D%add_input(UI_COMP, nthr)
+        call icm3D%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('icm3D', icm3D, prgtab)
+        call add_ui_program('icm3D', icm3D, prgtab, UI_CATEGORY)
     end subroutine new_icm3D
 
     subroutine new_ppca_denoise( prgtab )
@@ -107,50 +105,73 @@ contains
         ! PROGRAM SPECIFICATION
         call ppca_denoise%new(&
         &'ppca_denoise',&                             ! name
-        &'Filter stack/volume',&                      ! descr_short
-        &'is a program for ppca-based denoising of an image stack',&  ! descr_long
+        &'Denoise an image stack with probabilistic PCA',& ! summary
+        &'is a program for ppca-based denoising of an image stack',&  ! help
         &'simple_exec',&                              ! executable
-        &.false.)                                     ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call ppca_denoise%add_input(UI_IMG, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '')
-        call ppca_denoise%add_input(UI_IMG, outstk)
+        call ppca_denoise%add_input(UI_IMG, 'stk',  'file', 'Stack to denoise',  'Stack of images to denoise', 'e.g. stk.mrcs', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call ppca_denoise%add_input(UI_IMG, outstk, &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call ppca_denoise%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call ppca_denoise%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call ppca_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .true., 160.0)
-        call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, or diffusion maps', 'PCA methods', '(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}', .false., 'ppca')
-        call ppca_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Diffusion graph neighbors (default 5; try 5-30)', 'Local nearest neighbors used for pca_mode=diffusion_maps', '# neighbors', .false., 5.0)
+        call ppca_denoise%add_input(UI_FILT, 'neigs', 'num', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', 'Number of eigencomponents (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .true., 160.0, &
+        &visibility=UI_VIS_STANDARD)
+        call ppca_denoise%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, PPCA plus residual kPCA, standard SVD PCA, kernel PCA, or diffusion maps', 'PCA methods','', .false., 'ppca', &
+        &choices=ui_choices([character(len=15) :: 'ppca', 'ppca_kpca_resid', 'pca_svd', 'kpca', 'diffusion_maps']), &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise%add_input(UI_FILT, 'k_nn', 'num', 'Diffusion graph neighbors (default 5; try 5-30)', 'Local nearest neighbors used for pca_mode=diffusion_maps', '# neighbors', .false., 5.0, &
+        &visibility=UI_VIS_ADVANCED)
             call ppca_denoise%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
                 'Diffusion-map bandwidth mode', &
-                'Kernel bandwidth policy for diffusion maps(median|ferguson){median}', &
-                '(median|ferguson){median}', .false., 'median')
+                'Kernel bandwidth policy for diffusion maps(median|ferguson){median}','', .false., 'median', &
+            &choices=ui_choices([character(len=8) :: 'median', 'ferguson']), &
+        &visibility=UI_VIS_ADVANCED)
             call ppca_denoise%add_input(UI_FILT, 'bandwidth_tune', 'num', &
                 'Ferguson bandwidth multiplier (default 1)', &
                 'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
-                'tune >= 0', .false., 1.0)
+                'tune >= 0', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
             call ppca_denoise%add_input(UI_FILT, 'dm_alpha', 'num', &
                 'Diffusion-map density normalization (default 0)', &
                 'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
-                '0 <= alpha <= 1', .false., 0.0)
-        call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
-        call ppca_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
-        call ppca_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
-        call ppca_denoise%add_input(UI_FILT, 'ppca_kpca_resid_alpha', 'num', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'hybrid alpha', .false., 0.5)
-        call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
-        call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (default 96; try 96, 128)', 'Nyström max local support neighbors (default 96; try 96, 128)', '# max local nbrs', .false., 96.0)
-        call ppca_denoise%add_input(UI_FILT, hp)
-        call ppca_denoise%add_input(UI_FILT, lp)
+                '0 <= alpha <= 1', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}','', .false., 'rbf', &
+        &choices=ui_choices([character(len=6) :: 'rbf', 'cosine']), &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}','', .false., 'nystrom', &
+        &choices=ui_choices([character(len=7) :: 'exact', 'nystrom']), &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise%add_input(UI_FILT, 'ppca_kpca_resid_alpha', 'num', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'Residual hybrid damping (0 => PPCA only; default 0.5)', 'hybrid alpha', .false., 0.5, &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (default 96; try 96, 128)', 'Nyström max local support neighbors (default 96; try 96, 128)', '# max local nbrs', .false., 96.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise%add_input(UI_FILT, hp, &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise%add_input(UI_FILT, lp, &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call ppca_denoise%add_input(UI_MASK, mskdiam, required_override=.false.)
+        call ppca_denoise%add_input(UI_MASK, mskdiam, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         ! computer controls
-        call ppca_denoise%add_input(UI_COMP, nthr)
+        call ppca_denoise%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('ppca_denoise', ppca_denoise, prgtab)
+        call add_ui_program('ppca_denoise', ppca_denoise, prgtab, UI_CATEGORY)
     end subroutine new_ppca_denoise
 
     subroutine new_ppca_denoise_classes( prgtab )
@@ -158,34 +179,50 @@ contains
         ! PROGRAM SPECIFICATION
         call ppca_denoise_classes%new(&
         &'ppca_denoise_classes',&                     ! name
-        &'Filter stack/volume',&                      ! descr_short
-        &'is a program for ppca-based denoising of image classes',&  ! descr_long
+        &'Denoise class averages with probabilistic PCA',& ! summary
+        &'is a program for ppca-based denoising of image classes',&  ! help
         &'all',&                                      ! executable
-        &.true.)                                      ! requires sp_project
+        &.true., &
+        &visibility=UI_VIS_ADVANCED)                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call ppca_denoise_classes%add_input(UI_PARM, 'pre_norm', 'binary', 'Pre-normalize images', 'Statistical normalization(yes|no){no}', '(yes|no){no}', .false., 'no')
-        ! alternative inputs
+        call ppca_denoise_classes%add_input(UI_PARM, 'pre_norm', 'binary', 'Pre-normalize images', 'Statistical normalization(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call ppca_denoise_classes%add_input(UI_FILT, 'neigs', 'num', '# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .false., 160.0)
-        call ppca_denoise_classes%add_input(UI_FILT, 'transp_pca', 'binary', 'transpose for pixel-wise learning', 'transpose for pixel-wise learning(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call ppca_denoise_classes%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, standard SVD PCA or kernel PCA', 'PCA methods', '(ppca|pca_svd|kpca){ppca}', .false., 'ppca')
-        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}', '(rbf|cosine){rbf}', .false., 'rbf')
-        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}', '(exact|nystrom){nystrom}', .false., 'nystrom')
-        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0)
-        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0)
-        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (default 96; try 96, 128)', 'Nyström max local support neighbors (default 96; try 96, 128)', '# max local nbrs', .false., 96.0)
+        call ppca_denoise_classes%add_input(UI_FILT, 'neigs', 'num', '# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs (0 => auto for Nyström kPCA; default 160; try 128, 160)', '# eigenvecs', .false., 160.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise_classes%add_input(UI_FILT, 'transp_pca', 'binary', 'transpose for pixel-wise learning', 'transpose for pixel-wise learning(yes|no){no}','', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise_classes%add_input(UI_FILT, 'pca_mode', 'multi', 'PCA methods: PPCA, standard SVD PCA or kernel PCA', 'PCA methods','', .false., 'ppca', &
+        &choices=ui_choices([character(len=7) :: 'ppca', 'pca_svd', 'kpca']), &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_ker', 'multi', 'Kernel PCA kernel', 'Kernel PCA kernel(rbf|cosine){rbf}','', .false., 'rbf', &
+        &choices=ui_choices([character(len=6) :: 'rbf', 'cosine']), &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_backend', 'multi', 'Kernel PCA backend', 'Kernel PCA backend(exact|nystrom){nystrom}','', .false., 'nystrom', &
+        &choices=ui_choices([character(len=7) :: 'exact', 'nystrom']), &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_rbf_gamma', 'num', 'RBF gamma (0 => auto)', 'RBF gamma (0 => auto)', 'gamma', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_npts', 'num', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', 'Nyström landmark count (0 => auto=max(128,2*neigs), capped at 512; try 256, 512)', '# landmarks', .false., 512.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call ppca_denoise_classes%add_input(UI_FILT, 'kpca_nystrom_local_nbrs', 'num', 'Nyström max local support neighbors (default 96; try 96, 128)', 'Nyström max local support neighbors (default 96; try 96, 128)', '# max local nbrs', .false., 96.0, &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
         ! <empty>
         ! computer controls
-        call ppca_denoise_classes%add_input(UI_COMP, nthr)
+        call ppca_denoise_classes%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('ppca_denoise_classes', ppca_denoise_classes, prgtab)
+        call add_ui_program('ppca_denoise_classes', ppca_denoise_classes, prgtab, UI_CATEGORY)
     end subroutine new_ppca_denoise_classes
 
     subroutine new_ppca_volvar( prgtab )
@@ -193,27 +230,34 @@ contains
         ! PROGRAM SPECIFICATION
         call ppca_volvar%new(&
         &'ppca_volvar',&                                     ! name
-        &'Volume variability analysis using ppca',&          ! descr_short
-        &'is a program for ppca-based volume variability',&  ! descr_long
+        &'Volume variability analysis using ppca',&          ! summary
+        &'is a program for ppca-based volume variability',&  ! help
         &'simple_exec',&                                     ! executable
         &.false.)                                            ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call ppca_volvar%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume for creating 2D central sections', 'input volume e.g. vol.mrc', .true., 'vol1.mrc')
+        call ppca_volvar%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Volume for creating 2D central sections', 'input volume e.g. vol.mrc', .true., 'vol1.mrc', &
+        &visibility=UI_VIS_STANDARD)
+        call ppca_volvar%add_input(UI_IMG, outstk, &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call ppca_volvar%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call ppca_volvar%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call ppca_volvar%add_input(UI_FILT, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .true., 0.0)
+        call ppca_volvar%add_input(UI_FILT, 'neigs', 'num', '# eigenvecs', '# eigenvecs', '# eigenvecs', .true., 0.0, &
+        &visibility=UI_VIS_STANDARD)
         ! mask controls
-        call ppca_volvar%add_input(UI_MASK, mskdiam, required_override=.false.)
+        call ppca_volvar%add_input(UI_MASK, mskdiam, required_override=.false., &
+        &visibility=UI_VIS_DEVELOPER)
         ! computer controls
-        call ppca_volvar%add_input(UI_COMP, nthr)
+        call ppca_volvar%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('ppca_volvar', ppca_volvar, prgtab)
+        call add_ui_program('ppca_volvar', ppca_volvar, prgtab, UI_CATEGORY)
     end subroutine new_ppca_volvar
 
     subroutine new_cls_split( prgtab )
@@ -223,99 +267,122 @@ contains
         &'Split classes with latent clustering',&
         &'splits 2D/3D particle classes into subclasses using diffusion-map or kPCA embeddings and k-medoids clustering',&
         &'all',&
-        &.true.)
+        &.true., &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_PARM, 'class', 'num', &
             'Optional class index to split', &
             'Optional 2D class index or 3D projection/class index to split; omit to process all classes', &
-            'e.g. 5', .false., 0.0)
+            'e.g. 5', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_PARM, 'ncls', 'num', &
             'Fixed number of subclasses (0 => auto)', &
             'Fixed number of subclasses (0 => auto)', &
-            '# subclasses', .false., 0.0)
+            '# subclasses', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_PARM, 'nsubcls_min', 'num', &
             'Minimum subclass trial count in auto mode (default 3)', &
             'Used only when ncls=0: optimization tries every subclass count from nsubcls_min through nsubcls_max', &
-            '# min trial subclasses', .false., 3.0)
+            '# min trial subclasses', .false., 3.0, &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_PARM, 'nsubcls_max', 'num', &
             'Maximum subclass trial count in auto mode (default 10)', &
             'Used only when ncls=0: optimization tries every subclass count from nsubcls_min through nsubcls_max', &
-            '# max trial subclasses', .false., 10.0)
+            '# max trial subclasses', .false., 10.0, &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_PARM, 'k_nn', 'num', &
             'Diffusion graph neighbors (default 10; try 5-30)', &
             'Local nearest neighbors used only for diffusion-map modes; larger values smooth the graph', &
-            '# neighbors', .false., real(DIFFMAP_GRAPH_KNN_DEFAULT))
-        call cls_split%add_input(UI_ALT,  'oritype', 'multi', &
-            'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}', &
-            '(ptcl2D|ptcl3D){ptcl2D}', .false., 'ptcl2D')
+            '# neighbors', .false., real(DIFFMAP_GRAPH_KNN_DEFAULT), &
+        &visibility=UI_VIS_ADVANCED)
+        call cls_split%add_input(UI_PARM, 'oritype', 'multi', &
+            'Particle type to split', 'Particle type to split(ptcl2D|ptcl3D){ptcl2D}','', .false., 'ptcl2D', &
+        &choices=ui_choices([character(len=6) :: 'ptcl2D', 'ptcl3D']), &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_FILT, 'neigs', 'num', &
             'Number of eigencomponents (0 => auto scan; default 200)', &
             'Number of eigencomponents used as the scan upper bound before ICM dimension selection', &
-            '# eigenvecs', .false., real(DIFFMAP_NEIGS_SCAN_DEFAULT))
+            '# eigenvecs', .false., real(DIFFMAP_NEIGS_SCAN_DEFAULT), &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_FILT, 'pca_mode', 'multi', &
             'Class split embedding method', &
-            'Class split embedding method(diffusion_maps|kpca){diffusion_maps}', &
-            '(diffusion_maps|kpca){diffusion_maps}', .false., 'diffusion_maps')
+            'Class split embedding method(diffusion_maps|kpca){diffusion_maps}','', .false., 'diffusion_maps', &
+        &choices=ui_choices([character(len=14) :: 'diffusion_maps', 'kpca']), &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_FILT, 'graph', 'multi', &
-            'Class split graph', 'Class split graph(euc|ori){euc}', &
-            '(euc|ori){euc}', .false., 'euc')
+            'Class split graph', 'Class split graph(euc|ori){euc}','', .false., 'euc', &
+        &choices=ui_choices([character(len=3) :: 'euc', 'ori']), &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
             'Diffusion-map bandwidth mode', &
-            'Kernel bandwidth policy for diffusion maps(median|ferguson){median}', &
-            '(median|ferguson){median}', .false., 'median')
+            'Kernel bandwidth policy for diffusion maps(median|ferguson){median}','', .false., 'median', &
+        &choices=ui_choices([character(len=8) :: 'median', 'ferguson']), &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_FILT, 'bandwidth_tune', 'num', &
             'Ferguson bandwidth multiplier (default 1)', &
             'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
-            'tune >= 0', .false., 1.0)
+            'tune >= 0', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_FILT, 'dm_alpha', 'num', &
             'Diffusion-map density normalization (default 0)', &
             'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
-            '0 <= alpha <= 1', .false., 0.0)
-        call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., gui_submenu="mask", gui_advanced=.false.)
-        call cls_split%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
-        call cls_split%add_input(UI_COMP, nthr,   gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('cls_split', cls_split, prgtab)
+            '0 <= alpha <= 1', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call cls_split%add_input(UI_MASK, mskdiam, required_override=.false., group="mask", visibility=UI_VIS_STANDARD)
+        call cls_split%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
+        call cls_split%add_input(UI_COMP, nthr,   group="compute", visibility=UI_VIS_STANDARD)
+        call add_ui_program('cls_split', cls_split, prgtab, UI_CATEGORY)
     end subroutine new_cls_split
 
     subroutine new_denoise_project( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call denoise_project%new(&
         &'denoise_project',&
-        &'Create dual denoised project',&
+        &'Create paired raw and denoised particle representations',&
         &'is a workflow for creating a dual-representation project from existing 2D clustering by writing registered phase-flipped raw particles and denoised particle samples from diffusion maps',&
         &'all',&
-        &.true.)
+        &.true., &
+        &visibility=UI_VIS_ADVANCED)
         call denoise_project%add_input(UI_FILT, 'neigs', 'num', &
             'Number of eigencomponents (0 => auto scan; default 200)', &
             'Number of eigencomponents used as the scan upper bound before ICM rank selection', &
-            '# eigenvecs', .false., real(DIFFMAP_NEIGS_SCAN_DEFAULT))
+            '# eigenvecs', .false., real(DIFFMAP_NEIGS_SCAN_DEFAULT), &
+        &visibility=UI_VIS_ADVANCED)
         call denoise_project%add_input(UI_FILT, 'k_nn', 'num', &
             'Diffusion graph neighbors (default 10; try 5-30)', &
             'Local nearest neighbors used for diffusion-map graph construction', &
-            '# neighbors', .false., real(DIFFMAP_GRAPH_KNN_DEFAULT))
+            '# neighbors', .false., real(DIFFMAP_GRAPH_KNN_DEFAULT), &
+        &visibility=UI_VIS_ADVANCED)
         call denoise_project%add_input(UI_FILT, 'graph', 'multi', &
-            'Diffusion graph', 'Diffusion graph(euc|ori){euc}', '(euc|ori){euc}', .false., 'euc')
+            'Diffusion graph', 'Diffusion graph(euc|ori){euc}','', .false., 'euc', &
+        &choices=ui_choices([character(len=3) :: 'euc', 'ori']), &
+        &visibility=UI_VIS_ADVANCED)
         call denoise_project%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
             'Diffusion-map bandwidth mode', &
-            'Kernel bandwidth policy for diffusion maps(median|ferguson){median}', &
-            '(median|ferguson){median}', .false., 'median')
+            'Kernel bandwidth policy for diffusion maps(median|ferguson){median}','', .false., 'median', &
+        &choices=ui_choices([character(len=8) :: 'median', 'ferguson']), &
+        &visibility=UI_VIS_ADVANCED)
         call denoise_project%add_input(UI_FILT, 'bandwidth_tune', 'num', &
             'Ferguson bandwidth multiplier (default 1)', &
             'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
-            'tune >= 0', .false., 1.0)
+            'tune >= 0', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
         call denoise_project%add_input(UI_FILT, 'dm_alpha', 'num', &
             'Diffusion-map density normalization (default 0)', &
             'Coifman-Lafon alpha: 0=graph Laplacian, 0.5=Fokker-Planck, 1=Laplace-Beltrami (divides out sampling density)', &
-            '0 <= alpha <= 1', .false., 0.0)
-        call denoise_project%add_input(UI_SRCH, nspace, required_override=.false.)
+            '0 <= alpha <= 1', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call denoise_project%add_input(UI_SRCH, nspace, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
         call denoise_project%add_input(UI_SRCH, 'nspace_sub', 'num', &
             'SO3 mixture subspace size', 'SO3 mixture subspace size', &
-            '# subspace directions', .false., 500.0)
+            '# subspace directions', .false., 500.0, &
+        &visibility=UI_VIS_ADVANCED)
         call denoise_project%add_input(UI_MASK, mskdiam, required_override=.false., &
-            gui_submenu="mask", gui_advanced=.false.)
+            group="mask", visibility=UI_VIS_STANDARD)
         call denoise_project%add_input(UI_COMP, nparts, required_override=.false., &
-            gui_submenu="compute", gui_advanced=.false.)
-        call denoise_project%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('denoise_project', denoise_project, prgtab)
+            group="compute", visibility=UI_VIS_STANDARD)
+        call denoise_project%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+        call add_ui_program('denoise_project', denoise_project, prgtab, UI_CATEGORY)
     end subroutine new_denoise_project
 
     subroutine new_map_params_from_den( prgtab )
@@ -325,80 +392,100 @@ contains
         &'Map denoised-project assignments to raw particles',&
         &'is a workflow for transferring assignments obtained on denoise_project transformed particles back to the raw project particle frame',&
         &'all',&
-        &.true.)
-        call map_params_from_den%add_input(UI_PARM, projfile_raw)
-        call map_params_from_den%add_input(UI_PARM, projfile_den)
-        call map_params_from_den%add_input(UI_PARM, projfile, required_override=.false.)
-        call add_ui_program('map_params_from_den', map_params_from_den, prgtab)
+        &.true., &
+        &visibility=UI_VIS_ADVANCED)
+        call map_params_from_den%add_input(UI_FILE, projfile_raw, &
+        &visibility=UI_VIS_STANDARD)
+        call map_params_from_den%add_input(UI_FILE, projfile_den, &
+        &visibility=UI_VIS_STANDARD)
+        call map_params_from_den%add_input(UI_FILE, projfile, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call add_ui_program('map_params_from_den', map_params_from_den, prgtab, UI_CATEGORY)
     end subroutine new_map_params_from_den
 
     subroutine new_flex_analysis( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call flex_analysis%new(&
         &'flex_analysis',&
-        &'Diffusion-manifold representative 3D states',&
+        &'Identify representative 3D states from conformational variability',&
         &'builds a sparse diffusion map, selects k-medoids, fits a coupled projection-aware residual basis, and synthesizes Nyström 3D pre-images around the fixed mean',&
         &'simple_exec',&
-        &.true.)
+        &.true., &
+        &visibility=UI_VIS_STANDARD, display_name='Analyze Conformational Variability')
         call flex_analysis%add_input(UI_IMG, 'vol1', 'file', &
             'Mean volume', 'Fixed mean volume used by the projection-aware residual model', &
-            'input volume e.g. vol1.mrc', .true., '')
-        call flex_analysis%add_input(UI_IMG, outvol, required_override=.false.)
-        call flex_analysis%add_input(UI_SRCH, nspace, required_override=.true.)
+            'input volume e.g. vol1.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call flex_analysis%add_input(UI_IMG, outvol, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        call flex_analysis%add_input(UI_SRCH, nspace, required_override=.true., &
+        &visibility=UI_VIS_STANDARD)
         call flex_analysis%add_input(UI_FILT, 'neigs', 'num', &
             'Maximum number of diffusion modes (default 15)', &
             'Positive eigenpair scan limit, bounded only by the nontrivial graph spectrum; all returned modes are retained when icm=no', &
-            '# modes >=1', .false., 15.0)
+            '# modes >=1', .false., 15.0, &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, 'icm', 'binary', &
             'Automatic diffusion-mode selection', &
-            'Use ICM to select a spectral prefix; icm=no retains every mode returned by the neigs scan', &
-            '(yes|no){yes}', .false., 'yes')
+            'Use ICM to select a spectral prefix; icm=no retains every mode returned by the neigs scan','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, 'k_nn', 'num', &
             'Nearest neighbors (default 100)', &
-            'Registered-residual neighbors retained per particle', '# neighbors', .false., 100.0)
+            'Registered-residual neighbors retained per particle', '# neighbors', .false., 100.0, &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, 'nang_nbrs', 'num', &
             'Angular candidate cap (default 1000)', &
-            'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 1000.0)
+            'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 1000.0, &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
             'Diffusion-map bandwidth mode', &
-            'Kernel bandwidth policy for diffusion maps(median|ferguson){ferguson}', &
-            '(median|ferguson){ferguson}', .false., 'ferguson')
+            'Kernel bandwidth policy for diffusion maps(median|ferguson){ferguson}','', .false., 'ferguson', &
+        &choices=ui_choices([character(len=8) :: 'median', 'ferguson']), &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, 'bandwidth_tune', 'num', &
             'Ferguson bandwidth multiplier (default 1)', &
             'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
-            'tune >= 0', .false., 1.0)
+            'tune >= 0', .false., 1.0, &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, 'view_balance', 'binary', &
             'Correct uneven view distribution', &
-            'Give every occupied nspace projection bin equal total graph measure using fixed inverse-occupancy weights', &
-            '(yes|no){yes}', .false., 'yes')
+            'Give every occupied nspace projection bin equal total graph measure using fixed inverse-occupancy weights','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, 'npreimages', 'num', &
             'Representative state volumes (default 8)', &
             'Number of k-medoids used as representative Nyström pre-image targets', &
-            '# state volumes', .false., 8.0)
+            '# state volumes', .false., 8.0, &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, 'preimage_mode', 'multi', &
             'Diffusion-map output mode', &
-            'constant=local-constant kernel pre-images; linear=local-linear WLS pre-images; discrete=writes hard k-medoids labels to ptcl3D/state without running the pre-image reconstruction', &
-            '(constant|linear|discrete){linear}', .false., 'linear')
+            'constant=local-constant kernel pre-images; linear=local-linear WLS pre-images; discrete=writes hard k-medoids labels to ptcl3D/state without running the pre-image reconstruction','', .false., 'linear', &
+        &choices=ui_choices([character(len=8) :: 'constant', 'linear', 'discrete']), &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, 'preimage_ndim', 'num', &
             'Local-linear pre-image design dimension (default 2)', &
             'Cap on the number of leading diffusion coordinates used in the local-linear design; only used when preimage_mode=linear; d=min(preimage_ndim,neigs)', &
-            '# local dimensions >=1', .false., 2.0)
-        call flex_analysis%add_input(UI_PARM, 'outfile', 'file', &
+            '# local dimensions >=1', .false., 2.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call flex_analysis%add_input(UI_FILE, 'outfile', 'file', &
             'Discrete-state project', &
             'Output project whose selected ptcl3D rows receive hard k-medoids state labels; only used when preimage_mode=discrete', &
-            'output project e.g. flex_cluster_states.simple', .false., 'flex_cluster_states.simple')
+            'e.g. flex_cluster_states.simple', .false., 'flex_cluster_states.simple', &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_FILT, lp, required_override=.false., &
-            descr_placeholder_override='Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered', &
-            gui_submenu="regularization", gui_advanced=.false.)
-        call flex_analysis%add_input(UI_ALT, 'oritype', 'str', &
+            placeholder_override='Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered', &
+            group="regularization", visibility=UI_VIS_STANDARD)
+        call flex_analysis%add_input(UI_PARM, 'oritype', 'str', &
             'Particle orientation segment', 'Particle orientation segment fixed to ptcl3D', &
-            'ptcl3D', .false., 'ptcl3D')
+            'ptcl3D', .false., 'ptcl3D', &
+        &visibility=UI_VIS_ADVANCED)
         call flex_analysis%add_input(UI_MASK, mskdiam, required_override=.false., &
-            gui_submenu="mask", gui_advanced=.false.)
+            group="mask", visibility=UI_VIS_STANDARD)
         call flex_analysis%add_input(UI_COMP, nparts, required_override=.false., &
-            gui_submenu="compute", gui_advanced=.false.)
-        call flex_analysis%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
-        call add_ui_program('flex_analysis', flex_analysis, prgtab)
+            group="compute", visibility=UI_VIS_STANDARD)
+        call flex_analysis%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+        call add_ui_program('flex_analysis', flex_analysis, prgtab, UI_CATEGORY)
     end subroutine new_flex_analysis
 
 end module simple_ui_denoise

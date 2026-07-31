@@ -283,7 +283,11 @@ contains
         real    :: med_diam
         if( .not. cline%defined('lp')      ) call cline%set('lp',        7.0)
         if( .not. cline%defined('automsk') ) call cline%set('automsk', 'yes')
-        if( .not. cline%defined('amsklp')  ) call cline%set('amsklp', cline%get_rarg('lp'))
+        if( .not. cline%defined('amsklp') )then
+            call cline%set('amsklp', cline%get_rarg('lp'))
+        else if( cline%get_rarg('amsklp') <= 0. )then
+            call cline%set('amsklp', cline%get_rarg('lp'))
+        endif
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         call params%new(cline)
         ! allocate & read cavgs

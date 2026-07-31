@@ -1006,6 +1006,17 @@
 
         if (present(compact_reals)) me%compact_real = compact_reals
 
+        ! A caller may supply a complete Fortran format when a serialized
+        ! document has a deliberate precision contract.  The short format
+        ! names below retain the JSON-Fortran defaults for all existing users.
+        if (present(real_format)) then
+            if (len_trim(real_format) >= 2 .and. real_format(1:1) == '(' .and. &
+                &real_format(len_trim(real_format):len_trim(real_format)) == ')') then
+                me%real_fmt = trim(real_format)
+                return
+            endif
+        endif
+
         !set defaults
         sgn_prnt = .false.
         if ( present( print_signs) ) sgn_prnt = print_signs

@@ -3,6 +3,7 @@ module simple_ui_sym
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('sym', 'Symmetry', 160)
 type(ui_program), target :: symaxis_search
 type(ui_program), target :: symmetrize_map
 type(ui_program), target :: symmetry_test
@@ -16,50 +17,52 @@ contains
         call new_symmetry_test(prgtab)
     end subroutine construct_symmetry_programs
 
-    subroutine print_symmetry_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('SYMMETRY:', C_UNDERLINED)
-        write(logfhandle,'(A)') symaxis_search%name%to_char()
-        write(logfhandle,'(A)') symmetrize_map%name%to_char()
-        write(logfhandle,'(A)') symmetry_test%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_symmetry_programs
-
-    subroutine new_symaxis_search( prgtab )
+subroutine new_symaxis_search( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call symaxis_search%new(&
         &'symaxis_search',&                                                                                 ! name
-        &'Search for symmetry axis',&                                                                       ! descr_short
+        &'Find the principal symmetry axis of a C1 volume',& ! summary
         &'is a program for searching for the principal symmetry axis of a volume reconstructed in C1. &
         &The rotational transformation is applied to the oritype field in the project and the project &
-        &file is updated. If you are unsure about the point-group, use the symmetry_test program instead',& ! descr_long
+        &file is updated. If you are unsure about the point-group, use the symmetry_test program instead',& ! help
         &'simple_exec',&                                                                                    ! executable
-        &.false.)                                                                                           ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                                                                                           ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symaxis_search%add_input(UI_IMG, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &
-        & 'input volume e.g. vol_C1.mrc', .true., '')
+        & 'input volume e.g. vol_C1.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call symaxis_search%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call symaxis_search%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call symaxis_search%add_input(UI_SRCH, pgrp)
+        call symaxis_search%add_input(UI_SRCH, pgrp, &
+        &visibility=UI_VIS_STANDARD)
         call symaxis_search%add_input(UI_SRCH, 'center', 'binary', 'Center input volume', 'Center input volume by its &
-        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &center of gravity before symmetry axis search(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call symaxis_search%add_input(UI_FILT, lp)
-        call symaxis_search%add_input(UI_FILT, hp)
+        call symaxis_search%add_input(UI_FILT, lp, &
+        &visibility=UI_VIS_ADVANCED)
+        call symaxis_search%add_input(UI_FILT, hp, &
+        &visibility=UI_VIS_ADVANCED)
         call symaxis_search%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
+        &Angstroms{30}', .false., 30., &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call symaxis_search%add_input(UI_MASK, mskdiam)
+        call symaxis_search%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call symaxis_search%add_input(UI_COMP, nthr)
+        call symaxis_search%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('symaxis_search', symaxis_search, prgtab)
+        call add_ui_program('symaxis_search', symaxis_search, prgtab, UI_CATEGORY)
     end subroutine new_symaxis_search
 
     subroutine new_symmetrize_map( prgtab )
@@ -67,36 +70,48 @@ contains
         ! PROGRAM SPECIFICATION
         call symmetrize_map%new(&
         &'symmetrize_map',&                                                                                          ! name
-        &'Symmetrization of density map',&                                                                           ! descr_short
+        &'Align a density map and apply the selected point-group symmetry',& ! summary
         &'is a program that implements symmetrization of the input density map. &
         &Input is a volume and point-group symmetry, output is the volume aligned to the principal symmetry axis and averaged over the symmetry operations',& ! descr long
         &'simple_exec',&                                                                                             ! executable
-        &.false.)                                                                                                    ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_STANDARD, display_name='Symmetrize Density Map') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symmetrize_map%add_input(UI_IMG, 'vol1', 'file', 'Volume to symmetrize', 'Volume to symmetrize', &
-        & 'input volume e.g. vol.mrc', .true., '')
-        call symmetrize_map%add_input(UI_IMG, outvol)
+        & 'input volume e.g. vol.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call symmetrize_map%add_input(UI_IMG, outvol, &
+        &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        call symmetrize_map%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call symmetrize_map%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call symmetrize_map%add_input(UI_SRCH, pgrp)
+        call symmetrize_map%add_input(UI_SRCH, pgrp, &
+        &visibility=UI_VIS_STANDARD)
         call symmetrize_map%add_input(UI_SRCH, 'center', 'binary', 'Center input volume', 'Center input volume by its &
-        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &center of gravity before symmetry axis search(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call symmetrize_map%add_input(UI_FILT, lp)
-        call symmetrize_map%add_input(UI_FILT, hp)
+        call symmetrize_map%add_input(UI_FILT, lp, &
+        &visibility=UI_VIS_ADVANCED)
+        call symmetrize_map%add_input(UI_FILT, hp, &
+        &visibility=UI_VIS_ADVANCED)
         call symmetrize_map%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 20.)
+        &Angstroms{30}', .false., 20., &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call symmetrize_map%add_input(UI_MASK, mskdiam)
+        call symmetrize_map%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call symmetrize_map%add_input(UI_COMP, nthr)
+        call symmetrize_map%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('symmetrize_map', symmetrize_map, prgtab)
+        call add_ui_program('symmetrize_map', symmetrize_map, prgtab, UI_CATEGORY)
     end subroutine new_symmetrize_map
 
     subroutine new_symmetry_test( prgtab )
@@ -104,36 +119,49 @@ contains
         ! PROGRAM SPECIFICATION
         call symmetry_test%new(&
         &'symmetry_test',&                                                                                           ! name
-        &'Statistical test for symmetry',&                                                                           ! descr_short
+        &'Identify the most likely point-group symmetry of a C1 density map',& ! summary
         &'is a program that implements a statistical test for point-group symmetry. &
         &Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry',& ! descr long
         &'simple_exec',&                                                                                             ! executable
-        &.false.)                                                                                                    ! requires sp_project
+        &.false., &
+        &visibility=UI_VIS_STANDARD, display_name='Test Map Symmetry') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symmetry_test%add_input(UI_IMG, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
-        & 'input volume e.g. vol_C1.mrc', .true., '')
+        & 'input volume e.g. vol_C1.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call symmetry_test%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call symmetry_test%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call symmetry_test%add_input(UI_SRCH, 'cn_stop',  'num', 'Rotational symmetry order stop index',  'Rotational symmetry order stop index',  'give stop index',  .false., 10.)
+        call symmetry_test%add_input(UI_SRCH, 'cn_stop',  'num', 'Rotational symmetry order stop index',  'Rotational symmetry order stop index',  'give stop index',  .false., 10., &
+        &visibility=UI_VIS_ADVANCED)
         call symmetry_test%add_input(UI_SRCH, 'center', 'binary', 'Center input volume', 'Center input volume by its &
-        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call symmetry_test%add_input(UI_SRCH, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &center of gravity before symmetry axis search(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call symmetry_test%add_input(UI_SRCH, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){yes}','', .false., 'yes', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call symmetry_test%add_input(UI_FILT, lp)
-        call symmetry_test%add_input(UI_FILT, hp)
+        call symmetry_test%add_input(UI_FILT, lp, &
+        &visibility=UI_VIS_ADVANCED)
+        call symmetry_test%add_input(UI_FILT, hp, &
+        &visibility=UI_VIS_ADVANCED)
         call symmetry_test%add_input(UI_FILT, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
+        &Angstroms{30}', .false., 30., &
+        &visibility=UI_VIS_ADVANCED)
         ! mask controls
-        call symmetry_test%add_input(UI_MASK, mskdiam)
+        call symmetry_test%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call symmetry_test%add_input(UI_COMP, nthr)
+        call symmetry_test%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
         ! add to ui_hash
-        call add_ui_program('symmetry_test', symmetry_test, prgtab)
+        call add_ui_program('symmetry_test', symmetry_test, prgtab, UI_CATEGORY)
     end subroutine new_symmetry_test
 
 end module simple_ui_sym

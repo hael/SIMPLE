@@ -100,12 +100,14 @@
       - `simple_test_stream_initial_analysis.f90` — smoke test that invokes stream p03 initial analysis commander
       - `simple_test_stringmatch.f90`
       - `simple_test_sym.f90`
+      - `simple_test_ui_visibility.f90`
       - `simple_test_uniform_euler.f90`
       - `simple_test_uniform_rot.f90` — from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361
       - `simple_test_units.f90` — runs all implemented unit tests
       - `test_socket_comm_distr.f90`
   - **scripts/** — home of scripts and code generators
     - **memory/**
+    - **ui/**
   - **src/** — main source code folder
     - **defs/** — home of singleton modules with parameter and type definitions
       - `simple_ansi_ctrls.f90` — ANSI C control parameters for text formatting
@@ -527,6 +529,7 @@
         - `simple_stream_watcher.f90` — movie watcher for stream processing
       - **ui/**
         - `simple_ui.f90` — the main user interface module
+        - `simple_ui_descriptor_types.f90` — shared presentation-only value types for the command descriptor layer
         - `simple_ui_hash.f90` — extension type providing typed convenience accessors for ui_param & ui_program
         - `simple_ui_modules.f90` — module aggregating ui utility modules
         - `simple_ui_param.f90` — module defining the ui_param type, which is used to define input parameters for the simple_ui_program interface
@@ -537,6 +540,7 @@
         - `simple_ui_stream_group.f90` — aggregates SIMPLE stream ui program constructors
         - `simple_ui_test_group.f90` — aggregates SIMPLE TEST ui program constructors
         - `simple_ui_utils.f90` — module defining utility procedures for the simple_ui modules
+        - `simple_ui_visibility.f90` — typed visibility levels for command-descriptor presentation
         - **simple/**
           - `simple_ui_abinitio3D.f90` — module defining the user interfaces for ab initio 3D reconstruction programs in the simple_exec suite
           - `simple_ui_cavgproc.f90` — module defining the user interfaces for class average processing programs in the simple_exec suite

@@ -164,8 +164,8 @@ contains
         integer :: ncls, nptcls, ldim(3)
         real    :: smpd, diam_min, diam_max, mskdiam
         call cline%set('dir_exec', 'analysis2D_nano')
-        if( .not. cline%defined('objfun')  ) call cline%set('objfun', 'cc') ! best objfun
-        if( .not. cline%defined('ml_reg')  ) call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms 
+        call cline%set('objfun', 'cc') ! best objfun
+        call cline%set('ml_reg', 'no') ! ml_reg=yes -> too few atoms
         call params%new(cline)
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)

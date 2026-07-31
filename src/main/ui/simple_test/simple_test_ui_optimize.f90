@@ -3,6 +3,7 @@ module simple_test_ui_optimize
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('optimize', 'Optimization', 90)
 type(ui_program), target :: lbfgsb
 type(ui_program), target :: lbfgsb_cosine
 type(ui_program), target :: lplims
@@ -20,23 +21,12 @@ contains
         call new_opt_lp(tsttab)
     end subroutine construct_test_optimize_programs
 
-    subroutine print_test_optimize_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('OPTIMIZE:', C_UNDERLINED)
-        write(logfhandle,'(A)') lbfgsb%name%to_char()
-        write(logfhandle,'(A)') lbfgsb_cosine%name%to_char()
-        write(logfhandle,'(A)') lplims%name%to_char()
-        write(logfhandle,'(A)') lpstages_test%name%to_char()
-        write(logfhandle,'(A)') opt_lp%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_optimize_programs
-
-    subroutine new_lbfgsb( tsttab )
+subroutine new_lbfgsb( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call lbfgsb%new(&
         &'lbfgsb',&                         ! name
-        &'lbfgsb ',&                        ! descr_short
+        &'lbfgsb ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&               ! executable
         &.false.)                           ! requires sp_project
@@ -45,7 +35,7 @@ contains
         !call lbfgsb%add_input(UI_IO, )
         ! parameter input/output
         !call lbfgsb%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call lbfgsb%add_input(UI_PARM, )
         ! search controls
         !call lbfgsb%add_input(UI_SRCH, )
@@ -56,7 +46,7 @@ contains
         ! computer controls
         !call lbfgsb%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('lbfgsb', lbfgsb, tsttab)
+        call add_ui_program('lbfgsb', lbfgsb, tsttab, UI_CATEGORY)
     end subroutine new_lbfgsb
 
     subroutine new_lbfgsb_cosine( tsttab )
@@ -64,7 +54,7 @@ contains
         ! PROGRAM SPECIFICATION
         call lbfgsb_cosine%new(&
         &'lbfgsb_cosine',&                     ! name
-        &'lbfgsb_cosine ',&                    ! descr_short
+        &'lbfgsb_cosine ',&                    ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -73,7 +63,7 @@ contains
         !call lbfgsb_cosine%add_input(UI_IO, )
         ! parameter input/output
         !call lbfgsb_cosine%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call lbfgsb_cosine%add_input(UI_PARM, )
         ! search controls
         !call lbfgsb_cosine%add_input(UI_SRCH, )
@@ -84,7 +74,7 @@ contains
         ! computer controls
         !call lbfgsb_cosine%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('lbfgsb_cosine', lbfgsb_cosine, tsttab)
+        call add_ui_program('lbfgsb_cosine', lbfgsb_cosine, tsttab, UI_CATEGORY)
     end subroutine new_lbfgsb_cosine
 
     subroutine new_lplims( tsttab )
@@ -92,7 +82,7 @@ contains
         ! PROGRAM SPECIFICATION
         call lplims%new(&
         &'lplims',&                            ! name
-        &'lplims ',&                           ! descr_short
+        &'lplims ',&                           ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -101,7 +91,7 @@ contains
         !call lplims%add_input(UI_IO, )
         ! parameter input/output
         !call lplims%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call lplims%add_input(UI_PARM, )
         ! search controls
         !call lplims%add_input(UI_SRCH, )
@@ -112,7 +102,7 @@ contains
         ! computer controls
         !call lplims%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('lplims', lplims, tsttab)
+        call add_ui_program('lplims', lplims, tsttab, UI_CATEGORY)
     end subroutine new_lplims
 
     subroutine new_lpstages_test( tsttab )
@@ -120,7 +110,7 @@ contains
         ! PROGRAM SPECIFICATION
         call lpstages_test%new(&
         &'lpstages_test',&                     ! name
-        &'lpstages_test ',&                    ! descr_short
+        &'lpstages_test ',&                    ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -129,7 +119,7 @@ contains
         !call lpstages_test%add_input(UI_IO, )
         ! parameter input/output
         !call lpstages_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call lpstages_test%add_input(UI_PARM, )
         ! search controls
         !call lpstages_test%add_input(UI_SRCH, )
@@ -140,7 +130,7 @@ contains
         ! computer controls
         !call lpstages_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('lpstages_test', lpstages_test, tsttab)
+        call add_ui_program('lpstages_test', lpstages_test, tsttab, UI_CATEGORY)
     end subroutine new_lpstages_test
 
     subroutine new_opt_lp( tsttab )
@@ -148,7 +138,7 @@ contains
         ! PROGRAM SPECIFICATION
         call opt_lp%new(&
         &'opt_lp',&                            ! name
-        &'opt_lp ',&                           ! descr_short
+        &'opt_lp ',&                           ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -157,7 +147,7 @@ contains
         !call opt_lp%add_input(UI_IO, )
         ! parameter input/output
         !call opt_lp%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call opt_lp%add_input(UI_PARM, )
         ! search controls
         !call opt_lp%add_input(UI_SRCH, )
@@ -168,7 +158,7 @@ contains
         ! computer controls
         !call opt_lp%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('opt_lp', opt_lp, tsttab)
+        call add_ui_program('opt_lp', opt_lp, tsttab, UI_CATEGORY)
     end subroutine new_opt_lp
 
 

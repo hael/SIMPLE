@@ -62,7 +62,7 @@ contains
         call cline%set('automsk',       'no') ! no envelope masking for cavgs route
         call cline%set('nu_refine',     'no') ! no nonuniform refinement for cavgs route
         if( .not. cline%defined('mkdir')            ) call cline%set('mkdir',                      'yes')
-        if( .not. cline%defined('objfun')           ) call cline%set('objfun',                  'euclid') ! noise normalized Euclidean distances from the start
+        call cline%set('objfun', 'euclid') ! noise normalized Euclidean distances from the start
         if( .not. cline%defined('overlap')          ) call cline%set('overlap',                     0.95)
         if( .not. cline%defined('prob_athres')      ) call cline%set('prob_athres',                  90.) ! reduces # failed runs on trpv1 from 4->2/10
         if( .not. cline%defined('cenlp')            ) call cline%set('cenlp',   abinitio_cenlp_default())
@@ -516,7 +516,7 @@ contains
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',                10.)
         if( .not. cline%defined('center')      ) call cline%set('center',                    'no')
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp', abinitio_cenlp_default())
-        if( .not. cline%defined('oritype')     ) call cline%set('oritype',               'ptcl3D')
+        call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',                      'c1')
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',                'c1')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode',         'nonuniform')

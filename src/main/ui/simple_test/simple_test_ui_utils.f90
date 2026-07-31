@@ -3,6 +3,7 @@ module simple_test_ui_utils
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('utils', 'Utilities', 130)
 type(ui_program), target :: ansi_colors
 type(ui_program), target :: binoris_test
 type(ui_program), target :: binoris_io_test
@@ -34,30 +35,12 @@ contains
         call new_stringmatch(tsttab)
     end subroutine construct_test_utils_programs
 
-    subroutine print_test_utils_programs( logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('UTILS:', C_UNDERLINED)
-        write(logfhandle,'(A)') ansi_colors%name%to_char()
-        write(logfhandle,'(A)') binoris_test%name%to_char()
-        write(logfhandle,'(A)') binoris_io_test%name%to_char()
-        write(logfhandle,'(A)') cif2mrc%name%to_char()
-        write(logfhandle,'(A)') cif2pdb%name%to_char()
-        write(logfhandle,'(A)') cmdline%name%to_char()
-        write(logfhandle,'(A)') install%name%to_char()
-        write(logfhandle,'(A)') nice%name%to_char()
-        write(logfhandle,'(A)') pdb2mrc%name%to_char()
-        write(logfhandle,'(A)') peak_thres_fdr%name%to_char()
-        write(logfhandle,'(A)') serialize%name%to_char()
-        write(logfhandle,'(A)') stringmatch%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_utils_programs
-
-    subroutine new_ansi_colors( tsttab )
+subroutine new_ansi_colors( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call ansi_colors%new(&
         &'ansi_colors',&                       ! name
-        &'ansi_colors ',&                      ! descr_short
+        &'ansi_colors ',&                      ! summary
         &'is a test program for ansi colors',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -66,7 +49,7 @@ contains
         !call ansi_colors%add_input(UI_IO, )
         ! parameter input/output
         !call ansi_colors%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call ansi_colors%add_input(UI_PARM, )
         ! search controls
         !call ansi_colors%add_input(UI_SRCH, )
@@ -77,7 +60,7 @@ contains
         ! computer controls
         !call ansi_colors%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('ansi_colors', ansi_colors, tsttab)
+        call add_ui_program('ansi_colors', ansi_colors, tsttab, UI_CATEGORY)
     end subroutine new_ansi_colors
 
     subroutine new_binoris_test( tsttab )
@@ -85,7 +68,7 @@ contains
         ! PROGRAM SPECIFICATION
         call binoris_test%new(&
         &'binoris_test',&                      ! name
-        &'binoris_test ',&                     ! descr_short
+        &'binoris_test ',&                     ! summary
         &'is a test program for binoris',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -94,7 +77,7 @@ contains
         !call binoris_test%add_input(UI_IO, )
         ! parameter input/output
         !call binoris_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call binoris_test%add_input(UI_PARM, )
         ! search controls
         !call binoris_test%add_input(UI_SRCH, )
@@ -105,7 +88,7 @@ contains
         ! computer controls
         !call binoris_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('binoris_test', binoris_test, tsttab)
+        call add_ui_program('binoris_test', binoris_test, tsttab, UI_CATEGORY)
     end subroutine new_binoris_test
 
     subroutine new_binoris_io_test( tsttab )
@@ -113,7 +96,7 @@ contains
         ! PROGRAM SPECIFICATION
         call binoris_io_test%new(&
         &'binoris_io_test',&                   ! name
-        &'binoris_io_test ',&                  ! descr_short
+        &'binoris_io_test ',&                  ! summary
         &'is a test program for binoris input/output',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -122,7 +105,7 @@ contains
         !call binoris_io_test%add_input(UI_IO, )
         ! parameter input/output
         !call binoris_io_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call binoris_io_test%add_input(UI_PARM, )
         ! search controls
         !call binoris_io_test%add_input(UI_SRCH, )
@@ -133,7 +116,7 @@ contains
         ! computer controls
         !call binoris_io_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('binoris_io_test', binoris_io_test, tsttab)
+        call add_ui_program('binoris_io_test', binoris_io_test, tsttab, UI_CATEGORY)
     end subroutine new_binoris_io_test
 
     subroutine new_cif2mrc( tsttab )
@@ -141,7 +124,7 @@ contains
         ! PROGRAM SPECIFICATION
         call cif2mrc%new(&
         &'cif2mrc',&                         ! name
-        &'cif2mrc',&                         ! descr_short
+        &'cif2mrc',&                         ! summary
         &'is a test program for PDBx/mmCIF to MRC',&
         &'simple_test_exec',&                ! executable
         &.false.)                            ! requires sp_project
@@ -150,7 +133,7 @@ contains
         !call cmdline%add_input(UI_IO, )
         ! parameter input/output
         !call cmdline%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call cmdline%add_input(UI_PARM, )
         ! search controls
         !call cmdline%add_input(UI_SRCH, )
@@ -161,7 +144,7 @@ contains
         ! computer controls
         !call cmdline%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('cif2mrc', cif2mrc, tsttab)
+        call add_ui_program('cif2mrc', cif2mrc, tsttab, UI_CATEGORY)
     end subroutine new_cif2mrc
 
     subroutine new_cif2pdb( tsttab )
@@ -169,7 +152,7 @@ contains
         ! PROGRAM SPECIFICATION
         call cif2pdb%new(&
         &'cif2pdb',&                         ! name
-        &'test for cif2pdb',&                        ! descr_short
+        &'test for cif2pdb',&                        ! summary
         &'is a test program for PDBx/mmCIF to PDB convertion',&
         &'simple_test_exec',&                ! executable
         &.false.)                            ! requires sp_project
@@ -178,7 +161,7 @@ contains
         !call cmdline%add_input(UI_IO, )
         ! parameter input/output
         !call cmdline%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call cmdline%add_input(UI_PARM, )
         ! search controls
         !call cmdline%add_input(UI_SRCH, )
@@ -189,7 +172,7 @@ contains
         ! computer controls
         !call cmdline%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('cif2pdb', cif2pdb, tsttab)
+        call add_ui_program('cif2pdb', cif2pdb, tsttab, UI_CATEGORY)
     end subroutine new_cif2pdb
 
     subroutine new_cmdline( tsttab )
@@ -197,7 +180,7 @@ contains
         ! PROGRAM SPECIFICATION
         call cmdline%new(&
         &'cmdline',&                         ! name
-        &'cmdline ',&                        ! descr_short
+        &'cmdline ',&                        ! summary
         &'is a test program for cmdline',&
         &'simple_test_exec',&                ! executable
         &.false.)                            ! requires sp_project
@@ -206,7 +189,7 @@ contains
         !call cmdline%add_input(UI_IO, )
         ! parameter input/output
         !call cmdline%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call cmdline%add_input(UI_PARM, )
         ! search controls
         !call cmdline%add_input(UI_SRCH, )
@@ -217,7 +200,7 @@ contains
         ! computer controls
         !call cmdline%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('cmdline', cmdline, tsttab)
+        call add_ui_program('cmdline', cmdline, tsttab, UI_CATEGORY)
     end subroutine new_cmdline
 
     subroutine new_install( tsttab )
@@ -225,7 +208,7 @@ contains
         ! PROGRAM SPECIFICATION
         call install%new(&
         &'install',&                         ! name
-        &'install ',&                        ! descr_short
+        &'install ',&                        ! summary
         &'is a test program for install',&
         &'simple_test_exec',&                ! executable
         &.false.)                            ! requires sp_project
@@ -234,7 +217,7 @@ contains
         !call install%add_input(UI_IO, )
         ! parameter input/output
         !call install%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call install%add_input(UI_PARM, )
         ! search controls
         !call install%add_input(UI_SRCH, )
@@ -245,7 +228,7 @@ contains
         ! computer controls
         !call install%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('install', install, tsttab)
+        call add_ui_program('install', install, tsttab, UI_CATEGORY)
     end subroutine new_install
 
     subroutine new_nice( tsttab )
@@ -253,7 +236,7 @@ contains
         ! PROGRAM SPECIFICATION
         call nice%new(&
         &'nice',&                         ! name
-        &'nice ',&                        ! descr_short
+        &'nice ',&                        ! summary
         &'is a test program for NICE',&
         &'simple_test_exec',&             ! executable
         &.false.)                         ! requires sp_project
@@ -262,7 +245,7 @@ contains
         !call nice%add_input(UI_IO, )
         ! parameter input/output
         !call nice%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call nice%add_input(UI_PARM, )
         ! search controls
         !call nice%add_input(UI_SRCH, )
@@ -273,7 +256,7 @@ contains
         ! computer controls
         !call nice%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('nice', nice, tsttab)
+        call add_ui_program('nice', nice, tsttab, UI_CATEGORY)
     end subroutine new_nice
 
     subroutine new_pdb2mrc( tsttab )
@@ -281,7 +264,7 @@ contains
         ! PROGRAM SPECIFICATION
         call pdb2mrc%new(&
         &'pdb2mrc',&                         ! name
-        &'pdb2mrc ',&                     ! descr_short
+        &'pdb2mrc ',&                     ! summary
         &'is a test program for pdb2mrc',&
         &'simple_test_exec',&             ! executable
         &.false.)                         ! requires sp_project
@@ -290,7 +273,7 @@ contains
         !call pdb2mrc%add_input(UI_IO, )
         ! parameter input/output
         !call pdb2mrc%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call pdb2mrc%add_input(UI_PARM, )
         ! search controls
         !call pdb2mrc%add_input(UI_SRCH, )
@@ -301,7 +284,7 @@ contains
         ! computer controls
         !call pdb2mrc%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('pdb2mrc', pdb2mrc, tsttab)
+        call add_ui_program('pdb2mrc', pdb2mrc, tsttab, UI_CATEGORY)
     end subroutine new_pdb2mrc
 
     subroutine new_serialize( tsttab )
@@ -309,7 +292,7 @@ contains
         ! PROGRAM SPECIFICATION
         call serialize%new(&
         &'serialize',&                         ! name
-        &'serialize ',&                        ! descr_short
+        &'serialize ',&                        ! summary
         &'is a test program for serialize',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -318,7 +301,7 @@ contains
         !call serialize%add_input(UI_IO, )
         ! parameter input/output
         !call serialize%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call serialize%add_input(UI_PARM, )
         ! search controls
         !call serialize%add_input(UI_SRCH, )
@@ -329,7 +312,7 @@ contains
         ! computer controls
         !call serialize%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('serialize', serialize, tsttab)
+        call add_ui_program('serialize', serialize, tsttab, UI_CATEGORY)
     end subroutine new_serialize
 
     subroutine new_peak_thres_fdr( tsttab )
@@ -337,12 +320,12 @@ contains
         ! PROGRAM SPECIFICATION
         call peak_thres_fdr%new(&
         &'peak_thres_fdr',&                  ! name
-        &'peak_thres_fdr ',&                 ! descr_short
+        &'peak_thres_fdr ',&                 ! summary
         &'is a unit test for detect_peak_thres_fdr',&
         &'simple_test_exec',&                ! executable
         &.false.)                            ! requires sp_project
         ! add to ui_hash
-        call add_ui_program('peak_thres_fdr', peak_thres_fdr, tsttab)
+        call add_ui_program('peak_thres_fdr', peak_thres_fdr, tsttab, UI_CATEGORY)
     end subroutine new_peak_thres_fdr
 
     subroutine new_stringmatch( tsttab )
@@ -350,7 +333,7 @@ contains
         ! PROGRAM SPECIFICATION
         call stringmatch%new(&
         &'stringmatch',&                       ! name
-        &'stringmatch ',&                      ! descr_short
+        &'stringmatch ',&                      ! summary
         &'is a test program for stringmatch',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -359,7 +342,7 @@ contains
         !call stringmatch%add_input(UI_IO, )
         ! parameter input/output
         !call stringmatch%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call stringmatch%add_input(UI_PARM, )
         ! search controls
         !call stringmatch%add_input(UI_SRCH, )
@@ -370,7 +353,7 @@ contains
         ! computer controls
         !call stringmatch%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('stringmatch', stringmatch, tsttab)
+        call add_ui_program('stringmatch', stringmatch, tsttab, UI_CATEGORY)
     end subroutine new_stringmatch
 
 end module simple_test_ui_utils

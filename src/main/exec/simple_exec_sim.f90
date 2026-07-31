@@ -2,14 +2,13 @@
 module simple_exec_sim
 use simple_cmdline,          only: cmdline
 use simple_commanders_sim,   only: commander_simulate_noise, commander_simulate_particles, commander_simulate_movie
-use simple_commanders_atoms, only: commander_pdb2mrc, commander_cif2pdb, commander_cif2mrc
+use simple_commanders_atoms, only: commander_pdb2mrc, commander_cif2mrc
 implicit none
 
 public :: exec_sim_commander
 private
 
 type(commander_cif2mrc)            :: xcif2mrc
-type(commander_cif2pdb)            :: xcif2pdb
 type(commander_pdb2mrc)            :: xpdb2mrc
 type(commander_simulate_movie)     :: xsimulate_movie
 type(commander_simulate_noise)     :: xsimulate_noise
@@ -26,8 +25,6 @@ contains
         l_silent      = .false.
         l_did_execute = .true.
         select case(trim(which))
-            case( 'cif2pdb' )
-                call xcif2pdb%execute(cline)
             case( 'cif2mrc' )
                 call xcif2mrc%execute(cline)
             case( 'pdb2mrc' )

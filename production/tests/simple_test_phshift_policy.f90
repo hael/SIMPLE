@@ -2,8 +2,7 @@ program simple_test_phshift_policy
 use simple_string,      only: string
 use simple_linked_list, only: linked_list, list_iterator
 use simple_ui,          only: make_ui, get_prg_ptr
-use simple_ui_param,    only: ui_param
-use simple_ui_program,  only: ui_program
+use simple_ui_program,  only: ui_program, ui_program_input
 implicit none
 
 character(len=16), parameter :: FITTING_PROGRAMS(5) = [character(len=16) :: &
@@ -41,17 +40,17 @@ contains
         do while( iterator%has_value() )
             call iterator%getter(value)
             select type(param => value)
-                type is(ui_param)
-                    if( param%key%to_char() == key )then
+                type is(ui_program_input)
+                    if( param%param%key%to_char() == key )then
                         found = .true.
                         if( present(expected_type) )then
-                            if( param%keytype%to_char() /= expected_type )then
+                            if( param%param%keytype%to_char() /= expected_type )then
                                 write(*,'(A)') trim(program_name)//': '//key//' has wrong UI type'
                                 error stop 1
                             endif
                         endif
                         if( present(expected_default) )then
-                            if( param%cval_default%to_char() /= expected_default )then
+                            if( param%param%cval_default%to_char() /= expected_default )then
                                 write(*,'(A)') trim(program_name)//': '//key//' has wrong default'
                                 error stop 1
                             endif

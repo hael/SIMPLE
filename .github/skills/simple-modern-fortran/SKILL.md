@@ -45,6 +45,8 @@ SIMPLE already uses modern Fortran heavily. Follow the local style instead of in
 - Keep child command lines sparse. Set only values that change behavior or
   preserve execution mode rather than restating defaults already supplied by the
   child commander or `parameters`.
+- Do not declare a dummy argument `optional` when every valid caller supplies
+  it; make the dependency explicit and update all callers together.
 - Preserve `new`/`kill` lifecycle symmetry for stateful types.
 - Watch for generated sources from `scripts/simple_args_generator.pl` and git-hash insertion during builds.
 

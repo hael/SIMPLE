@@ -3,6 +3,7 @@ module simple_test_ui_numerics
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('numerics', 'Numerics', 80)
 type(ui_program), target :: eigh_test
 type(ui_program), target :: kbinterpol_fast
 type(ui_program), target :: maxnloc_test
@@ -18,22 +19,12 @@ contains
         call new_neigh(tsttab)
     end subroutine construct_test_numerics_programs
 
-    subroutine print_test_numerics_programs( logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('NUMERICS:', C_UNDERLINED)
-        write(logfhandle,'(A)') eigh_test%name%to_char()
-        write(logfhandle,'(A)') kbinterpol_fast%name%to_char()
-        write(logfhandle,'(A)') maxnloc_test%name%to_char()
-        write(logfhandle,'(A)') neigh%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_numerics_programs
-
-    subroutine new_eigh_test( tsttab )
+subroutine new_eigh_test( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call eigh_test%new(&
         &'eigh_test',&                         ! name
-        &'eigh_test ',&                        ! descr_short
+        &'eigh_test ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -42,7 +33,7 @@ contains
         !call eigh_test%add_input(UI_IO, )
         ! parameter input/output
         !call eigh_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call eigh_test%add_input(UI_PARM, )
         ! search controls
         !call eigh_test%add_input(UI_SRCH, )
@@ -53,7 +44,7 @@ contains
         ! computer controls
         !call eigh_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('eigh_test', eigh_test, tsttab)
+        call add_ui_program('eigh_test', eigh_test, tsttab, UI_CATEGORY)
     end subroutine new_eigh_test
 
     subroutine new_kbinterpol_fast( tsttab )
@@ -61,7 +52,7 @@ contains
         ! PROGRAM SPECIFICATION
         call kbinterpol_fast%new(&
         &'kbinterpol_fast',&                   ! name
-        &'kbinterpol_fast ',&                  ! descr_short
+        &'kbinterpol_fast ',&                  ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -70,7 +61,7 @@ contains
         !call kbinterpol_fast%add_input(UI_IO, )
         ! parameter input/output
         !call kbinterpol_fast%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call kbinterpol_fast%add_input(UI_PARM, )
         ! search controls
         !call kbinterpol_fast%add_input(UI_SRCH, )
@@ -81,7 +72,7 @@ contains
         ! computer controls
         !call kbinterpol_fast%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('kbinterpol_fast', kbinterpol_fast, tsttab)
+        call add_ui_program('kbinterpol_fast', kbinterpol_fast, tsttab, UI_CATEGORY)
     end subroutine new_kbinterpol_fast
 
     subroutine new_maxnloc_test( tsttab )
@@ -89,7 +80,7 @@ contains
         ! PROGRAM SPECIFICATION
         call maxnloc_test%new(&
         &'maxnloc_test',&                      ! name
-        &'maxnloc_test ',&                     ! descr_short
+        &'maxnloc_test ',&                     ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -98,7 +89,7 @@ contains
         !call maxnloc_test%add_input(UI_IO, )
         ! parameter input/output
         !call maxnloc_test%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call maxnloc_test%add_input(UI_PARM, )
         ! search controls
         !call maxnloc_test%add_input(UI_SRCH, )
@@ -109,7 +100,7 @@ contains
         ! computer controls
         !call maxnloc_test%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('maxnloc_test', maxnloc_test, tsttab)
+        call add_ui_program('maxnloc_test', maxnloc_test, tsttab, UI_CATEGORY)
     end subroutine new_maxnloc_test
 
     subroutine new_neigh( tsttab )
@@ -117,7 +108,7 @@ contains
         ! PROGRAM SPECIFICATION
         call neigh%new(&
         &'neigh',&                             ! name
-        &'neigh ',&                            ! descr_short
+        &'neigh ',&                            ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -126,7 +117,7 @@ contains
         !call neigh%add_input(UI_IO, )
         ! parameter input/output
         !call neigh%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call neigh%add_input(UI_PARM, )
         ! search controls
         !call neigh%add_input(UI_SRCH, )
@@ -137,7 +128,7 @@ contains
         ! computer controls
         !call neigh%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('neigh', neigh, tsttab)
+        call add_ui_program('neigh', neigh, tsttab, UI_CATEGORY)
     end subroutine new_neigh
 
 end module simple_test_ui_numerics

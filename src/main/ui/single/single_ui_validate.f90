@@ -3,6 +3,7 @@ module single_ui_validate
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('validate', 'Validation', 70)
 type(ui_program), target :: cavgseoproc_nano
 type(ui_program), target :: cavgsproc_nano
 type(ui_program), target :: ptclsproc_nano
@@ -18,43 +19,39 @@ contains
         call new_validate_cavgs_vs_model(prgtab)
     end subroutine construct_single_validate_programs
 
-    subroutine print_single_validate_programs(logfhandle)
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('VALIDATION:', C_UNDERLINED)
-        write(logfhandle,'(A)') cavgseoproc_nano%name%to_char()
-        write(logfhandle,'(A)') cavgsproc_nano%name%to_char()
-        write(logfhandle,'(A)') ptclsproc_nano%name%to_char()
-        write(logfhandle,'(A)') validate_cavgs_vs_model%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_single_validate_programs
-
-    subroutine new_cavgseoproc_nano( prgtab )
+subroutine new_cavgseoproc_nano( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call cavgseoproc_nano%new(&
         &'cavgseoproc_nano',&                                           ! name
-        &'Analysis of even and odd class averages along nanocrystal time-series',& ! descr_short
-        &'is a program to analyze the core/surface dynamics of nanocrystals using even and odd class averages',& ! descr_long
+        &'Analysis of even and odd class averages along nanocrystal time-series',& ! summary
+        &'is a program to analyze the core/surface dynamics of nanocrystals using even and odd class averages',& ! help
         &'single_exec',&                                                ! executable
-        &.true., gui_advanced=.false.)                                  ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER)                                  ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cavgseoproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
+        call cavgseoproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call cavgseoproc_nano%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call cavgseoproc_nano%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call cavgseoproc_nano%add_input(UI_SRCH, pgrp)
+        call cavgseoproc_nano%add_input(UI_SRCH, pgrp, &
+        &visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls
-        call cavgseoproc_nano%add_input(UI_MASK, mskdiam)
+        call cavgseoproc_nano%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call cavgseoproc_nano%add_input(UI_COMP, nthr)
-        call cavgseoproc_nano%add_input(UI_COMP, script)
+        call cavgseoproc_nano%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        call cavgseoproc_nano%add_input(UI_COMP, script, &
+        &visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
-        call add_ui_program('cavgseoproc_nano', cavgseoproc_nano, prgtab)
+        call add_ui_program('cavgseoproc_nano', cavgseoproc_nano, prgtab, UI_CATEGORY)
     end subroutine new_cavgseoproc_nano
 
     subroutine new_cavgsproc_nano( prgtab )
@@ -62,28 +59,34 @@ contains
         ! PROGRAM SPECIFICATION
         call cavgsproc_nano%new(&
         &'cavgsproc_nano',&                                           ! name
-        &'Analysis of class averages along nanocrystal time-series',& ! descr_short
-        &'is a program to analyze the core/surface dynamics of nanocrystals using class averages and re-projections',& ! descr_long
+        &'Analysis of class averages along nanocrystal time-series',& ! summary
+        &'is a program to analyze the core/surface dynamics of nanocrystals using class averages and re-projections',& ! help
         &'single_exec',&                                              ! executable
-        &.true., gui_advanced=.false.)                                ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER)                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cavgsproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
+        call cavgsproc_nano%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call cavgsproc_nano%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call cavgsproc_nano%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call cavgsproc_nano%add_input(UI_SRCH, pgrp)
+        call cavgsproc_nano%add_input(UI_SRCH, pgrp, &
+        &visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls
-        call cavgsproc_nano%add_input(UI_MASK, mskdiam)
+        call cavgsproc_nano%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call cavgsproc_nano%add_input(UI_COMP, nthr)
-        call cavgsproc_nano%add_input(UI_COMP, script)
+        call cavgsproc_nano%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        call cavgsproc_nano%add_input(UI_COMP, script, &
+        &visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
-        call add_ui_program('cavgsproc_nano', cavgsproc_nano, prgtab)
+        call add_ui_program('cavgsproc_nano', cavgsproc_nano, prgtab, UI_CATEGORY)
     end subroutine new_cavgsproc_nano
 
     subroutine new_ptclsproc_nano( prgtab )
@@ -91,27 +94,32 @@ contains
         ! PROGRAM SPECIFICATION
         call ptclsproc_nano%new(&
         &'ptclsproc_nano',&                                           ! name
-        &'Analysis of particle images inside a class along nanocrystal time-series using radial cross-correlation',& ! descr_short
-        &'is a program to analyze the core/surface dynamics of nanocrystals using particle images inside a class',& ! descr_long
+        &'Analyze radial core and surface changes in nanoparticle class images',& ! summary
+        &'is a program to analyze the core/surface dynamics of nanocrystals using particle images inside a class',& ! help
         &'single_exec',&                                              ! executable
-        &.true., gui_advanced=.false.)                                ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER)                                ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
-        call ptclsproc_nano%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call ptclsproc_nano%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call ptclsproc_nano%add_input(UI_SRCH, pgrp)
+        call ptclsproc_nano%add_input(UI_SRCH, pgrp, &
+        &visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls
-        call ptclsproc_nano%add_input(UI_MASK, mskdiam)
+        call ptclsproc_nano%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call ptclsproc_nano%add_input(UI_COMP, nthr)
-        call ptclsproc_nano%add_input(UI_COMP, script)
+        call ptclsproc_nano%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        call ptclsproc_nano%add_input(UI_COMP, script, &
+        &visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
-        call add_ui_program('ptclsproc_nano', ptclsproc_nano, prgtab)
+        call add_ui_program('ptclsproc_nano', ptclsproc_nano, prgtab, UI_CATEGORY)
     end subroutine new_ptclsproc_nano
 
     subroutine new_validate_cavgs_vs_model( prgtab )
@@ -119,28 +127,34 @@ contains
         ! PROGRAM SPECIFICATION
         call validate_cavgs_vs_model%new(&
         &'validate_cavgs_vs_model',&                                                                       ! name
-        &'Validation of class averages against model projections',&                                        ! descr_short
-        &'is a program to validate the class averages against model projections using cross-correlation',& ! descr_long
+        &'Validation of class averages against model projections',&                                        ! summary
+        &'is a program to validate the class averages against model projections using cross-correlation',& ! help
         &'single_exec',&                                                                                   ! executable
-        &.true., gui_advanced=.false.)                                                                     ! requires sp_project
+        &.true., visibility=UI_VIS_DEVELOPER)                                                                     ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call validate_cavgs_vs_model%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '')
+        call validate_cavgs_vs_model%add_input(UI_IMG, 'vol1', 'file', 'Volume', 'Input volume', 'input volume e.g. vol.mrc', .true., '', &
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
-        call validate_cavgs_vs_model%add_input(UI_PARM, smpd)
-        ! alternative inputs
+        call validate_cavgs_vs_model%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! <no additional inputs>
         ! <empty>
         ! search controls
-        call validate_cavgs_vs_model%add_input(UI_SRCH, pgrp)
+        call validate_cavgs_vs_model%add_input(UI_SRCH, pgrp, &
+        &visibility=UI_VIS_STANDARD)
         ! filter controls
         ! <empty>
         ! mask controls
-        call validate_cavgs_vs_model%add_input(UI_MASK, mskdiam)
+        call validate_cavgs_vs_model%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
         ! computer controls
-        call validate_cavgs_vs_model%add_input(UI_COMP, nthr)
-        call validate_cavgs_vs_model%add_input(UI_COMP, script)
+        call validate_cavgs_vs_model%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        call validate_cavgs_vs_model%add_input(UI_COMP, script, &
+        &visibility=UI_VIS_DEVELOPER)
         ! add to ui_hash
-        call add_ui_program('validate_cavgs_vs_model', validate_cavgs_vs_model, prgtab)
+        call add_ui_program('validate_cavgs_vs_model', validate_cavgs_vs_model, prgtab, UI_CATEGORY)
     end subroutine new_validate_cavgs_vs_model
 
 end module single_ui_validate

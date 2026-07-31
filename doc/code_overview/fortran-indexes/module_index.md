@@ -16017,7 +16017,6 @@ Public symbols:
 - `new_strategy2D` — subroutine
 - `new_ui_hash_test` — subroutine
 - `new_units` — subroutine
-- `print_test_class_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_fft
@@ -16038,7 +16037,6 @@ Public symbols:
 - `new_phasecorr` — subroutine
 - `new_rank_weights` — subroutine
 - `new_rotate_ref` — subroutine
-- `print_test_fft_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_geometry
@@ -16057,7 +16055,6 @@ Public symbols:
 - `new_sym_test` — subroutine
 - `new_uniform_euler` — subroutine
 - `new_uniform_rot` — subroutine
-- `print_test_geometry_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_highlevel
@@ -16120,7 +16117,6 @@ Public symbols:
 - `new_nano_mask` — subroutine
 - `new_otsu_test` — subroutine
 - `new_ptcl_center` — subroutine
-- `print_test_masks_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_network
@@ -16137,7 +16133,6 @@ Public symbols:
 - `new_socket_comm_distr` — subroutine
 - `new_socket_io` — subroutine
 - `new_socket_server` — subroutine
-- `print_test_network_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_numerics
@@ -16154,7 +16149,6 @@ Public symbols:
 - `new_kbinterpol_fast` — subroutine
 - `new_maxnloc_test` — subroutine
 - `new_neigh` — subroutine
-- `print_test_numerics_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_optimize
@@ -16172,7 +16166,6 @@ Public symbols:
 - `new_lplims` — subroutine
 - `new_lpstages_test` — subroutine
 - `new_opt_lp` — subroutine
-- `print_test_optimize_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_parallel
@@ -16189,7 +16182,6 @@ Public symbols:
 - `new_openacc` — subroutine
 - `new_openmp` — subroutine
 - `new_simd` — subroutine
-- `print_test_parallel_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_single
@@ -16206,7 +16198,6 @@ Public symbols:
 - `new_detect_atoms` — subroutine
 - `new_simulate_nanoparticle` — subroutine
 - `new_single_workflow` — subroutine
-- `print_test_single_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_stats
@@ -16228,7 +16219,6 @@ Public symbols:
 - `new_pca_all` — subroutine
 - `new_pca_imgvar` — subroutine
 - `new_sp_project` — subroutine
-- `print_test_stats_programs` — subroutine
 
 ---
 ## Module: simple_test_ui_utils
@@ -16253,7 +16243,6 @@ Public symbols:
 - `new_peak_thres_fdr` — subroutine
 - `new_serialize` — subroutine
 - `new_stringmatch` — subroutine
-- `print_test_utils_programs` — subroutine
 
 ---
 ## Module: simple_test_utils
@@ -16459,6 +16448,7 @@ Uses:
 - `simple_core_module_api`
 - `simple_linked_list`
 - `simple_ui_hash`
+- `simple_ui_param`
 - `simple_ui_params_common`
 - `simple_ui_program`
 - `simple_ui_simple_group`
@@ -16478,13 +16468,13 @@ Public symbols:
 - `print_stream_ui_json` — subroutine
 - `print_ui_json` — subroutine
 - `validate_ui_json` — subroutine
+- `validate_ui_presentation` — subroutine
 - `write_ui_json` — subroutine
 
 Private symbols:
-- `create_program_entry` — subroutine
-- `create_program_entry` — subroutine
-- `create_section_list` — subroutine
-- `create_section_list` — subroutine
+- `print_registered_programs` — subroutine
+- `validate_category_metadata` — subroutine
+- `validate_input_list` — subroutine
 
 ---
 ## Module: simple_ui_abinitio3D
@@ -16501,7 +16491,6 @@ Public symbols:
 - `new_abinitio3D_cavgs` — subroutine
 - `new_estimate_lpstages` — subroutine
 - `new_noisevol` — subroutine
-- `print_abinitio3D_programs` — subroutine
 
 ---
 ## Module: simple_ui_cavgproc
@@ -16521,7 +16510,6 @@ Public symbols:
 - `new_match_stacks` — subroutine
 - `new_model_cavgs_rejection` — subroutine
 - `new_select_clusters` — subroutine
-- `print_cavgproc_programs` — subroutine
 
 ---
 ## Module: simple_ui_cluster2D
@@ -16542,7 +16530,6 @@ Public symbols:
 - `new_sample_classes` — subroutine
 - `new_unbootstrap_cavgs` — subroutine
 - `new_write_classes` — subroutine
-- `print_cluster2D_programs` — subroutine
 
 ---
 ## Module: simple_ui_denoise
@@ -16564,7 +16551,21 @@ Public symbols:
 - `new_ppca_denoise` — subroutine
 - `new_ppca_denoise_classes` — subroutine
 - `new_ppca_volvar` — subroutine
-- `print_denoise_programs` — subroutine
+
+---
+## Module: simple_ui_descriptor_types
+
+Files:
+- `main/ui/simple_ui_descriptor_types.f90`
+
+Uses:
+- `simple_string`
+
+Public symbols:
+- `ui_choices` — function
+
+Private symbols:
+- `ui_choice` — type
 
 ---
 ## Module: simple_ui_dock
@@ -16580,7 +16581,6 @@ Public symbols:
 - `new_dock_volpair` — subroutine
 - `new_volanalyze` — subroutine
 - `new_volcluster` — subroutine
-- `print_dock_programs` — subroutine
 
 ---
 ## Module: simple_ui_filter
@@ -16597,7 +16597,6 @@ Public symbols:
 - `new_nu_filt3D` — subroutine
 - `new_uniform_filter2D` — subroutine
 - `new_uniform_filter3D` — subroutine
-- `print_filter_programs` — subroutine
 
 ---
 ## Module: simple_ui_hash
@@ -16643,7 +16642,6 @@ Public symbols:
 - `new_scale` — subroutine
 - `new_stack` — subroutine
 - `new_stackops` — subroutine
-- `print_image_programs` — subroutine
 
 ---
 ## Module: simple_ui_mask
@@ -16659,7 +16657,6 @@ Public symbols:
 - `new_auto_spher_mask` — subroutine
 - `new_automask2D` — subroutine
 - `new_mask` — subroutine
-- `print_mask_programs` — subroutine
 
 ---
 ## Module: simple_ui_modules
@@ -16670,10 +16667,12 @@ Files:
 Uses:
 - `simple_ansi_ctrls`
 - `simple_core_module_api`
+- `simple_ui_descriptor_types`
 - `simple_ui_hash`
 - `simple_ui_params_common`
 - `simple_ui_program`
 - `simple_ui_utils`
+- `simple_ui_visibility`
 
 ---
 ## Module: simple_ui_ori
@@ -16690,7 +16689,6 @@ Public symbols:
 - `new_oriops` — subroutine
 - `new_oristats` — subroutine
 - `new_vizoris` — subroutine
-- `print_ori_programs` — subroutine
 
 ---
 ## Module: simple_ui_other
@@ -16707,7 +16705,6 @@ Public symbols:
 - `new_fractionate_movies` — subroutine
 - `new_split_` — subroutine
 - `new_split_stack` — subroutine
-- `print_other_programs` — subroutine
 
 ---
 ## Module: simple_ui_param
@@ -16716,13 +16713,21 @@ Files:
 - `main/ui/simple_ui_param.f90`
 
 Uses:
+- `simple_error`
 - `simple_string`
+- `simple_string_utils`
+- `simple_ui_descriptor_types`
 
 Public symbols:
-- `apply_gui_overrides` — subroutine
 - `finalize` — subroutine
+- `infer_units` — function
+- `normalize_numeric_example` — function
+- `set_choices` — subroutine
+- `set_generated_default` — subroutine
 - `set_param_1` — subroutine
 - `set_param_2` — subroutine
+- `set_placeholder` — subroutine
+- `standardize_placeholder` — function
 
 ---
 ## Module: simple_ui_params_common
@@ -16732,6 +16737,7 @@ Files:
 
 Uses:
 - `simple_core_module_api`
+- `simple_ui_descriptor_types`
 - `simple_ui_param`
 
 Public symbols:
@@ -16757,7 +16763,6 @@ Public symbols:
 - `new_pick` — subroutine
 - `new_preprocess` — subroutine
 - `new_reextract` — subroutine
-- `print_preproc_programs` — subroutine
 
 ---
 ## Module: simple_ui_print
@@ -16775,7 +16780,6 @@ Public symbols:
 - `new_print_dose_weights` — subroutine
 - `new_print_fsc` — subroutine
 - `new_print_magic_boxes` — subroutine
-- `print_print_programs` — subroutine
 
 ---
 ## Module: simple_ui_program
@@ -16788,25 +16792,54 @@ Uses:
 - `simple_ansi_ctrls`
 - `simple_core_module_api`
 - `simple_linked_list`
+- `simple_ui_default_values`
+- `simple_ui_descriptor_types`
 - `simple_ui_param`
+- `simple_ui_visibility`
 
 Public symbols:
 - `add_input_num` — subroutine
 - `add_input_param` — subroutine
 - `add_input_str` — subroutine
+- `add_program_groups_json` — subroutine
+- `add_program_input_json` — subroutine
+- `add_program_requirements_json` — subroutine
+- `add_requirement` — subroutine
+- `append_input` — subroutine
 - `append_required_keys_from_list` — subroutine
+- `apply_generated_default` — subroutine
+- `bind_input` — subroutine
+- `cardinality_text` — function
+- `category_descriptor` — type
+- `create_json_entry` — subroutine
 - `create_section_from_list` — subroutine
+- `find_input_text` — subroutine
+- `get_category` — function
+- `get_display_name` — function
 - `get_executable` — function
 - `get_name` — function
 - `get_required_keys` — function
+- `group_label` — function
+- `input_text_for_key` — function
 - `kill` — subroutine
 - `new` — subroutine
 - `print_cmdline` — subroutine
+- `print_help` — subroutine
 - `print_param_hash` — subroutine
 - `print_param_list` — subroutine
-- `print_prg_descr_long` — subroutine
+- `print_requirement_groups` — subroutine
+- `print_requirement_inputs` — subroutine
 - `print_ui` — subroutine
+- `register_group` — subroutine
+- `set_category` — subroutine
+- `ui_activation` — type
+- `ui_activation_equals_any` — function
+- `ui_cli_param_choices` — function
+- `ui_cli_param_summary` — function
+- `ui_input_group` — type
 - `ui_program` — type
+- `ui_program_input` — type
+- `ui_requirement_group` — type
 - `write2json` — subroutine
 
 ---
@@ -16842,7 +16875,6 @@ Public symbols:
 - `new_validate_projfile` — subroutine
 - `new_write_mic_filetab` — subroutine
 - `new_zero_project_shifts` — subroutine
-- `print_project_programs` — subroutine
 
 ---
 ## Module: simple_ui_refine3D
@@ -16862,7 +16894,6 @@ Public symbols:
 - `new_refine3D` — subroutine
 - `new_refine3D_auto` — subroutine
 - `new_refine3D_multi` — subroutine
-- `print_refine3D_programs` — subroutine
 
 ---
 ## Module: simple_ui_res
@@ -16877,7 +16908,6 @@ Public symbols:
 - `construct_res_programs` — subroutine
 - `new_fsc` — subroutine
 - `new_fsc_area_score` — subroutine
-- `print_res_programs` — subroutine
 
 ---
 ## Module: simple_ui_sim
@@ -16895,7 +16925,6 @@ Public symbols:
 - `new_simulate_movie` — subroutine
 - `new_simulate_noise` — subroutine
 - `new_simulate_particles` — subroutine
-- `print_sim_programs` — subroutine
 
 ---
 ## Module: simple_ui_simple_group
@@ -16927,7 +16956,6 @@ Uses:
 
 Public symbols:
 - `add_simple_programs` — subroutine
-- `print_simple_programs` — subroutine
 
 ---
 ## Module: simple_ui_single_group
@@ -16947,7 +16975,6 @@ Uses:
 
 Public symbols:
 - `add_single_programs` — subroutine
-- `print_single_programs` — subroutine
 
 ---
 ## Module: simple_ui_stream
@@ -16967,7 +16994,6 @@ Public symbols:
 - `new_pick_extract` — subroutine
 - `new_preproc` — subroutine
 - `new_sieve_cavgs` — subroutine
-- `print_stream_programs` — subroutine
 
 ---
 ## Module: simple_ui_stream_group
@@ -16981,7 +17007,6 @@ Uses:
 
 Public symbols:
 - `add_stream_programs` — subroutine
-- `print_stream_programs_group` — subroutine
 
 ---
 ## Module: simple_ui_sym
@@ -16997,7 +17022,6 @@ Public symbols:
 - `new_symaxis_search` — subroutine
 - `new_symmetrize_map` — subroutine
 - `new_symmetry_test` — subroutine
-- `print_symmetry_programs` — subroutine
 
 ---
 ## Module: simple_ui_test_group
@@ -17023,7 +17047,6 @@ Uses:
 
 Public symbols:
 - `add_test_programs` — subroutine
-- `print_test_programs` — subroutine
 
 ---
 ## Module: simple_ui_utils
@@ -17053,7 +17076,15 @@ Public symbols:
 - `new_check_refpick` — subroutine
 - `new_mini_stream` — subroutine
 - `new_model_validate` — subroutine
-- `print_validate_programs` — subroutine
+
+---
+## Module: simple_ui_visibility
+
+Files:
+- `main/ui/simple_ui_visibility.f90`
+
+Public symbols:
+- `ui_visibility_name` — function
 
 ---
 ## Module: simple_ui_volume
@@ -17070,7 +17101,6 @@ Public symbols:
 - `new_reconstruct3D_pcg` — subroutine
 - `new_reproject` — subroutine
 - `new_volops` — subroutine
-- `print_volume_programs` — subroutine
 
 ---
 ## Module: simple_vol_pproc_policy
@@ -17581,7 +17611,6 @@ Public symbols:
 - `new_crys_score` — subroutine
 - `new_detect_atoms` — subroutine
 - `new_simulate_nanoparticle` — subroutine
-- `print_single_atom_programs` — subroutine
 
 ---
 ## Module: single_ui_map
@@ -17596,7 +17625,6 @@ Public symbols:
 - `construct_single_map_programs` — subroutine
 - `new_conv_atom_denoise` — subroutine
 - `new_tsegmaps_core_finder` — subroutine
-- `print_single_map_programs` — subroutine
 
 ---
 ## Module: single_ui_nano2D
@@ -17613,7 +17641,6 @@ Public symbols:
 - `new_center2D_nano` — subroutine
 - `new_cluster2D_nano` — subroutine
 - `new_estimate_diam` — subroutine
-- `print_single_nano2D_programs` — subroutine
 
 ---
 ## Module: single_ui_nano3D
@@ -17629,7 +17656,6 @@ Public symbols:
 - `new_abinitio3D_nano` — subroutine
 - `new_autorefine3D_nano` — subroutine
 - `new_refine3D_nano` — subroutine
-- `print_single_nano3D_programs` — subroutine
 
 ---
 ## Module: single_ui_trajectory
@@ -17649,7 +17675,6 @@ Public symbols:
 - `new_trajectory_make_projavgs` — subroutine
 - `new_trajectory_reconstruct3D` — subroutine
 - `new_trajectory_swap_stack` — subroutine
-- `print_single_trajectory_programs` — subroutine
 
 ---
 ## Module: single_ui_tseries
@@ -17668,7 +17693,6 @@ Public symbols:
 - `new_tseries_make_pickavg` — subroutine
 - `new_tseries_motion_correct` — subroutine
 - `new_tseries_prep4tracking` — subroutine
-- `print_single_tseries_programs` — subroutine
 
 ---
 ## Module: single_ui_validate
@@ -17685,7 +17709,6 @@ Public symbols:
 - `new_cavgsproc_nano` — subroutine
 - `new_ptclsproc_nano` — subroutine
 - `new_validate_cavgs_vs_model` — subroutine
-- `print_single_validate_programs` — subroutine
 
 ---
 ## Module: subroutine

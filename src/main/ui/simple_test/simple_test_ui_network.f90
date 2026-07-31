@@ -3,6 +3,7 @@ module simple_test_ui_network
 use simple_ui_modules
 implicit none
 
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('network', 'Network', 70)
 type(ui_program), target :: socket_client
 type(ui_program), target :: socket_comm_distr
 type(ui_program), target :: socket_io
@@ -18,22 +19,12 @@ contains
         call new_socket_server(tsttab)
     end subroutine construct_test_network_programs
 
-    subroutine print_test_network_programs( logfhandle )
-        integer, intent(in) :: logfhandle
-        write(logfhandle,'(A)') format_str('NETWORK:', C_UNDERLINED)
-        write(logfhandle,'(A)') socket_client%name%to_char()
-        write(logfhandle,'(A)') socket_comm_distr%name%to_char()
-        write(logfhandle,'(A)') socket_io%name%to_char()
-        write(logfhandle,'(A)') socket_server%name%to_char()
-        write(logfhandle,'(A)') ''
-    end subroutine print_test_network_programs
-
-    subroutine new_socket_client( tsttab )
+subroutine new_socket_client( tsttab )
         class(ui_hash), intent(inout) :: tsttab
         ! PROGRAM SPECIFICATION
         call socket_client%new(&
         &'socket_client',&                     ! name
-        &'socket_client ',&                    ! descr_short
+        &'socket_client ',&                    ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -42,7 +33,7 @@ contains
         !call socket_client%add_input(UI_IO, )
         ! parameter input/output
         !call socket_client%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call socket_client%add_input(UI_PARM, )
         ! search controls
         !call socket_client%add_input(UI_SRCH, )
@@ -53,7 +44,7 @@ contains
         ! computer controls
         !call socket_client%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('socket_client', socket_client, tsttab)
+        call add_ui_program('socket_client', socket_client, tsttab, UI_CATEGORY)
     end subroutine new_socket_client
 
     subroutine new_socket_comm_distr( tsttab )
@@ -61,7 +52,7 @@ contains
         ! PROGRAM SPECIFICATION
         call socket_comm_distr%new(&
         &'socket_comm_distr',&                 ! name
-        &'socket_comm_distr ',&                ! descr_short
+        &'socket_comm_distr ',&                ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -70,7 +61,7 @@ contains
         !call socket_comm_distr%add_input(UI_IO, )
         ! parameter input/output
         !call socket_comm_distr%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call socket_comm_distr%add_input(UI_PARM, )
         ! search controls
         !call socket_comm_distr%add_input(UI_SRCH, )
@@ -81,7 +72,7 @@ contains
         ! computer controls
         !call socket_comm_distr%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('socket_comm_distr', socket_comm_distr, tsttab)
+        call add_ui_program('socket_comm_distr', socket_comm_distr, tsttab, UI_CATEGORY)
     end subroutine new_socket_comm_distr
 
     subroutine new_socket_io( tsttab )
@@ -89,7 +80,7 @@ contains
         ! PROGRAM SPECIFICATION
         call socket_io%new(&
         &'socket_io',&                         ! name
-        &'socket_io ',&                        ! descr_short
+        &'socket_io ',&                        ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -98,7 +89,7 @@ contains
         !call socket_io%add_input(UI_IO, )
         ! parameter input/output
         !call socket_io%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call socket_io%add_input(UI_PARM, )
         ! search controls
         !call socket_io%add_input(UI_SRCH, )
@@ -109,7 +100,7 @@ contains
         ! computer controls
         !call socket_io%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('socket_io', socket_io, tsttab)
+        call add_ui_program('socket_io', socket_io, tsttab, UI_CATEGORY)
     end subroutine new_socket_io
 
     subroutine new_socket_server( tsttab )
@@ -117,7 +108,7 @@ contains
         ! PROGRAM SPECIFICATION
         call socket_server%new(&
         &'socket_server',&                     ! name
-        &'socket_server ',&                    ! descr_short
+        &'socket_server ',&                    ! summary
         &'is a test program for ',&
         &'simple_test_exec',&                  ! executable
         &.false.)                              ! requires sp_project
@@ -126,7 +117,7 @@ contains
         !call socket_server%add_input(UI_IO, )
         ! parameter input/output
         !call socket_server%add_input(UI_IMG, )
-        ! alternative inputs
+        ! <no additional inputs>
         !call socket_server%add_input(UI_PARM, )
         ! search controls
         !call socket_server%add_input(UI_SRCH, )
@@ -137,7 +128,7 @@ contains
         ! computer controls
         !call socket_server%add_input(UI_COMP, )
         ! add to ui_hash
-        call add_ui_program('socket_server', socket_server, tsttab)
+        call add_ui_program('socket_server', socket_server, tsttab, UI_CATEGORY)
     end subroutine new_socket_server
 
 end module simple_test_ui_network

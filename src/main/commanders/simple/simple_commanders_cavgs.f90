@@ -959,7 +959,6 @@ contains
         if( .not. cline%defined('trs')    ) call cline%set('trs',       10.)
         if( .not. cline%defined('lp')     ) call cline%set('lp',         6.)
         if( .not. cline%defined('prune')  ) call cline%set('prune',    'no')
-        if( .not. cline%defined('update') ) call cline%set('update',   'no')
         ! master parameters
         call params%new(cline)
         ! read match project file
