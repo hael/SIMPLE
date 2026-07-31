@@ -640,11 +640,21 @@ contains
         real :: angle_err, angle_err_alt, recovered_angle
         real(dp) :: loss, grad(2), best_loss, objective_initial, objective_final
         real(dp) :: candidate_initial, candidate_final
+        real(dp) :: scalar0, scalar_xp, scalar_xm, scalar_fd_x, diag_delta, direct_score
+        real(dp) :: vector0, vector_xp, vector_xm
+        real(dp) :: diag_shifts(2,5), l_scalar_diag, l_vector_diag, l_direct_diag
+        real(dp) :: dmin, dmax, dshift_min, dshift_max, direct_delta_max
+        real(dp) :: vector_fd_x, scalar_grad_x, max_grad_error
+        integer :: diag_rots(3), diag_ref, diag_rot_index, diag_shift_index
+        integer :: scalar_best_rot, vector_best_rot
+        real(dp) :: scalar_best_loss, vector_best_loss
         real :: candidate_result(3)
         integer :: accepted_steps, candidate_steps, best_steps
-        logical :: pass_class, pass_angle, pass_loss, pass_shift, pass_all
+        logical :: pass_class, pass_angle, pass_loss, pass_shift, pass_roundtrip, pass_all
         real, allocatable, target :: sigma2_noise(:, :)
         complex(sp), allocatable :: ref_pft_diag(:, :), ptcl_pft_diag(:, :)
+        real(sp), allocatable :: legacy_scores(:)
+        real(sp), allocatable :: raw_vector_diag(:)
         type(cmdline) :: cpft
         type(commander_simulate_particles) :: xsim
         type(commander_new_project) :: xnew
@@ -701,7 +711,17 @@ contains
         call ref1%memoize4polarize(b%pftc%get_pdim_srch()); call ref2%memoize4polarize(b%pftc%get_pdim_srch()); call observed%memoize4polarize(b%pftc%get_pdim_srch())
         call b%pftc%polarize_ref_pft(ref1, 1, .true., b%pftc%get_pdim_srch(), .false.); call b%pftc%polarize_ref_pft(ref2, 2, .true., b%pftc%get_pdim_srch(), .false.)
         call b%pftc%polarize_ptcl_pft(observed, 1, b%pftc%get_pdim_srch(), .false.); call b%pftc%set_eo(1, .true.)
+        ! The scalar gradient consumes pfts_refs_* directly, whereas the
+        ! vector raw-loss path consumes the memoized FT(ref) arrays.  Populate
+        ! both representations before the round-trip diagnostic and candidate
+        ! search; otherwise the zero-shift vector call sees uninitialized data.
+        call b%pftc%memoize_refs
         allocate (sigma2_noise(params%kfromto(1):params%kfromto(2), 1), source=0.05); call b%pftc%assign_sigma2_noise(sigma2_noise)
+        ! The vector path also consumes the memoized particle/CTF products
+        ! (ft_ptcl_ctf and ft_ctf2); the scalar gradient computes these terms
+        ! directly, so populate this second production memo before comparing
+        ! the two APIs.
+        call b%pftc%memoize_ptcls
         ! polarize_ptcl_pft memoizes the weighted norm at polarization time.  Sigma
         ! calibration is attached immediately afterward here, so refresh that cache
         ! before evaluating the raw Euclidean loss; otherwise its denominator is zero.
@@ -726,14 +746,133 @@ contains
         ! the production Fourier/polar context is invalid before SGD is entered.
         call b%pftc%gen_raw_euclid_grad_for_rot_8(1, 1, [0._dp, 0._dp], 1, loss, grad)
         write (logfhandle, '(a,2es16.8,1x,l1)') '>>> V4 RAW PROBE REF1 (LOSS,GX): ', loss, grad(1), ieee_is_finite(loss)
+        ! Diagnostic phase only: evaluate the scalar direct-gradient objective
+        ! at a symmetric finite-difference stencil and compare it with the
+        ! established FFT/vector raw-loss API at the same states.  This does
+        ! not alter optimization; it distinguishes a gradient/sign problem
+        ! from a residual normalization or rotation-indexing problem.
+        ! Use a displacement larger than sqrt(SHERRSQ) (about 0.0032 px in
+        ! SIMPLE).  Below that threshold the vector implementation is allowed
+        ! to reuse its zero-shift memoized FFT state, which would make the
+        ! finite-difference probe appear falsely constant.
+        diag_delta = 1.0e-2_dp
+        scalar0 = loss
+        call b%pftc%gen_raw_euclid_grad_for_rot_8(1, 1, [diag_delta, 0._dp], 1, scalar_xp, grad)
+        call b%pftc%gen_raw_euclid_grad_for_rot_8(1, 1, [-diag_delta, 0._dp], 1, scalar_xm, grad)
+        scalar_fd_x = (scalar_xp - scalar_xm) / (2._dp * diag_delta)
+        allocate(raw_vector_diag(b%pftc%get_nrots()))
+        call b%pftc%gen_raw_euclid_vals(1, 1, [0._sp, 0._sp], raw_vector_diag)
+        vector0 = real(raw_vector_diag(1), dp)
+        call b%pftc%gen_raw_euclid_vals(1, 1, [real(diag_delta,sp), 0._sp], raw_vector_diag)
+        vector_xp = real(raw_vector_diag(1), dp)
+        call b%pftc%gen_raw_euclid_vals(1, 1, [-real(diag_delta,sp), 0._sp], raw_vector_diag)
+        write(logfhandle,'(a,4es18.10)') '>>> V4 DIAG SCALAR 0/+X/-X/FDX: ', &
+            scalar0, scalar_xp, scalar_xm, scalar_fd_x
+        vector_xm = real(raw_vector_diag(1), dp)
+        write(logfhandle,'(a,3es18.10)') '>>> V4 DIAG VECTOR 0/+X/-X: ', &
+            vector0, vector_xp, vector_xm
+        direct_score = b%pftc%gen_corr_for_rot_8(1, 1, [0._dp, 0._dp], 1)
+        if (ieee_is_finite(direct_score) .and. direct_score > 0.0_dp) then
+        write(logfhandle,'(a,2es18.10)') '>>> V4 DIAG DIRECT SCORE/RAW ROT1: ', &
+                direct_score, -log(direct_score)
+        else
+            write(logfhandle,'(a,es18.10)') '>>> V4 DIAG DIRECT SCORE ROT1: ', direct_score
+        endif
+        deallocate(raw_vector_diag)
+
+        ! Characterize the objective difference over a small deterministic
+        ! state grid.  This is diagnostic only: it does not select candidates
+        ! or modify the optimizer.  The shift step is above SHERRSQ so the
+        ! vector path recomputes its shifted FFT state rather than reusing the
+        ! zero-shift memo.
+        diag_rots = [1, max(1, b%pftc%get_nrots()/2), b%pftc%get_nrots()]
+        diag_shifts(:,1) = [0._dp, 0._dp]
+        diag_shifts(:,2) = [0.01_dp, 0._dp]
+        diag_shifts(:,3) = [-0.01_dp, 0._dp]
+        diag_shifts(:,4) = [0._dp, 0.01_dp]
+        diag_shifts(:,5) = [0._dp, -0.01_dp]
+        dmin = huge(1._dp); dmax = -huge(1._dp)
+        dshift_min = huge(1._dp); dshift_max = -huge(1._dp)
+        direct_delta_max = 0._dp; max_grad_error = 0._dp
+        allocate(raw_vector_diag(b%pftc%get_nrots()))
+        do diag_ref = 1, 2
+            do diag_rot_index = 1, size(diag_rots)
+                dshift_min = huge(1._dp); dshift_max = -huge(1._dp)
+                do diag_shift_index = 1, size(diag_shifts,2)
+                    call b%pftc%gen_raw_euclid_grad_for_rot_8(diag_ref, 1, &
+                        diag_shifts(:,diag_shift_index), diag_rots(diag_rot_index), l_scalar_diag, grad)
+                    call b%pftc%gen_raw_euclid_vals(diag_ref, 1, &
+                        real(diag_shifts(:,diag_shift_index),sp), raw_vector_diag)
+                    l_vector_diag = real(raw_vector_diag(diag_rots(diag_rot_index)),dp)
+                    direct_score = b%pftc%gen_corr_for_rot_8(diag_ref, 1, &
+                        diag_shifts(:,diag_shift_index), diag_rots(diag_rot_index))
+                    if (direct_score > 0._dp .and. ieee_is_finite(direct_score)) then
+                        l_direct_diag = -log(direct_score)
+                    else
+                        l_direct_diag = huge(1._dp)
+                    endif
+                    dmin = min(dmin, l_vector_diag-l_scalar_diag)
+                    dmax = max(dmax, l_vector_diag-l_scalar_diag)
+                    dshift_min = min(dshift_min, l_vector_diag-l_scalar_diag)
+                    dshift_max = max(dshift_max, l_vector_diag-l_scalar_diag)
+                    direct_delta_max = max(direct_delta_max, abs(l_direct_diag-l_scalar_diag))
+                    if (diag_ref == 1 .and. diag_rot_index == 1 .and. diag_shift_index == 1) then
+                        scalar_grad_x = grad(1)
+                        call b%pftc%gen_raw_euclid_vals(diag_ref, 1, [real(diag_delta,sp),0._sp], raw_vector_diag)
+                        vector_xp = real(raw_vector_diag(diag_rots(diag_rot_index)),dp)
+                        call b%pftc%gen_raw_euclid_vals(diag_ref, 1, [-real(diag_delta,sp),0._sp], raw_vector_diag)
+                        vector_xm = real(raw_vector_diag(diag_rots(diag_rot_index)),dp)
+                        vector_fd_x = (vector_xp-vector_xm)/(2._dp*diag_delta)
+                        max_grad_error = abs(vector_fd_x-scalar_grad_x)
+                    endif
+                enddo
+                write(logfhandle,'(a,2i5,2es18.10)') '>>> V4 DIAG CANDIDATE (REF,ROT,DSHIFT_MIN,DSHIFT_MAX): ', &
+                    diag_ref, diag_rots(diag_rot_index), dshift_min, dshift_max
+            enddo
+        enddo
+        deallocate(raw_vector_diag)
+        write(logfhandle,'(a,3es18.10)') '>>> V4 DIAG VECTOR-SCALAR D MIN/MAX/RANGE: ', &
+            dmin, dmax, dmax-dmin
+        write(logfhandle,'(a,2es18.10)') '>>> V4 DIAG DIRECT-SCALAR MAX/DX: ', &
+            direct_delta_max, max_grad_error
+        ! Compare the discrete zero-shift winner under both raw APIs.
+        allocate(raw_vector_diag(b%pftc%get_nrots()))
+        do diag_ref = 1, 2
+            scalar_best_loss = huge(1._dp); vector_best_loss = huge(1._dp)
+            scalar_best_rot = 0; vector_best_rot = 0
+            do diag_rot_index = 1, b%pftc%get_nrots()
+                call b%pftc%gen_raw_euclid_grad_for_rot_8(diag_ref, 1, [0._dp,0._dp], &
+                    diag_rot_index, l_scalar_diag, grad)
+                call b%pftc%gen_raw_euclid_vals(diag_ref, 1, [0._sp,0._sp], raw_vector_diag)
+                l_vector_diag = real(raw_vector_diag(diag_rot_index),dp)
+                if (l_scalar_diag < scalar_best_loss) then
+                    scalar_best_loss = l_scalar_diag; scalar_best_rot = diag_rot_index
+                endif
+                if (l_vector_diag < vector_best_loss) then
+                    vector_best_loss = l_vector_diag; vector_best_rot = diag_rot_index
+                endif
+            enddo
+            write(logfhandle,'(a,i4,2(i6,1x),2es18.10)') '>>> V4 DIAG ZERO-SHIFT ARGMIN REF/SCALAR/VECTOR: ', &
+                diag_ref, scalar_best_rot, vector_best_rot, scalar_best_loss, vector_best_loss
+        enddo
+        deallocate(raw_vector_diag)
         call b%pftc%gen_raw_euclid_grad_for_rot_8(2, 1, [0._dp, 0._dp], 1, loss, grad)
         write (logfhandle, '(a,2es16.8,1x,l1)') '>>> V4 RAW PROBE REF2 (LOSS,GX): ', loss, grad(1), ieee_is_finite(loss)
+        allocate (legacy_scores(b%pftc%get_nrots()))
+        call b%pftc%gen_objfun_vals(1, 1, [0.0, 0.0], legacy_scores)
+        if (legacy_scores(1) > 0.0 .and. ieee_is_finite(legacy_scores(1))) then
+            write (logfhandle, '(a,2es16.8)') '>>> V4 LEGACY SCORE/RAW REF1 ROT1: ', legacy_scores(1), -log(real(legacy_scores(1), dp))
+        else
+            write (logfhandle, '(a,es16.8)') '>>> V4 LEGACY SCORE REF1 ROT1: ', legacy_scores(1)
+        endif
+        deallocate (legacy_scores)
 
         write (logfhandle, '(a)') '>>> V4 STEP 3: joint class/rotation search with bounded shift SGD'
         best_loss = huge(1._dp); best_ref = 0; best_rot = 0; best_steps = 0; candidate_count = 0
         write (logfhandle, '(a,i0)') '>>> V4 ROTATION COUNT: ', b%pftc%get_nrots()
         shift_limits(:, 1) = -5.; shift_limits(:, 2) = 5.
         call search%new(b, shift_limits, opt_angle=.false., direct_only=.true.)
+        call search%set_diagnostic_mode(.true.)
         do iref = 1, 2; do irot = 1, b%pftc%get_nrots()
                 call b%pftc%gen_raw_euclid_grad_for_rot_8(iref, 1, [0._dp, 0._dp], irot, loss, grad)
                 if (ieee_is_finite(loss)) then
@@ -782,7 +921,9 @@ contains
         write (logfhandle, '(a,l1)') '>>> V4 CHECK ANGLE: ', pass_angle
         write (logfhandle, '(a,l1)') '>>> V4 CHECK LOSS:  ', pass_loss
         write (logfhandle, '(a,l1)') '>>> V4 CHECK SHIFT: ', pass_shift
-        pass_all = pass_class .and. pass_angle .and. pass_loss .and. pass_shift
+        pass_roundtrip = .not. search%diagnostic_failed()
+        write (logfhandle, '(a,l1)') '>>> V4 CHECK ROUNDTRIP: ', pass_roundtrip
+        pass_all = pass_class .and. pass_angle .and. pass_loss .and. pass_shift .and. pass_roundtrip
         call search%kill; call b%kill_strategy2D_tbox; call b%kill_general_tbox; deallocate (sigma2_noise)
         call simple_chdir(cwd, status); if (status /= 0) THROW_HARD('could not restore original working directory')
         if (.not. pass_all) THROW_HARD('V4 truth-controlled assignment regression failed; see CHECK lines')
