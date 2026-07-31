@@ -12,7 +12,6 @@
     - `simple_test_exec.f90` — executes SIMPLE tests workflows
     - `single_exec.f90` — executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows
     - **tests/** — home of executable unit tests
-      - `simple_test_1jyx_abinitio.f90`
       - `simple_test_angres.f90` — angular resolution as a function of number of projection directions
       - `simple_test_ansi_colors.f90`
       - `simple_test_atomfit.f90`
@@ -88,6 +87,7 @@
       - `simple_test_rotate_ref.f90`
       - `simple_test_search_gain_flips.f90`
       - `simple_test_serialize.f90`
+      - `simple_test_sgd_base_suite.f90`
       - `simple_test_simd.f90`
       - `simple_test_socket_client.f90`
       - `simple_test_socket_io.f90`
@@ -211,7 +211,6 @@
           - `simple_commanders_misc.f90` — stuff that didn't fit elsewhere
           - `simple_commanders_mkcavgs.f90` — for producing class averages
           - `simple_commanders_ori.f90` — for operating on orientations
-          - `simple_commanders_pcg_recon.f90` — experimental CTF/sigma-weighted PCG 3D reconstruction command, see
           - `simple_commanders_pick.f90` — for picking, extraction, and making picking references
           - `simple_commanders_preprocess.f90` — for pre-processing (motion correction, CTF estimation etc.)
           - `simple_commanders_prob.f90`
@@ -221,6 +220,7 @@
           - `simple_commanders_project_ptcl.f90` — project commanders for particle-related things
           - `simple_commanders_rec.f90` — 3D reconstruction and associated things
           - `simple_commanders_rec_distr.f90`
+          - `simple_commanders_reconstruct3D_pcg.f90` — experimental CTF/sigma-weighted PCG 3D reconstruction command, see
           - `simple_commanders_refine3D.f90` — supporting 3D orientation search
           - `simple_commanders_relion.f90` — supporting interoperability with RELION
           - `simple_commanders_reproject.f90` — reprojection commanders
@@ -582,10 +582,10 @@
           - `single_ui_validate.f90` — module defining the user interfaces for validation programs in the single_exec suite
       - **volume/** — home of the volume reconstructor classes, the volume analyzers, the volume docking routines, and the symmetry search
         - `simple_dock_vols.f90` — class for docking pairs of volumes using correlation search and an icosahedral sampling geomery
-        - `simple_pcg_reconstruction.f90` — experimental CTF/sigma-weighted, matrix-free Fourier-projection
         - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
         - `simple_reconstructor_eo.f90` — 3D reconstruction of even-odd pairs for FSC estimation
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
+        - `simple_reconstructor_pcg.f90` — experimental CTF/sigma-weighted, matrix-free Fourier-projection
         - `simple_vol_pproc_policy.f90` — per-state automask and nonuniform-filter policy decisions consumed by volume assembly
         - `simple_volanalyzer.f90` — for analyzing sets of ab initio volumes, current implementation just outputting the medoid
         - `simple_volcluster.f90` — clustering of pre-docked volumes from Fourier-shell correlations
