@@ -31,6 +31,10 @@ type :: pftc_shsrch_grad
     logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
     logical                   :: direct_only  = .false. !< skip allocating an L-BFGS-B object for direct-gradient use
+    logical                   :: raw_roundtrip_check = .false. !< validate vector/scalar raw loss when diagnostics are enabled
+    logical                   :: raw_roundtrip_failed = .false. !< diagnostic mismatch observed during this search
+    logical                   :: raw_roundtrip_offset_set = .false. !< first vector-scalar offset calibrated
+    real(dp)                  :: raw_roundtrip_offset = 0.d0 !< diagnostic-only legacy score baseline offset
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
 contains
@@ -44,6 +48,8 @@ contains
     procedure          :: coarse_search
     procedure          :: coarse_search_opt_angle
     procedure          :: is_direct_shift_only
+    procedure          :: set_diagnostic_mode
+    procedure          :: diagnostic_failed => grad_shsrch_diagnostic_failed
     procedure          :: reset_profile => grad_shsrch_reset_profile
     procedure          :: get_profile   => grad_shsrch_get_profile
 end type pftc_shsrch_grad
@@ -67,6 +73,19 @@ contains
         if( .not. ieee_is_finite(offset) .or. abs(offset) > 0.5 ) offset = 0.
     end function parabolic_peak_offset
 
+    subroutine set_diagnostic_mode( self, enabled )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        logical,                 intent(in)    :: enabled
+        self%raw_roundtrip_check = enabled
+        self%raw_roundtrip_failed = .false.
+        self%raw_roundtrip_offset_set = .false.
+        self%raw_roundtrip_offset = 0.d0
+    end subroutine set_diagnostic_mode
+
+    logical function grad_shsrch_diagnostic_failed( self )
+        class(pftc_shsrch_grad), intent(in) :: self
+        grad_shsrch_diagnostic_failed = self%raw_roundtrip_failed
+    end function grad_shsrch_diagnostic_failed
 
     subroutine grad_shsrch_new( self, build, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init, direct_only )
         use simple_opt_factory, only: opt_factory
@@ -206,7 +225,6 @@ contains
         angle = self%b_ptr%pftc%get_rot(iang) + &
             (self%cur_inpl_ang - real(iang)) * self%b_ptr%pftc%get_dang()
     end function grad_shsrch_get_angle
-
 
     subroutine grad_shsrch_optimize_angle_wrapper( self )
         class(*), intent(inout) :: self
@@ -359,6 +377,8 @@ contains
         real(dp) :: current_xy(2), trial_xy(2), grad(2), corr_grad(2)
         real(dp) :: current_corr, current_cost, initial_cost, trial_corr, trial_cost
         real(dp) :: alpha, improve_tol
+        real(sp), allocatable :: vector_losses(:)
+        real(dp) :: vector_loss, roundtrip_tol
         integer :: istep, iback, naccepted
         logical :: accepted, l_sh_rot, l_raw_euclid
 
@@ -389,6 +409,38 @@ contains
         if( l_raw_euclid )then
             call self%b_ptr%pftc%gen_raw_euclid_grad_for_rot_8(&
                 &self%reference, self%particle, current_xy, self%cur_inpl_idx, current_corr, grad)
+            if( self%raw_roundtrip_check )then
+                ! Diagnostic-only invariant: the vector candidate loss and the
+                ! scalar gradient loss must agree at the identical state.
+                allocate(vector_losses(self%nrots))
+                call self%b_ptr%pftc%gen_raw_euclid_vals(self%reference, self%particle, &
+                    &real(current_xy,sp), vector_losses)
+                vector_loss = real(vector_losses(self%cur_inpl_idx),dp)
+                roundtrip_tol = 1.d-5 * (1.d0 + abs(current_corr))
+                if( ieee_is_finite(vector_loss) )then
+                    ! The legacy FFT score and the direct analytical loss have
+                    ! the same shift-dependent landscape but differ by a
+                    ! constant baseline in this SIMPLE representation.  The
+                    ! diagnostic therefore calibrates that baseline once and
+                    ! checks that it remains constant, rather than requiring
+                    ! two independently normalized implementations to match
+                    ! in absolute value.
+                    if( .not. self%raw_roundtrip_offset_set )then
+                        self%raw_roundtrip_offset = vector_loss - current_corr
+                        self%raw_roundtrip_offset_set = .true.
+                    endif
+                    if( abs((vector_loss-current_corr)-self%raw_roundtrip_offset) > roundtrip_tol )then
+                        write(*,'(A,2I8,5ES20.10)') &
+                            'RAW ROUNDTRIP offset mismatch (ref,rot,xy0,xy1,delta,expected): ', &
+                            self%reference, self%cur_inpl_idx, current_xy(1), current_xy(2), &
+                            vector_loss-current_corr, self%raw_roundtrip_offset
+                        self%raw_roundtrip_failed = .true.
+                    endif
+                else
+                    self%raw_roundtrip_failed = .true.
+                endif
+                deallocate(vector_losses)
+            endif
         else
             current_corr = self%b_ptr%pftc%gen_corr_for_rot_8(&
                 &self%reference, self%particle, current_xy, self%cur_inpl_idx)

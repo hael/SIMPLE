@@ -36,7 +36,7 @@ contains
         class(strategy2D_greedy), intent(inout) :: self
         class(oris),              intent(inout) :: os
         integer :: iref,inpl_ind
-        real    :: corrs(self%s%nrots),inpl_corr,corr
+        real    :: corrs(self%s%nrots),inpl_corr,corr,shift_eval(2)
         if( os%get_state(self%s%iptcl) > 0 )then
             ! Prep
             call self%s%prep4srch(os)
@@ -46,11 +46,19 @@ contains
             corr = -huge(corr)
             do iref=1,self%s%nrefs
                 if( s2D%cls_pops(iref) == 0 )cycle
-                ! class best
+                ! Evaluate each class at the current shift seed.  The stream
+                ! consumes raw loss (lower is better), while the legacy path
+                ! retains its established score representation.
                 if( self%s%l_sh_first )then
-                    call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, self%s%xy_first, corrs)
+                    shift_eval = self%s%xy_first
                 else
-                    call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, [0.,0.],         corrs)
+                    shift_eval = [0.,0.]
+                endif
+                if( self%s%p_ptr%l_sgd_streaming_active )then
+                    call self%s%b_ptr%pftc%gen_raw_euclid_vals(iref, self%s%iptcl, shift_eval, corrs)
+                    corrs = -corrs
+                else
+                    call self%s%b_ptr%pftc%gen_objfun_vals(iref, self%s%iptcl, shift_eval, corrs)
                 endif
                 inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)

@@ -284,93 +284,23 @@ contains
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: euclids(self%nrots)
-        complex(sp), pointer :: shmat(:,:)
-        complex(sp) :: c
-        real(dp)    :: ptcl_sqsum
-        real(sp)    :: A_sp, shift_mag_sq, wk
-        integer     :: k, i, ithr, kk, k0, p
-        logical     :: even
-        ithr         =  omp_get_thread_num() + 1
-        i            =  self%pinds(iptcl)
-        k0           =  self%kfromto(1)
-        even         =  self%iseven(i)
-        ptcl_sqsum   =  self%wsqsums_ptcls(i)
-        shmat        => self%heap_vars(ithr)%shmat
-        shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
-        if ( shift_mag_sq > SHERRSQ ) then
-            ! Reference is shifted first
-            call self%gen_shmat4aln(ithr, shift, shmat)
-            ! Shift reference
-            if (even) then
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_even(:,k,iref)
-                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
-                end do
-            else
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%cmat2_many(ithr)%c(1:self%pftsz,            kk) = shmat(:,k) * self%pfts_refs_odd(:,k,iref)
-                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
-                end do
-            endif
-            ! Calculate FT(S.REF)
-            call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-            ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*)
-            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-            if (even) then
-                do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
-                    kk = k - k0 + 1
-                    do p = 1,self%pftsz
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
-                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
-                    enddo
-                end do
-            else
-                do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
-                    kk = k - k0 + 1
-                    do p = 1,self%pftsz
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
-                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
-                    enddo
-                end do
-            endif
-        else
-            ! The reference is not shifted, memoized FT(REF) can be used
-            ! sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(REF)*)
-            self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-            if (even) then
-                do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
-                    do p = 1,self%pftsz
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
-                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
-                    enddo
-                end do
-            else
-                do k = self%kfromto(1), self%kfromto(2)
-                    wk = real(k, sp) / self%sigma2_noise(k,iptcl)
-                    do p = 1,self%pftsz
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
-                        self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
-                    enddo
-                end do
-            endif
-        endif
-        ! IFFT
-        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        ! Normalise and exponentiate — sp array expression enables vectorised vexpf
-        A_sp = real(ptcl_sqsum * real(2*self%nrots, dp), sp)
-        euclids(1:self%nrots) = exp(-1. - self%crvec1(ithr)%r(1:self%nrots) / A_sp)
+        real(sp) :: raw_losses(self%nrots)
+        ! Preserve the historical matcher score: the shared implementation
+        ! returns the normalized loss L, while this legacy API returns exp(-L).
+        call gen_raw_euclid_vals_impl(self, iref, iptcl, shift, raw_losses)
+        euclids = exp(-raw_losses)
     end subroutine gen_euclids
 
-    module subroutine gen_raw_euclid_vals( self, iref, iptcl, shift, losses )
+    ! Private implementation shared by the legacy score and streaming SGD
+    ! paths.  It remains a normal subroutine in this submodule, so it is not
+    ! added to the polarft_calc public type-bound API.
+    !
+    ! All mutable FFT work arrays are per-OpenMP-thread.  In particular,
+    ! crvec1(ithr) aliases one FFT allocation as complex input and real output;
+    ! heap_vars(ithr)%shmat and cmat2_many(ithr) hold shifted-reference work.
+    ! Keep the thread index local to this call.  Sharing these buffers across
+    ! threads can corrupt FFT state and cause a late segmentation fault.
+    subroutine gen_raw_euclid_vals_impl( self, iref, iptcl, shift, losses )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
@@ -456,7 +386,15 @@ contains
         endif
         ! IFFT
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        ! Normalize the FFT-expanded residual.
+        ! Normalize the shared raw Euclidean residual.  The IFFT contains the
+        ! reference and cross terms; adding one restores the complete
+        ! normalized squared residual:
+        !
+        !   L_r = 1 + crvec1_r / (wsqsums_ptcl * 2*nrots).
+        !
+        ! Do not exponentiate here: SGD selects the minimum raw loss, while
+        ! gen_euclids applies the legacy monotone score transform in its
+        ! wrapper above.
         A_sp = real(ptcl_sqsum * real(2*self%nrots, dp), sp)
         ! For each discrete rotation r, expose the finite Gaussian loss
         !
@@ -466,6 +404,16 @@ contains
         ! the reference and cross terms.  Streaming selection takes argmin L_r
         ! without SoftMax, top-K truncation, or an exponentiation.
         losses(1:self%nrots) = 1. + self%crvec1(ithr)%r(1:self%nrots) / A_sp
+    end subroutine gen_raw_euclid_vals_impl
+
+    module subroutine gen_raw_euclid_vals( self, iref, iptcl, shift, losses )
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        real(sp),                    intent(out)   :: losses(self%nrots)
+        ! Keep this public raw-loss entry point thin so the legacy and
+        ! streaming paths cannot acquire different numerical logic.
+        call gen_raw_euclid_vals_impl(self, iref, iptcl, shift, losses)
     end subroutine gen_raw_euclid_vals
 
     module subroutine gen_hybrid_scores( self, iref, iptcl, shift, scores )

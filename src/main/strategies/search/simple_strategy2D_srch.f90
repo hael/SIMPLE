@@ -99,6 +99,8 @@ contains
             maxits=self%p_ptr%maxits_sh, opt_angle=.false., direct_only=.true.)
             call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init,&
             maxits=self%p_ptr%maxits_sh, opt_angle=.false., coarse_init=.true., direct_only=.true.)
+            call self%grad_shsrch_obj%set_diagnostic_mode(self%p_ptr%sgd_diagnostic)
+            call self%grad_shsrch_first_obj%set_diagnostic_mode(self%p_ptr%sgd_diagnostic)
             if( .not. self%grad_shsrch_obj%is_direct_shift_only() )then
                 THROW_HARD('stream shift optimizer is not configured for fixed-angle direct descent')
             endif
