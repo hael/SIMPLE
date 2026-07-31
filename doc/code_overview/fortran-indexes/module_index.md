@@ -14604,20 +14604,17 @@ Files:
 - `main/strategies/search/simple_strategy2D_utils.f90`
 
 Uses:
-- `simple_atoms`
 - `simple_builder`
 - `simple_clustering_utils`
 - `simple_cmdline`
 - `simple_histogram`
 - `simple_image_bin`
 - `simple_image_msk`
-- `simple_molecule_data`
 - `simple_parameters`
 - `simple_pftc_shsrch_grad`
 - `simple_pftc_srch_api`
 - `simple_pspecs`
 - `simple_segmentation`
-- `simple_simple_volinterp`
 - `simple_sp_project`
 
 Public symbols:
