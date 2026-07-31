@@ -3,6 +3,7 @@ module simple_ui_param
 use simple_string, only: string
 use simple_error,  only: simple_exception
 use simple_ui_descriptor_types, only: ui_choice, ui_choices_are_valid
+use simple_string_utils, only: lowercase
 implicit none
 #include "simple_local_flags.inc"
 
@@ -18,6 +19,7 @@ type ui_param
     type(string) :: help
     type(string) :: placeholder
     type(string) :: units
+    type(string) :: example_value
     type(string) :: cval_default
     real         :: rval_default = 0.
     logical      :: required = .true.
@@ -49,7 +51,7 @@ contains
         self%has_default = .not. self%required
         if( self%has_default ) self%rval_default = default_value
         call self%set_choices(choices)
-        call self%set_placeholder(placeholder)
+        call self%set_placeholder(placeholder, '')
     end subroutine set_param_1
 
     subroutine set_param_2( self, key, keytype, label, help, placeholder, required, default_value, choices )
@@ -66,7 +68,7 @@ contains
         self%has_default = .not. self%required
         if( self%has_default ) self%cval_default = trim(default_value)
         call self%set_choices(choices)
-        call self%set_placeholder(placeholder)
+        call self%set_placeholder(placeholder, '')
         if( self%has_default .and. (self%keytype%to_char() == 'binary' .or. &
             &self%keytype%to_char() == 'multi') )then
             if( .not. choice_is_available(self%choices, self%cval_default%to_char()) )then
@@ -90,13 +92,16 @@ contains
         endif
     end subroutine set_choices
 
-    subroutine set_placeholder( self, placeholder )
+    subroutine set_placeholder( self, placeholder, example_value )
         class(ui_param), intent(inout) :: self
-        character(len=*), intent(in)   :: placeholder
+        character(len=*), intent(in)   :: placeholder, example_value
         character(len=:), allocatable  :: keytype
         character(len=UI_PLACEHOLDER_MAX_LEN) :: standard_placeholder
         keytype = trim(self%keytype%to_char())
-        standard_placeholder = standardize_placeholder(self%key%to_char(), keytype)
+        self%units = infer_units(keytype, self%label%to_char(), self%help%to_char(), placeholder)
+        self%example_value = trim(example_value)
+        standard_placeholder = standardize_placeholder(self%key%to_char(), keytype, self%units%to_char(), &
+            &self%example_value%to_char())
         select case( keytype )
             case('file')
                 if( trim(standard_placeholder) /= 'e.g. input.file' )then
@@ -147,6 +152,10 @@ contains
                 self%cval_default = trim(value)
         end select
         self%has_default = .true.
+        if( self%keytype%to_char() == 'num' .or. self%keytype%to_char() == 'int' .or. &
+            &self%keytype%to_char() == 'float' )then
+            call self%set_placeholder(self%placeholder%to_char(), value)
+        endif
     end subroutine set_generated_default
 
     pure logical function choice_is_available( choices, value )
@@ -162,13 +171,17 @@ contains
         enddo
     end function choice_is_available
 
-    pure function standardize_placeholder( key, keytype ) result( placeholder )
-        character(len=*), intent(in) :: key, keytype
+    pure function standardize_placeholder( key, keytype, units, example_value ) result( placeholder )
+        character(len=*), intent(in) :: key, keytype, units, example_value
         character(len=UI_PLACEHOLDER_MAX_LEN) :: placeholder
         ! Project files are a semantic subset of generic files.  Keep their
         ! format visible in every UI context rather than suggesting an MRC.
         if( index(trim(key), 'projfile') == 1 )then
             placeholder = 'e.g. input.simple'
+            return
+        endif
+        if( trim(key) == 'subprojname' )then
+            placeholder = 'e.g. myproject.simple'
             return
         endif
         if( trim(key) == 'projtab' )then
@@ -290,7 +303,17 @@ contains
             case('file')
                 placeholder = 'e.g. input.file'
             case('num', 'int', 'float')
-                placeholder = 'e.g. 10'
+                if( len_trim(example_value) > 0 )then
+                    placeholder = 'e.g. '//trim(normalize_numeric_example(example_value))
+                else
+                    select case( trim(key) )
+                        case('mskdiam', 'mskdiam_detect')
+                            placeholder = 'e.g. 180'
+                        case default
+                            placeholder = 'e.g. 10'
+                    end select
+                endif
+                if( len_trim(units) > 0 ) placeholder = trim(placeholder)//' '//trim(units)
             case('str', 'string')
                 placeholder = 'e.g. value'
             case default
@@ -298,16 +321,67 @@ contains
         end select
     end function standardize_placeholder
 
-    pure logical function ui_placeholder_is_standard( key, keytype, placeholder )
-        character(len=*), intent(in) :: key, keytype, placeholder
+    pure logical function ui_placeholder_is_standard( key, keytype, placeholder, units, example_value )
+        character(len=*), intent(in) :: key, keytype, placeholder, units, example_value
         select case( trim(keytype) )
             case('file', 'dir')
                 ui_placeholder_is_standard = len_trim(placeholder) > 0 .and. &
                     &len_trim(placeholder) <= UI_PLACEHOLDER_MAX_LEN
             case default
-                ui_placeholder_is_standard = trim(placeholder) == trim(standardize_placeholder(key, keytype))
+                ui_placeholder_is_standard = trim(placeholder) == &
+                    &trim(standardize_placeholder(key, keytype, units, example_value))
         end select
     end function ui_placeholder_is_standard
+
+    pure function normalize_numeric_example( value ) result( normalized )
+        character(len=*), intent(in) :: value
+        character(len=40)            :: normalized
+        normalized = trim(value)
+        if( index(normalized, 'e') == 0 .and. index(normalized, 'E') == 0 )then
+            if( normalized(len_trim(normalized):len_trim(normalized)) == '.' )then
+                normalized = normalized(:len_trim(normalized) - 1)
+            endif
+        endif
+    end function normalize_numeric_example
+
+    pure function infer_units( keytype, label, help, placeholder ) result( units )
+        character(len=*), intent(in) :: keytype, label, help, placeholder
+        character(len=16)            :: units
+        character(len=:), allocatable :: text
+        units = ''
+        select case( trim(keytype) )
+            case('num', 'int', 'float')
+            case default
+                return
+        end select
+        text = lowercase(trim(label)//' '//trim(help)//' '//trim(placeholder))
+        if( index(text, 'e/a2') > 0 .or. index(text, 'e/angstrom') > 0 )then
+            units = 'e/Angstrom^2'
+        else if( index(text, 'angstrom^2') > 0 .or. index(text, 'angstroms^2') > 0 )then
+            units = 'Angstroms^2'
+        else if( index(text, 'angstrom') > 0 .or. index(text, ' angs') > 0 .or. &
+            &index(text, '(in a)') > 0 .or. index(text, ' in a {') > 0 )then
+            units = 'Angstroms'
+        else if( index(text, 'pixel') > 0 )then
+            units = 'pixels'
+        else if( index(text, 'degree') > 0 )then
+            units = 'degrees'
+        else if( index(text, 'radian') > 0 )then
+            units = 'radians'
+        else if( index(text, 'micron') > 0 )then
+            units = 'microns'
+        else if( index(text, 'kilovolt') > 0 .or. index(text, '(kv)') > 0 .or. index(text, ' in kv') > 0 )then
+            units = 'kV'
+        else if( index(text, 'millimet') > 0 .or. index(text, '(mm)') > 0 .or. index(text, 'in mm') > 0 )then
+            units = 'mm'
+        else if( index(text, 'second') > 0 )then
+            units = 'seconds'
+        else if( index(text, 'minute') > 0 )then
+            units = 'minutes'
+        else if( index(text, 'hour') > 0 )then
+            units = 'hours'
+        endif
+    end function infer_units
 
     subroutine finalize(self)
         type(ui_param), intent(inout) :: self

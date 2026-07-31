@@ -36,6 +36,7 @@ file(GLOB_RECURSE SIMPLE_UI_DEFAULTS_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/production/simple_exec.f90"
     "${CMAKE_SOURCE_DIR}/production/single_exec.f90"
     "${CMAKE_SOURCE_DIR}/production/simple_stream.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/defs/*.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/params/*.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/exec/*.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/commanders/*.f90"

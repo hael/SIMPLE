@@ -10,6 +10,7 @@ being interpreted as a default.
 from __future__ import annotations
 
 import argparse
+from decimal import Decimal, InvalidOperation
 import json
 import re
 import subprocess
@@ -699,20 +700,26 @@ def key_binding_kind(key: str, bindings: dict[str, dict], baselines: dict[str, d
     return "char"
 
 
-def as_ui_real(value: str, binding_kind: str) -> str | None:
-    """Represent a known numeric CLI value in the UI's real-valued storage."""
+def normalize_cli_numeric(value: str, binding_kind: str) -> str | None:
+    """Preserve a parser-valid numeric value in its natural CLI notation."""
     text = value.strip()
     if text.lower() == "no":
         # Legacy numeric switches sometimes spell zero as ``no``.  cmdline
         # stores that token as a character argument, so get_rarg/get_iarg
         # expose their initialized numeric value, zero.
-        return "0.0"
+        return "0" if binding_kind == "int" else "0.0"
     if not NUMERIC_LITERAL.fullmatch(text):
         return None
     text = re.sub(r"_[a-z0-9_]+$", "", text, flags=re.IGNORECASE)
     text = re.sub(r"[dD]", "e", text)
-    if "." not in text and "e" not in text.lower():
-        text += ".0"
+    if binding_kind == "int":
+        try:
+            integer_value = Decimal(text)
+        except InvalidOperation:
+            return None
+        if integer_value != integer_value.to_integral_value():
+            return None
+        return str(int(integer_value))
     return text
 
 
@@ -721,7 +728,7 @@ def normalize_ui_default(key: str, value: str, bindings: dict[str, dict], baseli
     binding_kind = key_binding_kind(key, bindings, baselines)
     if binding_kind not in ("int", "real"):
         return value
-    normalized = as_ui_real(value, binding_kind)
+    normalized = normalize_cli_numeric(value, binding_kind)
     if normalized is None:
         raise ValueError(
             f"numeric UI default for {key} is not a valid {binding_kind} value: {value} ({source})"
@@ -829,7 +836,8 @@ def main() -> int:
     stream_paths = sorted((root / "src/main/stream").rglob("*.f90"))
     helper_paths = [root / "src/defs/simple_default_clines.f90"]
     parameter_paths = [root / "src/main/params/simple_parameters.f90", root / "src/main/params/simple_parameters_core.f90"]
-    constants = extract_named_constants(parameter_paths + stream_paths)
+    definition_paths = sorted((root / "src/defs").glob("*.f90"))
+    constants = extract_named_constants(parameter_paths + definition_paths + stream_paths)
     baselines = extract_parameter_defaults(root, constants)
     bindings = extract_parameter_bindings(root)
     procedures = extract_procedures(exec_paths + commander_paths + stream_paths)

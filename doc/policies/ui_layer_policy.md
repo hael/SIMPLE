@@ -61,16 +61,17 @@ missing-key commander overrides. `ui_program` consults the generated
 `get_ui_default` routine while constructing each input. Commanders and the
 parameter lifecycle never read this UI-only module.
 
-The generator preserves the parameter parser's scalar meaning before it emits
-a display value. Integer and real values are represented in the UI's
-real-valued numeric storage (for example, an integer `3` becomes `3.0`). JSON
-serialization rounds numeric UI defaults to at most six significant digits;
-this removes single-precision binary residue while retaining a practical,
-scientifically meaningful input value. The
-legacy numeric token `no` represents the command line's initialized numeric
-value and is exported as `0.0`. Any other nonnumeric value for a known numeric
-parameter is a generation error; an invalid value must never reach a UI
-descriptor.
+The generator preserves the parameter parser's scalar meaning and natural CLI
+notation before it emits a display value. Integer defaults remain integers
+(for example, `3`, never `3.0`) in CLI examples and generated lookup text,
+while the descriptor may still parse them into its shared numeric storage for
+JSON serialization. JSON serialization rounds numeric defaults to at most six
+significant digits; this removes single-precision binary residue while
+retaining a practical, scientifically meaningful input value. The legacy
+numeric token `no` represents the command line's initialized numeric value and
+is exported as `0` for integer inputs and `0.0` for real inputs. Any other
+nonnumeric value for a known numeric parameter is a generation error; an
+invalid value must never reach a UI descriptor.
 
 A global parameter baseline can be valid for the CLI but outside the narrower
 choice set declared by one program. Before applying a generated binary or
@@ -145,10 +146,15 @@ one another.
 | `keytype` | Input type used by CLI and GUI consumers. |
 | `label` | Short field label. |
 | `help` | Full help text. |
-| `placeholder` | Short example or entry hint; empty for choice inputs. |
+| `placeholder` | Short example or entry hint; empty for choice inputs. Numeric examples use the generated display default when available, with known units appended. |
 | `cval_default`, `rval_default`, `has_default` | Current internal storage and presence flag for a display default. |
 | `units` | Display units, empty when not applicable. |
 | `choices` | Structured values accepted by binary and multiple-choice inputs. |
+
+For visible numeric inputs, descriptor construction normalizes a unit only when
+it is explicitly stated in that input's label, help, or declared placeholder;
+it does not guess undocumented units. The standardized CLI placeholder then
+shows the unit alongside its example.
 
 The two `set_param` overloads construct numeric and character inputs. Binary
 and multiple-choice inputs must pass `choices=ui_choices([...])`; this creates
@@ -206,11 +212,13 @@ only; dependent or value-specific rules remain in activation predicates and
 commander validation until a richer shared rule is defined.
 
 Requirement guidance is intentionally compact but must be self-explanatory.
-Show every accepted alternative with the same aligned `key = label;
-placeholder` formatter used for ordinary CLI inputs, then print `Supplied` and
-`Required` as trimmed lines. The text must come from the registered input
-binding in that program, rather than from an independently maintained
-requirement description. Do not print empty sections or padded lines.
+Show every accepted alternative with the same aligned formatter used for
+ordinary CLI inputs: `key = label (choice1|choice2){default}; placeholder`.
+The choice and default fragments appear only when applicable. Then print
+`Supplied` and `Required` as trimmed lines. The text must come from the
+registered input binding in that program, rather than from an independently
+maintained requirement description. Do not print empty sections or padded
+lines.
 
 ### `ui_program`
 
@@ -371,7 +379,7 @@ the accepted artifact.
 
 | Input kind | Rendered placeholder |
 | --- | --- |
-| number (`num`, `int`, `float`) | `e.g. 10` |
+| number (`num`, `int`, `float`) | `e.g. <generated display default> <unit>` when known; otherwise a concise type-specific example |
 | image or volume file | `e.g. volume.mrc` or another accepted image format |
 | other file | a concise example matching the accepted format |
 | directory | `e.g. /path/to/folder` |
@@ -379,8 +387,10 @@ the accepted artifact.
 | choice, binary, or hidden input | empty |
 
 Choice widgets already render their accepted values, so their placeholder
-must be empty. Units, ranges, choice lists, default values, and explanatory
-prose belong respectively in `units`, `help`, `choices`, `default`, and
+must be empty. Numeric placeholders may repeat the generated display default
+as a useful CLI entry example; this is presentation only and does not change
+the parameter-layer execution default. Units, ranges, choice lists, and
+explanatory prose belong respectively in `units`, `help`, `choices`, and
 `help`—never in a placeholder.
 
 `file` describes the transport type, not the file content. Do not use
@@ -399,7 +409,9 @@ be preserved.
 
 Choice values are declared explicitly with `ui_choices([...])`. They are never
 parsed from placeholders. The placeholder for a choice is empty before JSON or
-CLI help is rendered.
+CLI help is rendered. CLI help derives its parenthesized choice list and
+optional `{default}` marker directly from the structured descriptor, so it
+remains a complete representation of accepted command-line values.
 
 ## JSON contract
 

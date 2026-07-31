@@ -3574,7 +3574,6 @@ digraph module_graph {
   "simple_ui" -> "simple_ui_single_group";
   "simple_ui" -> "simple_ui_stream_group";
   "simple_ui" -> "simple_ui_test_group";
-  "simple_ui" -> "simple_ui_visibility";
   "simple_ui_abinitio3D" -> "simple_ui_modules";
   "simple_ui_cavgproc" -> "simple_ui_modules";
   "simple_ui_cluster2D" -> "simple_ui_modules";
@@ -3599,9 +3598,10 @@ digraph module_graph {
   "simple_ui_other" -> "simple_ui_modules";
   "simple_ui_param" -> "simple_error";
   "simple_ui_param" -> "simple_string";
+  "simple_ui_param" -> "simple_string_utils";
   "simple_ui_param" -> "simple_ui_descriptor_types";
-  "simple_ui_param" -> "simple_ui_visibility";
   "simple_ui_params_common" -> "simple_core_module_api";
+  "simple_ui_params_common" -> "simple_ui_descriptor_types";
   "simple_ui_params_common" -> "simple_ui_param";
   "simple_ui_preproc" -> "simple_ui_modules";
   "simple_ui_print" -> "simple_ui_modules";
@@ -3609,6 +3609,8 @@ digraph module_graph {
   "simple_ui_program" -> "simple_ansi_ctrls";
   "simple_ui_program" -> "simple_core_module_api";
   "simple_ui_program" -> "simple_linked_list";
+  "simple_ui_program" -> "simple_ui_default_values";
+  "simple_ui_program" -> "simple_ui_descriptor_types";
   "simple_ui_program" -> "simple_ui_param";
   "simple_ui_program" -> "simple_ui_visibility";
   "simple_ui_project" -> "simple_ui_modules";

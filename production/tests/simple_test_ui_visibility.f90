@@ -5,7 +5,8 @@ use simple_string,        only: string
 use simple_ui,            only: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr
 use simple_ui_param,      only: UI_PLACEHOLDER_MAX_LEN, ui_param
 use simple_ui_program,    only: UI_DISPLAY_NAME_MAX_LEN, UI_FILE, UI_PARM, UI_SUMMARY_MAX_LEN, &
-    &category_descriptor, ui_program, ui_program_input, ui_activation_equals_any
+    &category_descriptor, ui_cli_param_choices, ui_cli_param_summary, ui_program, ui_program_input, &
+    &ui_activation_equals_any
 use simple_ui_descriptor_types, only: ui_choices
 use simple_ui_visibility, only: UI_VIS_STANDARD, UI_VIS_ADVANCED, UI_VIS_DEVELOPER, &
                                &ui_visibility_is_valid, ui_visibility_name
@@ -14,7 +15,7 @@ implicit none
 type(ui_param)   :: param
 type(ui_program) :: ui_prg
 type(ui_program), pointer :: registered_prg => null()
-type(string) :: program_name
+type(string) :: cli_text, program_name
 type(string), allocatable :: supplied_keys(:)
 
 call assert_true_all_valid
@@ -30,6 +31,36 @@ call assert_true(len_trim(param%placeholder%to_char()) <= UI_PLACEHOLDER_MAX_LEN
     &'placeholder respects the display limit')
 call assert_true(param%has_default, 'optional numeric parameter has a default')
 call assert_int(0, size(param%choices), 'numeric parameter has no choices')
+
+call param%set_param('mskdiam', 'num', 'Mask diameter', 'Mask diameter (in Angstroms)', 'e.g. 1', .true., 0.)
+call assert_char('Angstroms', param%units%to_char(), 'mask diameter unit is inferred from descriptor text')
+call assert_char('e.g. 180 Angstroms', param%placeholder%to_char(), 'mask diameter has a unit-aware example')
+cli_text = ui_cli_param_summary(param)
+call assert_char('Mask diameter; e.g. 180 Angstroms', cli_text%to_char(), 'CLI numeric summary includes the unit-aware example')
+
+call param%set_param('winsz', 'num', 'Window size', 'Window size (in pixels)', 'e.g. 1', .false., 1.)
+call assert_char('pixels', param%units%to_char(), 'pixel unit is inferred from descriptor text')
+call assert_char('e.g. 10 pixels', param%placeholder%to_char(), 'pixel placeholder includes its unit')
+call param%set_param('walltime', 'num', 'Walltime', 'Maximum execution time in seconds', 'e.g. 1', .false., 1.)
+call assert_char('seconds', param%units%to_char(), 'time unit is inferred from descriptor text')
+call assert_char('e.g. 10 seconds', param%placeholder%to_char(), 'time placeholder includes its unit')
+call param%set_param('bfac', 'num', 'B-factor', 'B-factor in Angstroms^2', 'e.g. 1', .false., 1.)
+call assert_char('Angstroms^2', param%units%to_char(), 'squared Angstrom unit is inferred from descriptor text')
+call assert_char('e.g. 10 Angstroms^2', param%placeholder%to_char(), 'squared Angstrom placeholder includes its unit')
+call param%set_param('cs', 'num', 'Spherical aberration', 'Spherical aberration constant (in mm)', 'e.g. 1', .true., 0.)
+call param%set_generated_default('2.7', .true.)
+call assert_char('mm', param%units%to_char(), 'millimeter unit is inferred from descriptor text')
+call assert_char('e.g. 2.7 mm', param%placeholder%to_char(), 'generated numeric default becomes the CLI example')
+call param%set_param('kv', 'num', 'Acceleration voltage', 'Acceleration voltage in kV', 'e.g. 1', .true., 0.)
+call param%set_generated_default('300.', .true.)
+call assert_char('e.g. 300 kV', param%placeholder%to_char(), 'generated numeric example is normalized and unit-aware')
+call param%set_param('nptcls_per_cls', 'num', 'Number of particles per cluster', 'Integer particle count', 'e.g. 1', .true., 0.)
+call param%set_generated_default('500', .true.)
+call assert_char('e.g. 500', param%placeholder%to_char(), 'integer generated default remains an integer CLI example')
+
+call param%set_param('subprojname', 'str', 'Subproject name', 'SIMPLE subproject name', 'e.g. value', .true., '')
+call assert_char('e.g. myproject.simple', param%placeholder%to_char(), &
+    &'subproject names advertise the SIMPLE project extension')
 
 call param%set_param('projfile', 'file', 'Project file', 'SIMPLE project file', 'e.g. any-file', .true., '')
 call assert_char('e.g. input.simple', param%placeholder%to_char(), &
@@ -50,11 +81,18 @@ call assert_int(3, size(param%choices), 'multi parameter choices are structured'
 call assert_char('first',  param%choices(1)%value%to_char(), 'first choice value')
 call assert_char('second', param%choices(2)%label%to_char(), 'choice label defaults to CLI value')
 call assert_char('', param%placeholder%to_char(), 'choice fields have no placeholder')
+cli_text = ui_cli_param_choices(param)
+call assert_char('(first|second|third)', cli_text%to_char(), 'CLI choice text uses structured values')
+cli_text = ui_cli_param_summary(param)
+call assert_char('Choice parameter (first|second|third){second}', cli_text%to_char(), &
+    &'CLI choice summary includes the optional default')
 
 call param%set_param('binary_param', 'binary', 'Binary parameter', 'Binary parameter help', &
     &'', .true., '', choices=ui_choices([character(len=3) :: 'yes', 'no']))
 call assert_true(.not. param%has_default, 'required binary parameter has no default')
 call assert_int(2, size(param%choices), 'binary parameter choices are structured')
+cli_text = ui_cli_param_summary(param)
+call assert_char('Binary parameter (yes|no)', cli_text%to_char(), 'CLI binary summary has no default marker')
 
 call ui_prg%new('test_program', 'Test program', 'Test program help', 'simple_exec', .false., &
     &visibility=UI_VIS_STANDARD)
@@ -110,6 +148,14 @@ call assert_registered_requirement('binarize', 'input', 1, 1)
 call assert_registered_category('icm2D', 'denoise', 'Denoising', 70)
 call assert_registered_category('atoms_stats', 'atom', 'Atom Analysis', 50)
 call assert_registered_category('abinitio2D_stream', 'stream', 'Stream Workflows', 10)
+call assert_registered_cli_summary('model_cavgs_rejection', 'quality_mode', &
+    &'Class-average quality mode (apply|analyze|learn|evaluate|promote){apply}')
+call assert_registered_cli_summary('import_movies', 'cs', 'Spherical aberration; e.g. 2.7 mm')
+call assert_registered_cli_summary('import_movies', 'fraca', 'Amplitude contrast fraction; e.g. 0.1')
+call assert_registered_cli_summary('import_movies', 'kv', 'Acceleration voltage; e.g. 300 kV')
+call assert_registered_cli_summary('extract_subproj', 'subprojname', 'Subproject name; e.g. myproject.simple')
+call assert_registered_search_cli_summary('ctf_estimate', 'dfmin', 'Expected minimum defocus; e.g. 0.2 microns')
+call assert_registered_search_cli_summary('ctf_estimate', 'dfmax', 'Expected maximum defocus; e.g. 5.0 microns')
 call make_test_ui
 program_name = 'strategy2D'
 call get_test_prg_ptr(program_name, registered_prg)
@@ -163,6 +209,58 @@ contains
             endif
         endif
     end subroutine assert_registered_requirement
+
+    subroutine assert_registered_cli_summary(name, key, expected_summary)
+        character(len=*), intent(in) :: name, key, expected_summary
+        type(list_iterator)   :: iterator
+        class(*), allocatable :: value
+        program_name = name
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), trim(name)//' is registered')
+        if( .not. associated(registered_prg) ) return
+        iterator = registered_prg%parm_ios%begin()
+        do while( iterator%has_value() )
+            call iterator%getter(value)
+            select type( input => value )
+                type is( ui_program_input )
+                    if( input%param%key%to_char() == key )then
+                        cli_text = ui_cli_param_summary(input%param)
+                        call assert_char(expected_summary, cli_text%to_char(), trim(name)//' CLI choice summary')
+                        if( allocated(value) ) deallocate(value)
+                        return
+                    endif
+            end select
+            if( allocated(value) ) deallocate(value)
+            call iterator%next()
+        enddo
+        call assert_int(1, 0, trim(name)//' input exists')
+    end subroutine assert_registered_cli_summary
+
+    subroutine assert_registered_search_cli_summary(name, key, expected_summary)
+        character(len=*), intent(in) :: name, key, expected_summary
+        type(list_iterator)   :: iterator
+        class(*), allocatable :: value
+        program_name = name
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), trim(name)//' is registered')
+        if( .not. associated(registered_prg) ) return
+        iterator = registered_prg%srch_ctrls%begin()
+        do while( iterator%has_value() )
+            call iterator%getter(value)
+            select type( input => value )
+                type is( ui_program_input )
+                    if( input%param%key%to_char() == key )then
+                        cli_text = ui_cli_param_summary(input%param)
+                        call assert_char(expected_summary, cli_text%to_char(), trim(name)//' CLI search summary')
+                        if( allocated(value) ) deallocate(value)
+                        return
+                    endif
+            end select
+            if( allocated(value) ) deallocate(value)
+            call iterator%next()
+        enddo
+        call assert_int(1, 0, trim(name)//' search input exists')
+    end subroutine assert_registered_search_cli_summary
 
     subroutine assert_input_visibility( inputs, key, expected_visibility )
         type(linked_list), intent(in) :: inputs

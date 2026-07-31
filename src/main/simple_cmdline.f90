@@ -143,6 +143,10 @@ contains
             call ptr2prg%print_help()
             stop
         endif
+        if( str_has_substr(self%entire_line, 'usage=yes') )then
+            call ptr2prg%print_cmdline()
+            stop
+        endif
         ! get required keys
         skip_required_keys = skip_mode_required_keys(prgname%to_char(), self%entire_line)
         if( skip_required_keys )then

@@ -96,7 +96,8 @@ contains
                     type is( ui_program_input )
                         if( len_trim(input%param%placeholder%to_char()) > UI_PLACEHOLDER_MAX_LEN .or. &
                             &.not. ui_placeholder_is_standard(input%param%key%to_char(), input%param%keytype%to_char(), &
-                            &input%param%placeholder%to_char()) )then
+                            &input%param%placeholder%to_char(), input%param%units%to_char(), &
+                            &input%param%example_value%to_char()) )then
                             THROW_HARD('ui_param placeholder is not standardized: '//input%param%key%to_char())
                         endif
                 end select

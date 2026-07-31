@@ -17,6 +17,8 @@ integer, parameter :: UI_SUMMARY_MAX_LEN = 100
 integer, parameter :: UI_DISPLAY_NAME_MAX_LEN = 100
 character(len=*), parameter :: UI_JSON_REAL_FORMAT = '(ss,G0.6)'
 
+public :: ui_cli_param_choices, ui_cli_param_summary
+
 type :: category_descriptor
     character(len=32) :: id = ''
     character(len=64) :: display_name = ''
@@ -202,7 +204,11 @@ contains
         if( present(label_override)       ) p%label       = label_override
         if( present(help_override)        ) p%help        = help_override
         if( present(choices_override) ) call p%set_choices(choices_override)
-        if( present(placeholder_override) ) call p%set_placeholder(placeholder_override)
+        if( present(placeholder_override) )then
+            call p%set_placeholder(placeholder_override, p%example_value%to_char())
+        else
+            call p%set_placeholder(p%placeholder%to_char(), p%example_value%to_char())
+        endif
         if( present(required_override) )then
             p%required = required_override
             if( p%required ) p%has_default = .false.
@@ -758,12 +764,18 @@ contains
             select type(t => tmp)
                 type is (ui_program_input)
                     write(logfhandle,'(a,1x,i3)') '>>> PARAMETER #', i
-                    call ch%new(8)
+                    call ch%new(10)
                     call ch%push('key',         t%param%key%to_char())
                     call ch%push('keytype',     t%param%keytype%to_char())
                     call ch%push('label',       t%param%label%to_char())
                     call ch%push('help',        t%param%help%to_char())
                     call ch%push('placeholder', t%param%placeholder%to_char())
+                    if( allocated(t%param%choices) )then
+                        if( size(t%param%choices) > 0 )then
+                            call ch%push('choices', ui_cli_param_choices(t%param))
+                            if( t%param%has_default ) call ch%push('default', t%param%cval_default%to_char())
+                        endif
+                    endif
                     call ch%push('required', merge('T','F', t%param%required))
                     call ch%push('visibility', trim(ui_visibility_name(t%visibility)))
                     call ch%push('group', t%group%label%to_char())
@@ -799,7 +811,7 @@ contains
             call it%getter(tmp)
             select type(t => tmp)
             type is (ui_program_input)
-                call ch%push(t%param%key%to_char(), t%param%label%to_char()//'; '//t%param%placeholder%to_char())
+                call ch%push(t%param%key%to_char(), ui_cli_param_summary(t%param))
                 keys(i) = t%param%key%to_char()
                 req(i)  = t%param%required
             class default
@@ -849,6 +861,45 @@ contains
         if (allocated(sorted_req))      deallocate(sorted_req)
         if (allocated(inds))            deallocate(inds)
     end subroutine print_param_hash
+
+    function ui_cli_param_choices( param ) result( choices_text )
+        type(ui_param), intent(in) :: param
+        type(string)              :: choices_text
+        character(len=:), allocatable :: text
+        integer :: i
+        text = ''
+        if( .not. allocated(param%choices) )then
+            choices_text = text
+            return
+        endif
+        if( size(param%choices) == 0 )then
+            choices_text = text
+            return
+        endif
+        text = '('
+        do i = 1, size(param%choices)
+            if( i > 1 ) text = text//'|'
+            text = text//param%choices(i)%value%to_char()
+        enddo
+        choices_text = text//')'
+    end function ui_cli_param_choices
+
+    function ui_cli_param_summary( param ) result( summary )
+        type(ui_param), intent(in) :: param
+        type(string)              :: summary
+        type(string)              :: choices_text
+        character(len=:), allocatable :: text
+        text = param%label%to_char()
+        choices_text = ui_cli_param_choices(param)
+        if( len_trim(choices_text%to_char()) > 0 )then
+            text = text//' '//choices_text%to_char()
+            if( param%has_default ) text = text//'{'//param%cval_default%to_char()//'}'
+        endif
+        if( len_trim(param%placeholder%to_char()) > 0 )then
+            text = text//'; '//param%placeholder%to_char()
+        endif
+        summary = text
+    end function ui_cli_param_summary
 
     subroutine create_section_from_list( json, program_entry, name, lst )
         use json_module
