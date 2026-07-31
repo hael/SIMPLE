@@ -110,6 +110,7 @@ contains
         class(ui_hash), intent(in) :: program_table
         type(string),   intent(in) :: program_names(:)
         type(ui_program), pointer :: first_program, second_program
+        type(string) :: errmsg
         integer :: ifirst, isecond
         do ifirst = 1, size(program_names)
             call program_table%get_ui_program(program_names(ifirst), first_program)
@@ -124,10 +125,9 @@ contains
                 if( trim(first_program%category%to_char()) /= trim(second_program%category%to_char()) )then
                     ! Distinct categories in one executable must have distinct display order.
                     if( first_program%category_order == second_program%category_order )then
-                        THROW_HARD('duplicate category order in executable '// &
-                            &trim(first_program%executable%to_char())//': '// &
-                            &trim(first_program%category%to_char())//' and '// &
-                            &trim(second_program%category%to_char()))
+                        errmsg = 'duplicate category order in executable '//trim(first_program%executable%to_char())//': '// &
+                            &trim(first_program%category%to_char())//' and '//trim(second_program%category%to_char())
+                        THROW_HARD(errmsg%to_char())
                     endif
                     cycle
                 endif
