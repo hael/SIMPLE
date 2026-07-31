@@ -344,6 +344,12 @@ contains
             call cline_cluster2D%set('extr_iter',   params%extr_lim + 1)
             call cline_cluster2D%set('refine',      'prob')
             call cline_cluster2D%set('restore_cavgs', 'yes')
+            ! The terminal pass is the conventional all-particle probability
+            ! cleanup.  It reuses the stage command line, so explicitly turn
+            ! off the stage-4+ streaming SGD policy instead of inheriting the
+            ! final SGD stage's settings.
+            call cline_cluster2D%set('sgd',          'no')
+            call cline_cluster2D%set('sgd_stage4_mode', 'off')
             call cline_cluster2D%delete('update_frac')
             call cline_cluster2D%delete('fillin')
             call cline_cluster2D%delete('endit')
