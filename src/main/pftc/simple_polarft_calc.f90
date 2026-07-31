@@ -123,6 +123,7 @@ type :: polarft_calc
     procedure          :: assign_sigma2_noise
     ! ===== GETTERS + POINTER ACCESSORS: simple_polarft_access.f90
     procedure          :: get_nrots
+    procedure          :: is_euclid_objfun
     procedure          :: get_pdim_interp
     procedure          :: get_pdim_srch
     procedure          :: get_kfromto
@@ -351,6 +352,10 @@ interface
         class(polarft_calc), intent(in) :: self
         integer :: nrots
     end function get_nrots
+
+    module pure logical function is_euclid_objfun(self)
+        class(polarft_calc), intent(in) :: self
+    end function is_euclid_objfun
 
     module pure function get_pdim_srch(self) result(pdim)
         class(polarft_calc), intent(in) :: self

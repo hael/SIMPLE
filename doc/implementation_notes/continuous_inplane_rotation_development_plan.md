@@ -21,6 +21,11 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Compile/link verification passed with the Windows MSYS2 UCRT64 workflow.
   - Runtime validation passed on Oracle Linux 8.10 with 288 rotations: legacy-score error `2.97e-08`, scalar-gradient error `1.82e-07`, tolerance `8.50e-04`.
 - [ ] Phase 1: parabolic sub-grid interpolation.
+  - Implemented a Euclidean-only three-point parabolic peak offset with periodic neighbors and a safeguarded fallback.
+  - Preserved discrete selection for non-Euclidean objectives and retained the integer `cur_inpl_idx` compatibility output.
+  - Added the continuous grid-index angle output used for shift-frame rotation and optional downstream propagation.
+  - Added a focused synthetic parabola check to `simple_test_euclid_route_identity`.
+  - Windows UCRT64 compile/link verification passed; Oracle Linux runtime validation is pending.
 - [ ] Phase 2: continuous angular refinement.
 - [ ] Stage 1 validation: route identity, gradients, aliasing, and synthetic recovery.
 - [ ] Phase 3: joint `(sx, sy, theta)` refinement.

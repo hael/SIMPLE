@@ -13,6 +13,12 @@ contains
         nrots = self%nrots
     end function get_nrots
 
+    module pure logical function is_euclid_objfun(self)
+        use simple_type_defs, only: OBJFUN_EUCLID
+        class(polarft_calc), intent(in) :: self
+        is_euclid_objfun = self%p_ptr%cc_objfun == OBJFUN_EUCLID
+    end function is_euclid_objfun
+
     module pure function get_pdim_srch(self) result(pdim)
         class(polarft_calc), intent(in) :: self
         integer :: pdim(3)

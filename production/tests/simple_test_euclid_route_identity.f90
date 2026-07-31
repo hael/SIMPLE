@@ -3,6 +3,7 @@ use simple_pftc_srch_api
 use simple_builder,         only: builder
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_projector_pft,   only: fproject_polar
+use simple_pftc_shsrch_grad, only: parabolic_peak_offset
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
 
@@ -14,7 +15,14 @@ real(sp), allocatable :: legacy_scores(:), raw_losses(:)
 real(dp), allocatable :: scalar_losses(:)
 real(sp), allocatable :: sigma2_noise(:,:)
 real(dp) :: max_legacy_error, max_route_error, tol, scalar_loss, grad(2)
+real :: parabola_vals(5), parabola_offset
 integer :: irot, nrots
+
+parabola_vals = [ -1.5625, -0.0625, -0.5625, -3.0625, -5.0625 ]
+parabola_offset = parabolic_peak_offset(parabola_vals, 2)
+if( abs(parabola_offset - 0.25) > 10.*epsilon(1.) )then
+    error stop 'Parabolic interpolation unit check failed'
+endif
 
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') &

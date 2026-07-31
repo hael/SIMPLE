@@ -8,7 +8,7 @@ use simple_optimizer, only: optimizer
 use simple_builder,   only: builder
 implicit none
 
-public :: pftc_shsrch_grad, bounded_shift_trial
+public :: pftc_shsrch_grad, bounded_shift_trial, parabolic_peak_offset
 private
 #include "simple_local_flags.inc"
 
@@ -26,6 +26,7 @@ type :: pftc_shsrch_grad
     integer                   :: maxits       = 100     !< max # iterations
     logical                   :: shbarr       = .true.  !< shift barrier constraint or not
     integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
+    real                      :: cur_inpl_ang = 0.      !< continuous angle in grid-index units
     integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
     logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
@@ -48,6 +49,24 @@ contains
 end type pftc_shsrch_grad
 
 contains
+
+    pure real function parabolic_peak_offset( vals, j ) result(offset)
+        real,    intent(in) :: vals(:)
+        integer, intent(in) :: j
+        integer :: jm, jp, n
+        real    :: denom, scale
+        n = size(vals)
+        offset = 0.
+        if( n < 3 .or. j < 1 .or. j > n ) return
+        jm = modulo(j - 2, n) + 1
+        jp = modulo(j,     n) + 1
+        denom = vals(jm) - 2.*vals(j) + vals(jp)
+        scale  = max(1., abs(vals(jm)), abs(vals(j)), abs(vals(jp)))
+        if( denom >= -10.*epsilon(1.)*scale ) return
+        offset = 0.5 * (vals(jm) - vals(jp)) / denom
+        if( .not. ieee_is_finite(offset) .or. abs(offset) > 0.5 ) offset = 0.
+    end function parabolic_peak_offset
+
 
     subroutine grad_shsrch_new( self, build, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init, direct_only )
         use simple_opt_factory, only: opt_factory
@@ -164,10 +183,30 @@ contains
 
     subroutine grad_shsrch_optimize_angle( self )
         class(pftc_shsrch_grad), intent(inout) :: self
-        real :: corrs(self%nrots)
-        call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
-        self%cur_inpl_idx = maxloc(corrs, dim=1)
+        real :: objective(self%nrots), raw_losses(self%nrots)
+        integer :: jmax
+        if( self%b_ptr%pftc%is_euclid_objfun() )then
+            call self%b_ptr%pftc%gen_raw_euclid_vals(self%reference, self%particle, &
+                &real(self%ospec%x,sp), raw_losses)
+            objective = -raw_losses
+            jmax = maxloc(objective, dim=1)
+            self%cur_inpl_ang = real(jmax) + parabolic_peak_offset(objective, jmax)
+        else
+            call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, objective)
+            jmax = maxloc(objective, dim=1)
+            self%cur_inpl_ang = real(jmax)
+        endif
+        self%cur_inpl_idx = modulo(nint(self%cur_inpl_ang) - 1, self%nrots) + 1
     end subroutine grad_shsrch_optimize_angle
+
+    real function grad_shsrch_get_angle( self ) result(angle)
+        class(pftc_shsrch_grad), intent(in) :: self
+        integer :: iang
+        iang = modulo(nint(self%cur_inpl_ang) - 1, self%nrots) + 1
+        angle = self%b_ptr%pftc%get_rot(iang) + &
+            (self%cur_inpl_ang - real(iang)) * self%b_ptr%pftc%get_dang()
+    end function grad_shsrch_get_angle
+
 
     subroutine grad_shsrch_optimize_angle_wrapper( self )
         class(*), intent(inout) :: self
@@ -188,11 +227,12 @@ contains
     end subroutine grad_shsrch_set_indices
 
     !> minimisation routine
-    function grad_shsrch_minimize( self, irot, sh_rot, xy_in ) result( cxy )
+    function grad_shsrch_minimize( self, irot, sh_rot, xy_in, theta ) result( cxy )
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(inout) :: irot
         logical, optional,       intent(in)    :: sh_rot
         real,    optional,       intent(in)    :: xy_in(2)
+        real,    optional,       intent(out)   :: theta
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
         integer  :: loc, i, lowest_rot, init_rot
@@ -200,6 +240,7 @@ contains
         if( self%direct_only )then
             THROW_HARD('L-BFGS-B minimize requested from a direct-only shift search object')
         endif
+        if( present(theta) ) theta = 0.
         l_sh_rot = .true.
         if( present(sh_rot)  ) l_sh_rot = sh_rot
         if( present(xy_in)   )then
@@ -213,7 +254,7 @@ contains
         found_better   = .false.
         if( self%opt_angle )then
             call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
-            self%cur_inpl_idx   = maxloc(corrs,dim=1)
+            call grad_shsrch_optimize_angle(self)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
             if( self%coarse_init )then
@@ -222,15 +263,16 @@ contains
                     self%ospec%x_8      = init_xy
                     self%ospec%x        = real(init_xy)
                     self%cur_inpl_idx   = init_rot
+                    self%cur_inpl_ang   = real(init_rot)
                 endif
             end if
             ! shift search / in-plane rot update
             do i = 1,self%max_evals
                 call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+                loc = self%cur_inpl_idx
                 call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
-                loc = maxloc(corrs,dim=1)
-                if( loc == self%cur_inpl_idx ) exit
-                self%cur_inpl_idx = loc
+                call grad_shsrch_optimize_angle(self)
+                if( self%cur_inpl_idx == loc ) exit
             end do
             ! update best
             lowest_cost = -corrs(self%cur_inpl_idx)
@@ -244,9 +286,10 @@ contains
                 irot    =   lowest_rot                 ! in-plane index
                 cxy(1)  = - real(lowest_cost_overall)  ! correlation
                 cxy(2:) =   real(lowest_shift)         ! shift
+                if( present(theta) ) theta = self%cur_inpl_ang
                 if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
-                    call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
+                    call rotmat2d(grad_shsrch_get_angle(self), rotmat)
                     cxy(2:) = matmul(cxy(2:), rotmat)
                 endif
             else
@@ -254,6 +297,7 @@ contains
             endif
         else
             self%cur_inpl_idx   = irot
+            self%cur_inpl_ang   = real(irot)
             self%profile_objective_evals = self%profile_objective_evals + 1_int64
             lowest_cost_overall = -self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             initial_cost        = lowest_cost_overall
@@ -275,6 +319,7 @@ contains
             if( found_better )then
                 cxy(1)  = - real(lowest_cost_overall)  ! correlation
                 cxy(2:) =   lowest_shift               ! shift
+                if( present(theta) ) theta = real(irot)
                 if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
                     call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
