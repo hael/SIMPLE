@@ -135,13 +135,13 @@ contains
             case DEFAULT
                 THROW_HARD('Program '//exec_cmd%to_char()//' not supported 3')
         end select
+        if( .not. associated(ptr2prg) )then
+            THROW_HARD('inputted prg not supported, use prg=list to list all available programs')
+        endif
         ! describe program if so instructed
         if( str_has_substr(self%entire_line, 'describe=yes') )then
             call ptr2prg%print_help()
             stop
-        endif
-        if( .not. associated(ptr2prg) )then
-            THROW_HARD('inputted prg not supported, use prg=list to list all available programs')
         endif
         ! get required keys
         skip_required_keys = skip_mode_required_keys(prgname%to_char(), self%entire_line)

@@ -121,7 +121,16 @@ contains
             do isecond = ifirst + 1, size(program_names)
                 call program_table%get_ui_program(program_names(isecond), second_program)
                 if( trim(first_program%executable%to_char()) /= trim(second_program%executable%to_char()) ) cycle
-                if( trim(first_program%category%to_char()) /= trim(second_program%category%to_char()) ) cycle
+                if( trim(first_program%category%to_char()) /= trim(second_program%category%to_char()) )then
+                    ! Distinct categories in one executable must have distinct display order.
+                    if( first_program%category_order == second_program%category_order )then
+                        THROW_HARD('duplicate category order in executable '// &
+                            &trim(first_program%executable%to_char())//': '// &
+                            &trim(first_program%category%to_char())//' and '// &
+                            &trim(second_program%category%to_char()))
+                    endif
+                    cycle
+                endif
                 if( trim(first_program%category_display_name%to_char()) /= &
                     &trim(second_program%category_display_name%to_char()) .or. &
                     &first_program%category_order /= second_program%category_order )then
