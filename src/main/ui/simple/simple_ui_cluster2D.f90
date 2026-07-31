@@ -146,7 +146,9 @@ contains
         ! mask controls
         call abinitio2D_chunks%add_input(UI_MASK, mskdiam, gui_submenu="cluster 2D", gui_advanced=.false.)
         ! computer controls
-        call abinitio2D_chunks%add_input(UI_COMP, nparts, required_override=.false., gui_submenu="compute", gui_advanced=.false.)
+        call abinitio2D_chunks%add_input(UI_COMP, 'nparts', 'num', 'Number of chunks classified simultaneously', &
+        &'Number of particle subsets abinitio2D jobs run concurrently. Each job itself runs shared-memory with nthr&
+        &threads (per-chunk MPI partitioning is not used){1}',  '# of concurrent chunks{1}', .false., 1., gui_submenu="compute", gui_advanced=.false.)
         call abinitio2D_chunks%add_input(UI_COMP, nthr, gui_submenu="compute", gui_advanced=.false.)
         call abinitio2D_chunks%add_input(UI_COMP, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and &
         &management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740., gui_submenu="compute")

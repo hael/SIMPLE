@@ -40,6 +40,7 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj_glob
         integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ncls_chunk
+        integer          :: nchunks_processed
         call cline%set('oritype',      'ptcl2D')
         call cline%set('autoscale',    'yes')
         call cline%set('remove_chunks','no')
@@ -96,10 +97,13 @@ contains
             call init_one_chunk(ichunk, ncls_chunk)
         enddo
         params%nthr2D = params%nthr ! ?? cf. Joe
-        ! Submit independent abinitio2D subset jobs sequentially.
-        do ichunk = 1,ntot_chunks
-            call submit_one_chunk(ichunk)
-            call wait_one_chunk(ichunk)
+        ! Submit concurrent abinitio2D jobs
+        do
+            nchunks_processed = count(chunks(:)%is_finished())
+            if( nchunks_processed == ntot_chunks ) exit
+            call analyze_first_available_chunk
+            call flag_converged_chunks
+            call sleep(WAITTIME)
         enddo
         write(logfhandle,'(A)')'>>> INDEPENDENT ABINITIO2D SUBSET PROJECTS:'
         do ichunk = 1,ntot_chunks
@@ -132,23 +136,34 @@ contains
             call cline_chunk%kill
         end subroutine init_one_chunk
 
-        subroutine submit_one_chunk( ichunk )
-            integer, intent(in) :: ichunk
+        ! Submit first available chunk
+        subroutine analyze_first_available_chunk()
             type(rec_list) :: project_list_slice
-            call project_list%slice(chunk_rec_fromto(ichunk,1), chunk_rec_fromto(ichunk,2), project_list_slice)
-            call chunks(ichunk)%generate(project_list_slice)
-            call chunks(ichunk)%analyze2D(makecavgs=.false.)
-            call project_list_slice%kill
-        end subroutine submit_one_chunk
+            integer        :: ichunk, nchunks_busy
+            nchunks_busy = count(.not.chunks(:)%is_available())
+            if( nchunks_busy < params%nchunks ) then
+                do ichunk = 1,ntot_chunks
+                    if( chunks(ichunk)%is_available() )then
+                        call project_list%slice(chunk_rec_fromto(ichunk,1), chunk_rec_fromto(ichunk,2), project_list_slice)
+                        call chunks(ichunk)%generate(project_list_slice)
+                        call chunks(ichunk)%analyze2D(makecavgs=.false.)
+                        call project_list_slice%kill
+                        exit
+                    endif
+                enddo
+            endif
+        end subroutine analyze_first_available_chunk
 
-        subroutine wait_one_chunk( ichunk )
-            integer, intent(in) :: ichunk
-            do
-                call chunks(ichunk)%display_iter
-                if( chunks(ichunk)%has_converged() ) exit
-                call sleep(WAITTIME)
+        subroutine flag_converged_chunks
+            integer :: ichunk
+            do ichunk = 1,ntot_chunks
+                if( (.not.chunks(ichunk)%is_available()) .and. (.not.chunks(ichunk)%is_finished()) )then
+                    if( chunks(ichunk)%has_converged() ) then
+                        call chunks(ichunk)%display_iter
+                    endif
+                endif
             enddo
-        end subroutine wait_one_chunk
+        end subroutine flag_converged_chunks
 
         subroutine generate_chunk_projects
             type(sp_project)     :: spproj

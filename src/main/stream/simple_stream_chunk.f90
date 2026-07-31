@@ -49,6 +49,7 @@ type stream_chunk
     procedure          :: remove_folder
     procedure          :: display_iter
     procedure          :: has_converged
+    procedure          :: is_finished
     procedure          :: print_info
     procedure          :: terminate_chunk
     procedure          :: kill
@@ -464,7 +465,7 @@ contains
         call debug_print('end chunk%display_iter '//int2str(self%id))
     end subroutine display_iter
 
-    ! Whether 2D analysis is complete
+    ! Check for convergence of 2D analysis is complete
     logical function has_converged( self )
         class(stream_chunk), intent(inout) :: self
         type(string) :: str_prg
@@ -479,6 +480,12 @@ contains
         endif
         has_converged  = self%converged
     end function has_converged
+
+    ! Check for convergence of 2D analysis is complete
+    elemental logical function is_finished( self )
+        class(stream_chunk), intent(in) :: self
+        is_finished  = self%converged
+    end function is_finished
 
     ! For debugging
     subroutine print_info( self )
