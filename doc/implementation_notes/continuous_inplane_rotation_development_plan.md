@@ -19,7 +19,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Added the focused `simple_test_euclid_route_identity` CTest target.
   - Confirmed the legacy Euclidean score, raw FFT loss, and scalar gradient route are checked for every discrete rotation by the harness.
   - Compile/link verification passed with the Windows MSYS2 UCRT64 workflow.
-  - Runtime execution remains outstanding because this machine cannot run SIMPLE binaries.
+  - Runtime validation passed on Oracle Linux 8.10 with 288 rotations: legacy-score error `2.97e-08`, scalar-gradient error `1.82e-07`, tolerance `8.50e-04`.
 - [ ] Phase 1: parabolic sub-grid interpolation.
 - [ ] Phase 2: continuous angular refinement.
 - [ ] Stage 1 validation: route identity, gradients, aliasing, and synthetic recovery.
