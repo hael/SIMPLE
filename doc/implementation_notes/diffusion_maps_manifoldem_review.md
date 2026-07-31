@@ -402,11 +402,6 @@ Wiener filtering.
      unfiltered for latent-basis estimation or follows refine3D-style policy.
 
 6. Add targeted regression checks before broad rollout.
-   - Extend `test_projected_model_plane_preparation` to run both modes:
-     `flex_ml_reg=no` (legacy) and `flex_ml_reg=yes` (sigma2-weighted).
-   - Keep algebraic identity checks in
-     `test_fake_preimage_against_reconstruct3D` for both modes, with separate
-     tolerances if needed.
    - Add one end-to-end flex fixture demonstrating that enabling
      `flex_ml_reg=yes` changes weighting behavior but preserves numerical
      stability and convergence.

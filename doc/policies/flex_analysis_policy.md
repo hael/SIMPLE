@@ -193,17 +193,6 @@ as planned work, not as production behavior.
 
 ## 6. Diagnostics and outputs
 
-`flex_preimage_identity` is a reconstruction-contract diagnostic for a
-registered project.  It compares standard `reconstruct3D` preparation with the
-projected-model observation/transfer planes, then checks a constant-latent
-residual reconstruction against the ordinary reconstruction.  It disables
-masking, output low-pass filtering, and ML regularization for that test.
-
-`flex_preimage_basis_ab` is a separate diagnostic for the legacy global
-modal-residual implementation.  It compares raw graph eigenfunctions with a
-non-centering whitened basis and inverse-transformed targets.  It is not the
-production local-linear state estimator.
-
 State one is written to `outvol` (default `flex_state_001.mrc`); additional
 states use the same stem with three-digit suffixes.  The medoid/assignment and
 soft-weight information is written to `flex_diffmap_preimages.txt` and

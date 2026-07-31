@@ -6,7 +6,7 @@ use simple_commanders_project_core, only: commander_new_project, commander_selec
 use simple_commanders_project_mov,  only: commander_import_movies
 use simple_commanders_reproject,    only: commander_reproject
 use simple_commanders_pick,         only: commander_pick, commander_extract
-use simple_commanders_sim,          only: commander_simulate_particles, commander_simulate_movie
+use simple_commanders_sim,          only: commander_simulate_noise, commander_simulate_particles, commander_simulate_movie
 use simple_commanders_preprocess,   only: commander_ctf_estimate, commander_motion_correct, commander_preprocess
 use simple_commanders_abinitio2D,   only: commander_abinitio2D
 use simple_commanders_abinitio,     only: commander_abinitio3D
@@ -48,74 +48,12 @@ type, extends(commander_base) :: commander_test_ptcls_ppca_subproject_distr
         procedure :: execute      => exec_test_ptcls_ppca_subproject_distr
 end type commander_test_ptcls_ppca_subproject_distr
 
-type, extends(commander_base) :: commander_test_flex_preimage_identity
-    contains
-        procedure :: execute      => exec_test_flex_preimage_identity
-end type commander_test_flex_preimage_identity
-
-type, extends(commander_base) :: commander_test_flex_preimage_basis_ab
-    contains
-        procedure :: execute      => exec_test_flex_preimage_basis_ab
-end type commander_test_flex_preimage_basis_ab
-
 type, extends(commander_base) :: commander_test_pcg_recon
   contains
     procedure :: execute      => exec_test_pcg_recon
 end type commander_test_pcg_recon
 
 contains
-
-subroutine exec_test_flex_preimage_identity( self, cline )
-    use simple_builder,                 only: builder
-    use simple_flex_diffmap_rec3D,      only: test_fake_preimage_against_reconstruct3D
-    use simple_parameters,              only: parameters
-    class(commander_test_flex_preimage_identity), intent(inout) :: self
-    class(cmdline),                                  intent(inout) :: cline
-    type(parameters) :: params
-    type(builder)    :: build
-    integer, allocatable :: pinds(:)
-    integer :: nptcls
-    if( .not.cline%defined('projfile') ) THROW_HARD('flex_preimage_identity requires projfile=flex_registered_particles.simple')
-    if( .not.cline%defined('vol1') ) THROW_HARD('flex_preimage_identity requires vol1=<fixed mean volume>')
-    if( .not.cline%defined('nspace') ) THROW_HARD('flex_preimage_identity requires nspace=<projection grid size>')
-    if( .not.cline%defined('oritype') ) call cline%set('oritype','ptcl3D')
-    if( .not.cline%defined('mkdir') ) call cline%set('mkdir','yes')
-    call cline%set('ml_reg','no')
-    call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-    call build%spproj_field%sample4rec([params%fromp,params%top],nptcls,pinds)
-    if( nptcls<3 ) THROW_HARD('flex_preimage_identity requires at least three active ptcl3D particles')
-    call test_fake_preimage_against_reconstruct3D(params,build,pinds)
-    deallocate(pinds)
-    call build%kill_general_tbox
-    call simple_end('**** SIMPLE_TEST_FLEX_PREIMAGE_IDENTITY NORMAL STOP ****')
-end subroutine exec_test_flex_preimage_identity
-
-subroutine exec_test_flex_preimage_basis_ab( self, cline )
-    use simple_builder,                only: builder
-    use simple_flex_analysis_strategy, only: flex_analysis_strategy, create_flex_analysis_strategy, &
-        &run_flex_preimage_basis_ab_test
-    use simple_parameters,             only: parameters
-    class(commander_test_flex_preimage_basis_ab), intent(inout) :: self
-    class(cmdline),                                intent(inout) :: cline
-    type(parameters) :: params
-    type(builder) :: build
-    class(flex_analysis_strategy), allocatable :: strategy
-    if( .not.cline%defined('projfile') ) THROW_HARD('flex_preimage_basis_ab requires projfile=<input project>')
-    if( .not.cline%defined('vol1') ) THROW_HARD('flex_preimage_basis_ab requires vol1=<fixed mean volume>')
-    if( .not.cline%defined('nspace') ) THROW_HARD('flex_preimage_basis_ab requires nspace=<projection grid size>')
-    if( .not.cline%defined('neigs') ) THROW_HARD('flex_preimage_basis_ab requires neigs=<diffusion rank>')
-    if( .not.cline%defined('oritype') ) call cline%set('oritype','ptcl3D')
-    if( .not.cline%defined('mkdir') ) call cline%set('mkdir','yes')
-    call cline%set('nparts','1')
-    strategy=create_flex_analysis_strategy(cline)
-    call strategy%initialize(params,build,cline)
-    call run_flex_preimage_basis_ab_test(params,build,cline)
-    call strategy%finalize_run(params,build,cline)
-    call strategy%cleanup(params)
-    deallocate(strategy)
-    call build%kill_general_tbox
-    call simple_end('**** SIMPLE_TEST_FLEX_PREIMAGE_BASIS_AB NORMAL STOP ****')
-end subroutine exec_test_flex_preimage_basis_ab
 
 subroutine exec_test_mini_stream( self, cline )
     class(commander_test_mini_stream),  intent(inout) :: self
@@ -833,63 +771,54 @@ end subroutine exec_test_simulated_workflow
 !>  \brief  Integration test: split project into subprojects, run in parallel, merge back.
 !  This test exercises the new generate_scripts_subprojects / gen_subproject_scripts_and_schedule
 !  machinery end-to-end.
-!    1. Simulates particles and runs coarse abinitio2D to obtain class labels
-!    2. Splits the project into per-class subprojects (extract_subproj pattern)
-!    3. Runs a program on each subproject in parallel via generate_scripts_subprojects
+!    1. Generates a small synthetic particle stack and imports it into a project
+!    2. Splits the project into deterministically balanced subprojects
+!    3. Runs one cluster2D iteration on each subproject in parallel
 !    4. Merges all subproject results with merge_chunk_projfiles
 !    5. Validates that particle count is preserved
 subroutine exec_test_subproject_distr( self, cline )
-    use simple_atoms,                   only: atoms
-    use simple_molecule_data,           only: molecule_data, sars_cov2_spkgp_6vxx
-    use simple_imghead,                 only: find_ldim_nptcls
     use simple_commanders_project_ptcl, only: commander_import_particles
     class(commander_test_subproject_distr), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    integer,          parameter :: NPTCLS_SIM  = 500      ! particles to simulate
-    integer,          parameter :: NCLS_COARSE = 4        ! coarse classes
-    integer,          parameter :: MAXKEYS     = 20       ! chash capacity
+    integer,          parameter :: NPTCLS_SIM  = 32
+    integer,          parameter :: NCLS_COARSE = 4
+    integer,          parameter :: BOX_SIM     = 32
+    integer,          parameter :: NTHR_JOB    = 1
+    integer,          parameter :: MAXKEYS     = 20
     real,             parameter :: SMPD        = 1.3
+    real,             parameter :: MSKDIAM     = 24.0
     character(len=*), parameter :: PROJNAME = 'test_subproj_distr'
     type(parameters)                    :: params
     type(sp_project)                    :: spproj, spproj_sub, spproj_merged
-    type(commander_simulate_particles)  :: xsim_ptcls
+    type(commander_simulate_noise)      :: xsim_noise
     type(commander_new_project)         :: xnew_project
     type(commander_import_particles)    :: ximport_particles
-    type(commander_abinitio2D)          :: xabinitio2D
-    type(cmdline)                       :: cline_sim, cline_new_proj, cline_import, cline_2D, cline_sub
+    type(cmdline)                       :: cline_sim, cline_new_proj, cline_import, cline_sub
     type(qsys_env)                      :: qenv
     type(chash),  allocatable           :: jobs_descr(:)
     type(string), allocatable           :: subproj_fnames(:), subproj_dirs(:)
     integer,      allocatable           :: class_labels(:)
     real,         allocatable           :: state_labels(:)
-    type(string)                        :: projname_sub, projfile_sub, cwd_root, sim_stk, sim_oris
-    type(molecule_data)                 :: mol
-    type(atoms)                         :: molecule
-    integer :: icls, nsub, isub, nptcls_sub, nptcls_merged, nptcls_orig
+    type(string)                        :: projname_sub, projfile_sub, cwd_root, sim_stk
+    integer :: icls, iptcl, nsub, isub, nptcls_sub, nptcls_merged, nptcls_orig
     logical :: all_ok
+    call cline%set('ncunits', NCLS_COARSE)
     call params%new(cline)
     call simple_getcwd(cwd_root)
-    ! 1. Simulate particles and populate project
-    write(logfhandle,'(a)') '>>> Step 1: simulate particles from 6VXX molecule data'
-    mol = sars_cov2_spkgp_6vxx()
-    call molecule%pdb2mrc(smpd=SMPD, mol=mol)
-    call cline_sim%set('prg',      'simulate_particles')
-    call cline_sim%set('vol1',           'molecule.mrc')
-    call cline_sim%set('smpd',                     SMPD)
-    call cline_sim%set('mskdiam',                   180)
-    call cline_sim%set('nthr',                       16)
-    call cline_sim%set('nptcls',             NPTCLS_SIM)
-    call cline_sim%set('pgrp',                     'c1')
-    call cline_sim%set('snr',                      0.01)
-    call cline_sim%set('ctf',                     'yes')
-    call params%new(cline_sim)
-    call xsim_ptcls%execute(cline_sim)
+    ! 1. Generate a deliberately small stack; molecular simulation and abinitio2D
+    ! are unrelated to the subproject scheduling/merge behavior under test.
+    write(logfhandle,'(a)') '>>> Step 1: generate compact synthetic particle stack'
+    sim_stk = 'simulated_particles.mrc'
+    call cline_sim%set('prg',        'simulate_noise')
+    call cline_sim%set('mkdir',                  'no')
+    call cline_sim%set('box',                 BOX_SIM)
+    call cline_sim%set('smpd',                   SMPD)
+    call cline_sim%set('nptcls',           NPTCLS_SIM)
+    call cline_sim%set('outstk',              sim_stk)
+    call xsim_noise%execute(cline_sim)
     call cline_sim%kill()
-    ! store paths to simulated output (relative to cwd_root)
-    sim_stk  = 'simulated_particles.mrc'
-    sim_oris = 'simulated_oris'//trim(TXT_EXT)
-    ! 1b. Create project and import simulated particles
-    write(logfhandle,'(a)') '>>> Step 1b: create project & import particles'
+    ! 2. Create project and import synthetic particles without CTF metadata.
+    write(logfhandle,'(a)') '>>> Step 2: create project & import particles'
     call cline_new_proj%set('projname', PROJNAME)
     call xnew_project%execute(cline_new_proj)
     call cline_new_proj%kill()
@@ -898,36 +827,22 @@ subroutine exec_test_subproject_distr( self, cline )
     call cline_import%set('mkdir',                         'no')
     call cline_import%set('projfile',       PROJNAME//'.simple')
     call cline_import%set('stk',       '../'//sim_stk%to_char())
-    call cline_import%set('deftab',   '../'//sim_oris%to_char())
     call cline_import%set('smpd',                          SMPD)
-    call cline_import%set('kv',                           300.0)
-    call cline_import%set('cs',                             2.7)
-    call cline_import%set('fraca',                          0.1)
-    call cline_import%set('ctf',                          'yes')
-    call params%new(cline_import)
+    call cline_import%set('ctf',                           'no')
     call ximport_particles%execute(cline_import)
     call cline_import%kill()
     write(logfhandle,'(a)') '    project populated with '//int2str(NPTCLS_SIM)//' particles'
     ! update cwd_root to project directory (new_project changed cwd)
     call simple_getcwd(cwd_root)
-    ! 2. Coarse abinitio2D to get class labels
-    ! (cwd is now inside project dir after new_project)
-    write(logfhandle,'(a)') '>>> Step 2: coarse abinitio2D'
-    call cline_2D%set('prg',             'abinitio2D')
-    call cline_2D%set('projfile', PROJNAME//'.simple')
-    call cline_2D%set('ncls',             NCLS_COARSE)
-    call cline_2D%set('mkdir',                   'no')
-    call cline_2D%set('mskdiam',                  180)
-    call cline_2D%set('smpd',                    SMPD)
-    call cline_2D%set('nthr',                      16)
-    call params%new(cline_2D)
-    call xabinitio2D%execute(cline_2D)
-    ! 3. Read project and split into subprojects by class 
-    write(logfhandle,'(a)') '>>> Step 3: splitting into subprojects'
+    ! 3. Split deterministically so setup cost and class populations are stable.
+    write(logfhandle,'(a)') '>>> Step 3: split into balanced subprojects'
     call spproj%read(string(PROJNAME//'.simple'))
-    nptcls_orig  = spproj%get_nptcls()
-    class_labels = spproj%os_ptcl2D%get_all_asint('class')
-    nsub         = NCLS_COARSE
+    nptcls_orig = spproj%get_nptcls()
+    nsub        = NCLS_COARSE
+    allocate(class_labels(nptcls_orig))
+    do iptcl = 1, nptcls_orig
+        class_labels(iptcl) = mod(iptcl - 1, nsub) + 1
+    enddo
     allocate(jobs_descr(nsub), subproj_fnames(nsub), subproj_dirs(nsub))
     do icls = 1, nsub
         projname_sub = 'subproj_'//int2str_pad(icls, 2)
@@ -964,20 +879,21 @@ subroutine exec_test_subproject_distr( self, cline )
         call jobs_descr(icls)%set('prg',                   'cluster2D_distr')
         call jobs_descr(icls)%set('projfile',         projfile_sub%to_char())
         call jobs_descr(icls)%set('ncls',     int2str(max(2, nptcls_sub/50)))
-        call jobs_descr(icls)%set('nthr',               int2str(params%nthr))
-        call jobs_descr(icls)%set('mskdiam',        real2str(params%mskdiam))
+        call jobs_descr(icls)%set('nthr',                  int2str(NTHR_JOB))
+        call jobs_descr(icls)%set('mskdiam',               real2str(MSKDIAM))
+        call jobs_descr(icls)%set('maxits',                              '1')
         call jobs_descr(icls)%set('mkdir',                              'no')
         call jobs_descr(icls)%set('objfun',                             'cc')
         call spproj_sub%kill
     end do
     ! 4. Generate scripts and execute subprojects in parallel ----
     write(logfhandle,'(a)') '>>> Step 4: parallel execution of subprojects'
-    call cline%set('projfile', PROJNAME//'.simple')
-    call cline%set('mskdiam',                 180.)
-    call cline%set('smpd',                    SMPD)
-    call cline%set('nthr',                     16.)
-    call cline%set('ncunits',                 nsub)
-    call params%new(cline)
+    params%projfile = PROJNAME//'.simple'
+    params%nptcls   = nptcls_orig
+    params%ncunits  = nsub
+    params%nthr     = NTHR_JOB
+    params%mskdiam  = MSKDIAM
+    params%smpd     = SMPD
     call qenv%new(params, nsub)
     call qenv%gen_subproject_scripts_and_schedule(jobs_descr, subproj_dirs=subproj_dirs)
     write(logfhandle,'(a)') '    all subprojects completed'

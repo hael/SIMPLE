@@ -9,7 +9,7 @@ type(parameters)         :: p
 type(cmdline)            :: cline
 type(builder)            :: b
 type(ori)                :: o
-real                     :: shvec(2), shift_err, ang_err, lims(2,2), cxy(3)
+real                     :: shvec(2), shift_err, ang_err, lims(2,2), cxy(3), rot
 real, allocatable        :: cc_fft(:)
 integer(timer_int_kind)  :: tfft
 integer                  :: loc
@@ -26,6 +26,7 @@ call cline%checkvar('smpd', 3)
 call cline%checkvar('lp',   4)
 call cline%set('nptcls',1.0)
 call cline%set('ctf','no')
+call cline%set('objfun','cc')
 call cline%check
 call b%init_params_and_build_strategy3D_tbox(cline,p)
 call set_bp_range3D(p, b, cline)
@@ -80,5 +81,10 @@ loc = 1
 tfft = tic()
 cxy = grad_shsrch_obj%minimize(irot=loc)
 print *, 'time of shift_search: ', toc(tfft)
-print *, cxy, b%pftc%get_rot(loc)
+if( loc > 0 )then
+    rot = b%pftc%get_rot(loc)
+    print *, cxy, rot
+else
+    print *, 'shift search found no better solution'
+endif
 end program simple_test_eval_polarftcc

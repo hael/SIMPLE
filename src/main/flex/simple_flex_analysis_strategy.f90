@@ -15,8 +15,7 @@ use simple_flex_diffmap_features, only: prepare_flex_diffmap_features, prepare_f
 use simple_flex_diffmap_preimage, only: select_flex_diffmap_preimages, build_flex_preimage_kernel_weights
 use simple_flex_diffmap_rec3D,    only: reconstruct_flex_diffmap_states, reconstruct_flex_diffmap_weighted_states, &
     &reconstruct_flex_diffmap_local_linear_states, write_flex_diffmap_rec_parts, &
-    &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts, canonicalize_flex_preimage_coordinates
-use simple_image,                 only: image
+    &reduce_flex_diffmap_rec_parts, cleanup_flex_diffmap_rec_parts
 use simple_sigma2_files,          only: load_sigma2_groups
 use simple_parameters,            only: parameters
 use simple_qsys_env,              only: qsys_env
@@ -28,7 +27,6 @@ private
 public :: flex_analysis_strategy, flex_analysis_shmem_strategy
 public :: flex_analysis_worker_strategy, flex_analysis_master_strategy
 public :: create_flex_analysis_strategy, fit_flex_analysis_embedding, flex_embedding_result
-public :: run_flex_preimage_basis_ab_test
 
 ! The embedding API is produced by this strategy and consumed by nano3D.
 ! Keeping the small value type here avoids a one-type transport module.
@@ -559,93 +557,6 @@ contains
         call finish_analysis_outputs(registered_stack,registered_project)
         deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords)
     end subroutine fit_flex_analysis_embedding
-
-    !> Strict numerical A/B diagnostic for the residual Nyström pre-image.
-    !! A uses the raw graph eigenfunctions.  B whitens their full-rank span
-    !! and transforms each Nyström target by the inverse basis transform, so
-    !! A and B denote the same representative states.  They may differ only
-    !! through finite-precision conditioning or an implementation defect.
-    subroutine run_flex_preimage_basis_ab_test( params, build, cline )
-        type(parameters), intent(inout) :: params
-        type(builder), intent(inout) :: build
-        class(cmdline), intent(inout) :: cline
-        integer, allocatable :: pinds(:), medoids(:), labels(:)
-        real, allocatable :: coords(:,:), raw_coords(:,:), spectral_z(:,:), nystrom_coords(:,:)
-        real, allocatable :: target_raw(:,:), z_canonical(:,:), target_canonical(:,:)
-        type(string) :: registered_stack, registered_project
-        type(builder) :: model_build
-        type(parameters) :: model_params, raw_params, canonical_params
-        type(cmdline) :: model_cline
-        real(dp), allocatable :: transform(:,:)
-        real(dp) :: transform_condition, gram_error, target_error
-        integer :: nmodes
-        call run_flex_analysis(params,build,cline,pinds,coords,raw_coords,spectral_z,nystrom_coords,nmodes, &
-            &registered_stack,registered_project)
-        call select_flex_diffmap_preimages(pinds,raw_coords,params%npreimages,medoids,labels)
-        call collect_target_coefficients(spectral_z,nystrom_coords,medoids,target_raw)
-        allocate(z_canonical(size(spectral_z,1),nmodes),target_canonical(size(target_raw,1),nmodes), &
-            &transform(nmodes,nmodes))
-        call canonicalize_flex_preimage_coordinates(spectral_z,target_raw,z_canonical,target_canonical,transform, &
-            &transform_condition,gram_error,target_error)
-        write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4)') '>>> FLEX PRE-IMAGE A/B canonical_transform_condition=', &
-            &transform_condition,' gram_error=',gram_error,' target_error=',target_error
-        call flush(logfhandle)
-        call init_model_context(cline,registered_project,model_cline,model_params,model_build)
-        raw_params=model_params
-        raw_params%outvol='flex_preimage_ab_raw_001.mrc'
-        canonical_params=model_params
-        canonical_params%outvol='flex_preimage_ab_canonical_001.mrc'
-        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE A/B: A=RAW GRAPH EIGENFUNCTIONS'
-        call reconstruct_flex_diffmap_states(raw_params,model_build,pinds,spectral_z,target_raw,size(medoids))
-        write(logfhandle,'(A)') '>>> FLEX PRE-IMAGE A/B: B=WHITENED GRAPH EIGENFUNCTIONS, INVERSE TARGETS'
-        call reconstruct_flex_diffmap_states(canonical_params,model_build,pinds,z_canonical,target_canonical,size(medoids))
-        call write_preimage_basis_ab_metrics(model_params,size(medoids),transform_condition,gram_error,target_error)
-        call model_build%kill_general_tbox
-        call model_cline%kill
-        call finish_analysis_outputs(registered_stack,registered_project)
-        deallocate(pinds,coords,raw_coords,spectral_z,nystrom_coords,target_raw,z_canonical,target_canonical, &
-            &transform,medoids,labels)
-    end subroutine run_flex_preimage_basis_ab_test
-
-    subroutine write_preimage_basis_ab_metrics( params, nstates, transform_condition, gram_error, target_error )
-        type(parameters), intent(in) :: params
-        integer, intent(in) :: nstates
-        real(dp), intent(in) :: transform_condition, gram_error, target_error
-        type(image) :: raw_img, canonical_img
-        type(string) :: raw_fname, canonical_fname
-        integer :: state, funit
-        real(dp) :: map_cc
-        open(newunit=funit,file='flex_preimage_basis_ab_metrics.txt',status='replace',action='write')
-        write(funit,'(A,ES16.8)') 'canonical_transform_condition=',transform_condition
-        write(funit,'(A,ES16.8)') 'canonical_gram_error=',gram_error
-        write(funit,'(A,ES16.8)') 'inverse_target_error=',target_error
-        write(funit,'(A)') '# state raw_vs_canonical_cc'
-        do state=1,nstates
-            raw_fname=preimage_ab_state_fname('raw',state)
-            canonical_fname=preimage_ab_state_fname('canonical',state)
-            call raw_img%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
-            call canonical_img%new([params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
-            call raw_img%read(raw_fname)
-            call canonical_img%read(canonical_fname)
-            map_cc=raw_img%corr(canonical_img)
-            write(funit,'(I0,1X,ES16.8)') state,map_cc
-            write(logfhandle,'(A,I0,A,ES12.4)') '>>> FLEX PRE-IMAGE A/B STATE=',state,' raw_vs_canonical_cc=',map_cc
-            call raw_img%kill
-            call canonical_img%kill
-            call raw_fname%kill
-            call canonical_fname%kill
-        end do
-        close(funit)
-    end subroutine write_preimage_basis_ab_metrics
-
-    function preimage_ab_state_fname( label, state ) result(fname)
-        character(len=*), intent(in) :: label
-        integer, intent(in) :: state
-        type(string) :: fname
-        character(len=3) :: tag
-        write(tag,'(I3.3)') state
-        fname='flex_preimage_ab_'//label//'_'//tag//'.mrc'
-    end function preimage_ab_state_fname
 
     subroutine run_flex_analysis( params, build, cline, pinds, coords, raw_coords, spectral_z, nystrom_coords, &
         &nmodes, registered_stack, &

@@ -1496,7 +1496,6 @@ digraph module_graph {
   "simple_commanders_test_geometry" -> "simple_sp_project";
   "simple_commanders_test_geometry" -> "simple_sym";
   "simple_commanders_test_highlevel" -> "simple_atoms";
-  "simple_commanders_test_highlevel" -> "simple_builder";
   "simple_commanders_test_highlevel" -> "simple_commanders_abinitio";
   "simple_commanders_test_highlevel" -> "simple_commanders_abinitio2d";
   "simple_commanders_test_highlevel" -> "simple_commanders_api";
@@ -1509,13 +1508,9 @@ digraph module_graph {
   "simple_commanders_test_highlevel" -> "simple_commanders_sim";
   "simple_commanders_test_highlevel" -> "simple_commanders_stkops";
   "simple_commanders_test_highlevel" -> "simple_commanders_validate";
-  "simple_commanders_test_highlevel" -> "simple_flex_analysis_strategy";
-  "simple_commanders_test_highlevel" -> "simple_flex_diffmap_rec3d";
   "simple_commanders_test_highlevel" -> "simple_imghead";
   "simple_commanders_test_highlevel" -> "simple_micproc";
   "simple_commanders_test_highlevel" -> "simple_molecule_data";
-  "simple_commanders_test_highlevel" -> "simple_ori_utils";
-  "simple_commanders_test_highlevel" -> "simple_parameters";
   "simple_commanders_test_highlevel" -> "simple_projfile_utils";
   "simple_commanders_test_highlevel" -> "simple_qsys_env";
   "simple_commanders_test_highlevel" -> "simple_reconstructor_pcg";
@@ -1951,7 +1946,6 @@ digraph module_graph {
   "simple_flex_analysis_strategy" -> "simple_flex_diffmap_features";
   "simple_flex_analysis_strategy" -> "simple_flex_diffmap_preimage";
   "simple_flex_analysis_strategy" -> "simple_flex_diffmap_rec3d";
-  "simple_flex_analysis_strategy" -> "simple_image";
   "simple_flex_analysis_strategy" -> "simple_parameters";
   "simple_flex_analysis_strategy" -> "simple_qsys_env";
   "simple_flex_analysis_strategy" -> "simple_qsys_funs";
@@ -3039,13 +3033,11 @@ digraph module_graph {
   "simple_starproject_tester" -> "omp_lib";
   "simple_starproject_tester" -> "simple_cmdline";
   "simple_starproject_tester" -> "simple_defs";
-  "simple_starproject_tester" -> "simple_parameters";
   "simple_starproject_tester" -> "simple_relion";
   "simple_starproject_tester" -> "simple_sp_project";
   "simple_starproject_tester" -> "simple_starfile";
   "simple_starproject_tester" -> "simple_starfile_wrappers";
   "simple_starproject_tester" -> "simple_starproject";
-  "simple_starproject_tester" -> "simple_starproject_stream";
   "simple_starproject_tester" -> "simple_starproject_utils";
   "simple_starproject_tester" -> "simple_string";
   "simple_starproject_tester" -> "simple_test_utils";
