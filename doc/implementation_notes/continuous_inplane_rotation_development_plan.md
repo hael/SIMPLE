@@ -27,6 +27,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Added a focused synthetic parabola check to `simple_test_euclid_route_identity`.
   - Windows UCRT64 compile/link verification passed.
   - Oracle Linux 8.10 runtime validation passed with 288 rotations: legacy-score error `2.91e-08`, scalar-gradient error `3.60e-07`, tolerance `1.11e-03`; the focused parabolic check also passed.
+  - Revalidated the updated `HEAD` on Oracle Linux 8.10 with two independent runs: legacy-score errors `2.87e-08` and `2.91e-08`, scalar-gradient errors `2.70e-07` and `3.70e-07`; both completed with `NORMAL STOP`.
 - [ ] Phase 2: continuous angular refinement.
 - [ ] Stage 1 validation: route identity, gradients, aliasing, and synthetic recovery.
 - [ ] Phase 3: joint `(sx, sy, theta)` refinement.
