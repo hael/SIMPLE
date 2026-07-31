@@ -248,6 +248,7 @@
                 exit
             end if
         end do
+        if (significand(sig_trim:sig_trim) == '.') sig_trim = sig_trim - 1
         str = trim(significand(1:sig_trim))
 
     else if (exp_start > decimal_pos) then !float has exponent
@@ -261,6 +262,7 @@
                 exit
             end if
         end do
+        if (significand(sig_trim:sig_trim) == '.') sig_trim = sig_trim - 1
         expnt = adjustl(str(exp_start+1:))
         if (expnt(1:1) == '+' .or. expnt(1:1) == '-') then
             separator = trim(adjustl(separator))//expnt(1:1)
