@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the full UI JSON registry emitted by ``simple_private_exec``.
+"""Validate the full UI JSON registry emitted by a SIMPLE executable.
 
 This is intentionally standard-library-only.  CMake's ``string(JSON)`` reparses
 the complete registry for every field, which makes a complete contract check
