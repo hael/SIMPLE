@@ -302,7 +302,7 @@ subroutine new_abinitio2D( prgtab )
         &'map_cavgs_selection',&                                         ! name
         &'Map class average selection to particles in project file',&    ! summary
         &'is a program for mapping selection based on class averages to the individual particles using correlation matching',& ! help
-        &'all',&                                                         ! executable
+        &'simple_exec',&                                                 ! executable
         &.true., &
         &visibility=UI_VIS_ADVANCED)                                                         ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

@@ -209,7 +209,7 @@ subroutine new_make_oris( prgtab )
         &'vizoris',&                                                                                               ! name
         &'Visualization of orientation distribution',&                                                             ! summary
         &'is a program for extracting projection directions from orientations for visualization in UCSF Chimera',& ! help
-        &'all',&                                                                                                   ! executable
+        &'simple_exec',&                                                                                           ! executable
         &.false., &
         &visibility=UI_VIS_ADVANCED)                                                                                                  ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
