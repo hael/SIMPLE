@@ -16,7 +16,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
 
 - [x] Phase 0: baseline, Nyquist behavior, and test harness.
   - Confirmed the current Euclidean residual accumulation uses `p=1:pftsz` and omits the `pftsz+1` Nyquist bin.
-  - Added the focused `simple_test_euclid_route_identity` CTest target.
+  - Added the focused `simple_test_euclid_route_identity` executable; direct SIMPLE invocation with explicit arguments is the authoritative runtime check.
   - Confirmed the legacy Euclidean score, raw FFT loss, and scalar gradient route are checked for every discrete rotation by the harness.
   - Compile/link verification passed with the Windows MSYS2 UCRT64 workflow.
   - Runtime validation passed on Oracle Linux 8.10 with 288 rotations: legacy-score error `2.97e-08`, scalar-gradient error `1.82e-07`, tolerance `8.50e-04`.
@@ -55,7 +55,15 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Oracle Linux 8.10 targeted build and runtime validation passed with `NORMAL STOP`.
   - All three joint solutions were accepted; the gradient checks were finite with maximum errors of `9.20e-03`, `2.48e-03`, and `9.40e-03` for the three fixtures.
   - The joint angle RMS was `0.2756°`, improving over continuous-angle RMS `0.3041°`; Windows recompilation was intentionally not repeated on the laptop.
-- [ ] Phase 4: downstream metadata and workflow wiring.
+- [x] Phase 4A: classical Euclidean 2D metadata and workflow wiring.
+  - Added a gated production gateway in the classical Euclidean 2D search strategy: the discrete candidate is refined by Stage 1, then passed to the Phase 3 three-variable L-BFGS-B path.
+  - The gateway is disabled for streaming SGD, time-series shift-only search, probabilistic-table generation, and non-Euclidean objectives.
+  - Selected orientations receive the continuous `e3` value while legacy integer `inpl` indices remain populated for search tables and compatibility.
+  - A real Oracle Linux classical Euclidean `abinitio2D` workflow completed five iterations with `objfun=euclid` and `sgd=no`, including repeated `SIMPLE_CLUSTER2D NORMAL STOP` and final `SIMPLE_ABINITIO2D NORMAL STOP` markers.
+  - Focused route-identity, Stage 1, and SGD regression tests also passed on Oracle Linux; conventional CTest is not used as the SIMPLE acceptance gate because the project test workflow is direct `simple_test_*` execution.
+- [ ] Phase 4B: classical Euclidean 3D metadata and workflow wiring.
+  - The 3D gateway implementation is present but intentionally not accepted or committed until the 2D pathway is fully reviewed.
+  - 3D workflow validation and any required 3D corrections remain pending.
 
 ## Implementation Changes
 

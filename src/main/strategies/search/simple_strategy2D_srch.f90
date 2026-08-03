@@ -26,6 +26,7 @@ type strategy2D_srch
     type(pftc_shsrch_grad) :: grad_shsrch_obj         !< origin shift search object, L-BFGS with gradient
     type(pftc_shsrch_grad) :: grad_shsrch_obj2        !< origin shift search object, L-BFGS with gradient, no call back
     type(pftc_shsrch_grad) :: grad_shsrch_first_obj   !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
+    type(pftc_shsrch_grad) :: grad_shsrch_joint_obj   !< classical Euclidean joint (sx,sy,theta) L-BFGS-B refinement
     integer                 :: nrefs           =  0   !< number of references
     integer                 :: nrots           =  0   !< number of in-plane rotations in polar representation
     integer                 :: nrefs_eval      =  0   !< nr of references evaluated
@@ -52,6 +53,9 @@ type strategy2D_srch
     logical                 :: sgd_used          = .false. !< stream shift update was attempted
     logical                 :: l_sh_first      = .false. !< Whether to search the shifts on previous best reference
     logical                 :: l_fresh_start   = .false. !< Whether previous alignment parameters are intentionally ignored
+    logical                 :: use_joint_angle = .false. !< selected Euclidean candidates use joint angle refinement
+    logical                 :: best_inpl_e3_valid = .false. !< whether best_inpl_e3 is continuous
+    real                    :: best_inpl_e3    = 0. !< continuous e3 angle for the selected candidate
   contains
     procedure :: new
     procedure :: prep4srch
@@ -70,7 +74,7 @@ contains
         class(parameters), target, intent(in)    :: params
         class(strategy2D_spec),    intent(in)    :: spec
         class(builder),    target, intent(in)    :: build
-        real :: lims(2,2), lims_init(2,2)
+        real :: lims(2,2), lims_init(2,2), joint_lims(3,2)
         call self%kill
         ! set pointer to parameters
         self%p_ptr => params
@@ -84,6 +88,9 @@ contains
         self%nrots       = self%b_ptr%pftc%get_nrots()
         if( self%nrots < 1 ) THROW_HARD('strategy2D_srch constructed before PFTC rotations were initialized')
         self%nrefs_eval  = 0
+        self%use_joint_angle = self%b_ptr%pftc%is_euclid_objfun() .and. &
+            &(.not. self%p_ptr%l_sgd_streaming_active) .and. trim(self%p_ptr%tseries) /= 'yes'
+        self%best_inpl_e3_valid = .false.
         ! construct composites
         self%trs        =  self%p_ptr%trs
         lims(:,1)       = -self%p_ptr%trs
@@ -121,6 +128,13 @@ contains
         endif
         call self%grad_shsrch_obj2%new(self%b_ptr, lims, lims_init=lims_init,&
         &maxits=self%p_ptr%maxits_sh, opt_angle=.false.)
+        if( self%use_joint_angle )then
+            joint_lims(1:2,:) = lims
+            joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
+            call self%grad_shsrch_joint_obj%new(self%b_ptr, joint_lims, &
+                &shbarrier=self%p_ptr%shbarrier, maxits=self%p_ptr%maxits_sh, &
+                &opt_angle=.false., joint_angle=.true.)
+        endif
     end subroutine new
 
     subroutine prep4srch( self, os )
@@ -134,6 +148,7 @@ contains
         self%sgd_objective_final   = 0.
         self%sgd_accepted_steps    = 0
         self%sgd_used              = .false.
+        self%best_inpl_e3_valid    = .false.
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
         self%l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter)
@@ -248,8 +263,10 @@ contains
 
     subroutine inpl_srch( self )
         class(strategy2D_srch), intent(inout) :: self
-        real    :: cxy(3)
-        integer :: irot
+        real    :: cxy(3), cxy_joint(3), theta_stage1, rotmat(2,2)
+        real    :: joint_lims(3,2)
+        real(dp) :: theta_joint
+        integer :: irot, irot_stage1, irot_joint, iang
         irot = 0
         self%best_shvec = [0.,0.]
         if( s2D%do_inplsrch(self%iptcl_batch) )then
@@ -277,6 +294,39 @@ contains
                         &accepted_steps=self%sgd_accepted_steps, &
                         &objective_initial=self%sgd_objective_initial, &
                         &objective_final=self%sgd_objective_final)
+                endif
+            else if( self%use_joint_angle )then
+                ! Obtain the validated continuous-angle Stage 1 state in the
+                ! native polar shift frame, then refine (sx,sy,theta) jointly.
+                irot_stage1 = 0
+                if( self%l_sh_first )then
+                    cxy = self%grad_shsrch_obj%minimize(irot=irot_stage1, &
+                        &xy_in=self%xy_first, sh_rot=.false., theta=theta_stage1)
+                else
+                    cxy = self%grad_shsrch_obj%minimize(irot=irot_stage1, &
+                        &sh_rot=.false., theta=theta_stage1)
+                endif
+                if( irot_stage1 > 0 )then
+                    joint_lims(1,:) = [-self%trs, self%trs]
+                    joint_lims(2,:) = [-self%trs, self%trs]
+                    joint_lims(3,:) = [theta_stage1-2., theta_stage1+2.]
+                    call self%grad_shsrch_joint_obj%set_indices(self%best_class, self%iptcl)
+                    call self%grad_shsrch_joint_obj%set_limits(joint_lims)
+                    irot_joint = irot_stage1
+                    cxy_joint = self%grad_shsrch_joint_obj%minimize_joint(irot_joint, &
+                        &theta_stage1, cxy(2:3), sh_rot=.true., theta=theta_joint)
+                    if( irot_joint > 0 )then
+                        irot = irot_joint
+                        cxy = cxy_joint
+                        iang = modulo(nint(theta_joint)-1,self%nrots)+1
+                        self%best_inpl_e3 = 360. - (self%b_ptr%pftc%get_rot(iang) + &
+                            &(real(theta_joint)-real(iang))*self%b_ptr%pftc%get_dang())
+                        self%best_inpl_e3_valid = .true.
+                    else
+                        irot = irot_stage1
+                        call rotmat2d(self%b_ptr%pftc%get_rot(irot_stage1), rotmat)
+                        cxy(2:) = matmul(cxy(2:), rotmat)
+                    endif
                 endif
             else
                 if( .not.self%grad_shsrch_obj%does_opt_angle() )then
@@ -420,6 +470,8 @@ contains
         ! get in-plane angle from class-space store
         e3 = s2D%class_space_e3s(best_class_local, ithr)
         if( e3 == 0. ) e3 = 360. - self%b_ptr%pftc%get_rot(best_rot_local)
+        if( self%best_inpl_e3_valid .and. best_class_local == self%best_class .and. &
+            &best_rot_local == self%best_rot ) e3 = self%best_inpl_e3
         ! calculate in-plane rot dist (radians)
         if( self%l_fresh_start )then
             dist = 0.
@@ -463,6 +515,7 @@ contains
         call self%grad_shsrch_obj%kill
         call self%grad_shsrch_obj2%kill
         call self%grad_shsrch_first_obj%kill
+        call self%grad_shsrch_joint_obj%kill
     end subroutine kill
 
 end module simple_strategy2D_srch
