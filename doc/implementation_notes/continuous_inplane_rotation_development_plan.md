@@ -77,6 +77,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Restart metadata validation also passed: `ACTIVE=200`, `OFFGRID=200`, `INVALID=0`, `NONFINITE=0`, `ROTATIONS=288`, and `CLASS_AVERAGES=3`.
   - The public `abinitio2D` `objfun=cc` alternate path completed clustering and class-average generation but exposed an existing finalization bug: sigma2 metadata was registered unconditionally although `cc` correctly produces no `sigma2_it_*.star` file. Finalization now skips this optional project entry when the file is absent; Oracle rebuild and rerun remain pending.
   - The metadata test now checks both contracts: `inpl_refine=yes` must produce at least one off-grid continuous `e3`, while `inpl_refine=no` must produce none. The `cc` workflow is tested with the key enabled to confirm the objective gate still keeps continuous refinement off.
+  - The first post-push default-off Oracle metadata run exposed stale/off-grid `e3` propagation despite the integer `inpl` result. The orientation writer now reconstructs the grid `e3` from `inpl` unless the explicit continuous gateway marks a valid angle; Oracle rebuild and rerun remain required.
   - After these gates, restore and validate the deferred 3D extension.
 
 ## Implementation Changes

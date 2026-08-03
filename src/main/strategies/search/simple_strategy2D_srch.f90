@@ -469,11 +469,15 @@ contains
             best_rot_local   = self%prev_rot
             best_corr_local  = self%prev_corr
         endif
-        ! get in-plane angle from class-space store
-        e3 = s2D%class_space_e3s(best_class_local, ithr)
-        if( e3 == 0. ) e3 = 360. - self%b_ptr%pftc%get_rot(best_rot_local)
+        ! Keep the legacy integer rotation and continuous metadata coupled.
+        ! Only the explicit Euclidean opt-in gateway may replace the grid angle
+        ! with a continuous value; all other paths reconstruct e3 from inpl.
         if( self%best_inpl_e3_valid .and. best_class_local == self%best_class .and. &
-            &best_rot_local == self%best_rot ) e3 = self%best_inpl_e3
+            &best_rot_local == self%best_rot )then
+            e3 = self%best_inpl_e3
+        else
+            e3 = 360. - self%b_ptr%pftc%get_rot(best_rot_local)
+        endif
         ! calculate in-plane rot dist (radians)
         if( self%l_fresh_start )then
             dist = 0.
