@@ -557,6 +557,16 @@ contains
             case DEFAULT
                 params%l_sgd_streaming_active = .false.
         end select
+        ! Warm up each later stage with SIMPLE's established probabilistic
+        ! assignment once before switching to the streaming optimizer.  The
+        ! controller enters stage 5 at global iteration 21 and stage 6 at
+        ! global iteration 26; comparing which_iter with startit keeps this
+        ! policy tied to the actual stage boundary rather than hard-coding
+        ! iteration numbers, and remains restart-stable.
+        if( params%l_sgd_streaming_active .and. params%startit > 16 .and. &
+            params%which_iter == params%startit )then
+            params%l_sgd_streaming_active = .false.
+        endif
         if( params%sgd_diagnostic )then
             write(logfhandle,'(A,1X,A,I0,1X,A,1X,A,1X,A,L1,1X,A,L1)') &
                 '>>> SEARCH DIAG: SGD iteration policy:', 'iteration=', params%which_iter, &

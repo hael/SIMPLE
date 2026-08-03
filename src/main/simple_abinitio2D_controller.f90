@@ -102,7 +102,14 @@ contains
             call cline_cluster2D%set('sgd', 'no')
             ! Keep stages 1-3 on the ordinary path even when the user
             ! enables SGD for stage 4 onward.
-            call cline_cluster2D%set('sgd_stage4_mode', 'off')
+            ! Preserve stage-4 alternate mode across its first legacy
+            ! iteration; the per-iteration policy in cluster2D_strategy must
+            ! be able to reactivate streaming on the following odd iteration.
+            if( istage == 4 .and. trim(params%sgd_stage4_mode) == 'alternate' )then
+                call cline_cluster2D%set('sgd_stage4_mode', 'alternate')
+            else
+                call cline_cluster2D%set('sgd_stage4_mode', 'off')
+            endif
         endif
     end subroutine set_cline_cluster2D_stage
 
