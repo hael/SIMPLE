@@ -301,22 +301,27 @@ contains
     ! heap_vars(ithr)%shmat and cmat2_many(ithr) hold shifted-reference work.
     ! Keep the thread index local to this call.  Sharing these buffers across
     ! threads can corrupt FFT state and cause a late segmentation fault.
-    subroutine gen_raw_euclid_vals_impl( self, iref, iptcl, shift, losses, coeffs )
+    subroutine gen_raw_euclid_vals_impl( self, iref, iptcl, shift, losses, coeffs, deriv_component )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: losses(self%nrots)
         complex(sp), optional,       intent(out)   :: coeffs(:)
+        integer,       optional,       intent(in)  :: deriv_component
         complex(sp), pointer :: shmat(:,:)
         complex(sp) :: c
         real(dp)    :: ptcl_sqsum
         real(sp)    :: A_sp, shift_mag_sq, wk
         integer     :: k, i, ithr, kk, k0, p
         logical     :: even
+        integer     :: deriv
         ithr         =  omp_get_thread_num() + 1
         i            =  self%pinds(iptcl)
         k0           =  self%kfromto(1)
         even         =  self%iseven(i)
+        deriv        =  0
+        if( present(deriv_component) ) deriv = deriv_component
+        if( deriv < 0 .or. deriv > 2 ) THROW_HARD('invalid Euclidean derivative component')
         ptcl_sqsum   =  self%wsqsums_ptcls(i)
         shmat        => self%heap_vars(ithr)%shmat
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
@@ -346,8 +351,9 @@ contains
                     wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                     kk = k - k0 + 1
                     do p = 1,self%pftsz
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
+                        c = euclid_coeff_term(self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref), &
+                            &self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk)), &
+                            &self%argtransf(p,k), self%argtransf(self%pftsz+p,k), deriv)
                         self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
                     enddo
                 end do
@@ -356,8 +362,9 @@ contains
                     wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                     kk = k - k0 + 1
                     do p = 1,self%pftsz
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk))
+                        c = euclid_coeff_term(self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref), &
+                            &self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p, kk)), &
+                            &self%argtransf(p,k), self%argtransf(self%pftsz+p,k), deriv)
                         self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
                     enddo
                 end do
@@ -370,8 +377,9 @@ contains
                 do k = self%kfromto(1), self%kfromto(2)
                     wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                     do p = 1,self%pftsz
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref))
+                        c = euclid_coeff_term(self%ft_ctf2(p,k,i) * self%ft_ref2_even(p,k,iref), &
+                            &self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_even(p,k,iref)), &
+                            &self%argtransf(p,k), self%argtransf(self%pftsz+p,k), deriv)
                         self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
                     enddo
                 end do
@@ -379,8 +387,9 @@ contains
                 do k = self%kfromto(1), self%kfromto(2)
                     wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                     do p = 1,self%pftsz
-                        c = self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref)
-                        c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref))
+                        c = euclid_coeff_term(self%ft_ctf2(p,k,i) * self%ft_ref2_odd(p,k,iref), &
+                            &self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref_odd(p,k,iref)), &
+                            &self%argtransf(p,k), self%argtransf(self%pftsz+p,k), deriv)
                         self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
                     enddo
                 end do
@@ -392,7 +401,7 @@ contains
                 THROW_HARD('invalid angular coefficient size; gen_raw_euclid_vals_impl')
             endif
             coeffs = self%crvec1(ithr)%c / A_sp
-            coeffs(1) = coeffs(1) + cmplx(1.,0.,kind=sp)
+            if( deriv == 0 ) coeffs(1) = coeffs(1) + cmplx(1.,0.,kind=sp)
         endif
         ! IFFT
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
@@ -1603,6 +1612,23 @@ contains
         grad  = -f * 2.d0 * grad / denom
     end subroutine gen_euclid_grad_for_rot_8
 
+    pure function euclid_coeff_term(ref2_term, cross_term, argx, argy, deriv) result(c)
+        complex(sp), intent(in) :: ref2_term, cross_term
+        real(dp),    intent(in) :: argx, argy
+        integer,     intent(in) :: deriv
+        complex(sp) :: c
+        select case(deriv)
+        case(0)
+            c = ref2_term - 2._sp * cross_term
+        case(1)
+            c = cmplx(0._sp, 2._sp*real(argx,sp), kind=sp) * cross_term
+        case(2)
+            c = cmplx(0._sp, 2._sp*real(argy,sp), kind=sp) * cross_term
+        case default
+            c = cmplx(0._sp, 0._sp, kind=sp)
+        end select
+    end function euclid_coeff_term
+
     ! Candidate API for SGD: return the finite Gaussian loss L and grad(L).
     ! The legacy score is exp(-L), which is monotonic but can underflow.
     module subroutine gen_raw_euclid_grad_for_rot_8(self, iref, iptcl, shvec, irot, f, grad)
@@ -1625,6 +1651,33 @@ contains
         f    = f / denom
         grad = 2.d0 * grad / denom
     end subroutine gen_raw_euclid_grad_for_rot_8
+
+    ! Candidate Phase 3 API: evaluate the normalized raw Euclidean residual and
+    ! its gradient at a continuous angular grid coordinate.  The angular
+    ! derivative is evaluated from the same Fourier coefficients used by the
+    ! Stage 1 residual evaluator; shift derivatives use the differentiated
+    ! weighted cross-term coefficients.
+    module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, theta, f, grad)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2), theta
+        real(dp),                    intent(out)   :: f, grad(3)
+        real(sp), allocatable :: losses(:)
+        complex(sp), allocatable :: coeffs(:), coeffs_x(:), coeffs_y(:)
+        real(dp) :: dtheta, ddtheta, dummy, dummy2
+        integer :: pftsz
+
+        if( .not. self%is_euclid_objfun() ) THROW_HARD('continuous joint gradient requires Euclidean objective')
+        pftsz = self%pftsz
+        allocate(losses(self%nrots), coeffs(pftsz+1), coeffs_x(pftsz+1), coeffs_y(pftsz+1))
+        call gen_raw_euclid_vals_impl(self, iref, iptcl, real(shvec,sp), losses, coeffs)
+        call self%eval_euclid_resid_at_angle(coeffs, theta, f, grad(3), dummy)
+        call gen_raw_euclid_vals_impl(self, iref, iptcl, real(shvec,sp), losses, coeffs_x, deriv_component=1)
+        call self%eval_euclid_resid_at_angle(coeffs_x, theta, grad(1), dummy, dummy2)
+        call gen_raw_euclid_vals_impl(self, iref, iptcl, real(shvec,sp), losses, coeffs_y, deriv_component=2)
+        call self%eval_euclid_resid_at_angle(coeffs_y, theta, grad(2), dummy, dummy2)
+        deallocate(losses, coeffs, coeffs_x, coeffs_y)
+    end subroutine gen_raw_euclid_grad_at_angle
 
     module subroutine gen_denoised_corr_grad_for_rot_8( self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready )
         class(polarft_calc),  target, intent(inout) :: self

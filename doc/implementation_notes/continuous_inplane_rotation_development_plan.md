@@ -47,8 +47,14 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - All three stages accepted the common fixed-angle shift refinement. Shift RMS over cases was `0.00704` pixels; the worst individual case was `0.01039` pixels.
   - Continuous angle RMS was `0.3041°`, improving over parabolic `0.3139°` and grid-only `0.4621°`; continuous was better than parabolic for each case.
   - The harder hard-mask near-Nyquist comparison produced low-pass RMS `1.8403e-04°` and full-band RMS `4.1441e-05°`, with no observed aliasing degradation.
-  - The Stage 1 report retains `JOINT_PHASE3 NOT_IMPLEMENTED`; Phase 3 is now the next implementation step.
-- [ ] Phase 3: joint `(sx, sy, theta)` refinement.
+  - The Stage 1 report now includes the Phase 3 joint row and four-way recovery summary.
+- [x] Phase 3: joint `(sx, sy, theta)` refinement.
+  - Added a classical Euclidean continuous-angle gradient API using the angular Fourier residual coefficients and differentiated shift cross terms.
+  - Added a three-variable L-BFGS-B joint refinement entry point with a periodic angle window and monotonic acceptance relative to the Stage 1 starting point.
+  - Extended the Stage 1 Oracle test to report the Phase 3 row and central-difference gradient error for all three truths.
+  - Oracle Linux 8.10 targeted build and runtime validation passed with `NORMAL STOP`.
+  - All three joint solutions were accepted; the gradient checks were finite with maximum errors of `9.20e-03`, `2.48e-03`, and `9.40e-03` for the three fixtures.
+  - The joint angle RMS was `0.2756°`, improving over continuous-angle RMS `0.3041°`; Windows recompilation was intentionally not repeated on the laptop.
 - [ ] Phase 4: downstream metadata and workflow wiring.
 
 ## Implementation Changes

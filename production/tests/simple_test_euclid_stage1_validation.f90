@@ -17,19 +17,27 @@ type :: recovery_result
     real(dp) :: angle_error_grid = 0.d0
     real(dp) :: angle_error_parabola = 0.d0
     real(dp) :: angle_error_continuous = 0.d0
+    real(dp) :: angle_joint = 0.d0
+    real(dp) :: angle_error_joint = 0.d0
     real(dp) :: shift_rms_grid = 0.d0
     real(dp) :: shift_rms_parabola = 0.d0
     real(dp) :: shift_rms_continuous = 0.d0
+    real(dp) :: shift_rms_joint = 0.d0
     real(dp) :: shift_est_grid(2) = 0.d0
     real(dp) :: shift_est_parabola(2) = 0.d0
     real(dp) :: shift_est_continuous(2) = 0.d0
+    real(dp) :: shift_est_joint(2) = 0.d0
     real(dp) :: shift_expected(2) = 0.d0
     logical :: shift_grid_accepted = .false.
     logical :: shift_parabola_accepted = .false.
     logical :: shift_continuous_accepted = .false.
+    logical :: joint_accepted = .false.
     real(dp) :: loss_grid = 0.d0
     real(dp) :: loss_parabola = 0.d0
     real(dp) :: loss_continuous = 0.d0
+    real(dp) :: loss_joint = 0.d0
+    real(dp) :: joint_gradient_max_error = 0.d0
+    logical :: joint_gradient_finite = .false.
     logical :: finite = .false.
 end type recovery_result
 
@@ -82,6 +90,8 @@ do icase = 1, ncases
         &recovery(icase)%shift_rms_parabola, recovery(icase)%loss_parabola
     write(logfhandle,'(i4,1x,a,3es24.8)') icase, 'CONTINUOUS              ', recovery(icase)%angle_error_continuous, &
         &recovery(icase)%shift_rms_continuous, recovery(icase)%loss_continuous
+    write(logfhandle,'(i4,1x,a,3es24.8)') icase, 'JOINT_PHASE3            ', recovery(icase)%angle_error_joint, &
+        &recovery(icase)%shift_rms_joint, recovery(icase)%loss_joint
     write(logfhandle,'(a,2f12.5)') 'SYNTHETIC_EXPECTED_SHIFT_XY: ', &
         &recovery(icase)%shift_expected
     write(logfhandle,'(a,2f12.5)') 'SYNTHETIC_GRID_SHIFT_ESTIMATE: ', &
@@ -90,19 +100,24 @@ do icase = 1, ncases
         &recovery(icase)%shift_est_parabola
     write(logfhandle,'(a,2f12.5)') 'SYNTHETIC_CONTINUOUS_SHIFT_ESTIMATE: ', &
         &recovery(icase)%shift_est_continuous
-    write(logfhandle,'(a,3l2)') 'SYNTHETIC_SHIFT_ACCEPTED_GRID/PARAB/CONT: ', &
+    write(logfhandle,'(a,2f12.5)') 'SYNTHETIC_JOINT_SHIFT_ESTIMATE: ', &
+        &recovery(icase)%shift_est_joint
+    write(logfhandle,'(a,es16.8,1x,l1)') 'PHASE3_GRADIENT_MAX_ERROR/FINITE: ', &
+        &recovery(icase)%joint_gradient_max_error, recovery(icase)%joint_gradient_finite
+    write(logfhandle,'(a,4l2)') 'SYNTHETIC_SHIFT_ACCEPTED_GRID/PARAB/CONT/JOINT: ', &
         &recovery(icase)%shift_grid_accepted, recovery(icase)%shift_parabola_accepted, &
-        &recovery(icase)%shift_continuous_accepted
+        &recovery(icase)%shift_continuous_accepted, recovery(icase)%joint_accepted
 enddo
-write(logfhandle,'(a,3es24.8)') 'RMS_OVER_CASES GRID/PARAB/CONT ANGLE: ', &
+write(logfhandle,'(a,4es24.8)') 'RMS_OVER_CASES GRID/PARAB/CONT/JOINT ANGLE: ', &
     &sqrt(sum([(recovery(icase)%angle_error_grid**2,icase=1,ncases)])/real(ncases,dp)), &
     &sqrt(sum([(recovery(icase)%angle_error_parabola**2,icase=1,ncases)])/real(ncases,dp)), &
-    &sqrt(sum([(recovery(icase)%angle_error_continuous**2,icase=1,ncases)])/real(ncases,dp))
-write(logfhandle,'(a,3es24.8)') 'RMS_OVER_CASES GRID/PARAB/CONT SHIFT: ', &
+    &sqrt(sum([(recovery(icase)%angle_error_continuous**2,icase=1,ncases)])/real(ncases,dp)), &
+    &sqrt(sum([(recovery(icase)%angle_error_joint**2,icase=1,ncases)])/real(ncases,dp))
+write(logfhandle,'(a,4es24.8)') 'RMS_OVER_CASES GRID/PARAB/CONT/JOINT SHIFT: ', &
     &sqrt(sum([(recovery(icase)%shift_rms_grid**2,icase=1,ncases)])/real(ncases,dp)), &
     &sqrt(sum([(recovery(icase)%shift_rms_parabola**2,icase=1,ncases)])/real(ncases,dp)), &
-    &sqrt(sum([(recovery(icase)%shift_rms_continuous**2,icase=1,ncases)])/real(ncases,dp))
-write(logfhandle,'(a)') 'JOINT_PHASE3             NOT_IMPLEMENTED'
+    &sqrt(sum([(recovery(icase)%shift_rms_continuous**2,icase=1,ncases)])/real(ncases,dp)), &
+    &sqrt(sum([(recovery(icase)%shift_rms_joint**2,icase=1,ncases)])/real(ncases,dp))
 write(logfhandle,'(a)') 'SYNTHETIC_RECOVERY_TABLE_END'
 
 if( any(.not. low_band%finite) .or. any(.not. full_band%finite) .or. any(.not. recovery%finite) .or. &
@@ -155,18 +170,22 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     type(builder) :: b
     type(ori) :: o_ref, o_particle
     type(pftc_shsrch_grad) :: direct_search
+    type(pftc_shsrch_grad) :: joint_search
     real(sp), allocatable, target :: sigma2_noise(:,:)
     real(sp), allocatable :: raw_losses(:)
     complex(sp), allocatable :: coeffs(:)
-    real :: limits(2,2), cxy(3)
+    real :: limits(2,2), joint_limits(3,2), cxy(3), joint_cxy(3)
     real(dp) :: theta_grid, theta_parab, theta_cont, residual, dtheta, ddtheta
     real(dp) :: trial_theta, trial_residual, trial_dtheta, trial_ddtheta, step
-    real(dp) :: shift_grid(2), shift_parabola(2), shift_continuous(2)
+    real(dp) :: shift_grid(2), shift_parabola(2), shift_continuous(2), shift_joint(2)
     real(dp) :: expected_shift(2), objective_initial, objective_final
     real(dp) :: objective_final_grid, objective_final_parabola, objective_final_continuous
     real(dp) :: theta_rad
-    integer :: nrots, igrid, irot_direct, iter, iback, pftsz
-    logical :: accepted, shift_grid_accepted, shift_parabola_accepted, shift_continuous_accepted
+    real(dp) :: theta_joint, joint_loss, joint_grad(3), joint_grad_ref(3), probe_grad(3)
+    real(dp) :: fd_plus, fd_minus, fd_step, fd_error, probe_shift(2), probe_theta
+    integer :: nrots, igrid, irot_direct, irot_joint, iter, iback, pftsz
+    integer :: idim
+    logical :: accepted, shift_grid_accepted, shift_parabola_accepted, shift_continuous_accepted, joint_accepted
 
     call cline%set('vol1', vol_file)
     call cline%set('mskdiam', mskdiam)
@@ -268,6 +287,51 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     objective_final_continuous = objective_final
     call direct_search%kill
 
+    ! Phase 3 starts from the Stage 1 continuous-angle/shift solution and
+    ! permits a small periodic angular window around that point.
+    joint_limits(:,1) = [-5., -5., real(theta_cont)-2.]
+    joint_limits(:,2) = [ 5.,  5., real(theta_cont)+2.]
+    call joint_search%new(b, joint_limits, opt_angle=.false., joint_angle=.true.)
+    call joint_search%set_indices(1,1)
+    irot_joint = modulo(nint(theta_cont)-1,nrots)+1
+    joint_cxy = joint_search%minimize_joint(irot_joint, real(theta_cont), real(shift_continuous), &
+        &sh_rot=.false., theta=theta_joint)
+    joint_accepted = irot_joint > 0
+    if( joint_accepted )then
+        shift_joint = real(joint_cxy(2:),dp)
+    else
+        shift_joint = shift_continuous
+        theta_joint = theta_cont
+    endif
+    call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, shift_joint, theta_joint, joint_loss, joint_grad)
+    joint_grad_ref = joint_grad
+    fd_step = 1.e-3_dp
+    result%joint_gradient_max_error = 0.d0
+    result%joint_gradient_finite = ieee_is_finite(joint_loss) .and. all(ieee_is_finite(joint_grad))
+    do idim = 1, 3
+        probe_shift = shift_joint
+        probe_theta = theta_joint
+        if( idim <= 2 )then
+            probe_shift(idim) = probe_shift(idim) + fd_step
+        else
+            probe_theta = probe_theta + fd_step
+        endif
+        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_theta, fd_plus, probe_grad)
+        probe_shift = shift_joint
+        probe_theta = theta_joint
+        if( idim <= 2 )then
+            probe_shift(idim) = probe_shift(idim) - fd_step
+        else
+            probe_theta = probe_theta - fd_step
+        endif
+        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_theta, fd_minus, probe_grad)
+        fd_error = abs((fd_plus-fd_minus)/(2.d0*fd_step) - joint_grad_ref(idim))
+        result%joint_gradient_max_error = max(result%joint_gradient_max_error, fd_error)
+    enddo
+    result%joint_gradient_finite = result%joint_gradient_finite .and. &
+        &ieee_is_finite(result%joint_gradient_max_error)
+    call joint_search%kill
+
     theta_rad = real(truth_angle,dp) * acos(-1.d0) / 180.d0
     expected_shift = [cos(theta_rad)*real(shift_truth(1),dp) - sin(theta_rad)*real(shift_truth(2),dp), &
         &sin(theta_rad)*real(shift_truth(1),dp) + cos(theta_rad)*real(shift_truth(2),dp)]
@@ -275,25 +339,42 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     result%angle_grid = grid_index_to_angle(b%pftc, theta_grid)
     result%angle_parabola = grid_index_to_angle(b%pftc, theta_parab)
     result%angle_continuous = grid_index_to_angle(b%pftc, theta_cont)
+    result%angle_joint = grid_index_to_angle(b%pftc, theta_joint)
     result%angle_error_grid = angular_error(result%angle_grid, -real(truth_angle,dp))
     result%angle_error_parabola = angular_error(result%angle_parabola, -real(truth_angle,dp))
     result%angle_error_continuous = angular_error(result%angle_continuous, -real(truth_angle,dp))
+    result%angle_error_joint = angular_error(result%angle_joint, -real(truth_angle,dp))
     result%shift_rms_grid = sqrt(sum((shift_grid-expected_shift)**2)/2.d0)
     result%shift_rms_parabola = sqrt(sum((shift_parabola-expected_shift)**2)/2.d0)
     result%shift_rms_continuous = sqrt(sum((shift_continuous-expected_shift)**2)/2.d0)
+    result%shift_rms_joint = sqrt(sum((shift_joint-expected_shift)**2)/2.d0)
     result%shift_est_grid = shift_grid
     result%shift_est_parabola = shift_parabola
     result%shift_est_continuous = shift_continuous
+    result%shift_est_joint = shift_joint
     result%shift_expected = expected_shift
     result%shift_grid_accepted = shift_grid_accepted
     result%shift_parabola_accepted = shift_parabola_accepted
     result%shift_continuous_accepted = shift_continuous_accepted
+    result%joint_accepted = joint_accepted
     result%loss_grid = objective_final_grid
     result%loss_parabola = objective_final_parabola
     result%loss_continuous = objective_final_continuous
-    result%finite = all(ieee_is_finite([result%angle_error_grid, result%angle_error_parabola, &
-        &result%angle_error_continuous, result%shift_rms_grid, result%shift_rms_parabola, &
-        &result%shift_rms_continuous, result%loss_grid, result%loss_parabola, result%loss_continuous]))
+    result%loss_joint = joint_loss
+    result%finite = ieee_is_finite(result%angle_error_grid) .and. &
+        &ieee_is_finite(result%angle_error_parabola) .and. &
+        &ieee_is_finite(result%angle_error_continuous) .and. &
+        &ieee_is_finite(result%angle_error_joint) .and. &
+        &ieee_is_finite(result%shift_rms_grid) .and. &
+        &ieee_is_finite(result%shift_rms_parabola) .and. &
+        &ieee_is_finite(result%shift_rms_continuous) .and. &
+        &ieee_is_finite(result%shift_rms_joint) .and. &
+        &ieee_is_finite(result%loss_grid) .and. &
+        &ieee_is_finite(result%loss_parabola) .and. &
+        &ieee_is_finite(result%loss_continuous) .and. &
+        &ieee_is_finite(result%loss_joint) .and. &
+        &ieee_is_finite(result%joint_gradient_max_error) .and. &
+        &result%joint_gradient_finite
 
     call b%kill_strategy3D_tbox
     call b%kill_general_tbox

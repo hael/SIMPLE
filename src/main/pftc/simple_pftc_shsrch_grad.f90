@@ -31,6 +31,7 @@ type :: pftc_shsrch_grad
     logical                   :: cur_inpl_loss_valid = .false. !< continuous residual is valid
     integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
     logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
+    logical                   :: joint_angle  = .false. !< classical Euclidean joint (sx,sy,theta) mode
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
     logical                   :: direct_only  = .false. !< skip allocating an L-BFGS-B object for direct-gradient use
     logical                   :: raw_roundtrip_check = .false. !< validate vector/scalar raw loss when diagnostics are enabled
@@ -44,6 +45,7 @@ contains
     procedure          :: set_indices => grad_shsrch_set_indices
     procedure          :: minimize    => grad_shsrch_minimize
     procedure          :: minimize_direct => grad_shsrch_minimize_direct
+    procedure          :: minimize_joint => grad_shsrch_minimize_joint
     procedure          :: kill        => grad_shsrch_kill
     procedure          :: does_opt_angle
     procedure          :: set_limits
@@ -89,7 +91,7 @@ contains
         grad_shsrch_diagnostic_failed = self%raw_roundtrip_failed
     end function grad_shsrch_diagnostic_failed
 
-    subroutine grad_shsrch_new( self, build, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init, direct_only )
+    subroutine grad_shsrch_new( self, build, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init, direct_only, joint_angle )
         use simple_opt_factory, only: opt_factory
         class(pftc_shsrch_grad),     intent(inout) :: self           !< instance
         class(builder),      target, intent(in)    :: build          !< builder object for pftc access
@@ -100,6 +102,7 @@ contains
         logical,           optional, intent(in)    :: opt_angle      !< optimise in-plane angle with callback flag
         logical,           optional, intent(in)    :: coarse_init    !< coarse inital search
         logical,           optional, intent(in)    :: direct_only    !< configure for the bounded direct-gradient path only
+        logical,           optional, intent(in)    :: joint_angle    !< configure the 3D Euclidean joint path
         type(opt_factory) :: opt_fact
         call self%kill
         self%cur_inpl_ang        = 0.
@@ -120,8 +123,15 @@ contains
         if( present(coarse_init) ) self%coarse_init = coarse_init
         self%direct_only = .false.
         if( present(direct_only) ) self%direct_only = direct_only
+        self%joint_angle = .false.
+        if( present(joint_angle) ) self%joint_angle = joint_angle
+        if( self%joint_angle )then
+            if( self%direct_only ) THROW_HARD('joint angle path cannot be direct-only')
+            if( .not. self%b_ptr%pftc%is_euclid_objfun() ) THROW_HARD('joint angle path requires Euclidean objective')
+            self%opt_angle = .false.
+        endif
         ! make optimizer spec
-        call self%ospec%specify('lbfgsb', 2, factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
+        call self%ospec%specify('lbfgsb', merge(3,2,self%joint_angle), factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
         if( .not. self%direct_only ) call opt_fact%new(self%ospec, self%opt_obj)
@@ -161,7 +171,15 @@ contains
         select type(self)
             class is (pftc_shsrch_grad)
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
-                cost = - self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+                if( self%joint_angle )then
+                    block
+                        real(dp) :: joint_grad(3)
+                        call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
+                            &vec(1:2), vec(3), cost, joint_grad)
+                    end block
+                else
+                    cost = - self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+                endif
             class default
                 THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
@@ -172,13 +190,19 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: grad(D)
-        real(dp)                :: corrs_grad(2)
+        real(dp)                :: corrs_grad(2), joint_grad(3), joint_loss
         grad = 0.
         select type(self)
             class is (pftc_shsrch_grad)
                 self%profile_gradient_evals = self%profile_gradient_evals + 1_int64
-                call self%b_ptr%pftc%gen_corr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
-                grad = - corrs_grad
+                if( self%joint_angle )then
+                    call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
+                        &vec(1:2), vec(3), joint_loss, joint_grad)
+                    grad = joint_grad
+                else
+                    call self%b_ptr%pftc%gen_corr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
+                    grad = - corrs_grad
+                endif
             class default
                 THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
         end select
@@ -190,16 +214,22 @@ contains
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: f, grad(D)
         real(dp)                :: corrs
-        real(dp)                :: corrs_grad(2)
+        real(dp)                :: corrs_grad(2), joint_grad(3)
         f    = 0.
         grad = 0.
         select type(self)
             class is (pftc_shsrch_grad)
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
                 self%profile_gradient_evals  = self%profile_gradient_evals  + 1_int64
-                call self%b_ptr%pftc%gen_corr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
-                f    = - corrs
-                grad = - corrs_grad
+                if( self%joint_angle )then
+                    call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
+                        &vec(1:2), vec(3), f, joint_grad)
+                    grad = joint_grad
+                else
+                    call self%b_ptr%pftc%gen_corr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+                    f    = - corrs
+                    grad = - corrs_grad
+                endif
             class default
                 THROW_HARD('error in grad_shsrch_fdfcostfun: unknown type; grad_shsrch_fdfcostfun')
         end select
@@ -416,6 +446,54 @@ contains
         end if
         if( present(xy_in) ) self%coarse_init = coarse_init_orig
     end function grad_shsrch_minimize
+
+    !> Phase 3 classical Euclidean joint refinement over (sx,sy,theta).
+    !! The angle is a continuous grid coordinate and is deliberately not
+    !! passed through the Stage 1 angle callback.  The PFTC objective is
+    !! periodic, so bounds may safely straddle the first or last grid index.
+    function grad_shsrch_minimize_joint( self, irot, theta_in, xy_in, sh_rot, theta ) result(cxy)
+        class(pftc_shsrch_grad), intent(inout) :: self
+        integer,                 intent(inout) :: irot
+        real,                    intent(in)    :: theta_in, xy_in(2)
+        logical,       optional, intent(in)    :: sh_rot
+    real(dp),      optional, intent(out)   :: theta
+        real :: cxy(3), rotmat(2,2), lowest_cost
+        real(dp) :: initial_cost, final_cost, joint_grad(3), improve_tol
+        logical :: l_sh_rot
+
+        if( .not. self%joint_angle ) THROW_HARD('joint minimization requested from a non-joint search object')
+        if( self%direct_only ) THROW_HARD('joint minimization requested from a direct-only search object')
+        l_sh_rot = .true.
+        if( present(sh_rot) ) l_sh_rot = sh_rot
+        self%ospec%x = [xy_in, theta_in]
+        self%ospec%x_8 = dble(self%ospec%x)
+        self%cur_inpl_ang = theta_in
+        self%cur_inpl_idx = modulo(nint(theta_in)-1,self%nrots)+1
+        call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
+            &self%ospec%x_8(1:2), self%ospec%x_8(3), initial_cost, joint_grad)
+        self%profile_objective_evals = self%profile_objective_evals + 1_int64
+        call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+        final_cost = real(lowest_cost,dp)
+        improve_tol = 64.d0 * epsilon(1.d0) * max(1.d0, abs(initial_cost), abs(final_cost))
+        if( .not. ieee_is_finite(final_cost) .or. final_cost >= initial_cost - improve_tol )then
+            irot = 0
+            cxy = 0.
+            if( present(theta) ) theta = 0.
+            return
+        endif
+        self%cur_inpl_ang = self%ospec%x(3)
+        self%cur_inpl_idx = modulo(nint(self%cur_inpl_ang)-1,self%nrots)+1
+        self%cur_inpl_loss = final_cost
+        self%cur_inpl_loss_valid = .true.
+        irot = self%cur_inpl_idx
+        cxy(1) = real(exp(-final_cost))
+        cxy(2:) = self%ospec%x(1:2)
+        if( present(theta) ) theta = self%cur_inpl_ang
+        if( l_sh_rot )then
+            call rotmat2d(grad_shsrch_get_angle(self), rotmat)
+            cxy(2:) = matmul(cxy(2:), rotmat)
+        endif
+    end function grad_shsrch_minimize_joint
 
     !> Bounded direct-gradient minimization for the streaming SGD path.
     !! The PFTC routine supplies grad(C) for the correlation objective.  We
@@ -687,6 +765,7 @@ contains
         call self%ospec%kill
         nullify(self%b_ptr)
         self%direct_only = .false.
+        self%joint_angle = .false.
         call self%reset_profile
     end subroutine grad_shsrch_kill
 

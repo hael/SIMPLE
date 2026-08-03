@@ -198,6 +198,7 @@ type :: polarft_calc
     procedure          :: gen_euclid_angular_coeffs
     procedure          :: eval_euclid_resid_at_angle
     procedure          :: gen_raw_euclid_grad_for_rot_8
+    procedure          :: gen_raw_euclid_grad_at_angle
     procedure, private :: gen_corr_cc_grad_for_rot_8
     procedure, private :: gen_euclid_grad_for_rot_8
     procedure, private :: gen_denoised_corr_grad_for_rot_8
@@ -885,6 +886,13 @@ interface
         real(dp),                    intent(in)    :: shvec(2)
         real(dp),                    intent(out)   :: f, grad(2)
     end subroutine gen_raw_euclid_grad_for_rot_8
+
+    module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, theta, f, grad)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2), theta
+        real(dp),                    intent(out)   :: f, grad(3)
+    end subroutine gen_raw_euclid_grad_at_angle
 
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self
