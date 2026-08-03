@@ -1,3 +1,10 @@
+# Feature safety rule
+
+Every new feature must be protected by an explicit opt-in key, with the default
+set to disabled. Existing behavior must remain unchanged unless the user
+enables the feature deliberately. Add validation for the key and test both the
+default-off and opt-in paths before release.
+
 # Codex Repository References
 
 - `doc/code_overview/code_base_map.md` — generated source tree and module overview.

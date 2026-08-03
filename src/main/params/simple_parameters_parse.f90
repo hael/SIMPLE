@@ -133,6 +133,7 @@ contains
         call reg%add_char('nu_refine', self%nu_refine)
         call reg%add_char('objfun_den', self%objfun_den)
         call reg%add_char('objfun', self%objfun)
+        call reg%add_char('inpl_refine', self%inpl_refine)
         call reg%add_char('omit_neg', self%omit_neg)
         call reg%add_char('opt', self%opt)
         call reg%add_char('optics_dir', self%optics_dir)

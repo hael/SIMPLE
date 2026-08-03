@@ -10,6 +10,9 @@ Implement continuous in-plane angle refinement for `objfun=euclid` in gated stag
 4. Only if justified, extend L-BFGS-B to jointly refine `(sx, sy, theta)`.
 5. Propagate the continuous angle through alignment metadata and class-average assembly.
 
+The feature is opt-in: `inpl_refine=no` is the default, and continuous refinement is
+enabled only by `inpl_refine=yes` in the eligible classical Euclidean stages.
+
 The existing integer `irot` interface remains compatible throughout the transition.
 
 ## Progress
@@ -57,13 +60,24 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - The joint angle RMS was `0.2756°`, improving over continuous-angle RMS `0.3041°`; Windows recompilation was intentionally not repeated on the laptop.
 - [x] Phase 4A: classical Euclidean 2D metadata and workflow wiring.
   - Added a gated production gateway in the classical Euclidean 2D search strategy: the discrete candidate is refined by Stage 1, then passed to the Phase 3 three-variable L-BFGS-B path.
-  - The gateway is disabled for streaming SGD, time-series shift-only search, probabilistic-table generation, and non-Euclidean objectives.
+  - The public `inpl_refine` key defaults to `no`; the gateway requires `inpl_refine=yes` and is disabled for streaming SGD, time-series shift-only search, probabilistic-table generation, and non-Euclidean objectives.
   - Selected orientations receive the continuous `e3` value while legacy integer `inpl` indices remain populated for search tables and compatibility.
   - A real Oracle Linux classical Euclidean `abinitio2D` workflow completed five iterations with `objfun=euclid` and `sgd=no`, including repeated `SIMPLE_CLUSTER2D NORMAL STOP` and final `SIMPLE_ABINITIO2D NORMAL STOP` markers.
   - Focused route-identity, Stage 1, and SGD regression tests also passed on Oracle Linux; conventional CTest is not used as the SIMPLE acceptance gate because the project test workflow is direct `simple_test_*` execution.
 - [ ] Phase 4B: classical Euclidean 3D metadata and workflow wiring.
   - The 3D gateway implementation is present but intentionally not accepted or committed until the 2D pathway is fully reviewed.
   - 3D workflow validation and any required 3D corrections remain pending.
+- [ ] 2D-only completion: production metadata and final regression.
+  - Added `simple_test_euclid_2d_metadata` to verify persisted continuous `e3`, compatible integer `inpl`, and class-average metadata after a real `abinitio2D` run.
+  - The check reads the final project metadata; it does not depend on temporary `algndoc_*.simple` files, which the normal workflow removes during cleanup.
+  - When the workflow is run with `mkdir=yes`, launch from the repository `build/` directory and validate the copied project inside a build-local execution directory such as `build/1_abinitio2D`; do not place generated artifacts at the repository root.
+  - Before the opt-in switch was added, Oracle compilation and execution passed: `ACTIVE=200`, `OFFGRID=199`, `INVALID=0`, `NONFINITE=0`, `ROTATIONS=288`, and `CLASS_AVERAGES=3`. The default-off and explicit opt-in contracts now require rerunning this regression.
+  - Pending Oracle gates: classical checkpoint stop/resume, public `abinitio2D` execution with the non-Euclidean `cc` objective (the internal cluster2D path is not a public `simple_exec prg`), and a fresh real-data Euclidean run with final-project metadata inspection.
+  - Checkpoint creation and resume now pass in `build/1_abinitio2D`: stage 1 reached `last_iter=5`, persisted the required reference stacks, stage 2 resumed from iteration 5, completed through iteration 10, generated final class averages/rankings, and ended with `SIMPLE_ABINITIO2D NORMAL STOP`. The resume must run from the build-local execution directory because `mkdir=no` preserves relative reference paths.
+  - Restart metadata validation also passed: `ACTIVE=200`, `OFFGRID=200`, `INVALID=0`, `NONFINITE=0`, `ROTATIONS=288`, and `CLASS_AVERAGES=3`.
+  - The public `abinitio2D` `objfun=cc` alternate path completed clustering and class-average generation but exposed an existing finalization bug: sigma2 metadata was registered unconditionally although `cc` correctly produces no `sigma2_it_*.star` file. Finalization now skips this optional project entry when the file is absent; Oracle rebuild and rerun remain pending.
+  - The metadata test now checks both contracts: `inpl_refine=yes` must produce at least one off-grid continuous `e3`, while `inpl_refine=no` must produce none. The `cc` workflow is tested with the key enabled to confirm the objective gate still keeps continuous refinement off.
+  - After these gates, restore and validate the deferred 3D extension.
 
 ## Implementation Changes
 
@@ -187,6 +201,7 @@ Add focused tests under the existing production test framework, preferably along
 8. **Workflow regression**
    - Run the existing polar FFT, class-search, 2D search, and 3D search tests affected by the API.
    - Confirm non-Euclidean objectives and direct-only paths remain unchanged.
+   - Run public `abinitio2D` with `objfun=euclid inpl_refine=no`, with `objfun=euclid inpl_refine=yes`, and with `objfun=cc inpl_refine=yes`; only the explicit Euclidean opt-in run may persist off-grid continuous `e3` values.
 
 ## Acceptance and Rollout
 
@@ -201,6 +216,8 @@ Add focused tests under the existing production test framework, preferably along
 
 - The full staged roadmap is desired, with Stage 0–1 as the gated first deliverable.
 - Continuous refinement is enabled only for `objfun=euclid` and the non-direct refinement path.
+- Continuous refinement is opt-in through `inpl_refine=yes`; the default is `inpl_refine=no`.
+- The runtime gateway additionally requires a classical, non-SGD, non-time-series, non-probabilistic gated stage.
 - The current dirty worktree changes belong to the user and must not be overwritten.
 - Integer `irot` remains the compatibility index; continuous angle is an additive output and metadata enhancement.
 - The original plan’s sign convention and local ±2-grid-step Stage 2 window are authoritative.

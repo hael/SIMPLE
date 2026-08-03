@@ -726,6 +726,11 @@ contains
                 write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
                 THROW_HARD('unsupported objective function')
         end select
+        select case(trim(self%inpl_refine))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('inpl_refine must be yes or no')
+        end select
         select case(trim(self%sgd))
             case('yes')
                 self%l_sgd = .true.

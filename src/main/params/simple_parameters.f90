@@ -296,6 +296,7 @@ type :: parameters
     character(len=STDLEN)     :: multi_moldiams=''    !< list of molecular diameters to be used for multiple gaussian pick
     character(len=4)          :: objfun_den='no'      !< augment raw Euclidean objective with denoised-particle correlation(yes|no){no}
     character(len=7)          :: objfun='euclid'      !< objective function(euclid|cc){euclid}
+    character(len=3)          :: inpl_refine='no'     !< enable continuous Euclidean in-plane refinement(yes|no){no}
     character(len=STDLEN)     :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN)     :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN)     :: pca_mode='ppca' !< PCA mode(ppca|ppca_kpca_resid|pca_svd|kpca|diffusion_maps){ppca}

@@ -88,8 +88,10 @@ contains
         self%nrots       = self%b_ptr%pftc%get_nrots()
         if( self%nrots < 1 ) THROW_HARD('strategy2D_srch constructed before PFTC rotations were initialized')
         self%nrefs_eval  = 0
-        self%use_joint_angle = self%b_ptr%pftc%is_euclid_objfun() .and. &
-            &(.not. self%p_ptr%l_sgd_streaming_active) .and. trim(self%p_ptr%tseries) /= 'yes'
+        self%use_joint_angle = trim(self%p_ptr%inpl_refine) == 'yes' .and. &
+            &self%b_ptr%pftc%is_euclid_objfun() .and. &
+            &(.not. self%p_ptr%l_sgd_streaming_active) .and. trim(self%p_ptr%tseries) /= 'yes' .and. &
+            &(.not. self%p_ptr%l_prob_align_mode)
         self%best_inpl_e3_valid = .false.
         ! construct composites
         self%trs        =  self%p_ptr%trs

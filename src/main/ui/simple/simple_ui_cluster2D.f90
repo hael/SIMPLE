@@ -59,6 +59,12 @@ subroutine new_abinitio2D( prgtab )
         &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="search", &
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
+        call abinitio2D%add_input(UI_SRCH, 'inpl_refine', 'binary', &
+        &'Continuous in-plane refinement', &
+        &'Enable continuous Euclidean in-plane angle refinement in gated classical stages(yes|no){no}', '', &
+        &.false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
         &'Sigma estimation method(group|global){global}','', .false., 'global', group="search", &
         &choices=ui_choices([character(len=6) :: 'group', 'global']), &
