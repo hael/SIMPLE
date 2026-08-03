@@ -163,13 +163,13 @@ subroutine new_abinitio2D_stream( prgtab )
         call master%add_input(UI_FILE, 'dir_movies', 'dir',  'Input movies directory',   'Input movies directory',   '', .true.,  '', &
         &visibility=UI_VIS_STANDARD)
         call master%add_input(UI_FILE, 'dir_meta',   'dir',  'Input metadata directory', 'Input metadata directory', '', .false., '', &
-        &visibility=UI_VIS_DEVELOPER)
+        &visibility=UI_VIS_STANDARD)
         call master%add_input(UI_FILE, 'gainref',    'file', 'Gain reference',           'Gain reference',           '', .false., '', &
-        &visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_IMG, 'flipgain',   'multi',  'Gain processing', 'Gain processing(none|flip_auto|flip_x|flip_y|flip_xy|generate){none}','', .false., 'none', &
-        &choices=ui_choices([character(len=9) :: 'none', 'flip_auto', 'flip_x', 'flip_y', 'flip_xy', 'generate']), &
-        &visibility=UI_VIS_DEVELOPER)
+        &visibility=UI_VIS_STANDARD)
         ! parameter input/output
+        call master%add_input(UI_PARM, 'flipgain',       'multi',         'Gain processing', 'Gain processing(none|flip_auto|flip_x|flip_y|flip_xy|generate){none}', '', .false., 'none', &
+        &choices=ui_choices([character(len=9) :: 'none', 'flip_auto', 'flip_x', 'flip_y', 'flip_xy', 'generate']), &
+        &visibility=UI_VIS_STANDARD)
         call master%add_input(UI_PARM, 'cs',             'float',  'Spherical aberration (mm)',   'Spherical aberration (mm)',   '2.7',                    .true.,  '', &
         &visibility=UI_VIS_STANDARD)
         call master%add_input(UI_PARM, 'fraca',          'float',  'Amplitude contrast fraction', 'Amplitude contrast fraction', '0.1',                    .true.,  '', &
@@ -180,17 +180,17 @@ subroutine new_abinitio2D_stream( prgtab )
         &visibility=UI_VIS_STANDARD)
         call master%add_input(UI_PARM, 'fit_phshift',    'binary', 'Fit CTF phase shift', &
         &'Fit the additive phase shift during CTF estimation (yes|no){no}', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_PARM, 'phshift_min',    'float',  'Minimum CTF phase shift',     'Minimum fitted additive phase shift in degrees, 0-360; a window narrower than 180 degrees fixes the sign of the fitted CTF', '0',   .false., '', visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_PARM, 'phshift_max',    'float',  'Maximum CTF phase shift',     'Maximum fitted additive phase shift in degrees, 0-360; fitting is blind to a 180-degree offset, so narrow the window around the expected phase', '180', .false., '', visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_PARM, 'phshift_step',   'float',  'CTF phase-shift step',        'Initial phase-shift grid step in degrees', '10',  .false., '', visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_PARM, 'smpd_downscale', 'hidden_float', 'Downscaled pixel size (A)',   'Downscaled pixel size (A)',   real2str(SMPD4DOWNSCALE), .false., '', visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_PARM, 'total_dose',     'float',  'Total exposure dose (e/A2)',  'Total exposure dose (e/A2)',  '',                       .true.,  '', visibility=UI_VIS_STANDARD)
-        call master%add_input(UI_IMG, 'pickrefs', 'file',   '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)',    '', .false., '', visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_PARM, 'box_extract',    'int',    'Force box size (px, optional)',                        'force a box size (px) eg. to match an existing dataset"', '', .false., '', visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_FILE, 'dir_preprocess', 'hidden_dir',    'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '',                                    .false., '', visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_PARM, 'nicedispid',     'hidden_int',    'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '', visibility=UI_VIS_DEVELOPER)
-        call master%add_input(UI_PARM, 'thres',          'hidden_float',  'Distance threshold for peak picking(A)', 'Distance threshold for peak picking(A)', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_PARM, 'phshift_min',    'float',         'Minimum CTF phase shift', 'Minimum fitted additive phase shift in degrees, 0-360; a window narrower than 180 degrees fixes the sign of the fitted CTF', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'phshift_max',    'float',         'Maximum CTF phase shift', 'Maximum fitted additive phase shift in degrees, 0-360; fitting is blind to a 180-degree offset, so narrow the window around the expected phase', '180', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'phshift_step',   'float',         'CTF phase-shift step', 'Initial phase-shift grid step in degrees', '10', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'smpd_downscale', 'float',         'Downscaled pixel size (A)', 'Downscaled pixel size (A)', real2str(SMPD4DOWNSCALE), .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'total_dose',     'float',         'Total exposure dose (e/A2)', 'Total exposure dose (e/A2)', '', .true., '', visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_FILE, 'pickrefs',       'file',          '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)', '', .false., '', visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_PARM, 'box_extract',    'int',           'Force box size (px, optional)', 'force a box size (px) eg. to match an existing dataset"', '', .false., '', visibility=UI_VIS_STANDARD)
+        call master%add_input(UI_FILE, 'dir_preprocess', 'dir',           'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'nicedispid',     'int',           'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'thres',          'float',         'Distance threshold for peak picking(A)', 'Distance threshold for peak picking(A)', '0', .false., '', visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! search controls
         ! filter controls
