@@ -1,5 +1,6 @@
 !@descr: polarft class submodule for objective function evaluations
 submodule (simple_polarft_calc) simple_polarft_corr
+use simple_defs, only: DTWOPI
 use simple_eul_prob_tab_utils, only: sample_bounded_dist, sample_likelihood_dist, sample_power_dist
 #include "simple_local_flags.inc"
 implicit none
@@ -291,20 +292,21 @@ contains
         euclids = exp(-raw_losses)
     end subroutine gen_euclids
 
-    ! Private implementation shared by the legacy score and streaming SGD
-    ! paths.  It remains a normal subroutine in this submodule, so it is not
-    ! added to the polarft_calc public type-bound API.
+    ! Private implementation shared by the classical Euclidean score and
+    ! continuous-angle coefficient paths.  It remains a normal subroutine in
+    ! this submodule, so it is not added to the polarft_calc public API.
     !
     ! All mutable FFT work arrays are per-OpenMP-thread.  In particular,
     ! crvec1(ithr) aliases one FFT allocation as complex input and real output;
     ! heap_vars(ithr)%shmat and cmat2_many(ithr) hold shifted-reference work.
     ! Keep the thread index local to this call.  Sharing these buffers across
     ! threads can corrupt FFT state and cause a late segmentation fault.
-    subroutine gen_raw_euclid_vals_impl( self, iref, iptcl, shift, losses )
+    subroutine gen_raw_euclid_vals_impl( self, iref, iptcl, shift, losses, coeffs )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: losses(self%nrots)
+        complex(sp), optional,       intent(out)   :: coeffs(:)
         complex(sp), pointer :: shmat(:,:)
         complex(sp) :: c
         real(dp)    :: ptcl_sqsum
@@ -384,6 +386,14 @@ contains
                 end do
             endif
         endif
+        A_sp = real(ptcl_sqsum * real(2*self%nrots, dp), sp)
+        if( present(coeffs) )then
+            if( size(coeffs) /= self%pftsz + 1 )then
+                THROW_HARD('invalid angular coefficient size; gen_raw_euclid_vals_impl')
+            endif
+            coeffs = self%crvec1(ithr)%c / A_sp
+            coeffs(1) = coeffs(1) + cmplx(1.,0.,kind=sp)
+        endif
         ! IFFT
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         ! Normalize the shared raw Euclidean residual.  The IFFT contains the
@@ -395,7 +405,6 @@ contains
         ! Do not exponentiate here: SGD selects the minimum raw loss, while
         ! gen_euclids applies the legacy monotone score transform in its
         ! wrapper above.
-        A_sp = real(ptcl_sqsum * real(2*self%nrots, dp), sp)
         ! For each discrete rotation r, expose the finite Gaussian loss
         !
         !   L_r = sum_k w_k |X_k - CTF_k R_r S_s A_k|^2 / wsqsum(X).
@@ -415,6 +424,56 @@ contains
         ! streaming paths cannot acquire different numerical logic.
         call gen_raw_euclid_vals_impl(self, iref, iptcl, shift, losses)
     end subroutine gen_raw_euclid_vals
+
+    module subroutine gen_euclid_angular_coeffs(self, iref, iptcl, shift, coeffs, irot)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(sp),                    intent(in)    :: shift(2)
+        complex(sp),                 intent(out)   :: coeffs(:)
+        integer,                     intent(out)   :: irot
+        real(sp) :: losses(self%nrots)
+        call gen_raw_euclid_vals_impl(self, iref, iptcl, shift, losses, coeffs)
+        irot = minloc(losses, dim=1)
+    end subroutine gen_euclid_angular_coeffs
+
+    module subroutine eval_euclid_resid_at_angle(self, coeffs, theta, residual, dtheta, ddtheta)
+        class(polarft_calc), intent(in)  :: self
+        complex(sp),         intent(in)  :: coeffs(:)
+        real(dp),            intent(in)  :: theta
+        real(dp),            intent(out) :: residual, dtheta, ddtheta
+        integer  :: m
+        real(dp) :: phase, dphase, frequency
+        complex(dp) :: z
+        if( size(coeffs) /= self%pftsz + 1 )then
+            THROW_HARD('invalid angular coefficient size; eval_euclid_resid_at_angle')
+        endif
+        phase    = DTWOPI * (theta - 1.d0) / real(self%nrots,dp)
+        dphase   = DTWOPI / real(self%nrots,dp)
+        residual = real(coeffs(1),dp)
+        dtheta   = 0.d0
+        ddtheta  = 0.d0
+        ! The current grid objective uses p=1:pftsz, i.e. frequencies
+        ! m=0:(pftsz-1), and deliberately leaves the Nyquist slot empty.
+        ! Keep the evaluator compatible with that route while handling a
+        ! populated Nyquist coefficient with its single real-valued weight.
+        do m = 1, self%pftsz - 1
+            frequency = real(m,dp) * dphase
+            z = cmplx(real(coeffs(m+1),dp), aimag(coeffs(m+1)), kind=dp) * &
+                exp(cmplx(0.d0, real(m,dp)*phase, kind=dp))
+            residual = residual + 2.d0 * real(z,dp)
+            dtheta   = dtheta   - 2.d0 * frequency * aimag(z)
+            ddtheta  = ddtheta  - 2.d0 * frequency * frequency * real(z,dp)
+        enddo
+        m = self%pftsz
+        if( abs(coeffs(m+1)) > 0._sp )then
+            frequency = real(m,dp) * dphase
+            z = cmplx(real(coeffs(m+1),dp), aimag(coeffs(m+1)), kind=dp) * &
+                exp(cmplx(0.d0, real(m,dp)*phase, kind=dp))
+            residual = residual + real(z,dp)
+            dtheta   = dtheta   - frequency * aimag(z)
+            ddtheta  = ddtheta  - frequency * frequency * real(z,dp)
+        endif
+    end subroutine eval_euclid_resid_at_angle
 
     module subroutine gen_hybrid_scores( self, iref, iptcl, shift, scores )
         class(polarft_calc), target, intent(inout) :: self

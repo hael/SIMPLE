@@ -28,8 +28,15 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Windows UCRT64 compile/link verification passed.
   - Oracle Linux 8.10 runtime validation passed with 288 rotations: legacy-score error `2.91e-08`, scalar-gradient error `3.60e-07`, tolerance `1.11e-03`; the focused parabolic check also passed.
   - Revalidated the updated `HEAD` on Oracle Linux 8.10 with two independent runs: legacy-score errors `2.87e-08` and `2.91e-08`, scalar-gradient errors `2.70e-07` and `3.70e-07`; both completed with `NORMAL STOP`.
-- [ ] Phase 2: continuous angular refinement.
-- [ ] Stage 1 validation: route identity, gradients, aliasing, and synthetic recovery.
+- [x] Phase 2 implementation: continuous angular refinement (classical Euclidean likelihood path only).
+  - The current implementation changes only the classical polar Euclidean refinement path and its focused route-identity test.
+  - No streaming-SGD implementation or test path is being extended; treat SGD as out of scope for this effort.
+  - Windows MSYS2 UCRT64 compile/link verification completed before the build was stopped.
+- [x] Phase 2 focused validation: coefficient route identity and angular derivatives.
+  - Oracle Linux 8.10 runtime passed with 288 rotations and `NORMAL STOP`.
+  - Legacy-score error `2.96171144e-08`; scalar-gradient error `2.26158719e-07`; tolerance `1.08889884e-03`.
+  - Angular grid error `1.33313786e-07`; periodic error `9.36750677e-17`; first-derivative error `1.32675199e-08`; second-derivative error `9.03031514e-09`; angular tolerance `1.08889884e-03`.
+- [ ] Phase 2 extended validation: aliasing experiment, synthetic recovery, and the required four-way recovery table.
 - [ ] Phase 3: joint `(sx, sy, theta)` refinement.
 - [ ] Phase 4: downstream metadata and workflow wiring.
 
@@ -67,6 +74,8 @@ Extend `simple_polarft_calc.f90` and `simple_polarft_corr.f90` with Euclidean-on
 ### 3. Stage 1 angle refinement
 
 Update `simple_pftc_shsrch_grad.f90`:
+
+- Scope this refinement to the classical SIMPLE Euclidean likelihood path. Do not add new SGD integration while that path is being reconsidered.
 
 - Add `cur_inpl_ang` alongside `cur_inpl_idx`.
 - Replace the discrete angle callback’s final `maxloc` selection with:
@@ -151,7 +160,7 @@ Add focused tests under the existing production test framework, preferably along
    - Require results to match the existing discrete-angle behavior.
 
 8. **Workflow regression**
-   - Run the existing polar FFT, class-search, 2D search, 3D search, and SGD tests affected by the API.
+   - Run the existing polar FFT, class-search, 2D search, and 3D search tests affected by the API.
    - Confirm non-Euclidean objectives and direct-only paths remain unchanged.
 
 ## Acceptance and Rollout

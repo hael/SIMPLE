@@ -27,6 +27,8 @@ type :: pftc_shsrch_grad
     logical                   :: shbarr       = .true.  !< shift barrier constraint or not
     integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
     real                      :: cur_inpl_ang = 0.      !< continuous angle in grid-index units
+    real(dp)                  :: cur_inpl_loss = 0.d0   !< continuous Euclidean residual at cur_inpl_ang
+    logical                   :: cur_inpl_loss_valid = .false. !< continuous residual is valid
     integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
     logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
@@ -90,7 +92,7 @@ contains
     subroutine grad_shsrch_new( self, build, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init, direct_only )
         use simple_opt_factory, only: opt_factory
         class(pftc_shsrch_grad),     intent(inout) :: self           !< instance
-        class(builder),      target, intent(in)    :: build          !< builder object for pftc access 
+        class(builder),      target, intent(in)    :: build          !< builder object for pftc access
         real,                        intent(in)    :: lims(:,:)      !< limits for barrier constraint
         real,              optional, intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
         character(len=*),  optional, intent(in)    :: shbarrier      !< shift barrier constraint or not
@@ -100,6 +102,9 @@ contains
         logical,           optional, intent(in)    :: direct_only    !< configure for the bounded direct-gradient path only
         type(opt_factory) :: opt_fact
         call self%kill
+        self%cur_inpl_ang        = 0.
+        self%cur_inpl_loss       = 0.d0
+        self%cur_inpl_loss_valid = .false.
         ! set pointer to pftc instance for cost function evaluations
         self%b_ptr => build
         ! flag the barrier constraint
@@ -202,14 +207,53 @@ contains
 
     subroutine grad_shsrch_optimize_angle( self )
         class(pftc_shsrch_grad), intent(inout) :: self
-        real :: objective(self%nrots), raw_losses(self%nrots)
-        integer :: jmax
+        real :: objective(self%nrots)
+        complex(sp), allocatable :: coeffs(:)
+        real(dp) :: theta, trial_theta, residual, dtheta, ddtheta
+        real(dp) :: trial_residual, trial_dtheta, trial_ddtheta, step
+        integer :: jmax, iter, iback
+        logical :: accepted
+        self%cur_inpl_loss_valid = .false.
         if( self%b_ptr%pftc%is_euclid_objfun() )then
-            call self%b_ptr%pftc%gen_raw_euclid_vals(self%reference, self%particle, &
-                &real(self%ospec%x,sp), raw_losses)
-            objective = -raw_losses
-            jmax = maxloc(objective, dim=1)
-            self%cur_inpl_ang = real(jmax) + parabolic_peak_offset(objective, jmax)
+            allocate(coeffs(self%b_ptr%pftc%get_pftsz()+1))
+            call self%b_ptr%pftc%gen_euclid_angular_coeffs(self%reference, self%particle, &
+                &real(self%ospec%x,sp), coeffs, jmax)
+            theta = real(jmax,dp)
+            call self%b_ptr%pftc%eval_euclid_resid_at_angle(coeffs, theta, &
+                &residual, dtheta, ddtheta)
+            if( ieee_is_finite(residual) .and. ieee_is_finite(dtheta) .and. &
+                &ieee_is_finite(ddtheta) )then
+                do iter = 1, 3
+                    if( ddtheta <= 0.d0 ) exit
+                    step = -dtheta / ddtheta
+                    if( .not. ieee_is_finite(step) ) exit
+                    step = max(-0.5d0, min(0.5d0, step))
+                    if( abs(step) <= 10.d0*epsilon(1.d0) ) exit
+                    accepted = .false.
+                    do iback = 0, 3
+                        trial_theta = theta + step
+                        call self%b_ptr%pftc%eval_euclid_resid_at_angle(coeffs, trial_theta, &
+                            &trial_residual, trial_dtheta, trial_ddtheta)
+                        if( ieee_is_finite(trial_residual) .and. &
+                            &trial_residual <= residual )then
+                            theta    = trial_theta
+                            residual = trial_residual
+                            dtheta   = trial_dtheta
+                            ddtheta  = trial_ddtheta
+                            accepted = .true.
+                            exit
+                        endif
+                        step = 0.5d0 * step
+                    enddo
+                    if( .not. accepted ) exit
+                enddo
+                self%cur_inpl_loss = residual
+                self%cur_inpl_loss_valid = .true.
+            else
+                theta = real(jmax,dp)
+            endif
+            self%cur_inpl_ang = real(theta)
+            deallocate(coeffs)
         else
             call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, objective)
             jmax = maxloc(objective, dim=1)
@@ -271,9 +315,19 @@ contains
         self%ospec%x_8 = dble(self%ospec%x)
         found_better   = .false.
         if( self%opt_angle )then
-            call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
-            call grad_shsrch_optimize_angle(self)
-            lowest_cost_overall = -corrs(self%cur_inpl_idx)
+            if( self%b_ptr%pftc%is_euclid_objfun() )then
+                call grad_shsrch_optimize_angle(self)
+                if( self%cur_inpl_loss_valid )then
+                    lowest_cost_overall = self%cur_inpl_loss
+                else
+                    call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+                    lowest_cost_overall = -corrs(self%cur_inpl_idx)
+                endif
+            else
+                call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+                call grad_shsrch_optimize_angle(self)
+                lowest_cost_overall = -corrs(self%cur_inpl_idx)
+            endif
             initial_cost        = lowest_cost_overall
             if( self%coarse_init )then
                 call self%coarse_search_opt_angle(init_xy, init_rot)
@@ -288,12 +342,21 @@ contains
             do i = 1,self%max_evals
                 call self%opt_obj%minimize(self%ospec, self, lowest_cost)
                 loc = self%cur_inpl_idx
-                call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+                if( .not. self%b_ptr%pftc%is_euclid_objfun() )then
+                    call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+                endif
                 call grad_shsrch_optimize_angle(self)
                 if( self%cur_inpl_idx == loc ) exit
             end do
             ! update best
-            lowest_cost = -corrs(self%cur_inpl_idx)
+            if( self%b_ptr%pftc%is_euclid_objfun() .and. self%cur_inpl_loss_valid )then
+                lowest_cost = real(self%cur_inpl_loss)
+            elseif( .not. self%b_ptr%pftc%is_euclid_objfun() )then
+                lowest_cost = -corrs(self%cur_inpl_idx)
+            else
+                call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+                lowest_cost = -corrs(self%cur_inpl_idx)
+            endif
             if( lowest_cost < lowest_cost_overall )then
                 found_better        = .true.
                 lowest_cost_overall = lowest_cost
@@ -302,7 +365,11 @@ contains
             endif
             if( found_better )then
                 irot    =   lowest_rot                 ! in-plane index
-                cxy(1)  = - real(lowest_cost_overall)  ! correlation
+                if( self%b_ptr%pftc%is_euclid_objfun() )then
+                    cxy(1) = real(exp(-lowest_cost_overall))
+                else
+                    cxy(1) = - real(lowest_cost_overall)  ! correlation
+                endif
                 cxy(2:) =   real(lowest_shift)         ! shift
                 if( present(theta) ) theta = self%cur_inpl_ang
                 if( l_sh_rot )then
