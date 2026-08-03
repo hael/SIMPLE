@@ -75,66 +75,9 @@
                                             <span class="text-[10px] text-streamlabel">{{ cls2D.pop|intcomma }} ptcls</span>
                                             <span class="text-[10px] text-streamlabel">{{ cls2D.res|floatformat:1 }}Å</span>
                                         </div>
-                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
+                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto disabledbutton">
                                             <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
                                                 <canvas class="mskcanvas z-1" height=100 width=100 data-mskscale="{{ jobstats.mskscale }}" data-mskdiam="{{ jobstats.mskdiam }}"></canvas>
-                                                <div class="xmark hidden h-[100px] w-[100px] text-streamerror flex items-center justify-center">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
-                                                        <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
-                                                    </svg>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                            <div name="selectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu(this, event)" oncontextmenu="hideMenu(this, event)"></div>
-                                <div name="selectmenubox" class="fixed flex flex-col gap-1 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
-                                    <div class="flex flex-col">
-                                        <div class="text-[10px] text-streamlabel">contrast</div>
-                                        <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
-                                    </div>
-                                    <div class="flex flex-col">
-                                        <div class="text-[10px] text-streamlabel">brightness</div>
-                                        <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
-                                    </div>
-                                    <div class="flex flex-col">
-                                        <div class="text-[10px] text-streamlabel">scale</div>
-                                        <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="400" min="20" step="10" value="100"></input> 
-                                    </div>
-                                    <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
-                                    <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
-                                    <div id="selectabove" class="userbutton w-auto text-center">select above</div>
-                                    <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
-                                    <div id="selectall" class="userbutton w-auto text-center">select all</div>
-                                    <div id="deselectall" class="userbutton w-auto text-center">deselect all</div>
-                                    <div id="invertselection" class="userbutton w-auto text-center">invert selection</div>
-                                </div>
-                            </div>
-                        </div> 
-                    </div>
-                {% endif %}
-            {% else %}
-                {% if "latest_cls2D" in jobstats %}                
-                    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
-                        <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">final classes</p>
-                    </div>
-                    <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
-                        <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
-                            <div id="accepted_cls2D_slider" class="flex flex-wrap">
-                                {% for cls2D in jobstats.latest_cls2D %}
-                                    <div class="flex flex-col snap-center cls2dcontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
-                                        <div class="flex justify-between mb-1.5">
-                                            <span class="text-[10px] text-streamlabel">{{ cls2D.pop|intcomma }} ptcls</span>
-                                            <span class="text-[10px] text-streamlabel">{{ cls2D.res|floatformat:1 }}Å</span>
-                                        </div>
-                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto">
-                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
-                                                <div class="xmark hidden h-[100px] w-[100px] text-streamerror flex items-center justify-center">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-12">
-                                                        <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
-                                                    </svg>
-                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -158,9 +101,50 @@
                                     <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
                                     <div id="selectabove" class="userbutton w-auto text-center">select above</div>
                                     <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
-                                    <div id="selectall" class="userbutton w-auto text-center">select all</div>
-                                    <div id="deselectall" class="userbutton w-auto text-center">deselect all</div>
-                                    <div id="invertselection" class="userbutton w-auto text-center">invert selection</div>
+                                </div>
+                            </div>
+                        </div> 
+                    </div>
+                {% endif %}
+            {% else %}
+                {% if "latest_cls2D" in jobstats %}                
+                    <div class="flex items-center px-4 pt-3 pb-2 border-b border-streamline flex-shrink-0">
+                        <p class="text-[10px] font-medium text-streamlabel uppercase tracking-widest">final classes</p>
+                    </div>
+                    <div class="flex flex-row items-baseline m-auto overflow-auto w-full flex-1">
+                        <div class="flex flex-row w-full overflow-x-hidden overflow-y-auto snap-y snap-mandatory">
+                            <div id="accepted_cls2D_slider" class="flex flex-wrap">
+                                {% for cls2D in jobstats.latest_cls2D %}
+                                    <div class="flex flex-col snap-center cls2dcontainer rounded bg-streambg m-[5px] p-[5px] border-[1px] border-streamline" data-res={{ cls2D.res | floatformat:1 }} data-pop={{ cls2D.pop }} title="particles: {{ cls2D.pop }}&#013;resolution: {{ cls2D.res | floatformat:1 }}Å"> 
+                                        <div class="flex justify-between mb-1.5">
+                                            <span class="text-[10px] text-streamlabel">{{ cls2D.pop|intcomma }} ptcls</span>
+                                            <span class="text-[10px] text-streamlabel">{{ cls2D.res|floatformat:1 }}Å</span>
+                                        </div>
+                                        <div onclick="toggleCls(this)" oncontextmenu="showMenu(this, event)" data-idx="{{ cls2D.idx }}" data-path="{{ cls2D.mrcpath }}" class="cls2D bg-black h-[100px] w-[100px] overflow-hidden rounded m-auto disabledbutton">
+                                            <div style="background: url({% url 'nice_lite:image' cls2D.path %}); background-size:{{ cls2D.spritew }}% {{ cls2D.spriteh }}%; background-position:{{ cls2D.spritex }}% {{ cls2D.spritey }}%; filter:contrast(var(--classification2D-contrast)) brightness(var(--classification2D-brightness));" class="cls2Dimg bg-black h-[100px] w-[100px]">
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <div name="selectmenu" class="hidden fixed w-full h-full top-0 left-0 bg-transparent" onclick="hideMenu(this, event)" oncontextmenu="hideMenu(this, event)">
+                                <div name="selectmenubox" class="fixed flex flex-col gap-1 bg-streambar border border-streamline rounded-lg shadow-sm p-3 text-[10px] text-streamtext">
+                                    <div class="flex flex-col">
+                                        <div class="text-[10px] text-streamlabel">contrast</div>
+                                        <input class="mx-[10px]" oninput="updateContrast(this)" type="range" max="500" min="0" step="1" value="100"></input> 
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="text-[10px] text-streamlabel">brightness</div>
+                                        <input class="mx-[10px]" oninput="updateBrightness(this)" type="range" max="300" min="0" step="1" value="100"></input> 
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <div class="text-[10px] text-streamlabel">scale</div>
+                                        <input class="mx-[10px]" oninput="updateScale(this)" type="range" max="400" min="20" step="10" value="100"></input> 
+                                    </div>
+                                    <div id="sortpop" class="userbutton w-auto text-center">sort on pop</div>
+                                    <div id="sortres" class="userbutton w-auto text-center">sort on res</div>
+                                    <div id="selectabove" class="userbutton w-auto text-center">select above</div>
+                                    <div id="selectbelow" class="userbutton w-auto text-center">select below</div>
                                 </div>
                             </div>
                         </div> 
@@ -178,6 +162,11 @@
                             <span class="text-[11px] text-streamlabel px-2">selected particles</span>
                             <span id="particlecount" class="text-[11px] font-medium text-streamtext font-mono"></span>
                         </div>
+                    </div>
+                    <div class="flex flex-row gap-2">
+                        <div id="selectall" onclick="selectAll()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">select all</div>
+                        <div id="deselectall" onclick="deselectAll()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">deselect all</div>
+                        <div id="invertselection" onclick="invertSelection()" class="text-xs font-medium px-2 py-1 bg-streamring text-white rounded-lg hover:opacity-90 transition-opacity cursor-pointer">invert selection</div>
                     </div>
                 {% endif %}
                 {% if status == "running" %}
@@ -224,18 +213,28 @@
             return 0;
         };
 
+        const updateSelectionBorder = (cls2D) => {
+            const container = cls2D.closest(".cls2dcontainer");
+            if (!container) return;
+            if (cls2D.classList.contains("disabledbutton")) {
+                container.classList.remove("border-streamring", "bg-streamring/10");
+                container.classList.add("border-streamline", "bg-streambg");
+            } else {
+                container.classList.remove("border-streamline", "bg-streambg");
+                container.classList.add("border-streamring", "bg-streamring/10");
+            }
+        };
+
         const toggleCls = (element) => {
             element.classList.toggle("disabledbutton");
             const mskcanvas = element.querySelector(".mskcanvas");
-            const xmark = element.querySelector(".xmark");
 
             if (element.classList.contains("disabledbutton")) {
                 if (mskcanvas) mskcanvas.classList.add("hidden");
-                if (xmark) xmark.classList.remove("hidden");
             } else {
-                if (xmark) xmark.classList.add("hidden");
                 if (mskcanvas) mskcanvas.classList.remove("hidden");
             }
+            updateSelectionBorder(element);
 
             lastinteraction = Date.now();
             updateCounts();
@@ -344,9 +343,6 @@
             const sortres = selectmenu.querySelector("#sortres");
             const selectabove = selectmenu.querySelector("#selectabove");
             const selectbelow = selectmenu.querySelector("#selectbelow");
-            const selectall = selectmenu.querySelector("#selectall");
-            const deselectall = selectmenu.querySelector("#deselectall");
-            const invertselection = selectmenu.querySelector("#invertselection");
 
             selectmenubox.style.top = event.clientY + "px";
             selectmenubox.style.left = event.clientX + "px";
@@ -355,9 +351,6 @@
             if (sortres) sortres.onclick = sortRes;
             if (selectabove) selectabove.onclick = () => selectAbove(element);
             if (selectbelow) selectbelow.onclick = () => selectBelow(element);
-            if (selectall) selectall.onclick = () => selectAll(element);
-            if (deselectall) deselectall.onclick = () => deselectAll(element);
-            if (invertselection) invertselection.onclick = () => invertSelection(element);
             lastinteraction = Date.now();
         };
 
@@ -368,17 +361,11 @@
                 const sortres = selectmenu.querySelector("#sortres");
                 const selectabove = selectmenu.querySelector("#selectabove");
                 const selectbelow = selectmenu.querySelector("#selectbelow");
-                const selectall = selectmenu.querySelector("#selectall");
-                const deselectall = selectmenu.querySelector("#deselectall");
-                const invertselection = selectmenu.querySelector("#invertselection");
                 selectmenu.style.display = "none";
                 if (sortpop) sortpop.onclick = null;
                 if (sortres) sortres.onclick = null;
                 if (selectabove) selectabove.onclick = null;
                 if (selectbelow) selectbelow.onclick = null;
-                if (selectall) selectall.onclick = null;
-                if (deselectall) deselectall.onclick = null;
-                if (invertselection) invertselection.onclick = null;
             }
             lastinteraction = Date.now();
         };
@@ -403,7 +390,6 @@
             let threshold = true;
             for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
                 const mskcanvas = clscontainer.querySelector(".mskcanvas");
-                const xmark = clscontainer.querySelector(".xmark");
                 if (threshold) {
                     clscontainer.classList.remove("disabledbutton");
                 } else {
@@ -412,11 +398,10 @@
 
                 if (clscontainer.classList.contains("disabledbutton")) {
                     if (mskcanvas) mskcanvas.classList.add("hidden");
-                    if (xmark) xmark.classList.remove("hidden");
                 } else {
-                    if (xmark) xmark.classList.add("hidden");
                     if (mskcanvas) mskcanvas.classList.remove("hidden");
                 }
+                updateSelectionBorder(clscontainer);
 
                 if (clscontainer === element) {
                     threshold = false;
@@ -430,7 +415,6 @@
             let threshold = false;
             for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
                 const mskcanvas = clscontainer.querySelector(".mskcanvas");
-                const xmark = clscontainer.querySelector(".xmark");
                 if (clscontainer === element) {
                     threshold = true;
                 }
@@ -443,55 +427,53 @@
 
                 if (clscontainer.classList.contains("disabledbutton")) {
                     if (mskcanvas) mskcanvas.classList.add("hidden");
-                    if (xmark) xmark.classList.remove("hidden");
                 } else {
-                    if (xmark) xmark.classList.add("hidden");
                     if (mskcanvas) mskcanvas.classList.remove("hidden");
                 }
+                updateSelectionBorder(clscontainer);
             }
             updateCounts();
             hideMenu();
         };
 
-        const selectAll = (element) => {
-            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+        const selectAll = () => {
+            const slider = document.getElementById("accepted_cls2D_slider");
+            if (!slider) return;
+            for (const clscontainer of slider.querySelectorAll(".cls2D")) {
                 const mskcanvas = clscontainer.querySelector(".mskcanvas");
-                const xmark = clscontainer.querySelector(".xmark");
                 clscontainer.classList.remove("disabledbutton");
-                if (xmark) xmark.classList.add("hidden");
                 if (mskcanvas) mskcanvas.classList.remove("hidden");
+                updateSelectionBorder(clscontainer);
             }
             updateCounts();
-            hideMenu();
         };
 
-        const deselectAll = (element) => {
-            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+        const deselectAll = () => {
+            const slider = document.getElementById("accepted_cls2D_slider");
+            if (!slider) return;
+            for (const clscontainer of slider.querySelectorAll(".cls2D")) {
                 const mskcanvas = clscontainer.querySelector(".mskcanvas");
-                const xmark = clscontainer.querySelector(".xmark");
                 clscontainer.classList.add("disabledbutton");
                 if (mskcanvas) mskcanvas.classList.add("hidden");
-                if (xmark) xmark.classList.remove("hidden");
+                updateSelectionBorder(clscontainer);
             }
             updateCounts();
-            hideMenu();
         };
 
-        const invertSelection = (element) => {
-            for (const clscontainer of element.parentElement.parentElement.querySelectorAll(".cls2D")) {
+        const invertSelection = () => {
+            const slider = document.getElementById("accepted_cls2D_slider");
+            if (!slider) return;
+            for (const clscontainer of slider.querySelectorAll(".cls2D")) {
                 const mskcanvas = clscontainer.querySelector(".mskcanvas");
-                const xmark = clscontainer.querySelector(".xmark");
                 clscontainer.classList.toggle("disabledbutton");
                 if (clscontainer.classList.contains("disabledbutton")) {
                     if (mskcanvas) mskcanvas.classList.add("hidden");
-                    if (xmark) xmark.classList.remove("hidden");
                 } else {
-                    if (xmark) xmark.classList.add("hidden");
                     if (mskcanvas) mskcanvas.classList.remove("hidden");
                 }
+                updateSelectionBorder(clscontainer);
             }
             updateCounts();
-            hideMenu();
         };
 
         const updateCounts = () => {
@@ -552,6 +534,12 @@
         window.addEventListener("load", () => {
             const logtext = document.querySelector(".logtext");
             if (logtext) logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight;
+        });
+
+        window.addEventListener("load", () => {
+            for (const cls2D of document.getElementsByClassName("cls2D")) {
+                updateSelectionBorder(cls2D);
+            }
         });
 
         window.addEventListener("load", () => {

@@ -35,6 +35,7 @@ contains
   procedure :: new
   procedure :: type
   procedure :: assigned
+  procedure :: set_assigned
   procedure :: initialized
   procedure :: jsonise
   procedure :: serialise
@@ -85,6 +86,15 @@ contains
     if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
     l_assigned = self%l_assigned
   end function assigned
+
+  ! Explicitly set/clear the assigned flag, e.g. to mark a broadcast update as
+  ! consumed without discarding the derived-type field values it carried.
+  subroutine set_assigned( self, l_assigned )
+    class(gui_metadata_base), intent(inout) :: self
+    logical,                  intent(in)    :: l_assigned
+    if( .not.self%l_initialized ) THROW_HARD('gui metadata object is uninitialised')
+    self%l_assigned = l_assigned
+  end subroutine set_assigned
 
   !---------------- serialisation ----------------
 

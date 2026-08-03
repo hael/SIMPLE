@@ -108,7 +108,11 @@ class Job:
         if self.jobmodel is None:
             print_error("jobmodel is none")
             return None
-        return self.jobmodel.master_update
+        master_update = dict(self.jobmodel.master_update)
+        if "snapshot2D" in self.jobmodel.master_update:
+            self.jobmodel.master_update.pop("snapshot2D", None)
+            self.jobmodel.save()
+        return master_update
 
     # ------------------------------------------------------------------
     # Setters
