@@ -148,8 +148,8 @@ reuse the residual partition files written by the preceding matcher. See
 
 `calc_pspec` bootstraps two global noise spectra, one for each even/odd half-set,
 from masked particle images. It selects a random, even/odd-stratified sample of
-at most 25,000 active particles across the complete run, so distributed workers
-only evaluate their intersection with that shared selection. The assembler uses
+at most 25,000 active particles across the complete run, and each partition only
+evaluates its intersection with that shared selection. The assembler uses
 the existing global-estimate scaling and propagation path. In the bootstrap
 assembly step:
 
@@ -165,6 +165,24 @@ This is the established `sigma_est='global'` propagation behavior, now used for
 all initial bootstraps. It is not a permanent replacement for group estimation:
 the normal orientation-conditioned matcher residual update and later group
 consolidation specialize the initially shared curves.
+
+The bootstrap runs in shared memory. Once the sample is capped at 25,000
+particles the per-partition work is small enough that scheduling it costs more
+than it saves, chiefly because every worker process re-reads the whole project.
+When `nparts` is set, `calc_pspec` therefore computes all partitions in one
+process, writing the same `init_pspec_partN.dat`, `sum_img_partN` and
+`sigma2_noise_partN.dat` artifacts that distributed workers used to produce.
+Partition ranges are `split_nobjs_even(nptcls, nparts)`, i.e. the ranges
+`qsys_env` derives under `split_mode='even'`, so the on-disk contract seen by
+matchers, reconstructors and `continue='yes'` is unchanged. No submission
+scripts are generated for this step. `part=` on the command line still selects
+the single-partition worker path, which generated scripts rely on.
+
+Images are read once, in batches spanning the whole selection rather than one
+partition at a time, so stack runs are not reopened at partition boundaries.
+Accumulation stays partition-local: because the selection is sorted and the
+ranges are disjoint, each batch is split into the contiguous runs it shares with
+each partition and every run reduces into that partition's own Fourier sum.
 
 See [src/main/strategies/parallelization/simple_calc_pspec_strategy.f90](/Users/elmlundho/src/SIMPLE/src/main/strategies/parallelization/simple_calc_pspec_strategy.f90:130) and [src/main/commanders/simple/simple_commanders_euclid_distr.f90](/Users/elmlundho/src/SIMPLE/src/main/commanders/simple/simple_commanders_euclid_distr.f90:15).
 

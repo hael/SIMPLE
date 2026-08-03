@@ -889,12 +889,15 @@ contains
                 call assert_multistate_populations(build, params)
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            if( params%cc_objfun /= OBJFUN_EUCLID .or. sigma2_stage_needs_bootstrap(params%startit) )then
-                if( L_BENCH_GLOB ) t_calc_pspec = tic()
-                call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
-                if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
-            else
-                write(logfhandle,'(A)') 'SIGMA2 INIT: reusing existing particle sigma files'
+            ! objfun=cc never reads sigmas, so it must not pay for the bootstrap
+            if( params%cc_objfun == OBJFUN_EUCLID )then
+                if( sigma2_stage_needs_bootstrap(params%startit) )then
+                    if( L_BENCH_GLOB ) t_calc_pspec = tic()
+                    call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
+                    if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
+                else
+                    write(logfhandle,'(A)') 'SIGMA2 INIT: reusing existing particle sigma files'
+                endif
             endif
             ! check if we have input volume(s) and/or 3D orientations
             vol_defined = .true.

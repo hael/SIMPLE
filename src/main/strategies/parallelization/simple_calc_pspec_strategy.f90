@@ -4,14 +4,13 @@ use simple_core_module_api
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
 use simple_cmdline,        only: cmdline
-use simple_qsys_env,       only: qsys_env
-use simple_qsys_funs,      only: qsys_cleanup, qsys_job_finished
+use simple_qsys_funs,      only: qsys_job_finished
 use simple_image,          only: image, unmemoize_powspec_coords
 use simple_sigma2_binfile, only: sigma2_binfile
 use simple_ran_tabu,       only: ran_tabu
 implicit none
 
-public :: calc_pspec_strategy, calc_pspec_inmem_strategy, calc_pspec_distr_strategy, create_calc_pspec_strategy
+public :: calc_pspec_strategy, calc_pspec_inmem_strategy, calc_pspec_partitioned_strategy, create_calc_pspec_strategy
 private
 #include "simple_local_flags.inc"
 
@@ -41,17 +40,19 @@ contains
     procedure :: cleanup      => inmem_cleanup
 end type calc_pspec_inmem_strategy
 
-type, extends(calc_pspec_strategy) :: calc_pspec_distr_strategy
-    type(qsys_env) :: qenv
-    type(chash)    :: job_descr
-    type(cmdline)  :: cline_calc_pspec
-    type(cmdline)  :: cline_calc_pspec_assemble
+! Computes every partition of the sigma2 bootstrap in a single process. The
+! artifacts written are the ones nparts distributed workers would have produced,
+! so downstream consumers of init_pspec_part*/sum_img_part*/sigma2_noise_part*
+! see an unchanged on-disk contract.
+type, extends(calc_pspec_strategy) :: calc_pspec_partitioned_strategy
+    type(cmdline)        :: cline_calc_pspec_assemble
+    integer, allocatable :: parts(:,:)
 contains
-    procedure :: initialize   => distr_initialize
-    procedure :: execute      => distr_execute
-    procedure :: finalize_run => distr_finalize_run
-    procedure :: cleanup      => distr_cleanup
-end type calc_pspec_distr_strategy
+    procedure :: initialize   => partitioned_initialize
+    procedure :: execute      => partitioned_execute
+    procedure :: finalize_run => partitioned_finalize_run
+    procedure :: cleanup      => partitioned_cleanup
+end type calc_pspec_partitioned_strategy
 
 abstract interface
     subroutine init_interface(self, params, build, cline)
@@ -97,10 +98,10 @@ contains
         class(cmdline), intent(in) :: cline
         class(calc_pspec_strategy), allocatable :: strategy
         if( cline%defined('nparts') .and. (.not. cline%defined('part')) )then
-            allocate(calc_pspec_distr_strategy :: strategy)
-            strategy%end_msg          = '**** SIMPLE_DISTR_CALC_PSPEC NORMAL STOP ****'
+            allocate(calc_pspec_partitioned_strategy :: strategy)
+            strategy%end_msg          = '**** SIMPLE_CALC_PSPEC NORMAL STOP ****'
             strategy%end_print_simple = .true.
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED EXECUTION'
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SHARED-MEMORY PARTITIONED EXECUTION'
         else
             allocate(calc_pspec_inmem_strategy :: strategy)
             strategy%end_msg          = '**** SIMPLE_CALC_PSPEC NORMAL STOP ****'
@@ -137,125 +138,25 @@ contains
     end subroutine inmem_initialize
 
     subroutine inmem_execute(self, params, build, cline)
-        use simple_matcher_ptcl_io,         only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
         use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
         class(calc_pspec_inmem_strategy), intent(inout) :: self
         type(parameters),                 intent(inout) :: params
         type(builder),                    intent(inout) :: build
         class(cmdline),                   intent(inout) :: cline
         type(commander_calc_pspec_assemble) :: xcalc_pspec_assemble
-        type(image)                         :: sum_img
-        type(sigma2_binfile)                :: binfile
-        type(string)                        :: binfname
-        complex(dp), allocatable :: cmat_thr_sum(:,:,:,:)
-        complex,     allocatable :: cmat_sum(:,:,:)
-        integer,     allocatable :: pinds(:)
-        real,        allocatable :: sigma2(:,:), sigma2_batch(:,:)
-        integer :: batchlims(2), kfromto(2)
-        integer :: i, iptcl, imatch, ithr, nyq, nptcls_part_sel, batchsz_max, nbatch, eo
-        integer :: ninvalid_sigma2
-        logical :: l_add_to_sum
-        real    :: sig2_mul(2)
+        integer, allocatable :: sel_pinds(:)
+        real :: sig2_mul(2)
         ! Sigma2 is bootstrapped once from a capped, random global E/O sample.
         ! The resulting two curves are propagated to every particle record;
         ! matcher residual updates establish any requested group structure later.
-        call read_sigma2_bootstrap_selection(params, build, nptcls_part_sel, pinds, sig2_mul)
-        nyq = build%img%get_nyq()
-        allocate(sigma2(nyq,params%fromp:params%top), source=0.)
-        call sum_img%new([params%box,params%box,1], params%smpd)
-        call sum_img%zero_and_flag_ft
-        cmat_sum = sum_img%allocate_cmat()
-        allocate(cmat_thr_sum(size(cmat_sum,dim=1), size(cmat_sum,dim=2), 1, nthr_glob))
-        call compute_pspec_channel('init_pspec_part', 'sum_img_part', 'calc_pspec')
-        ! destruct local objects
-        call binfile%kill
-        call sum_img%kill
+        call read_sigma2_bootstrap_selection(params, build, sel_pinds, sig2_mul)
+        call compute_pspec_partitions(params, build, [params%part],&
+            &reshape([params%fromp, params%top], [1,2]), sel_pinds, sig2_mul)
+        deallocate(sel_pinds)
         ! Group averaging in non-distributed execution
         if( .not.cline%defined('nparts') .and. params%part==1 )then
             call xcalc_pspec_assemble%execute(self%cline_calc_pspec_assemble)
         endif
-
-    contains
-
-        subroutine compute_pspec_channel(init_fbody, sum_fbody, warning_label)
-            character(len=*), intent(in) :: init_fbody, sum_fbody, warning_label
-            sigma2           = 0.
-            ninvalid_sigma2  = 0
-            call sum_img%zero_and_flag_ft
-            cmat_sum = cmplx(0., 0.)
-            if( nptcls_part_sel > 0 )then
-                batchsz_max = min(nptcls_part_sel, 50 * nthr_glob)
-                call prepimgbatch(params, build, batchsz_max)
-                if( allocated(sigma2_batch) ) deallocate(sigma2_batch)
-                allocate(sigma2_batch(nyq,batchsz_max), source=0.)
-                ! mask and radial-shell memoization for the calc_pspec fused kernel
-                call build%imgbatch(1)%memoize_powspec_coords(params%msk)
-                do i = 1, nptcls_part_sel, batchsz_max
-                    batchlims = [i, min(i+batchsz_max-1, nptcls_part_sel)]
-                    nbatch    = batchlims(2) - batchlims(1) + 1
-                    if( params%l_ptcl_src_den )then
-                        call discrete_read_imgbatch_source(params, build, 'den', nbatch, pinds(batchlims(1):batchlims(2)), &
-                            [1,nbatch], build%imgbatch(:nbatch))
-                    else
-                        call discrete_read_imgbatch(params, build, nbatch, pinds(batchlims(1):batchlims(2)), [1,nbatch])
-                    endif
-                    ! allocate contigous local sigma2 array for optimal caching in parallell loop
-                    cmat_thr_sum = dcmplx(0.d0, 0.d0)
-                    !$omp parallel do default(shared) private(iptcl,imatch,ithr,eo,l_add_to_sum)&
-                    !$omp schedule(static) proc_bind(close) reduction(+:ninvalid_sigma2)
-                     do imatch = 1, nbatch
-                        ithr  = omp_get_thread_num() + 1
-                        iptcl = pinds(batchlims(1) + imatch - 1)
-                        call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2_batch(:,imatch))
-                        eo = build%spproj_field%get_eo(iptcl)
-                        sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul(eo+1)
-                        l_add_to_sum = all(ieee_is_finite(sigma2_batch(:,imatch))) .and. any(sigma2_batch(:,imatch) > real(DTINY))
-                        if( sanitize_computed_sigma2(sigma2_batch(:,imatch)) ) ninvalid_sigma2 = ninvalid_sigma2 + 1
-                        ! thread average
-                        if( l_add_to_sum ) call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:,ithr))
-                    end do
-                    !$omp end parallel do
-                    ! global average
-                    do ithr = 1, nthr_glob
-                        cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmplx(cmat_thr_sum(:,:,:,ithr), kind=sp)
-                    end do
-                    ! update non-contiguous sigma2 array to provide the correct geometry on disk
-                    do imatch = 1, nbatch
-                        iptcl = pinds(batchlims(1) + imatch - 1)
-                        sigma2(:,iptcl) = sigma2_batch(:,imatch)
-                    end do
-                end do
-                deallocate(sigma2_batch)
-            endif
-            if( ninvalid_sigma2 > 0 )then
-                write(logfhandle,*) '>>> WARNING: '//trim(warning_label)//&
-                    ' floored invalid computed sigma spectra to 1.0; part/fromp/top/count/selected: ', &
-                    params%part, params%fromp, params%top, ninvalid_sigma2, nptcls_part_sel
-            endif
-            call sum_img%set_cmat(cmat_sum)
-            call sum_img%write(string(sum_fbody)//int2str_pad(params%part,params%numlen)//params%ext%to_char())
-            kfromto  = [1, nyq]
-            binfname = trim(init_fbody)//trim(int2str(params%part))//'.dat'
-            call binfile%new(binfname, params%fromp, params%top, kfromto)
-            call binfile%write(sigma2)
-            call binfile%kill
-        end subroutine compute_pspec_channel
-
-        logical function sanitize_computed_sigma2(sigma2_curve)
-            real, intent(inout) :: sigma2_curve(:)
-            logical :: invalid
-            invalid = .false.
-            if( .not. all(ieee_is_finite(sigma2_curve)) )then
-                where( .not. ieee_is_finite(sigma2_curve) ) sigma2_curve = 1.0
-                invalid = .true.
-            endif
-            if( .not. any(sigma2_curve > real(DTINY)) )then
-                sigma2_curve = 1.0
-                invalid = .true.
-            endif
-            sanitize_computed_sigma2 = invalid
-        end function sanitize_computed_sigma2
-
     end subroutine inmem_execute
 
     subroutine inmem_finalize_run(self, params, build, cline)
@@ -280,77 +181,263 @@ contains
     end subroutine inmem_cleanup
 
     ! =====================================================================
-    ! DISTRIBUTED MASTER IMPLEMENTATION
+    ! SHARED-MEMORY PARTITIONED IMPLEMENTATION
     ! =====================================================================
 
-    subroutine distr_initialize(self, params, build, cline)
-        class(calc_pspec_distr_strategy), intent(inout) :: self
-        type(parameters),                 intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
+    subroutine partitioned_initialize(self, params, build, cline)
+        class(calc_pspec_partitioned_strategy), intent(inout) :: self
+        type(parameters),                       intent(inout) :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
         call cline%set('stream', 'no')
         if( .not. cline%defined('projfile') )then
-            THROW_HARD('Missing project file entry; exec_calc_pspec_distr')
+            THROW_HARD('Missing project file entry; exec_calc_pspec')
         endif
         ! Parse parameters (mkdir default kept as provided/assigned by commander-level defaults)
         call params%new(cline)
         call cleanup_calc_pspec_outputs(params)
-        ! Build project ONLY (no general toolbox)
-        call build%build_spproj(params, cline)
+        ! Project + 2D toolbox, this process does the particle work itself
+        call build%build_spproj(params, cline, wthreads=.true.)
+        call build%build_general_tbox(params, cline, do3d=.false.)
         ! Sanity check + ensure EO partition exists and is persisted
         call sanity_check_calc_pspec_input(params, build)
         call ensure_calc_pspec_eo_partition(params, build)
         call write_sigma2_bootstrap_selection(params, build)
         ! Set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        ! Prepare command lines from prototype master
-        self%cline_calc_pspec          = cline
+        ! Partition ranges must be the ones the downstream distributed consumers
+        ! derive, i.e. qsys_env's split_mode='even' partitioning of nptcls.
+        self%parts = split_nobjs_even(params%nptcls, params%nparts)
         self%cline_calc_pspec_assemble = cline
-        ! Required program keys
-        call self%cline_calc_pspec%set('prg', 'calc_pspec')
         call self%cline_calc_pspec_assemble%set('prg', 'calc_pspec_assemble')
-        ! Setup the environment for distributed execution
-        call self%qenv%new(params, params%nparts)
-        call self%cline_calc_pspec%gen_job_descr(self%job_descr)
-    end subroutine distr_initialize
+    end subroutine partitioned_initialize
 
-    subroutine distr_execute(self, params, build, cline)
+    subroutine partitioned_execute(self, params, build, cline)
+        use simple_matcher_ptcl_io,         only: killimgbatch
         use simple_commanders_euclid_distr, only: commander_calc_pspec_assemble
-        class(calc_pspec_distr_strategy), intent(inout) :: self
-        type(parameters),                 intent(inout) :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
+        class(calc_pspec_partitioned_strategy), intent(inout) :: self
+        type(parameters),                       intent(inout) :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
         type(commander_calc_pspec_assemble) :: xcalc_pspec_assemble
-        ! schedule
-        call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, array=L_USE_SLURM_ARR, extra_params=params)
-        ! assemble (local)
+        integer, allocatable :: sel_pinds(:), part_ids(:)
+        real    :: sig2_mul(2)
+        integer :: ipart
+        call read_sigma2_bootstrap_selection(params, build, sel_pinds, sig2_mul)
+        part_ids = [(ipart, ipart=1,params%nparts)]
+        call compute_pspec_partitions(params, build, part_ids, self%parts, sel_pinds, sig2_mul)
+        deallocate(sel_pinds, part_ids)
+        ! Release the compute toolbox before the assemble commander builds its own
+        call killimgbatch(build)
+        call unmemoize_powspec_coords
+        call build%kill_general_tbox
         call xcalc_pspec_assemble%execute(self%cline_calc_pspec_assemble)
-    end subroutine distr_execute
+    end subroutine partitioned_execute
 
-    subroutine distr_finalize_run(self, params, build, cline)
-        class(calc_pspec_distr_strategy), intent(inout) :: self
-        type(parameters),                 intent(in)    :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
+    subroutine partitioned_finalize_run(self, params, build, cline)
+        class(calc_pspec_partitioned_strategy), intent(inout) :: self
+        type(parameters),                       intent(in)    :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
         ! No-op
-    end subroutine distr_finalize_run
+    end subroutine partitioned_finalize_run
 
-    subroutine distr_cleanup(self, params, build, cline)
-        class(calc_pspec_distr_strategy), intent(inout) :: self
-        type(parameters),                 intent(in)    :: params
-        type(builder),                    intent(inout) :: build
-        class(cmdline),                   intent(inout) :: cline
-        call self%cline_calc_pspec%kill
+    subroutine partitioned_cleanup(self, params, build, cline)
+        class(calc_pspec_partitioned_strategy), intent(inout) :: self
+        type(parameters),                       intent(in)    :: params
+        type(builder),                          intent(inout) :: build
+        class(cmdline),                         intent(inout) :: cline
         call self%cline_calc_pspec_assemble%kill
-        call self%qenv%kill
-        call self%job_descr%kill
-        call qsys_cleanup(params)
-        ! Best-effort cleanup of project-related resources
-        call build%spproj_field%kill
-        call build%spproj%kill
+        if( allocated(self%parts) ) deallocate(self%parts)
+        ! kill_general_tbox is idempotent; execute already released it
+        call build%kill_general_tbox
         call del_file(SIGMA2_BOOTSTRAP_SELECTION_FNAME)
         call simple_touch(CALCPSPEC_FINISHED)
-    end subroutine distr_cleanup
+    end subroutine partitioned_cleanup
+
+    !>  Computes the bootstrap sigma2 spectra and Fourier-space sums for a set of
+    !!  partitions and writes the two artifacts per partition that
+    !!  calc_pspec_assemble consumes. part_ids supplies the file index of each
+    !!  partition, part_ranges its [fromp,top].
+    !!
+    !!  Particle images are read once, in batches spanning the whole selection,
+    !!  independently of where the partition boundaries fall. Accumulation is
+    !!  partition-local: a batch is split into the contiguous runs it shares with
+    !!  each partition (sel_pinds is sorted and the ranges are disjoint), and each
+    !!  run reduces into that partition's sum, so no two partitions ever contend.
+    !!  Particles outside the bootstrap sample keep a zero spectrum; the assemble
+    !!  step compensates via sig2_mul.
+    subroutine compute_pspec_partitions( params, build, part_ids, part_ranges, sel_pinds, sig2_mul )
+        use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        integer,          intent(in)    :: part_ids(:)
+        integer,          intent(in)    :: part_ranges(:,:)
+        integer,          intent(in)    :: sel_pinds(:)
+        real,             intent(in)    :: sig2_mul(2)
+        type(image)          :: sum_img
+        type(sigma2_binfile) :: binfile
+        type(string)         :: binfname
+        complex(dp), allocatable :: cmat_thr_sum(:,:,:,:)
+        complex,     allocatable :: cmat_part_sum(:,:,:,:), cmat_dims(:,:,:)
+        integer,     allocatable :: work_pinds(:), work_slot(:), slot_from(:), slot_to(:)
+        real,        allocatable :: sigma2(:,:), sigma2_sel(:,:), sigma2_batch(:,:)
+        integer :: batchlims(2)
+        integer :: i, nyq, nselected, n_work, batchsz_max, nbatch
+        integer :: islot, nslots, ipart, fromp, top, run_lo, run_hi
+        integer :: ninvalid_sigma2
+        nslots          = size(part_ids)
+        nselected       = size(sel_pinds)
+        ninvalid_sigma2 = 0
+        nyq             = build%img%get_nyq()
+        ! Map the shared selection onto the requested partitions, dropping any
+        ! particle none of them owns (the single-partition worker case).
+        allocate(work_pinds(nselected), work_slot(nselected), source=0)
+        n_work = 0
+        do i = 1,nselected
+            islot = slot_of(sel_pinds(i))
+            if( islot == 0 ) cycle
+            n_work             = n_work + 1
+            work_pinds(n_work) = sel_pinds(i)
+            work_slot(n_work)  = islot
+        end do
+        allocate(slot_from(nslots), source=0)
+        allocate(slot_to(nslots),   source=-1)
+        do i = 1,n_work
+            islot = work_slot(i)
+            if( slot_from(islot) == 0 ) slot_from(islot) = i
+            slot_to(islot) = i
+        end do
+        call sum_img%new([params%box,params%box,1], params%smpd)
+        call sum_img%zero_and_flag_ft
+        cmat_dims = sum_img%allocate_cmat()
+        allocate(cmat_part_sum(size(cmat_dims,dim=1), size(cmat_dims,dim=2), 1, nslots), source=cmplx(0.,0.))
+        allocate(cmat_thr_sum( size(cmat_dims,dim=1), size(cmat_dims,dim=2), 1, nthr_glob))
+        allocate(sigma2_sel(nyq,max(1,n_work)), source=0.)
+        if( n_work > 0 )then
+            batchsz_max = min(n_work, 50 * nthr_glob)
+            call prepimgbatch(params, build, batchsz_max)
+            allocate(sigma2_batch(nyq,batchsz_max), source=0.)
+            ! mask and radial-shell memoization for the calc_pspec fused kernel
+            call build%imgbatch(1)%memoize_powspec_coords(params%msk)
+            do i = 1, n_work, batchsz_max
+                batchlims = [i, min(i+batchsz_max-1, n_work)]
+                nbatch    = batchlims(2) - batchlims(1) + 1
+                if( params%l_ptcl_src_den )then
+                    call discrete_read_imgbatch_source(params, build, 'den', nbatch, work_pinds(batchlims(1):batchlims(2)), &
+                        [1,nbatch], build%imgbatch(:nbatch))
+                else
+                    call discrete_read_imgbatch(params, build, nbatch, work_pinds(batchlims(1):batchlims(2)), [1,nbatch])
+                endif
+                ! reduce the batch one partition-run at a time
+                do islot = 1,nslots
+                    if( slot_from(islot) == 0 ) cycle
+                    run_lo = max(slot_from(islot), batchlims(1))
+                    run_hi = min(slot_to(islot),   batchlims(2))
+                    if( run_hi < run_lo ) cycle
+                    call accumulate_run(islot, run_lo, run_hi, batchlims(1))
+                end do
+            end do
+            deallocate(sigma2_batch)
+        endif
+        if( ninvalid_sigma2 > 0 )then
+            write(logfhandle,*) '>>> WARNING: calc_pspec'//&
+                ' floored invalid computed sigma spectra to 1.0; count/selected: ', &
+                ninvalid_sigma2, n_work
+        endif
+        ! scatter the compact spectra into partition-local geometry and write
+        do islot = 1,nslots
+            ipart = part_ids(islot)
+            fromp = part_ranges(islot,1)
+            top   = part_ranges(islot,2)
+            allocate(sigma2(nyq,fromp:top), source=0.)
+            if( slot_from(islot) > 0 )then
+                do i = slot_from(islot), slot_to(islot)
+                    sigma2(:,work_pinds(i)) = sigma2_sel(:,i)
+                end do
+            endif
+            call sum_img%zero_and_flag_ft
+            call sum_img%set_cmat(cmat_part_sum(:,:,:,islot))
+            call sum_img%write(string('sum_img_part')//int2str_pad(ipart,params%numlen)//params%ext%to_char())
+            binfname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
+            call binfile%new(binfname, fromp, top, [1,nyq])
+            call binfile%write(sigma2)
+            call binfile%kill
+            deallocate(sigma2)
+        end do
+        call sum_img%kill
+        call binfname%kill
+        deallocate(work_pinds, work_slot, slot_from, slot_to)
+        deallocate(sigma2_sel, cmat_part_sum, cmat_thr_sum, cmat_dims)
+
+    contains
+
+        !>  Index of the partition owning iptcl, 0 when none does
+        integer function slot_of( iptcl_here )
+            integer, intent(in) :: iptcl_here
+            integer :: jslot
+            slot_of = 0
+            do jslot = 1,nslots
+                if( iptcl_here >= part_ranges(jslot,1) .and. iptcl_here <= part_ranges(jslot,2) )then
+                    slot_of = jslot
+                    return
+                endif
+            end do
+        end function slot_of
+
+        !>  Reduces work items [run_lo,run_hi], all owned by partition islot, into
+        !!  that partition's Fourier sum. batch_base maps work index to batch slot.
+        subroutine accumulate_run( islot_here, run_lo_here, run_hi_here, batch_base )
+            integer, intent(in) :: islot_here, run_lo_here, run_hi_here, batch_base
+            integer :: j, iwork, imatch, nrun, eo_here, ithr_here, iptcl_here
+            logical :: l_add_to_sum
+            nrun         = run_hi_here - run_lo_here + 1
+            cmat_thr_sum = dcmplx(0.d0, 0.d0)
+            !$omp parallel do default(shared) private(j,iwork,imatch,iptcl_here,ithr_here,eo_here,l_add_to_sum)&
+            !$omp schedule(static) proc_bind(close) reduction(+:ninvalid_sigma2)
+            do j = 1, nrun
+                iwork      = run_lo_here + j - 1
+                imatch     = iwork - batch_base + 1
+                ithr_here  = omp_get_thread_num() + 1
+                iptcl_here = work_pinds(iwork)
+                call build%imgbatch(imatch)%norm_noise_mask_fft_powspec(build%lmsk, params%msk, sigma2_batch(:,imatch))
+                eo_here = build%spproj_field%get_eo(iptcl_here)
+                sigma2_batch(:,imatch) = sigma2_batch(:,imatch) * sig2_mul(eo_here+1)
+                l_add_to_sum = all(ieee_is_finite(sigma2_batch(:,imatch))) .and. any(sigma2_batch(:,imatch) > real(DTINY))
+                if( sanitize_computed_sigma2(sigma2_batch(:,imatch)) ) ninvalid_sigma2 = ninvalid_sigma2 + 1
+                ! thread average
+                if( l_add_to_sum ) call build%imgbatch(imatch)%add_dble_cmat2mat(cmat_thr_sum(:,:,:,ithr_here))
+            end do
+            !$omp end parallel do
+            ! partition-local average
+            do ithr_here = 1, nthr_glob
+                cmat_part_sum(:,:,:,islot_here) = cmat_part_sum(:,:,:,islot_here)&
+                    &+ cmplx(cmat_thr_sum(:,:,:,ithr_here), kind=sp)
+            end do
+            ! keep the compact spectra, scattered to disk geometry after the read pass
+            do j = 1, nrun
+                iwork  = run_lo_here + j - 1
+                imatch = iwork - batch_base + 1
+                sigma2_sel(:,iwork) = sigma2_batch(:,imatch)
+            end do
+        end subroutine accumulate_run
+
+        logical function sanitize_computed_sigma2(sigma2_curve)
+            real, intent(inout) :: sigma2_curve(:)
+            logical :: invalid
+            invalid = .false.
+            if( .not. all(ieee_is_finite(sigma2_curve)) )then
+                where( .not. ieee_is_finite(sigma2_curve) ) sigma2_curve = 1.0
+                invalid = .true.
+            endif
+            if( .not. any(sigma2_curve > real(DTINY)) )then
+                sigma2_curve = 1.0
+                invalid = .true.
+            endif
+            sanitize_computed_sigma2 = invalid
+        end function sanitize_computed_sigma2
+
+    end subroutine compute_pspec_partitions
 
     ! =====================================================================
     ! Internal helpers
@@ -435,13 +522,14 @@ contains
         deallocate(candidates, pinds)
     end subroutine write_sigma2_bootstrap_selection
 
-    subroutine read_sigma2_bootstrap_selection(params, build, nsamples_part, pinds, sig2_mul)
+    !>  Reads the global bootstrap selection shared by every partition. The
+    !!  returned indices are sorted and span the whole particle range; callers
+    !!  slice them to their own [fromp,top].
+    subroutine read_sigma2_bootstrap_selection(params, build, sel_pinds, sig2_mul)
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
-        integer,          intent(out)   :: nsamples_part
-        integer, allocatable, intent(out) :: pinds(:)
+        integer, allocatable, intent(out) :: sel_pinds(:)
         real,             intent(out)   :: sig2_mul(2)
-        integer, allocatable :: all_pinds(:)
         integer :: nactive(2), nsample(2), nselected, eo, i, ios, fd
         logical :: is_open
         if( .not.file_exists(SIGMA2_BOOTSTRAP_SELECTION_FNAME) ) &
@@ -457,23 +545,20 @@ contains
             &THROW_HARD('Invalid sigma2 bootstrap selection size')
         if( any(nsample < 0) .or. any(nsample > nactive) ) &
             &THROW_HARD('Invalid sigma2 bootstrap selection counts')
-        allocate(all_pinds(nselected), source=0)
+        allocate(sel_pinds(nselected), source=0)
         do i = 1,nselected
-            read(fd,*,iostat=ios) all_pinds(i), eo
+            read(fd,*,iostat=ios) sel_pinds(i), eo
             if( ios /= 0 ) THROW_HARD('Cannot read sigma2 bootstrap selection record')
-            if( all_pinds(i) < 1 .or. all_pinds(i) > params%nptcls .or. eo < 0 .or. eo > 1 ) &
+            if( sel_pinds(i) < 1 .or. sel_pinds(i) > params%nptcls .or. eo < 0 .or. eo > 1 ) &
                 &THROW_HARD('Invalid sigma2 bootstrap selection record')
-            if( build%spproj_field%get_eo(all_pinds(i)) /= eo ) &
+            if( build%spproj_field%get_eo(sel_pinds(i)) /= eo ) &
                 &THROW_HARD('Sigma2 bootstrap selection even/odd mismatch')
         enddo
         if( is_open ) close(fd)
-        pinds = pack(all_pinds, all_pinds >= params%fromp .and. all_pinds <= params%top)
-        nsamples_part = size(pinds)
         sig2_mul = 0.
         do eo = 1,2
             if( nsample(eo) > 0 ) sig2_mul(eo) = real(nactive(eo)) / (2. * real(nsample(eo)))
         enddo
-        deallocate(all_pinds)
     end subroutine read_sigma2_bootstrap_selection
 
     subroutine sanity_check_calc_pspec_input(params, build)
