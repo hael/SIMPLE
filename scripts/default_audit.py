@@ -482,7 +482,11 @@ def extract_stream_routes(root: Path) -> dict[str, list[dict]]:
 
 def add_router_case(root: Path, router: Procedure, names: list[str], statements: list[Statement], variable_types: dict[str, str], routes: dict[str, list[dict]], constants: dict[str, str]) -> None:
     execute = next((EXECUTE_CALL.search(statement.text) for statement in statements if EXECUTE_CALL.search(statement.text)), None)
-    forced = [rule for statement in statements if (rule := parse_set_rule(root, router.path, statement, "router", constants))]
+    forced: list[dict] = []
+    for statement in statements:
+        rule = parse_set_rule(root, router.path, statement, "router", constants)
+        if rule:
+            forced.append(rule)
     target = None
     if execute:
         target = variable_types.get(execute.group(1).lower())
