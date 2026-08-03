@@ -130,11 +130,13 @@ contains
     if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_TIMEOUT')
     rc = curl_easy_setopt(self%curl_ptr, CURLOPT_NOSIGNAL,      1)
     if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_NOSIGNAL')
-    if( .not. VERIFY_PEER .and. .not. self%l_once) then
-      THROW_WARN('Warning: SSL peer verification is disabled')
+    if( .not. VERIFY_PEER ) then
+      if( .not. self%l_once ) then
+        THROW_WARN('Warning: SSL peer verification is disabled')
+        self%l_once = .true.
+      endif
       rc = curl_easy_setopt(self%curl_ptr, CURLOPT_SSL_VERIFYPEER, 0)
       if( rc /= CURLE_OK ) THROW_HARD('Error: failed to set curl option CURLOPT_SSL_VERIFYPEER')
-      self%l_once = .true.
     endif
     ! Attach POST body if provided
     if( present(request_str) ) then
