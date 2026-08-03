@@ -36,7 +36,18 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Oracle Linux 8.10 runtime passed with 288 rotations and `NORMAL STOP`.
   - Legacy-score error `2.96171144e-08`; scalar-gradient error `2.26158719e-07`; tolerance `1.08889884e-03`.
   - Angular grid error `1.33313786e-07`; periodic error `9.36750677e-17`; first-derivative error `1.32675199e-08`; second-derivative error `9.03031514e-09`; angular tolerance `1.08889884e-03`.
-- [ ] Phase 2 extended validation: aliasing experiment, synthetic recovery, and the required four-way recovery table.
+- [x] Phase 2 extended validation: aliasing experiment, synthetic recovery, and the required four-way recovery table.
+  - Added `simple_test_euclid_stage1_validation`, an Oracle-runnable production test for the two-band aliasing comparison and deterministic synthetic recovery report.
+  - The report includes grid-only, parabolic, and continuous rows; the Phase 3 joint row is explicitly reported as `NOT_IMPLEMENTED` until Phase 3 exists.
+  - The harness now evaluates zero-shift, nonzero-shift, and near-periodic-boundary truths, and repeats the low-pass/full-band comparison with a hard-edged near-Nyquist fixture.
+  - All three recovery rows use the same fixed-angle classical Euclidean direct-shift minimizer. The harness reports expected and recovered shift vectors plus acceptance flags.
+  - For the polar `shift_ptcl` fixture, the expected candidate is `R(truth_angle) * applied_shift`; this is distinct from the `-R(angle) * applied_shift` corrective convention used by the image-space `rtsq` fixture in `simple_test_sgd_base_suite`.
+  - Oracle Linux 8.10 validation passed with `NORMAL STOP`.
+  - Three truths were covered: zero shift/zero angle, nonzero shift at `37°`, and nonzero shift near the periodic boundary at `359.375°`.
+  - All three stages accepted the common fixed-angle shift refinement. Shift RMS over cases was `0.00704` pixels; the worst individual case was `0.01039` pixels.
+  - Continuous angle RMS was `0.3041°`, improving over parabolic `0.3139°` and grid-only `0.4621°`; continuous was better than parabolic for each case.
+  - The harder hard-mask near-Nyquist comparison produced low-pass RMS `1.8403e-04°` and full-band RMS `4.1441e-05°`, with no observed aliasing degradation.
+  - The Stage 1 report retains `JOINT_PHASE3 NOT_IMPLEMENTED`; Phase 3 is now the next implementation step.
 - [ ] Phase 3: joint `(sx, sy, theta)` refinement.
 - [ ] Phase 4: downstream metadata and workflow wiring.
 
