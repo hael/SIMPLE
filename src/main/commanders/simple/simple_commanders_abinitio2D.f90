@@ -35,6 +35,8 @@ contains
         type(sp_project)           :: spproj
         class(oris),       pointer :: spproj_field
         integer :: maxits, istage, last_iter, nptcls_eff, nstages, nsample_target_2D
+        integer :: start_stage, stop_stage, checkpoint_last_iter, env_status
+        character(len=32) :: env_value
         integer(timer_int_kind) :: t_tot, t_phase
         real(timer_int_kind)    :: rt_setup, rt_calc_pspec, rt_cluster2D, rt_final_cavgs, rt_tot
         logical :: l_shmem
@@ -75,13 +77,31 @@ contains
         call determine_abinitio2D_stages(params, nstages)
         ! override # stages
         if( cline%defined('nstages') ) nstages = min(params%nstages,NSTAGES_CLS)
+        start_stage = 1
+        stop_stage = nstages
+        checkpoint_last_iter = 0
+        call get_environment_variable('JOINT2D_SGD_CHECKPOINT_START_STAGE', env_value, status=env_status)
+        if( env_status == 0 .and. len_trim(env_value) > 0 ) read(env_value,*) start_stage
+        call get_environment_variable('JOINT2D_SGD_CHECKPOINT_STOP_STAGE', env_value, status=env_status)
+        if( env_status == 0 .and. len_trim(env_value) > 0 ) read(env_value,*) stop_stage
+        call get_environment_variable('JOINT2D_SGD_CHECKPOINT_LAST_ITER', env_value, status=env_status)
+        if( env_status == 0 .and. len_trim(env_value) > 0 ) read(env_value,*) checkpoint_last_iter
+        if( start_stage < 1 .or. start_stage > nstages ) THROW_HARD('invalid stream checkpoint start stage')
+        if( stop_stage < start_stage .or. stop_stage > nstages ) THROW_HARD('invalid stream checkpoint stop stage')
+        if( start_stage > 1 .and. checkpoint_last_iter < 1 )&
+            &THROW_HARD('stream checkpoint continuation requires the last completed iteration')
         allocate(stage_parms(nstages))
         ! read project
         call spproj%read(params%projfile)
         call set_dims                   ! set downscaling
-        call inirefs                    ! deal with initial references
+        if( start_stage == 1 ) call inirefs ! deal with initial references only on fresh runs
         call set_lplims(nstages)        ! set resolutions limits
         call prep_command_lines(cline)  ! prepare class command lines
+        if( start_stage > 1 )then
+            call cline_cluster2D%set('endit', checkpoint_last_iter)
+            write(logfhandle,'(A,I0,A,I0)') '>>> ABINITIO2D CHECKPOINT RESUME: start_stage=', start_stage,&
+                &' last_iter=', checkpoint_last_iter
+        endif
         call set_sampling               ! sampling
         if( L_BENCH_GLOB ) rt_setup = toc(t_phase)
         ! summary
@@ -92,12 +112,14 @@ contains
             &stage_parms(istage)%l_sticky_sampling, stage_parms(istage)%l_frac_restore
         end do
         ! prep particles field
-        call spproj_field%delete_2Dclustering
-        call spproj_field%clean_entry('updatecnt', 'sampled')
-        if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
-        call spproj%write_segment_inside(params%oritype, params%projfile)
+        if( start_stage == 1 )then
+            call spproj_field%delete_2Dclustering
+            call spproj_field%clean_entry('updatecnt', 'sampled')
+            if( spproj_field%get_nevenodd() == 0 ) call spproj_field%partition_eo
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
         ! Frequency marching
-        do istage = 1,nstages
+        do istage = start_stage,stop_stage
             write(logfhandle,'(A)')'>>>'
             if( stage_parms(istage)%l_lpset )then
                 write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', stage_parms(istage)%lp
@@ -109,6 +131,18 @@ contains
             ! classify
             call execute_cluster2D
         enddo
+        if( stop_stage < nstages )then
+            last_iter = cline_cluster2D%get_iarg('endit')
+            write(logfhandle,'(A,I0,A,I0)') '>>> ABINITIO2D CHECKPOINT READY: stage=', stop_stage,&
+                &' last_iter=', last_iter
+            deallocate(stage_parms)
+            call spproj%kill
+            nullify(spproj_field)
+            call qsys_cleanup(params)
+            call simple_touch('ABINITIO2D_CHECKPOINT_STAGE'//int2str_pad(stop_stage,3))
+            call simple_end('**** SIMPLE_ABINITIO2D CHECKPOINT NORMAL STOP ****')
+            return
+        endif
         call execute_terminal_prob_pass
         ! transfer 2D shifts to 3D field only when no prior valid 3D alignment exists
         call spproj%read_segment(params%oritype,params%projfile)
