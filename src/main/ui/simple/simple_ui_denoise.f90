@@ -181,7 +181,7 @@ subroutine new_icm2D( prgtab )
         &'ppca_denoise_classes',&                     ! name
         &'Denoise class averages with probabilistic PCA',& ! summary
         &'is a program for ppca-based denoising of image classes',&  ! help
-        &'all',&                                      ! executable
+        &'simple_exec',&                              ! executable
         &.true., &
         &visibility=UI_VIS_ADVANCED)                                      ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -266,7 +266,7 @@ subroutine new_icm2D( prgtab )
         &'cls_split',&
         &'Split classes with latent clustering',&
         &'splits 2D/3D particle classes into subclasses using diffusion-map or kPCA embeddings and k-medoids clustering',&
-        &'all',&
+        &'simple_exec',&
         &.true., &
         &visibility=UI_VIS_ADVANCED)
         call cls_split%add_input(UI_PARM, 'class', 'num', &
@@ -339,7 +339,7 @@ subroutine new_icm2D( prgtab )
         &'denoise_project',&
         &'Create paired raw and denoised particle representations',&
         &'is a workflow for creating a dual-representation project from existing 2D clustering by writing registered phase-flipped raw particles and denoised particle samples from diffusion maps',&
-        &'all',&
+        &'simple_exec',&
         &.true., &
         &visibility=UI_VIS_ADVANCED)
         call denoise_project%add_input(UI_FILT, 'neigs', 'num', &
@@ -391,7 +391,7 @@ subroutine new_icm2D( prgtab )
         &'map_params_from_den',&
         &'Map denoised-project assignments to raw particles',&
         &'is a workflow for transferring assignments obtained on denoise_project transformed particles back to the raw project particle frame',&
-        &'all',&
+        &'simple_exec',&
         &.true., &
         &visibility=UI_VIS_ADVANCED)
         call map_params_from_den%add_input(UI_FILE, projfile_raw, &

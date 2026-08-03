@@ -28,7 +28,7 @@ subroutine new_cif2mrc( prgtab )
         &'cif2mrc', &                                      ! name
         &'Simulate an MRC density map from PDBx/mmCIF atomic coordinates',& ! summary
         &'is a program to simulate a 3D density map in MRC format using a PDBx/mmCIF format coordinates file',& ! descr long
-        &'all',&                                           ! executable
+        &'simple_exec',&                                   ! executable
         &.false., visibility=UI_VIS_STANDARD, display_name='Create Density Map from mmCIF') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -55,7 +55,7 @@ subroutine new_cif2mrc( prgtab )
         &'pdb2mrc', &                                      ! name
         &'Simulate an MRC density map from PDB atomic coordinates',& ! summary
         &'is a program to simulate a 3D density map in MRC format using a PDB format coordinates file',& ! descr long
-        &'all',&                                           ! executable
+        &'simple_exec',&                                   ! executable
         &.false., visibility=UI_VIS_STANDARD, display_name='Create Density Map from PDB') ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output

@@ -33,7 +33,7 @@ integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-stan
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
-integer,          parameter :: NSAMPLE_HET_SPLIT_CAP   = 200000
+integer,          parameter :: NSAMPLE_HET_SPLIT_CAP   = 100000
 character(len=*), parameter :: PROB_NEIGH_MODE_STAGE1  = 'snhc'
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
 character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
@@ -150,6 +150,15 @@ contains
         istage = HET_DOCKED_STAGE
     end function abinitio_het_docked_stage
 
+    module function abinitio_docked_cohort_active( params, istage ) result(l_active)
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        logical :: l_active
+        l_active = trim(params%multivol_mode).eq.'docked' .and. &
+            &params%nstates > 1 .and. istage >= params%split_stage .and. &
+            &.not. force_full_sampling_mode(params)
+    end function abinitio_docked_cohort_active
+
     module function abinitio_stoch_sampl_stage(params) result(istage)
         class(parameters), intent(in) :: params
         integer :: istage
@@ -171,8 +180,16 @@ contains
 
     module procedure set_cline_refine3D
         type(refine3D_stage_cfg) :: cfg
+        logical :: l_sticky_class_sampling_active
+        l_sticky_class_sampling_active = .false.
+        if( .not. l_cavgs ) l_sticky_class_sampling_active = abinitio_docked_cohort_active(params, istage)
+        if( l_sticky_class_sampling_active .and. docked_split_stage(params, istage) )then
+            write(logfhandle,'(A)') &
+                '>>> ABINITIO3D DOCKED STICKY CLASS SAMPLING ENABLED FOR POST-SPLIT STAGES'
+        endif
         call build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
-        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_refine3D_lp_override )
+        call emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, &
+            &l_refine3D_lp_override, l_sticky_class_sampling_active )
     end procedure set_cline_refine3D
 
     subroutine build_refine3D_stage_cfg( cfg, params, istage, l_cavgs )
@@ -308,7 +325,7 @@ contains
             case('independent')
                 if( istage >= TRAILREC_STAGE_MULTI  ) cfg%trail_rec = 'yes'
             case('docked')
-                if( istage >= TRAILREC_STAGE_SINGLE .and. istage /= params%split_stage )then
+                if( istage >= TRAILREC_STAGE_SINGLE )then
                     cfg%trail_rec = 'yes'
                 endif
             case default
@@ -423,12 +440,13 @@ contains
         end select
     end subroutine apply_refine3D_search_overrides
 
-    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override )
+    subroutine emit_refine3D_stage_cfg( cfg, params, istage, l_cavgs, l_cmdline_lp_override, l_sticky_class_sampling )
         type(refine3D_stage_cfg), intent(in) :: cfg
         class(parameters),        intent(in) :: params
         integer,                  intent(in) :: istage
         logical,                  intent(in) :: l_cavgs
         logical,                  intent(in) :: l_cmdline_lp_override
+        logical,                  intent(in) :: l_sticky_class_sampling
         character(len=STDLEN) :: ptcl_src_eff
         real :: lp_eff
         logical :: l_full_update_stage
@@ -459,6 +477,11 @@ contains
             else
                 call cline_refine3D%set('nsample', params%nsample)
             endif
+        endif
+        if( l_sticky_class_sampling )then
+            call cline_refine3D%set('sticky_class_sampling', 'yes')
+        else
+            call cline_refine3D%delete('sticky_class_sampling')
         endif
         call cline_refine3D%set('box_crop',               lpinfo(istage)%box_crop)
         call cline_refine3D%set('startit',                cfg%iter)
@@ -533,7 +556,10 @@ contains
         integer,           intent(in)  :: nptcls
         integer,           intent(out) :: nptcls_cap
         real,              intent(out) :: ufrac_cap
-        nptcls_cap = min(nint(params%nstates * 2.5 * params%nsample), NSAMPLE_HET_SPLIT_CAP)
+        integer :: nptcls_update
+        nptcls_update = min(nstates_glob * params%nsample, nptcls)
+        nptcls_cap = min(nint(nstates_glob * 2.5 * params%nsample), NSAMPLE_HET_SPLIT_CAP)
+        nptcls_cap = max(nptcls_cap, nptcls_update)
         nptcls_cap = min(nptcls_cap, nptcls)
         ufrac_cap  = min(real(nptcls_cap) / real(nptcls), 1.0)
         ufrac_cap  = min(abinitio_update_frac_max(), ufrac_cap)

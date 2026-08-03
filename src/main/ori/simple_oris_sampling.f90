@@ -151,7 +151,8 @@ contains
         call self%incr_sampled_updatecnt(inds, incr_sampled)
     end subroutine sample4update_cnt
 
-    module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, frac_best )
+    module subroutine sample4update_class( self, clssmp, fromto, update_frac, nsamples, inds, incr_sampled, l_greedy, &
+        &frac_best, sampled_only )
         class(oris),          intent(inout) :: self
         type(class_sample),   intent(inout) :: clssmp(:)
         integer,              intent(in)    :: fromto(2)
@@ -160,10 +161,14 @@ contains
         integer, allocatable, intent(inout) :: inds(:)
         logical,              intent(in)    :: incr_sampled, l_greedy
         real,    optional,    intent(in)    :: frac_best
-        integer, allocatable :: states(:), eligible(:), updatecnts(:), inds_pool(:), inds_fill(:)
+        logical, optional,    intent(in)    :: sampled_only
+        integer, allocatable :: states(:), eligible(:), updatecnts(:), sampleinds(:), inds_pool(:), inds_fill(:)
         real,    allocatable :: rstates(:)
         integer :: i, j, cnt, nptcls, nsamples_class, states_bal(self%n)
         integer :: nbest, nfill, ucnt, ucnt_min, ucnt_max
+        logical :: l_sampled_only
+        l_sampled_only = .false.
+        if( present(sampled_only) ) l_sampled_only = sampled_only
         rstates        = self%get_all('state')
         nsamples_class = nint(update_frac * real(count(rstates > 0.5)))
         deallocate(rstates)
@@ -171,6 +176,15 @@ contains
         do while( sum(clssmp(:)%nsample) < nsamples_class )
             where( clssmp(:)%nsample < clssmp(:)%pop ) clssmp(:)%nsample = clssmp(:)%nsample + 1
         end do
+        if( l_sampled_only )then
+            ! The legacy balanced allocation may overshoot by up to one
+            ! particle per class. Cohort sampling is also the exact-K split
+            ! reconstruction contract, so trim that overshoot deterministically.
+            do i = size(clssmp), 1, -1
+                if( sum(clssmp(:)%nsample) == nsamples_class ) exit
+                if( clssmp(i)%nsample > 0 ) clssmp(i)%nsample = clssmp(i)%nsample - 1
+            enddo
+        endif
         states_bal = 0
         do i = 1, size(clssmp)
             if( clssmp(i)%nsample < 1 ) cycle
@@ -178,13 +192,24 @@ contains
                 nbest = max(clssmp(i)%nsample, nint(frac_best * real(clssmp(i)%pop)))
                 nbest = min(nbest, clssmp(i)%pop)
                 eligible = clssmp(i)%pinds(:nbest)
-            else if( l_greedy )then
+            else if( l_greedy .and. .not. l_sampled_only )then
                 do j = 1, clssmp(i)%nsample
                     states_bal(clssmp(i)%pinds(j)) = 1
                 end do
                 cycle
             else
                 eligible = clssmp(i)%pinds
+            endif
+            if( l_sampled_only )then
+                allocate(sampleinds(size(eligible)), source=0)
+                do j = 1, size(eligible)
+                    sampleinds(j) = self%o(eligible(j))%get_sampled()
+                enddo
+                eligible = pack(eligible, mask=sampleinds > 0)
+                deallocate(sampleinds)
+                if( size(eligible) < clssmp(i)%nsample )then
+                    THROW_HARD('insufficient previously sampled class-balanced update candidates')
+                endif
             endif
             allocate(updatecnts(size(eligible)), source=0)
             do j = 1, size(eligible)

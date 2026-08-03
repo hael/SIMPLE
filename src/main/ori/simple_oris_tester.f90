@@ -238,6 +238,21 @@ contains
         else
             call assert_true(.false., 'sample4update_class low updatecnt first')
         endif
+        ! sampled_only keeps class-balanced updates inside a persistent cohort
+        call os%set_all2single('sampled',   0.0)
+        call os%set_all2single('updatecnt', 0.0)
+        do i = 1, 10
+            if( any(i == [1,4,5,6,9,10]) )then
+                call os%set(i, 'sampled',   1.)
+                call os%set(i, 'updatecnt', 1.)
+            endif
+        enddo
+        frac = 0.3
+        call os%sample4update_class(clssmp, [1, n], frac, nsamp, inds, .true., .false., sampled_only=.true.)
+        call assert_int(3, nsamp, 'sample4update_class sampled_only exact nsamp')
+        do i = 1, size(inds)
+            call assert_true(any(inds(i) == [1,4,5,6,9,10]), 'sample4update_class sampled_only cohort')
+        enddo
         do i = 1, size(clssmp)
             if( allocated(clssmp(i)%pinds) ) deallocate(clssmp(i)%pinds)
             if( allocated(clssmp(i)%ccs)   ) deallocate(clssmp(i)%ccs)

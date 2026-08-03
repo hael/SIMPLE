@@ -206,9 +206,15 @@ contains
         integer, allocatable, intent(inout) :: pinds(:)
         type(class_sample),   allocatable   :: clssmp(:)
         type(string) :: fname
+        integer :: iptcl
         fname = CLASS_SAMPLING_FILE
         if( params%l_update_frac )then
             if( trim(params%balance).eq.'yes' )then
+                if( params%l_sticky_class_sampling )then
+                    if( .not. build%spproj_field%has_been_sampled() )then
+                        THROW_HARD('sticky_class_sampling requires a pre-existing sampled particle cohort')
+                    endif
+                endif
                 if( file_exists(fname) )then
                     call read_class_samples(clssmp, fname)
                 else
@@ -217,10 +223,12 @@ contains
                 ! balanced class sampling
                 if( params%l_frac_best )then
                     call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac,&
-                    nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, frac_best=params%frac_best)
+                    nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, frac_best=params%frac_best,&
+                    &sampled_only=params%l_sticky_class_sampling)
                 else
                     call build%spproj_field%sample4update_class(clssmp, pfromto, params%update_frac,&
-                    nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl)
+                    nptcls2update, pinds, l_incr_sampl, params%l_greedy_smpl, &
+                    &sampled_only=params%l_sticky_class_sampling)
                 endif
                 call deallocate_class_samples(clssmp)
             else

@@ -501,6 +501,7 @@ contains
         self%l_frac_best   = self%frac_best  <= 0.99
         self%l_frac_worst  = self%frac_worst <= 0.99
         self%l_greedy_smpl = trim(self%greedy_sampling).eq.'yes'
+        self%l_sticky_class_sampling = trim(self%sticky_class_sampling).eq.'yes'
     end subroutine derive_sampling_settings
 
     module subroutine derive_parallel_settings(self, cline)
@@ -659,6 +660,11 @@ contains
             case('yes','no')
             case DEFAULT
                 THROW_HARD('memreport must be yes or no')
+        end select
+        select case(trim(self%sticky_class_sampling))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('sticky_class_sampling must be yes or no')
         end select
         if( self%memreport_interval < 1 ) THROW_HARD('memreport_interval must be at least 1 second')
         if( self%walltime <= 0 )then

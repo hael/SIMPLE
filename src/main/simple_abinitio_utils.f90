@@ -101,6 +101,12 @@ interface
         integer :: istage
     end function abinitio_het_docked_stage
 
+    module function abinitio_docked_cohort_active( params, istage ) result(l_active)
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        logical :: l_active
+    end function abinitio_docked_cohort_active
+
     module function abinitio_stoch_sampl_stage(params) result(istage)
         class(parameters), intent(in) :: params
         integer :: istage
@@ -507,16 +513,19 @@ contains
     end subroutine symmetrize
 
     ! Performs reconstruction at selected stage boundaries.
-    subroutine calc_rec( params, projfile, xrec3D, istage )
+    subroutine calc_rec( params, projfile, xrec3D, istage, current_sample_only )
         class(parameters),       intent(inout) :: params
         class(string),           intent(in)    :: projfile
         class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
+        logical, optional,       intent(in)    :: current_sample_only
         type(string)      :: vol_even, vol_odd, tmpl, src, dest, dest_main, dest_even, dest_odd, sstate, sstage, pgrp, vol_diag
         type(cmdline)     :: cline_rec
         integer           :: state
         real              :: lp_snapshot
-        logical           :: have_even_stage, have_odd_stage
+        logical           :: have_even_stage, have_odd_stage, l_current_sample_only
+        l_current_sample_only = .false.
+        if( present(current_sample_only) ) l_current_sample_only = current_sample_only
         ! Reconstruction
         pgrp = trim(params%pgrp)
         if( istage <= abinitio_symsrch_stage() ) pgrp = trim(params%pgrp_start)
@@ -527,13 +536,20 @@ contains
         call cline_rec%set('pgrp',      pgrp)
         call cline_rec%set('box_crop',  lpinfo(istage)%box_crop)
         call cline_rec%set('trail_rec', 'no')
+        call cline_rec%delete('sticky_class_sampling')
         if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
         do state = 1,params%nstates
             call cline_rec%delete('vol'//int2str(state))
         enddo
         call cline_rec%delete('vol_even')
         call cline_rec%delete('vol_odd')
-        call cline_rec%delete('update_frac')
+        if( l_current_sample_only )then
+            if( .not. cline_rec%defined('update_frac') )then
+                THROW_HARD('current-sample reconstruction requires update_frac')
+            endif
+        else
+            call cline_rec%delete('update_frac')
+        endif
         call strip_refine3D_planning_keys(cline_rec)
         call xrec3D%execute(cline_rec)
         ! Rename volumes, update cline & project
@@ -586,19 +602,25 @@ contains
         call cline_rec%kill
     end subroutine calc_rec
 
-    subroutine randomize_states( params, spproj, projfile, xrec3D, istage )
+    subroutine randomize_states( params, spproj, projfile, xrec3D, istage, clean_sampling, reconstruct_states )
         use simple_commanders_euclid,  only: commander_calc_group_sigmas
         class(parameters),     intent(inout) :: params
         class(sp_project),     intent(inout) :: spproj
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
         integer,               intent(in)    :: istage
+        logical, optional,     intent(in)    :: clean_sampling, reconstruct_states
         integer, parameter :: MIN_SPLIT_STATE_POP = 5
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
         type(cmdline)                     :: cline_calc_group_sigmas
         integer :: pop, state
+        logical :: l_clean_sampling, l_reconstruct_states
+        l_clean_sampling     = .true.
+        l_reconstruct_states = .true.
+        if( present(clean_sampling)     ) l_clean_sampling     = clean_sampling
+        if( present(reconstruct_states) ) l_reconstruct_states = reconstruct_states
         call spproj%read_segment('ptcl3D', projfile)
-        call spproj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
+        if( l_clean_sampling ) call spproj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
         call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
         do state = 1, params%nstates
             pop = spproj%os_ptcl3D%get_pop(state, 'state')
@@ -619,7 +641,7 @@ contains
             call cline_calc_group_sigmas%kill
         endif
         ! Multi-state reconstruction
-        call calc_rec(params, projfile, xrec3D, istage)
+        if( l_reconstruct_states ) call calc_rec(params, projfile, xrec3D, istage)
     end subroutine randomize_states
 
     subroutine gen_ortho_reprojs4viz( params, spproj )

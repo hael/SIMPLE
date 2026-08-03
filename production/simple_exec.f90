@@ -24,6 +24,10 @@ call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
 ! make UI
 call make_ui
+if( trim(prg) == 'print_ui_json' )then
+    call print_ui_json
+    stop
+endif
 if( str_has_substr(entire_line, 'prg=list') )then
     call list_simple_prgs_in_ui
     stop

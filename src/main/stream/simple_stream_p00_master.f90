@@ -83,6 +83,13 @@ type pipe_rx_state
     integer                       :: expected_len = -1
 end type pipe_rx_state
 
+type pipe_tx_state
+    character(len=:),       allocatable :: framed
+    character(kind=c_char), allocatable :: cbuf(:)
+    integer                             :: capacity = 0
+    integer                             :: small_payload_streak = 0
+end type pipe_tx_state
+
 !=========================================================
 
 type, extends(commander_base) :: stream_p00_master
@@ -236,6 +243,7 @@ contains
         integer                                    :: loop_counter
         real(kind=dp)                              :: r_val
         type(pipe_rx_state)                        :: rx_state(N_STREAM_PIPES)
+        type(pipe_tx_state),                target :: tx_state(N_STREAM_PIPES)
         ! check cline arguments 
         l_existing_pickrefs   = .false.
         l_existing_box        = .false.
@@ -362,12 +370,9 @@ contains
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             ! stringify assembled json
             request = assembler%to_string()
-         !   write(*,*) request%to_char()
             ! send
             if( post%request(response, request) ) then
-              !  write(*, *) "POST", request%to_char()
                 if( response%code == 200) then
-                    write(*, *) "RESPONSE", response%content%to_char()
                     ! parse response JSON
                     call json%parse(json_response_ptr, response%content%to_char())
                     if( json%failed()) then
@@ -409,36 +414,42 @@ contains
                         call json%get(json_response_ptr, 'restart_preprocess', l_test, l_found)
                         if( l_found .and. l_test ) then
                             if( fork_preprocess%status() /= FORK_STATUS_RUNNING ) then
+                                call drain_and_reset_pipe_state(1, ipc_pipe_preprocess_in, ipc_pipe_preprocess_out)
                                 call fork_preprocess%start(name=string(PREPROC_JOB_NAME), logfile=string(PREPROC_JOB_NAME//'.log'), cline=cline_preprocess, restart=.true.)
                             endif
                         endif
                         call json%get(json_response_ptr, 'restart_optics_assignment', l_test, l_found)
                         if( l_found .and. l_test ) then
                             if( fork_assign_optics%status() /= FORK_STATUS_RUNNING ) then
+                                call drain_and_reset_pipe_state(2, ipc_pipe_assign_optics_in, ipc_pipe_assign_optics_out)
                                 call fork_assign_optics%start(name=string(OPTICS_JOB_NAME), logfile=string(OPTICS_JOB_NAME//'.log'),  cline=cline_assign_optics, restart=.true.)
                             endif
                         endif
                         call json%get(json_response_ptr, 'restart_opening2D', l_test, l_found)
                         if( l_found .and. l_test ) then
                             if( fork_initial_analysis%status() /= FORK_STATUS_RUNNING ) then
+                                call drain_and_reset_pipe_state(3, ipc_pipe_initial_analysis_in, ipc_pipe_initial_analysis_out)
                                 call fork_initial_analysis%start(name=string(OPENING2D_JOB_NAME), logfile=string(OPENING2D_JOB_NAME//'.log'),  cline=cline_opening2D, restart=.true.)
                             endif
                         endif
                         call json%get(json_response_ptr, 'restart_reference_picking', l_test, l_found)
                         if( l_found .and. l_test ) then
                             if( fork_reference_picking%status() /= FORK_STATUS_RUNNING ) then
+                                call drain_and_reset_pipe_state(4, ipc_pipe_refpick_in, ipc_pipe_refpick_out)
                                 call fork_reference_picking%start(name=string(REFPICK_JOB_NAME), logfile=string(REFPICK_JOB_NAME//'.log'),  cline=cline_reference_picking, restart=.true.)
                             endif
                         endif
                         call json%get(json_response_ptr, 'restart_particle_sieving', l_test, l_found)
                         if( l_found .and. l_test ) then
                             if( fork_particle_sieving%status() /= FORK_STATUS_RUNNING ) then
+                                call drain_and_reset_pipe_state(5, ipc_pipe_sieve_cavgs_in, ipc_pipe_sieve_cavgs_out)
                                 call fork_particle_sieving%start(name=string(SIEVING_JOB_NAME), logfile=string(SIEVING_JOB_NAME//'.log'),  cline=cline_particle_sieving, restart=.true.)
                             endif
                         endif
                         call json%get(json_response_ptr, 'restart_pool2D', l_test, l_found)
                         if( l_found .and. l_test ) then
                             if( fork_pool2D%status() /= FORK_STATUS_RUNNING ) then
+                                call drain_and_reset_pipe_state(6, ipc_pipe_pool2D_in, ipc_pipe_pool2D_out)
                                 call fork_pool2D%start(name=string(CLASS2D_JOB_NAME), logfile=string(CLASS2D_JOB_NAME//'.log'),  cline=cline_pool2D, restart=.true.)
                             endif
                         endif
@@ -478,6 +489,9 @@ contains
                         if( meta_update%assigned() ) then
                             call meta_update%serialise(meta_buffer)
                             call send_update_to_stage_pipes(meta_buffer)
+                            ! clear so unchanged fields are not silently re-sent every
+                            ! loop iteration; only newly-set fields trigger a resend
+                            call meta_update%set_assigned(.false.)
                         endif
                         if(allocated(i_arr)) deallocate(i_arr)
                     endif
@@ -1218,25 +1232,27 @@ contains
 
         subroutine send_update_to_stage_pipes(buffer)
             character(len=*), intent(in) :: buffer
-            call send_framed_to_pipe(ipc_pipe_preprocess_out(2), buffer)
-            call send_framed_to_pipe(ipc_pipe_assign_optics_out(2), buffer)
-            call send_framed_to_pipe(ipc_pipe_initial_analysis_out(2), buffer)
-            call send_framed_to_pipe(ipc_pipe_refpick_out(2), buffer)
-            call send_framed_to_pipe(ipc_pipe_sieve_cavgs_out(2), buffer)
-            call send_framed_to_pipe(ipc_pipe_pool2D_out(2), buffer)
+            ! only send to stages that are actually running: the master keeps its own
+            ! copy of every pipe fd open across forks, so a stopped/restarting stage's
+            ! pipe never reports EPIPE and would otherwise silently fill up
+            if( fork_preprocess%status()        == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_preprocess_out(2), buffer, 'preprocess', tx_state(1))
+            if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_pool2D_out(2), buffer, 'pool2D', tx_state(6))
+            ! The following are commented out because they dont currently receive update messages
+            ! if( fork_assign_optics%status()     == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_assign_optics_out(2), buffer, 'assign_optics', tx_state(2))
+            ! if( fork_initial_analysis%status()  == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_initial_analysis_out(2), buffer, 'initial_analysis', tx_state(3))
+            ! if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_refpick_out(2), buffer, 'reference_picking', tx_state(4))
+            ! if( fork_particle_sieving%status()  == FORK_STATUS_RUNNING ) call send_framed_to_pipe(ipc_pipe_sieve_cavgs_out(2), buffer, 'particle_sieving', tx_state(5))
         end subroutine send_update_to_stage_pipes
 
-        subroutine send_framed_to_pipe(fd, buffer)
+        subroutine send_framed_to_pipe(fd, buffer, pipe_name, st)
             integer, intent(in)                          :: fd
             character(len=*), intent(in)                 :: buffer
-            character(len=:), allocatable, save          :: framed
-            character(kind=c_char), allocatable, target, save :: cbuf(:)
+            character(len=*), intent(in)                 :: pipe_name
+            type(pipe_tx_state), intent(inout), target    :: st
             integer(c_int), target                       :: msg_len
             integer(c_int)                               :: nwritten
             integer                                      :: nbytes, header_bytes, framed_nbytes, new_capacity
             integer                                      :: sent, retry_count, rc_sleep, err_no, ich
-            integer, save                                :: framed_capacity = 0
-            integer, save                                :: small_payload_streak = 0
             integer, parameter                           :: MAX_RETRIES = 200
             integer, parameter                           :: RETRY_SLEEP_US = 10000
             integer, parameter                           :: TRIM_STREAK = 64
@@ -1248,23 +1264,23 @@ contains
             msg_len = int(nbytes, c_int)
             header_bytes = sizeof(msg_len)
             framed_nbytes = header_bytes + nbytes
-            if( framed_nbytes > framed_capacity )then
-                if( allocated(framed) ) deallocate(framed)
-                if( allocated(cbuf)   ) deallocate(cbuf)
-                allocate(character(len=framed_nbytes) :: framed)
-                allocate(cbuf(framed_nbytes))
-                framed_capacity = framed_nbytes
+            if( framed_nbytes > st%capacity )then
+                if( allocated(st%framed) ) deallocate(st%framed)
+                if( allocated(st%cbuf)   ) deallocate(st%cbuf)
+                allocate(character(len=framed_nbytes) :: st%framed)
+                allocate(st%cbuf(framed_nbytes))
+                st%capacity = framed_nbytes
             endif
-            framed(1:header_bytes) = transfer(msg_len, framed(1:header_bytes))
-            framed(header_bytes + 1:) = buffer
+            st%framed(1:header_bytes) = transfer(msg_len, st%framed(1:header_bytes))
+            st%framed(header_bytes + 1:header_bytes + nbytes) = buffer
             do ich = 1, framed_nbytes
-                cbuf(ich) = transfer(framed(ich:ich), cbuf(ich))
+                st%cbuf(ich) = transfer(st%framed(ich:ich), st%cbuf(ich))
             end do
 
             sent = 0
             retry_count = 0
             do while( sent < framed_nbytes )
-                nwritten = c_write(fd, c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                nwritten = c_write(fd, c_loc(st%cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
                 if( nwritten > 0 ) then
                     sent = sent + int(nwritten)
                     retry_count = 0
@@ -1272,44 +1288,94 @@ contains
                 endif
 
                 err_no = ierrno()
+                if( err_no == int(EINTR) ) then
+                    ! interrupted system call (e.g. by SIGTERM/SIGINT or a timer signal);
+                    ! not backpressure, just retry immediately without counting against
+                    ! the retry budget or touching sent
+                    cycle
+                endif
+
                 if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
                     retry_count = retry_count + 1
-                    if( retry_count > MAX_RETRIES ) then
-                        THROW_WARN('failed to send framed update to stream pipe: retry limit exceeded')
+                    if( sent == 0 .and. retry_count > MAX_RETRIES ) then
+                        ! nothing of this frame has reached the pipe yet, so it is safe
+                        ! to drop it here; the next update will be sent whole on the
+                        ! following cycle. Once any bytes are in the pipe we must keep
+                        ! retrying instead of abandoning mid-frame, since a partial
+                        ! frame permanently desyncs the reader's length-prefixed framing.
+                        THROW_WARN('failed to send framed update to '//trim(pipe_name)//' pipe: retry limit exceeded')
                         exit
                     endif
                     rc_sleep = c_usleep(RETRY_SLEEP_US)
                     cycle
                 endif
 
-                if( err_no == int(EPIPE) .or. err_no == int(EBADF) ) then
-                    THROW_WARN('failed to send framed update to stream pipe: no active reader')
-                else
-                    THROW_WARN('failed to send framed update to stream pipe')
+                ! Any other write error (EPIPE, EBADF, or otherwise). Once bytes are
+                ! already in the pipe we must not abandon here, since a partial frame
+                ! permanently desyncs the reader's length-prefixed framing, so keep
+                ! retrying with the same backoff/budget as backpressure. Only a
+                ! completely unsent frame is safe to drop.
+                retry_count = retry_count + 1
+                if( sent == 0 .and. retry_count > MAX_RETRIES ) then
+                    if( err_no == int(EPIPE) .or. err_no == int(EBADF) ) then
+                        THROW_WARN('failed to send framed update to '//trim(pipe_name)//' pipe: no active reader')
+                    else
+                        THROW_WARN('failed to send framed update to '//trim(pipe_name)//' pipe')
+                    endif
+                    exit
                 endif
-                exit
+                rc_sleep = c_usleep(RETRY_SLEEP_US)
+                cycle
             end do
 
             if( sent == framed_nbytes ) then
-                if( framed_capacity > 4 * max_msgsize .and. framed_capacity > 8 * framed_nbytes ) then
-                    small_payload_streak = small_payload_streak + 1
+                if( st%capacity > 4 * max_msgsize .and. st%capacity > 8 * framed_nbytes ) then
+                    st%small_payload_streak = st%small_payload_streak + 1
                 else
-                    small_payload_streak = 0
+                    st%small_payload_streak = 0
                 endif
 
-                if( small_payload_streak >= TRIM_STREAK ) then
+                if( st%small_payload_streak >= TRIM_STREAK ) then
                     new_capacity = max(max_msgsize, 2 * framed_nbytes)
-                    if( new_capacity < framed_capacity ) then
-                        if( allocated(framed) ) deallocate(framed)
-                        if( allocated(cbuf)   ) deallocate(cbuf)
-                        allocate(character(len=new_capacity) :: framed)
-                        allocate(cbuf(new_capacity))
-                        framed_capacity = new_capacity
+                    if( new_capacity < st%capacity ) then
+                        if( allocated(st%framed) ) deallocate(st%framed)
+                        if( allocated(st%cbuf)   ) deallocate(st%cbuf)
+                        allocate(character(len=new_capacity) :: st%framed)
+                        allocate(st%cbuf(new_capacity))
+                        st%capacity = new_capacity
                     endif
-                    small_payload_streak = 0
+                    st%small_payload_streak = 0
                 endif
             endif
         end subroutine send_framed_to_pipe
+
+        ! Drains any stale bytes left in a stage's pipes by a previous, now-dead
+        ! instance of that child process, and resets the corresponding rx/tx
+        ! framing state. Must be called before restarting a stage: the master
+        ! keeps both ends of every pipe open across forks (see init_ipc_pipe), so
+        ! bytes the dead child never read remain sitting in the pipe. A freshly
+        ! restarted child (or master) starts frame parsing from scratch, and
+        ! would otherwise misinterpret those leftover bytes as a bogus frame
+        ! length, corrupting the length-prefixed framing protocol.
+        subroutine drain_and_reset_pipe_state( ipipe, in_pipe, out_pipe )
+            integer, intent(in)            :: ipipe
+            integer, intent(inout)         :: in_pipe(2)
+            integer, intent(inout)         :: out_pipe(2)
+            character(kind=c_char), target :: raw(max_msgsize)
+            integer(c_int)                  :: nread
+            do
+                if( in_pipe(1) < 0 ) exit
+                nread = c_read(in_pipe(1), c_loc(raw(1)), int(size(raw), c_size_t))
+                if( nread <= 0 ) exit
+            end do
+            do
+                if( out_pipe(1) < 0 ) exit
+                nread = c_read(out_pipe(1), c_loc(raw(1)), int(size(raw), c_size_t))
+                if( nread <= 0 ) exit
+            end do
+            rx_state(ipipe) = pipe_rx_state()
+            tx_state(ipipe) = pipe_tx_state()
+        end subroutine drain_and_reset_pipe_state
 
     end subroutine exec_stream_p00_master
 

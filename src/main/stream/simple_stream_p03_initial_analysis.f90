@@ -34,7 +34,7 @@
 !   commander_extract, commander_abinitio2D, commander_shape_rank_cavgs
 !==============================================================================
 module simple_stream_p03_initial_analysis
-use unix,                         only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK
+use unix,                         only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
 use simple_stream_api
 use simple_stream_state,          only: ipc_pipe_initial_analysis_in, ipc_pipe_initial_analysis_out
@@ -1419,16 +1419,28 @@ contains
                     end if
 
                     err_no = ierrno()
+                    if( err_no == int(EINTR) ) then
+                        ! interrupted system call; not backpressure, just retry immediately
+                        ! without counting against the retry budget or touching sent
+                        cycle
+                    end if
+
                     if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
                         retry_count = retry_count + 1
-                        if( retry_count > MAX_RETRIES ) then
-                            THROW_HARD('failed to write initial_analysis metadata to ipc_pipe_initial_analysis_in: retry limit exceeded')
+                        if( sent == 0 .and. retry_count > MAX_RETRIES ) then
+                            ! nothing of this frame has reached the pipe yet, so it is safe
+                            ! to drop it here. Once any bytes are in the pipe we must keep
+                            ! retrying instead of abandoning mid-frame, since a partial
+                            ! frame permanently desyncs the reader's length-prefixed framing.
+                            THROW_WARN('failed to write initial_analysis metadata to ipc_pipe_initial_analysis_in: retry limit exceeded')
+                            exit
                         end if
                         rc_sleep = c_usleep(RETRY_SLEEP_US)
                         cycle
                     end if
 
-                    THROW_HARD('failed to write initial_analysis metadata to ipc_pipe_initial_analysis_in')
+                    THROW_WARN('failed to write initial_analysis metadata to ipc_pipe_initial_analysis_in')
+                    exit
                 end do
 
                 if( allocated(cbuf) ) deallocate(cbuf)

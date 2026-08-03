@@ -29,7 +29,7 @@
 !   simple_stream_state, simple_gui_metadata_api, unix
 !==============================================================================
 module simple_stream_p06_pool2D_new
-use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, c_read
+use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR, c_read
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
 use simple_stream_api
 use simple_stream2D_state,       only: snapshot_iteration, snapshot_selection, snapshot_last_nptcls
@@ -275,8 +275,8 @@ contains
                     last_sent_iter = last_complete_iter
                 endif
             endif
-            ! update params
-            if( receive_from_pool2D_out_pipe(meta_buffer) ) then
+            ! update params; drain all currently buffered messages, not just one
+            do while( receive_from_pool2D_out_pipe(meta_buffer) )
                 if( allocated(meta_buffer) ) then
                     ! deserialise buffer into meta_update
                     meta_update    = transfer(meta_buffer, meta_update)
@@ -314,7 +314,7 @@ contains
                     endif
                     deallocate(meta_buffer)
                 endif
-            endif
+            enddo
             ! Wait
             call sleep(WAITTIME)
         enddo
@@ -647,16 +647,28 @@ contains
                     end if
 
                     err_no = ierrno()
+                    if( err_no == int(EINTR) ) then
+                        ! interrupted system call; not backpressure, just retry immediately
+                        ! without counting against the retry budget or touching sent
+                        cycle
+                    end if
+
                     if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
                         retry_count = retry_count + 1
-                        if( retry_count > MAX_RETRIES ) then
-                            THROW_HARD('failed to write pool2D metadata to ipc_pipe_pool2D_in: retry limit exceeded')
+                        if( sent == 0 .and. retry_count > MAX_RETRIES ) then
+                            ! nothing of this frame has reached the pipe yet, so it is safe
+                            ! to drop it here. Once any bytes are in the pipe we must keep
+                            ! retrying instead of abandoning mid-frame, since a partial
+                            ! frame permanently desyncs the reader's length-prefixed framing.
+                            THROW_WARN('failed to write pool2D metadata to ipc_pipe_pool2D_in: retry limit exceeded')
+                            exit
                         end if
                         rc_sleep = c_usleep(RETRY_SLEEP_US)
                         cycle
                     end if
 
-                    THROW_HARD('failed to write pool2D metadata to ipc_pipe_pool2D_in')
+                    THROW_WARN('failed to write pool2D metadata to ipc_pipe_pool2D_in')
+                    exit
                 end do
 
                 if( allocated(cbuf) ) deallocate(cbuf)

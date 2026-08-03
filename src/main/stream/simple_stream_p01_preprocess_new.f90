@@ -20,7 +20,7 @@
 !   simple_motion_correct_utils, simple_histogram
 !==============================================================================
 module simple_stream_p01_preprocess_new
-use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, c_read
+use unix,                        only: SIGTERM, c_write, c_usleep, EAGAIN, EWOULDBLOCK, EINTR, c_read
 use, intrinsic :: iso_c_binding, only: c_char, c_size_t, c_int, c_loc
 use simple_stream_api
 use simple_stream_state
@@ -513,8 +513,8 @@ contains
                 call send_to_preprocess_in_pipe(meta_buffer)
             endif
         !    call update_user_params(params, cline, http_communicator)
-            ! update params
-            if( receive_from_preprocess_out_pipe(meta_buffer) ) then
+            ! update params; drain all currently buffered messages, not just one
+            do while( receive_from_preprocess_out_pipe(meta_buffer) )
                 if( allocated(meta_buffer) ) then
                     ! deserialise buffer into meta_update
                     meta_update = transfer(meta_buffer, meta_update)
@@ -537,7 +537,7 @@ contains
                         write(logfhandle,'(A,F8.2)')'>>> ICE SCORE THRESHOLD UPDATED TO: ', params%icefracthreshold
                     endif
                 endif
-            endif
+            enddo
             call flush(logfhandle)
         end do
         ! termination
@@ -1089,16 +1089,28 @@ contains
                     end if
 
                     err_no = ierrno()
+                    if( err_no == int(EINTR) ) then
+                        ! interrupted system call; not backpressure, just retry immediately
+                        ! without counting against the retry budget or touching sent
+                        cycle
+                    end if
+
                     if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) then
                         retry_count = retry_count + 1
-                        if( retry_count > MAX_RETRIES ) then
-                            THROW_HARD('failed to write preprocess metadata to ipc_pipe_preprocess_in: retry limit exceeded')
+                        if( sent == 0 .and. retry_count > MAX_RETRIES ) then
+                            ! nothing of this frame has reached the pipe yet, so it is safe
+                            ! to drop it here. Once any bytes are in the pipe we must keep
+                            ! retrying instead of abandoning mid-frame, since a partial
+                            ! frame permanently desyncs the reader's length-prefixed framing.
+                            THROW_WARN('failed to write preprocess metadata to ipc_pipe_preprocess_in: retry limit exceeded')
+                            exit
                         end if
                         rc_sleep = c_usleep(RETRY_SLEEP_US)
                         cycle
                     end if
 
-                    THROW_HARD('failed to write preprocess metadata to ipc_pipe_preprocess_in')
+                    THROW_WARN('failed to write preprocess metadata to ipc_pipe_preprocess_in')
+                    exit
                 end do
 
                 if( allocated(cbuf) ) deallocate(cbuf)
