@@ -92,6 +92,8 @@ type :: parameters
     character(len=3)          :: greedy_sampling='yes' !< greedy class sampling or not (referring to objective function)
     character(len=3)          :: hist='no'            !< whether to print histogram
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
+    character(len=3)          :: nufilt='no'          !< nonuniform local-resolution filter on flex_pca state maps(yes|no){no}
+    character(len=3)          :: heldout='no'         !< flex_pca cross-halfset (held-out) embedding(yes|no){no}
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
     character(len=3)          :: interactive='no'     !< Whether job is interactive
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
@@ -311,6 +313,7 @@ type :: parameters
     character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|shc|snhc){state}
     character(len=STDLEN)     :: ptcl_src='raw' !< particle source for matching and 3D rec(raw|den){raw}
+    character(len=STDLEN)     :: column_sampling='snr' !< flex_pca column selection(lowfreq|snr){snr}
     character(len=STDLEN)     :: qsys_name='local'    !< name of queue system (local|coarray|slurm|pbs|lsf|sge)
     character(len=STDLEN)     :: qsys_partition2D=''  !< partition name for streaming 2D analysis
     character(len=STDLEN)     :: quality_mode='apply' !< class-average quality mode(apply|analyze|learn|evaluate|promote){apply}
@@ -345,6 +348,7 @@ type :: parameters
     integer :: box=0               !< square image size(in pixels)
     integer :: box_crop=0          !< square image size(in pixels), relates to Fourier cropped references
     integer :: box_croppd=0        !< square image size(in pixels), relates to Fourier cropped references and padded
+    integer :: box_rec=0           !< square image size(in pixels) for flex state-map reconstruction, decoupled from box_crop
     integer :: box_extract
     integer :: box_coarse=0
     integer :: box_fine=0
@@ -431,6 +435,16 @@ type :: parameters
     integer :: nptcls_per_subcls=300 !< legacy class-splitting target; current cls_split auto mode uses nsubcls_min/max trial range
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
     integer :: npreimages=8        !< # representative manifold pre-image volumes
+    integer :: niter=5             !< # alternating low-rank covariance fitting iterations
+    integer :: min_neff=2000       !< minimum effective particle count for covariance state kernels
+    integer :: state_axis=0        !< covariance latent coordinate for state targets; 0=k-means over all components
+    integer :: nkern=0             !< # leading latent components used for state placement/kernel; 0=all (neigs)
+    integer :: ngeo=-1             !< # components spanning the FINCH trajectory geodesic; -1=auto, 0=off
+    real    :: pcrot=0.            !< Gaussian low-pass (A) for the smoothness basis rotation; 0=off
+    integer :: nbins=1             !< # kernel bandwidth bins for cross-validated state selection (1=off)
+    integer :: ncols=64            !< # selected 3D Fourier frequencies used as covariance columns
+    integer :: column_separation=2 !< minimum grid separation between selected covariance columns
+    integer :: n_probe_iters=0     !< flex_pca EM/probe subspace-iteration refinements of the column basis (0=off)
     integer :: preimage_ndim=2     !< diffusion-map local-linear pre-image design dimension cap; d=min(preimage_ndim,neigs){2}
     integer :: nquanta=0           !< # quanta in quantization
     integer :: nran=0              !< # random images to select
@@ -597,6 +611,7 @@ type :: parameters
     real    :: smpd_pickrefs       !< sampling distance of pickrefs
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume
+    real    :: smpd_rec=0.         !< sampling distance of the flex state-map reconstruction box (box_rec)
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: snr_noise_reg=0.    !< signal to noise ratio of noise regularization
@@ -632,6 +647,7 @@ type :: parameters
     logical :: l_gauref          = .false.
     logical :: l_graphene        = .false.
     logical :: l_icm             = .false.
+    logical :: l_heldout         = .false.
     logical :: l_incrreslim      = .false.
     logical :: l_lam_anneal      = .false.
     logical :: l_lpauto          = .false.

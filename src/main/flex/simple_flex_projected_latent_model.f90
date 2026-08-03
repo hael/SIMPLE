@@ -77,7 +77,8 @@ end type projected_latent_estep_part
 
 contains
 
-    subroutine update_basis_from_latents( params, build, mean_rec, basis_recs, z, pinds, nptcls, ncomp, fpls, log_label )
+    subroutine update_basis_from_latents( params, build, mean_rec, basis_recs, z, pinds, nptcls, ncomp, fpls, log_label, &
+        &latent_second )
         class(parameters),   intent(in)    :: params
         class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -87,13 +88,14 @@ contains
         integer,             intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable, intent(inout) :: fpls(:)
         character(len=*), optional, intent(in) :: log_label
+        real(dp), optional, intent(in) :: latent_second(ncomp,ncomp,nptcls)
         type(fplane_type), allocatable :: mean_fpls(:)
         type(image) :: gridcorr_img
         type(projected_latent_mstep_2d_block) :: mstep_block
         real,    allocatable :: rho_cross_exp(:,:,:,:)
         integer, allocatable :: parts(:,:)
         character(len=:), allocatable :: log_prefix
-        integer              :: exp_shape(3)
+        integer              :: exp_shape(3), npairs
         integer           :: batchlims(2), batchsz, ibatch, ipart, ithr, nparts_eff, partlims(2), q
         integer(timer_int_kind) :: t_total, t_phase, t_comp, t_batch
         real(dp) :: read_prep_seconds, mean_project_seconds, insert_seconds
@@ -119,10 +121,15 @@ contains
             call basis_recs(q)%reset_exp
         end do
         exp_shape = shape(basis_recs(1)%cmat_exp)
-        ! Nyström modal pre-image: each eigenvolume is an independently
-        ! weighted residual reconstruction. All modes share the ordinary
-        ! sampling/CTF density; no per-voxel latent Gram matrix is formed.
-        allocate(rho_cross_exp(1, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
+        ! The graph pre-image path uses one ordinary density.  A probabilistic
+        ! covariance model supplies E[z z^T] and therefore needs the packed
+        ! coupled latent normal matrix at every Kaiser--Bessel grid point.
+        npairs = (ncomp * (ncomp + 1)) / 2
+        if( present(latent_second) )then
+            allocate(rho_cross_exp(npairs, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
+        else
+            allocate(rho_cross_exp(1, exp_shape(1), exp_shape(2), exp_shape(3)), source=0.)
+        endif
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_mstep_2d_block(mstep_block, MAXIMGBATCHSZ, ncomp)
@@ -140,7 +147,7 @@ contains
                 read_prep_seconds = read_prep_seconds + toc(t_batch)
                 t_batch = tic()
                 call prepare_projected_latent_mstep_2d_block(params, build, mean_rec, fpls(:batchsz), z, &
-                    &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpls)
+                    &pinds, batchlims, batchsz, ncomp, mstep_block, mean_fpls, latent_second)
                 mean_project_seconds = mean_project_seconds + toc(t_batch)
                 t_batch = tic()
                 call insert_projected_latent_mstep_2d_block(build, basis_recs, rho_cross_exp, ncomp, &
@@ -164,9 +171,16 @@ contains
         end do
         deallocate(mean_fpls)
         t_phase = tic()
-        do q = 1, ncomp
-            basis_recs(q)%rho_exp = rho_cross_exp(1,:,:,:)
-        end do
+        if( present(latent_second) )then
+            call solve_coupled_basis_exp(basis_recs, rho_cross_exp, ncomp)
+            do q = 1, ncomp
+                basis_recs(q)%rho_exp = 1.0
+            end do
+        else
+            do q = 1, ncomp
+                basis_recs(q)%rho_exp = rho_cross_exp(1,:,:,:)
+            end do
+        endif
         call log_seconds(log_prefix//' M-STEP MODAL DENSITY HANDOFF SECONDS', toc(t_phase))
         deallocate(rho_cross_exp)
         t_phase = tic()
@@ -176,7 +190,7 @@ contains
             write(logfhandle,'(A,I0,A,I0)') log_prefix//' M-STEP FINALIZE COMPONENT ', q, ' / ', ncomp
             call flush(logfhandle)
             t_comp = tic()
-            call finalize_basis_for_projection(params, basis_recs(q), gridcorr_img)
+            call finalize_basis_for_projection(params, basis_recs(q), gridcorr_img, density_corrected=present(latent_second))
             call log_comp_seconds(log_prefix//' M-STEP FINALIZE SECONDS', q, toc(t_comp))
         end do
         call gridcorr_img%kill
@@ -236,7 +250,7 @@ contains
     end subroutine reset_projected_latent_mstep_2d_block
 
     subroutine prepare_projected_latent_mstep_2d_block( params, build, mean_rec, fpls_batch, z, &
-        &pinds, batchlims, batchsz, ncomp, block, mean_fpls )
+        &pinds, batchlims, batchsz, ncomp, block, mean_fpls, latent_second )
         class(parameters),   intent(in)    :: params
         class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -246,6 +260,7 @@ contains
         integer,             intent(in)    :: pinds(:)
         type(projected_latent_mstep_2d_block), intent(inout) :: block
         type(fplane_type), intent(inout) :: mean_fpls(nthr_glob)
+        real(dp), optional, intent(in) :: latent_second(ncomp,ncomp,size(pinds))
         integer :: i, iptcl, row, ithr
         call reset_projected_latent_mstep_2d_block(block, batchsz)
         !$omp parallel do default(shared) private(i,row,iptcl,ithr) schedule(static) proc_bind(close)
@@ -260,9 +275,9 @@ contains
             call project_fplane_mean(mean_rec, block%orientations(i), fpls_batch(i), mean_fpls(ithr), apply_ctf_amp=.true.)
             call subtract_plane(fpls_batch(i), mean_fpls(ithr))
             block%zrows(:,i) = z(row,:)
-            ! The modal Nyström pre-image has one ordinary density for all
-            ! residual modes. Keep this compatibility buffer zeroed: the
-            ! accumulator ignores it when passed a single density volume.
+            if( present(latent_second) ) block%latent_second(:,:,i) = latent_second(:,:,row)
+            ! With no supplied second moments this remains the modal Nyström
+            ! compatibility path; the shared-density accumulator ignores it.
             block%valid(i) = .true.
         end do
         !$omp end parallel do
@@ -853,7 +868,7 @@ contains
 
     subroutine prepare_projected_latent_estep_part( build, mean_rec, basis_recs, fpls_batch, pinds, &
         &batchlims, batchsz, ncomp, part, basis_fpls, mean_fpls, orientations, gram_h, rhs_h, gram, rhs, zrow, &
-        &basis_metric_thread, metric_count_thread )
+        &basis_metric_thread, metric_count_thread, prior_precision, posterior_second )
         class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
         integer,             intent(in)    :: batchlims(2), batchsz, ncomp
@@ -868,9 +883,13 @@ contains
         real(dp),          intent(inout) :: zrow(ncomp,nthr_glob)
         real(dp),          intent(inout) :: basis_metric_thread(ncomp,ncomp,nthr_glob)
         integer,           intent(inout) :: metric_count_thread(nthr_glob)
+        real(dp), optional, intent(in)    :: prior_precision(ncomp)
+        real(dp), optional, intent(out)   :: posterior_second(ncomp,ncomp,size(pinds))
+        real(dp) :: gram_inv(ncomp,ncomp), unit_rhs(ncomp), inv_col(ncomp)
         integer :: i, iptcl, q, r, row, ithr
         call reset_projected_latent_estep_part(part, batchsz)
-        !$omp parallel do default(shared) private(i,row,iptcl,q,r,ithr) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(i,row,iptcl,q,r,ithr,gram_inv,unit_rhs,inv_col) &
+        !$omp& schedule(static) proc_bind(close)
         do i = 1, batchsz
             row   = batchlims(1) + i - 1
             iptcl = pinds(row)
@@ -899,8 +918,35 @@ contains
             end do
             basis_metric_thread(:,:,ithr) = basis_metric_thread(:,:,ithr) + gram(:,:,ithr)
             metric_count_thread(ithr) = metric_count_thread(ithr) + 1
+            if( present(prior_precision) )then
+                do q = 1, ncomp
+                    gram(q,q,ithr) = gram(q,q,ithr) + max(0.d0, prior_precision(q))
+                end do
+            endif
             call solve_latent_least_squares(gram(:,:,ithr), rhs(:,ithr), zrow(:,ithr))
             part%zrows(:,i) = zrow(:,ithr)
+            if( present(posterior_second) )then
+                if( .not. present(prior_precision) )then
+                    THROW_HARD('posterior second moments require a latent prior precision')
+                endif
+                gram_inv = 0.d0
+                do q = 1, ncomp
+                    unit_rhs = 0.d0
+                    unit_rhs(q) = 1.d0
+                    call solve_latent_least_squares(gram(:,:,ithr), unit_rhs, inv_col)
+                    gram_inv(:,q) = inv_col
+                end do
+                gram_inv = 0.5d0 * (gram_inv + transpose(gram_inv))
+                do r = 1, ncomp
+                    do q = 1, ncomp
+                        ! The normal equations are scaled by the per-Fourier-
+                        ! coefficient noise variance: (B'B + sigma^2 I).
+                        ! Hence Cov[z|y] = sigma^2 * inverse(precision).
+                        posterior_second(q,r,row) = prior_precision(1) * gram_inv(q,r) + &
+                            &zrow(q,ithr) * zrow(r,ithr)
+                    end do
+                end do
+            endif
             do q = 1, ncomp
                 call subtract_scaled_plane(fpls_batch(i), basis_fpls(q,ithr), zrow(q,ithr))
             end do
@@ -926,7 +972,7 @@ contains
 
     subroutine infer_latents_from_basis( params, build, mean_rec, basis_recs, z, &
         &resid_energy, resid_mean_energy, pinds, nptcls, ncomp, fpls, log_label, &
-        &basis_metric, metric_valid_count )
+        &basis_metric, metric_valid_count, prior_precision, posterior_second )
         class(parameters),   intent(in)    :: params
         class(builder),      intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -939,6 +985,8 @@ contains
         character(len=*), optional, intent(in) :: log_label
         real(dp), optional, intent(out) :: basis_metric(ncomp,ncomp)
         integer,  optional, intent(out) :: metric_valid_count
+        real(dp), optional, intent(in)  :: prior_precision(ncomp)
+        real(dp), optional, intent(out) :: posterior_second(ncomp,ncomp,nptcls)
         type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpls(:)
         type(ori),         allocatable :: orientations(:)
         type(projected_latent_estep_part) :: estep_part
@@ -973,6 +1021,7 @@ contains
         resid_mean_energy = 0.d0
         basis_metric_thread = 0.d0
         metric_count_thread = 0
+        if( present(posterior_second) ) posterior_second = 0.d0
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         call init_projected_latent_estep_part(estep_part, MAXIMGBATCHSZ, ncomp)
@@ -987,7 +1036,8 @@ contains
                     &pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
                 call prepare_projected_latent_estep_part(build, mean_rec, basis_recs, fpls(:batchsz), pinds, &
                     &batchlims, batchsz, ncomp, estep_part, basis_fpls, mean_fpls, orientations, &
-                    &gram_h, rhs_h, gram, rhs, zrow, basis_metric_thread, metric_count_thread)
+                    &gram_h, rhs_h, gram, rhs, zrow, basis_metric_thread, metric_count_thread, prior_precision, &
+                    &posterior_second)
                 call reduce_projected_latent_estep_part(estep_part, z, resid_energy, resid_mean_energy)
                 if( batchlims(2) == nptcls .or. mod(batchlims(2), progress_stride) == 0 )then
                     write(logfhandle,'(A,I0,A,I0)') log_prefix//' E-STEP PARTICLES: ', batchlims(2), ' / ', nptcls
@@ -1427,27 +1477,56 @@ contains
         endif
     end subroutine read_particles
 
-    subroutine prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, fplanes )
+    !!  mskrad (optional, pixels at params%box): when present the particle is soft-masked to
+    !!  that radius after noise normalization instead of edge-tapered. This is SIMPLE's
+    !!  equivalent of the reference's mask_images_in_H_B/mask_images_in_proj (covariance_estimation
+    !!  options, both default True), which masks each image to the projected molecular
+    !!  envelope before the covariance accumulation. Solvent outside the particle contributes
+    !!  only noise, and at box_crop=64/mskdiam=200 the disc keeps ~21% of the frame, so the
+    !!  noise in every per-image inner product drops by roughly the same factor. Left absent
+    !!  the behaviour is exactly as before.
+    subroutine prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, fplanes, mskrad )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: nptcls
         class(image),      intent(inout) :: ptcl_imgs(nptcls)
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), intent(inout) :: fplanes(nptcls)
+        real, optional,    intent(in)    :: mskrad
         type(ctfparams) :: ctfparms(nthr_glob)
         real    :: shift(2)
         integer :: iptcl, i, ithr, kfromto(2)
+        logical :: l_mask
+        l_mask = .false.
+        if( present(mskrad) ) l_mask = mskrad > 0.0
         call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
         kfromto = projected_model_kfromto(params)
         !$omp parallel do default(shared) private(i,ithr,iptcl,shift) schedule(static) proc_bind(close)
         do i = 1, nptcls
             ithr   = omp_get_thread_num() + 1
             iptcl  = pinds(i)
-            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+            if( l_mask )then
+                call ptcl_imgs(i)%norm_noise_mask_pad_fft(build%lmsk, mskrad, build%img_pad_heap(ithr))
+            else
+                call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+            endif
             ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
             shift = build%spproj_field%get_2Dshift(iptcl)
-            call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr), &
-                &shift, fplanes(i), store_transfer=.true., observation_model=.true.)
+            if( params%l_ml_reg )then
+                if( .not. allocated(build%esig%sigma2_noise) )then
+                    THROW_HARD('projected covariance model requested whitening without loaded sigma2 spectra')
+                endif
+                if( iptcl < lbound(build%esig%sigma2_noise,2) .or. &
+                    &iptcl > ubound(build%esig%sigma2_noise,2) )then
+                    THROW_HARD('projected covariance particle index is outside the sigma2 table')
+                endif
+                call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr), &
+                    &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl), &
+                    &store_transfer=.true., observation_model=.true.)
+            else
+                call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr), &
+                    &shift, fplanes(i), store_transfer=.true., observation_model=.true.)
+            endif
             call cap_fplane_for_projected_model(fplanes(i), kfromto)
         end do
         !$omp end parallel do

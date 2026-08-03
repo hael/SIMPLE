@@ -1,10 +1,18 @@
 # Flex analysis subsystem
 
-`src/main/flex` contains the workflow-specific implementation behind
+`src/main/flex` contains the workflow-specific implementation behind two
+heterogeneity programs:
 
 ```text
-simple_exec prg=flex_analysis ...
+simple_exec prg=flex_analysis ...   # diffusion-map pipeline
+simple_exec prg=flex_pca ...        # projection-aware low-rank covariance (PCA)
 ```
+
+They are independent pipelines that share the reconstruction and projected-latent
+layers. `flex_analysis` is also consumed by `nano3D` and the trajectory chunker;
+`flex_pca` is standalone.
+
+## `flex_analysis` — diffusion map
 
 The directory is organized by the data flow through the analysis:
 
@@ -24,6 +32,30 @@ The directory is organized by the data flow through the analysis:
 `flex_embedding_result`, the compact embedding returned to `nano3D`, is part
 of `simple_flex_analysis_strategy.f90`: it is the public result of that
 strategy rather than a module of its own.
+
+## `flex_pca` — projection-aware low-rank covariance
+
+7. `simple_flex_pca_columns.f90` estimates regularized columns of the 3D
+   conformational covariance from fixed-pose particles (matched-KB selected-column
+   accumulation, regularized halfset merge, reduced projected-covariance solve) and
+   derives the low-rank real eigenbasis, then the contrast-aware MAP embedding.
+8. `simple_flex_pca_model.f90` is the driver: it owns the embedding cache and its
+   resume path, kernel state weights and bandwidth selection, weighted state
+   reconstruction, and the volume-space trajectory ordering.
+9. `simple_flex_lot.f90` provides linearised optimal transport between state
+   volumes. Only `lot_pullback_metric` is intended for use: it supplies the optional
+   `zmetric` of `build_covariance_state_weights`, replacing latent Euclidean distance
+   with one that measures how much density actually moves. It is not yet wired.
+
+`flex_pca` reuses `simple_flex_diffmap_rec3D.f90` for weighted state
+reconstruction. That routine takes an optional `floor_rho` argument, off by
+default, which applies a RELION-style shellwise density floor before the
+gridding divide; only `flex_pca` opts in, because kernel weights in `[0,1]`
+make `rho` small and erratic where occupancy is low.
+
+Self-contained tests for both pipelines live in `../../../production/tests/`
+(`simple_test_flex_pca.f90`, `simple_test_flex_projected_latent_model.f90`,
+`simple_test_flex_diffmap_graph.f90`) and require no data.
 
 The following integration points remain in their architectural layers:
 

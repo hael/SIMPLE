@@ -10,6 +10,11 @@ type, extends(commander_base) :: commander_flex_analysis
     procedure :: execute => exec_flex_analysis
 end type commander_flex_analysis
 
+type, extends(commander_base) :: commander_flex_pca
+  contains
+    procedure :: execute => exec_flex_pca
+end type commander_flex_pca
+
 contains
 
     subroutine exec_flex_analysis( self, cline )
@@ -32,5 +37,27 @@ contains
             call simple_end('**** SIMPLE_FLEX_ANALYSIS NORMAL STOP ****')
         endif
     end subroutine exec_flex_analysis
+
+    subroutine exec_flex_pca( self, cline )
+        use simple_flex_pca_model, only: run_flex_pca
+        class(commander_flex_pca), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        if( .not.cline%defined('mkdir') )       call cline%set('mkdir','yes')
+        if( .not.cline%defined('oritype') )     call cline%set('oritype','ptcl3D')
+        if( .not.cline%defined('nstates') )     call cline%set('nstates',1)
+        if( .not.cline%defined('npreimages') )  call cline%set('npreimages',7)
+        if( .not.cline%defined('neigs') )       call cline%set('neigs',6)
+        if( .not.cline%defined('lp') )          call cline%set('lp',12.0)
+        if( .not.cline%defined('box_crop') )    call cline%set('box_crop',64)
+        if( .not.cline%defined('ptcl_src') )    call cline%set('ptcl_src','raw')
+        if( .not.cline%defined('objfun') )      call cline%set('objfun','euclid')
+        if( .not.cline%defined('outvol') )      call cline%set('outvol','flex_pca_state_001.mrc')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        call run_flex_pca(params,build,cline)
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_FLEX_PCA NORMAL STOP ****')
+    end subroutine exec_flex_pca
 
 end module simple_commanders_flex_analysis

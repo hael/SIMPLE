@@ -47,6 +47,7 @@ type, extends(image) :: reconstructor
     procedure          :: insert_plane_oversamp
     procedure          :: insert_plane_oversamp_opt
     procedure          :: sampl_dens_correct
+    procedure          :: floor_rho_shellwise
     procedure          :: compress_exp
     procedure          :: expand_exp
     procedure          :: project_polar
@@ -507,6 +508,68 @@ contains
             end subroutine kernel
 
     end subroutine insert_plane_oversamp_opt
+
+    !>  RELION/reference-style density floor, applied BEFORE sampl_dens_correct.
+    !!
+    !!  sampl_dens_correct divides the Fourier numerator by rho with no floor and no Wiener
+    !!  term. RELION never does that: adjust_regularization_relion_style (backprojector.cpp,
+    !!  and the reference's relion_functions.adjust_regularization_relion_style) floors the filter
+    !!  at the spherically-averaged filter of its own shell divided by 1000, and applies that
+    !!  floor unconditionally -- even when the optional Wiener term 1/tau is absent.
+    !!
+    !!  For an ordinary reconstruction every particle contributes weight 1, rho is large and
+    !!  smooth, and the missing floor rarely bites. For KERNEL-WEIGHTED state maps the weights
+    !!  lie in [0,1] with most near zero, so rho is small and highly variable and the divide
+    !!  explodes wherever it approaches zero -- preferentially in low-occupancy regions, i.e.
+    !!  the solvent. Measured consequence before this floor existed: state maps carried
+    !!  solvent/molecule noise of 0.30 against the reference's 0.054, 70 % of the state-difference
+    !!  power sat in solvent, and the difference fragmented into ~200 disconnected specks
+    !!  instead of the single positive and single negative lobe a domain motion produces.
+    !!
+    !!  frac defaults to 1000 to match RELION exactly (floor = shell mean / 1000).
+    subroutine floor_rho_shellwise( self, frac )
+        class(reconstructor), intent(inout) :: self
+        real, optional,       intent(in)    :: frac
+        real(dp), allocatable :: shsum(:)
+        integer,  allocatable :: shcnt(:)
+        integer  :: h, k, m, phys(3), sh, nsh
+        real     :: ffrac, floor_here
+        ffrac = 1000.0
+        if( present(frac) ) ffrac = max(1.0, frac)
+        nsh = self%sh_lim
+        allocate(shsum(0:nsh), source=0.d0)
+        allocate(shcnt(0:nsh), source=0)
+        ! pass 1: spherical average of rho per shell
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    sh = nint(sqrt(real(h*h + k*k + m*m)))
+                    if( sh > nsh ) cycle
+                    phys = self%comp_addr_phys(h, k, m)
+                    shsum(sh) = shsum(sh) + real(self%rho(phys(1),phys(2),phys(3)), dp)
+                    shcnt(sh) = shcnt(sh) + 1
+                end do
+            end do
+        end do
+        ! pass 2: floor each voxel at its shell mean / frac
+        !$omp parallel do collapse(3) default(shared) schedule(static) &
+        !$omp private(h,k,m,phys,sh,floor_here) proc_bind(close)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    sh = nint(sqrt(real(h*h + k*k + m*m)))
+                    if( sh > nsh ) cycle
+                    if( shcnt(sh) < 1 ) cycle
+                    phys = self%comp_addr_phys(h, k, m)
+                    floor_here = real(shsum(sh)/real(shcnt(sh),dp)) / ffrac
+                    if( self%rho(phys(1),phys(2),phys(3)) < floor_here ) &
+                        &self%rho(phys(1),phys(2),phys(3)) = floor_here
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        deallocate(shsum, shcnt)
+    end subroutine floor_rho_shellwise
 
     subroutine sampl_dens_correct( self )
         class(reconstructor), intent(inout) :: self

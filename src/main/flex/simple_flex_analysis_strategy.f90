@@ -516,32 +516,6 @@ contains
     ! persistent project transport: SIMPLE serializes only the fixed particle
     ! parameters.  Keeping the vector in the assignment makes the worker
     ! handoff explicit and preserves the selected-row ordering.
-    subroutine prepare_reconstruction_partitions( self, params, model_pinds, spectral_z )
-        class(flex_analysis_master_strategy), intent(inout) :: self
-        type(parameters), intent(in) :: params
-        integer, intent(in) :: model_pinds(:)
-        real, intent(in) :: spectral_z(:,:)
-        type(string) :: fname
-        integer :: ipart,first,last,i,u
-        if( size(model_pinds)<1 .or. size(spectral_z,1)/=size(model_pinds) .or. size(spectral_z,2)<1 ) &
-            &THROW_HARD('invalid flex reconstruction partition table')
-        if( .not.allocated(self%part_params) .or. size(self%part_params)/=self%nparts_run ) &
-            &THROW_HARD('flex reconstruction partitions were not initialized')
-        do ipart=1,self%nparts_run
-            first=self%qenv%parts(ipart,1); last=self%qenv%parts(ipart,2)
-            if( first<1 .or. last<first .or. last>size(model_pinds) ) &
-                &THROW_HARD('invalid flex reconstruction partition bounds')
-            fname=string('flex_particles_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
-            open(newunit=u,file=fname%to_char(),status='replace',action='write')
-            write(u,'(A)') '# registered_particle_index spectral_coordinates'
-            do i=first,last
-                write(u,*) model_pinds(i),spectral_z(i,:)
-            end do
-            close(u)
-            call fname%kill
-        end do
-    end subroutine prepare_reconstruction_partitions
-
     subroutine fit_flex_analysis_embedding( params, build, cline, fit_result )
         class(parameters), intent(inout) :: params
         class(builder), intent(inout) :: build
@@ -742,51 +716,6 @@ contains
         end do
         close(u); call fname%kill
     end subroutine write_graph_part
-
-    subroutine read_graph_parts( params, nptcls, nparts, graph, cmin, cmax, cmean )
-        type(parameters), intent(in) :: params
-        integer, intent(in) :: nptcls,nparts
-        type(diffmap_graph), intent(out) :: graph
-        integer, intent(out) :: cmin,cmax
-        real, intent(out) :: cmean
-        integer, allocatable :: nbrs(:,:),ncandidates(:)
-        real, allocatable :: d2s(:,:)
-        logical, allocatable :: covered(:)
-        type(string) :: fname
-        character(len=XLONGSTRLEN) :: line
-        integer, allocatable :: row_nbrs(:)
-        real, allocatable :: row_d2s(:)
-        integer :: k_used,ipart,u,ios,row,m,nread,row_ncandidates
-        k_used=min(max(1,params%k_nn),nptcls-1)
-        allocate(nbrs(k_used,nptcls),ncandidates(nptcls),source=0)
-        allocate(d2s(k_used,nptcls),source=0.)
-        allocate(covered(nptcls),source=.false.)
-        allocate(row_nbrs(k_used),row_d2s(k_used))
-        do ipart=1,nparts
-            fname=string('flex_graph_neighbors_part')//int2str_pad(ipart,params%numlen)//TXT_EXT
-            open(newunit=u,file=fname%to_char(),status='old',action='read',iostat=ios)
-            call fileiochk('opening flex graph part '//fname%to_char(),ios)
-            nread=0
-            do
-                read(u,'(A)',iostat=ios) line
-                if( ios/=0 ) exit
-                if( len_trim(line)==0 .or. line(1:1)=='#' ) cycle
-                read(line,*) row,row_ncandidates,(row_nbrs(m),row_d2s(m),m=1,k_used)
-                if( row<1 .or. row>nptcls ) THROW_HARD('flex graph part row outside table')
-                if( covered(row) ) THROW_HARD('duplicate flex graph part row')
-                ncandidates(row)=row_ncandidates; nbrs(:,row)=row_nbrs; d2s(:,row)=row_d2s
-                covered(row)=.true.; nread=nread+1
-            end do
-            close(u); call fname%kill
-            if( nread<1 ) THROW_HARD('empty flex graph part')
-        end do
-        if( any(.not.covered) ) THROW_HARD('distributed flex graph parts do not cover every particle')
-        call build_gated_euclidean_graph_from_neighbors(nptcls,nbrs,d2s,ncandidates,graph, &
-            &params%bandwidth_mode,params%bandwidth_tune,0.0)
-        cmin=minval(ncandidates); cmax=maxval(ncandidates)
-        cmean=real(sum(int(ncandidates,kind=8)),kind=sp)/real(nptcls,kind=sp)
-        deallocate(nbrs,ncandidates,d2s,covered,row_nbrs,row_d2s)
-    end subroutine read_graph_parts
 
     subroutine embed_flex_graph( params, pinds, graph, max_modes, cmin, cmax, cmean, coords, raw_coords, &
         &spectral_z, nystrom_coords, nmodes )

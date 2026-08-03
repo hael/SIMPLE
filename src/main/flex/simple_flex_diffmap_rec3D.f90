@@ -24,6 +24,7 @@ public :: reconstruct_flex_diffmap_weighted_states
 public :: reconstruct_flex_diffmap_local_linear_states
 public :: cleanup_flex_diffmap_rec_parts
 public :: test_flex_local_linear_preimage
+public :: flex_rec_box, flex_rec_smpd
 
 contains
 
@@ -227,12 +228,18 @@ contains
     !! Medoid-selected manifold descriptors are converted to soft particle
     !! weights upstream; this routine reconstructs each state from weighted
     !! contributions of all particles rather than from a global residual basis.
-    subroutine reconstruct_flex_diffmap_weighted_states( params, build, pinds, state_weights, nstates, fsc_projfile )
+    subroutine reconstruct_flex_diffmap_weighted_states( params, build, pinds, state_weights, nstates, fsc_projfile, &
+        &floor_rho )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: pinds(:), nstates
         real,              intent(in)    :: state_weights(:,:)
         type(string), optional, intent(in) :: fsc_projfile
+        ! RELION-style shellwise rho floor before the divide. OFF by default so the diffusion-map
+        ! callers keep their previous behaviour exactly; flex_pca opts in. See the note at the
+        ! floor call below for why the kernel-weighted path needs it.
+        logical,      optional, intent(in) :: floor_rho
+        logical :: l_floor_rho
         type(reconstructor), allocatable :: state_recs(:)
         type(fplane_type), allocatable :: fpls(:)
         type(image) :: gridcorr_img, state_img
@@ -241,17 +248,36 @@ contains
         real, allocatable :: lowpass_filters(:,:)
         logical, allocatable :: has_lowpass_filter(:)
         integer, allocatable :: lowpass_source_state(:)
-        integer :: batchlims(2), batchsz, ibatch, i, iptcl, state
+        integer :: batchlims(2), batchsz, ibatch, i, iptcl, state, box_rec
+        real    :: smpd_rec, smpd_crop_bak
+        l_floor_rho = .false.
+        if( present(floor_rho) ) l_floor_rho = floor_rho
         if( size(pinds)<1 .or. nstates<1 ) THROW_HARD('invalid flex weighted state reconstruction dimensions')
         if( any(shape(state_weights)/=[size(pinds),nstates]) ) THROW_HARD('flex weighted state table mismatch')
+        box_rec  = flex_rec_box(params)
+        smpd_rec = flex_rec_smpd(params)
+        if( box_rec /= params%box_crop )then
+            write(logfhandle,'(A,I0,A,F6.3,A,I0,A,F6.3,A)') '>>> FLEX STATE RECONSTRUCTION decoupled box: rec box=',box_rec, &
+                &' smpd=',smpd_rec,' A (covariance box=',params%box_crop,' smpd=',params%smpd_crop,' A)'
+        endif
         allocate(state_recs(nstates),scales(nstates))
         call prepare_project_fsc_lowpass_filters(params,build,nstates,lowpass_filters,has_lowpass_filter,lowpass_source_state, &
             &fsc_projfile)
         do state=1,nstates
-            call init_basis_reconstructor(params,build,state_recs(state))
+            call init_state_reconstructor(params,build,state_recs(state))
         end do
         call init_rec(params,build,MAXIMGBATCHSZ,fpls)
         call prepimgbatch(params,build,MAXIMGBATCHSZ)
+        ! prep_imgs4rec builds the Fourier planes at params%smpd_crop, which fixes the physical
+        ! frequency each plane sample carries and hence the CTF evaluated there. These state maps
+        ! are reconstructed on the box_rec/smpd_rec lattice, so the planes must be built at
+        ! smpd_rec or the CTF lands on the wrong frequencies. Point smpd_crop at the reconstruction
+        ! sampling for the batch loop and restore it afterwards. Safe because prep_imgs4rec is the
+        ! only consumer of smpd_crop in between: init_state_reconstructor sizes from
+        ! flex_rec_box/flex_rec_smpd and init_rec uses boxpd/smpd. A no-op by default, since
+        ! box_rec defaults to box_crop and therefore smpd_rec == smpd_crop.
+        smpd_crop_bak    = params%smpd_crop
+        params%smpd_crop = smpd_rec
         do ibatch=1,size(pinds),MAXIMGBATCHSZ
             batchlims=[ibatch,min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
             batchsz=batchlims(2)-batchlims(1)+1
@@ -272,11 +298,16 @@ contains
             end do
         end do
         call orientation%kill
+        params%smpd_crop = smpd_crop_bak
         call cleanup_rec_buffers(build,fpls)
-        gridcorr_img=prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
-            &OSMPL_PAD_FAC*[params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+        gridcorr_img=prep3D_inv_instrfun4mul([box_rec,box_rec,box_rec], &
+            &OSMPL_PAD_FAC*[box_rec,box_rec,box_rec],smpd_rec)
         do state=1,nstates
             call state_recs(state)%compress_exp
+            ! Kernel weights live in [0,1] with most near zero, so rho is small and highly
+            ! variable here and an unfloored divide amplifies noise wherever occupancy is low.
+            ! Opt-in: the platform reconstructor is unchanged, and so is the diffusion-map path.
+            if( l_floor_rho ) call state_recs(state)%floor_rho_shellwise
             call state_recs(state)%sampl_dens_correct
             call state_recs(state)%ifft
             call state_recs(state)%div(real(params%box))
@@ -287,6 +318,24 @@ contains
                 write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE applied project-FSC low-pass filter to state=',state, &
                     &' using_source_state=',lowpass_source_state(state)
             endif
+            ! Background removal + soft spherical mask, matching the reference's finalisation
+            ! (heterogeneity_volume.py builds its estimates with use_spherical_mask=True, which
+            ! routes to relion_functions.post_process_from_filter_v2 -> soft_mask_outside_map).
+            ! Two distinct problems are fixed here, and both are why the delivered states looked
+            ! like one smeared map:
+            !  (1) DC / global level. Each state carries a different total kernel weight, and the
+            !      density correction does not equalise the resulting baseline. Measured on run
+            !      80: 59.6 % of the ENTIRE state-to-state difference power sat in the DC term
+            !      alone and 91.5 % at spatial scales larger than the particle, so the visible
+            !      difference between two states was dominated by a constant offset rather than
+            !      by the conformational change. zero_background estimates the level from the box
+            !      faces (pure solvent) and subtracts it, which is shape-preserving.
+            !  (2) Solvent noise. Only 12.7 % of the difference power lay on the molecule
+            !      (the reference: 97.2 %); the rest was unmasked solvent, which dominates any visual
+            !      or correlation comparison of the states.
+            ! The radius convention is the platform's own (reconstructor_eo line 103).
+            call state_img%zero_background
+            call state_img%mask3D_soft(real(box_rec/2) - COSMSKHALFWIDTH - 1., backgr=0.)
             call write_state(params,state_img,state)
             call state_img%kill
             call state_recs(state)%dealloc_rho
@@ -440,7 +489,8 @@ contains
         real, allocatable :: fsc(:)
         integer :: filtsz, state, fsc_box, i, state1_fsc_count
         logical :: out_loaded
-        filtsz=fdim(params%box_crop)-1
+        ! sized to the DELIVERED map, which is box_rec (== box_crop unless decoupled)
+        filtsz=fdim(flex_rec_box(params))-1
         allocate(lowpass_filters(filtsz,nstates),has_filter(nstates),source_state(nstates))
         lowpass_filters=0.
         has_filter=.false.
@@ -613,6 +663,37 @@ contains
         call basis_rec%reset
         call basis_rec%reset_exp
     end subroutine init_basis_reconstructor
+
+    !> Box/sampling of the DELIVERED state maps.  Decoupled from box_crop because the
+    !! covariance and the embedding are low-frequency objects -- the measured column FSC
+    !! on IgG-RL dies at ~27 A and the reference does not even estimate past 48 A -- whereas the
+    !! state maps are ordinary backprojections of the same particles and carry signal well
+    !! beyond the covariance Nyquist.  With box_rec==box_crop this is exactly the previous
+    !! behaviour.  The embedding never sees the extra band, so the added shells cannot be
+    !! selected on themselves and this cannot manufacture structure from noise.
+    pure integer function flex_rec_box( params ) result( box_rec )
+        class(parameters), intent(in) :: params
+        box_rec = params%box_crop
+        if( params%box_rec >= 1 ) box_rec = params%box_rec
+    end function flex_rec_box
+
+    pure real function flex_rec_smpd( params ) result( smpd_rec )
+        class(parameters), intent(in) :: params
+        smpd_rec = params%smpd_crop
+        if( params%box_rec >= 1 .and. params%smpd_rec > 0. ) smpd_rec = params%smpd_rec
+    end function flex_rec_smpd
+
+    subroutine init_state_reconstructor( params, build, state_rec )
+        class(parameters), intent(inout) :: params
+        class(builder), intent(inout) :: build
+        type(reconstructor), intent(inout) :: state_rec
+        integer :: box_rec
+        box_rec = flex_rec_box(params)
+        call state_rec%new([box_rec,box_rec,box_rec],flex_rec_smpd(params))
+        call state_rec%alloc_rho(params,build%spproj,expand=.true.)
+        call state_rec%reset
+        call state_rec%reset_exp
+    end subroutine init_state_reconstructor
 
     subroutine write_preimage_states( params, basis_recs, target_coeffs, nstates, ncomp )
         class(parameters), intent(in) :: params

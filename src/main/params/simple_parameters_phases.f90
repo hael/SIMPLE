@@ -311,6 +311,15 @@ contains
                 self%smpd_crop = self%smpd
             endif
         endif
+        ! box_rec decouples the flex state-map reconstruction box from the covariance box.
+        ! The conformational covariance is low-frequency, so box_crop is chosen for the
+        ! basis/embedding; the delivered state maps are ordinary backprojections of the
+        ! same particles and need not inherit that Nyquist. Defaults to box_crop, i.e. the
+        ! previous coupled behaviour.
+        if( .not. cline%defined('box_rec') ) self%box_rec = self%box_crop
+        if( self%box_rec < 1          ) self%box_rec = self%box_crop
+        if( self%box_rec > self%box   ) self%box_rec = self%box
+        self%smpd_rec = real(self%box)/real(self%box_rec) * self%smpd
         call check_file_formats
         call double_check_file_formats
         call mkfnames
@@ -594,6 +603,7 @@ contains
             self%l_envfsc = .false.
         endif
         if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
+        if( cline%defined('heldout') ) self%l_heldout = (trim(self%heldout).eq.'yes')
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
         self%l_corrw = self%wcrit .ne. 'no'
         if( self%l_corrw )then

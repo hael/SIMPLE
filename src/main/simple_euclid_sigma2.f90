@@ -37,6 +37,7 @@ contains
     ! utils
     procedure          :: write_info
     procedure          :: get_kfromto
+    procedure          :: set_kfromto
     ! I/O
     procedure          :: read_part
     procedure          :: read_groups
@@ -170,6 +171,15 @@ contains
         integer :: kfromto(2)
         kfromto = self%kfromto
     end function get_kfromto
+
+    !>  Set the reconstruction/alignment band. Used by workflows (e.g. flex_pca)
+    !!  that reconstruct at a cropped box without a loaded sigma2 group table, so the
+    !!  reconstruction backend uses the correct box_crop spectral range.
+    subroutine set_kfromto( self, kfromto )
+        class(euclid_sigma2), intent(inout) :: self
+        integer,              intent(in)    :: kfromto(2)
+        self%kfromto = kfromto
+    end subroutine set_kfromto
 
     ! I/O
 
