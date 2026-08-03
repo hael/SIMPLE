@@ -859,10 +859,10 @@ contains
                 else if( istage == split_stage )then
                     if( l_force_full_sampling )then
                         update_frac = 1.0
-                        call ensure_docked_multistate_particle_assignments(nptcls_eff, update_frac)
+                        call prepare_docked_particle_cohort(nptcls_eff, update_frac)
                     else
                         call calc_docked_multistate_max_sampling(params, nptcls_eff, nptcls_cap, update_frac)
-                        call ensure_docked_multistate_particle_assignments(nptcls_cap, update_frac)
+                        call prepare_docked_particle_cohort(nptcls_cap, update_frac)
                         update_frac = real(nstates_glob * params%nsample) / real(nptcls_eff)
                         update_frac = min(abinitio_update_frac_max(), update_frac)
                     endif
@@ -882,7 +882,14 @@ contains
             endif
             ! Need to be here since rec cline depends on refine3D cline
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
-                call randomize_states(params, spproj, params%projfile, xrec3D, split_stage)
+                call randomize_states(params, spproj, params%projfile, xrec3D, split_stage,&
+                    &clean_sampling=.false., reconstruct_states=.false.)
+                if( l_force_full_sampling )then
+                    call calc_rec(params, params%projfile, xrec3D, split_stage)
+                else
+                    call select_docked_split_reconstruction_sample
+                    call calc_rec(params, params%projfile, xrec3D, split_stage, current_sample_only=.true.)
+                endif
             endif
             if( lpinfo(istage)%l_autoscale )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
@@ -1017,50 +1024,81 @@ contains
             endif
         end subroutine ensure_multistate_particle_assignments
 
-        subroutine ensure_docked_multistate_particle_assignments( nsample, ufrac )
+        subroutine prepare_docked_particle_cohort( nsample, ufrac )
             integer, intent(in) :: nsample
             real ,   intent(in) ::ufrac
             integer,  parameter :: DOCKED_NITERS_MISSING = 1
             type(cmdline)       :: cline_missing
-            integer             :: nactive, nupdated, nmissing, iter_missing
+            integer             :: nupdated, nmissing, iter_missing, nactive
+            call spproj%read_segment('ptcl3D', params%projfile)
+            call clean_ptcl3D_sampling
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            iter_missing = next_refine3D_iteration()
+            write(logfhandle,'(A,A,I0,A,I0,A,I0)') &
+                &'>>> ABINITIO3D DOCKED PRE-SPLIT COHORT ASSIGNMENT', &
+                &' TARGET/ACTIVE/ITER: ', nsample, '/', nptcls_eff, '/', iter_missing
+            cline_missing = cline_refine3D
+            call cline_missing%set('prg',               'refine3D')
+            call cline_missing%set('mkdir',                   'no')
+            call cline_missing%set('refine',                'prob')
+            call cline_missing%set('balance',                'yes')
+            call cline_missing%set('nsample',              nsample)
+            call cline_missing%set('frac_best',                1.0)
+            call cline_missing%set('fillin',                  'no')
+            call cline_missing%set('update_frac',            ufrac)
+            call cline_missing%set('trail_rec',               'no')
+            call cline_missing%set('volrec',                  'no')
+            call cline_missing%set('sticky_class_sampling',   'no')
+            call cline_missing%set('maxits', DOCKED_NITERS_MISSING)
+            call cline_missing%set('startit',         iter_missing)
+            call cline_missing%set('which_iter',      iter_missing)
+            call cline_missing%set('extr_iter',       iter_missing)
+            call cline_missing%delete('endit')
+            call cline_missing%delete('greedy_sampling')
+            call xrefine3D%execute(cline_missing)
+            call del_files(DIST_FBODY,      params%nparts, ext='.dat')
+            call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
+            call del_file(DIST_FBODY//'.dat')
+            call del_file(ASSIGNMENT_FBODY//'.dat')
             call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
-            if( nactive < 1 )then
-                THROW_HARD('multistate abinitio3D has no active particles after staged refinement')
+            if( nupdated < nsample )then
+                THROW_HARD('docked pre-split cohort assignment updated too few particles')
             endif
-            if( nmissing > 0 )then
-                iter_missing = next_refine3D_iteration()
-                write(logfhandle,'(A,A,I0,A,I0,A,I0,A,I0)') &
-                &'>>> ABINITIO3D DOCKED MULTISTATE MISSING-UPDATE ASSIGNMENT', &
-                &' MISSING/ACTIVE/ITER/NSAMPLE: ', nmissing, '/', nactive, '/', iter_missing, '/', nsample
-                cline_missing = cline_refine3D
-                call cline_missing%set('prg',               'refine3D')
-                call cline_missing%set('mkdir',                   'no')
-                call cline_missing%set('refine',                'prob')
-                call cline_missing%set('balance',                'yes')
-                call cline_missing%set('nsample',              nsample)
-                call cline_missing%set('frac_best',                1.0)
-                call cline_missing%set('fillin',                  'no')
-                call cline_missing%set('update_frac',            ufrac)
-                call cline_missing%set('trail_rec',               'no')
-                call cline_missing%set('volrec',                  'no')
-                call cline_missing%set('maxits', DOCKED_NITERS_MISSING)
-                call cline_missing%set('startit',         iter_missing)
-                call cline_missing%set('which_iter',      iter_missing)
-                call cline_missing%set('extr_iter',       iter_missing)
-                call cline_missing%delete('endit')
-                call cline_missing%delete('greedy_sampling')
-                call xrefine3D%execute(cline_missing)
-                call del_files(DIST_FBODY,      params%nparts, ext='.dat')
-                call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
-                call del_file(DIST_FBODY//'.dat')
-                call del_file(ASSIGNMENT_FBODY//'.dat')
-                call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
-                if( (nactive-nmissing) < nsample )then
-                    THROW_HARD('multistate abinitio3D final missing-update pass failed to update enough particles')
+            call cline_missing%kill
+        end subroutine prepare_docked_particle_cohort
+
+        subroutine select_docked_split_reconstruction_sample
+            type(class_sample), allocatable :: split_clssmp(:)
+            integer, allocatable :: split_pinds(:), sampled(:), states(:)
+            integer :: noris, nrequested, nselected, sample_ind, split_state, state_pop
+            call spproj%read_segment('ptcl3D', params%projfile)
+            noris   = spproj%os_ptcl3D%get_noris()
+            if( nptcls_eff < 1 ) THROW_HARD('docked split reconstruction has no active particles')
+            call read_class_samples(split_clssmp, string(CLASS_SAMPLING_FILE))
+            call spproj%os_ptcl3D%sample4update_class(split_clssmp, [1,noris], update_frac,&
+                &nselected, split_pinds, .true., .false., sampled_only=.true.)
+            nrequested = nint(update_frac * real(nptcls_eff))
+            if( nselected /= nrequested )then
+                THROW_HARD('docked split reconstruction failed to select the exact requested sample')
+            endif
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+            sampled   = spproj%os_ptcl3D%get_all_asint('sampled')
+            states    = spproj%os_ptcl3D%get_all_asint('state')
+            sample_ind = maxval(sampled)
+            do split_state = 1, params%nstates
+                state_pop = count(states == split_state .and. sampled == sample_ind)
+                if( state_pop <= 5 )then
+                    THROW_HARD('docked split reconstruction sample has insufficient state population')
                 endif
-                call cline_missing%kill
-            endif
-        end subroutine ensure_docked_multistate_particle_assignments
+            enddo
+            write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
+                &'>>> ABINITIO3D DOCKED SPLIT RECONSTRUCTION SAMPLE SELECTED/COHORT/FRACTION: ',&
+                &nselected, '/', count(sampled > 0), '/', real(nselected) / real(count(sampled > 0))
+            if( allocated(sampled)    ) deallocate(sampled)
+            if( allocated(states)     ) deallocate(states)
+            if( allocated(split_pinds)) deallocate(split_pinds)
+            if( allocated(split_clssmp) ) call deallocate_class_samples(split_clssmp)
+        end subroutine select_docked_split_reconstruction_sample
 
         subroutine read_multistate_assignment_coverage( nactive, nupdated, nmissing )
             integer, intent(out) :: nactive, nupdated, nmissing
@@ -1102,6 +1140,7 @@ contains
             call cline_missing%set('update_frac',            1.0)
             call cline_missing%set('trail_rec',             'no')
             call cline_missing%set('volrec',                'no')
+            call cline_missing%set('sticky_class_sampling', 'no')
             call cline_missing%set('maxits',                   1)
             call cline_missing%set('startit',       iter_missing)
             call cline_missing%set('which_iter',    iter_missing)

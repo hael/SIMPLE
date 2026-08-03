@@ -117,10 +117,13 @@ Each stage is configured through the shared ab initio stage controller with
 - `snr_noise_reg` is set from the stage controls
 - early Gaussian reference filtering remains available through stage policy
 
-The docked split uses the same shared stage policy as particle `abinitio3D`:
-the split stage is emitted as `refine=prob_state`, later docked multi-state
-neighborhood stages use `prob_neigh_mode=geom`, and trailing reconstruction is
-disabled at the split stage itself.
+The docked split shares the particle `abinitio3D` search-mode policy: the split
+stage is emitted as `refine=prob_state`, and later docked multi-state
+neighborhood stages use `prob_neigh_mode=geom`. The class-average route does
+not adopt particle `abinitio3D`'s fractional split preparation or update epoch.
+Because `l_cavgs=.true.` removes `update_frac`, `refine3D` derives full-update
+mode and disables trailing reconstruction effectively, even when the shared
+stage controller emits `trail_rec=yes`.
 
 At the symmetry-search stage, the workflow runs the shared symmetry handling
 used by ab initio workflows.

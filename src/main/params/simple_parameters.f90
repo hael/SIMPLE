@@ -154,6 +154,7 @@ type :: parameters
     character(len=3)          :: single_pass='no'     !< only run coarse pass of sieving(yes|no){no}
     character(len=3)          :: skip_rejection='no'  !< skip class-average rejection/update path(yes|no){no}
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
+    character(len=3)          :: sticky_class_sampling='no' !< sticky class-sampling cohort(yes|no){no}
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: stream2d='no'        !< indicates streaming 2D clustering(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
@@ -649,6 +650,7 @@ type :: parameters
     logical :: sgd_diagnostic    = .false.
     logical :: l_ptcl_src_den    = .false.
     logical :: l_sigma_glob      = .false.
+    logical :: l_sticky_class_sampling = .false.
     logical :: l_trail_rec       = .false.
     logical :: l_ufrac_trec_defined = .false. !< explicit ufrac_trec override was provided
     logical :: l_update_missing  = .false.

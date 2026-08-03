@@ -171,23 +171,72 @@ top-ranked fraction. The outer particle target remains the fixed
 `abinitio3D` `multivol_mode=docked` has an explicit split/update epoch policy.
 Stages before the split run as one state. The default split stage is 6, so the
 split occurs after stage 5. Docked early stops before the split are rejected.
+
+Ordinary pre-split stages use the single-state target
+`min(UPDATE_FRAC_MAX, nsample / active_particles)`. The stage immediately before
+the split increases that target to
+`min(UPDATE_FRAC_MAX, nstates * nsample / active_particles)`. This deliberately
+broadens the one-state pose coverage before state labels are introduced.
+
+Immediately before the cohort-forming assignment pass, the commander clears
+`sampled` and `updatecnt`. It then always runs one class-balanced `refine=prob`
+pass with `frac_best=1.0`, `fillin=no`, `trail_rec=no`, `volrec=no`, and
+`sticky_class_sampling=no`. In the fractional regime its nominal target is:
+
+```text
+min(active_particles,
+    max(effective_post_split_target,
+        min(NSAMPLE_HET_SPLIT_CAP, round(2.5 * nstates * nsample))))
+```
+
+`NSAMPLE_HET_SPLIT_CAP` is 100000 consistently with refine3D_multi. The
+corresponding fraction remains capped by `UPDATE_FRAC_MAX`, so the effective
+target cannot exceed 90 percent of the active particles. The cap limits cohort
+expansion but cannot make the cohort smaller than the effective post-split update.
+In the global full-sampling regime, the pass instead targets all active particles.
+
 At the split, the commander restores the requested state count, recomputes the
-post-split `nsample`-derived update target, clears `ptcl3D%sampled` and
-`ptcl3D%updatecnt`, randomizes active particles into balanced uniform state
-labels, validates that every split state is populated enough for probabilistic
-multi-state tables, and reconstructs split state volumes. Pre-split stages
-continue to use the single-state update target.
+fixed post-split target
+`min(UPDATE_FRAC_MAX, nstates * nsample / active_particles)`, and randomizes
+active particles into balanced uniform state labels without clearing the cohort
+markers. It then selects one post-split-sized class-balanced subset restricted
+to `sampled > 0` and reconstructs state-specific starting volumes and halfmaps
+from exactly that latest sampled round without trailing. The reconstruction
+reproduces the subset.
 
-The first post-split stage uses `refine=prob_state`, removes `update_frac`,
-`nsample`, and `fillin`, and therefore processes all active particles without
-fractional particle sampling. It also keeps trailing reconstruction off,
-preventing pre-split mixed-volume memory from being blended into the split-stage
-volumes. Later post-split stages restore the fixed `nsample`-derived fractional
-particle target and trailing reconstruction inside the new multi-state epoch.
+Throughout ordinary post-split docked refinement, `sample4update_class` applies
+the same `sampled > 0` eligibility restriction when `set_cline_refine3D` calls
+`abinitio_docked_cohort_active` and emits the
+`sticky_class_sampling=yes` child flag. This flag is consumed only by the
+class-balanced `sample4update_class` path, where it enables `sampled_only`; it
+does not change unbalanced or full particle sampling. It is emitted only after
+the fractional cohort pass succeeds and the requested state count is restored;
+the matcher does not infer it from `nstates` or `multivol_mode`. The
+cohort-forming reset ensures that eligibility means membership in the pre-split
+cohort. The latest round remains `sampled == max(sampled)`, and `updatecnt`
+rotates selection toward less-updated cohort members. Particles outside the
+cohort remain excluded until the separate terminal missing-assignment policy is
+invoked, for which `sticky_class_sampling=no`.
 
-Because the split clears the counters, `updatecnt` after the split is
-post-split multi-state update history, not single-state history. Final docked
-reconstruction requires every active particle to have a post-split update.
+The split-stage refinement uses `refine=prob_state`, keeps the post-split
+fractional target, and keeps `fillin=no`. From `TRAILREC_STAGE_SINGLE` onward,
+trailing reconstruction is enabled in the fractional regime and consumes
+realized state-local update fractions. This includes the default split stage 6;
+an earlier custom split stage does not enable trailing before that threshold.
+The previous artifacts at the default split are the state-specific split
+halfmaps reconstructed from the initial post-split-sized subset, not the
+pre-split one-state halfmaps. With a full 2.5-times cohort, the first realized
+fraction is approximately 0.4. Later docked stages keep the same fractional target;
+neighborhood stages use `prob_neigh_mode=geom`, which selects the geometric
+neighborhood containing each particle's previous best projection and evaluates
+that same neighborhood for every state.
+
+The global full-sampling switch remains authoritative. When
+`nsample / active_particles > 0.9`, emitted docked stage commands omit
+`update_frac`, `nsample`, and `fillin`, and trailing remains disabled, including
+at the split stage. Because the cohort pass resets the counters before selecting
+its members, `updatecnt` after the split is cohort-local selection history. Final docked reconstruction still requires every active particle to have a multi-state
+assignment and may therefore invoke the separate terminal missing-update pass.
 
 `sample_ptcls4update3D` applies the normal 3D subset policy:
 
@@ -271,11 +320,20 @@ are separate workflow stages and may perform their own reads.
   previous class-average sums.
 - The `abinitio3D` docked split starts a new multi-state `sampled/updatecnt`
   epoch.
+- The docked cohort pass resets sampling history before selecting its persistent
+  pre-split cohort; its `sampled > 0` markers survive state relabeling.
+- Ordinary post-split docked class sampling is restricted to that  sticky cohort,
+  while reconstruction and downstream probabilistic work reproduce the latest
+  sampled round exactly.
+- Docked split-stage `prob_state` remains fractional unless the global
+  full-sampling switch is active.
 - Independent multi-state `abinitio3D` defaults to a five-stage,
   `lpstop=6.0 A` inspection run, starts stochastic balanced sampling at stage
   4, and still writes final reconstruction outputs.
-- Docked split-stage refinement must not use trailing volume averaging; later
-  post-split stages restore trailing inside the new multi-state epoch.
+- In fractional docked mode, trailing starts at `TRAILREC_STAGE_SINGLE`; for the
+  default split stage this means split-stage refinement uses the freshly
+  reconstructed state-specific split artifacts plus realized state-local update
+  fractions.
 - 2D fractional class-average restoration remains class-local.
 - Staged `abinitio2D` `fillin=yes` remains a full-assignment coverage guard
   unless the implementation is deliberately changed to missing-only assignment.
