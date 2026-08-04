@@ -70,3 +70,38 @@ class TemplateIntegrationTests(SimpleTestCase):
 
         self.assertGreaterEqual(jobbuilder.count('absolute right-2'), 2)
         self.assertIn('program.classList.toggle("hidden", !matches)', jobbuilder)
+
+    def test_batch_tabs_restore_selected_commanders(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        self.assertIn("let selectedSimpleProgramKey = null;", jobbuilder)
+        self.assertIn("showSimpleProgramConfig(selectedSimpleProgramKey);", jobbuilder)
+        self.assertIn("selectedSimpleProgramKey = programKey;", jobbuilder)
+        self.assertIn("selectedSimpleProgramKey = null;", jobbuilder)
+        self.assertIn("let selectedSingleProgramKey = null;", jobbuilder)
+        self.assertIn("showSingleProgramConfig(selectedSingleProgramKey);", jobbuilder)
+        self.assertIn("selectedSingleProgramKey = programKey;", jobbuilder)
+        self.assertIn("selectedSingleProgramKey = null;", jobbuilder)
+
+    def test_batch_panels_match_stream_spacing(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        heading_classes = "text-xs font-semibold text-streamtext text-left mb-6 mx-4 uppercase tracking-widest"
+        footer_classes = "flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2"
+        button_classes = "text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors"
+        self.assertEqual(jobbuilder.count(heading_classes), 3)
+        self.assertEqual(jobbuilder.count(footer_classes), 3)
+        self.assertEqual(jobbuilder.count(button_classes), 6)
+        self.assertIn('id="panel_batch" class="flex-1 w-full flex flex-col hidden"', jobbuilder)
+        self.assertIn('id="card_simple_batch" class="flex-1 w-full flex flex-col"', jobbuilder)
+        self.assertIn('id="card_single_batch" class="flex-1 w-full flex flex-col"', jobbuilder)
+        self.assertIn('id="simple_config_panel" class="hidden flex flex-1 flex-col mx-4 pb-16"', jobbuilder)
+        self.assertIn('id="single_config_panel" class="hidden flex flex-1 flex-col mx-4 pb-16"', jobbuilder)
+        fixed_footer_classes = f"{footer_classes} fixed bottom-0 left-0 w-full z-10 bg-streambar hidden"
+        self.assertIn(f'id="simple_batch_actions" class="{fixed_footer_classes}"', jobbuilder)
+        self.assertIn(f'id="single_batch_actions" class="{fixed_footer_classes}"', jobbuilder)
+        self.assertIn('id="simple_batch_start" type="button"', jobbuilder)
+        self.assertIn('id="single_batch_start" type="button"', jobbuilder)
+        self.assertEqual(jobbuilder.count('onclick="closeJobBuilder()"'), 3)
+        self.assertEqual(jobbuilder.count('if (actions) actions.classList.add("hidden");'), 2)
+        self.assertEqual(jobbuilder.count('if (actions) actions.classList.remove("hidden");'), 2)
