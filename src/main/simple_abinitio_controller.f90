@@ -21,6 +21,7 @@ integer,          parameter :: NSPACE_SUB_BASE         = 2500
 ! Stage transition policy
 integer,          parameter :: TURNED_OFF              = NSTAGES + 1 ! value for stage-based policies to indicate "turned off" 
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
+integer,          parameter :: ML_REG_START_STAGE      = 3           ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
 integer,          parameter :: SYMSRCH_STAGE           = 3           ! search symmetry axis
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
@@ -144,6 +145,11 @@ contains
         integer :: istage
         istage = SYMSRCH_STAGE
     end function abinitio_symsrch_stage
+
+    module function abinitio_ml_reg_start_stage() result(istage)
+        integer :: istage
+        istage = ML_REG_START_STAGE
+    end function abinitio_ml_reg_start_stage
 
     module function abinitio_het_docked_stage() result(istage)
         integer :: istage

@@ -97,6 +97,10 @@ interface
         integer :: istage
     end function abinitio_symsrch_stage
 
+    module function abinitio_ml_reg_start_stage() result(istage)
+        integer :: istage
+    end function abinitio_ml_reg_start_stage
+
     module function abinitio_het_docked_stage() result(istage)
         integer :: istage
     end function abinitio_het_docked_stage
@@ -267,16 +271,22 @@ contains
         call vol_lp%kill
     end subroutine write_abinitio_lowpass_snapshot
 
-    real function abinitio_state_fsc_lowpass( state, box, smpd, fallback_lp ) result( lp )
-        integer, intent(in) :: state, box
-        real,    intent(in) :: smpd, fallback_lp
+    real function abinitio_state_fsc_lowpass( state, box, smpd, fallback_lp, istage ) result( lp )
+        integer,           intent(in) :: state, box
+        real,              intent(in) :: smpd, fallback_lp
+        integer, optional, intent(in) :: istage
         type(string) :: fsc_name
         real, allocatable :: fsc(:), res(:)
         real :: fsc05, fsc0143
         lp = fallback_lp
-        ! In cavgs mode the even/odd class-average FSC is unreliable, so all stage
-        ! and output volumes use the scheduled low-pass limit for a consistent policy.
-        if( l_cavgs_mode ) return
+        ! In cavgs mode the even/odd class-average FSC is only unreliable for the
+        ! first stages (ml_reg off). Once ml_reg is active the FSC resolution is
+        ! trusted for filtering; final outputs (no istage) always trust it.
+        if( l_cavgs_mode )then
+            if( present(istage) )then
+                if( istage < abinitio_ml_reg_start_stage() ) return
+            endif
+        endif
         fsc_name = refine3D_fsc_fname(state)
         if( file_exists(fsc_name) )then
             fsc = file2rarr(fsc_name)
@@ -428,7 +438,7 @@ contains
             vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
             if( file_exists(vol_name) )then
                 lp_snapshot = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
-                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp, istage)
                 call write_abinitio_lowpass_snapshot(vol_name, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
             endif
         enddo
@@ -509,7 +519,7 @@ contains
                 vol_stage    = add2fbody(vol_sym, string(MRC_EXT), stage)
                 vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
                 lp_snapshot  = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
-                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp, istage)
                 call write_abinitio_lowpass_snapshot(vol_sym, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
                 call inject_refine3D_volume(params, state, vol_sym)
                 call vol_stage%kill
@@ -575,7 +585,7 @@ contains
             call simple_rename(src, dest_main)
             vol_diag = add2fbody(dest_main, MRC_EXT, LP_SUFFIX)
             lp_snapshot = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
-                &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp)
+                &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp, istage)
             call write_abinitio_lowpass_snapshot(dest_main, lp_snapshot, vol_diag, lpinfo(istage)%smpd_crop)
             vol_even = refine3D_state_halfvol_fname(state, 'even')
             if( file_exists(vol_even) )then

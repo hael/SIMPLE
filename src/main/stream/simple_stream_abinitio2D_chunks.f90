@@ -40,7 +40,7 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj_glob
         integer          :: ichunk, nstks, nptcls, nptcls_tot, ntot_chunks, ncls_chunk
-        integer          :: nchunks_processed
+        integer          :: nchunks_processed, nchunks_conc
         call cline%set('oritype',      'ptcl2D')
         call cline%set('autoscale',    'yes')
         call cline%set('remove_chunks','no')
@@ -97,6 +97,12 @@ contains
             call init_one_chunk(ichunk, ncls_chunk)
         enddo
         params%nthr2D = params%nthr ! ?? cf. Joe
+        ! Cap on the number of chunks running at the same time (0 = all at once)
+        nchunks_conc = ntot_chunks
+        if( params%nchunks_conc > 0 ) nchunks_conc = min(params%nchunks_conc, ntot_chunks)
+        if( nchunks_conc < ntot_chunks )then
+            write(logfhandle,'(A,I8)')'>>> MAX CONCURRENT CHUNKS  : ', nchunks_conc
+        endif
         ! Submit concurrent abinitio2D jobs
         do
             nchunks_processed = count(chunks(:)%is_finished())
@@ -140,8 +146,9 @@ contains
         subroutine analyze_first_available_chunk()
             type(rec_list) :: project_list_slice
             integer        :: ichunk, nchunks_busy
-            nchunks_busy = count(.not.chunks(:)%is_available())
-            if( nchunks_busy < params%nchunks ) then
+            ! count only chunks that are currently running (submitted but not yet finished)
+            nchunks_busy = count( (.not.chunks(:)%is_available()) .and. (.not.chunks(:)%is_finished()) )
+            if( nchunks_busy < nchunks_conc ) then
                 do ichunk = 1,ntot_chunks
                     if( chunks(ichunk)%is_available() )then
                         call project_list%slice(chunk_rec_fromto(ichunk,1), chunk_rec_fromto(ichunk,2), project_list_slice)

@@ -394,6 +394,7 @@ type :: parameters
     integer :: minits=0            !< minimum # iterations
     integer :: nboxes_max=0
     integer :: nchunks=0
+    integer :: nchunks_conc=0      !< max # of chunks run concurrently (0 = all at once)
     integer :: nchunks_max=0       !< maximum candidate temporal chunk count for automatic selection
     integer :: nchunks_min=0       !< minimum candidate temporal chunk count for automatic selection
     integer :: nchunksperset=0

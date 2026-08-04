@@ -353,6 +353,7 @@ contains
         call reg%add_int('minits', self%minits)
         call reg%add_int('nboxes_max', self%nboxes_max)
         call reg%add_int('nchunks', self%nchunks)
+        call reg%add_int('nchunks_conc', self%nchunks_conc)
         call reg%add_int('nchunks_max', self%nchunks_max)
         call reg%add_int('nchunks_min', self%nchunks_min)
         call reg%add_int('nchunksperset', self%nchunksperset)
