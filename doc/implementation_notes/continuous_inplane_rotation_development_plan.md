@@ -1,5 +1,11 @@
 # Continuous In-Plane Rotation Refinement
 
+> Historical development record. The experimental continuous callback route
+> and its coefficient API have been removed. The production interface is now
+> `inpl_cont=yes|no`, where `yes` selects only the optimized joint formulation.
+> See `doc/algorithms/continuous_inplane_refinement_abinitio2D.md` for the
+> current design.
+
 ## Summary
 
 Implement continuous in-plane angle refinement for `objfun=euclid` in gated stages:

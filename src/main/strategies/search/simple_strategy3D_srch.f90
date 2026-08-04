@@ -108,11 +108,11 @@ contains
         ! create in-plane search objects
         self%nrots = self%b_ptr%pftc%get_nrots()
         if( .not. str_has_substr(self%refine, 'prob') )then
-            call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+            call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init, &
             &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
             call self%grad_shsrch_obj2%new(self%b_ptr, lims, lims_init=lims_init, maxits=self%p_ptr%maxits_sh,&
-            &shbarrier=self%p_ptr%shbarrier, opt_angle=.false.)
-            call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init, shbarrier=self%p_ptr%shbarrier,&
+            &opt_angle=.false.)
+            call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init, &
             &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
         endif
         self%exists = .true.

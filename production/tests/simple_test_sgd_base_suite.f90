@@ -427,7 +427,7 @@ contains
 
         shift_limits(:, 1) = -5.0
         shift_limits(:, 2) = 5.0
-        call direct_shift_search%new(pft_builder, shift_limits, opt_angle=.false., direct_only=.true.)
+        call direct_shift_search%new_direct(pft_builder, shift_limits)
         call direct_shift_search%set_indices(1, 1)
         direct_irot = 1
 ! P2: request the finite raw Euclidean loss/gradient API so SGD does not
@@ -871,7 +871,7 @@ contains
         best_loss = huge(1._dp); best_ref = 0; best_rot = 0; best_steps = 0; candidate_count = 0
         write (logfhandle, '(a,i0)') '>>> V4 ROTATION COUNT: ', b%pftc%get_nrots()
         shift_limits(:, 1) = -5.; shift_limits(:, 2) = 5.
-        call search%new(b, shift_limits, opt_angle=.false., direct_only=.true.)
+        call search%new_direct(b, shift_limits)
         call search%set_diagnostic_mode(.true.)
         do iref = 1, 2; do irot = 1, b%pftc%get_nrots()
                 call b%pftc%gen_raw_euclid_grad_for_rot_8(iref, 1, [0._dp, 0._dp], irot, loss, grad)

@@ -201,8 +201,6 @@ type :: polarft_calc
     procedure, private :: hybrid_dist_from_score
     procedure          :: gen_corr_grad_for_rot_8
     procedure          :: gen_raw_euclid_vals
-    procedure          :: gen_euclid_angular_coeffs
-    procedure          :: eval_euclid_resid_at_angle
     procedure          :: gen_raw_euclid_grad_for_rot_8
     procedure          :: gen_raw_euclid_grad_at_angle
     procedure, private :: gen_corr_cc_grad_for_rot_8
@@ -700,21 +698,6 @@ interface
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: losses(self%nrots)
     end subroutine gen_raw_euclid_vals
-
-    module subroutine gen_euclid_angular_coeffs(self, iref, iptcl, shift, coeffs, irot)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        complex(sp),                 intent(out)   :: coeffs(:)
-        integer,                     intent(out)   :: irot
-    end subroutine gen_euclid_angular_coeffs
-
-    module subroutine eval_euclid_resid_at_angle(self, coeffs, theta, residual, dtheta, ddtheta)
-        class(polarft_calc), intent(in)  :: self
-        complex(sp),         intent(in)  :: coeffs(:)
-        real(dp),            intent(in)  :: theta
-        real(dp),            intent(out) :: residual, dtheta, ddtheta
-    end subroutine eval_euclid_resid_at_angle
 
     module subroutine gen_hybrid_scores(self, iref, iptcl, shift, scores)
         class(polarft_calc), target, intent(inout) :: self

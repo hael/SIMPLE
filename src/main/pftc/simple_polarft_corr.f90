@@ -276,35 +276,27 @@ contains
         euclids = exp(-raw_losses)
     end subroutine gen_euclids
 
-    ! Private implementation shared by the classical Euclidean score and
-    ! continuous-angle coefficient paths.  It remains a normal subroutine in
-    ! this submodule, so it is not added to the polarft_calc public API.
+    ! Private implementation of the classical Euclidean score.
     !
     ! All mutable FFT work arrays are per-OpenMP-thread.  In particular,
     ! crvec1(ithr) aliases one FFT allocation as complex input and real output;
     ! heap_vars(ithr)%shmat and cmat2_many(ithr) hold shifted-reference work.
     ! Keep the thread index local to this call.  Sharing these buffers across
     ! threads can corrupt FFT state and cause a late segmentation fault.
-    subroutine gen_raw_euclid_vals_impl( self, iref, iptcl, shift, losses, coeffs, deriv_component )
+    subroutine gen_raw_euclid_vals_impl( self, iref, iptcl, shift, losses )
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: losses(self%nrots)
-        complex(sp), optional,       intent(out)   :: coeffs(:)
-        integer,       optional,       intent(in)  :: deriv_component
         complex(sp), pointer :: shmat(:,:)
         complex(sp) :: c
         real(dp)    :: ptcl_sqsum
         real(sp)    :: A_sp, shift_mag_sq, wk
         integer     :: k, i, ithr, kk, k0, p, ieo
-        integer     :: deriv
         ithr         =  omp_get_thread_num() + 1
         i            =  self%pinds(iptcl)
         k0           =  self%kfromto(1)
         ieo          =  merge(REF_EVEN, REF_ODD, self%iseven(i))
-        deriv        =  0
-        if( present(deriv_component) ) deriv = deriv_component
-        if( deriv < 0 .or. deriv > 2 ) THROW_HARD('invalid Euclidean derivative component')
         ptcl_sqsum   =  self%wsqsums_ptcls(i)
         shmat        => self%heap_vars(ithr)%shmat
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
@@ -326,9 +318,8 @@ contains
                 wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                 kk = k - k0 + 1
                 do p = 1,self%pftsz
-                    c = euclid_coeff_term(self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo), &
-                        &self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk)), &
-                        &self%argtransf(p,k), self%argtransf(self%pftsz+p,k), deriv)
+                    c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo) - &
+                        &2._sp * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk))
                     self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
                 enddo
             enddo
@@ -339,21 +330,13 @@ contains
             do k = self%kfromto(1), self%kfromto(2)
                 wk = real(k, sp) / self%sigma2_noise(k,iptcl)
                 do p = 1,self%pftsz
-                    c = euclid_coeff_term(self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo), &
-                        &self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo)), &
-                        &self%argtransf(p,k), self%argtransf(self%pftsz+p,k), deriv)
+                    c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo) - &
+                        &2._sp * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
                     self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
                 enddo
             enddo
         endif
         A_sp = real(ptcl_sqsum * real(2*self%nrots, dp), sp)
-        if( present(coeffs) )then
-            if( size(coeffs) /= self%pftsz + 1 )then
-                THROW_HARD('invalid angular coefficient size; gen_raw_euclid_vals_impl')
-            endif
-            coeffs = self%crvec1(ithr)%c / A_sp
-            if( deriv == 0 ) coeffs(1) = coeffs(1) + cmplx(1.,0.,kind=sp)
-        endif
         ! IFFT
         call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
         ! Normalize the shared raw Euclidean residual.  The IFFT contains the
@@ -384,56 +367,6 @@ contains
         ! streaming paths cannot acquire different numerical logic.
         call gen_raw_euclid_vals_impl(self, iref, iptcl, shift, losses)
     end subroutine gen_raw_euclid_vals
-
-    module subroutine gen_euclid_angular_coeffs(self, iref, iptcl, shift, coeffs, irot)
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(in)    :: shift(2)
-        complex(sp),                 intent(out)   :: coeffs(:)
-        integer,                     intent(out)   :: irot
-        real(sp) :: losses(self%nrots)
-        call gen_raw_euclid_vals_impl(self, iref, iptcl, shift, losses, coeffs)
-        irot = minloc(losses, dim=1)
-    end subroutine gen_euclid_angular_coeffs
-
-    module subroutine eval_euclid_resid_at_angle(self, coeffs, theta, residual, dtheta, ddtheta)
-        class(polarft_calc), intent(in)  :: self
-        complex(sp),         intent(in)  :: coeffs(:)
-        real(dp),            intent(in)  :: theta
-        real(dp),            intent(out) :: residual, dtheta, ddtheta
-        integer  :: m
-        real(dp) :: phase, dphase, frequency
-        complex(dp) :: z
-        if( size(coeffs) /= self%pftsz + 1 )then
-            THROW_HARD('invalid angular coefficient size; eval_euclid_resid_at_angle')
-        endif
-        phase    = DTWOPI * (theta - 1.d0) / real(self%nrots,dp)
-        dphase   = DTWOPI / real(self%nrots,dp)
-        residual = real(coeffs(1),dp)
-        dtheta   = 0.d0
-        ddtheta  = 0.d0
-        ! The current grid objective uses p=1:pftsz, i.e. frequencies
-        ! m=0:(pftsz-1), and deliberately leaves the Nyquist slot empty.
-        ! Keep the evaluator compatible with that route while handling a
-        ! populated Nyquist coefficient with its single real-valued weight.
-        do m = 1, self%pftsz - 1
-            frequency = real(m,dp) * dphase
-            z = cmplx(real(coeffs(m+1),dp), aimag(coeffs(m+1)), kind=dp) * &
-                exp(cmplx(0.d0, real(m,dp)*phase, kind=dp))
-            residual = residual + 2.d0 * real(z,dp)
-            dtheta   = dtheta   - 2.d0 * frequency * aimag(z)
-            ddtheta  = ddtheta  - 2.d0 * frequency * frequency * real(z,dp)
-        enddo
-        m = self%pftsz
-        if( abs(coeffs(m+1)) > 0._sp )then
-            frequency = real(m,dp) * dphase
-            z = cmplx(real(coeffs(m+1),dp), aimag(coeffs(m+1)), kind=dp) * &
-                exp(cmplx(0.d0, real(m,dp)*phase, kind=dp))
-            residual = residual + real(z,dp)
-            dtheta   = dtheta   - frequency * aimag(z)
-            ddtheta  = ddtheta  - frequency * frequency * real(z,dp)
-        endif
-    end subroutine eval_euclid_resid_at_angle
 
     module subroutine gen_hybrid_scores( self, iref, iptcl, shift, scores )
         class(polarft_calc), target, intent(inout) :: self
@@ -1508,23 +1441,6 @@ contains
         f     = exp(-f / denom)
         grad  = -f * 2.d0 * grad / denom
     end subroutine gen_euclid_grad_for_rot_8
-
-    pure function euclid_coeff_term(ref2_term, cross_term, argx, argy, deriv) result(c)
-        complex(sp), intent(in) :: ref2_term, cross_term
-        real(dp),    intent(in) :: argx, argy
-        integer,     intent(in) :: deriv
-        complex(sp) :: c
-        select case(deriv)
-        case(0)
-            c = ref2_term - 2._sp * cross_term
-        case(1)
-            c = cmplx(0._sp, 2._sp*real(argx,sp), kind=sp) * cross_term
-        case(2)
-            c = cmplx(0._sp, 2._sp*real(argy,sp), kind=sp) * cross_term
-        case default
-            c = cmplx(0._sp, 0._sp, kind=sp)
-        end select
-    end function euclid_coeff_term
 
     ! Candidate API for SGD: return the finite Gaussian loss L and grad(L).
     ! The legacy score is exp(-L), which is monotonic but can underflow.

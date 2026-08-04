@@ -157,7 +157,7 @@ contains
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         do ithr = 1, nthr_glob
-            call grad_shsrch_obj(ithr)%new(build, lims, lims_init=lims_init, shbarrier='yes',&
+            call grad_shsrch_obj(ithr)%new(build, lims, lims_init=lims_init, &
             &maxits=MAXITS_SH, opt_angle=.true.)
         end do
         !$omp parallel do default(shared)  private(i,ithr,pft) proc_bind(close) schedule(static)

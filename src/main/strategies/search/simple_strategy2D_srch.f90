@@ -24,8 +24,8 @@ type strategy2D_srch
     class(parameters), pointer :: p_ptr => null()     ! pointer to parameters
     class(builder),    pointer :: b_ptr => null()     !< build handle for access to pftc
     type(pftc_shsrch_grad) :: grad_shsrch_obj         !< origin shift search object, L-BFGS with gradient
-    type(pftc_shsrch_grad) :: grad_shsrch_obj2        !< origin shift search object, L-BFGS with gradient, no call back
-    type(pftc_shsrch_grad) :: grad_shsrch_first_obj   !< origin shift search object, L-BFGS with gradient, used for initial shift search on previous ref
+    type(pftc_shsrch_grad) :: grad_shsrch_obj2        !< fixed-angle origin shift search object
+    type(pftc_shsrch_grad) :: grad_shsrch_first_obj   !< initial shift search on the previous reference
     type(pftc_shsrch_grad) :: joint_inpl_optimizer    !< continuous joint (sx,sy,theta) L-BFGS-B refinement
     integer                 :: nrefs           =  0   !< number of references
     integer                 :: nrots           =  0   !< number of in-plane rotations in polar representation
@@ -53,7 +53,6 @@ type strategy2D_srch
     logical                 :: sgd_used          = .false. !< stream shift update was attempted
     logical                 :: l_sh_first      = .false. !< Whether to search the shifts on previous best reference
     logical                 :: l_fresh_start   = .false. !< Whether previous alignment parameters are intentionally ignored
-    character(len=8)        :: inpl_cont_mode = 'no' !< effective continuous route: no, callback, or joint
     logical                 :: continuous_active = .false. !< selected candidates receive continuous refinement
     logical                 :: has_continuous_e3 = .false. !< whether continuous_e3 is valid
     real                    :: continuous_e3 = 0. !< continuous e3 angle for the selected candidate
@@ -67,7 +66,6 @@ type strategy2D_srch
     procedure :: store_solution
     procedure :: assign_ori
     procedure :: uses_continuous_refinement
-    procedure :: get_inpl_cont_mode
     procedure :: kill
 end type strategy2D_srch
 
@@ -96,9 +94,7 @@ contains
         continuous_eligible = self%b_ptr%pftc%is_raw_euclid_objfun() .and. &
             &(.not. self%p_ptr%l_objfun_den) .and. &
             &(.not. self%p_ptr%l_sgd_streaming_active) .and. trim(self%p_ptr%tseries) /= 'yes'
-        self%inpl_cont_mode = 'no'
-        if( continuous_eligible ) self%inpl_cont_mode = trim(self%p_ptr%inpl_cont)
-        self%continuous_active = trim(self%inpl_cont_mode) /= 'no'
+        self%continuous_active = continuous_eligible .and. trim(self%p_ptr%inpl_cont) == 'yes'
         self%has_continuous_e3 = .false.
         ! construct composites
         self%trs        =  self%p_ptr%trs
@@ -111,10 +107,8 @@ contains
             ! Construct shift-only objects so minimize_direct differentiates
             ! L(c,r,s) with respect to s=(sx,sy) at fixed (c,r), and do not
             ! allocate the legacy particle-shift L-BFGS-B optimizer.
-            call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init,&
-            maxits=self%p_ptr%maxits_sh, opt_angle=.false., direct_only=.true.)
-            call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init,&
-            maxits=self%p_ptr%maxits_sh, opt_angle=.false., coarse_init=.true., direct_only=.true.)
+            call self%grad_shsrch_obj%new_direct(self%b_ptr, lims)
+            call self%grad_shsrch_first_obj%new_direct(self%b_ptr, lims)
             call self%grad_shsrch_obj%set_diagnostic_mode(self%p_ptr%sgd_diagnostic)
             call self%grad_shsrch_first_obj%set_diagnostic_mode(self%p_ptr%sgd_diagnostic)
             if( .not. self%grad_shsrch_obj%is_direct_shift_only() )then
@@ -131,20 +125,17 @@ contains
             maxits=self%p_ptr%maxits_sh, opt_angle=.false., coarse_init=.true.)
         else
             call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init,&
-            maxits=self%p_ptr%maxits_sh, &
-            &continuous_callback=trim(self%inpl_cont_mode) == 'callback')
+            maxits=self%p_ptr%maxits_sh)
             call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init,&
             maxits=self%p_ptr%maxits_sh, coarse_init=.true., &
-            &opt_angle=trim(self%inpl_cont_mode) == 'no')
+            &opt_angle=.not. self%continuous_active)
         endif
         call self%grad_shsrch_obj2%new(self%b_ptr, lims, lims_init=lims_init,&
         &maxits=self%p_ptr%maxits_sh, opt_angle=.false.)
-        if( trim(self%inpl_cont_mode) == 'joint' )then
+        if( self%continuous_active )then
             joint_lims(1:2,:) = lims
             joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
-            call self%joint_inpl_optimizer%new(self%b_ptr, joint_lims, &
-                &shbarrier=self%p_ptr%shbarrier, maxits=self%p_ptr%maxits_sh, &
-                &opt_angle=.false., joint_inplane=.true.)
+            call self%joint_inpl_optimizer%new_joint(self%b_ptr, joint_lims, self%p_ptr%maxits_sh)
         endif
     end subroutine new
 
@@ -279,17 +270,15 @@ contains
         irot = 0
         if( s2D%do_inplsrch(self%iptcl_batch) )then
             if( self%continuous_active )then
-                ! Both continuous routes start from the same discrete polar
-                ! candidate and native shift seed.  The selected mode then
-                ! performs either callback refinement or joint refinement.
+                ! Joint refinement starts from the selected discrete polar
+                ! candidate and its native shift seed.
                 if( self%l_sh_first )then
                     call rotmat2d(self%b_ptr%pftc%get_rot(self%best_rot), rotmat)
                     self%best_shvec = matmul(self%xy_first, rotmat)
-                    call self%refine_selected_continuously(self%xy_first)
                 else
                     self%best_shvec = 0.
-                    call self%refine_selected_continuously([0.,0.])
                 endif
+                call self%refine_selected_continuously
                 return
             endif
             self%best_shvec = [0.,0.]
@@ -343,59 +332,17 @@ contains
         endif
     end subroutine inpl_srch
 
-    !> Refine one discrete polar candidate with the selected continuous route.
-    !! Callback and joint refinement are mutually exclusive.  Probabilistic
-    !! selection is complete before this routine is entered.
-    subroutine refine_selected_continuously( self, xy_native_in )
+    !> Jointly refine the shift and in-plane angle of one selected candidate.
+    !! Probabilistic selection is complete before this routine is entered.
+    subroutine refine_selected_continuously( self )
         class(strategy2D_srch), intent(inout) :: self
-        real,          optional, intent(in)    :: xy_native_in(2)
         real :: rotmat(2,2), xy_native(2)
         if( .not. self%continuous_active ) return
         if( self%best_class < 1 .or. self%best_class > self%nrefs ) return
         if( self%best_rot < 1 .or. self%best_rot > self%nrots ) return
-        if( present(xy_native_in) )then
-            xy_native = xy_native_in
-        else
-            call rotmat2d(self%b_ptr%pftc%get_rot(self%best_rot), rotmat)
-            xy_native = matmul(self%best_shvec, transpose(rotmat))
-        endif
-        select case(trim(self%inpl_cont_mode))
-        case('callback')
-            call refine_selected_with_callback(self, xy_native)
-        case('joint')
-            call refine_selected_jointly(self, xy_native)
-        end select
-    end subroutine refine_selected_continuously
-
-    subroutine refine_selected_with_callback( self, xy_native )
-        class(strategy2D_srch), intent(inout) :: self
-        real,                    intent(in)    :: xy_native(2)
-        real    :: cxy(3), callback_lims(2,2), theta_cont
-        integer :: irot
-        callback_lims(:,1) = -self%trs
-        callback_lims(:,2) =  self%trs
-        if( .not. self%p_ptr%l_doshift )then
-            callback_lims(:,1) = xy_native
-            callback_lims(:,2) = xy_native
-        endif
-        call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
-        call self%grad_shsrch_obj%set_limits(callback_lims)
-        irot = self%best_rot
-        cxy = self%grad_shsrch_obj%minimize(irot, xy_in=xy_native, &
-            &sh_rot=.true., theta=theta_cont)
-        callback_lims(:,1) = -self%trs
-        callback_lims(:,2) =  self%trs
-        call self%grad_shsrch_obj%set_limits(callback_lims)
-        if( irot <= 0 ) return
-        self%best_rot   = irot
-        self%best_corr  = cxy(1)
-        self%best_shvec = cxy(2:3)
-        call store_continuous_e3(self, real(theta_cont,dp))
-    end subroutine refine_selected_with_callback
-
-    subroutine refine_selected_jointly( self, xy_native )
-        class(strategy2D_srch), intent(inout) :: self
-        real,                    intent(in)    :: xy_native(2)
+        call rotmat2d(self%b_ptr%pftc%get_rot(self%best_rot), rotmat)
+        xy_native = matmul(self%best_shvec, transpose(rotmat))
+        block
         real     :: cxy(3), joint_lims(3,2)
         real(dp) :: theta_cont
         integer  :: irot
@@ -416,7 +363,8 @@ contains
         self%best_corr  = cxy(1)
         self%best_shvec = cxy(2:3)
         call store_continuous_e3(self, theta_cont)
-    end subroutine refine_selected_jointly
+        end block
+    end subroutine refine_selected_continuously
 
     subroutine store_continuous_e3( self, theta )
         class(strategy2D_srch), intent(inout) :: self
@@ -432,12 +380,6 @@ contains
         class(strategy2D_srch), intent(in) :: self
         uses_continuous_refinement = self%continuous_active
     end function uses_continuous_refinement
-
-    pure function get_inpl_cont_mode( self ) result(mode)
-        class(strategy2D_srch), intent(in) :: self
-        character(len=8) :: mode
-        mode = self%inpl_cont_mode
-    end function get_inpl_cont_mode
 
     subroutine inpl_srch_peaks( self, npeaks_inpl )
         class(strategy2D_srch), intent(inout) :: self
@@ -606,7 +548,6 @@ contains
         call self%grad_shsrch_obj2%kill
         call self%grad_shsrch_first_obj%kill
         call self%joint_inpl_optimizer%kill
-        self%inpl_cont_mode = 'no'
         self%continuous_active = .false.
         self%has_continuous_e3 = .false.
     end subroutine kill

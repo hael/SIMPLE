@@ -450,7 +450,6 @@ contains
         call cmd_dict%push('rrate',         'randomization rate{0.8}')
         call cmd_dict%push('scale',         'image scale factor{1}')
         call cmd_dict%push('shalgn',        'do 2D shift alignment(yes|no){no}')
-        call cmd_dict%push('shbarrier',     'use shift search barrier constraint(yes|no){yes}')
         call cmd_dict%push('sherr',         'shift error(in pixels){2}')
         call cmd_dict%push('single',        'simulate a single image(yes|no){no}')
         call cmd_dict%push('smpd',          'sampling distance, same as EMANs apix(in A)')

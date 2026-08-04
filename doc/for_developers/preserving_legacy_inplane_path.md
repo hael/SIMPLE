@@ -5,7 +5,7 @@
 The continuous-angle mathematics was not the critical problem in the original
 implementation. The critical problem was the placement of the feature boundary.
 
-`inpl_refine=no` was intended to mean:
+`inpl_cont=no` means:
 
 > Run the historical in-plane algorithm without any continuous-angle behavior.
 
@@ -14,7 +14,7 @@ What it actually meant was:
 > Do not run the final joint optimizer.
 
 The shared Euclidean shift optimizer had already been changed to use the
-continuous angle callback, regardless of the value of `inpl_refine`. As a
+continuous angle path, regardless of the value of `inpl_cont`. As a
 result, the default-off route was no longer the legacy route.
 
 ## Intended invariant
@@ -30,7 +30,7 @@ This is stronger than saying that the new final stage is skipped. Every earlier
 operation shared with the new development must also retain its historical
 configuration.
 
-For this development, `inpl_refine=no` should have guaranteed all of the
+For this development, `inpl_cont=no` must guarantee all of the
 following:
 
 - the historical two-shift L-BFGS-B object was constructed unchanged;
@@ -49,14 +49,14 @@ At the strategy level, the original implementation derived a flag equivalent
 to:
 
 ```fortran
-use_joint_angle = inpl_refine == 'yes' .and. euclidean_is_active
+use_joint_angle = inpl_cont == 'yes' .and. euclidean_is_active
 ```
 
 That flag controlled construction and invocation of the three-variable joint
 optimizer. This part was gated.
 
 However, the ordinary shift-search objects were constructed identically for
-`inpl_refine=yes` and `inpl_refine=no`. The option was not passed into the
+`inpl_cont=yes` and `inpl_cont=no`. The option was not passed into the
 lower-level object that owned the angle callback.
 
 The strategy therefore protected only the last new step, not the earlier
@@ -148,7 +148,7 @@ Those tests answered:
 
 They did not answer:
 
-> Does `inpl_refine=no` avoid the continuous formulation entirely?
+> Does `inpl_cont=no` avoid the continuous formulation entirely?
 
 There was no route-identity test that constructed the strategy twice, once with
 the option off and once with it on, and inspected which low-level algorithms
@@ -160,10 +160,10 @@ when it has not been requested.
 
 ## Corrected design
 
-The corrected interface is:
+The production interface is:
 
 ```text
-inpl_cont=no|callback|joint
+inpl_cont=yes|no
 ```
 
 The route is resolved before the numerical objects are constructed.
@@ -176,21 +176,12 @@ The route is resolved before the numerical objects are constructed.
 - Does not create or propagate continuous pose state.
 - Reconstructs `e3` from the integer rotation index.
 
-### `inpl_cont=callback`
+### `inpl_cont=yes`
 
-- Explicitly constructs a shift optimizer with `continuous_callback=.true.`.
-- Does not construct the joint optimizer.
-- Applies continuous callback refinement only after discrete candidate
-  selection.
-
-### `inpl_cont=joint`
-
-- Keeps the callback optimizer disabled.
-- Explicitly constructs the three-variable object with
-  `joint_inplane=.true.`.
+- Explicitly constructs the three-variable object with `new_joint`.
 - Applies joint refinement only after discrete candidate selection.
 
-Both active routes additionally require the raw Euclidean capability. An
+The active route additionally requires the raw Euclidean capability. An
 ineligible request resolves to effective mode `no`.
 
 The low-level properties default to false. Thus default construction once again
@@ -201,18 +192,17 @@ objective type alone.
 
 The route-identity test should assert the construction itself:
 
-| Mode | Continuous callback | Joint optimizer | Legacy seed angle update |
-|---|---:|---:|---:|
-| `no` | off | off | on |
-| `callback` | on | off | off |
-| `joint` | off | on | off |
+| Mode | Joint optimizer | Legacy seed angle update |
+|---|---:|---:|
+| `no` | off | on |
+| `yes` | on | off |
 
 It should also verify:
 
 - a hybrid/denoised request resolves to effective `no`;
 - probabilistic stages retain the requested active implementation;
 - `no` produces only grid-consistent `e3` values;
-- active modes can produce continuous `e3` values; and
+- `yes` can produce continuous `e3` values; and
 - the `abinitio2D` controller propagates the option through every child and
   final stage.
 

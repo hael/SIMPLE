@@ -768,7 +768,7 @@ contains
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         do ithr = 1, nthr_glob
-            call grad_shsrch_obj(ithr)%new(build, lims, lims_init=lims_init, shbarrier='yes', maxits=MAXITS_SH, opt_angle=.true.)
+            call grad_shsrch_obj(ithr)%new(build, lims, lims_init=lims_init, maxits=MAXITS_SH, opt_angle=.true.)
         end do
         ! set the reference transform
         didft = .false.
@@ -869,7 +869,7 @@ contains
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
         do ithr = 1, nthr_glob
-            call grad_shsrch_obj(ithr)%new(build, lims, lims_init=lims_init, shbarrier='yes',&
+            call grad_shsrch_obj(ithr)%new(build, lims, lims_init=lims_init, &
             &maxits=MAXITS_SH, opt_angle=.true.)
         end do
         !$omp parallel default(shared)  private(i,m)  proc_bind(close)

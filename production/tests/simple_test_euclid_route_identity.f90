@@ -3,7 +3,7 @@ use simple_pftc_srch_api
 use simple_builder,         only: builder
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_projector_pft,   only: fproject_polar
-use simple_pftc_shsrch_grad, only: parabolic_peak_offset, pftc_shsrch_grad
+use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
 use simple_strategy2D_srch, only: strategy2D_srch, strategy2D_spec
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
@@ -12,27 +12,15 @@ type(parameters), target :: p
 type(cmdline)   :: cline
 type(builder)   :: b
 type(ori)       :: o
-type(pftc_shsrch_grad) :: legacy_shift_search, continuous_shift_search
+type(pftc_shsrch_grad) :: legacy_shift_search
 type(strategy2D_srch) :: probabilistic_refine_search
 type(strategy2D_spec) :: probabilistic_refine_spec
 real(sp), allocatable :: legacy_scores(:), raw_losses(:)
 real(dp), allocatable :: scalar_losses(:)
 real(sp), allocatable :: sigma2_noise(:,:)
 real(dp) :: max_legacy_error, max_route_error, tol, scalar_loss, grad(2)
-complex(sp), allocatable :: angular_coeffs(:)
-real(dp) :: max_angular_error, max_period_error, fd_dtheta_error, fd_ddtheta_error
-real(dp) :: angular_loss, angular_dtheta, angular_ddtheta, loss_minus, loss_plus
-real(dp) :: fd_dtheta, fd_ddtheta, theta_eval, h, angle_tol
-real :: parabola_vals(5), parabola_offset
 real :: shift_limits(2,2)
 integer :: irot, nrots
-integer :: angular_best_rot
-
-parabola_vals = [ -1.5625, -0.0625, -0.5625, -3.0625, -5.0625 ]
-parabola_offset = parabolic_peak_offset(parabola_vals, 2)
-if( abs(parabola_offset - 0.25) > 10.*epsilon(1.) )then
-    error stop 'Parabolic interpolation unit check failed'
-endif
 
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') &
@@ -72,15 +60,7 @@ call b%pftc%memoize_sqsum_ptcl(1)
 shift_limits(:,1) = -1.
 shift_limits(:,2) =  1.
 call legacy_shift_search%new(b, shift_limits, opt_angle=.true.)
-if( legacy_shift_search%uses_continuous_callback() )then
-    error stop 'Default shift search unexpectedly enables continuous angle refinement'
-endif
-call continuous_shift_search%new(b, shift_limits, opt_angle=.true., continuous_callback=.true.)
-if( .not. continuous_shift_search%uses_continuous_callback() )then
-    error stop 'Explicit continuous angle refinement was not enabled'
-endif
 call legacy_shift_search%kill
-call continuous_shift_search%kill
 
 probabilistic_refine_spec%iptcl       = 1
 probabilistic_refine_spec%iptcl_batch = 1
@@ -92,12 +72,6 @@ call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
 if( probabilistic_refine_search%uses_continuous_refinement() )then
     error stop 'inpl_cont=no unexpectedly enables probabilistic continuous polish'
 endif
-if( trim(probabilistic_refine_search%get_inpl_cont_mode()) /= 'no' )then
-    error stop 'inpl_cont=no did not preserve the effective legacy route'
-endif
-if( probabilistic_refine_search%grad_shsrch_obj%uses_continuous_callback() )then
-    error stop 'inpl_cont=no unexpectedly enabled the continuous callback'
-endif
 if( probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
     error stop 'inpl_cont=no unexpectedly constructed the joint optimizer'
 endif
@@ -105,71 +79,38 @@ if( .not. probabilistic_refine_search%grad_shsrch_first_obj%does_opt_angle() )th
     error stop 'inpl_cont=no did not retain the legacy seed-search angle update'
 endif
 call probabilistic_refine_search%kill
-p%inpl_cont = 'callback'
+p%inpl_cont = 'yes'
 call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
 if( .not. probabilistic_refine_search%uses_continuous_refinement() )then
-    error stop 'inpl_cont=callback did not enable continuous refinement'
-endif
-if( trim(probabilistic_refine_search%get_inpl_cont_mode()) /= 'callback' )then
-    error stop 'callback route identity was not preserved'
-endif
-if( .not. probabilistic_refine_search%grad_shsrch_obj%uses_continuous_callback() )then
-    error stop 'callback route did not activate the continuous callback'
-endif
-if( probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
-    error stop 'callback route unexpectedly constructed the joint optimizer'
-endif
-if( probabilistic_refine_search%grad_shsrch_first_obj%does_opt_angle() )then
-    error stop 'callback route unexpectedly changed the discrete candidate during shift seeding'
-endif
-call probabilistic_refine_search%kill
-p%inpl_cont = 'joint'
-call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
-if( .not. probabilistic_refine_search%uses_continuous_refinement() )then
-    error stop 'inpl_cont=joint did not enable continuous refinement'
-endif
-if( trim(probabilistic_refine_search%get_inpl_cont_mode()) /= 'joint' )then
-    error stop 'joint route identity was not preserved'
-endif
-if( probabilistic_refine_search%grad_shsrch_obj%uses_continuous_callback() )then
-    error stop 'joint route unexpectedly activated the continuous callback'
+    error stop 'inpl_cont=yes did not enable continuous refinement'
 endif
 if( .not. probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
-    error stop 'joint route did not construct the joint optimizer'
+    error stop 'inpl_cont=yes did not construct the joint optimizer'
 endif
 if( probabilistic_refine_search%grad_shsrch_first_obj%does_opt_angle() )then
-    error stop 'joint route unexpectedly changed the discrete candidate during shift seeding'
+    error stop 'inpl_cont=yes unexpectedly changed the discrete candidate during shift seeding'
 endif
 call probabilistic_refine_search%kill
 p%l_prob_align_mode = .true.
-p%inpl_cont = 'callback'
+p%inpl_cont = 'yes'
 call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
 if( .not. probabilistic_refine_search%uses_continuous_refinement() )then
-    error stop 'Probabilistic callback route did not enable selected-candidate refinement'
+    error stop 'Probabilistic continuous route did not enable selected-candidate refinement'
 endif
-if( .not. probabilistic_refine_search%grad_shsrch_obj%uses_continuous_callback() )then
-    error stop 'Probabilistic callback route did not construct the callback optimizer'
-endif
-if( probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
-    error stop 'Probabilistic callback route unexpectedly constructed the joint optimizer'
+if( .not. probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
+    error stop 'Probabilistic continuous route did not construct the joint optimizer'
 endif
 call probabilistic_refine_search%kill
-p%inpl_cont = 'joint'
+p%inpl_cont = 'yes'
 p%l_objfun_den = .true.
 if( b%pftc%is_raw_euclid_objfun() )then
     error stop 'Hybrid Euclidean objective unexpectedly reports raw continuous derivative support'
 endif
 call legacy_shift_search%new(b, shift_limits, opt_angle=.true.)
-if( legacy_shift_search%uses_continuous_callback() )then
-    error stop 'Hybrid Euclidean Stage 1 did not preserve the discrete callback fallback'
-endif
 call legacy_shift_search%kill
 call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
 if( probabilistic_refine_search%uses_continuous_refinement() )then
     error stop 'Hybrid Euclidean objective unexpectedly enables raw continuous polish'
-endif
-if( trim(probabilistic_refine_search%get_inpl_cont_mode()) /= 'no' )then
-    error stop 'Hybrid Euclidean objective did not fall back to the effective no route'
 endif
 call probabilistic_refine_search%kill
 p%l_prob_align_mode = .false.
@@ -180,39 +121,6 @@ nrots = b%pftc%get_nrots()
 allocate(legacy_scores(nrots), raw_losses(nrots), scalar_losses(nrots))
 call b%pftc%gen_objfun_vals(1, 1, [0.0_sp, 0.0_sp], legacy_scores)
 call b%pftc%gen_raw_euclid_vals(1, 1, [0.0_sp, 0.0_sp], raw_losses)
-allocate(angular_coeffs(b%pftc%get_pftsz()+1))
-call b%pftc%gen_euclid_angular_coeffs(1, 1, [0.0_sp, 0.0_sp], &
-    &angular_coeffs, angular_best_rot)
-
-max_angular_error = 0.d0
-do irot = 1, nrots
-    call b%pftc%eval_euclid_resid_at_angle(angular_coeffs, real(irot,dp), &
-        &angular_loss, angular_dtheta, angular_ddtheta)
-    max_angular_error = max(max_angular_error, &
-        &abs(angular_loss - real(raw_losses(irot),dp)))
-enddo
-if( angular_best_rot /= minloc(raw_losses, dim=1) )then
-    error stop 'Angular coefficient best-rotation check failed'
-endif
-
-theta_eval = 0.37_dp
-h = 1.e-2_dp
-call b%pftc%eval_euclid_resid_at_angle(angular_coeffs, theta_eval, &
-    &angular_loss, angular_dtheta, angular_ddtheta)
-call b%pftc%eval_euclid_resid_at_angle(angular_coeffs, theta_eval-h, &
-    &loss_minus, fd_dtheta, fd_ddtheta)
-call b%pftc%eval_euclid_resid_at_angle(angular_coeffs, theta_eval+h, &
-    &loss_plus, fd_dtheta, fd_ddtheta)
-fd_dtheta  = (loss_plus - loss_minus) / (2.d0*h)
-fd_ddtheta = (loss_plus - 2.d0*angular_loss + loss_minus) / (h*h)
-fd_dtheta_error  = abs(fd_dtheta - angular_dtheta)
-fd_ddtheta_error = abs(fd_ddtheta - angular_ddtheta)
-call b%pftc%eval_euclid_resid_at_angle(angular_coeffs, theta_eval+real(nrots,dp), &
-    &loss_plus, fd_dtheta, fd_ddtheta)
-max_period_error = max(abs(loss_plus-angular_loss), abs(fd_dtheta-angular_dtheta), &
-    &abs(fd_ddtheta-angular_ddtheta))
-angle_tol = 5.e-4_dp * (1.d0 + maxval(abs(real(raw_losses,dp))))
-
 max_legacy_error = 0.0_dp
 max_route_error  = 0.0_dp
 do irot = 1, nrots
@@ -230,30 +138,17 @@ write(logfhandle,'(a,i0)')    'ROUTE_IDENTITY_NROTS: ', nrots
 write(logfhandle,'(a,es16.8)') 'ROUTE_IDENTITY_MAX_LEGACY_ERROR: ', max_legacy_error
 write(logfhandle,'(a,es16.8)') 'ROUTE_IDENTITY_MAX_SCALAR_ERROR: ', max_route_error
 write(logfhandle,'(a,es16.8)') 'ROUTE_IDENTITY_TOLERANCE: ', tol
-write(logfhandle,'(a,i0)')    'ANGULAR_COEFF_BEST_ROT: ', angular_best_rot
-write(logfhandle,'(a,es16.8)') 'ANGULAR_COEFF_MAX_GRID_ERROR: ', max_angular_error
-write(logfhandle,'(a,es16.8)') 'ANGULAR_COEFF_MAX_PERIOD_ERROR: ', max_period_error
-write(logfhandle,'(a,es16.8)') 'ANGULAR_COEFF_DTHETA_ERROR: ', fd_dtheta_error
-write(logfhandle,'(a,es16.8)') 'ANGULAR_COEFF_DDTHETA_ERROR: ', fd_ddtheta_error
-write(logfhandle,'(a,es16.8)') 'ANGULAR_COEFF_TOLERANCE: ', angle_tol
-
 if( .not. ieee_is_finite(max_legacy_error) .or. &
     .not. ieee_is_finite(max_route_error) .or. &
-    .not. ieee_is_finite(max_angular_error) .or. &
-    .not. ieee_is_finite(max_period_error) .or. &
-    .not. ieee_is_finite(fd_dtheta_error) .or. &
-    .not. ieee_is_finite(fd_ddtheta_error) .or. &
-    max_legacy_error > tol .or. max_route_error > tol .or. &
-    max_angular_error > angle_tol .or. max_period_error > angle_tol .or. &
-    fd_dtheta_error > 10.d0*angle_tol .or. fd_ddtheta_error > 100.d0*angle_tol )then
+    max_legacy_error > tol .or. max_route_error > tol )then
     call b%kill_strategy3D_tbox
     call b%kill_general_tbox
-    deallocate(legacy_scores, raw_losses, scalar_losses, sigma2_noise, angular_coeffs)
-    error stop 'Euclidean or angular coefficient route identity failed'
+    deallocate(legacy_scores, raw_losses, scalar_losses, sigma2_noise)
+    error stop 'Euclidean route identity failed'
 endif
 
 call b%kill_strategy3D_tbox
 call b%kill_general_tbox
-deallocate(legacy_scores, raw_losses, scalar_losses, sigma2_noise, angular_coeffs)
+deallocate(legacy_scores, raw_losses, scalar_losses, sigma2_noise)
 write(logfhandle,'(a)') 'SIMPLE_TEST_EUCLID_ROUTE_IDENTITY NORMAL STOP'
 end program simple_test_euclid_route_identity

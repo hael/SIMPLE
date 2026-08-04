@@ -27,7 +27,7 @@ call args%parse_oldschool
 if( command_argument_count() < 5 )then
     write(logfhandle,'(a)') &
         'simple_test_euclid_2d_metadata projfile=xx mskdiam=xx lp=xx smpd=xx box_crop=xx '//&
-        &'inpl_cont=no|callback|joint'
+        &'inpl_cont=yes|no'
     stop 2
 endif
 call args%checkvar('projfile', 1)
@@ -46,12 +46,12 @@ inpl_mode = string('no')
 if( args%defined('inpl_cont') )then
     inpl_mode = args%get_carg('inpl_cont')
     select case(trim(inpl_mode%to_char()))
-    case('callback','joint')
+    case('yes')
         expect_continuous = .true.
     case('no')
         expect_continuous = .false.
     case default
-        THROW_HARD('inpl_cont must be no, callback, or joint')
+        THROW_HARD('inpl_cont must be yes or no')
     end select
 endif
 

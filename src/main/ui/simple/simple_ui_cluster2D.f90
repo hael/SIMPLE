@@ -59,11 +59,11 @@ subroutine new_abinitio2D( prgtab )
         &'Refinement mode(prob_snhc|prob|snhc_smpl){prob_snhc}','', .false., 'prob_snhc', group="search", &
         &choices=ui_choices([character(len=9) :: 'prob_snhc', 'prob', 'snhc_smpl']), &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio2D%add_input(UI_SRCH, 'inpl_cont', 'multi', &
-        &'Continuous in-plane formulation', &
-        &'Continuous Euclidean in-plane route(no|callback|joint){no}', '', &
+        call abinitio2D%add_input(UI_SRCH, 'inpl_cont', 'binary', &
+        &'Continuous in-plane refinement', &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
         &.false., 'no', group="search", &
-        &choices=ui_choices([character(len=8) :: 'no', 'callback', 'joint']), &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call abinitio2D%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&
         &'Sigma estimation method(group|global){global}','', .false., 'global', group="search", &

@@ -203,7 +203,6 @@ contains
         call reg%add_char('sgd_stage4_mode', self%sgd_stage4_mode)
         call reg%add_char('single_pass', self%single_pass)
         call reg%add_char('select_flag', self%select_flag)
-        call reg%add_char('shbarrier', self%shbarrier)
         call reg%add_char('skip_rejection', self%skip_rejection)
         call reg%add_char('sigma_est', self%sigma_est)
         call reg%add_char('snapshot', self%snapshot)

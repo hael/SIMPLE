@@ -727,12 +727,12 @@ contains
                 THROW_HARD('unsupported objective function')
         end select
         select case(trim(self%inpl_cont))
-            case('no','callback','joint')
+            case('yes','no')
             case DEFAULT
-                THROW_HARD('inpl_cont must be no, callback, or joint')
+                THROW_HARD('inpl_cont must be yes or no')
         end select
         if( trim(self%inpl_cont) /= 'no' .and. self%cc_objfun /= OBJFUN_EUCLID )then
-            THROW_HARD('inpl_cont=callback or joint is supported only with objfun=euclid')
+            THROW_HARD('inpl_cont=yes is supported only with objfun=euclid')
         endif
         select case(trim(self%sgd))
             case('yes')
