@@ -731,6 +731,9 @@ contains
             case DEFAULT
                 THROW_HARD('inpl_refine must be yes or no')
         end select
+        if( trim(self%inpl_refine) == 'yes' .and. self%cc_objfun /= OBJFUN_EUCLID )then
+            THROW_HARD('inpl_refine=yes is supported only with objfun=euclid')
+        endif
         select case(trim(self%sgd))
             case('yes')
                 self%l_sgd = .true.
