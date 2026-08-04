@@ -148,11 +148,11 @@ subroutine new_abinitio2D( prgtab )
             &Omit or set to 0 to target about 100 classes per chunk.', &
             &'# of chunks (0=auto)', .false., 0., &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio2D_chunks%add_input(UI_PARM, 'nchunks_conc', 'num', 'Number of chunks run concurrently', &
+        call abinitio2D_chunks%add_input(UI_PARM, 'nchunks_in_parallel', 'num', 'Number of chunks run in parallel', &
             &'Maximum number of chunks executed at the same time. Each chunk uses nparts parts, so the &
-            &peak load is about nchunks_conc*nparts processes. Set to 1 to run one chunk at a time. &
-            &Omit or set to 0 to run all chunks concurrently.', &
-            &'# of concurrent chunks (0=all)', .false., 0., &
+            &peak load is about nchunks_in_parallel*nparts processes. Defaults to 1 (one chunk at a time). &
+            &Set to 0 to run all chunks in parallel.', &
+            &'# of parallel chunks (0=all){1}', .false., 1., &
         &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
