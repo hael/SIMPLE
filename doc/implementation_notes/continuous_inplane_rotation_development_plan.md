@@ -64,6 +64,8 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Selected orientations receive the continuous `e3` value while legacy integer `inpl` indices remain populated for search tables and compatibility.
   - A real Oracle Linux classical Euclidean `abinitio2D` workflow completed five iterations with `objfun=euclid` and `sgd=no`, including repeated `SIMPLE_CLUSTER2D NORMAL STOP` and final `SIMPLE_ABINITIO2D NORMAL STOP` markers.
   - Focused route-identity, Stage 1, and SGD regression tests also passed on Oracle Linux; conventional CTest is not used as the SIMPLE acceptance gate because the project test workflow is direct `simple_test_*` execution.
+  - Full six-stage, 30-iteration default-off Euclidean `abinitio2D` completed normally; corrected final metadata validation passed with 200 active particles, zero off-grid/invalid/non-finite values, 176 rotations, and 3 class-average records using `box_crop=88`.
+  - The opt-in Euclidean workflow and final metadata validation also completed normally with valid 176-grid metadata. Real-data opt-in validation records off-grid count but does not require an off-grid winner; synthetic Stage 1/Phase 3 validation proves continuous-angle movement.
 - [ ] Phase 4B: classical Euclidean 3D metadata and workflow wiring.
   - The 3D gateway implementation is present but intentionally not accepted or committed until the 2D pathway is fully reviewed.
   - 3D workflow validation and any required 3D corrections remain pending.
@@ -71,13 +73,15 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Added `simple_test_euclid_2d_metadata` to verify persisted continuous `e3`, compatible integer `inpl`, and class-average metadata after a real `abinitio2D` run.
   - The check reads the final project metadata; it does not depend on temporary `algndoc_*.simple` files, which the normal workflow removes during cleanup.
   - When the workflow is run with `mkdir=yes`, launch from the repository `build/` directory and validate the copied project inside a build-local execution directory such as `build/1_abinitio2D`; do not place generated artifacts at the repository root.
-  - Before the opt-in switch was added, Oracle compilation and execution passed: `ACTIVE=200`, `OFFGRID=199`, `INVALID=0`, `NONFINITE=0`, `ROTATIONS=288`, and `CLASS_AVERAGES=3`. The default-off and explicit opt-in contracts now require rerunning this regression.
+  - The full six-stage, 30-iteration Oracle Linux default-off Euclidean workflow completed with `SIMPLE_ABINITIO2D NORMAL STOP`.
+  - Corrected final-project metadata validation passed with `ACTIVE=200`, `OFFGRID=0`, `INVALID=0`, `NONFINITE=0`, `ROTATIONS=176`, and `CLASS_AVERAGES=3`, using the workflow's effective `box_crop=88`.
+  - The validator must use the effective workflow crop; constructing a default 288-rotation grid produces a false failure against a 176-rotation production search.
   - Pending Oracle gates: classical checkpoint stop/resume, public `abinitio2D` execution with the non-Euclidean `cc` objective (the internal cluster2D path is not a public `simple_exec prg`), and a fresh real-data Euclidean run with final-project metadata inspection.
   - Checkpoint creation and resume now pass in `build/1_abinitio2D`: stage 1 reached `last_iter=5`, persisted the required reference stacks, stage 2 resumed from iteration 5, completed through iteration 10, generated final class averages/rankings, and ended with `SIMPLE_ABINITIO2D NORMAL STOP`. The resume must run from the build-local execution directory because `mkdir=no` preserves relative reference paths.
   - Restart metadata validation also passed: `ACTIVE=200`, `OFFGRID=200`, `INVALID=0`, `NONFINITE=0`, `ROTATIONS=288`, and `CLASS_AVERAGES=3`.
   - The public `abinitio2D` `objfun=cc` alternate path completed clustering and class-average generation but exposed an existing finalization bug: sigma2 metadata was registered unconditionally although `cc` correctly produces no `sigma2_it_*.star` file. Finalization now skips this optional project entry when the file is absent; Oracle rebuild and rerun remain pending.
-  - The metadata test now checks both contracts: `inpl_refine=yes` must produce at least one off-grid continuous `e3`, while `inpl_refine=no` must produce none. The `cc` workflow is tested with the key enabled to confirm the objective gate still keeps continuous refinement off.
-  - The first post-push default-off Oracle metadata run exposed stale/off-grid `e3` propagation despite the integer `inpl` result. The orientation writer now reconstructs the grid `e3` from `inpl` unless the explicit continuous gateway marks a valid angle; Oracle rebuild and rerun remain required.
+  - The metadata test enforces no off-grid `e3` for `inpl_refine=no`, while `inpl_refine=yes` accepts a valid real-data optimum on or between grid points and reports the off-grid count. The synthetic Stage 1/Phase 3 test remains the continuous-angle movement check.
+  - The post-push default-off Oracle metadata regression initially exposed stale/off-grid `e3` propagation; the orientation writer now reconstructs grid `e3` from `inpl` unless the explicit continuous gateway marks a valid angle. The full six-stage Oracle rerun passed with the corrected 176-rotation validator.
   - After these gates, restore and validate the deferred 3D extension.
 
 ## Implementation Changes
