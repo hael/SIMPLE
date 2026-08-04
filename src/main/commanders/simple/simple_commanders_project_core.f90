@@ -796,6 +796,9 @@ contains
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('prune')  ) call cline%set('prune',  'no')
         if( .not. cline%defined('append') ) call cline%set('append', 'no')
+        if( cline%defined('state') .and. cline%defined('states') )then
+            THROW_HARD('exec_selection: only one of STATE/STATES can be provided')
+        endif
         call params%new(cline, silent=.true.)
         ! http communicator init
         call http_communicator%create(params%niceprocid, params%niceserver%to_char())
@@ -837,6 +840,13 @@ contains
             do i=1,noris_in_state
                 states(ptcls_in_state(i)) = 1
             enddo
+        else if( cline%defined('states') )then
+            select case(iseg)
+                case(PTCL2D_SEG,PTCL3D_SEG)
+                    call perform_states_selection
+                case DEFAULT
+                    THROW_HARD('exec_selection: states selection only implemented for PTCL2D/PTCL3D segments')
+            end select
         else if( cline%defined('ctfresthreshold') .or. cline%defined('icefracthreshold') )then
             l_ctfres  = cline%defined('ctfresthreshold')
             l_icefrac = cline%defined('icefracthreshold')
@@ -995,6 +1005,61 @@ contains
         endif
         call http_communicator%term()
         call simple_end('**** SELECTION NORMAL STOP ****')
+      contains
+
+        subroutine perform_states_selection
+            use simple_srch_sort_loc, only: unique
+            integer, allocatable :: states_to_select(:), unique_states(:)
+            integer :: iptcl, ps, s, n2select, maxs, mins, min_input_states
+            if( len_trim(params%states) <= 1 ) THROW_HARD('Only for multi-state selection/merging')
+            states_to_select = list_of_ints2arr(params%states)
+            call unique(states_to_select, unique_states)
+            n2select = size(unique_states)
+            if( n2select == 0 ) THROW_HARD('No valid states specified for selection')
+            ! validate input
+            do s = 1, n2select
+                if( unique_states(s) < 1 ) THROW_HARD('Invalid state selection, must be >= 1')
+            enddo
+            states = pos%get_all_asint('state')
+            mins   = minval(states)
+            maxs   = maxval(states)
+            if( maxs < 1 ) THROW_HARD('No states found in the segment')
+            if( mins < 0 ) THROW_HARD('Negative states found in the segment')
+            if( maxval(unique_states) > maxs ) THROW_HARD('State selection exceeds maximum state in the segment')
+            min_input_states = minval(unique_states)
+            if( min_input_states < mins ) THROW_HARD('State selection includes invalid state below segment minimum')
+            ! merge state particles
+            !$omp parallel do private(iptcl,ps,s) default(shared) proc_bind(close) schedule(guided)
+            do iptcl = 1, noris
+                ps = states(iptcl)
+                states(iptcl) = 0
+                do s = 1, n2select
+                    if( ps == unique_states(s) ) then
+                        states(iptcl) = 1
+                        exit
+                    endif
+                enddo
+            enddo
+            !$omp end parallel do
+            ! remove state-associated 3D artifacts
+            if( spproj%os_out%get_noris() > 0 )then
+                if( n2select == 1 )then
+                    ! preserve this state only
+                    do s = mins,maxs
+                        if( s == unique_states(1) ) cycle
+                        call spproj%remove_state_artifacts_from_osout(s)
+                    enddo
+                    call spproj%reattribute_state_artifacts_in_osout(unique_states(1), 1)
+                else
+                    ! wipe all states
+                    do s = mins,maxs
+                        call spproj%remove_state_artifacts_from_osout(s)
+                    enddo
+                endif
+            endif
+            deallocate(states_to_select, unique_states)
+        end subroutine perform_states_selection
+
     end subroutine exec_selection
 
 end module simple_commanders_project_core

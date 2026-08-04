@@ -212,6 +212,7 @@ contains
         call reg%add_char('speckind', self%speckind)
         call reg%add_char('split_mode', self%split_mode)
         call reg%add_char('stats', self%stats)
+        call reg%add_char('states', self%states)
         call reg%add_char('sticky_class_sampling', self%sticky_class_sampling)
         call reg%add_char('stream', self%stream)
         call reg%add_char('stream2d', self%stream2d)

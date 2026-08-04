@@ -580,6 +580,7 @@ contains
         type(lp_crop_inf), intent(inout) :: lpinfo_local(:)
         if( size(lpinfo_local) < 1 ) return
         lpinfo_local(1)%lp = calc_lowpass_lim(FIND_STAGE1, lpinfo_local(1)%box_crop, lpinfo_local(1)%smpd_crop)
+        write(logfhandle,*) 'lp stage 1 reset to:', lpinfo_local(1)%lp
     end subroutine force_stage1_lowpass_limit
 
     real function stage_matching_lp( cfg, params, istage, l_cmdline_lp_override ) result( lp )

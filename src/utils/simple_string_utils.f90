@@ -311,7 +311,8 @@ contains
         cnt = 0
         do
             index  = scan(str, ',')
-            if( index == 0 ) exit
+            if( index == 0 )             exit
+            if( index == len_trim(str) ) exit
             cnt    = cnt + 1
             before = adjustl(trim(str(1:index-1)))
             str    = adjustl(str(index+1:))

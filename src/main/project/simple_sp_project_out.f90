@@ -77,11 +77,10 @@ contains
         class(sp_project), intent(inout) :: self
         class(string),     intent(in)    :: fsc
         integer,           intent(in)    :: state, box
-        type(string) :: imgkind, abspath
-        integer      :: i, ind, n_os_out
+        type(string) :: abspath
+        integer      :: ind, n_os_out
         ! full path and existence check
         abspath = simple_abspath(fsc)
-        ! add os_out entry
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 )then
@@ -89,18 +88,7 @@ contains
             ind      = 1
             call self%os_out%new(n_os_out, is_ptcl=.false.)
         else
-            ind = 0
-            do i=1,n_os_out
-                if( self%os_out%isthere(i,'imgkind') )then
-                    call self%os_out%getter(i,'imgkind',imgkind)
-                    if(imgkind.eq.'fsc')then
-                        if( self%os_out%get_state(i) == state )then
-                            ind = i
-                            exit
-                        endif
-                    endif
-                endif
-            end do
+            ind = self%get_os_out_entry_index('fsc', state)
             if( ind == 0 )then
                 n_os_out = n_os_out + 1
                 call self%os_out%reallocate(n_os_out)
@@ -158,16 +146,7 @@ contains
             select case(trim(which_imgkind))
                 case('vol_msk')
                     ! one volume type for all states
-                    ind = 0
-                    do i=1,n_os_out
-                        if( self%os_out%isthere(i,'imgkind') )then
-                            call self%os_out%getter(i,'imgkind',imgkind)
-                            if(imgkind.eq.which_imgkind)then
-                                ind = i
-                                exit
-                            endif
-                        endif
-                    end do
+                    ind = self%get_os_out_entry_index(which_imgkind)
                     if( ind == 0 )then
                         n_os_out = n_os_out + 1
                         call self%os_out%reallocate(n_os_out)
@@ -175,18 +154,7 @@ contains
                     endif
                 case DEFAULT
                     ! one volume per state
-                    ind = 0
-                    do i=1,n_os_out
-                        if( self%os_out%isthere(i,'imgkind') )then
-                            call self%os_out%getter(i,'imgkind',imgkind)
-                            if(imgkind.eq.which_imgkind)then
-                                if( self%os_out%get_state(i) == state )then
-                                    ind = i
-                                    exit
-                                endif
-                            endif
-                        endif
-                    end do
+                    ind = self%get_os_out_entry_index(which_imgkind, state)
                     if( ind == 0 )then
                         n_os_out = n_os_out + 1
                         call self%os_out%reallocate(n_os_out)
@@ -216,16 +184,7 @@ contains
             ind      = 1
             call self%os_out%new(n_os_out, is_ptcl=.false.)
         else
-            ind = 0
-            do i=1,n_os_out
-                if( self%os_out%isthere(i,'imgkind') )then
-                    imgkind = self%os_out%get_str(i,'imgkind')
-                    if(imgkind.eq.trim(which_imgkind))then
-                        ind = i
-                        exit
-                    endif
-                endif
-            end do
+            ind = self%get_os_out_entry_index(which_imgkind)
             if( ind == 0 )then
                 n_os_out = n_os_out + 1
                 call self%os_out%reallocate(n_os_out)
@@ -234,31 +193,72 @@ contains
         endif
     end subroutine add_entry2os_out
 
+    module integer function get_os_out_entry_index( self, which_imgkind, state )
+        class(sp_project), intent(in) :: self
+        character(len=*),  intent(in) :: which_imgkind
+        integer, optional, intent(in) :: state
+        type(string) :: imgkind
+        integer      :: i, n_os_out
+        get_os_out_entry_index = 0
+        n_os_out = self%os_out%get_noris()
+        if( present(state) )then
+            do i = 1,n_os_out
+                if( self%os_out%isthere(i,'imgkind') )then
+                    imgkind = self%os_out%get_str(i,'imgkind')
+                    if(imgkind.eq.trim(which_imgkind))then
+                        if( self%os_out%isthere(i,'state') )then
+                            if( self%os_out%get_state(i) == state )then
+                                get_os_out_entry_index = i
+                                exit
+                            endif
+                        endif
+                    endif
+                endif
+            enddo
+        else
+            do i = 1,n_os_out
+                if( self%os_out%isthere(i,'imgkind') )then
+                    imgkind = self%os_out%get_str(i,'imgkind')
+                    if(imgkind.eq.trim(which_imgkind))then
+                        get_os_out_entry_index = i
+                        exit
+                    endif
+                endif
+            end do
+        endif
+        call imgkind%kill
+    end function get_os_out_entry_index
+
     module subroutine remove_entry_from_osout( self, which_imgkind, state )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: which_imgkind
         integer,           intent(in)    :: state
-        type(string) :: imgkind
-        integer :: n_os_out, i, ind
-        n_os_out = self%os_out%get_noris()
-        if( n_os_out == 0 ) return
-        ind = 0
-        do i = 1,n_os_out
-            if( self%os_out%isthere(i,'imgkind') )then
-                imgkind = self%os_out%get_str(i,'imgkind')
-                if(imgkind.eq.trim(which_imgkind))then
-                    if( self%os_out%isthere(i, 'state') )then
-                        if( self%os_out%get_state(i) == state )then
-                            ind = i
-                            exit
-                        endif
-                    endif
-                endif
-            endif
-        enddo
+        integer :: ind
+        ind = self%get_os_out_entry_index(which_imgkind, state)
         if( ind == 0 ) return ! entry not found
         call self%os_out%delete(ind)
     end subroutine remove_entry_from_osout
+
+    ! removes only the artifacts that are state-associated: vol, vol_cavg & fsc
+    module subroutine remove_state_artifacts_from_osout( self, state )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: state
+        call self%remove_entry_from_osout('vol',      state)
+        call self%remove_entry_from_osout('vol_cavg', state)
+        call self%remove_entry_from_osout('fsc',      state)
+    end subroutine remove_state_artifacts_from_osout
+
+    module subroutine reattribute_state_artifacts_in_osout( self, prev_state, new_state )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: prev_state, new_state
+        integer :: i
+        i = self%get_os_out_entry_index('vol', prev_state)
+        if( i > 0 ) call self%os_out%set(i, 'state', new_state)
+        i = self%get_os_out_entry_index('vol_cavg', prev_state)
+        if( i > 0 ) call self%os_out%set(i, 'state', new_state)
+        i = self%get_os_out_entry_index('fsc', prev_state)
+        if( i > 0 ) call self%os_out%set(i, 'state', new_state)
+    end subroutine reattribute_state_artifacts_in_osout
 
     ! Getters
 
@@ -271,20 +271,7 @@ contains
         isthere_in_osout = .false.
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 ) return
-        ind = 0
-        do i = 1,n_os_out
-            if( self%os_out%isthere(i,'imgkind') )then
-                imgkind = self%os_out%get_str(i,'imgkind')
-                if(imgkind.eq.trim(which_imgkind))then
-                    if( self%os_out%isthere(i, 'state') )then
-                        if( self%os_out%get_state(i) == state )then
-                            ind = i
-                            exit
-                        endif
-                    endif
-                endif
-            endif
-        enddo
+        ind = self%get_os_out_entry_index(which_imgkind, state)
         if( ind > 0 ) isthere_in_osout = .true.
     end function isthere_in_osout
 

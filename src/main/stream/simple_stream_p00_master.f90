@@ -521,12 +521,30 @@ contains
                 if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) call fork_pool2D%terminate()
                 l_last_loop = .true.
                 ! if processes are still running set last_loop back to false
-                if( fork_preprocess%status()        == FORK_STATUS_RUNNING ) l_last_loop = .false.
-                if( fork_assign_optics%status()     == FORK_STATUS_RUNNING ) l_last_loop = .false.
-                if( fork_initial_analysis%status()  == FORK_STATUS_RUNNING ) l_last_loop = .false.
-                if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) l_last_loop = .false.
-                if( fork_particle_sieving%status()  == FORK_STATUS_RUNNING ) l_last_loop = .false.
-                if( fork_pool2D%status()            == FORK_STATUS_RUNNING ) l_last_loop = .false.
+                if( fork_preprocess%status() == FORK_STATUS_RUNNING ) then
+                    write(logfhandle, '(A)') "PREPROCESS STILL RUNNING. WAITING FOR TERMINATION"
+                    l_last_loop = .false.
+                endif
+                if( fork_assign_optics%status() == FORK_STATUS_RUNNING ) then
+                    write(logfhandle, '(A)') "ASSIGN OPTICS STILL RUNNING. WAITING FOR TERMINATION"
+                    l_last_loop = .false.
+                endif
+                if( fork_initial_analysis%status() == FORK_STATUS_RUNNING ) then
+                    write(logfhandle, '(A)') "INITIAL ANALYSIS STILL RUNNING. WAITING FOR TERMINATION"
+                    l_last_loop = .false.
+                endif
+                if( fork_reference_picking%status() == FORK_STATUS_RUNNING ) then
+                    write(logfhandle, '(A)') "REFERENCE PICKING STILL RUNNING. WAITING FOR TERMINATION"
+                    l_last_loop = .false.
+                endif
+                if( fork_particle_sieving%status() == FORK_STATUS_RUNNING ) then
+                    write(logfhandle, '(A)') "PARTICLE SIEVING STILL RUNNING. WAITING FOR TERMINATION"
+                    l_last_loop = .false.
+                endif
+                if( fork_pool2D%status() == FORK_STATUS_RUNNING ) then
+                    write(logfhandle, '(A)') "POOL2D STILL RUNNING. WAITING FOR TERMINATION"
+                    l_last_loop = .false.
+                endif
                 ! set stoptime in assembler
                 call assembler%set_stoptime()
             else
