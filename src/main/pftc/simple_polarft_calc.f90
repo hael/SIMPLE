@@ -124,6 +124,7 @@ type :: polarft_calc
     ! ===== GETTERS + POINTER ACCESSORS: simple_polarft_access.f90
     procedure          :: get_nrots
     procedure          :: is_euclid_objfun
+    procedure          :: is_raw_euclid_objfun
     procedure          :: get_pdim_interp
     procedure          :: get_pdim_srch
     procedure          :: get_kfromto
@@ -359,6 +360,10 @@ interface
     module pure logical function is_euclid_objfun(self)
         class(polarft_calc), intent(in) :: self
     end function is_euclid_objfun
+
+    module pure logical function is_raw_euclid_objfun(self)
+        class(polarft_calc), intent(in) :: self
+    end function is_raw_euclid_objfun
 
     module pure function get_pdim_srch(self) result(pdim)
         class(polarft_calc), intent(in) :: self

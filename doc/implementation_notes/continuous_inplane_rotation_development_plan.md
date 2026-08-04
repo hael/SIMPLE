@@ -4,14 +4,21 @@
 
 Implement continuous in-plane angle refinement for `objfun=euclid` in gated stages:
 
-1. Establish a parabolic sub-grid baseline.
+1. Establish a parabolic continuous-angle baseline.
 2. Add exact continuous angular interpolation from the Euclidean residual’s angular Fourier coefficients.
-3. Validate the method and produce the required four-way recovery table.
+3. Validate the method and produce a recovery table comparing the discrete,
+   continuous callback, and continuous joint formulations.
 4. Only if justified, extend L-BFGS-B to jointly refine `(sx, sy, theta)`.
 5. Propagate the continuous angle through alignment metadata and class-average assembly.
 
-The feature is opt-in: `inpl_refine=no` is the default, and continuous refinement is
-enabled only by `inpl_refine=yes` in the eligible classical Euclidean stages.
+The feature is opt-in through `inpl_cont=no|callback|joint`. `no` is the default
+and preserves the legacy discrete algorithm. `callback` alternates two-shift
+L-BFGS-B with continuous angle updates. `joint` optimizes `(sx,sy,theta)` in one
+three-variable L-BFGS-B solve and invokes no continuous angle callback. The two
+active routes are mutually exclusive and begin from the same selected discrete
+candidate and shift seed. Probabilistic sampling remains discrete; its selected
+candidate receives the requested continuous refinement before orientation
+persistence.
 
 The existing integer `irot` interface remains compatible throughout the transition.
 
@@ -23,7 +30,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Confirmed the legacy Euclidean score, raw FFT loss, and scalar gradient route are checked for every discrete rotation by the harness.
   - Compile/link verification passed with the Windows MSYS2 UCRT64 workflow.
   - Runtime validation passed on Oracle Linux 8.10 with 288 rotations: legacy-score error `2.97e-08`, scalar-gradient error `1.82e-07`, tolerance `8.50e-04`.
-- [x] Phase 1: parabolic sub-grid interpolation.
+- [x] Phase 1: parabolic continuous-angle interpolation.
   - Implemented a Euclidean-only three-point parabolic peak offset with periodic neighbors and a safeguarded fallback.
   - Preserved discrete selection for non-Euclidean objectives and retained the integer `cur_inpl_idx` compatibility output.
   - Added the continuous grid-index angle output used for shift-frame rotation and optional downstream propagation.
@@ -39,7 +46,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Oracle Linux 8.10 runtime passed with 288 rotations and `NORMAL STOP`.
   - Legacy-score error `2.96171144e-08`; scalar-gradient error `2.26158719e-07`; tolerance `1.08889884e-03`.
   - Angular grid error `1.33313786e-07`; periodic error `9.36750677e-17`; first-derivative error `1.32675199e-08`; second-derivative error `9.03031514e-09`; angular tolerance `1.08889884e-03`.
-- [x] Phase 2 extended validation: aliasing experiment, synthetic recovery, and the required four-way recovery table.
+- [x] Phase 2 extended validation: aliasing experiment and synthetic recovery comparison.
   - Added `simple_test_euclid_stage1_validation`, an Oracle-runnable production test for the two-band aliasing comparison and deterministic synthetic recovery report.
   - The report includes grid-only, parabolic, and continuous rows; the Phase 3 joint row is explicitly reported as `NOT_IMPLEMENTED` until Phase 3 exists.
   - The harness now evaluates zero-shift, nonzero-shift, and near-periodic-boundary truths, and repeats the low-pass/full-band comparison with a hard-edged near-Nyquist fixture.
@@ -50,7 +57,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - All three stages accepted the common fixed-angle shift refinement. Shift RMS over cases was `0.00704` pixels; the worst individual case was `0.01039` pixels.
   - Continuous angle RMS was `0.3041°`, improving over parabolic `0.3139°` and grid-only `0.4621°`; continuous was better than parabolic for each case.
   - The harder hard-mask near-Nyquist comparison produced low-pass RMS `1.8403e-04°` and full-band RMS `4.1441e-05°`, with no observed aliasing degradation.
-  - The Stage 1 report now includes the Phase 3 joint row and four-way recovery summary.
+  - The Stage 1 report now includes independent continuous callback and continuous joint rows.
 - [x] Phase 3: joint `(sx, sy, theta)` refinement.
   - Added a classical Euclidean continuous-angle gradient API using the angular Fourier residual coefficients and differentiated shift cross terms.
   - Added a three-variable L-BFGS-B joint refinement entry point with a periodic angle window and monotonic acceptance relative to the Stage 1 starting point.
@@ -59,8 +66,8 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - All three joint solutions were accepted; the gradient checks were finite with maximum errors of `9.20e-03`, `2.48e-03`, and `9.40e-03` for the three fixtures.
   - The joint angle RMS was `0.2756°`, improving over continuous-angle RMS `0.3041°`; Windows recompilation was intentionally not repeated on the laptop.
 - [x] Phase 4A: classical Euclidean 2D metadata and workflow wiring.
-  - Added a gated production gateway in the classical Euclidean 2D search strategy: the discrete candidate is refined by Stage 1, then passed to the Phase 3 three-variable L-BFGS-B path.
-  - The public `inpl_refine` key defaults to `no`; the gateway requires `inpl_refine=yes` and is disabled for streaming SGD, time-series shift-only search, probabilistic-table generation, and non-Euclidean objectives.
+  - Added a gated production gateway in the classical Euclidean 2D search strategy: the selected discrete candidate is passed to exactly one continuous implementation.
+  - The public `inpl_cont` key defaults to `no`; `callback` and `joint` are disabled for streaming SGD, time-series shift-only search, hybrid/denoised objectives, and non-Euclidean objectives.
   - Selected orientations receive the continuous `e3` value while legacy integer `inpl` indices remain populated for search tables and compatibility.
   - A real Oracle Linux classical Euclidean `abinitio2D` workflow completed five iterations with `objfun=euclid` and `sgd=no`, including repeated `SIMPLE_CLUSTER2D NORMAL STOP` and final `SIMPLE_ABINITIO2D NORMAL STOP` markers.
   - Focused route-identity, Stage 1, and SGD regression tests also passed on Oracle Linux; conventional CTest is not used as the SIMPLE acceptance gate because the project test workflow is direct `simple_test_*` execution.
@@ -80,8 +87,14 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Checkpoint creation and resume now pass in `build/1_abinitio2D`: stage 1 reached `last_iter=5`, persisted the required reference stacks, stage 2 resumed from iteration 5, completed through iteration 10, generated final class averages/rankings, and ended with `SIMPLE_ABINITIO2D NORMAL STOP`. The resume must run from the build-local execution directory because `mkdir=no` preserves relative reference paths.
   - Restart metadata validation also passed: `ACTIVE=200`, `OFFGRID=200`, `INVALID=0`, `NONFINITE=0`, `ROTATIONS=288`, and `CLASS_AVERAGES=3`.
   - The public `abinitio2D` `objfun=cc` alternate path completed clustering and class-average generation but exposed an existing finalization bug: sigma2 metadata was registered unconditionally although `cc` correctly produces no `sigma2_it_*.star` file. Finalization now skips this optional project entry when the file is absent; Oracle rebuild and rerun remain pending.
-  - The metadata test enforces no off-grid `e3` for `inpl_refine=no`, while `inpl_refine=yes` accepts a valid real-data optimum on or between grid points and reports the off-grid count. The synthetic Stage 1/Phase 3 test remains the continuous-angle movement check.
+  - The metadata test enforces grid-aligned `e3` for `inpl_cont=no` and requires at least one final continuous `e3` for both active routes. The synthetic validation reports continuous callback and continuous joint recovery separately.
   - The post-push default-off Oracle metadata regression initially exposed stale/off-grid `e3` propagation; the orientation writer now reconstructs grid `e3` from `inpl` unless the explicit continuous gateway marks a valid angle. The full six-stage Oracle rerun passed with the corrected 176-rotation validator.
+  - The opt-in gateway now continues through `prob`, `prob_snhc`, the final staged probabilistic invocation, and the terminal dense all-particle pass. Candidate sampling and selection stay discrete; only the selected candidate is polished before orientation assignment.
+  - The controller writes `inpl_cont=no|callback|joint` explicitly into every child stage, and the terminal pass reuses that command line. The route-identity regression checks all three effective modes and hybrid fallback.
+  - Continuous callback and continuous joint refinement share a raw-Euclidean capability predicate requiring `.not. l_objfun_den`. Constructors and runtime gateways reject hybrid use; production preserves the legacy discrete fallback.
+  - Both active routes bypass angle changes during previous-reference shift seeding, so callback and joint refinement start from the same selected discrete candidate and native shift seed.
+  - The callback route uses only alternating continuous angle/shift refinement. The joint route uses only joint `(sx,sy,theta)` L-BFGS-B. A pure continuous angle improvement is accepted by the callback route even when the shift is unchanged.
+  - The current joint gradient is a correctness-first prototype: one optimizer evaluation allocates four arrays and makes three coefficient-generator calls, including three unused inverse FFT loss vectors. A coefficient-only, thread-local implementation is the required performance follow-up.
   - After these gates, restore and validate the deferred 3D extension.
 
 ## Implementation Changes
@@ -150,7 +163,7 @@ After the Stage 0–1 validation table is complete:
   - add the rotation component to the existing residual loop.
 - Assert the square-box assumption required by the perpendicular phase derivative.
 - Preserve periodic angle evaluation even when the local optimizer window crosses the first or last grid index.
-- Enforce monotonicity: the Stage 2 accepted residual must not exceed the Stage 1 residual beyond optimizer tolerance.
+- Enforce monotonicity: an accepted joint residual must improve the selected discrete pose beyond optimizer tolerance.
 
 ### 5. Downstream wiring
 
@@ -197,7 +210,7 @@ Add focused tests under the existing production test framework, preferably along
    - Report RMS error separately for angle and both shifts.
 
 6. **Monotonicity**
-   - Assert Stage 2 residual ≤ Stage 1 residual for every particle within optimizer tolerance.
+   - Assert that accepted callback and joint results improve their common selected discrete pose within optimizer tolerance.
 
 7. **Zero-width compatibility**
    - Clamp the Stage 2 angular window to zero.
@@ -206,7 +219,7 @@ Add focused tests under the existing production test framework, preferably along
 8. **Workflow regression**
    - Run the existing polar FFT, class-search, 2D search, and 3D search tests affected by the API.
    - Confirm non-Euclidean objectives and direct-only paths remain unchanged.
-   - Run public `abinitio2D` with `objfun=euclid inpl_refine=no`, with `objfun=euclid inpl_refine=yes`, and with `objfun=cc inpl_refine=yes`; only the explicit Euclidean opt-in run may persist off-grid continuous `e3` values.
+   - Run public `abinitio2D` with `objfun=euclid` for each `inpl_cont` mode and with `objfun=cc inpl_cont=joint`; only eligible active Euclidean routes may persist continuous `e3` values.
 
 ## Acceptance and Rollout
 
@@ -220,9 +233,9 @@ Add focused tests under the existing production test framework, preferably along
 ## Assumptions
 
 - The full staged roadmap is desired, with Stage 0–1 as the gated first deliverable.
-- Continuous refinement is enabled only for `objfun=euclid` and the non-direct refinement path.
-- Continuous refinement is opt-in through `inpl_refine=yes`; the default is `inpl_refine=no`.
-- The runtime gateway additionally requires a classical, non-SGD, non-time-series, non-probabilistic gated stage.
+- Continuous refinement is enabled only for the raw Euclidean, non-streaming, non-time-series path.
+- Continuous refinement is opt-in through `inpl_cont=callback|joint`; the default is `inpl_cont=no`.
+- The runtime gateway requires raw Euclidean (`objfun=euclid` and `.not. l_objfun_den`), non-SGD, non-time-series search; the same raw-objective requirement is rechecked by the Stage-1 callback and joint-gradient gateways. Probabilistic selection is followed by a gated polish of its selected candidate.
 - The current dirty worktree changes belong to the user and must not be overwritten.
 - Integer `irot` remains the compatibility index; continuous angle is an additive output and metadata enhancement.
 - The original plan’s sign convention and local ±2-grid-step Stage 2 window are authoritative.

@@ -31,7 +31,8 @@ type :: pftc_shsrch_grad
     logical                   :: cur_inpl_loss_valid = .false. !< continuous residual is valid
     integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
     logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
-    logical                   :: joint_angle  = .false. !< classical Euclidean joint (sx,sy,theta) mode
+    logical                   :: continuous_callback = .false. !< callback refines the in-plane angle continuously
+    logical                   :: joint_inplane = .false. !< optimize (sx,sy,theta) together
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
     logical                   :: direct_only  = .false. !< skip allocating an L-BFGS-B object for direct-gradient use
     logical                   :: raw_roundtrip_check = .false. !< validate vector/scalar raw loss when diagnostics are enabled
@@ -41,21 +42,23 @@ type :: pftc_shsrch_grad
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
 contains
-    procedure          :: new         => grad_shsrch_new
-    procedure          :: set_indices => grad_shsrch_set_indices
-    procedure          :: minimize    => grad_shsrch_minimize
+    procedure          :: new             => grad_shsrch_new
+    procedure          :: set_indices     => grad_shsrch_set_indices
+    procedure          :: minimize        => grad_shsrch_minimize
     procedure          :: minimize_direct => grad_shsrch_minimize_direct
-    procedure          :: minimize_joint => grad_shsrch_minimize_joint
-    procedure          :: kill        => grad_shsrch_kill
+    procedure          :: minimize_joint  => grad_shsrch_minimize_joint
+    procedure          :: kill            => grad_shsrch_kill
     procedure          :: does_opt_angle
+    procedure          :: uses_continuous_callback
+    procedure          :: uses_joint_inplane
     procedure          :: set_limits
     procedure          :: coarse_search
     procedure          :: coarse_search_opt_angle
     procedure          :: is_direct_shift_only
     procedure          :: set_diagnostic_mode
     procedure          :: diagnostic_failed => grad_shsrch_diagnostic_failed
-    procedure          :: reset_profile => grad_shsrch_reset_profile
-    procedure          :: get_profile   => grad_shsrch_get_profile
+    procedure          :: reset_profile     => grad_shsrch_reset_profile
+    procedure          :: get_profile       => grad_shsrch_get_profile
 end type pftc_shsrch_grad
 
 contains
@@ -91,7 +94,8 @@ contains
         grad_shsrch_diagnostic_failed = self%raw_roundtrip_failed
     end function grad_shsrch_diagnostic_failed
 
-    subroutine grad_shsrch_new( self, build, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init, direct_only, joint_angle )
+    subroutine grad_shsrch_new( self, build, lims, lims_init, shbarrier, maxits, opt_angle, coarse_init, direct_only, &
+        &joint_inplane, continuous_callback )
         use simple_opt_factory, only: opt_factory
         class(pftc_shsrch_grad),     intent(inout) :: self           !< instance
         class(builder),      target, intent(in)    :: build          !< builder object for pftc access
@@ -102,7 +106,8 @@ contains
         logical,           optional, intent(in)    :: opt_angle      !< optimise in-plane angle with callback flag
         logical,           optional, intent(in)    :: coarse_init    !< coarse inital search
         logical,           optional, intent(in)    :: direct_only    !< configure for the bounded direct-gradient path only
-        logical,           optional, intent(in)    :: joint_angle    !< configure the 3D Euclidean joint path
+        logical,           optional, intent(in)    :: joint_inplane !< configure the 3D continuous joint path
+        logical,           optional, intent(in)    :: continuous_callback !< enable the continuous angle callback
         type(opt_factory) :: opt_fact
         call self%kill
         self%cur_inpl_ang        = 0.
@@ -123,15 +128,25 @@ contains
         if( present(coarse_init) ) self%coarse_init = coarse_init
         self%direct_only = .false.
         if( present(direct_only) ) self%direct_only = direct_only
-        self%joint_angle = .false.
-        if( present(joint_angle) ) self%joint_angle = joint_angle
-        if( self%joint_angle )then
+        self%continuous_callback = .false.
+        if( present(continuous_callback) ) self%continuous_callback = continuous_callback
+        self%joint_inplane = .false.
+        if( present(joint_inplane) ) self%joint_inplane = joint_inplane
+        if( self%joint_inplane )then
             if( self%direct_only ) THROW_HARD('joint angle path cannot be direct-only')
-            if( .not. self%b_ptr%pftc%is_euclid_objfun() ) THROW_HARD('joint angle path requires Euclidean objective')
+            if( .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
+                THROW_HARD('joint angle path requires raw Euclidean objective; hybrid derivative is unavailable')
+            endif
             self%opt_angle = .false.
         endif
+        if( self%continuous_callback .and. .not. self%opt_angle )then
+            THROW_HARD('continuous angle callback requires opt_angle=yes')
+        endif
+        if( self%continuous_callback .and. .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
+            THROW_HARD('continuous angle callback requires raw Euclidean objective; hybrid derivative is unavailable')
+        endif
         ! make optimizer spec
-        call self%ospec%specify('lbfgsb', merge(3,2,self%joint_angle), factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
+        call self%ospec%specify('lbfgsb', merge(3,2,self%joint_inplane), factr=1.0d+7, pgtol=1.0d-5, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
         if( .not. self%direct_only ) call opt_fact%new(self%ospec, self%opt_obj)
@@ -148,6 +163,16 @@ contains
         class(pftc_shsrch_grad), intent(in) :: self
         does_opt_angle = self%opt_angle
     end function does_opt_angle
+
+    pure logical function uses_continuous_callback( self )
+        class(pftc_shsrch_grad), intent(in) :: self
+        uses_continuous_callback = self%continuous_callback
+    end function uses_continuous_callback
+
+    pure logical function uses_joint_inplane( self )
+        class(pftc_shsrch_grad), intent(in) :: self
+        uses_joint_inplane = self%joint_inplane
+    end function uses_joint_inplane
 
     pure logical function is_direct_shift_only( self )
         class(pftc_shsrch_grad), intent(in) :: self
@@ -171,7 +196,7 @@ contains
         select type(self)
             class is (pftc_shsrch_grad)
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
-                if( self%joint_angle )then
+                if( self%joint_inplane )then
                     block
                         real(dp) :: joint_grad(3)
                         call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
@@ -195,7 +220,7 @@ contains
         select type(self)
             class is (pftc_shsrch_grad)
                 self%profile_gradient_evals = self%profile_gradient_evals + 1_int64
-                if( self%joint_angle )then
+                if( self%joint_inplane )then
                     call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
                         &vec(1:2), vec(3), joint_loss, joint_grad)
                     grad = joint_grad
@@ -221,7 +246,7 @@ contains
             class is (pftc_shsrch_grad)
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
                 self%profile_gradient_evals  = self%profile_gradient_evals  + 1_int64
-                if( self%joint_angle )then
+                if( self%joint_inplane )then
                     call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
                         &vec(1:2), vec(3), f, joint_grad)
                     grad = joint_grad
@@ -235,22 +260,32 @@ contains
         end select
     end subroutine grad_shsrch_fdfcostfun
 
-    subroutine grad_shsrch_optimize_angle( self )
+    subroutine grad_shsrch_optimize_angle( self, seed_loss )
         class(pftc_shsrch_grad), intent(inout) :: self
+        real(dp),       optional, intent(out)   :: seed_loss
         real :: objective(self%nrots)
         complex(sp), allocatable :: coeffs(:)
         real(dp) :: theta, trial_theta, residual, dtheta, ddtheta
         real(dp) :: trial_residual, trial_dtheta, trial_ddtheta, step
         integer :: jmax, iter, iback
         logical :: accepted
+        if( present(seed_loss) ) seed_loss = huge(1.d0)
+        if( self%continuous_callback .and. .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
+            THROW_HARD('continuous angle callback requires raw Euclidean objective; hybrid derivative is unavailable')
+        endif
         self%cur_inpl_loss_valid = .false.
-        if( self%b_ptr%pftc%is_euclid_objfun() )then
+        if( self%continuous_callback )then
             allocate(coeffs(self%b_ptr%pftc%get_pftsz()+1))
             call self%b_ptr%pftc%gen_euclid_angular_coeffs(self%reference, self%particle, &
                 &real(self%ospec%x,sp), coeffs, jmax)
-            theta = real(jmax,dp)
+            if( self%cur_inpl_idx >= 1 .and. self%cur_inpl_idx <= self%nrots )then
+                theta = real(self%cur_inpl_ang,dp)
+            else
+                theta = real(jmax,dp)
+            endif
             call self%b_ptr%pftc%eval_euclid_resid_at_angle(coeffs, theta, &
                 &residual, dtheta, ddtheta)
+            if( present(seed_loss) .and. ieee_is_finite(residual) ) seed_loss = residual
             if( ieee_is_finite(residual) .and. ieee_is_finite(dtheta) .and. &
                 &ieee_is_finite(ddtheta) )then
                 do iter = 1, 3
@@ -327,6 +362,7 @@ contains
         real,    optional,       intent(out)   :: theta
         real     :: corrs(self%nrots), rotmat(2,2), cxy(3), lowest_shift(2), lowest_cost
         real(dp) :: init_xy(2), lowest_cost_overall, coarse_cost, initial_cost
+        real(dp) :: discrete_cost, improve_tol
         integer  :: loc, i, lowest_rot, init_rot
         logical  :: found_better, l_sh_rot, coarse_init_orig
         if( self%direct_only )then
@@ -345,17 +381,33 @@ contains
         self%ospec%x_8 = dble(self%ospec%x)
         found_better   = .false.
         if( self%opt_angle )then
-            if( self%b_ptr%pftc%is_euclid_objfun() )then
-                call grad_shsrch_optimize_angle(self)
+            if( self%continuous_callback )then
+                if( irot >= 1 .and. irot <= self%nrots )then
+                    self%cur_inpl_idx = irot
+                    self%cur_inpl_ang = real(irot)
+                else
+                    self%cur_inpl_idx = 0
+                    self%cur_inpl_ang = 0.
+                endif
+                call grad_shsrch_optimize_angle(self, discrete_cost)
                 if( self%cur_inpl_loss_valid )then
                     lowest_cost_overall = self%cur_inpl_loss
                 else
                     call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
                     lowest_cost_overall = -corrs(self%cur_inpl_idx)
                 endif
+                if( self%cur_inpl_loss_valid )then
+                    improve_tol = 64.d0 * epsilon(1.d0) * max(1.d0, abs(discrete_cost), abs(lowest_cost_overall))
+                    if( lowest_cost_overall < discrete_cost - improve_tol )then
+                        found_better = .true.
+                        lowest_rot   = self%cur_inpl_idx
+                        lowest_shift = self%ospec%x
+                    endif
+                endif
             else
                 call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
-                call grad_shsrch_optimize_angle(self)
+                self%cur_inpl_idx = maxloc(corrs, dim=1)
+                self%cur_inpl_ang = real(self%cur_inpl_idx)
                 lowest_cost_overall = -corrs(self%cur_inpl_idx)
             endif
             initial_cost        = lowest_cost_overall
@@ -372,19 +424,23 @@ contains
             do i = 1,self%max_evals
                 call self%opt_obj%minimize(self%ospec, self, lowest_cost)
                 loc = self%cur_inpl_idx
-                if( .not. self%b_ptr%pftc%is_euclid_objfun() )then
+                if( self%continuous_callback )then
+                    call grad_shsrch_optimize_angle(self)
+                else
                     call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
+                    self%cur_inpl_idx = maxloc(corrs, dim=1)
+                    self%cur_inpl_ang = real(self%cur_inpl_idx)
                 endif
-                call grad_shsrch_optimize_angle(self)
                 if( self%cur_inpl_idx == loc ) exit
             end do
             ! update best
-            if( self%b_ptr%pftc%is_euclid_objfun() .and. self%cur_inpl_loss_valid )then
+            if( self%continuous_callback .and. self%cur_inpl_loss_valid )then
                 lowest_cost = real(self%cur_inpl_loss)
-            elseif( .not. self%b_ptr%pftc%is_euclid_objfun() )then
-                lowest_cost = -corrs(self%cur_inpl_idx)
+            elseif( self%continuous_callback )then
+                irot = 0
+                if( present(xy_in) ) self%coarse_init = coarse_init_orig
+                return
             else
-                call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
                 lowest_cost = -corrs(self%cur_inpl_idx)
             endif
             if( lowest_cost < lowest_cost_overall )then
@@ -395,16 +451,26 @@ contains
             endif
             if( found_better )then
                 irot    =   lowest_rot                 ! in-plane index
-                if( self%b_ptr%pftc%is_euclid_objfun() )then
+                if( self%continuous_callback )then
                     cxy(1) = real(exp(-lowest_cost_overall))
                 else
                     cxy(1) = - real(lowest_cost_overall)  ! correlation
                 endif
                 cxy(2:) =   real(lowest_shift)         ! shift
-                if( present(theta) ) theta = self%cur_inpl_ang
+                if( present(theta) )then
+                    if( self%continuous_callback )then
+                        theta = self%cur_inpl_ang
+                    else
+                        theta = real(irot)
+                    endif
+                endif
                 if( l_sh_rot )then
                     ! rotate the shift vector to the frame of reference
-                    call rotmat2d(grad_shsrch_get_angle(self), rotmat)
+                    if( self%continuous_callback )then
+                        call rotmat2d(grad_shsrch_get_angle(self), rotmat)
+                    else
+                        call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
+                    endif
                     cxy(2:) = matmul(cxy(2:), rotmat)
                 endif
             else
@@ -456,13 +522,16 @@ contains
         integer,                 intent(inout) :: irot
         real,                    intent(in)    :: theta_in, xy_in(2)
         logical,       optional, intent(in)    :: sh_rot
-    real(dp),      optional, intent(out)   :: theta
+        real(dp),      optional, intent(out)   :: theta
         real :: cxy(3), rotmat(2,2), lowest_cost
         real(dp) :: initial_cost, final_cost, joint_grad(3), improve_tol
         logical :: l_sh_rot
 
-        if( .not. self%joint_angle ) THROW_HARD('joint minimization requested from a non-joint search object')
+        if( .not. self%joint_inplane ) THROW_HARD('joint minimization requested from a non-joint search object')
         if( self%direct_only ) THROW_HARD('joint minimization requested from a direct-only search object')
+        if( .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
+            THROW_HARD('joint minimization requires raw Euclidean objective; hybrid derivative is unavailable')
+        endif
         l_sh_rot = .true.
         if( present(sh_rot) ) l_sh_rot = sh_rot
         self%ospec%x = [xy_in, theta_in]
@@ -528,16 +597,16 @@ contains
         logical :: accepted, l_sh_rot, l_raw_euclid
 
         if( self%opt_angle )then
-            THROW_HARD('direct joint shift minimizer requires a fixed in-plane angle')
+            THROW_HARD('direct shift minimizer requires a fixed in-plane angle')
         endif
         if( irot < 1 .or. irot > self%nrots )then
-            THROW_HARD('direct joint shift minimizer received invalid rotation')
+            THROW_HARD('direct shift minimizer received invalid rotation')
         endif
         if( step_size <= 0. )then
-            THROW_HARD('direct joint shift minimizer step_size must be > 0')
+            THROW_HARD('direct shift minimizer step_size must be > 0')
         endif
         if( max_steps < 1 )then
-            THROW_HARD('direct joint shift minimizer max_steps must be >= 1')
+            THROW_HARD('direct shift minimizer max_steps must be >= 1')
         endif
         l_sh_rot = .true.
         if( present(sh_rot) ) l_sh_rot = sh_rot
@@ -765,7 +834,8 @@ contains
         call self%ospec%kill
         nullify(self%b_ptr)
         self%direct_only = .false.
-        self%joint_angle = .false.
+        self%continuous_callback = .false.
+        self%joint_inplane = .false.
         call self%reset_profile
     end subroutine grad_shsrch_kill
 

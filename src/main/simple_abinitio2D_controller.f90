@@ -75,6 +75,9 @@ contains
         logical :: l_enable_sgd
         call build_cluster2D_stage_cfg( cfg, cline_cluster2D, cline, params, stage_parms, maxits, istage )
         call emit_cluster2D_stage_cfg( cline_cluster2D, cfg, stage_parms, istage )
+        ! Preserve the public experiment switch explicitly on every child
+        ! stage.  The terminal probabilistic pass reuses this command line.
+        call cline_cluster2D%set('inpl_cont', params%inpl_cont)
         ! sgd_stage4_mode is the sole public activation switch. The stream
         ! implementation is passed only to stage 4 and later; stages 1-3
         ! retain the ordinary SIMPLE path unchanged.

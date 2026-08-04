@@ -1667,7 +1667,9 @@ contains
         real(dp) :: dtheta, ddtheta, dummy, dummy2
         integer :: pftsz
 
-        if( .not. self%is_euclid_objfun() ) THROW_HARD('continuous joint gradient requires Euclidean objective')
+        if( .not. self%is_raw_euclid_objfun() )then
+            THROW_HARD('continuous joint gradient requires raw Euclidean objective; hybrid derivative is unavailable')
+        endif
         pftsz = self%pftsz
         allocate(losses(self%nrots), coeffs(pftsz+1), coeffs_x(pftsz+1), coeffs_y(pftsz+1))
         call gen_raw_euclid_vals_impl(self, iref, iptcl, real(shvec,sp), losses, coeffs)

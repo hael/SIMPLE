@@ -56,6 +56,7 @@ contains
                 self%s%best_shvec = [self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%x, &
                                   self%spec%eulprob_obj_part2D%assgn_map(iptcl_map)%y]
             endif
+            call self%s%refine_selected_continuously
             call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
             call self%s%assign_ori(os)
             call os%set(self%s%iptcl, 'frac', frac)

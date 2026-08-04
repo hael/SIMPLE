@@ -3,14 +3,18 @@ use simple_pftc_srch_api
 use simple_builder,         only: builder
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
 use simple_projector_pft,   only: fproject_polar
-use simple_pftc_shsrch_grad, only: parabolic_peak_offset
+use simple_pftc_shsrch_grad, only: parabolic_peak_offset, pftc_shsrch_grad
+use simple_strategy2D_srch, only: strategy2D_srch, strategy2D_spec
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
 
-type(parameters) :: p
+type(parameters), target :: p
 type(cmdline)   :: cline
 type(builder)   :: b
 type(ori)       :: o
+type(pftc_shsrch_grad) :: legacy_shift_search, continuous_shift_search
+type(strategy2D_srch) :: probabilistic_refine_search
+type(strategy2D_spec) :: probabilistic_refine_spec
 real(sp), allocatable :: legacy_scores(:), raw_losses(:)
 real(dp), allocatable :: scalar_losses(:)
 real(sp), allocatable :: sigma2_noise(:,:)
@@ -20,6 +24,7 @@ real(dp) :: max_angular_error, max_period_error, fd_dtheta_error, fd_ddtheta_err
 real(dp) :: angular_loss, angular_dtheta, angular_ddtheta, loss_minus, loss_plus
 real(dp) :: fd_dtheta, fd_ddtheta, theta_eval, h, angle_tol
 real :: parabola_vals(5), parabola_offset
+real :: shift_limits(2,2)
 integer :: irot, nrots
 integer :: angular_best_rot
 
@@ -63,6 +68,113 @@ call b%pftc%memoize_ptcls
 allocate(sigma2_noise(p%kfromto(1):p%kfromto(2), 1), source=1.0_sp)
 call b%pftc%assign_sigma2_noise(sigma2_noise)
 call b%pftc%memoize_sqsum_ptcl(1)
+
+shift_limits(:,1) = -1.
+shift_limits(:,2) =  1.
+call legacy_shift_search%new(b, shift_limits, opt_angle=.true.)
+if( legacy_shift_search%uses_continuous_callback() )then
+    error stop 'Default shift search unexpectedly enables continuous angle refinement'
+endif
+call continuous_shift_search%new(b, shift_limits, opt_angle=.true., continuous_callback=.true.)
+if( .not. continuous_shift_search%uses_continuous_callback() )then
+    error stop 'Explicit continuous angle refinement was not enabled'
+endif
+call legacy_shift_search%kill
+call continuous_shift_search%kill
+
+probabilistic_refine_spec%iptcl       = 1
+probabilistic_refine_spec%iptcl_batch = 1
+probabilistic_refine_spec%iptcl_map   = 1
+p%l_prob_align_mode = .false.
+p%l_objfun_den      = .false.
+p%inpl_cont         = 'no'
+call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
+if( probabilistic_refine_search%uses_continuous_refinement() )then
+    error stop 'inpl_cont=no unexpectedly enables probabilistic continuous polish'
+endif
+if( trim(probabilistic_refine_search%get_inpl_cont_mode()) /= 'no' )then
+    error stop 'inpl_cont=no did not preserve the effective legacy route'
+endif
+if( probabilistic_refine_search%grad_shsrch_obj%uses_continuous_callback() )then
+    error stop 'inpl_cont=no unexpectedly enabled the continuous callback'
+endif
+if( probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
+    error stop 'inpl_cont=no unexpectedly constructed the joint optimizer'
+endif
+if( .not. probabilistic_refine_search%grad_shsrch_first_obj%does_opt_angle() )then
+    error stop 'inpl_cont=no did not retain the legacy seed-search angle update'
+endif
+call probabilistic_refine_search%kill
+p%inpl_cont = 'callback'
+call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
+if( .not. probabilistic_refine_search%uses_continuous_refinement() )then
+    error stop 'inpl_cont=callback did not enable continuous refinement'
+endif
+if( trim(probabilistic_refine_search%get_inpl_cont_mode()) /= 'callback' )then
+    error stop 'callback route identity was not preserved'
+endif
+if( .not. probabilistic_refine_search%grad_shsrch_obj%uses_continuous_callback() )then
+    error stop 'callback route did not activate the continuous callback'
+endif
+if( probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
+    error stop 'callback route unexpectedly constructed the joint optimizer'
+endif
+if( probabilistic_refine_search%grad_shsrch_first_obj%does_opt_angle() )then
+    error stop 'callback route unexpectedly changed the discrete candidate during shift seeding'
+endif
+call probabilistic_refine_search%kill
+p%inpl_cont = 'joint'
+call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
+if( .not. probabilistic_refine_search%uses_continuous_refinement() )then
+    error stop 'inpl_cont=joint did not enable continuous refinement'
+endif
+if( trim(probabilistic_refine_search%get_inpl_cont_mode()) /= 'joint' )then
+    error stop 'joint route identity was not preserved'
+endif
+if( probabilistic_refine_search%grad_shsrch_obj%uses_continuous_callback() )then
+    error stop 'joint route unexpectedly activated the continuous callback'
+endif
+if( .not. probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
+    error stop 'joint route did not construct the joint optimizer'
+endif
+if( probabilistic_refine_search%grad_shsrch_first_obj%does_opt_angle() )then
+    error stop 'joint route unexpectedly changed the discrete candidate during shift seeding'
+endif
+call probabilistic_refine_search%kill
+p%l_prob_align_mode = .true.
+p%inpl_cont = 'callback'
+call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
+if( .not. probabilistic_refine_search%uses_continuous_refinement() )then
+    error stop 'Probabilistic callback route did not enable selected-candidate refinement'
+endif
+if( .not. probabilistic_refine_search%grad_shsrch_obj%uses_continuous_callback() )then
+    error stop 'Probabilistic callback route did not construct the callback optimizer'
+endif
+if( probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
+    error stop 'Probabilistic callback route unexpectedly constructed the joint optimizer'
+endif
+call probabilistic_refine_search%kill
+p%inpl_cont = 'joint'
+p%l_objfun_den = .true.
+if( b%pftc%is_raw_euclid_objfun() )then
+    error stop 'Hybrid Euclidean objective unexpectedly reports raw continuous derivative support'
+endif
+call legacy_shift_search%new(b, shift_limits, opt_angle=.true.)
+if( legacy_shift_search%uses_continuous_callback() )then
+    error stop 'Hybrid Euclidean Stage 1 did not preserve the discrete callback fallback'
+endif
+call legacy_shift_search%kill
+call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
+if( probabilistic_refine_search%uses_continuous_refinement() )then
+    error stop 'Hybrid Euclidean objective unexpectedly enables raw continuous polish'
+endif
+if( trim(probabilistic_refine_search%get_inpl_cont_mode()) /= 'no' )then
+    error stop 'Hybrid Euclidean objective did not fall back to the effective no route'
+endif
+call probabilistic_refine_search%kill
+p%l_prob_align_mode = .false.
+p%l_objfun_den      = .false.
+p%inpl_cont         = 'no'
 
 nrots = b%pftc%get_nrots()
 allocate(legacy_scores(nrots), raw_losses(nrots), scalar_losses(nrots))
