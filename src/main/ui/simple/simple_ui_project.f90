@@ -725,6 +725,8 @@ subroutine new_export_relion( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call selection%add_input(UI_PARM, 'state',           'num',    'State number', 'Map selection to oris with this state only', '{1}', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
+        call selection%add_input(UI_PARM, 'states',          'str',    'State numbers to select and merge', 'Comma-separated list of states to select and merge', 'e.g. 1,3,4', .false., '', &
+        &visibility=UI_VIS_ADVANCED)
         call selection%add_input(UI_PARM, prune, &
         &visibility=UI_VIS_ADVANCED)
         call selection%add_input(UI_PARM, 'append',          'binary', 'Append selection to existing', 'Previously deselected particles will stay deselected(yes|no){no}','', .false., 'no', &
@@ -757,9 +759,9 @@ subroutine new_export_relion( prgtab )
         call selection%add_input(UI_PARM, 'res_threshold',   'num',    'Class resolution threshold', 'Select classes based on resolution threshold(oritype=cls2D only)', '{-1}', .false., -1.0, &
         &visibility=UI_VIS_ADVANCED)
         call selection%add_requirement('selection_source', 'Selection source', &
-            'Supply a selection method or a state to select.', &
+            'Supply a selection method or one or more states to select.', &
             [character(len=16) :: 'infile', 'deselfile', 'nran', 'ctfresthreshold', 'icefracthreshold', &
-                'dfmin', 'res_threshold', 'state'])
+                'dfmin', 'res_threshold', 'state', 'states'])
         ! <empty>
         ! search controls
         ! <empty>

@@ -141,7 +141,10 @@ contains
     procedure          :: add_sigma22os_out
     procedure          :: add_vol2os_out
     procedure          :: add_entry2os_out
+    procedure, private :: get_os_out_entry_index
     procedure          :: remove_entry_from_osout
+    procedure          :: remove_state_artifacts_from_osout
+    procedure          :: reattribute_state_artifacts_in_osout
     ! OUT - Getters
     procedure          :: isthere_in_osout
     procedure          :: get_all_vols
@@ -657,11 +660,27 @@ interface
         integer,           intent(out)   :: ind
     end subroutine add_entry2os_out
 
+    module integer function get_os_out_entry_index( self, which_imgkind, state )
+        class(sp_project), intent(in) :: self
+        character(len=*),  intent(in) :: which_imgkind
+        integer, optional, intent(in) :: state
+    end function get_os_out_entry_index
+
     module subroutine remove_entry_from_osout( self, which_imgkind, state )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: which_imgkind
         integer,           intent(in)    :: state
     end subroutine remove_entry_from_osout
+
+    module subroutine remove_state_artifacts_from_osout( self, state )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: state
+    end subroutine remove_state_artifacts_from_osout
+
+    module subroutine reattribute_state_artifacts_in_osout( self, prev_state, new_state )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: prev_state, new_state
+    end subroutine reattribute_state_artifacts_in_osout
 
     ! OUT - Getters
 
