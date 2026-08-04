@@ -91,8 +91,7 @@ contains
         self%argtransf(:self%pftsz,:)     = transpose(real(self%polar(1,self%kfromto(1):self%interpklim,:self%pftsz),dp)) * A(1)  ! h-part
         self%argtransf(self%pftsz + 1:,:) = transpose(real(self%polar(2,self%kfromto(1):self%interpklim,:self%pftsz),dp)) * A(2)  ! k-part
         ! allocate others
-        allocate(self%pfts_refs_even(self%pftsz,self%kfromto(1):self%interpklim,self%nrefs),&
-            &self%pfts_refs_odd(self%pftsz,self%kfromto(1):self%interpklim,self%nrefs),&
+        allocate(self%pfts_refs(self%pftsz,self%kfromto(1):self%interpklim,self%nrefs,N_REF_PARITIES),&
                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                 &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                 &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
@@ -107,10 +106,10 @@ contains
                     &self%heap_vars(ithr)%shmat_8(self%pftsz,self%kfromto(1):self%interpklim),&
                     &self%heap_vars(ithr)%pft_r1_8(self%pftsz,self%kfromto(1):self%kfromto(2)),&
                     &self%heap_vars(ithr)%w_weights(self%nk),&
-                    &self%heap_vars(ithr)%sumsq_cache(self%nk))
+                    &self%heap_vars(ithr)%sumsq_cache(self%nk),&
+                    &self%heap_vars(ithr)%joint_coeffs(self%pftsz+1,3))
         end do
-        self%pfts_refs_even = zero
-        self%pfts_refs_odd  = zero
+        self%pfts_refs      = zero
         self%pfts_ptcls     = zero
         if( self%p_ptr%l_objfun_den )then
             allocate(self%pfts_ptcls_den(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
@@ -143,13 +142,14 @@ contains
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%pft_r1_8,&
-                    self%heap_vars(ithr)%w_weights,self%heap_vars(ithr)%sumsq_cache)
+                    &self%heap_vars(ithr)%w_weights,self%heap_vars(ithr)%sumsq_cache,&
+                    &self%heap_vars(ithr)%joint_coeffs)
             end do
             if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
             if( allocated(self%pfts_ptcls_den) ) deallocate(self%pfts_ptcls_den)
             if( allocated(self%sqsums_ptcls_den) ) deallocate(self%sqsums_ptcls_den, self%ksqsums_ptcls_den)
             deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab,&
-                &self%argtransf, self%pfts_ptcls, self%polar, self%pfts_refs_even, self%pfts_refs_odd,&
+                &self%argtransf, self%pfts_ptcls, self%polar, self%pfts_refs,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
             call self%kill_memo_ptcls
             call self%kill_memo_refs
@@ -215,11 +215,9 @@ contains
         integer,             intent(in)    :: iref
         complex(sp),         intent(in)    :: pft(self%pftsz,self%kfromto(1):self%interpklim)
         logical,             intent(in)    :: iseven
-        if( iseven )then
-            self%pfts_refs_even(:,:,iref) = pft
-        else
-            self%pfts_refs_odd(:,:,iref) = pft
-        endif
+        integer :: ieo
+        ieo = merge(REF_EVEN, REF_ODD, iseven)
+        self%pfts_refs(:,:,iref,ieo) = pft
     end subroutine set_ref_pft
 
     module subroutine set_ptcl_pft(self, iptcl, pft)
@@ -244,20 +242,14 @@ contains
         class(image),        intent(in)    :: img
         integer,             intent(in)    :: iref, pdim(3)
         logical,             intent(in)    :: iseven, oversamp
+        integer :: ieo
         call assert_polarize_pdim(self, pdim, 'polarize_ref_pft')
         if( iref < 1 .or. iref > self%nrefs ) THROW_HARD('iref out of range; polarize_ref_pft')
-        if( iseven )then
-            if( oversamp )then
-                call img%polarize_oversamp(self%pfts_refs_even(:,pdim(2):pdim(3),iref))
-            else
-                call img%polarize(self%pfts_refs_even(:,pdim(2):pdim(3),iref))
-            endif
+        ieo = merge(REF_EVEN, REF_ODD, iseven)
+        if( oversamp )then
+            call img%polarize_oversamp(self%pfts_refs(:,pdim(2):pdim(3),iref,ieo))
         else
-            if( oversamp )then
-                call img%polarize_oversamp(self%pfts_refs_odd(:,pdim(2):pdim(3),iref))
-            else
-                call img%polarize(self%pfts_refs_odd(:,pdim(2):pdim(3),iref))
-            endif
+            call img%polarize(self%pfts_refs(:,pdim(2):pdim(3),iref,ieo))
         endif
     end subroutine polarize_ref_pft
 
@@ -308,11 +300,7 @@ contains
         integer,             intent(in)    :: iref, irot, k
         complex(sp),         intent(in)    :: comp
         logical,             intent(in)    :: iseven
-        if( iseven )then
-            self%pfts_refs_even(irot,k,iref) = comp
-        else
-            self%pfts_refs_odd(irot,k,iref)  = comp
-        endif
+        self%pfts_refs(irot,k,iref,merge(REF_EVEN, REF_ODD, iseven)) = comp
     end subroutine set_ref_fcomp
 
     module subroutine set_ptcl_fcomp(self, iptcl, irot, k, comp)
@@ -325,25 +313,24 @@ contains
     module subroutine cp_even2odd_ref(self, iref)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref
-        self%pfts_refs_odd(:,:,iref) = self%pfts_refs_even(:,:,iref)
+        self%pfts_refs(:,:,iref,REF_ODD) = self%pfts_refs(:,:,iref,REF_EVEN)
     end subroutine cp_even2odd_ref
 
     module subroutine cp_odd2even_ref(self, iref)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref
-        self%pfts_refs_even(:,:,iref) = self%pfts_refs_odd(:,:,iref)
+        self%pfts_refs(:,:,iref,REF_EVEN) = self%pfts_refs(:,:,iref,REF_ODD)
     end subroutine cp_odd2even_ref
 
     module subroutine cp_refs(self, self2)
         class(polarft_calc), intent(inout) :: self, self2
-        self%pfts_refs_odd  = self2%pfts_refs_odd
-        self%pfts_refs_even = self2%pfts_refs_even
+        self%pfts_refs = self2%pfts_refs
     end subroutine cp_refs
 
     module subroutine cp_even_ref2ptcl(self, iref, iptcl)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref, iptcl
-        self%pfts_ptcls(:,:,self%pinds(iptcl)) = self%pfts_refs_even(:,:,iref)
+        self%pfts_ptcls(:,:,self%pinds(iptcl)) = self%pfts_refs(:,:,iref,REF_EVEN)
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine cp_even_ref2ptcl
 
@@ -381,7 +368,7 @@ contains
         logical,             intent(in)    :: iseven
         real(sp) :: hcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
         real(sp) :: kcoords(self%pftsz, self%kfromto(2)-self%kfromto(1)+1)
-        integer  :: iref_from, iref_to, kproj(2)
+        integer  :: iref_from, iref_to, kproj(2), ieo
         if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
         iref_from = (state - 1) * self%p_ptr%nspace + 1
         iref_to   = iref_from + self%p_ptr%nspace - 1
@@ -390,24 +377,15 @@ contains
         kproj     = self%kfromto
         hcoords   = transpose(self%polar(1, kproj(1):kproj(2), 1:self%pftsz))
         kcoords   = transpose(self%polar(2, kproj(1):kproj(2), 1:self%pftsz))
+        ieo       = merge(REF_EVEN, REF_ODD, iseven)
         if( trim(self%p_ptr%mirr_proj).ne.'yes' )then
             ! extract all the slices
-            if( iseven )then
-                call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
-                &hcoords, kcoords, self%pfts_refs_even(:, kproj(1):kproj(2), iref_from:iref_to))
-            else
-                call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
-                &hcoords, kcoords, self%pfts_refs_odd(:, kproj(1):kproj(2), iref_from:iref_to))
-            endif
+            call fproject_polar_batch(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
+                &hcoords, kcoords, self%pfts_refs(:, kproj(1):kproj(2), iref_from:iref_to, ieo))
         else
             ! extract half the slices and generate the other half by mirroring
-            if( iseven )then
-                call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
-                &hcoords, kcoords, self%pfts_refs_even(:, kproj(1):kproj(2), iref_from:iref_to))
-            else
-                call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
-                &hcoords, kcoords, self%pfts_refs_odd(:, kproj(1):kproj(2), iref_from:iref_to))
-            endif
+            call fproject_polar_batch_mirr(vol_pad, eulspace, self%p_ptr%nspace, kproj, &
+                &hcoords, kcoords, self%pfts_refs(:, kproj(1):kproj(2), iref_from:iref_to, ieo))
         endif
     end subroutine vol_pad2ref_pfts
 
@@ -419,20 +397,16 @@ contains
         class(oris),         intent(in)    :: eulspace
         integer,             intent(in)    :: state
         logical,             intent(in)    :: iseven
-        integer  :: iref_from, iref_to, kproj(2)
+        integer  :: iref_from, iref_to, kproj(2), ieo
         iref_from = (state - 1) * self%p_ptr%nspace + 1
         iref_to   = iref_from + self%p_ptr%nspace - 1
         kproj     = self%kfromto
+        ieo       = merge(REF_EVEN, REF_ODD, iseven)
         if( state < 1 .or. state > self%p_ptr%nstates ) THROW_HARD('state out of range in vol_pad2ref_pfts')
         if( trim(self%p_ptr%mirr_proj).ne.'yes' )then
             ! extract all the slices
-            if( iseven )then
-                call fproject_polar_batch_opt(vol_pad, eulspace, self%p_ptr%nspace, self, &
-                &self%pfts_refs_even(:, kproj(1):kproj(2), iref_from:iref_to))
-            else
-                call fproject_polar_batch_opt(vol_pad, eulspace, self%p_ptr%nspace, self, &
-                &self%pfts_refs_odd(:, kproj(1):kproj(2), iref_from:iref_to))
-            endif
+            call fproject_polar_batch_opt(vol_pad, eulspace, self%p_ptr%nspace, self, &
+                &self%pfts_refs(:, kproj(1):kproj(2), iref_from:iref_to, ieo))
         else
             THROW_HARD('not supported yet for optimized polarft extraction; vol_pad2ref_pfts_opt')
         endif

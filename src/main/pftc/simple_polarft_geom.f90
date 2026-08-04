@@ -97,12 +97,13 @@ contains
         integer,             intent(in)    :: iref
         real(sp),            intent(in)    :: shvec(2)
         complex(dp), pointer :: shmat(:,:)
-        integer :: ithr
+        integer :: ithr, ieo
         ithr = omp_get_thread_num() + 1
         shmat => self%heap_vars(ithr)%shmat_8
         call self%gen_shmat_8(ithr, real(shvec,dp), shmat)
-        self%pfts_refs_even(:,:,iref) = cmplx(dcmplx(self%pfts_refs_even(:,:,iref)) * shmat)
-        self%pfts_refs_odd( :,:,iref) = cmplx(dcmplx(self%pfts_refs_odd( :,:,iref)) * shmat)
+        do ieo = REF_EVEN, REF_ODD
+            self%pfts_refs(:,:,iref,ieo) = cmplx(dcmplx(self%pfts_refs(:,:,iref,ieo)) * shmat)
+        enddo
     end subroutine shift_ref
 
     ! mirror pft about h (mirror about y of cartesian image)
@@ -133,7 +134,7 @@ contains
     module pure subroutine mirror_ref_pft_2( self, iref )
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iref
-        call self%mirror_ref_pft_1(self%pfts_refs_even(:,:,iref), self%pfts_refs_odd(:,:,iref))
+        call self%mirror_ref_pft_1(self%pfts_refs(:,:,iref,REF_EVEN), self%pfts_refs(:,:,iref,REF_ODD))
     end subroutine mirror_ref_pft_2
 
     module subroutine rotate_ref_8( self, pft, irot, pft_rot)

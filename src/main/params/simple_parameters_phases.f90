@@ -731,8 +731,8 @@ contains
             case DEFAULT
                 THROW_HARD('inpl_cont must be no, callback, or joint')
         end select
-        if( trim(self%inpl_refine) == 'yes' .and. self%cc_objfun /= OBJFUN_EUCLID )then
-            THROW_HARD('inpl_refine=yes is supported only with objfun=euclid')
+        if( trim(self%inpl_cont) /= 'no' .and. self%cc_objfun /= OBJFUN_EUCLID )then
+            THROW_HARD('inpl_cont=callback or joint is supported only with objfun=euclid')
         endif
         select case(trim(self%sgd))
             case('yes')

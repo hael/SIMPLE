@@ -8,6 +8,10 @@ public :: vol_pad2ref_pfts, vol_pad2ref_pfts_opt
 private
 #include "simple_local_flags.inc"
 
+integer, parameter :: REF_EVEN = 1
+integer, parameter :: REF_ODD  = 2
+integer, parameter :: N_REF_PARITIES = 2
+
 type fftw_drvec
     type(c_ptr)                  :: p
     real(kind=c_double), pointer :: r(:) => null()
@@ -42,6 +46,7 @@ type heap_vars
     ! cache arrays for batched computations
     real(dp),    pointer :: w_weights(:)        => null()  ! k/sigma2 weights
     real(dp),    pointer :: sumsq_cache(:)      => null()  ! particle sumsq per k
+    complex(sp), pointer :: joint_coeffs(:,:)   => null()  ! objective/dsx/dsy angular coefficients
 end type heap_vars
 
 type :: polarft_calc
@@ -68,8 +73,7 @@ type :: polarft_calc
     real(sp),    allocatable :: polar(:,:,:)             !< table of polar coordinates (2,k,irot): polar(1,k,irot)=h, polar(2,k,irot)=kc
     real(sp),    allocatable :: ctfmats(:,:,:)           !< expand set of CTF matrices (for efficient parallel exec)
     real(dp),    allocatable :: argtransf_shellone(:)    !< one dimensional argument transfer constants (shell k=1) for shifting the references
-    complex(sp), allocatable :: pfts_refs_even(:,:,:)    !< 3D complex matrix of polar reference sections (pftsz,nk,nrefs), even
-    complex(sp), allocatable :: pfts_refs_odd(:,:,:)     !< -"-, odd
+    complex(sp), allocatable :: pfts_refs(:,:,:,:)       !< polar reference sections (pftsz,nk,nrefs,parity)
     complex(sp), allocatable :: pfts_ptcls(:,:,:)        !< 3D complex matrix of particle sections
     complex(sp), allocatable :: pfts_ptcls_den(:,:,:)    !< denoised-particle polar sections for hybrid objective
     ! FFTW plans
@@ -81,8 +85,9 @@ type :: polarft_calc
     complex(kind=c_float_complex), allocatable :: ft_ptcl_ctf(:,:,:)                      !< Fourier Transform of particle times CTF
     complex(kind=c_float_complex), allocatable :: ft_ptcl_den(:,:,:)                      !< Fourier Transform of denoised particles
     complex(kind=c_float_complex), allocatable :: ft_ctf2(:,:,:)                          !< Fourier Transform of CTF squared modulus
-    complex(kind=c_float_complex), allocatable :: ft_ref_even(:,:,:),  ft_ref_odd(:,:,:)  !< Fourier Transform of even/odd references
-    complex(kind=c_float_complex), allocatable :: ft_ref2_even(:,:,:), ft_ref2_odd(:,:,:) !< Fourier Transform of even/odd references squared modulus
+    complex(kind=c_float_complex), allocatable :: ft_ref(:,:,:,:)  !< Fourier transforms of references, final dimension is parity
+    ! Fourier transforms of squared reference moduli; final dimension is parity
+    complex(kind=c_float_complex), allocatable :: ft_ref2(:,:,:,:)
     ! buffer: (nrots,nk) holding cvec2 for all k
     type(fftw_cmat),               allocatable :: cmat2_many(:)  ! per thread
     ! batched backward (c2r) plan: nrefs transforms of length nrots, in-place
@@ -1010,7 +1015,5 @@ end interface
 ! CLASS PARAMETERS/VARIABLES
 complex(sp), parameter       :: zero            = cmplx(0.,0.) !< just a complex zero
 integer,     parameter       :: FFTW_USE_WISDOM = 16
-
-contains
 
 end module simple_polarft_calc

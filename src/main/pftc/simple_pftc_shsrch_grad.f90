@@ -33,6 +33,8 @@ type :: pftc_shsrch_grad
     logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
     logical                   :: continuous_callback = .false. !< callback refines the in-plane angle continuously
     logical                   :: joint_inplane = .false. !< optimize (sx,sy,theta) together
+    real(dp)                  :: joint_initial_cost = 0.d0 !< first optimizer evaluation for monotonic acceptance
+    logical                   :: joint_initial_cost_valid = .false.
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
     logical                   :: direct_only  = .false. !< skip allocating an L-BFGS-B object for direct-gradient use
     logical                   :: raw_roundtrip_check = .false. !< validate vector/scalar raw loss when diagnostics are enabled
@@ -202,6 +204,10 @@ contains
                         call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
                             &vec(1:2), vec(3), cost, joint_grad)
                     end block
+                    if( .not. self%joint_initial_cost_valid )then
+                        self%joint_initial_cost = cost
+                        self%joint_initial_cost_valid = .true.
+                    endif
                 else
                     cost = - self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
                 endif
@@ -250,6 +256,10 @@ contains
                     call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
                         &vec(1:2), vec(3), f, joint_grad)
                     grad = joint_grad
+                    if( .not. self%joint_initial_cost_valid )then
+                        self%joint_initial_cost = f
+                        self%joint_initial_cost_valid = .true.
+                    endif
                 else
                     call self%b_ptr%pftc%gen_corr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
                     f    = - corrs
@@ -524,7 +534,7 @@ contains
         logical,       optional, intent(in)    :: sh_rot
         real(dp),      optional, intent(out)   :: theta
         real :: cxy(3), rotmat(2,2), lowest_cost
-        real(dp) :: initial_cost, final_cost, joint_grad(3), improve_tol
+        real(dp) :: initial_cost, final_cost, improve_tol
         logical :: l_sh_rot
 
         if( .not. self%joint_inplane ) THROW_HARD('joint minimization requested from a non-joint search object')
@@ -538,13 +548,14 @@ contains
         self%ospec%x_8 = dble(self%ospec%x)
         self%cur_inpl_ang = theta_in
         self%cur_inpl_idx = modulo(nint(theta_in)-1,self%nrots)+1
-        call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
-            &self%ospec%x_8(1:2), self%ospec%x_8(3), initial_cost, joint_grad)
-        self%profile_objective_evals = self%profile_objective_evals + 1_int64
+        self%joint_initial_cost = 0.d0
+        self%joint_initial_cost_valid = .false.
         call self%opt_obj%minimize(self%ospec, self, lowest_cost)
+        initial_cost = self%joint_initial_cost
         final_cost = real(lowest_cost,dp)
         improve_tol = 64.d0 * epsilon(1.d0) * max(1.d0, abs(initial_cost), abs(final_cost))
-        if( .not. ieee_is_finite(final_cost) .or. final_cost >= initial_cost - improve_tol )then
+        if( .not. self%joint_initial_cost_valid .or. .not. ieee_is_finite(initial_cost) .or. &
+            &.not. ieee_is_finite(final_cost) .or. final_cost >= initial_cost - improve_tol )then
             irot = 0
             cxy = 0.
             if( present(theta) ) theta = 0.
@@ -836,6 +847,8 @@ contains
         self%direct_only = .false.
         self%continuous_callback = .false.
         self%joint_inplane = .false.
+        self%joint_initial_cost = 0.d0
+        self%joint_initial_cost_valid = .false.
         call self%reset_profile
     end subroutine grad_shsrch_kill
 

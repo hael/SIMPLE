@@ -41,7 +41,7 @@ contains
         class(polarft_calc), intent(in) :: self
         class(string),       intent(in) :: fname
         logical,             intent(in) :: iseven
-        integer :: funit
+        integer :: funit, ieo
         integer :: header(4)
         integer(kind=8) :: payload_pos
         if( .not. self%existence ) THROW_HARD('polarft_calc does not exist; write_ref_pfts')
@@ -49,11 +49,8 @@ contains
         payload_pos = int(sizeof(header), kind=8) + 1_int8
         call open_pft_or_ctf2_array_for_write(fname, funit)
         write(unit=funit,pos=1) header
-        if( iseven )then
-            write(unit=funit,pos=payload_pos) self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),:)
-        else
-            write(unit=funit,pos=payload_pos) self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),:)
-        endif
+        ieo = merge(REF_EVEN, REF_ODD, iseven)
+        write(unit=funit,pos=payload_pos) self%pfts_refs(:,self%kfromto(1):self%kfromto(2),:,ieo)
         call fclose(funit)
     end subroutine write_ref_pfts
 
@@ -61,7 +58,7 @@ contains
         class(polarft_calc), intent(inout) :: self
         class(string),       intent(in)    :: fname
         logical,             intent(in)    :: iseven
-        integer :: funit, io_stat
+        integer :: funit, io_stat, ieo
         integer :: header(4)
         integer(kind=8) :: payload_pos
         if( .not. self%existence ) THROW_HARD('polarft_calc does not exist; read_ref_pfts')
@@ -77,11 +74,8 @@ contains
             THROW_HARD('incompatible reprojection model header; read_ref_pfts')
         endif
         payload_pos = int(sizeof(header), kind=8) + 1_int8
-        if( iseven )then
-            read(unit=funit,pos=payload_pos) self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),:)
-        else
-            read(unit=funit,pos=payload_pos) self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),:)
-        endif
+        ieo = merge(REF_EVEN, REF_ODD, iseven)
+        read(unit=funit,pos=payload_pos) self%pfts_refs(:,self%kfromto(1):self%kfromto(2),:,ieo)
         call fclose(funit)
     end subroutine read_ref_pfts
 

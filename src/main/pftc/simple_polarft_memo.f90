@@ -127,7 +127,7 @@ contains
         class(polarft_calc),           intent(inout) :: self
         class(oris),         optional, intent(in)    :: eulspace
         real     :: psi
-        integer :: k, kk, k0, ithr, iref, mref
+        integer :: k, kk, k0, ithr, iref, mref, ieo
         logical :: l_even_inds(self%pftsz+1,1:self%nk)
         logical :: l_mirr_proj, l_rot
         if( OMP_IN_PARALLEL() )then
@@ -146,136 +146,73 @@ contains
             l_even_inds(2:self%pftsz+1:2,:) = .true.
             l_even_inds(1:self%pftsz+1:2,:) = .false.
             ! mirror reprojection indices
-            !$omp parallel do private(iref,ithr,mref,psi,l_rot) default(shared) proc_bind(close) schedule(static)
+            !$omp parallel do private(iref,ithr,mref,psi,l_rot,ieo) default(shared) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs/2
                 ithr = omp_get_thread_num() + 1
                 ! index of mirror reprojection
                 mref  = eulspace%get_int(iref,'mirr')
                 psi   = eulspace%get(mref,'psi')
                 l_rot = (psi>0.1) .and. (psi<359.9)
-                ! ========================================================================
-                ! Batched computation of FT(REFeven)* for all k shells
-                ! ========================================================================
-                self%cmat2_many(ithr)%c(           1:self%pftsz, 1:self%nk) = self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
-                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, 1:self%nk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, 1:self%nk))
-                ! Execute batched C2C FFT for even references
-                call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-                ! Extract and store FT(REFeven)* results
-                self%ft_ref_even(:, self%kfromto(1):self%kfromto(2), iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:self%nk)
-                ! Store FT(Mirror(REFeven))*
-                if( l_rot )then
-                    self%ft_ref_even(:,:, mref) = conjg(merge(-self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:self%nk),&
-                                                              &self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:self%nk), l_even_inds(:,:)))
-                else
-                    self%ft_ref_even(:, :, mref) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:self%nk))
-                endif
-                ! ========================================================================
-                ! Batched computation of FT(REF2even)* for all k shells
-                ! ========================================================================
-                self%crmat1_many(ithr)%r(1:self%pftsz, 1:self%nk) = real(self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)*&
-                                                                        &conjg(self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)))
-                self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, 1:self%nk) = self%crmat1_many(ithr)%r(1:self%pftsz, 1:self%nk)
-                ! Execute batched R2C FFT for even reference squares
-                call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
-                ! Extract and store FT(REF2even)*
-                self%ft_ref2_even(:, self%kfromto(1):self%kfromto(2), iref) = conjg(self%crmat1_many(ithr)%c(:, 1:self%nk))
-                ! Extract and store FT(Mirr(REF2even))* = FT(REF2even)
-                self%ft_ref2_even(:, self%kfromto(1):self%kfromto(2), mref) =       self%crmat1_many(ithr)%c(:, 1:self%nk)
-                ! ========================================================================
-                ! Batched computation of FT(REFodd)* for all k shells
-                ! ========================================================================
-                self%cmat2_many(ithr)%c(           1:self%pftsz, 1:self%nk) = self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
-                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, 1:self%nk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, 1:self%nk))
-                ! Execute batched C2C FFT for odd references
-                call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-                ! Extract and store FT(REFodd)* results
-                self%ft_ref_odd(:, self%kfromto(1):self%kfromto(2), iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:self%nk)
-                ! Store FT(Mirror(REFodd))*
-                if( l_rot )then
-                    self%ft_ref_odd(:, :, mref) = conjg(merge(-self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:self%nk),&
-                                                              &self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:self%nk), l_even_inds(:,:)))
-                else
-                    self%ft_ref_odd(:, :, mref) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, 1:self%nk))
-                endif
-                ! ========================================================================
-                ! Batched computation of FT(REF2odd)* for all k shells
-                ! ========================================================================
-                self%crmat1_many(ithr)%r(1:self%pftsz, 1:self%nk) = real(self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)*&
-                                                                        &conjg(self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)))
-                self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, 1:self%nk) = self%crmat1_many(ithr)%r(1:self%pftsz, 1:self%nk)
-                ! Execute batched R2C FFT for odd reference squares
-                call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
-                ! Extract and store FT(REF2odd)*
-                self%ft_ref2_odd(:, self%kfromto(1):self%kfromto(2), iref) = conjg(self%crmat1_many(ithr)%c(:, 1:self%nk))
-                ! Extract and store FT(Mirr(REF2odd))* = FT(REF2odd)
-                self%ft_ref2_odd(:, self%kfromto(1):self%kfromto(2), mref) =       self%crmat1_many(ithr)%c(:, 1:self%nk)
+                do ieo = REF_EVEN, REF_ODD
+                    self%cmat2_many(ithr)%c(1:self%pftsz, 1:self%nk) = &
+                        self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
+                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, 1:self%nk) = &
+                        conjg(self%cmat2_many(ithr)%c(1:self%pftsz, 1:self%nk))
+                    call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+                    self%ft_ref(:,self%kfromto(1):self%kfromto(2),iref,ieo) = &
+                        self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk)
+                    if( l_rot )then
+                        self%ft_ref(:,:,mref,ieo) = conjg(merge(&
+                            -self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk), &
+                             self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk), l_even_inds))
+                    else
+                        self%ft_ref(:,:,mref,ieo) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk))
+                    endif
+
+                    self%crmat1_many(ithr)%r(1:self%pftsz,1:self%nk) = real(&
+                        self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo) * &
+                        conjg(self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)))
+                    self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots,1:self%nk) = &
+                        self%crmat1_many(ithr)%r(1:self%pftsz,1:self%nk)
+                    call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
+                    self%ft_ref2(:,self%kfromto(1):self%kfromto(2),iref,ieo) = &
+                        conjg(self%crmat1_many(ithr)%c(:,1:self%nk))
+                    self%ft_ref2(:,self%kfromto(1):self%kfromto(2),mref,ieo) = &
+                        self%crmat1_many(ithr)%c(:,1:self%nk)
+                enddo
             enddo
             !$omp end parallel do
         else
             k0 = self%kfromto(1)
-            !$omp parallel do private(iref,k,kk,ithr) default(shared) proc_bind(close) schedule(static)
+            !$omp parallel do private(iref,k,kk,ithr,ieo) default(shared) proc_bind(close) schedule(static)
             do iref = 1, self%nrefs
                 ithr = omp_get_thread_num() + 1
-                ! ========================================================================
-                ! Batched computation of FT(REFeven)* for all k shells
-                ! ========================================================================
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%cmat2_many(ithr)%c(1:self%pftsz, kk) = self%pfts_refs_even(:,k,iref)
-                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
-                end do
-                ! Execute batched C2C FFT for even references
-                call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-                ! Extract and store FT(REFeven)* results
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%ft_ref_even(:,k,iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
-                end do
-                ! ========================================================================
-                ! Batched computation of FT(REFodd)* for all k shells
-                ! ========================================================================
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%cmat2_many(ithr)%c(1:self%pftsz, kk) = self%pfts_refs_odd(:,k,iref)
-                    self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots, kk) = conjg(self%cmat2_many(ithr)%c(1:self%pftsz, kk))
-                end do
-                ! Execute batched C2C FFT for odd references
-                call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
-                ! Extract and store FT(REFodd)* results
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%ft_ref_odd(:,k,iref) = self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
-                end do
-                ! ========================================================================
-                ! Batched computation of FT(REF2even)* for all k shells
-                ! ========================================================================
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%crmat1_many(ithr)%r(1:self%pftsz, kk) = real(self%pfts_refs_even(:,k,iref) * conjg(self%pfts_refs_even(:,k,iref)))
-                    self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, kk) = self%crmat1_many(ithr)%r(1:self%pftsz, kk)
-                end do
-                ! Execute batched R2C FFT for even reference squares
-                call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
-                ! Extract and store FT(REF2even)* results
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%ft_ref2_even(:,k,iref) = conjg(self%crmat1_many(ithr)%c(:,kk))
-                end do
-                ! ========================================================================
-                ! Batched computation of FT(REF2odd)* for all k shells
-                ! ========================================================================
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%crmat1_many(ithr)%r(1:self%pftsz, kk) = real(self%pfts_refs_odd(:,k,iref) * conjg(self%pfts_refs_odd(:,k,iref)))
-                    self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots, kk) = self%crmat1_many(ithr)%r(1:self%pftsz, kk)
-                end do
-                ! Execute batched R2C FFT for odd reference squares
-                call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
-                ! Extract and store FT(REF2odd)* results
-                do k = self%kfromto(1), self%kfromto(2)
-                    kk = k - k0 + 1
-                    self%ft_ref2_odd(:,k,iref) = conjg(self%crmat1_many(ithr)%c(:,kk))
-                end do
+                do ieo = REF_EVEN, REF_ODD
+                    do k = self%kfromto(1), self%kfromto(2)
+                        kk = k - k0 + 1
+                        self%cmat2_many(ithr)%c(1:self%pftsz,kk) = self%pfts_refs(:,k,iref,ieo)
+                        self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots,kk) = &
+                            conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk))
+                    enddo
+                    call fftwf_execute_dft(self%plan_fwd1_many, self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+                    do k = self%kfromto(1), self%kfromto(2)
+                        kk = k - k0 + 1
+                        self%ft_ref(:,k,iref,ieo) = self%cmat2_many(ithr)%c(1:self%pftsz+1,kk)
+                    enddo
+
+                    do k = self%kfromto(1), self%kfromto(2)
+                        kk = k - k0 + 1
+                        self%crmat1_many(ithr)%r(1:self%pftsz,kk) = real(&
+                            self%pfts_refs(:,k,iref,ieo) * conjg(self%pfts_refs(:,k,iref,ieo)))
+                        self%crmat1_many(ithr)%r(self%pftsz+1:self%nrots,kk) = &
+                            self%crmat1_many(ithr)%r(1:self%pftsz,kk)
+                    enddo
+                    call fftwf_execute_dft_r2c(self%plan_mem_r2c_many, self%crmat1_many(ithr)%r, self%crmat1_many(ithr)%c)
+                    do k = self%kfromto(1), self%kfromto(2)
+                        kk = k - k0 + 1
+                        self%ft_ref2(:,k,iref,ieo) = conjg(self%crmat1_many(ithr)%c(:,kk))
+                    enddo
+                enddo
             enddo
             !$omp end parallel do
         endif
@@ -333,10 +270,8 @@ contains
     module subroutine alloc_memo_refs(self)
         class(polarft_calc), intent(inout) :: self
         call self%kill_memo_refs
-        allocate(self%ft_ref_even( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%ft_ref_odd(  self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%ft_ref2_even(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs),&
-                &self%ft_ref2_odd( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs))
+        allocate(self%ft_ref( self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs,N_REF_PARITIES),&
+                &self%ft_ref2(self%pftsz+1,self%kfromto(1):self%kfromto(2),self%nrefs,N_REF_PARITIES))
     end subroutine alloc_memo_refs
 
     module subroutine allocate_memo_workspace(self, nmany_refs)
@@ -451,8 +386,8 @@ contains
 
     module subroutine kill_memo_refs(self)
         class(polarft_calc), intent(inout) :: self
-        if( allocated(self%ft_ref_even) )then
-            deallocate(self%ft_ref_even,self%ft_ref_odd,self%ft_ref2_even,self%ft_ref2_odd)
+        if( allocated(self%ft_ref) )then
+            deallocate(self%ft_ref,self%ft_ref2)
         endif
     end subroutine kill_memo_refs
 

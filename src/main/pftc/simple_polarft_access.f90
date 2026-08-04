@@ -106,11 +106,9 @@ contains
         integer,             intent(in) :: iref
         logical,             intent(in) :: iseven
         complex(sp), intent(inout) :: pft(self%pftsz,self%kfromto(1):self%kfromto(2))
-        if( iseven )then
-            pft = self%pfts_refs_even(:,self%kfromto(1):self%kfromto(2),iref)
-        else
-            pft = self%pfts_refs_odd(:,self%kfromto(1):self%kfromto(2),iref)
-        endif
+        integer :: ieo
+        ieo = merge(REF_EVEN, REF_ODD, iseven)
+        pft = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
     end subroutine get_ref_pft
 
     module subroutine get_ptcl_pft(self, iptcl, pft)
