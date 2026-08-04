@@ -86,7 +86,7 @@ module simple_persistent_worker_server
     type persistent_worker_data
         integer :: n_workers                        = 0       !< highest worker_id registered so far
         integer :: nthr_per_worker                  = 1       !< configured thread capacity per worker process
-        integer :: queue_pressure_workers_required  = 0       !< estimated workers needed to execute the queued task backlog
+        integer :: queue_pressure_workers_required  = 0       !< estimated workers needed for queued backlog + currently running tasks
         integer :: queue_pressure_below_since       = 0       !< first heartbeat_time where pressure stayed below active workers
         integer :: queue_pressure_above_since       = 0       !< first heartbeat_time where pressure exceeded active workers
         integer :: n_warmup_worker_ids              = 0       !< number of worker slots requested for warm-up relaunch
@@ -115,7 +115,7 @@ module simple_persistent_worker_server
         procedure :: queue_task   !< submit a task request to the listener thread
         procedure :: get_port     !< return the TCP port being listened on
         procedure :: get_host_ips !< return the local IP address list
-        procedure :: get_queue_pressure_workers_required !< estimated workers needed for queued backlog
+        procedure :: get_queue_pressure_workers_required !< estimated workers needed for queued backlog + running tasks
         procedure :: set_warmup_cooldown_enabled !< enable/disable listener-side warmup/cooldown autoscaling
         procedure :: claim_warmup_worker_ids !< claim and clear pending warm-up worker slot requests
         procedure :: mark_worker_slots_launch_pending !< mark worker slots as launch-pending prior to scheduler submission
@@ -308,8 +308,9 @@ contains
     end function get_host_ips
 
     !> Return estimated number of workers required to execute all currently
-    !> queued tasks, based on queued thread demand and configured
-    !> nthr_per_worker. Returns 0 when server state is unavailable.
+    !> queued AND already-dispatched/running tasks, based on total thread
+    !> demand and configured nthr_per_worker. Returns 0 when server state
+    !> is unavailable.
     function get_queue_pressure_workers_required( self ) result( n_workers_required )
         class(persistent_worker_server), intent(in) :: self
         integer                                 :: n_workers_required
@@ -648,7 +649,7 @@ contains
         !> Uses queued task thread demand divided by configured nthr_per_worker.
         !> Caller must hold args%mutex.
         subroutine update_queue_pressure()
-            integer :: k, nthr_total_queued, nthr_per_worker_cfg
+            integer :: k, nthr_total_queued, nthr_total_running, nthr_per_worker_cfg
             nthr_total_queued = 0
             do k = 1, n_high
                 if( tasks_priority_high(k)%job_id > 0 .and. tasks_priority_high(k)%end_time == 0 ) then
@@ -665,13 +666,22 @@ contains
                     nthr_total_queued = nthr_total_queued + max(1, tasks_priority_low(k)%nthr)
                 end if
             end do
+            ! Also account for threads already consumed by tasks dispatched to workers
+            ! on prior heartbeats — once dispatched, a task's queue slot is cleared
+            ! (job_id = 0) and it no longer contributes to nthr_total_queued above, but
+            ! it is still real demand until the worker reports it finished.
+            nthr_total_running = 0
+            do k = 1, size(workers)
+                if( workers(k)%worker_uid /= '' ) nthr_total_running = nthr_total_running + workers(k)%nthr_used
+            end do
             nthr_per_worker_cfg = max(1, status%nthr_per_worker)
-            if( nthr_total_queued > 0 ) then
-                status%queue_pressure_workers_required = (nthr_total_queued + nthr_per_worker_cfg - 1) / nthr_per_worker_cfg
+            if( nthr_total_queued + nthr_total_running > 0 ) then
+                status%queue_pressure_workers_required = &
+                    (nthr_total_queued + nthr_total_running + nthr_per_worker_cfg - 1) / nthr_per_worker_cfg
             else
                 status%queue_pressure_workers_required = 0
             end if
-            
+
         end subroutine update_queue_pressure
 
         !> Return the index of the first pending, unsubmitted task in \p queue
