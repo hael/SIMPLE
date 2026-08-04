@@ -111,8 +111,15 @@ stage. `refine3D` then treats `maxits` as the run length for that stage.
 are derived from class FRCs by default, with `lpstart`/`lpstop` overrides and a
 `force_lp_range=yes` path that uses the requested range directly.
 
-For external starting volumes, the low-pass plan is derived from the input
-volume dimensions and mask diameter.
+FRC-derived particle schedules apply an internal guardrail of the starting
+alignment resolution limit (stage 1, ) only when `lpstart` was not supplied.
+The stage 1 guardrail (fixed Fourier shell 5) is applied after schedule and crop
+generation and changes only `lpinfo(1)%lp`; it does not recalculate the stage-1
+image dimensions.
+
+External-volume schedules derive missing limits from the mask diameter, and an
+explicitly supplied `lpstart` overrides the guardrail. Class-average schedules
+never apply the particle stage-1 guardrail.
 
 Saved `_stageNN_lp.mrc` diagnostic volumes are filtered to the current state
 FSC resolution when an FSC exists. The planned stage LP is only a fallback.

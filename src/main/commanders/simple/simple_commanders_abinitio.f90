@@ -757,7 +757,7 @@ contains
                 lprange       = abinitio_lpstop_bounds()
                 params%lpstop = min(params%lpstop, lprange(1))
             endif
-            call set_lplims_from_input(params, spproj, params%lpstart, params%lpstop)
+            call set_lplims_from_input(params, spproj, params%lpstart, params%lpstop, .not.cline%defined('lpstart'))
         else
             if( cline%defined('lpstart') .and. cline%defined('lpstop') )then
                 call set_lplims_from_frcs(params, spproj, l_cavgs=.false., lpstart=params%lpstart, lpstop=params%lpstop)
