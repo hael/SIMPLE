@@ -1,4 +1,4 @@
-program simple_test_euclid_stage1_validation
+program simple_test_continuous_inplane_rotation2D_stage1_validation
 use simple_pftc_srch_api
 use simple_string, only: string
 use simple_builder, only: builder
@@ -82,7 +82,7 @@ do icase = 1, ncases
         &recovery(icase)%shift_rms_grid, recovery(icase)%loss_grid
     write(logfhandle,'(i4,1x,a,3es24.8)') icase, 'PARABOLIC               ', recovery(icase)%angle_error_parabola, &
         &recovery(icase)%shift_rms_parabola, recovery(icase)%loss_parabola
-    write(logfhandle,'(i4,1x,a,3es24.8)') icase, 'CONTINUOUS_JOINT        ', &
+    write(logfhandle,'(i4,1x,a,3es24.8)') icase, 'INPL_CONT_YES           ', &
         &recovery(icase)%angle_error_joint, recovery(icase)%shift_rms_joint, recovery(icase)%loss_joint
     write(logfhandle,'(a,2f12.5)') 'SYNTHETIC_EXPECTED_SHIFT_XY: ', &
         &recovery(icase)%shift_expected
@@ -90,19 +90,19 @@ do icase = 1, ncases
         &recovery(icase)%shift_est_grid
     write(logfhandle,'(a,2f12.5)') 'SYNTHETIC_PARABOLIC_SHIFT_ESTIMATE: ', &
         &recovery(icase)%shift_est_parabola
-    write(logfhandle,'(a,2f12.5)') 'SYNTHETIC_JOINT_SHIFT_ESTIMATE: ', &
+    write(logfhandle,'(a,2f12.5)') 'SYNTHETIC_INPL_CONT_YES_SHIFT_ESTIMATE: ', &
         &recovery(icase)%shift_est_joint
     write(logfhandle,'(a,es16.8,1x,l1)') 'PHASE3_GRADIENT_MAX_ERROR/FINITE: ', &
         &recovery(icase)%joint_gradient_max_error, recovery(icase)%joint_gradient_finite
-    write(logfhandle,'(a,3l2)') 'SYNTHETIC_SHIFT_ACCEPTED_GRID/PARAB/JOINT: ', &
+    write(logfhandle,'(a,3l2)') 'SYNTHETIC_SHIFT_ACCEPTED_GRID/PARAB/INPL_CONT_YES: ', &
         &recovery(icase)%shift_grid_accepted, recovery(icase)%shift_parabola_accepted, &
         &recovery(icase)%joint_accepted
 enddo
-write(logfhandle,'(a,3es24.8)') 'RMS_OVER_CASES GRID/PARAB/JOINT ANGLE: ', &
+write(logfhandle,'(a,3es24.8)') 'RMS_OVER_CASES GRID/PARAB/INPL_CONT_YES ANGLE: ', &
     &sqrt(sum([(recovery(icase)%angle_error_grid**2,icase=1,ncases)])/real(ncases,dp)), &
     &sqrt(sum([(recovery(icase)%angle_error_parabola**2,icase=1,ncases)])/real(ncases,dp)), &
     &sqrt(sum([(recovery(icase)%angle_error_joint**2,icase=1,ncases)])/real(ncases,dp))
-write(logfhandle,'(a,3es24.8)') 'RMS_OVER_CASES GRID/PARAB/JOINT SHIFT: ', &
+write(logfhandle,'(a,3es24.8)') 'RMS_OVER_CASES GRID/PARAB/INPL_CONT_YES SHIFT: ', &
     &sqrt(sum([(recovery(icase)%shift_rms_grid**2,icase=1,ncases)])/real(ncases,dp)), &
     &sqrt(sum([(recovery(icase)%shift_rms_parabola**2,icase=1,ncases)])/real(ncases,dp)), &
     &sqrt(sum([(recovery(icase)%shift_rms_joint**2,icase=1,ncases)])/real(ncases,dp))
@@ -112,7 +112,7 @@ if( any(.not. low_band%finite) .or. any(.not. full_band%finite) .or. any(.not. r
     &.not. ieee_is_finite(low_alias_err) .or. .not. ieee_is_finite(full_alias_err) )then
     error stop 'Stage 1 validation produced a non-finite result'
 endif
-write(logfhandle,'(a)') 'SIMPLE_TEST_EUCLID_STAGE1_VALIDATION NORMAL STOP'
+write(logfhandle,'(a)') 'SIMPLE_TEST_CONT_INPL_ROT2D_STAGE1_VALIDATION NORMAL STOP'
 
 contains
 
@@ -130,7 +130,7 @@ subroutine parse_arguments(args, vol_file, mskdiam, smpd, lp_low, lp_full, truth
     shift_truth = [2., -1.5]
     call args%parse_oldschool
     if( .not. args%defined('vol1') )then
-        write(logfhandle,'(a)') 'simple_test_euclid_stage1_validation vol1=xx mskdiam=120 smpd=1.3 '// &
+        write(logfhandle,'(a)') 'simple_test_continuous_inplane_rotation2D_stage1_validation vol1=xx mskdiam=120 smpd=1.3 '// &
             &'lp=8 lpstop=2.7 angerr=37 xsh=2 ysh=-1.5'
         error stop 'vol1 is required'
     endif
@@ -237,7 +237,7 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     objective_final_parabola = objective_final
     call direct_search%kill
 
-    ! Continuous joint route: optimize (sx,sy,rotind_frac) directly from
+    ! The inpl_cont=yes route optimizes (sx,sy,rotind_frac) directly from
     ! the same selected discrete candidate and zero native shift.
     joint_limits(:,1) = [-5., -5., real(rotind_grid)-2.]
     joint_limits(:,2) = [ 5.,  5., real(rotind_grid)+2.]
@@ -356,4 +356,4 @@ real(dp) function angular_error(angle, target) result(err)
     err = abs(modulo(angle-target+180.d0,360.d0)-180.d0)
 end function angular_error
 
-end program simple_test_euclid_stage1_validation
+end program simple_test_continuous_inplane_rotation2D_stage1_validation

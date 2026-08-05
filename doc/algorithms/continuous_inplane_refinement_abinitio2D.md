@@ -74,6 +74,8 @@ option was also removed because it did not affect the implementation.
 - Joint optimizer: `src/main/pftc/simple_pftc_shsrch_grad.f90`.
 - Coefficient-only objective/gradient:
   `src/main/pftc/simple_polarft_corr.f90`.
-- Focused validation: `production/tests/simple_test_euclid_route_identity.f90`,
-  `production/tests/simple_test_euclid_stage1_validation.f90`, and
-  `production/tests/simple_test_euclid_2d_metadata.f90`.
+- Focused validation is orchestrated by
+  `production/tests/simple_test_continuous_inplane_rotation2D.f90` and implemented in
+  `production/tests/simple_test_continuous_inplane_rotation2D_route_identity.f90`,
+  `production/tests/simple_test_continuous_inplane_rotation2D_stage1_validation.f90`, and
+  `production/tests/simple_test_continuous_inplane_rotation2D_metadata.f90`.

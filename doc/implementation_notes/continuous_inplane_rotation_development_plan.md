@@ -32,7 +32,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
 
 - [x] Phase 0: baseline, Nyquist behavior, and test harness.
   - Confirmed the current Euclidean residual accumulation uses `p=1:pftsz` and omits the `pftsz+1` Nyquist bin.
-  - Added the focused `simple_test_euclid_route_identity` executable; direct SIMPLE invocation with explicit arguments is the authoritative runtime check.
+  - Added the focused route check under the `simple_test_continuous_inplane_rotation2D` regression driver; direct SIMPLE invocation with explicit arguments remains the authoritative runtime check.
   - Confirmed the legacy Euclidean score, raw FFT loss, and scalar gradient route are checked for every discrete rotation by the harness.
   - Compile/link verification passed with the Windows MSYS2 UCRT64 workflow.
   - Runtime validation passed on Oracle Linux 8.10 with 288 rotations: legacy-score error `2.97e-08`, scalar-gradient error `1.82e-07`, tolerance `8.50e-04`.
@@ -40,7 +40,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Implemented a Euclidean-only three-point parabolic peak offset with periodic neighbors and a safeguarded fallback.
   - Preserved discrete selection for non-Euclidean objectives and retained the integer `cur_inpl_idx` compatibility output.
   - Added the continuous grid-index angle output used for shift-frame rotation and optional downstream propagation.
-  - Added a focused synthetic parabola check to `simple_test_euclid_route_identity`.
+  - Added a focused synthetic parabola check to the continuous in-plane route-identity test.
   - Windows UCRT64 compile/link verification passed.
   - Oracle Linux 8.10 runtime validation passed with 288 rotations: legacy-score error `2.91e-08`, scalar-gradient error `3.60e-07`, tolerance `1.11e-03`; the focused parabolic check also passed.
   - Revalidated the updated `HEAD` on Oracle Linux 8.10 with two independent runs: legacy-score errors `2.87e-08` and `2.91e-08`, scalar-gradient errors `2.70e-07` and `3.70e-07`; both completed with `NORMAL STOP`.
@@ -53,7 +53,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Legacy-score error `2.96171144e-08`; scalar-gradient error `2.26158719e-07`; tolerance `1.08889884e-03`.
   - Angular grid error `1.33313786e-07`; periodic error `9.36750677e-17`; first-derivative error `1.32675199e-08`; second-derivative error `9.03031514e-09`; angular tolerance `1.08889884e-03`.
 - [x] Phase 2 extended validation: aliasing experiment and synthetic recovery comparison.
-  - Added `simple_test_euclid_stage1_validation`, an Oracle-runnable production test for the two-band aliasing comparison and deterministic synthetic recovery report.
+  - Added the continuous in-plane Stage 1 validation test, an Oracle-runnable production test for the two-band aliasing comparison and deterministic synthetic recovery report.
   - The report includes grid-only, parabolic, and continuous rows; the Phase 3 joint row is explicitly reported as `NOT_IMPLEMENTED` until Phase 3 exists.
   - The harness now evaluates zero-shift, nonzero-shift, and near-periodic-boundary truths, and repeats the low-pass/full-band comparison with a hard-edged near-Nyquist fixture.
   - All three recovery rows use the same fixed-angle classical Euclidean direct-shift minimizer. The harness reports expected and recovered shift vectors plus acceptance flags.
@@ -83,7 +83,7 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - The 3D gateway implementation is present but intentionally not accepted or committed until the 2D pathway is fully reviewed.
   - 3D workflow validation and any required 3D corrections remain pending.
 - [ ] 2D-only completion: production metadata and final regression.
-  - Added `simple_test_euclid_2d_metadata` to verify persisted continuous `e3`, compatible integer `inpl`, and class-average metadata after a real `abinitio2D` run.
+  - Added the continuous in-plane metadata test to verify persisted continuous `e3`, compatible integer `inpl`, and class-average metadata after a real `abinitio2D` run.
   - The check reads the final project metadata; it does not depend on temporary `algndoc_*.simple` files, which the normal workflow removes during cleanup.
   - When the workflow is run with `mkdir=yes`, launch from the repository `build/` directory and validate the copied project inside a build-local execution directory such as `build/1_abinitio2D`; do not place generated artifacts at the repository root.
   - The full six-stage, 30-iteration Oracle Linux default-off Euclidean workflow completed with `SIMPLE_ABINITIO2D NORMAL STOP`.
@@ -225,7 +225,7 @@ Add focused tests under the existing production test framework, preferably along
 8. **Workflow regression**
    - Run the existing polar FFT, class-search, 2D search, and 3D search tests affected by the API.
    - Confirm non-Euclidean objectives and direct-only paths remain unchanged.
-   - Run public `abinitio2D` with `objfun=euclid` for each `inpl_cont` mode and with `objfun=cc inpl_cont=joint`; only eligible active Euclidean routes may persist continuous `e3` values.
+   - Run public `abinitio2D` with `objfun=euclid inpl_cont=no` and `objfun=euclid inpl_cont=yes`; reject `objfun=cc inpl_cont=yes` until CC derivatives are implemented, and require only eligible Euclidean routes to persist continuous `e3` values.
 
 ## Acceptance and Rollout
 
@@ -240,7 +240,7 @@ Add focused tests under the existing production test framework, preferably along
 
 - The full staged roadmap is desired, with Stage 0–1 as the gated first deliverable.
 - Continuous refinement is enabled only for the raw Euclidean, non-streaming, non-time-series path.
-- Continuous refinement is opt-in through `inpl_cont=callback|joint`; the default is `inpl_cont=no`.
+- Continuous refinement is opt-in through `inpl_cont=yes`; the default is `inpl_cont=no`.
 - The runtime gateway requires raw Euclidean (`objfun=euclid` and `.not. l_objfun_den`), non-SGD, non-time-series search; the same raw-objective requirement is rechecked by the Stage-1 callback and joint-gradient gateways. Probabilistic selection is followed by a gated polish of its selected candidate.
 - The current dirty worktree changes belong to the user and must not be overwritten.
 - Integer `irot` remains the compatibility index; continuous angle is an additive output and metadata enhancement.

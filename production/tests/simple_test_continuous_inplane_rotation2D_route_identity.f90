@@ -1,4 +1,4 @@
-program simple_test_euclid_route_identity
+program simple_test_continuous_inplane_rotation2D_route_identity
 use simple_pftc_srch_api
 use simple_builder,         only: builder
 use simple_matcher_smpl_and_lplims, only: set_bp_range3D
@@ -24,7 +24,7 @@ integer :: irot, nrots
 
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') &
-        'simple_test_euclid_route_identity vol1=xx mskdiam=xx lp=xx'
+        'simple_test_continuous_inplane_rotation2D_route_identity vol1=xx mskdiam=xx lp=xx'
     write(logfhandle,'(a)') ' smpd=xx>'
     stop 2
 endif
@@ -98,7 +98,7 @@ if( .not. probabilistic_refine_search%uses_continuous_refinement() )then
     error stop 'Probabilistic continuous route did not enable selected-candidate refinement'
 endif
 if( .not. probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
-    error stop 'Probabilistic continuous route did not construct the joint optimizer'
+    error stop 'inpl_cont=yes probabilistic route did not construct the joint optimizer'
 endif
 call probabilistic_refine_search%kill
 p%inpl_cont = 'yes'
@@ -150,5 +150,5 @@ endif
 call b%kill_strategy3D_tbox
 call b%kill_general_tbox
 deallocate(legacy_scores, raw_losses, scalar_losses, sigma2_noise)
-write(logfhandle,'(a)') 'SIMPLE_TEST_EUCLID_ROUTE_IDENTITY NORMAL STOP'
-end program simple_test_euclid_route_identity
+write(logfhandle,'(a)') 'SIMPLE_TEST_CONT_INPL_ROT2D_ROUTE_IDENTITY NORMAL STOP'
+end program simple_test_continuous_inplane_rotation2D_route_identity
