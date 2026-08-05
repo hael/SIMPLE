@@ -86,7 +86,7 @@ contains
         call cline%set('overlap',         0.99) ! convergence if overlap > 99%
         call cline%set('nstates',            1) ! only single-state refinement is supported
         call cline%set('objfun',      'euclid') ! the objective function is noise-normalized Euclidean distance
-        call cline%set('envfsc',         'yes') ! we use the envelope mask when calculating the FSC
+        call cline%set('envfsc',         'no')  ! spherical mask when calculating the FSC
         call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults

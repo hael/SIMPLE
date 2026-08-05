@@ -459,14 +459,8 @@ contains
         l_full_update_stage = force_full_sampling_mode(params)
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
-        call cline_refine3D%set('prg',                     'refine3D')
-        if( l_cavgs )then
-            call cline_refine3D%set('envfsc',              'no')
-        else if( params%nstates == 1 .and. istage >= GOLD_STD_STAGE )then
-            call cline_refine3D%set('envfsc',              'yes')
-        else
-            call cline_refine3D%set('envfsc',              'no')
-        endif
+        call cline_refine3D%set('prg',    'refine3D')
+        call cline_refine3D%set('envfsc', 'no')
         if( l_full_update_stage )then
             call cline_refine3D%delete('update_frac')
             call cline_refine3D%delete('fillin')

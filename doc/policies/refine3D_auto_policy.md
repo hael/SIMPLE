@@ -25,7 +25,7 @@ the refinement iterations are delegated to `commander_refine3D`.
 - `overlap=0.99`
 - `nstates=1`
 - `objfun=euclid`
-- `envfsc=yes`
+- `envfsc=no`
 - `lplim_crit=0.143`
 - `incrreslim=no`
 

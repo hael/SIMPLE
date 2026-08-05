@@ -63,8 +63,9 @@ This avoids the old single-file collision problem in multi-state workflows and k
 2. `volassemble` builds even, odd, and merged state volumes.
 3. If `automsk != 'no'`, `volassemble` may generate `automask3D_stateNN.mrc`.
 4. If a NU `filt_mode` is active, `volassemble` prefers that state mask as the nonuniform-filter support mask.
-5. During FSC calculation, the reconstructor attempts to load the same state-specific mask.
-6. If no compatible mask exists, FSC uses the spherical fallback mask.
+5. During FSC calculation only the spherical mask is used (`envfsc=no` by default) to
+   prevent FSC overestimation resulting from the Fourier convolution of the automask
+   unless `envfsc=yes` is explicitly defined.
 
 ## Current implementation notes
 
