@@ -240,7 +240,10 @@ contains
                 ! removing the current node from the queue
                 call dequeue(i,j,k)
                 ! enqueuing the neighbors (with necessary index and flood-fill logic checking)
+                ! the full 26-neighborhood in 3D; in 2D the k-1 and k+1 planes fall
+                ! outside the box and enqueue rejects them, leaving 8-connectivity
                 ! k-1
+                call enqueue(i,   j,   k-1, iVal)
                 call enqueue(i-1, j,   k-1, iVal)
                 call enqueue(i+1, j,   k-1, iVal)
                 call enqueue(i,   j-1, k-1, iVal)
@@ -259,6 +262,7 @@ contains
                 call enqueue(i+1, j-1, k,   iVal)
                 call enqueue(i+1, j+1, k,   iVal)
                 ! k + 1
+                call enqueue(i,   j,   k+1, iVal)
                 call enqueue(i-1, j,   k+1, iVal)
                 call enqueue(i+1, j,   k+1, iVal)
                 call enqueue(i,   j-1, k+1, iVal)
@@ -805,12 +809,16 @@ contains
         class(image_bin), intent(inout) :: self
         type (image_bin) :: img_cc ! connected component image
         integer         :: seed
-        if(self%bldim(3) > 1) then
-            THROW_WARN('Not implemented for volumes! set_edge_cc2background')
-            return
-        endif
         call self%find_ccs(img_cc, black=.true.)
         seed = img_cc%bimat(1,1,1) ! Corner pixel should belong to the background
+        if( seed == 0 )then
+            ! The corner is foreground, so it was never labelled in the inverted
+            ! pass and there is no background component to flood from. Filling on
+            ! this seed would invert the image rather than close its holes.
+            THROW_WARN('foreground touches the corner, holes not filled; set_edgecc2background')
+            call img_cc%kill_bimg
+            return
+        endif
         ! Set to foreground whatever is not background
         where(img_cc%bimat == seed)
             self%bimat = 0

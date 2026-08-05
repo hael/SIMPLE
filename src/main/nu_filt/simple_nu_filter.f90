@@ -47,7 +47,9 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
           refine_nu_extension_filtmap_ordered_labels, analyze_filtmap_neighbor_continuity,&
           nu_highres_extension_stats, get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
-          get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT
+          get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
+          nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, calc_nu_evidence_margin,&
+          write_nu_evidence_map, print_nu_envmask_stats
 private
 #include "simple_local_flags.inc"
 
@@ -95,6 +97,10 @@ real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
 integer,          parameter   :: NU_LABEL_KIND               = selected_int_kind(4)
+! Sentinel floor above which a mask-packed unary entry is treated as unpopulated.
+! Columns are allocated with huge() and compaction can leave stale members behind,
+! so evidence comparisons must ignore anything at that magnitude.
+real,             parameter   :: NU_EVIDENCE_INVALID         = 0.5 * huge(1.)
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 real,             allocatable :: dmats_mask(:,:)
@@ -103,6 +109,14 @@ real,             allocatable :: candidate_coords(:)
 integer(kind=NU_LABEL_KIND), allocatable :: filtmap(:,:,:)
 integer,          allocatable :: cutoff_finds(:)
 real,             allocatable :: dmat_finest_cached(:)
+! Raw, unsmoothed unary costs kept for envelope masking. dmats_mask is smoothed at
+! candidate-dependent radii (30 A for the coarsest member, 6 A for the finest),
+! which is right for label selection but wrong for locating a boundary: it blurs
+! the coarse baseline five times harder than its competitors and erodes the
+! envelope inward on a 30 A scale. The envelope therefore gets its own evidence
+! from these, smoothed once, symmetrically, at a scale the caller chooses.
+real,             allocatable :: nu_ev_base(:)
+real,             allocatable :: nu_ev_best(:)
 logical,          allocatable :: nu_lmask(:,:,:)
 integer,          allocatable :: nu_mask_vox(:,:)
 real,             allocatable :: nu_smooth_norm(:,:,:)
@@ -142,6 +156,36 @@ type :: nu_highres_extension_stats
     logical :: accepted_by_frontier = .false.
     logical :: memory_limited       = .false.
 end type nu_highres_extension_stats
+
+! Controls for NU-evidence-driven envelope masking. beta regularizes boundary
+! area only; connectivity and hole filling are the caller's responsibility.
+type :: nu_envmask_params
+    real    :: nsigma      = 3.0   ! threshold, in null MADs above the null median
+    real    :: beta        = 1.0   ! binary MRF smoothness, same normalized units
+    real    :: dens_weight = 0.0   ! weight of the local-density evidence term
+    real    :: lp_smooth   = 8.0   ! scale, in Angstrom, at which the envelope is defined
+    logical :: l_relative  = .false. ! scale-free margin: improvement per unit baseline cost
+    integer :: maxits      = 6     ! ICM sweeps
+end type nu_envmask_params
+
+type :: nu_envmask_stats
+    real    :: null_med    = 0.
+    real    :: null_mad    = 0.
+    real    :: thres       = 0.
+    real    :: nsigma      = 0.
+    real    :: beta_used   = 0.
+    real    :: dens_med    = 0.
+    real    :: dens_mad    = 0.
+    real    :: dens_weight = 0.
+    integer :: n_support   = 0
+    integer :: n_seed      = 0
+    integer :: n_signal    = 0
+    integer :: nits        = 0
+    real    :: pct_seed    = 0.
+    real    :: pct_signal  = 0.
+    real    :: lp_smooth   = 0.
+    logical :: l_relative  = .false.
+end type nu_envmask_stats
 
 interface
 
@@ -416,6 +460,60 @@ interface
         logical, optional, intent(in) :: mask(:,:,:)
         real,    optional, intent(in) :: max_frequency
     end subroutine write_nu_local_resolution_map
+
+    module subroutine accumulate_nu_evidence_raw( dmat_full, icand )
+        real,    intent(in) :: dmat_full(:,:,:)
+        integer, intent(in) :: icand
+    end subroutine accumulate_nu_evidence_raw
+
+    ! In submodule: simple_nu_filter_envmask.f90
+    module subroutine calc_nu_evidence_margin( margin, lp_smooth, l_relative )
+        real, allocatable, intent(inout) :: margin(:)
+        real,    optional, intent(in)    :: lp_smooth
+        logical, optional, intent(in)    :: l_relative
+    end subroutine calc_nu_evidence_margin
+
+    module real function nu_evidence_baseline_floor( base_full ) result( floor_val )
+        real, intent(in) :: base_full(:,:,:)
+    end function nu_evidence_baseline_floor
+
+    module subroutine calc_nu_evidence_score( margin, nsigma, score, stats )
+        real,                   intent(in)    :: margin(:)
+        real,                   intent(in)    :: nsigma
+        real, allocatable,      intent(inout) :: score(:)
+        type(nu_envmask_stats), intent(inout) :: stats
+    end subroutine calc_nu_evidence_score
+
+    module subroutine add_nu_evidence_density( vol_dens, weight, score, stats )
+        class(image), target,   intent(in)    :: vol_dens
+        real,                   intent(in)    :: weight
+        real, allocatable,      intent(inout) :: score(:)
+        type(nu_envmask_stats), intent(inout) :: stats
+    end subroutine add_nu_evidence_density
+
+    module subroutine segment_nu_evidence( score, p, lmask, stats )
+        real,                    intent(in)    :: score(:)
+        type(nu_envmask_params), intent(in)    :: p
+        logical, allocatable,    intent(inout) :: lmask(:,:,:)
+        type(nu_envmask_stats),  intent(inout) :: stats
+    end subroutine segment_nu_evidence
+
+    module subroutine nu_evidence_envelope( p, lmask, stats, vol_dens )
+        type(nu_envmask_params), intent(in)    :: p
+        logical, allocatable,    intent(inout) :: lmask(:,:,:)
+        type(nu_envmask_stats),  intent(inout) :: stats
+        class(image), optional, target, intent(in) :: vol_dens
+    end subroutine nu_evidence_envelope
+
+    module subroutine write_nu_evidence_map( fname, lp_smooth, l_relative )
+        class(string),     intent(in) :: fname
+        real,    optional, intent(in) :: lp_smooth
+        logical, optional, intent(in) :: l_relative
+    end subroutine write_nu_evidence_map
+
+    module subroutine print_nu_envmask_stats( stats )
+        type(nu_envmask_stats), intent(in) :: stats
+    end subroutine print_nu_envmask_stats
 
 end interface
 

@@ -109,6 +109,12 @@ type(ui_param) :: outfile
 type(ui_param) :: outside
 type(ui_param) :: outstk
 type(ui_param) :: outvol
+type(ui_param) :: nu_envmsk
+type(ui_param) :: nu_msk_beta
+type(ui_param) :: nu_msk_dens
+type(ui_param) :: nu_msk_minvol
+type(ui_param) :: nu_msk_rel
+type(ui_param) :: nu_msk_sig
 type(ui_param) :: nu_refine
 type(ui_param) :: particle_density
 type(ui_param) :: pcontrast
@@ -591,6 +597,30 @@ subroutine set_ui_params
     call outvol%set_param(         'outvol',          'file',   'Output volume name', &
                                    'Output volume name', &
                                    'e.g. outvol.mrc', .false., '')
+
+    call nu_envmsk%set_param(      'nu_envmsk',       'binary', 'NU evidence envelope mask', &
+                                   'Derive an envelope mask from the nonuniform-filter evidence margin(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+
+    call nu_msk_beta%set_param(    'nu_msk_beta',     'num',    'NU envelope mask boundary smoothness', &
+                                   'Binary MRF smoothness of the NU evidence envelope mask; higher gives smoother boundaries{1.0}', &
+                                   'smoothness{1.0}', .false., 1.0)
+
+    call nu_msk_dens%set_param(    'nu_msk_dens',     'num',    'NU envelope mask density weight', &
+                                   'Weight of the local density term, which retains strong but poorly ordered density{0.0}', &
+                                   'density weight{0.0}', .false., 0.0)
+
+    call nu_msk_minvol%set_param(  'nu_msk_minvol',   'num',    'NU envelope mask min component size', &
+                                   'Smallest connected component kept, as a fraction of the largest one{0.1}', &
+                                   'fraction of largest{0.1}', .false., 0.1)
+
+    call nu_msk_rel%set_param(     'nu_msk_rel',      'binary', 'Scale-free NU evidence margin', &
+                                   'Score the fractional rather than absolute objective improvement, so weak but well-ordered density is not outvoted by a high-contrast core(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+
+    call nu_msk_sig%set_param(     'nu_msk_sig',      'num',    'NU envelope mask threshold', &
+                                   'Evidence threshold in MADs above the solvent null; higher gives a tighter mask{3.0}', &
+                                   'in MADs{3.0}', .false., 3.0)
 
     call nu_refine%set_param(      'nu_refine',       'binary', 'NU resolution expansion refinement', &
                                    'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){no}','', .false., 'no', &

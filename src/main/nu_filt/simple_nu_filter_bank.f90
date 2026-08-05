@@ -89,6 +89,10 @@ contains
         allocate(dmats_mask(n_nu_mask,n_candidates), source=huge(x))
         allocate(dmat_tmp(ldim(1),ldim(2),ldim(3)),  source=0.)
         allocate(dmat_cand(ldim(1),ldim(2),ldim(3)), source=huge(x))
+        if( allocated(nu_ev_base) ) deallocate(nu_ev_base)
+        if( allocated(nu_ev_best) ) deallocate(nu_ev_best)
+        allocate(nu_ev_base(n_nu_mask), source=0.)
+        allocate(nu_ev_best(n_nu_mask), source=huge(x))
         do i = 1, size(cutoff_finds)
             dmat_cand = huge(x)
             if( nu_label_is_aux_replacement(i) )then
@@ -104,6 +108,9 @@ contains
                 call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmat_cand, &
                     &nu_lmask, noise_sigma)
             endif
+            ! Snapshot the raw cost before candidate-scale smoothing; the envelope
+            ! needs terms that were blurred identically, not per-candidate.
+            call accumulate_nu_evidence_raw(dmat_cand, i)
             call smooth_nu_objective(dmat_cand, dmat_tmp, nu_label_lowpass_limit(i))
             call pack_nu_dmat_candidate(dmat_cand, i)
         end do

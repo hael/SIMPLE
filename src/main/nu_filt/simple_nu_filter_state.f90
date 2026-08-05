@@ -160,10 +160,33 @@ contains
         nu_smooth_norm_radius = -1
     end subroutine release_nu_smooth_norm
 
+    module subroutine accumulate_nu_evidence_raw( dmat_full, icand )
+        real,    intent(in) :: dmat_full(:,:,:)
+        integer, intent(in) :: icand
+        integer :: imask, i, j, k
+        real    :: val
+        if( .not.allocated(nu_ev_base) ) THROW_HARD('nu_ev_base not allocated; accumulate_nu_evidence_raw')
+        if( .not.allocated(nu_ev_best) ) THROW_HARD('nu_ev_best not allocated; accumulate_nu_evidence_raw')
+        if( any(shape(dmat_full) /= ldim) ) THROW_HARD('dmat shape mismatch; accumulate_nu_evidence_raw')
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,val) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i   = nu_mask_vox(1,imask)
+            j   = nu_mask_vox(2,imask)
+            k   = nu_mask_vox(3,imask)
+            val = dmat_full(i,j,k)
+            ! Candidate 1 is the coarsest bank member and is the envelope baseline.
+            if( icand == 1 ) nu_ev_base(imask) = val
+            if( val < nu_ev_best(imask) ) nu_ev_best(imask) = val
+        end do
+        !$omp end parallel do
+    end subroutine accumulate_nu_evidence_raw
+
     module subroutine cleanup_nu_filter
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_EVEN))
         call delete_cached_filtered_vols(string(NU_FILTER_CACHE_ODD))
         call release_nu_filter_unary_storage
+        if( allocated(nu_ev_base)         ) deallocate(nu_ev_base)
+        if( allocated(nu_ev_best)         ) deallocate(nu_ev_best)
         if( allocated(bwfilters)          ) deallocate(bwfilters)
         if( allocated(candidate_coords)   ) deallocate(candidate_coords)
         if( allocated(filtmap)            ) deallocate(filtmap)

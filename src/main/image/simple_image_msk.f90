@@ -26,6 +26,7 @@ type, extends(image_bin) :: image_msk
     procedure, private :: automask3D_1, automask3D_2
     generic            :: automask3D => automask3D_1, automask3D_2
     procedure          :: estimate_spher_mask_diam
+    procedure          :: envmask3D_from_lmask
     procedure          :: automask3D_filter
     procedure, private :: automask3D_binarize
     procedure, private :: automask3D_keep_largest_cc
@@ -99,6 +100,76 @@ contains
         ! destruct
         call vol_filt%kill
     end subroutine estimate_spher_mask_diam
+
+    !>  Builds a soft envelope mask from an already-segmented binary field. This is
+    !!  the topology and morphology tail shared by any segmentation front end: a
+    !!  smoothness prior regularizes boundary area but cannot enforce a connected
+    !!  result, so component selection and hole filling have to happen here.
+    !!  minvol_frac keeps every component at least that fraction of the largest,
+    !!  which preserves a second well-resolved domain joined by a disordered linker
+    !!  instead of silently discarding it the way largest-component selection does.
+    subroutine envmask3D_from_lmask( self, lmask, smpd, binwidth, edge, minvol_frac, l_fill_holes, n_ccs, n_ccs_kept )
+        class(image_msk), intent(inout) :: self
+        logical,          intent(in)    :: lmask(:,:,:)
+        real,             intent(in)    :: smpd
+        integer,          intent(in)    :: binwidth, edge
+        real,             intent(in)    :: minvol_frac
+        logical,          intent(in)    :: l_fill_holes
+        integer,          intent(out)   :: n_ccs, n_ccs_kept
+        type(image)          :: vol_bin
+        type(image_bin)      :: ccimage
+        integer, allocatable :: ccsizes(:), imat(:,:,:), keepmat(:,:,:)
+        integer              :: ldim_l(3), minsz, icc, i, j, k
+        ldim_l = shape(lmask)
+        n_ccs      = 0
+        n_ccs_kept = 0
+        if( ldim_l(3) < 2 ) THROW_HARD('envmask3D_from_lmask is intended for volumes only')
+        if( .not.any(lmask) )then
+            THROW_WARN('empty binary field, no envelope produced; envmask3D_from_lmask')
+            return
+        endif
+        call vol_bin%new(ldim_l, smpd)
+        call vol_bin%set_rmat(merge(1., 0., lmask), .false.)
+        call self%transfer2bimg(vol_bin)
+        call vol_bin%kill
+        call self%find_ccs(ccimage)
+        ccsizes = ccimage%size_ccs()
+        n_ccs   = size(ccsizes)
+        if( maxval(ccsizes) < 1 )then
+            THROW_WARN('no connected components found; envmask3D_from_lmask')
+            call ccimage%kill_bimg
+            return
+        endif
+        minsz = 1
+        if( minvol_frac > 0. ) minsz = max(1, nint(minvol_frac * real(maxval(ccsizes))))
+        n_ccs_kept = count(ccsizes >= minsz)
+        write(logfhandle,'(A,I7,A,I7,A,I10,A)') '>>> ENVELOPE COMPONENTS: ', n_ccs, ' FOUND, ', &
+            &n_ccs_kept, ' KEPT (min size ', minsz, ' voxels)'
+        call ccimage%get_imat(imat)
+        allocate(keepmat(ldim_l(1),ldim_l(2),ldim_l(3)), source=0)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,icc) proc_bind(close)
+        do k = 1, ldim_l(3)
+            do j = 1, ldim_l(2)
+                do i = 1, ldim_l(1)
+                    icc = imat(i,j,k)
+                    if( icc < 1 ) cycle
+                    if( ccsizes(icc) >= minsz ) keepmat(i,j,k) = 1
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        call vol_bin%new(ldim_l, smpd)
+        call vol_bin%set_rmat(real(keepmat), .false.)
+        call self%transfer2bimg(vol_bin)
+        call vol_bin%kill
+        ! Hole filling precedes dilation so interior voids are closed exactly rather
+        ! than partially bridged by the grown layers.
+        if( l_fill_holes ) call self%set_edgecc2background
+        if( binwidth > 0 ) call self%grow_bins(binwidth)
+        call self%cos_edge(edge)
+        call ccimage%kill_bimg
+        deallocate(ccsizes, imat, keepmat)
+    end subroutine envmask3D_from_lmask
 
     subroutine automask3D_filter( self, params, vol_even, vol_odd, vol_filt )
         class(image_msk),  intent(inout) :: self

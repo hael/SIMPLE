@@ -197,6 +197,28 @@ subroutine new_filter( prgtab )
         &visibility=UI_VIS_STANDARD)
         call nu_filt3D%add_input(UI_MASK, automsk, &
         &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, nu_envmsk, &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, nu_msk_sig, &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, nu_msk_beta, &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, nu_msk_dens, &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, nu_msk_minvol, &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, nu_msk_rel, &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, 'binwidth', 'num', 'Envelope binary layers width',&
+        &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1., &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, 'edge', 'num', 'Envelope mask soft edge',&
+        &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6., &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for the density term',&
+        &'Low-pass limit applied to the even/odd average before the density term is formed, in Angstroms', &
+        &'low-pass limit in Angstroms', .false., 8., &
+        &visibility=UI_VIS_ADVANCED)
         ! computer controls
         call nu_filt3D%add_input(UI_COMP, nthr, &
         &visibility=UI_VIS_STANDARD)
