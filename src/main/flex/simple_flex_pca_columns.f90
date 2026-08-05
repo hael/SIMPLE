@@ -45,7 +45,7 @@ real(dp), parameter :: COV_EIG_REL_FLOOR = 1.0d-6
 ! rearrangement (see unrearrange_kron_selfsum), which needs ONE shared d^4 array regardless of thread count.
 integer,  parameter :: COV_MAX_DTILDE    = 320
 !> Total particles the probe refines the basis on, summed across processes. The basis has a fixed
-!! parameter count, so this is a CAP rather than a fraction -- see the stride derivation below.
+!! parameter count, so this is a cap rather than a fraction -- see the stride derivation below.
 integer,  parameter :: COV_PROBE_MAX_PTCLS = 25000
 !> probe stops when successive bases agree to this mean principal-angle cosine. 0.999 is tight
 !! enough that the remaining rotation cannot move a state target, and on Ribosembly it fires at the
@@ -170,13 +170,12 @@ contains
         if( stat == 0 ) off = ival == 0
     end function cov_env_int_off
 
-    !>  Write the two half-data latent solves so the per-particle error MODEL can be calibrated
-    !!  against the error actually observed. The halves are disjoint checkerboard subsets of ONE
+    !>  Write the two half-data latent solves so the per-particle error model can be calibrated
+    !!  against the error actually observed. The halves are disjoint checkerboard subsets of one
     !!  particle's own Fourier samples (see cov_herm_inner's `half` argument), so var(z1 - z2)
-    !!  measures that particle's estimation error directly -- including model misspecification,
-    !!  which the analytic posterior covariance cannot express. `prior` is written alongside because
-    !!  the half solves are shrunk by it and any calibration has to undo that.
-    !!  Gated on SIMPLE_COV_ZHALF; writes nothing and costs nothing when unset.
+    !!  measures that particle's estimation error directly, including the model misspecification the
+    !!  analytic posterior covariance cannot express. `prior` is written alongside because the half
+    !!  solves are shrunk by it. Gated on SIMPLE_COV_ZHALF.
     subroutine write_zhalf_replicates( zhalf, prior, nptcls, ncomp )
         real(dp), intent(in) :: zhalf(nptcls,ncomp,2), prior(ncomp)
         integer,  intent(in) :: nptcls, ncomp
@@ -371,9 +370,9 @@ contains
             call work%dealloc_rho; call work%kill
             return
         endif
-        ! EMBED WORKER. Same handoff as the probe worker -- the basis is on disk as flex_pca_pc*.mrc
-        ! and flex_pca_probe.txt carries its dimension, prior variances and noise level -- but only ONE
-        ! round, because the basis is final by now and does not change under the workers.
+        ! embed worker: same handoff as the probe worker (basis on disk as flex_pca_pc*.mrc,
+        ! dimension/prior variances/noise level in flex_pca_probe.txt) but only one round, since the
+        ! basis is final by now and does not change under the workers
         if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_EMBED )then
             call load_probe_state(ncomp_probe, eig_probe, sig2_probe)
             call load_probe_basis(params, build, ncomp_probe, basis_recs)
@@ -2866,16 +2865,14 @@ contains
         l_from_parts = .false.
         if( present(stats_only) ) l_stats_only = stats_only
         if( present(from_parts) ) l_from_parts = from_parts
-        ! Distribution rides on the sufficient statistics the reliability prior needs. With
-        ! SIMPLE_COV_RELPRIOR=0 those caches are never formed, so there is nothing to ship and the
-        ! stage stays in process -- correct, just not parallel.
+        ! distribution ships the sufficient statistics the reliability prior needs; with
+        ! SIMPLE_COV_RELPRIOR=0 those caches are never formed, so the stage stays in process
         if( .not. l_relprior .and. (l_stats_only .or. l_from_parts) ) &
             &THROW_HARD('distributed embedding requires the reliability prior; unset SIMPLE_COV_RELPRIOR')
         allocate(prior(ncomp))
         if( l_relprior )then
-            ! The reducing master never holds Gcache at nptcls: it reads one part's blocks at a time in
-            ! the re-solve below. At a million particles with ncomp=48 that is the difference between
-            ! 1.8 GB and 18.4 GB, on top of the precision array it must hold either way.
+            ! the reducing master never holds Gcache at nptcls: it reads one part's blocks at a time
+            ! in the re-solve below
             if( l_from_parts )then
                 allocate(Gcache(0,0,0), bcache(0,0), ccache(0,0))
             else
@@ -2901,13 +2898,13 @@ contains
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         z = 0.d0; contrast = 1.d0; precision = 0.d0; resid_energy = 0.d0; resid_mean_energy = 0.d0
         t_phase = tic()
-        ! MASTER REDUCING PARTS. The image pass below is the whole cost of this stage and the workers
-        ! have already paid it; the master only needs their sufficient statistics to run the coupled
-        ! phase (rho over every particle, then the re-solve). Jump straight there.
+        ! master reducing parts: the workers have already paid the image pass below, so the master
+        ! only needs their sufficient statistics to run the coupled phase (rho over every particle,
+        ! then the re-solve)
         if( l_from_parts )then
-            ! PASS 1 ONLY. zhalf and the per-particle scalars are all rho needs, and rho has to exist
-            ! before any particle can be solved. The Gram blocks stay on disk until the re-solve reads
-            ! them one part at a time -- Gcache below is deliberately never allocated at nptcls.
+            ! pass 1 only: zhalf and the per-particle scalars are all rho needs, and rho has to exist
+            ! before any particle can be solved. The Gram blocks stay on disk until the re-solve
+            ! reads them one part at a time.
             call reduce_embed_zhalf_parts(params, flex_pca_nparts(), pinds, contrast, resid_energy, &
                 &resid_mean_energy, zhalf, nptcls, ncomp)
             goto 200
@@ -3034,9 +3031,9 @@ contains
                 call flush(logfhandle)
             endif
         end do
-        ! The reducing master lands here rather than after the diagnostics, so it still frees the
-        ! per-thread Gram workspace. gcnt_thr is all zero when no batch loop ran, so the spectrum
-        ! report below skips itself -- those diagnostics are per-particle and belong to the parts.
+        ! the reducing master lands here rather than after the diagnostics, so it still frees the
+        ! per-thread Gram workspace; gcnt_thr is all zero when no batch loop ran, so the per-particle
+        ! spectrum report below skips itself
 200     continue
         allocate(gspec(ncomp), source=0.d0)
         gcnt = sum(gcnt_thr)
@@ -3063,8 +3060,8 @@ contains
             &' zeroRHS=',sum(nzeroR_thr),' zeroZ=',sum(nzeroZ_thr),' of nptcls=',nptcls
         write(logfhandle,'(A,F8.1)') '>>> FLEX_PCA CONTRAST EMBED SECONDS: ', toc(t_phase)
         call flush(logfhandle)
-        ! WORKER. The image pass is done for this part's particles; everything below is coupled across
-        ! ALL of them, so it belongs to the master. Ship the sufficient statistics and stop.
+        ! worker: the image pass is done for this part's particles and everything below is coupled
+        ! across all of them, so ship the sufficient statistics and leave the rest to the master
         if( l_stats_only )then
             call write_embed_stats_part(flex_pca_part_fname('embedstats', params%part, params%numlen), &
                 &pinds, contrast, resid_energy, resid_mean_energy, Gcache, bcache, ccache, zhalf, &
@@ -3077,11 +3074,9 @@ contains
         ! near-unregularized least squares. Rescale each prior by the component's split-half reliability.
         if( l_relprior )then
             allocate(rho(ncomp))
-            ! OPTIONAL EXPORT of the two half-data solves themselves, for calibrating the per-particle
-            ! error MODEL against the error actually observed. rho below collapses the pair to one
-            ! correlation per component; the variance of their DIFFERENCE is what measures the error
-            ! directly, including the model misspecification that precision(:,:,row) cannot see.
-            ! Off unless SIMPLE_COV_ZHALF is set, and writes nothing else -- purely additive.
+            ! optional export of the half-data solves for calibrating the per-particle error model:
+            ! rho below collapses the pair to one correlation per component, whereas the variance of
+            ! their difference measures the error directly. Off unless SIMPLE_COV_ZHALF is set.
             call write_zhalf_replicates(zhalf, prior, nptcls, ncomp)
             do q = 1, ncomp
                 rho(q) = corr_dp(zhalf(:,q,1), zhalf(:,q,2), nptcls)
@@ -3096,18 +3091,17 @@ contains
                 rrel = (rho(q)*rho(q)) / (rho_max*rho_max)
                 prior(q) = 1.d0 / max(max(rrel, RHO_FLOOR) * eigvals(q), DTINY)
             end do
-            ! All components, not the leading 10: rho drives state-target placement via comp_rho, so
-            ! its ranking has to be checkable against a signal measure over the whole basis.
+            ! all components, not the leading 10: rho drives state-target placement via comp_rho, so
+            ! its ranking has to be checkable over the whole basis
             write(logfhandle,'(A)') '>>> FLEX_PCA split-half reliability per component (rho, corrected):'
             do q = 1, ncomp
                 write(logfhandle,'(A,I3,A,F7.4,A,ES11.3,A,ES11.3)') '>>>   z',q,'  rho=',rho(q), &
                     &'  eigval=',eigvals(q),'  prior_precision=',prior(q)
             end do
             call flush(logfhandle)
-            ! re-solve every particle in closed form from the cached sufficient statistics.
-            ! Two routes to the SAME arithmetic: in process the blocks are already in Gcache, while a
-            ! reducing master streams them back one part at a time so its footprint does not grow with
-            ! the dataset. The solve is identical either way -- only where the blocks live differs.
+            ! re-solve every particle in closed form from the cached sufficient statistics. Two
+            ! routes to the same arithmetic: in process the blocks are already in Gcache, while a
+            ! reducing master streams them back one part at a time to keep its footprint flat.
             if( l_from_parts )then
                 do ipart = 1, flex_pca_nparts()
                     call read_embed_stats_part(params, ipart, pinds, prows, Gpart, bpart, cpart, &
@@ -3231,19 +3225,15 @@ contains
         ! and leaves the other empty -- and every probe M-step is regularised by an even/odd FSC, which
         ! is then computed against nothing. Measured: the Wiener filter kills the basis and the run dies
         ! at the "embedding collapsed" guard. Striding per halfset keeps both populated at any stride.
-        ! ---- ABSOLUTE CAP, not a fixed ratio ----
-        ! The probe refines ncomp band-limited, FSC-regularised volumes. That parameter count is FIXED
-        ! -- it does not grow when the dataset does -- so the number of particles needed to determine
-        ! it is fixed too, and a constant stride is the wrong control: at stride 4 a million-particle
-        ! project would still refine on 250k particles and the probe would still scale linearly,
-        ! staying the dominant stage (projected 5228 s of a 4.1 h run). Capping the COUNT instead
-        ! makes the probe O(1) in dataset size.
+        ! ---- absolute cap, not a fixed ratio ----
+        ! The probe refines ncomp band-limited, FSC-regularised volumes, and that parameter count
+        ! does not grow with the dataset, so the particles needed to determine it do not either. A
+        ! constant stride would leave the probe scaling linearly and dominating the run; capping the
+        ! count makes it O(1) in dataset size.
         !
-        ! COV_PROBE_MAX_PTCLS is the total across all processes, so each one takes its share; a worker
+        ! COV_PROBE_MAX_PTCLS is the total across all processes, so each takes its share -- a worker
         ! sees only its own partition and would otherwise take the whole budget nparts times over.
-        ! 25000 is what the stride-4 benchmark actually validated at 100k particles: basis principal
-        ! angles 0.988557 vs 0.989457 against every-particle refinement, and 71 vs 70 delivered states.
-        ! SIMPLE_COV_PROBE_STRIDE still wins if set, so the old knob keeps working.
+        ! SIMPLE_COV_PROBE_STRIDE still wins if set.
         nprobe_max = max(1, COV_PROBE_MAX_PTCLS / max(1, params%nparts))
         pstride    = 1
         if( nptcls > nprobe_max ) pstride = (nptcls + nprobe_max - 1) / nprobe_max

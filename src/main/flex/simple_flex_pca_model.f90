@@ -90,14 +90,10 @@ contains
         endif
 
         neigs_req  = max(1, min(48, params%neigs))
-        ! The state count used to be capped at 20 and the excess SILENTLY dropped -- npreimages=24
-        ! delivered 20 with no warning. That is below the truth on any compositionally rich specimen
-        ! (Tomotwin-100 carries ~99 species) and it makes an OVER-provisioned run impossible to
-        ! express, which is the only regime in which the two-gate merge can recover K.
-        ! Nothing algorithmic wanted 20. What actually bounds the state count is memory:
-        ! reconstruct_flex_weighted_states holds all nstates reconstructors resident at once, and a
-        ! second set of nstates when the halfsets are fused. So the ceiling is a memory budget,
-        ! checked against an estimate and reported, rather than a constant.
+        ! No fixed ceiling on the state count: a compositionally rich specimen can carry far more
+        ! states than any constant would allow, and an over-provisioned run is the only regime in
+        ! which the two-gate merge can recover K. What actually bounds it is memory, so it is checked
+        ! against a budget instead.
         nstates    = max(3, params%npreimages)
         call check_state_memory_budget(params, nstates)
         min_neff   = max(20, min(nptcls, params%min_neff))
@@ -205,13 +201,11 @@ contains
             ! contrast-aware MAP embedding (S.D/S.E)
             allocate(contrast(nptcls))
             allocate(comp_rho(ncomp), source=1.d0)
-            ! ---- EMBEDDING: distributed when the master has parts ---- The image pass is by far the
-            ! cost here and it was the last compute stage still running master-only: measured at box
-            ! 96 it held 100k particles on one process at ~115 % CPU while 79 cores idled.
-            ! ONE qsys round, unlike the probe, because the basis does not change: the workers project
-            ! against a fixed basis, so they need no per-iteration refresh. What they cannot do is
-            ! finish -- the reliability prior couples every particle -- so they ship sufficient
-            ! statistics and the master owns rho and the re-solve. See write_embed_stats_part.
+            ! ---- embedding: distributed when the master has parts ----
+            ! One qsys round, unlike the probe, because the basis is fixed here and the workers need
+            ! no per-iteration refresh. What they cannot do is finish, since the reliability prior
+            ! couples every particle, so they ship sufficient statistics and the master owns rho and
+            ! the re-solve. See write_embed_stats_part.
             if( flex_pca_is_master() .and. flex_pca_nparts() > 1 )then
                 call save_probe_state(ncomp, eigvals, sig2_eff)
                 call flex_pca_run_stage(PCA_STAGE_EMBED, 'embedding')
@@ -325,10 +319,10 @@ contains
             &floor_rho=.true., outvol_even=string('flex_pca_even_state_001.mrc'), &
             &outvol_odd=string('flex_pca_odd_state_001.mrc'))
         write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE states_combined_eo seconds=', toc(t_blk)
-        ! ---- TWO-GATE MERGE ---- Collapse states that the orientations or the maps say are not
-        ! distinct, then reconstruct ONCE at the surviving count. Runs here because it needs the
-        ! half maps the pass above just wrote, and before the trajectory ordering, which should
-        ! order the states that are actually delivered.
+        ! ---- two-gate merge ----
+        ! Collapse states the orientations or the maps say are not distinct, then reconstruct once
+        ! at the surviving count. Runs here because it needs the half maps the pass above just wrote,
+        ! and before the trajectory ordering, which should order the states actually delivered.
         if( flex_pca_merge_enabled() .and. nstates > 1 )then
             t_blk = tic()
             allocate(merge_label(nstates))
@@ -343,10 +337,10 @@ contains
                 do i = 1, nptcls
                     if( labels(i) >= 1 .and. labels(i) <= nstates ) labels(i) = merge_label(labels(i))
                 end do
-                ! The re-reconstruction below writes 001..nstates_merged; the maps above that index
-                ! are from the pre-merge pass and MUST go. Everything downstream addresses the state
-                ! maps as the contiguous run flex_pca_state_001..NNN, so leaving the tail behind
-                ! silently delivers states the merge just decided do not exist.
+                ! the re-reconstruction below writes 001..nstates_merged, so the maps above that
+                ! index are stale. Everything downstream addresses the state maps as the contiguous
+                ! run flex_pca_state_001..NNN, so leaving the tail behind delivers states the merge
+                ! just decided do not exist.
                 do s = nstates_merged + 1, nstates
                     call del_file('flex_pca_state_'     //int2str_pad(s,3)//MRC_EXT)
                     call del_file('flex_pca_even_state_'//int2str_pad(s,3)//MRC_EXT)
@@ -496,12 +490,11 @@ contains
 
     !> Report, and bound, what the requested state count will cost in resident reconstructors.
     !!
-    !! reconstruct_flex_weighted_states allocates ALL nstates reconstructors before the particle
-    !! loop, plus a second nstates when the halfsets are fused, and each one carries an expanded
-    !! complex grid and its rho at the RECONSTRUCTION box -- so the cost is linear in nstates and
-    !! cubic in box_rec, and it is paid up front rather than growing during the pass. Estimating it
-    !! here turns an out-of-memory kill deep inside the gridding loop into a message naming the two
-    !! knobs that actually control it.
+    !! reconstruct_flex_weighted_states allocates all nstates reconstructors before the particle
+    !! loop, plus a second nstates when the halfsets are fused, each carrying an expanded complex
+    !! grid and its rho at the reconstruction box. The cost is therefore linear in nstates, cubic in
+    !! box_rec, and paid up front -- so estimating it here turns an out-of-memory kill deep inside
+    !! the gridding loop into a message naming the knobs that control it.
     subroutine check_state_memory_budget( params, nstates )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: nstates
@@ -515,10 +508,8 @@ contains
         nexp    = (2.d0*real(dim_exp,dp) + 1.d0)**3
         ! complex cmat_exp (8 B) + real rho_exp (4 B) per grid point, x2 when even and odd coexist
         gb_proc = 2.d0 * real(nstates,dp) * nexp * 12.d0 / 1.d9
-        ! EVERY process pays this, not just the master: reconstruct_flex_weighted_states allocates
-        ! state_recs(nstates) in the worker path too, because a worker owns a particle subset but
-        ! all of the states. So the machine-wide peak is nparts+1 times the per-process figure, and
-        ! reporting only the latter understates it by an order of magnitude at nparts=10.
+        ! every process pays this, not just the master: a worker owns a particle subset but all of
+        ! the states, so the machine-wide peak is nparts+1 times the per-process figure
         nproc   = max(1, params%nparts) + 1
         gb      = gb_proc * real(nproc,dp)
         budget_gb = 64.d0
@@ -530,11 +521,9 @@ contains
         write(logfhandle,'(A,I0,A,I0,A,F8.2,A,I0,A,F8.2,A)') '>>> FLEX_PCA states=',nstates, &
             &' at reconstruction box ',box_rec,' -> approx ',gb_proc,' GB of reconstructors per &
             &process x ',nproc,' processes = ',gb,' GB machine-wide'
-        ! The reconstructors are rarely what hurts. The reduced solve's accumulator is sized against
-        ! COV_ATHR_BUDGET, which is likewise PER PROCESS and predates distributed execution, so a
-        ! distributed run multiplies it by nproc as well -- measured on Tomotwin at box 96 with
-        ! nparts=10: d_tilde=250 gave 7.9 GB each, ~87 GB machine-wide, which dwarfed the volumes.
-        ! SIMPLE_COV_DTILDE pins d_tilde and is the knob that actually moves this.
+        ! the reconstructors are rarely what hurts: the reduced solve's accumulator is sized against
+        ! COV_ATHR_BUDGET, which is likewise per process and predates distributed execution, so a
+        ! distributed run multiplies it by nproc too. SIMPLE_COV_DTILDE is the knob that moves it.
         if( params%nparts > 1 ) write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA NOTE: the reduced-solve &
             &accumulator is also per process; at nparts=',params%nparts,' it is paid that many times &
             &over. Cap it with SIMPLE_COV_DTILDE if the machine is tight.'

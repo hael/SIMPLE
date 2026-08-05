@@ -437,9 +437,8 @@ contains
         call tmp_fname%kill
     end subroutine write_embed_part
 
-    !> Index of key in an ASCENDING array, 0 if absent. pinds arrive in project order, so the scatter
-    !! below can binary search: the linear scan the older reducers use is O(nptcls) per row and would
-    !! cost 1e11 comparisons on a 335k-particle project.
+    !> Index of key in an ascending array, 0 if absent. pinds arrive in project order, so the scatter
+    !! below can binary search rather than scan linearly, which is O(nptcls) per row.
     pure integer function binsrch_int( arr, n, key ) result( pos )
         integer, intent(in) :: n, arr(n), key
         integer :: lo, hi, mid
@@ -459,21 +458,17 @@ contains
         end do
     end function binsrch_int
 
-    !> One part's EMBEDDING SUFFICIENT STATISTICS, which is what the distributed embedding actually
-    !! has to ship.
+    !> One part's embedding sufficient statistics.
     !!
-    !! The embedding is NOT a clean partition, which is why write_embed_part above -- shipping each
-    !! part's finished latents -- was never wired to anything. The reliability prior is derived from
-    !! rho(q) = corr(zhalf(:,q,1), zhalf(:,q,2)) taken over EVERY particle, and each particle's final
-    !! z is then re-solved against that prior. Let each part compute its own rho and the parts are
-    !! solved against different priors, so the halves of the embedding are not comparable and every
-    !! downstream distance is wrong.
+    !! The embedding is not a clean partition, so a part cannot ship finished latents (which is why
+    !! write_embed_part above was never wired up). The reliability prior comes from
+    !! rho(q) = corr(zhalf(:,q,1), zhalf(:,q,2)) over every particle, and each particle's final z is
+    !! re-solved against it; per-part rho would solve the parts against different priors.
     !!
     !! So a part ships what it can compute independently -- the per-particle sufficient statistics
-    !! from the image pass, plus its own rows of the split-half latents -- and the master does the
-    !! coupled arithmetic: reduce zhalf over all particles, form rho and the prior ONCE, then re-solve
-    !! everything. The re-solve is a small SPD solve per particle and touches no images, so the stage
-    !! that actually costs (reading and projecting particles) is the part that distributes.
+    !! from the image pass plus its own rows of the split-half latents -- and the master does the
+    !! coupled arithmetic: reduce zhalf, form rho and the prior once, then re-solve. The re-solve
+    !! touches no images, so the stage that actually costs is the part that distributes.
     subroutine write_embed_stats_part( fname, pinds, contrast, resid_energy, resid_mean_energy, &
         &Gcache, bcache, ccache, zhalf, nptcls, ncomp )
         class(string), intent(in) :: fname
@@ -488,11 +483,9 @@ contains
         call fileiochk('write_embed_stats_part; open', io_stat)
         write(funit, iostat=io_stat) header
         call fileiochk('write_embed_stats_part; header', io_stat)
-        ! zhalf BEFORE Gcache, deliberately. The master needs two things from these files and they
-        ! differ in size by ncomp/4: the split-half latents, to form rho over every particle before it
-        ! can solve anything, and the per-particle Gram blocks, which it consumes one part at a time.
-        ! Putting the small arrays first lets the first pass stop reading at zhalf instead of pulling
-        ! ncomp^2 doubles per particle through memory for a quantity it does not use yet.
+        ! zhalf before Gcache, deliberately: the master forms rho from the split-half latents before
+        ! it can solve anything, and consumes the much larger Gram blocks one part at a time. Small
+        ! arrays first lets pass 1 stop reading at zhalf.
         write(funit, iostat=io_stat) pinds(1:nptcls)
         write(funit, iostat=io_stat) contrast(1:nptcls), resid_energy(1:nptcls), resid_mean_energy(1:nptcls)
         write(funit, iostat=io_stat) zhalf(1:nptcls,1:ncomp,1:2)
@@ -504,14 +497,13 @@ contains
         call tmp_fname%kill
     end subroutine write_embed_stats_part
 
-    !> PASS 1: gather only what the master needs BEFORE it can solve anything -- the split-half
-    !! latents that form rho, plus the per-particle scalars. Reads no Gram blocks and deletes nothing;
-    !! the files are consumed by read_embed_stats_part below.
+    !> Pass 1: gather what the master needs before it can solve anything -- the split-half latents
+    !! that form rho, plus the per-particle scalars. Reads no Gram blocks and deletes nothing; the
+    !! files are consumed by read_embed_stats_part below.
     !!
-    !! Splitting the reduce in two is what keeps the master's footprint flat in dataset size. Pulling
-    !! every part's Gcache in at once costs ncomp^2 doubles per particle held simultaneously -- 18.4 GB
-    !! at a million particles with ncomp=48, on top of the same again for the precision output. One
-    !! part at a time costs that divided by nparts.
+    !! Splitting the reduce in two keeps the master's footprint flat in dataset size: holding every
+    !! part's Gcache at once costs ncomp^2 doubles per particle, one part at a time costs that
+    !! divided by nparts.
     subroutine reduce_embed_zhalf_parts( params, nparts, gpinds, contrast, resid_energy, &
         &resid_mean_energy, zhalf, nptcls, ncomp )
         class(parameters), intent(in)    :: params
@@ -562,7 +554,7 @@ contains
         call flush(logfhandle)
     end subroutine reduce_embed_zhalf_parts
 
-    !> PASS 2: one part's Gram blocks and its global row indices, so the caller can re-solve just
+    !> Pass 2: one part's Gram blocks and its global row indices, so the caller can re-solve just
     !! those particles and free the buffer before reading the next. Deletes the part file.
     subroutine read_embed_stats_part( params, ipart, gpinds, rows, Gpart, bpart, cpart, pn, nptcls, ncomp )
         class(parameters),     intent(in)  :: params
