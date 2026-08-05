@@ -38,6 +38,7 @@ type(ui_param) :: e1, e2, e3
 type(ui_param) :: eer_fraction
 type(ui_param) :: element
 type(ui_param) :: envfsc
+type(ui_param) :: envref
 type(ui_param) :: eo
 type(ui_param) :: flipgain
 type(ui_param) :: fraca
@@ -315,6 +316,11 @@ subroutine set_ui_params
 
     call envfsc%set_param(         'envfsc',          'binary', 'Envelope solvent correction for FSC', &
                                    'Use the state envelope for FSC; nonuniform refinement applies phase-randomized solvent correction, while no keeps the broad spherical FSC(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+
+    call envref%set_param(         'envref',          'binary', 'Envelope-mask matching references', &
+                                   'Solvent-flatten matching references with the current state envelope before projection; particles are &
+                                   &unchanged(yes|no){no}','', .false., 'no', &
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call eo%set_param(             'eo',              'binary', 'Gold-standard FSC for filtering and resolution estimation', &

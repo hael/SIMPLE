@@ -117,6 +117,8 @@ subroutine new_abinitio3D( prgtab )
         call abinitio3D%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &
             &'Whether to generate/apply an envelope mask from the staged automasking point(yes|tight|no){no}','', .false., 'no', group="mask", visibility=UI_VIS_STANDARD, &
         &choices=ui_choices([character(len=5) :: 'yes', 'tight', 'no']))
+        call abinitio3D%add_input(UI_MASK, envref, group="mask", &
+        &visibility=UI_VIS_ADVANCED)
         ! computer controls
         call abinitio3D%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call abinitio3D%add_input(UI_COMP, nthr,                              group="compute", visibility=UI_VIS_STANDARD)

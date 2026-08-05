@@ -6,6 +6,7 @@ use simple_parameters,      only: parameters
 use simple_cmdline,         only: cmdline
 use simple_image,           only: image
 use simple_refine3D_fnames, only: refine3D_reproj_model_fname
+use simple_vol_pproc_policy, only: state_mask_is_compatible
 implicit none
 
 public :: read_mask_filter_reproject_refvols
@@ -231,10 +232,12 @@ contains
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: s
-        type(string)         :: vol_even, vol_odd, vol_avg
+        type(string)         :: vol_even, vol_odd, vol_avg, envmask_fname
+        type(image)          :: envmask
         real    :: cur_fil(params%box_crop)
         integer :: filtsz
         logical :: have_even, have_odd, have_avg, l_nonuniform_mode, l_use_merged_nu_ref
+        logical :: l_envmask_exists, l_envmask_compatible, l_use_envmask
         l_nonuniform_mode    = params%l_nonuniform
         l_use_merged_nu_ref  = params%l_nonuniform_lpset .and. params%l_lpset
         vol_avg = params%vols(s)
@@ -282,9 +285,9 @@ contains
             call regularize_ref_with_noise(build%vol,     s, 'even')
             call regularize_ref_with_noise(build%vol_odd, s, 'odd')
         endif
-        ! MASK: use circular masking (volassemble handles automask if needed)
-        call build%vol%mask3D_soft(params%msk_crop, backgr=0.0)
-        call build%vol_odd%mask3D_soft(params%msk_crop, backgr=0.0)
+        call prepare_matching_reference_mask()
+        call mask_matching_reference(build%vol)
+        call mask_matching_reference(build%vol_odd)
         ! FILTER
         if( params%l_icm )then
             call build%vol%ICM3D_eo(build%vol_odd, params%lambda)
@@ -306,8 +309,7 @@ contains
             if( params%l_noise_reg )then
                 call regularize_ref_with_noise(build%vol, s, 'avg')
             endif
-            ! mask with circular mask (volassemble handles automask if needed)
-            call build%vol%mask3D_soft(params%msk_crop, backgr=0.0)
+            call mask_matching_reference(build%vol)
             ! FT & odd <- even
             call build%vol%fft
             call build%vol_odd%copy_fast(build%vol)
@@ -339,8 +341,42 @@ contains
                 call build%vol_odd%apply_filter(cur_fil)
             endif
         endif
+        call envmask%kill
+        call envmask_fname%kill
 
     contains
+
+        subroutine prepare_matching_reference_mask()
+            l_use_envmask = .false.
+            if( .not. params%l_envref ) return
+            envmask_fname = string(AUTOMASK_FBODY)//int2str_pad(s,2)//string(MRC_EXT)
+            call state_mask_is_compatible(envmask_fname, params%box_crop, params%smpd_crop, &
+                &l_envmask_exists, l_envmask_compatible)
+            if( l_envmask_compatible )then
+                call envmask%read_and_crop(envmask_fname, params%smpd_crop, params%box_crop, params%smpd_crop)
+                l_use_envmask = .true.
+                write(logfhandle,'(A,I0,A,1X,A)') &
+                    &'>>> MATCHING REFERENCE ENVELOPE: STATE ', s, ', MASK', envmask_fname%to_char()
+            else if( l_envmask_exists )then
+                write(logfhandle,'(A,I0,A)') &
+                    &'>>> WARNING: state ', s, &
+                    &' matching-reference envelope is incompatible; using spherical reference mask'
+            else
+                write(logfhandle,'(A,I0,A)') &
+                    &'>>> WARNING: state ', s, &
+                    &' matching-reference envelope is not available yet; using spherical reference mask'
+            endif
+        end subroutine prepare_matching_reference_mask
+
+        subroutine mask_matching_reference( refvol )
+            class(image), intent(inout) :: refvol
+            if( l_use_envmask )then
+                call refvol%zero_env_background(envmask)
+                call refvol%mul(envmask)
+            else
+                call refvol%mask3D_soft(params%msk_crop, backgr=0.0)
+            endif
+        end subroutine mask_matching_reference
 
         subroutine regularize_ref_with_noise( refvol, state, label )
             class(image),     intent(inout) :: refvol

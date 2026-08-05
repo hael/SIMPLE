@@ -305,6 +305,8 @@ subroutine new_automask( prgtab )
         call refine3D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
         call refine3D%add_input(UI_MASK, automsk, group="mask", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_MASK, envref, group="mask", &
+        &visibility=UI_VIS_ADVANCED)
         ! computer controls
         call refine3D%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call refine3D%add_input(UI_COMP, nthr,                              group="compute", visibility=UI_VIS_STANDARD)
@@ -380,6 +382,8 @@ subroutine new_automask( prgtab )
         call refine3D_auto%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
         call refine3D_auto%add_input(UI_MASK, automsk, group="mask", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_MASK, envref, group="mask", &
+        &visibility=UI_VIS_ADVANCED)
         ! computer controls
         call refine3D_auto%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
         call refine3D_auto%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
@@ -454,6 +458,8 @@ subroutine new_automask( prgtab )
         call refine3D_multi%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &
         &'Perform envelope masking(yes|tight|no){no}','', .false., 'no', group="mask", &
         &choices=ui_choices([character(len=5) :: 'yes', 'tight', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_multi%add_input(UI_MASK, envref, group="mask", &
         &visibility=UI_VIS_ADVANCED)
         ! computer controls
         call refine3D_multi%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)

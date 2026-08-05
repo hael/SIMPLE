@@ -512,6 +512,8 @@ contains
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         call cline%set('nu_refine',     'no') ! no nonuniform refinement
         if( .not. cline%defined('envfsc') ) call cline%set('envfsc', 'no') ! broad spherical FSC by default
+        if( .not. cline%defined('envref') ) &
+            &call cline%set('envref', 'no') ! spherical matching-reference mask by default
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',                    'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',                   0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',                10.)

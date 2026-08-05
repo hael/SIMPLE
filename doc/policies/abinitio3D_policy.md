@@ -304,6 +304,10 @@ explicit merged-reference LP-set matching run.
 
 Automasking is opt-in at the public interface and defaults to `no`. Even when
 enabled, staged automasking starts only from `AUTOMSK_STAGE`.
+`envref` is also opt-in. The controller emits `envref=no` before that stage and
+propagates the requested value once staged automasking is active, so early
+stages remain valid and later matching references can use the current state
+envelope.
 
 The default `multivol_mode=independent` stage limit stops at stage 5, before
 this NU-filtering policy is activated. Users who override `nstages` past that

@@ -24,6 +24,12 @@ The user-facing control is:
 `envfsc=yes` requests phase-randomized solvent correction when a compatible
 automask is available in a nonuniform refinement.
 
+`envref=no` is the default and retains the spherical matching-reference mask.
+`envref=yes` requests RELION-style solvent flattening of each matching
+reference with its compatible state automask. It changes only the references
+used to generate projections; particle images, FSC estimation, NU filtering,
+and matching-bandwidth selection are unchanged.
+
 `mskfile` is no longer part of the CLI policy. Passing `mskfile` is a hard error.
 
 ## Ownership
@@ -54,6 +60,15 @@ missing.
 
 The reconstructor no longer regenerates missing masks on demand.
 
+### Matcher reference preparation
+
+With `envref=yes`, reference preparation loads the compatible
+`automask3D_stateNN.mrc`, subtracts the median density in its soft transition,
+and multiplies the selected reference volume by the mask before reprojection.
+This is applied after choosing regular versus NU-derived and independent
+versus merged references. A missing or incompatible mask falls back to the
+spherical reference mask for that iteration.
+
 ## State-specific artifacts
 
 Mask files are named:
@@ -75,6 +90,8 @@ This avoids the old single-file collision problem in multi-state workflows and k
 6. With `envfsc=yes`, `volassemble` calculates unmasked/broad-sphere, masked,
    and randomized-phase masked curves, then writes the corrected curve as the
    state FSC used for resolution and bandwidth decisions.
+7. With `envref=yes`, the next iteration solvent-flattens its matching
+   references with the compatible state mask before projection.
 
 ## Current implementation notes
 

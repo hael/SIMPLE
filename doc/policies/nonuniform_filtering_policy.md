@@ -51,6 +51,11 @@ phase-randomized solvent correction using the same state automask. FSC
 correction changes the reported resolution metadata; it does not truncate the
 NU filter bank or directly set the NU matching bandwidth.
 
+`envref=yes` is an independent, opt-in matching-reference policy. It
+solvent-flattens the selected NU-derived reference with the current compatible
+state automask immediately before reprojection. It does not alter the NU map,
+the FSC, particle images, or the selected matching low-pass limit.
+
 ## 3. Ownership
 
 `simple_vol_pproc_policy.f90` owns per-state postprocessing decisions:
@@ -256,6 +261,12 @@ The ordinary low-pass filter is not applied on top of the NU reference path.
 Reference preparation treats NU filtering, like ML regularization, as filtering
 already done during assembly.
 
+With `envref=yes`, the selected independent or merged reference is
+background-zeroed from the automask transition and multiplied by the state
+automask before projection. If the state automask is not yet available or is
+incompatible with the current crop, reference preparation uses the ordinary
+spherical mask for that iteration.
+
 ## 12. FSC Correction and Matching-Bandwidth Handoff
 
 The active FSC is selected before NU filtering for resolution estimation and
@@ -309,6 +320,7 @@ matching.
 - `automsk=yes`
 - `ml_reg=yes`
 - `envfsc=no`
+- `envref=no`
 
 The `envfsc` default is overridable so `envfsc=yes` can explicitly request the
 phase-randomized solvent-corrected FSC path.

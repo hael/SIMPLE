@@ -46,6 +46,7 @@ It also supplies overridable defaults when the user has not provided them:
 - `nu_refine=yes`
 - `automsk=yes`
 - `envfsc=no`
+- `envref=no`
 - `keepvol=no`
 
 The default `envfsc=no` keeps the automask out of FSC estimation. Explicit
@@ -53,6 +54,11 @@ The default `envfsc=no` keeps the automask out of FSC estimation. Explicit
 correction after the current state automask has been generated or loaded. The
 choice is exposed as an advanced filter control in the `refine3D_auto` UI/CLI
 contract.
+
+`envref=yes` is an independent advanced mask control for an A/B test against
+the default spherical matching-reference mask. Once a compatible state
+automask exists, it solvent-flattens the matching references before projection
+without changing the NU filter, FSC policy, particles, or matching low-pass.
 
 ## 3. Starting Reference
 

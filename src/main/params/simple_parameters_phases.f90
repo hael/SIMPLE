@@ -597,6 +597,7 @@ contains
         endif
         self%l_lpset  = cline%defined('lp')
         self%l_envfsc = self%envfsc .ne. 'no'
+        self%l_envref = self%envref .ne. 'no'
         if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
         if( cline%defined('heldout') ) self%l_heldout = (trim(self%heldout).eq.'yes')
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
@@ -712,6 +713,14 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported automsk mode: '//trim(self%automsk))
         end select
+        select case(trim(self%envref))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('envref must be yes or no')
+        end select
+        if( self%l_envref .and. trim(self%automsk).eq.'no' )then
+            THROW_HARD('envref=yes requires automsk=yes or automsk=tight')
+        endif
         select case(trim(self%objfun))
             case('cc')
                 self%cc_objfun = OBJFUN_CC
