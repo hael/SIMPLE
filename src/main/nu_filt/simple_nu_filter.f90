@@ -47,7 +47,8 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
           refine_nu_extension_filtmap_ordered_labels, analyze_filtmap_neighbor_continuity,&
           nu_highres_extension_stats, get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
-          get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT
+          get_nu_filtmap_highres_shell_depth, calc_nu_fsc_working_find, write_nu_local_resolution_map, &
+          set_nu_filter_report, NU_DEV_OUTPUT
 private
 #include "simple_local_flags.inc"
 
@@ -109,6 +110,7 @@ real,             allocatable :: nu_smooth_norm(:,:,:)
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: n_nu_mask = 0
+integer :: nu_static_bank_size = 0
 integer :: nu_smooth_norm_radius = -1
 real    :: smpd
 logical :: nu_l_report = .true.
@@ -158,10 +160,15 @@ interface
         integer, intent(in) :: ilabel
     end function nu_label_is_aux_replacement
 
-    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps )
+    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps, max_find )
         class(image), intent(in) :: vol_even, vol_odd
-        integer, optional, intent(in) :: n_highres_steps
+        integer, optional, intent(in) :: n_highres_steps, max_find
     end subroutine init_nu_filter
+
+    module integer function calc_nu_fsc_working_find( fsc, max_find )
+        real, intent(in) :: fsc(:)
+        integer, optional, intent(in) :: max_find
+    end function calc_nu_fsc_working_find
 
     module subroutine set_nu_filter_report( l_report )
         logical, intent(in) :: l_report
@@ -252,12 +259,12 @@ interface
 
     ! In submodule: simple_nu_filter_bank.f90
     module subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps )
+            &n_highres_steps, max_find )
         class(image),          intent(in) :: vol_even, vol_odd
         logical,               intent(in) :: l_mask(:,:,:)
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
-        integer,     optional, intent(in) :: n_highres_steps
+        integer,     optional, intent(in) :: n_highres_steps, max_find
     end subroutine setup_nu_dmats
 
     module subroutine setup_nu_candidate_coords( n_candidates )
@@ -339,16 +346,18 @@ interface
         real, optional, intent(in) :: accept_pct
     end subroutine extend_nu_filter_highres
 
-    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct )
+    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct, max_find )
         class(image),                               intent(in)  :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         real, optional, intent(in) :: accept_pct
+        integer, optional, intent(in) :: max_find
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct, max_find )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
         real, optional, intent(in) :: accept_pct
+        integer, optional, intent(in) :: max_find
     end subroutine extend_nu_filter_highres_shells
 
     module subroutine refine_nu_extension_filtmap_ordered_labels

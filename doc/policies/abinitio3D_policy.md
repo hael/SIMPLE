@@ -295,8 +295,10 @@ shell extension is reserved for `refine3D_auto` and explicit base
 `refine3D` use.
 
 Because `abinitio3D` currently keeps gold-standard refinement disabled,
-`GOLD_STD_STAGE` is off, `envfsc=no`, and the controller keeps a scheduled
-`lp` on the refine3D command line. From `NU_FILTER_STAGE`, staged
+`GOLD_STD_STAGE` is off and `envfsc` defaults to `no`. The advanced `envfsc`
+control is nevertheless exposed with the existing automasking option and its
+value is propagated to every emitted refine3D stage. The controller keeps a
+scheduled `lp` on the refine3D command line. From `NU_FILTER_STAGE`, staged
 `nonuniform` is promoted to `nonuniform_lpset`, so the NU frontier can feed an
 explicit merged-reference LP-set matching run.
 

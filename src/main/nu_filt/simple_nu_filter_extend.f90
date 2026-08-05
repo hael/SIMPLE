@@ -225,10 +225,11 @@ contains
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres
 
-    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct )
+    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct, max_find )
         class(image), intent(in) :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         real, optional, intent(in) :: accept_pct
+        integer, optional, intent(in) :: max_find
         type(nu_highres_extension_stats) :: local_stats
         integer :: new_find, sz_old, frontier_label, n_frontier, ilabel
         real    :: new_limit
@@ -264,6 +265,12 @@ contains
             if( present(stats) ) stats = local_stats
             return
         endif
+        if( present(max_find) )then
+            if( new_find > max(1, max_find) )then
+                if( present(stats) ) stats = local_stats
+                return
+            endif
+        endif
         new_limit = calc_lowpass_lim(new_find, box, smpd)
         if( present(accept_pct) )then
             call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
@@ -275,18 +282,20 @@ contains
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct, max_find )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
         real, optional, intent(in) :: accept_pct
+        integer, optional, intent(in) :: max_find
         type(nu_highres_extension_stats) :: step_stats
         integer :: nsteps_local
         nsteps_local = 0
         do
             if( present(accept_pct) )then
-                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats, accept_pct=accept_pct)
+                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats, &
+                    &accept_pct=accept_pct, max_find=max_find)
             else
-                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats)
+                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats, max_find=max_find)
             endif
             if( .not. step_stats%attempted ) exit
             if( .not. step_stats%applied   ) exit
@@ -340,7 +349,7 @@ contains
         new_n_base = old_n_base + 1
         n_aux = max(0, size(dmats_mask,2) - old_n_base)
         allocate(keep(new_n_base), source=.true.)
-        base_keep_n = min(size(lowpass_limits), new_n_base)
+        base_keep_n = min(nu_static_bank_size, new_n_base)
         if( NU_HIGHRES_EXTENSION_RETAIN_STRIDE > 1 .and. new_n_base > base_keep_n )then
             keep = .false.
             keep(:base_keep_n) = .true.
@@ -482,9 +491,9 @@ contains
         if( .not.allocated(nu_lmask)     ) return
         if( size(dmats_mask,2) < NU_DMAT_CANDIDATE_CAP ) return
         old_n_base = size(cutoff_finds)
-        if( old_n_base <= size(lowpass_limits) ) return
+        if( old_n_base <= nu_static_bank_size ) return
         allocate(keep(old_n_base), source=.false.)
-        base_keep_n = min(size(lowpass_limits), old_n_base)
+        base_keep_n = min(nu_static_bank_size, old_n_base)
         keep(:base_keep_n) = .true.
         do i = base_keep_n + 1, old_n_base
             keep(i) = count_nu_base_label_voxels(i) > 0

@@ -43,6 +43,7 @@ type :: reconstructor_eo
     procedure          :: reset_sum
     procedure          :: apply_weight
     procedure          :: set_sh_lim
+    procedure          :: set_fsc
     ! GETTERS
     procedure          :: is_initialized
     procedure          :: get_kbwin
@@ -76,6 +77,20 @@ type :: reconstructor_eo
 end type reconstructor_eo
 
 contains
+
+    subroutine set_fsc( self, fsc )
+        class(reconstructor_eo), intent(inout) :: self
+        real,                    intent(in)    :: fsc(:)
+        real, allocatable :: res(:)
+        if( size(fsc) /= self%filtsz ) THROW_HARD('FSC size mismatch; reconstructor_eo%set_fsc')
+        if( allocated(self%fsc) ) deallocate(self%fsc)
+        allocate(self%fsc(self%filtsz), source=fsc)
+        res = get_resarr(self%box, self%smpd)
+        call get_resolution(self%fsc, res, self%res_fsc05, self%res_fsc0143)
+        self%res_fsc05   = max(self%res_fsc05, self%fny)
+        self%res_fsc0143 = max(self%res_fsc0143, self%fny)
+        deallocate(res)
+    end subroutine set_fsc
 
     ! CONSTRUCTOR
 
@@ -617,7 +632,8 @@ contains
         class(image),            intent(inout) :: even, odd
         type(string)  :: mskfile_state
         logical       :: l_state_mask_exists, l_state_mask_compatible
-        if( self%p_ptr%l_envfsc .and. (trim(self%p_ptr%automsk).ne.'no') )then
+        if( self%p_ptr%l_envfsc .and. (trim(self%p_ptr%automsk).ne.'no') .and. &
+            &(.not.self%p_ptr%l_nonuniform) )then
             ! Try to load state-specific automask if automasking/envfsc enabled
             ! Construct state-specific filename: automask3D_state{N:02d}.mrc
             mskfile_state = string(AUTOMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)

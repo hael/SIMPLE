@@ -64,7 +64,7 @@ contains
             enddo
             if(build%spproj%is_virgin_field(params%oritype)) &
                 all_fsc_bin_exist = (count(fsc_bin_exists)==params%nstates)
-            l_nu_align_lp = try_nu_refine_project_alignment_lp(params, build, nu_align_lp)
+            l_nu_align_lp = try_nu_project_working_lp(params, build, nu_align_lp)
             ! set low-pass Fourier index limit
             if( all_fsc_bin_exist )then
                 resarr = build%img%get_res()
@@ -136,7 +136,7 @@ contains
         call build%spproj_field%set_all2single('lp',params%lp)
     end subroutine set_bp_range3D
 
-    logical function try_nu_refine_project_alignment_lp( params, build, align_lp ) result( l_use )
+    logical function try_nu_project_working_lp( params, build, align_lp ) result( l_use )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         real,              intent(out)   :: align_lp
@@ -144,14 +144,13 @@ contains
         align_lp = 0.
         l_use    = .false.
         if( .not. params%l_nonuniform ) return
-        if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
         l_fresh_start = params%which_iter <= params%startit .and. trim(params%continue).ne.'yes'
         if( l_fresh_start ) return
         if( .not. build%spproj_field%isthere(params%fromp, 'lp') ) return
         align_lp = build%spproj_field%get(params%fromp, 'lp')
         l_use = align_lp > TINY
         if( align_lp <= TINY ) l_use = .false.
-    end function try_nu_refine_project_alignment_lp
+    end function try_nu_project_working_lp
 
     subroutine set_bp_range2D( params, build, cline, which_iter, frac_srch_space )
         class(parameters), intent(inout) :: params

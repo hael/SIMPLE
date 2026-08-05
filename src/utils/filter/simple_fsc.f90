@@ -39,62 +39,87 @@ end type fsc_area_score_result
 contains
 
     ! calculate phase-randomized FSC according to Chen et al,JSB,2013
-    subroutine phase_rand_fsc(even, odd, envmask, msk, state, n, fsc, fsc_t, fsc_n)
-        class(image),            intent(inout) :: even, odd, envmask
+    subroutine phase_rand_fsc(even, odd, envmask, state, n, fsc, fsc_t, fsc_n, fsc_u)
+        class(image),            intent(in)    :: even, odd
+        class(image),            intent(inout) :: envmask
         integer,                 intent(in)    :: state, n
-        real,                    intent(in)    :: msk
         real, allocatable,       intent(out)   :: fsc(:), fsc_t(:), fsc_n(:)
-        real    :: lp_rand, smpd
+        real, allocatable, optional, intent(out) :: fsc_u(:)
+        type(image) :: work_even, work_odd
+        real, allocatable :: fsc_unmasked(:)
+        real    :: lp_rand, smpd, denom
         integer :: ldim(3), k, k_rand
         call random_seed()
         ldim = even%get_ldim()
         smpd = even%get_smpd()
-        allocate(fsc(n),fsc_t(n),fsc_n(n), source=0.)
-        call even%ifft()                        ! Fourier space
-        call odd%ifft()
-        ! Enveloppe-masked FSC
-        call even%zero_env_background(envmask)
-        call odd%zero_env_background(envmask)
-        call even%mul(envmask)                  ! mask
-        call odd%mul(envmask)
-        call even%fft()                         ! Fourier space
-        call odd%fft()
-        call even%fsc(odd, fsc_t)               ! FSC
-        ! Randomize then calculate masked FSC
-        k_rand = get_find_at_crit(fsc_t, ENVMSK_FSC_THRESH)
-        if( k_rand > n-3 )then
-            ! reverts to sherical masking
-            call even%ifft()
-            call odd%ifft()
-            call even%mask3D_soft(msk)
-            call odd%mask3D_soft(msk)
-            call even%fft()
-            call odd%fft()
-            call even%fsc(odd, fsc)
+        if( n < 1 ) THROW_HARD('phase-randomized FSC requires at least one shell')
+        if( any(odd%get_ldim() /= ldim) ) THROW_HARD('even/odd dimensions differ; phase_rand_fsc')
+        if( any(envmask%get_ldim() /= ldim) ) THROW_HARD('mask dimensions differ; phase_rand_fsc')
+        allocate(fsc(n), fsc_t(n), fsc_n(n), fsc_unmasked(n), source=0.)
+        call work_even%copy(even)
+        call work_odd%copy(odd)
+        call work_even%ifft()
+        call work_odd%ifft()
+        ! The unmasked curve determines the randomization onset, as in the
+        ! RELION solvent-correction policy.
+        call work_even%fft()
+        call work_odd%fft()
+        call work_even%fsc(work_odd, fsc_unmasked)
+        ! Envelope-masked FSC.
+        call work_even%ifft()
+        call work_odd%ifft()
+        call work_even%zero_env_background(envmask)
+        call work_odd%zero_env_background(envmask)
+        call work_even%mul(envmask)
+        call work_odd%mul(envmask)
+        call work_even%fft()
+        call work_odd%fft()
+        call work_even%fsc(work_odd, fsc_t)
+        k_rand = 0
+        do k = 2,n
+            if( fsc_unmasked(k) < ENVMSK_FSC_THRESH )then
+                k_rand = k
+                exit
+            endif
+        enddo
+        if( k_rand == 0 .or. k_rand > n-2 )then
+            ! With no usable 0.8 crossing the masked correction is not
+            ! identifiable; retain the unmasked gold-standard curve.
+            fsc = fsc_unmasked
         else
             lp_rand = calc_lowpass_lim(k_rand, ldim(1), smpd)
-            ! randomize
-            call even%phase_rand(lp_rand)
-            call odd%phase_rand(lp_rand)
-            ! mask
-            call even%ifft()
-            call odd%ifft()
-            call even%zero_env_background(envmask)
-            call odd%zero_env_background(envmask)
-            call even%mul(envmask)
-            call odd%mul(envmask)
-            ! FSC phase-randomized
-            call even%fft()
-            call odd%fft()
-            call even%fsc(odd, fsc_n)
-            ! correction
+            call work_even%kill
+            call work_odd%kill
+            call work_even%copy(even)
+            call work_odd%copy(odd)
+            call work_even%ifft()
+            call work_odd%ifft()
+            call work_even%phase_rand(lp_rand)
+            call work_odd%phase_rand(lp_rand)
+            call work_even%zero_env_background(envmask)
+            call work_odd%zero_env_background(envmask)
+            call work_even%mul(envmask)
+            call work_odd%mul(envmask)
+            call work_even%fft()
+            call work_odd%fft()
+            call work_even%fsc(work_odd, fsc_n)
             fsc = fsc_t
             do k = k_rand+2,n
-                fsc(k) = (fsc_t(k)-fsc_n(k)) / (1.-fsc_n(k))
+                denom = 1. - fsc_n(k)
+                if( fsc_n(k) > fsc_t(k) .or. denom <= TINY )then
+                    fsc(k) = 0.
+                else
+                    fsc(k) = max(0., min(1., (fsc_t(k)-fsc_n(k)) / denom))
+                endif
             enddo
-            call arr2file(fsc_t, string('fsct_state'//int2str_pad(state,2)//BIN_EXT))
-            call arr2file(fsc_n, string('fscn_state'//int2str_pad(state,2)//BIN_EXT))
         endif
+        if( present(fsc_u) ) allocate(fsc_u(n), source=fsc_unmasked)
+        call arr2file(fsc_unmasked, string('fscu_state'//int2str_pad(state,2)//BIN_EXT))
+        call arr2file(fsc_t,        string('fsct_state'//int2str_pad(state,2)//BIN_EXT))
+        call arr2file(fsc_n,        string('fscn_state'//int2str_pad(state,2)//BIN_EXT))
+        call work_even%kill
+        call work_odd%kill
+        deallocate(fsc_unmasked)
     end subroutine phase_rand_fsc
 
     subroutine plot_fsc( n, fsc, res, smpd, tmpl_fname )

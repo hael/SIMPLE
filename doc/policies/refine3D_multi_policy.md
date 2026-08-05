@@ -93,7 +93,7 @@ compute controls:
 
 - search: `maxits`, `nstates`, `pgrp`, `autoscale`, `continue`
 - mode: `multivol_mode`
-- filter: `filt_mode`, `lpstop`, `ml_reg`
+- filter: `filt_mode`, `lpstop`, `ml_reg`, `envfsc`
 - mask: `mskdiam`, `automsk`
 - compute: `nparts`, `nthr`
 
@@ -104,7 +104,6 @@ The commander sets these hard workflow defaults:
 - `frac_best=1.0`
 - `trail_rec=yes`, except `input_oris_fixed` sets `trail_rec=no`
 - `objfun=euclid`
-- `envfsc=no`
 - `lplim_crit=0.5`
 - `incrreslim=no`
 - `nu_refine=no`
@@ -113,6 +112,7 @@ The commander sets these hard workflow defaults:
 The commander also sets these defaults only when the user did not provide a
 value:
 
+- `envfsc=no`
 - `mkdir=yes`
 - `center=no`
 - `sigma_est=global`
@@ -464,6 +464,11 @@ references:
 - `automsk=no`
 - `envfsc=no`
 - `lplim_crit=0.5`
+
+`envfsc` is an advanced filter control. Its default keeps each state automask
+out of FSC estimation. When both automasking and `envfsc=yes` are selected,
+`volassemble` performs phase-randomized solvent correction independently for
+each state before deriving the NU working bandwidth.
 
 `volassemble` remains the execution site for volume-domain work. In a default
 run it may restore per-state half maps, calculate FSCs, run ML regularization,

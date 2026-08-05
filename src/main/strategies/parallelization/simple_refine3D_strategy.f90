@@ -239,7 +239,6 @@ contains
         integer :: project_find, lpstop_find
         logical :: l_has_lp, l_log_promotion
         if( .not. params%l_nonuniform ) return
-        if( .not. (params%l_nu_refine .or. params%l_nonuniform_lpset) ) return
         if( .not. file_exists(params%projfile) ) return
         project_lp = 0.
         l_has_lp   = .false.

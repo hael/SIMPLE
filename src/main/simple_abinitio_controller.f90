@@ -460,7 +460,7 @@ contains
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         call cline_refine3D%set('prg',    'refine3D')
-        call cline_refine3D%set('envfsc', 'no')
+        call cline_refine3D%set('envfsc', params%envfsc)
         if( l_full_update_stage )then
             call cline_refine3D%delete('update_frac')
             call cline_refine3D%delete('fillin')

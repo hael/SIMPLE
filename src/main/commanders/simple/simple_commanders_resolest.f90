@@ -73,7 +73,7 @@ contains
         if( params%automsk .ne. 'no' )then
             call mskvol%new([params%box,params%box,params%box], params%smpd)
             call mskvol%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
-            call phase_rand_fsc(even, odd, mskvol, params%msk, 1, nyq, fsc, fsc_t, fsc_n)
+            call phase_rand_fsc(even, odd, mskvol, 1, nyq, fsc, fsc_t, fsc_n)
         else
             ! spherical masking
             call even%mask3D_soft(params%msk)

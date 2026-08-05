@@ -597,11 +597,6 @@ contains
         endif
         self%l_lpset  = cline%defined('lp')
         self%l_envfsc = self%envfsc .ne. 'no'
-        if( self%nstates > 1 .and. self%l_envfsc )then
-            THROW_WARN('envfsc disabled for nstates > 1')
-            self%envfsc  = 'no'
-            self%l_envfsc = .false.
-        endif
         if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
         if( cline%defined('heldout') ) self%l_heldout = (trim(self%heldout).eq.'yes')
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')

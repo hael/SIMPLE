@@ -9,15 +9,20 @@ The current architecture treats automasking as:
 - a workflow policy selected by `automsk`
 - a per-state artifact named by convention
 - a post-reconstruction operation owned by `volassemble`
-- an optional FSC mask input consumed by the reconstructor
+- NU-filter support that is independent of the default FSC mask
+- an opt-in input to phase-randomized FSC solvent correction
 
 ## Public policy
 
 The user-facing control is:
 
-- `automsk=no`: no automask generation; FSC falls back to the spherical mask
+- `automsk=no`: no automask generation; FSC uses the spherical mask
 - `automsk=yes`: generate a per-state envelope mask from the even/odd volumes
 - `automsk=tight`: same as `yes`, but request tighter Otsu-style thresholding
+
+`envfsc=no` is the default and keeps the automask out of FSC estimation.
+`envfsc=yes` requests phase-randomized solvent correction when a compatible
+automask is available in a nonuniform refinement.
 
 `mskfile` is no longer part of the CLI policy. Passing `mskfile` is a hard error.
 
@@ -38,12 +43,14 @@ Responsibilities:
 
 The reconstructor is a consumer, not a producer.
 
-Responsibilities:
+For a nonuniform refinement, the reconstructor first calculates the provisional
+gold-standard FSC with the broad spherical mask. After `volassemble` has
+generated or loaded the current automask, it optionally replaces that curve
+with the phase-randomized solvent-corrected FSC when `envfsc=yes`.
 
-- try to load `automask3D_stateNN.mrc`
-- verify that the mask matches the current box and sampling
-- apply it to FSC volumes only when `envfsc=yes`
-- fall back to the spherical mask when no compatible state mask exists
+Legacy non-NU reconstruction paths may still consume a compatible state mask
+directly when `envfsc=yes`; they fall back to the spherical mask when it is
+missing.
 
 The reconstructor no longer regenerates missing masks on demand.
 
@@ -63,9 +70,11 @@ This avoids the old single-file collision problem in multi-state workflows and k
 2. `volassemble` builds even, odd, and merged state volumes.
 3. If `automsk != 'no'`, `volassemble` may generate `automask3D_stateNN.mrc`.
 4. If a NU `filt_mode` is active, `volassemble` prefers that state mask as the nonuniform-filter support mask.
-5. During FSC calculation only the spherical mask is used (`envfsc=no` by default) to
-   prevent FSC overestimation resulting from the Fourier convolution of the automask
-   unless `envfsc=yes` is explicitly defined.
+5. With `envfsc=no`, the FSC remains the broad-sphere curve and the automask has
+   no FSC role.
+6. With `envfsc=yes`, `volassemble` calculates unmasked/broad-sphere, masked,
+   and randomized-phase masked curves, then writes the corrected curve as the
+   state FSC used for resolution and bandwidth decisions.
 
 ## Current implementation notes
 

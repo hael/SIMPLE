@@ -369,6 +369,8 @@ subroutine new_automask( prgtab )
         & 'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){yes}','', .false., 'yes', group="filter", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_FILT, envfsc, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_FILT, combine_eo, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_FILT, 'res_target', 'num', 'Resolution target (in A)',&
@@ -444,6 +446,8 @@ subroutine new_automask( prgtab )
         &group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_multi%add_input(UI_FILT, ml_reg, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_multi%add_input(UI_FILT, envfsc, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call refine3D_multi%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)

@@ -103,6 +103,8 @@ subroutine new_abinitio3D( prgtab )
             &NU frontier into an explicit merged-reference LP-set matching run','', .false., 'nonuniform', &
             &group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
+        call abinitio3D%add_input(UI_FILT, envfsc, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&
             &'low-pass limit for the initial stage of ini3D in Angstroms',  .false., 20., group="filter", &

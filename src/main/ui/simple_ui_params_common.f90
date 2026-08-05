@@ -313,8 +313,8 @@ subroutine set_ui_params
                                    'Atom element name: Au, Pt etc.', &
                                    'atom composition e.g. Pt', .true., '  ')
 
-    call envfsc%set_param(         'envfsc',          'binary', 'Envelope mask e/o maps for FSC', &
-                                   'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}','', .false., 'no', &
+    call envfsc%set_param(         'envfsc',          'binary', 'Envelope solvent correction for FSC', &
+                                   'Use the state envelope for FSC; nonuniform refinement applies phase-randomized solvent correction, while no keeps the broad spherical FSC(yes|no){no}','', .false., 'no', &
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call eo%set_param(             'eo',              'binary', 'Gold-standard FSC for filtering and resolution estimation', &

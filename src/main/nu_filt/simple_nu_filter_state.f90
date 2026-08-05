@@ -28,11 +28,12 @@ contains
             &allocated(aux_even_bank) .and. allocated(aux_odd_bank)
     end function nu_label_is_aux_replacement
 
-    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps )
+    module subroutine init_nu_filter( vol_even, vol_odd, n_highres_steps, max_find )
         class(image), intent(in) :: vol_even, vol_odd
-        integer, optional, intent(in) :: n_highres_steps
+        integer, optional, intent(in) :: n_highres_steps, max_find
         integer, allocatable :: cutoff_finds_tmp(:)
         integer :: i, n_extra, n_extra_requested, n_valid, max_extra, base_find
+        integer :: candidate_find, find_ceiling, nominal_base_find
         integer :: istep, n_extra_retained_requested, n_extra_skip, n_kept_seen
         ldim = vol_even%get_ldim()
         smpd = vol_even%get_smpd()
@@ -43,20 +44,42 @@ contains
         nu_smooth_norm_radius = -1
         if( allocated(dmat_finest_cached) ) deallocate(dmat_finest_cached)
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
-        base_find = calc_fourier_index(lowpass_limits(size(lowpass_limits)), box, smpd)
+        find_ceiling = box / 2
+        if( present(max_find) ) find_ceiling = min(find_ceiling, max(1, max_find))
+        nominal_base_find = calc_fourier_index(lowpass_limits(size(lowpass_limits)), box, smpd)
+        allocate(cutoff_finds_tmp(NU_DMAT_CANDIDATE_CAP))
+        n_valid = 0
+        do i = 1, size(lowpass_limits)
+            candidate_find = calc_fourier_index(lowpass_limits(i), box, smpd)
+            if( candidate_find > find_ceiling ) cycle
+            if( n_valid > 0 )then
+                if( any(cutoff_finds_tmp(:n_valid) == candidate_find) ) cycle
+            endif
+            n_valid = n_valid + 1
+            cutoff_finds_tmp(n_valid) = candidate_find
+        enddo
+        ! When the FSC gate falls inside the static bank, retain an exact
+        ! terminal candidate at the permitted working shell.
+        if( find_ceiling <= nominal_base_find )then
+            if( n_valid == 0 .or. .not.any(cutoff_finds_tmp(:n_valid) == find_ceiling) )then
+                n_valid = n_valid + 1
+                cutoff_finds_tmp(n_valid) = find_ceiling
+            endif
+        endif
+        if( n_valid == 0 )then
+            n_valid = 1
+            cutoff_finds_tmp(1) = find_ceiling
+        endif
+        nu_static_bank_size = n_valid
+        base_find = cutoff_finds_tmp(n_valid)
         n_extra_requested = 0
         if( present(n_highres_steps) )then
-            n_extra_requested = min(max(0, n_highres_steps), max(0, box / 2 - base_find))
+            n_extra_requested = min(max(0, n_highres_steps), max(0, find_ceiling - base_find))
         endif
-        max_extra = max(0, NU_DMAT_CANDIDATE_CAP - size(lowpass_limits) - NU_DMAT_CANDIDATE_HEADROOM)
+        max_extra = max(0, NU_DMAT_CANDIDATE_CAP - nu_static_bank_size - NU_DMAT_CANDIDATE_HEADROOM)
         n_extra_retained_requested = count_nu_highres_extension_retained_steps(n_extra_requested)
         n_extra = min(n_extra_retained_requested, max_extra)
         n_extra_skip = max(0, n_extra_retained_requested - n_extra)
-        allocate(cutoff_finds_tmp(size(lowpass_limits) + n_extra))
-        do i = 1, size(lowpass_limits)
-            cutoff_finds_tmp(i) = calc_fourier_index(lowpass_limits(i), box, smpd)
-        end do
-        n_valid = size(lowpass_limits)
         if( NU_DEV_OUTPUT .and. nu_l_report .and. n_extra_retained_requested > n_extra )then
             write(logfhandle,'(A,I0,A,I0,A,I0,A)') &
                 &'>>> NU high-resolution depth ', n_extra_requested, &
@@ -174,9 +197,45 @@ contains
         ldim = 0
         box  = 0
         n_nu_mask = 0
+        nu_static_bank_size = 0
         smpd = 0.
         nu_noise_sigma_cached = 0.
     end subroutine cleanup_nu_filter
+
+    module integer function calc_nu_fsc_working_find( fsc, max_find )
+        real, intent(in) :: fsc(:)
+        integer, optional, intent(in) :: max_find
+        integer :: i, k05, k0143, k05_high, max_shell, margin
+        if( size(fsc) < 2 )then
+            calc_nu_fsc_working_find = 1
+            return
+        endif
+        max_shell = max(1, size(fsc) - 1)
+        k05 = 1
+        do i = 2,max_shell
+            if( fsc(i) < 0.5 ) exit
+            k05 = i
+        enddo
+        ! RELION's high-side safeguard for a short dip followed by renewed
+        ! evidence above the data/prior boundary.
+        k05_high = k05
+        do i = max_shell,k05,-1
+            if( fsc(i) > 0.5 )then
+                k05_high = i
+                exit
+            endif
+        enddo
+        if( k05_high > k05 + 3 ) k05 = k05_high
+        k0143 = 1
+        do i = 2,max_shell
+            if( fsc(i) < 0.143 ) exit
+            k0143 = i
+        enddo
+        k0143 = max(k0143, k05)
+        margin = max(10, k0143 - k05 + 5)
+        calc_nu_fsc_working_find = min(max_shell, k05 + margin)
+        if( present(max_find) ) calc_nu_fsc_working_find = min(calc_nu_fsc_working_find, max(1, max_find))
+    end function calc_nu_fsc_working_find
 
     module subroutine cleanup_aux_bank
         integer :: i

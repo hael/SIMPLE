@@ -25,7 +25,6 @@ the refinement iterations are delegated to `commander_refine3D`.
 - `overlap=0.99`
 - `nstates=1`
 - `objfun=euclid`
-- `envfsc=no`
 - `lplim_crit=0.143`
 - `incrreslim=no`
 
@@ -41,7 +40,14 @@ It also supplies overridable defaults when the user has not provided them:
 - `filt_mode=nonuniform`
 - `nu_refine=yes`
 - `automsk=yes`
+- `envfsc=no`
 - `keepvol=no`
+
+The default `envfsc=no` keeps the automask out of FSC estimation. Explicit
+`envfsc=yes` enables the nonuniform workflow's phase-randomized solvent
+correction after the current state automask has been generated or loaded. The
+choice is exposed as an advanced filter control in the `refine3D_auto` UI/CLI
+contract.
 
 ## 3. Starting Reference
 
