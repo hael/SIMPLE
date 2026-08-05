@@ -9,6 +9,7 @@ use simple_commanders_mkcavgs,              only: commander_make_cavgs_distr, co
                                                   commander_unbootstrap_cavgs, commander_write_classes
 use simple_commanders_abinitio2D,           only: commander_abinitio2D
 use simple_stream_abinitio2D_chunks,        only: stream_abinitio2D_chunks
+use simple_commanders_abinitio2d_sgd,       only: commander_abinitio2d_sgd
 use simple_commanders_cavgs,                only: commander_map_cavgs_selection
 
 implicit none
@@ -18,6 +19,7 @@ private
 
 type(commander_abinitio2D)                  :: xabinitio2D
 type(stream_abinitio2D_chunks)              :: xabinitio2D_chunks
+type(commander_abinitio2d_sgd)              :: xabinitio2d_sgd
 type(commander_make_cavgs_distr)            :: xmake_cavgs_distr
 type(commander_bootstrap_cavgs)             :: xbootstrap_cavgs
 type(commander_unbootstrap_cavgs)           :: xunbootstrap_cavgs
@@ -44,6 +46,12 @@ contains
                 endif
             case( 'abinitio2D_chunks' )
                 call xabinitio2D_chunks%execute(cline)       
+            case( 'abinitio2d_sgd' )
+                if( cline%defined('nrestarts') )then
+                    call restarted_exec(cline, string('abinitio2d_sgd'), string('simple_exec'))
+                else
+                    call xabinitio2d_sgd%execute(cline)
+                endif
             case( 'make_cavgs' )
                 call xmake_cavgs_distr%execute(cline)
             case( 'bootstrap_cavgs' )

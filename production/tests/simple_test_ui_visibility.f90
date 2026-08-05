@@ -1,5 +1,5 @@
 program simple_test_ui_visibility
-use simple_test_utils,    only: assert_char, assert_int, assert_true, report_summary, tests_failed
+use simple_test_utils,    only: assert_char, assert_int, assert_real, assert_true, report_summary, tests_failed
 use simple_linked_list,   only: linked_list, list_iterator
 use simple_string,        only: string
 use simple_ui,            only: make_ui, make_test_ui, get_prg_ptr, get_test_prg_ptr
@@ -148,6 +148,32 @@ call assert_registered_requirement('binarize', 'input', 1, 1)
 call assert_registered_category('icm2D', 'denoise', 'Denoising', 70)
 call assert_registered_category('atoms_stats', 'atom', 'Atom Analysis', 50)
 call assert_registered_category('abinitio2D_stream', 'stream', 'Stream Workflows', 10)
+call assert_registered_category('abinitio2D', 'cluster2d', 'Cluster2D Workflows', 30)
+call assert_registered_search_input_absent('abinitio2D', 'sgd_stage4_mode')
+call assert_registered_search_input_absent('abinitio2D', 'sgd_diagnostic')
+call assert_registered_search_input_absent('abinitio2D', 'sgd_eta_shift')
+call assert_registered_search_input_absent('abinitio2D', 'sgd_update_frac')
+call assert_registered_search_input_absent('abinitio2D', 'sgd_shift_its')
+call assert_registered_category('abinitio2d_sgd', 'cluster2d', 'Cluster2D Workflows', 30)
+program_name = 'abinitio2d_sgd'
+call get_prg_ptr(program_name, registered_prg)
+call assert_true(associated(registered_prg), 'abinitio2d_sgd is registered')
+if( associated(registered_prg) )then
+    call assert_char('simple_exec', registered_prg%executable%to_char(), 'abinitio2d_sgd executable')
+    call assert_int(UI_VIS_DEVELOPER, registered_prg%visibility, 'abinitio2d_sgd developer visibility')
+endif
+call assert_registered_search_input_visibility('abinitio2d_sgd', 'sgd_stage4_mode', UI_VIS_DEVELOPER)
+call assert_registered_search_input_visibility('abinitio2d_sgd', 'sgd_diagnostic', UI_VIS_DEVELOPER)
+call assert_registered_search_input_visibility('abinitio2d_sgd', 'sgd_eta_shift', UI_VIS_DEVELOPER)
+call assert_registered_search_input_visibility('abinitio2d_sgd', 'sgd_update_frac', UI_VIS_DEVELOPER)
+call assert_registered_search_input_visibility('abinitio2d_sgd', 'sgd_shift_its', UI_VIS_DEVELOPER)
+call assert_registered_search_input_default('abinitio2d_sgd', 'sgd_stage4_mode', 'on')
+call assert_registered_search_input_choice('abinitio2d_sgd', 'sgd_stage4_mode', 'alternate')
+call assert_registered_search_input_default('abinitio2d_sgd', 'sgd_diagnostic', 'no')
+call assert_registered_search_input_choice('abinitio2d_sgd', 'sgd_diagnostic', 'no')
+call assert_registered_search_input_real_default('abinitio2d_sgd', 'sgd_eta_shift', 0.25)
+call assert_registered_search_input_real_default('abinitio2d_sgd', 'sgd_update_frac', 0.6)
+call assert_registered_search_input_real_default('abinitio2d_sgd', 'sgd_shift_its', 4.)
 call assert_registered_cli_summary('model_cavgs_rejection', 'quality_mode', &
     &'Class-average quality mode (apply|analyze|learn|evaluate|promote){apply}')
 call assert_registered_cli_summary('import_movies', 'cs', 'Spherical aberration; e.g. 2.7 mm')
@@ -261,6 +287,107 @@ contains
         enddo
         call assert_int(1, 0, trim(name)//' search input exists')
     end subroutine assert_registered_search_cli_summary
+
+    subroutine assert_registered_search_input_absent(name, key)
+        character(len=*), intent(in) :: name, key
+        type(list_iterator)   :: iterator
+        class(*), allocatable :: value
+        program_name = name
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), trim(name)//' is registered')
+        if( .not. associated(registered_prg) ) return
+        iterator = registered_prg%srch_ctrls%begin()
+        do while( iterator%has_value() )
+            call iterator%getter(value)
+            select type( input => value )
+                type is( ui_program_input )
+                    if( input%param%key%to_char() == key )then
+                        call assert_int(0, 1, trim(name)//' does not expose '//trim(key))
+                        if( allocated(value) ) deallocate(value)
+                        return
+                    endif
+            end select
+            if( allocated(value) ) deallocate(value)
+            call iterator%next()
+        enddo
+        call assert_true(.true., trim(name)//' omits '//trim(key))
+    end subroutine assert_registered_search_input_absent
+
+    subroutine assert_registered_search_input_visibility(name, key, expected_visibility)
+        character(len=*), intent(in) :: name, key
+        integer,          intent(in) :: expected_visibility
+        program_name = name
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), trim(name)//' is registered')
+        if( associated(registered_prg) )then
+            call assert_input_visibility(registered_prg%srch_ctrls, key, expected_visibility)
+        endif
+    end subroutine assert_registered_search_input_visibility
+
+    subroutine assert_registered_search_input_default(name, key, expected_default)
+        character(len=*), intent(in) :: name, key, expected_default
+        type(list_iterator)   :: iterator
+        class(*), allocatable :: value
+        program_name = name
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), trim(name)//' is registered')
+        if( .not. associated(registered_prg) ) return
+        iterator = registered_prg%srch_ctrls%begin()
+        do while( iterator%has_value() )
+            call iterator%getter(value)
+            select type( input => value )
+                type is( ui_program_input )
+                    if( input%param%key%to_char() == key )then
+                        call assert_true(input%param%has_default, trim(name)//' '//trim(key)//' has a default')
+                        call assert_char(expected_default, input%param%cval_default%to_char(), &
+                            &trim(name)//' '//trim(key)//' default')
+                        if( allocated(value) ) deallocate(value)
+                        return
+                    endif
+            end select
+            if( allocated(value) ) deallocate(value)
+            call iterator%next()
+        enddo
+        call assert_int(1, 0, trim(name)//' '//trim(key)//' exists')
+    end subroutine assert_registered_search_input_default
+
+    subroutine assert_registered_search_input_real_default(name, key, expected_default)
+        character(len=*), intent(in) :: name, key
+        real,             intent(in) :: expected_default
+        type(list_iterator)   :: iterator
+        class(*), allocatable :: value
+        program_name = name
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), trim(name)//' is registered')
+        if( .not. associated(registered_prg) ) return
+        iterator = registered_prg%srch_ctrls%begin()
+        do while( iterator%has_value() )
+            call iterator%getter(value)
+            select type( input => value )
+                type is( ui_program_input )
+                    if( input%param%key%to_char() == key )then
+                        call assert_true(input%param%has_default, trim(name)//' '//trim(key)//' has a default')
+                        call assert_real(expected_default, input%param%rval_default, 1.e-6, &
+                            &trim(name)//' '//trim(key)//' default')
+                        if( allocated(value) ) deallocate(value)
+                        return
+                    endif
+            end select
+            if( allocated(value) ) deallocate(value)
+            call iterator%next()
+        enddo
+        call assert_int(1, 0, trim(name)//' '//trim(key)//' exists')
+    end subroutine assert_registered_search_input_real_default
+
+    subroutine assert_registered_search_input_choice(name, key, expected_choice)
+        character(len=*), intent(in) :: name, key, expected_choice
+        program_name = name
+        call get_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), trim(name)//' is registered')
+        if( associated(registered_prg) )then
+            call assert_input_choice(registered_prg%srch_ctrls, key, expected_choice)
+        endif
+    end subroutine assert_registered_search_input_choice
 
     subroutine assert_input_visibility( inputs, key, expected_visibility )
         type(linked_list), intent(in) :: inputs

@@ -6,7 +6,7 @@ use simple_commanders_cluster2D
 use simple_abinitio2D_controller 
 implicit none
 
-public :: commander_abinitio2D
+public :: commander_abinitio2D, execute_abinitio2D_staged
 private
 #include "simple_local_flags.inc"
 
@@ -18,13 +18,39 @@ end type commander_abinitio2D
 ! class variables
 type(stage_params), allocatable :: stage_parms(:)
 
+abstract interface
+    subroutine terminal_cline_policy( cline )
+        import :: cmdline
+        class(cmdline), intent(inout) :: cline
+    end subroutine terminal_cline_policy
+end interface
+
 contains
 
     subroutine exec_abinitio2D( self, cline )
-        use simple_classaverager
-        use simple_timer, only: timer_int_kind, tic, toc
         class(commander_abinitio2D), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
+        call exec_abinitio2D_workflow(cline, 1, 0, 0, .false.)
+    end subroutine exec_abinitio2D
+
+    subroutine execute_abinitio2D_staged( cline, start_stage_requested, stop_stage_requested, &
+        &checkpoint_last_iter, l_checkpoint, terminal_policy )
+        class(cmdline), intent(inout) :: cline
+        integer,        intent(in)    :: start_stage_requested, stop_stage_requested, checkpoint_last_iter
+        logical,        intent(in)    :: l_checkpoint
+        procedure(terminal_cline_policy), optional :: terminal_policy
+        call exec_abinitio2D_workflow(cline, start_stage_requested, stop_stage_requested, &
+            &checkpoint_last_iter, l_checkpoint, terminal_policy)
+    end subroutine execute_abinitio2D_staged
+
+    subroutine exec_abinitio2D_workflow( cline, start_stage_requested, stop_stage_requested, &
+        &checkpoint_last_iter, l_checkpoint, terminal_policy )
+        use simple_classaverager
+        use simple_timer, only: timer_int_kind, tic, toc
+        class(cmdline), intent(inout) :: cline
+        integer,        intent(in)    :: start_stage_requested, stop_stage_requested, checkpoint_last_iter
+        logical,        intent(in)    :: l_checkpoint
+        procedure(terminal_cline_policy), optional :: terminal_policy
         ! commanders
         type(commander_cluster2D)  :: xcluster2D
         type(commander_calc_pspec) :: xcalc_pspec
@@ -35,8 +61,7 @@ contains
         type(sp_project)           :: spproj
         class(oris),       pointer :: spproj_field
         integer :: maxits, istage, last_iter, nptcls_eff, nstages, nsample_target_2D
-        integer :: start_stage, stop_stage, checkpoint_last_iter, env_status
-        character(len=32) :: env_value
+        integer :: start_stage, stop_stage
         integer(timer_int_kind) :: t_tot, t_phase
         real(timer_int_kind)    :: rt_setup, rt_calc_pspec, rt_cluster2D, rt_final_cavgs, rt_tot
         logical :: l_shmem
@@ -77,19 +102,18 @@ contains
         call determine_abinitio2D_stages(params, nstages)
         ! override # stages
         if( cline%defined('nstages') ) nstages = min(params%nstages,NSTAGES_CLS)
-        start_stage = 1
-        stop_stage = nstages
-        checkpoint_last_iter = 0
-        call get_environment_variable('JOINT2D_SGD_CHECKPOINT_START_STAGE', env_value, status=env_status)
-        if( env_status == 0 .and. len_trim(env_value) > 0 ) read(env_value,*) start_stage
-        call get_environment_variable('JOINT2D_SGD_CHECKPOINT_STOP_STAGE', env_value, status=env_status)
-        if( env_status == 0 .and. len_trim(env_value) > 0 ) read(env_value,*) stop_stage
-        call get_environment_variable('JOINT2D_SGD_CHECKPOINT_LAST_ITER', env_value, status=env_status)
-        if( env_status == 0 .and. len_trim(env_value) > 0 ) read(env_value,*) checkpoint_last_iter
-        if( start_stage < 1 .or. start_stage > nstages ) THROW_HARD('invalid stream checkpoint start stage')
-        if( stop_stage < start_stage .or. stop_stage > nstages ) THROW_HARD('invalid stream checkpoint stop stage')
-        if( start_stage > 1 .and. checkpoint_last_iter < 1 )&
-            &THROW_HARD('stream checkpoint continuation requires the last completed iteration')
+        start_stage = start_stage_requested
+        if( stop_stage_requested > 0 )then
+            stop_stage = stop_stage_requested
+        else
+            stop_stage = nstages
+        endif
+        if( l_checkpoint )then
+            if( start_stage < 1 .or. start_stage > nstages ) THROW_HARD('invalid stream checkpoint start stage')
+            if( stop_stage < start_stage .or. stop_stage > nstages ) THROW_HARD('invalid stream checkpoint stop stage')
+            if( start_stage > 1 .and. checkpoint_last_iter < 1 )&
+                &THROW_HARD('stream checkpoint continuation requires the last completed iteration')
+        endif
         allocate(stage_parms(nstages))
         ! read project
         call spproj%read(params%projfile)
@@ -131,7 +155,7 @@ contains
             ! classify
             call execute_cluster2D
         enddo
-        if( stop_stage < nstages )then
+        if( l_checkpoint .and. stop_stage < nstages )then
             last_iter = cline_cluster2D%get_iarg('endit')
             write(logfhandle,'(A,I0,A,I0)') '>>> ABINITIO2D CHECKPOINT READY: stage=', stop_stage,&
                 &' last_iter=', last_iter
@@ -378,12 +402,7 @@ contains
             call cline_cluster2D%set('extr_iter',   params%extr_lim + 1)
             call cline_cluster2D%set('refine',      'prob')
             call cline_cluster2D%set('restore_cavgs', 'yes')
-            ! The terminal pass is the conventional all-particle probability
-            ! cleanup.  It reuses the stage command line, so explicitly turn
-            ! off the stage-4+ streaming SGD policy instead of inheriting the
-            ! final SGD stage's settings.
-            call cline_cluster2D%set('sgd',          'no')
-            call cline_cluster2D%set('sgd_stage4_mode', 'off')
+            if( present(terminal_policy) ) call terminal_policy(cline_cluster2D)
             call cline_cluster2D%delete('update_frac')
             call cline_cluster2D%delete('fillin')
             call cline_cluster2D%delete('endit')
@@ -483,6 +502,6 @@ contains
             call benchfname%kill
         end subroutine write_abinitio_benchmark
 
-    end subroutine exec_abinitio2D
+    end subroutine exec_abinitio2D_workflow
 
 end module simple_commanders_abinitio2D
