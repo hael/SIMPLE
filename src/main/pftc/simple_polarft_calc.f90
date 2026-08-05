@@ -880,10 +880,10 @@ interface
         real(dp),                    intent(out)   :: f, grad(2)
     end subroutine gen_raw_euclid_grad_for_rot_8
 
-    module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, theta, f, grad)
+    module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2), theta
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
         real(dp),                    intent(out)   :: f, grad(3)
     end subroutine gen_raw_euclid_grad_at_angle
 

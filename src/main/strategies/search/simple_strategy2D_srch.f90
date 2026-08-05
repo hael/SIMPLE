@@ -26,7 +26,7 @@ type strategy2D_srch
     type(pftc_shsrch_grad) :: grad_shsrch_obj         !< origin shift search object, L-BFGS with gradient
     type(pftc_shsrch_grad) :: grad_shsrch_obj2        !< fixed-angle origin shift search object
     type(pftc_shsrch_grad) :: grad_shsrch_first_obj   !< initial shift search on the previous reference
-    type(pftc_shsrch_grad) :: joint_inpl_optimizer    !< continuous joint (sx,sy,theta) L-BFGS-B refinement
+    type(pftc_shsrch_grad) :: joint_inpl_optimizer    !< continuous joint (sx,sy,rotind_frac) refinement
     integer                 :: nrefs           =  0   !< number of references
     integer                 :: nrots           =  0   !< number of in-plane rotations in polar representation
     integer                 :: nrefs_eval      =  0   !< nr of references evaluated
@@ -344,7 +344,7 @@ contains
         xy_native = matmul(self%best_shvec, transpose(rotmat))
         block
         real     :: cxy(3), joint_lims(3,2)
-        real(dp) :: theta_cont
+        real(dp) :: rotind_frac
         integer  :: irot
         joint_lims(1,:) = [-self%trs, self%trs]
         joint_lims(2,:) = [-self%trs, self%trs]
@@ -357,22 +357,21 @@ contains
         call self%joint_inpl_optimizer%set_limits(joint_lims)
         irot = self%best_rot
         cxy = self%joint_inpl_optimizer%minimize_joint(irot, &
-            &real(self%best_rot), xy_native, sh_rot=.true., theta=theta_cont)
+            &real(self%best_rot), xy_native, sh_rot=.true., rotind_frac=rotind_frac)
         if( irot <= 0 ) return
         self%best_rot   = irot
         self%best_corr  = cxy(1)
         self%best_shvec = cxy(2:3)
-        call store_continuous_e3(self, theta_cont)
+        call store_continuous_e3(self, rotind_frac)
         end block
     end subroutine refine_selected_continuously
 
-    subroutine store_continuous_e3( self, theta )
+    subroutine store_continuous_e3( self, rotind_frac )
         class(strategy2D_srch), intent(inout) :: self
-        real(dp),                intent(in)    :: theta
-        integer :: iang
-        iang = modulo(nint(theta)-1,self%nrots)+1
-        self%continuous_e3 = 360. - (self%b_ptr%pftc%get_rot(iang) + &
-            &(real(theta)-real(iang))*self%b_ptr%pftc%get_dang())
+        real(dp),                intent(in)    :: rotind_frac
+        real(dp) :: e3
+        e3 = (rotind_frac - 1.d0) * real(self%b_ptr%pftc%get_dang(),dp)
+        self%continuous_e3 = real(modulo(360.d0 - e3,360.d0))
         self%has_continuous_e3 = .true.
     end subroutine store_continuous_e3
 

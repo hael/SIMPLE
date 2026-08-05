@@ -26,7 +26,7 @@ type :: pftc_shsrch_grad
     integer                   :: nrots        = 0       !< # rotations
     integer                   :: maxits       = 100     !< max # iterations
     integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
-    real                      :: cur_inpl_ang = 0.      !< continuous angle in grid-index units
+    real                      :: cur_inpl_rotind = 0.   !< continuous in-plane rotation index
     integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
     logical                   :: opt_angle    = .true.  !< alternate discrete in-plane and shift optimization
     integer                   :: search_mode = SHSRCH_LEGACY !< configured numerical algorithm
@@ -87,7 +87,7 @@ contains
         logical,           optional, intent(in)    :: coarse_init    !< coarse inital search
         type(opt_factory) :: opt_fact
         call self%kill
-        self%cur_inpl_ang = 0.
+        self%cur_inpl_rotind = 0.
         ! set pointer to pftc instance for cost function evaluations
         self%b_ptr => build
         self%maxits = 100
@@ -259,15 +259,12 @@ contains
         real :: objective(self%nrots)
         call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, objective)
         self%cur_inpl_idx = maxloc(objective, dim=1)
-        self%cur_inpl_ang = real(self%cur_inpl_idx)
+        self%cur_inpl_rotind = real(self%cur_inpl_idx)
     end subroutine grad_shsrch_update_discrete_angle
 
     real function grad_shsrch_get_angle( self ) result(angle)
         class(pftc_shsrch_grad), intent(in) :: self
-        integer :: iang
-        iang = modulo(nint(self%cur_inpl_ang) - 1, self%nrots) + 1
-        angle = self%b_ptr%pftc%get_rot(iang) + &
-            (self%cur_inpl_ang - real(iang)) * self%b_ptr%pftc%get_dang()
+        angle = (self%cur_inpl_rotind - 1.) * self%b_ptr%pftc%get_dang()
     end function grad_shsrch_get_angle
 
     subroutine grad_shsrch_update_discrete_angle_wrapper( self )
@@ -315,7 +312,7 @@ contains
         if( self%opt_angle )then
             call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
             self%cur_inpl_idx = maxloc(corrs, dim=1)
-            self%cur_inpl_ang = real(self%cur_inpl_idx)
+            self%cur_inpl_rotind = real(self%cur_inpl_idx)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
             if( self%coarse_init )then
                 call self%coarse_search_opt_angle(init_xy, init_rot)
@@ -323,7 +320,7 @@ contains
                     self%ospec%x_8      = init_xy
                     self%ospec%x        = real(init_xy)
                     self%cur_inpl_idx   = init_rot
-                    self%cur_inpl_ang   = real(init_rot)
+                    self%cur_inpl_rotind = real(init_rot)
                 endif
             end if
             ! shift search / in-plane rot update
@@ -332,7 +329,7 @@ contains
                 loc = self%cur_inpl_idx
                 call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, corrs)
                 self%cur_inpl_idx = maxloc(corrs, dim=1)
-                self%cur_inpl_ang = real(self%cur_inpl_idx)
+                self%cur_inpl_rotind = real(self%cur_inpl_idx)
                 if( self%cur_inpl_idx == loc ) exit
             end do
             ! update best
@@ -357,7 +354,7 @@ contains
             endif
         else
             self%cur_inpl_idx   = irot
-            self%cur_inpl_ang   = real(irot)
+            self%cur_inpl_rotind = real(irot)
             self%profile_objective_evals = self%profile_objective_evals + 1_int64
             lowest_cost_overall = -self%b_ptr%pftc%gen_corr_for_rot_8(self%reference, &
                 &self%particle, self%ospec%x_8, self%cur_inpl_idx)
@@ -391,15 +388,15 @@ contains
         if( present(xy_in) ) self%coarse_init = coarse_init_orig
     end function grad_shsrch_minimize
 
-    !> Classical Euclidean joint refinement over (sx,sy,theta).
-    !! The PFTC objective is periodic, so angular bounds may safely straddle
-    !! the first or last grid index.
-    function grad_shsrch_minimize_joint( self, irot, theta_in, xy_in, sh_rot, theta ) result(cxy)
+    !> Classical Euclidean joint refinement over (sx,sy,rotind_frac).
+    !! The PFTC objective is periodic, so rotation-index bounds may safely
+    !! straddle the first or last grid index.
+    function grad_shsrch_minimize_joint( self, irot, rotind_frac_in, xy_in, sh_rot, rotind_frac ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(inout) :: irot
-        real,                    intent(in)    :: theta_in, xy_in(2)
+        real,                    intent(in)    :: rotind_frac_in, xy_in(2)
         logical,                 intent(in)    :: sh_rot
-        real(dp),                intent(out)   :: theta
+        real(dp),                intent(out)   :: rotind_frac
         real :: cxy(3), rotmat(2,2), lowest_cost
         real(dp) :: initial_cost, final_cost, improve_tol
 
@@ -409,10 +406,10 @@ contains
         if( .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
             THROW_HARD('joint minimization requires raw Euclidean objective; hybrid derivative is unavailable')
         endif
-        self%ospec%x = [xy_in, theta_in]
+        self%ospec%x = [xy_in, rotind_frac_in]
         self%ospec%x_8 = dble(self%ospec%x)
-        self%cur_inpl_ang = theta_in
-        self%cur_inpl_idx = modulo(nint(theta_in)-1,self%nrots)+1
+        self%cur_inpl_rotind = rotind_frac_in
+        self%cur_inpl_idx = modulo(nint(rotind_frac_in)-1,self%nrots)+1
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         call self%opt_obj%minimize(self%ospec, self, lowest_cost)
@@ -423,15 +420,15 @@ contains
             &.not. ieee_is_finite(final_cost) .or. final_cost >= initial_cost - improve_tol )then
             irot = 0
             cxy = 0.
-            theta = 0.
+            rotind_frac = 0.
             return
         endif
-        self%cur_inpl_ang = self%ospec%x(3)
-        self%cur_inpl_idx = modulo(nint(self%cur_inpl_ang)-1,self%nrots)+1
+        self%cur_inpl_rotind = self%ospec%x(3)
+        self%cur_inpl_idx = modulo(nint(self%cur_inpl_rotind)-1,self%nrots)+1
         irot = self%cur_inpl_idx
         cxy(1) = real(exp(-final_cost))
         cxy(2:) = self%ospec%x(1:2)
-        theta = self%cur_inpl_ang
+        rotind_frac = self%cur_inpl_rotind
         if( sh_rot )then
             call rotmat2d(grad_shsrch_get_angle(self), rotmat)
             cxy(2:) = matmul(cxy(2:), rotmat)

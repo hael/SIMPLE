@@ -1466,12 +1466,13 @@ contains
     ! its gradient at a continuous angular grid coordinate.  One fused polar-ring
     ! traversal accumulates the objective and both shift-derivative coefficient
     ! series.  At nonzero shift the shifted reference is prepared and transformed
-    ! once.  The coefficient series are evaluated directly at theta, so this hot
-    ! path allocates no temporary arrays and performs no inverse FFTs.
-    module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, theta, f, grad)
+    ! once.  The coefficient series are evaluated directly at the fractional
+    ! rotation index, so this hot path allocates no temporary arrays and
+    ! performs no inverse FFTs.
+    module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
-        real(dp),                    intent(in)    :: shvec(2), theta
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
         real(dp),                    intent(out)   :: f, grad(3)
         complex(sp), pointer :: coeffs(:,:)
         complex(sp), pointer :: shmat(:,:)
@@ -1524,7 +1525,7 @@ contains
         A_sp = real(self%wsqsums_ptcls(i) * real(2*self%nrots,dp),sp)
         coeffs = coeffs / A_sp
         coeffs(1,1) = coeffs(1,1) + cmplx(1._sp,0._sp,kind=sp)
-        call eval_joint_coeffs_at_angle(self, coeffs, theta, f, grad)
+        call eval_joint_coeffs_at_rotind(self, coeffs, rotind_frac, f, grad)
     end subroutine gen_raw_euclid_grad_at_angle
 
     pure subroutine accumulate_joint_coeffs(coeff, coeff_x, coeff_y, wk, ref2_term, cross_term, argx, argy)
@@ -1539,16 +1540,16 @@ contains
             &cmplx(0._sp,2._sp*real(argy,sp),kind=sp) * cross_term
     end subroutine accumulate_joint_coeffs
 
-    subroutine eval_joint_coeffs_at_angle(self, coeffs, theta, f, grad)
+    subroutine eval_joint_coeffs_at_rotind(self, coeffs, rotind_frac, f, grad)
         class(polarft_calc), intent(in)  :: self
         complex(sp),         intent(in)  :: coeffs(:,:)
-        real(dp),            intent(in)  :: theta
+        real(dp),            intent(in)  :: rotind_frac
         real(dp),            intent(out) :: f, grad(3)
         complex(dp) :: phase_factor, z
         real(dp) :: phase, dphase, frequency
         integer :: m, component
 
-        phase  = DTWOPI * (theta - 1.d0) / real(self%nrots,dp)
+        phase  = DTWOPI * (rotind_frac - 1.d0) / real(self%nrots,dp)
         dphase = DTWOPI / real(self%nrots,dp)
         f       = real(coeffs(1,1),dp)
         grad(1) = real(coeffs(1,2),dp)
@@ -1580,7 +1581,7 @@ contains
                 grad(component) = grad(component) + real(z,dp)
             enddo
         endif
-    end subroutine eval_joint_coeffs_at_angle
+    end subroutine eval_joint_coeffs_at_rotind
 
     module subroutine gen_denoised_corr_grad_for_rot_8( self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready )
         class(polarft_calc),  target, intent(inout) :: self

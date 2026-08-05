@@ -162,14 +162,14 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     real(sp), allocatable, target :: sigma2_noise(:,:)
     real(sp), allocatable :: raw_losses(:)
     real :: limits(2,2), joint_limits(3,2), cxy(3), joint_cxy(3)
-    real(dp) :: theta_grid, theta_parab
+    real(dp) :: rotind_grid, rotind_parab
     real(dp) :: shift_grid(2), shift_parabola(2), shift_joint(2)
     real(dp) :: expected_shift(2), objective_final
     real(dp) :: objective_final_grid, objective_final_parabola
     real(dp) :: theta_rad
-    real(dp) :: theta_joint, joint_loss
+    real(dp) :: rotind_joint, joint_loss
     real(dp) :: joint_grad(3), joint_grad_ref(3), probe_grad(3)
-    real(dp) :: fd_plus, fd_minus, fd_step, fd_error, probe_shift(2), probe_theta
+    real(dp) :: fd_plus, fd_minus, fd_step, fd_error, probe_shift(2), probe_rotind
     integer :: nrots, igrid, irot_direct, irot_joint
     integer :: idim
     logical :: shift_grid_accepted, shift_parabola_accepted, joint_accepted
@@ -217,8 +217,8 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     allocate(raw_losses(nrots))
     call b%pftc%gen_raw_euclid_vals(1, 1, [0._sp,0._sp], raw_losses)
     igrid = minloc(raw_losses, dim=1)
-    theta_grid = real(igrid,dp)
-    theta_parab = theta_grid + real(parabolic_peak_offset(-raw_losses, igrid),dp)
+    rotind_grid = real(igrid,dp)
+    rotind_parab = rotind_grid + real(parabolic_peak_offset(-raw_losses, igrid),dp)
     limits(:,1) = -5.; limits(:,2) = 5.
     call direct_search%new_direct(b, limits)
     call direct_search%set_indices(1,1)
@@ -229,7 +229,7 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     shift_grid_accepted = irot_direct > 0
     if( shift_grid_accepted ) shift_grid = real(cxy(2:),dp)
     objective_final_grid = objective_final
-    irot_direct = modulo(nint(theta_parab)-1,nrots)+1
+    irot_direct = modulo(nint(rotind_parab)-1,nrots)+1
     cxy = direct_search%minimize_direct(irot_direct, [0.,0.], .5, 16, sh_rot=.false., &
         &objective_final=objective_final, raw_euclid=.true.)
     shift_parabola_accepted = irot_direct > 0
@@ -237,44 +237,44 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     objective_final_parabola = objective_final
     call direct_search%kill
 
-    ! Continuous joint route: optimize (sx,sy,theta) together directly from
+    ! Continuous joint route: optimize (sx,sy,rotind_frac) directly from
     ! the same selected discrete candidate and zero native shift.
-    joint_limits(:,1) = [-5., -5., real(theta_grid)-2.]
-    joint_limits(:,2) = [ 5.,  5., real(theta_grid)+2.]
+    joint_limits(:,1) = [-5., -5., real(rotind_grid)-2.]
+    joint_limits(:,2) = [ 5.,  5., real(rotind_grid)+2.]
     call joint_search%new_joint(b, joint_limits, 100)
     call joint_search%set_indices(1,1)
     irot_joint = igrid
-    joint_cxy = joint_search%minimize_joint(irot_joint, real(theta_grid), [0.,0.], &
-        &sh_rot=.false., theta=theta_joint)
+    joint_cxy = joint_search%minimize_joint(irot_joint, real(rotind_grid), [0.,0.], &
+        &sh_rot=.false., rotind_frac=rotind_joint)
     joint_accepted = irot_joint > 0
     if( joint_accepted )then
         shift_joint = real(joint_cxy(2:),dp)
     else
         shift_joint = 0.d0
-        theta_joint = theta_grid
+        rotind_joint = rotind_grid
     endif
-    call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, shift_joint, theta_joint, joint_loss, joint_grad)
+    call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, shift_joint, rotind_joint, joint_loss, joint_grad)
     joint_grad_ref = joint_grad
     fd_step = 1.e-3_dp
     result%joint_gradient_max_error = 0.d0
     result%joint_gradient_finite = ieee_is_finite(joint_loss) .and. all(ieee_is_finite(joint_grad))
     do idim = 1, 3
         probe_shift = shift_joint
-        probe_theta = theta_joint
+        probe_rotind = rotind_joint
         if( idim <= 2 )then
             probe_shift(idim) = probe_shift(idim) + fd_step
         else
-            probe_theta = probe_theta + fd_step
+            probe_rotind = probe_rotind + fd_step
         endif
-        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_theta, fd_plus, probe_grad)
+        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_rotind, fd_plus, probe_grad)
         probe_shift = shift_joint
-        probe_theta = theta_joint
+        probe_rotind = rotind_joint
         if( idim <= 2 )then
             probe_shift(idim) = probe_shift(idim) - fd_step
         else
-            probe_theta = probe_theta - fd_step
+            probe_rotind = probe_rotind - fd_step
         endif
-        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_theta, fd_minus, probe_grad)
+        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_rotind, fd_minus, probe_grad)
         fd_error = abs((fd_plus-fd_minus)/(2.d0*fd_step) - joint_grad_ref(idim))
         result%joint_gradient_max_error = max(result%joint_gradient_max_error, fd_error)
     enddo
@@ -287,9 +287,9 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     expected_shift = [cos(theta_rad)*real(shift_truth(1),dp) - sin(theta_rad)*real(shift_truth(2),dp), &
         &sin(theta_rad)*real(shift_truth(1),dp) + cos(theta_rad)*real(shift_truth(2),dp)]
 
-    result%angle_grid = grid_index_to_angle(b%pftc, theta_grid)
-    result%angle_parabola = grid_index_to_angle(b%pftc, theta_parab)
-    result%angle_joint = grid_index_to_angle(b%pftc, theta_joint)
+    result%angle_grid = grid_index_to_angle(b%pftc, rotind_grid)
+    result%angle_parabola = grid_index_to_angle(b%pftc, rotind_parab)
+    result%angle_joint = grid_index_to_angle(b%pftc, rotind_joint)
     result%angle_error_grid = angular_error(result%angle_grid, -real(truth_angle,dp))
     result%angle_error_parabola = angular_error(result%angle_parabola, -real(truth_angle,dp))
     result%angle_error_joint = angular_error(result%angle_joint, -real(truth_angle,dp))
@@ -340,15 +340,12 @@ pure real function parabolic_peak_offset(vals, j) result(offset)
     if( .not. ieee_is_finite(offset) .or. abs(offset) > 0.5 ) offset = 0.
 end function parabolic_peak_offset
 
-real(dp) function grid_index_to_angle(pftc, theta) result(angle)
+real(dp) function grid_index_to_angle(pftc, rotind_frac) result(angle)
     class(*), intent(in) :: pftc
-    real(dp), intent(in) :: theta
-    integer :: iang, nrots
+    real(dp), intent(in) :: rotind_frac
     select type(pftc)
         class is (polarft_calc)
-            nrots = pftc%get_nrots()
-            iang = modulo(nint(theta)-1,nrots)+1
-            angle = real(pftc%get_rot(iang),dp) + (theta-real(iang,dp))*real(pftc%get_dang(),dp)
+            angle = (rotind_frac - 1.d0) * real(pftc%get_dang(),dp)
         class default
             error stop 'invalid polarft type in grid_index_to_angle'
     end select
