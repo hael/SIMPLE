@@ -8,7 +8,7 @@ implicit none
 public :: commander_abinitio2d_sgd, prepare_abinitio2d_sgd
 private
 
-! The public abinitio2d_sgd command deliberately has a small surface: it
+! The public abinitio2D_sgd command deliberately has a small surface: it
 ! selects the development stream, validates its compatible objective, and
 ! delegates the staged workflow to the established abinitio2D commander.
 ! This keeps standard abinitio2D free of experimental user-facing controls.
@@ -38,11 +38,11 @@ contains
         ! separate continuous in-plane optimisation path.
         if( .not. cline%defined('objfun') ) call cline%set('objfun', 'euclid')
         if( cline%get_carg('objfun') .ne. 'euclid' )then
-            THROW_HARD('abinitio2d_sgd requires objfun=euclid')
+            THROW_HARD('abinitio2D_sgd requires objfun=euclid')
         endif
         if( .not. cline%defined('inpl_cont') ) call cline%set('inpl_cont', 'no')
         if( cline%get_carg('inpl_cont') .ne. 'no' )then
-            THROW_HARD('abinitio2d_sgd does not support inpl_cont=yes')
+            THROW_HARD('abinitio2D_sgd does not support inpl_cont=yes')
         endif
 
         ! off is the conventional abinitio2D mode.  This development command
@@ -51,7 +51,7 @@ contains
         if( .not. cline%defined('sgd_stage4_mode') ) call cline%set('sgd_stage4_mode', 'on')
         if( cline%get_carg('sgd_stage4_mode') .ne. 'on' .and. &
             &cline%get_carg('sgd_stage4_mode') .ne. 'alternate' )then
-            THROW_HARD('abinitio2d_sgd requires sgd_stage4_mode=on or alternate')
+            THROW_HARD('abinitio2D_sgd requires sgd_stage4_mode=on or alternate')
         endif
 
         ! These fields are internal compatibility inputs consumed by the

@@ -46,9 +46,9 @@ contains
                 endif
             case( 'abinitio2D_chunks' )
                 call xabinitio2D_chunks%execute(cline)       
-            case( 'abinitio2d_sgd' )
+            case( 'abinitio2D_sgd' )
                 if( cline%defined('nrestarts') )then
-                    call restarted_exec(cline, string('abinitio2d_sgd'), string('simple_exec'))
+                    call restarted_exec(cline, string('abinitio2D_sgd'), string('simple_exec'))
                 else
                     call xabinitio2d_sgd%execute(cline)
                 endif

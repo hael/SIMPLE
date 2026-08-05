@@ -1,4 +1,4 @@
-!@descr: focused dispatch and command-line contract test for the development abinitio2d_sgd commander
+!@descr: focused dispatch and command-line contract test for the development abinitio2D_sgd commander
 program simple_test_abinitio2d_sgd_dispatch
 use simple_test_utils, only: assert_char, assert_true, report_summary, tests_failed
 use simple_cmdline, only: cmdline
@@ -23,9 +23,9 @@ call get_command_argument(0, executable, argument_length, argument_status)
 if( argument_status /= 0 .or. argument_length < 1 ) error stop 'could not determine dispatch-test executable path'
 
 call test_valid_preparation()
-call expect_invalid_child('objfun_cc', 'abinitio2d_sgd requires objfun=euclid')
-call expect_invalid_child('inpl_cont_yes', 'abinitio2d_sgd does not support inpl_cont=yes')
-call expect_invalid_child('stage4_off', 'abinitio2d_sgd requires sgd_stage4_mode=on or alternate')
+call expect_invalid_child('objfun_cc', 'abinitio2D_sgd requires objfun=euclid')
+call expect_invalid_child('inpl_cont_yes', 'abinitio2D_sgd does not support inpl_cont=yes')
+call expect_invalid_child('stage4_off', 'abinitio2D_sgd requires sgd_stage4_mode=on or alternate')
 
 call report_summary()
 if( tests_failed /= 0 ) error stop 1
@@ -34,7 +34,7 @@ contains
 
     subroutine test_valid_preparation()
         type(cmdline) :: cline
-        call cline%set('prg', 'abinitio2d_sgd')
+        call cline%set('prg', 'abinitio2D_sgd')
         call prepare_abinitio2d_sgd(cline)
         call assert_cline_char(cline, 'objfun', 'euclid', 'wrapper defaults to Euclidean objective')
         call assert_cline_char(cline, 'inpl_cont', 'no', 'wrapper disables continuous in-plane path')
@@ -64,7 +64,7 @@ contains
         type(cmdline) :: cline
         logical :: l_silent, l_did_execute
 
-        call cline%set('prg', 'abinitio2d_sgd')
+        call cline%set('prg', 'abinitio2D_sgd')
         select case(trim(label))
         case('objfun_cc')
             call cline%set('objfun', 'cc')
@@ -76,9 +76,9 @@ contains
             error stop 'unknown abinitio2d_sgd dispatch child case'
         end select
         l_did_execute = .false.
-        call exec_cluster2D_commander('abinitio2d_sgd', cline, l_silent, l_did_execute)
-        if( .not. l_did_execute ) error stop 'abinitio2d_sgd route was not registered'
-        error stop 'invalid abinitio2d_sgd command reached workflow execution'
+        call exec_cluster2D_commander('abinitio2D_sgd', cline, l_silent, l_did_execute)
+        if( .not. l_did_execute ) error stop 'abinitio2D_sgd route was not registered'
+        error stop 'invalid abinitio2D_sgd command reached workflow execution'
     end subroutine run_invalid_child
 
     subroutine assert_cline_char(cline, key, expected, message)

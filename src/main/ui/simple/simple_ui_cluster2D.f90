@@ -41,12 +41,12 @@ contains
 
     subroutine new_abinitio2d_sgd( prgtab )
         class(ui_hash), intent(inout) :: prgtab
-        call new_abinitio2D_descriptor(abinitio2d_sgd, 'abinitio2d_sgd', &
+        call new_abinitio2D_descriptor(abinitio2d_sgd, 'abinitio2D_sgd', &
             &'Run experimental streaming-SGD 2D classification from particle images', &
             &'runs the development table-free SGD variant of staged 2D classification', &
             &UI_VIS_DEVELOPER, 'Development 2D SGD')
         call add_abinitio2d_sgd_inputs(abinitio2d_sgd)
-        call add_ui_program('abinitio2d_sgd', abinitio2d_sgd, prgtab, UI_CATEGORY)
+        call add_ui_program('abinitio2D_sgd', abinitio2d_sgd, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2d_sgd
 
     subroutine new_abinitio2D_descriptor( program, name, summary, help, visibility, display_name )
