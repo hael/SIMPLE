@@ -231,12 +231,6 @@ subroutine new_extract_substk( prgtab )
         &.true., visibility=UI_VIS_DEVELOPER)                                   ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call trajectory_reconstruct3D%add_input(UI_IMG, 'vol1', 'file', 'Mean volume for latent chunking', &
-        &'Mean volume used by flex_analysis when chunk_mode=latent', 'input mean volume e.g. vol.mrc', .false., '', &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_IMG, outvol, required_override=.false., &
-        &activation=ui_activation_equals_any('chunk_mode', [character(len=6) :: 'latent']), &
-        &visibility=UI_VIS_DEVELOPER)
         ! parameter input/output
         call trajectory_reconstruct3D%add_input(UI_PARM, 'stepsz',  'num', 'Time window size (# frames){500}', 'Time window size (# frames) for windowed 3D rec{500}', 'give # frames',  .false., 500., &
         &visibility=UI_VIS_DEVELOPER)
@@ -244,53 +238,14 @@ subroutine new_extract_substk( prgtab )
         &visibility=UI_VIS_DEVELOPER)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'top',   'num', 'To particle index', 'Stop index for 3D reconstruction', 'stop index', .false., 1.0, &
         &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_mode', 'multi', 'Trajectory chunking mode', &
-        &'Use balanced windows or time-constrained flex-latent segmentation(balanced|latent){balanced}','', .false., 'balanced', &
-        &choices=ui_choices([character(len=8) :: 'balanced', 'latent']), &
-        &visibility=UI_VIS_DEVELOPER)
         call trajectory_reconstruct3D%add_input(UI_PARM, 'nchunks', 'num', 'Number of temporal chunks', &
-        &'Fixed number of contiguous chunks; overrides the automatic count range when positive', '# chunks', .false., 0., &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_PARM, 'nchunks_min', 'num', 'Minimum automatic chunk count', &
-        &'First chunk count evaluated when nchunks is 0; set with nchunks_max to enable automatic selection', &
-        &'minimum # chunks', .false., 0., &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_PARM, 'nchunks_max', 'num', 'Maximum automatic chunk count', &
-        &'Last chunk count evaluated when nchunks is 0; set with nchunks_min to enable automatic selection', &
-        &'maximum # chunks', .false., 0., &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_count_penalty', 'num', 'Chunk-count penalty', &
-        &'Penalty per additional chunk subtracted from the adjacent-centroid temporal silhouette{0.05}', &
-        &'nonnegative penalty', .false., 0.05, &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_min_len', 'num', 'Minimum latent chunk length', &
-        &'Minimum number of consecutive frames in a latent chunk; 0 uses half the average chunk length', '# frames', .false., 0., &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_max_len', 'num', 'Maximum latent chunk length', &
-        &'Maximum number of consecutive frames in a latent chunk; 0 uses twice the average chunk length', '# frames', .false., 0., &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_PARM, 'chunk_max_shift', 'num', 'Maximum boundary shift', &
-        &'Maximum displacement from a balanced boundary; 0 uses half the average chunk length', '# frames', .false., 0., &
+        &'Fixed number of contiguous chunks; overrides the stepsz-derived count when positive', '# chunks', .false., 0., &
         &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
         call trajectory_reconstruct3D%add_input(UI_SRCH, pgrp, &
         &visibility=UI_VIS_STANDARD)
-        call trajectory_reconstruct3D%add_input(UI_SRCH, 'neigs', 'num', 'Flex latent dimensions', &
-        &'Maximum flex_analysis latent dimensions used for chunking{20}', '# modes', .false., 20., &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_SRCH, 'k_nn', 'num', 'Nearest neighbors', &
-        &'Registered-residual neighbors retained per particle for latent chunking', '# neighbors{100}', .false., 100., &
-        &activation=ui_activation_equals_any('chunk_mode', [character(len=6) :: 'latent']), &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_SRCH, 'nang_nbrs', 'num', 'Angular candidate cap', &
-        &'Maximum orientation-gated candidate particles compared per particle for latent chunking', '# candidates{1000}', .false., 1000., &
-        &activation=ui_activation_equals_any('chunk_mode', [character(len=6) :: 'latent']), &
-        &visibility=UI_VIS_DEVELOPER)
-        call trajectory_reconstruct3D%add_input(UI_SRCH, nstates, required_override=.false., &
-        &activation=ui_activation_equals_any('chunk_mode', [character(len=6) :: 'latent']), &
-        &visibility=UI_VIS_DEVELOPER)
         call trajectory_reconstruct3D%add_input(UI_SRCH, maxits, required_override=.false., &
         &visibility=UI_VIS_DEVELOPER)
         call trajectory_reconstruct3D%add_input(UI_SRCH, trs, &

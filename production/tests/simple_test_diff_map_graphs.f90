@@ -1,5 +1,5 @@
-!@descr: validates angularly gated registered-residual kNN construction
-program simple_test_flex_diffmap_graph
+!@descr: validates the shared angularly gated kNN diffusion-map graph engine
+program simple_test_diff_map_graphs
 use simple_core_module_api
 use simple_diff_map_graphs, only: diffmap_graph, build_gated_euclidean_knn_graph, &
     &find_gated_euclidean_neighbors_rows, build_gated_euclidean_graph_from_neighbors, build_euclidean_knn_graph, &
@@ -88,6 +88,6 @@ call graph_many%kill()
 deallocate(nbrs1,nbrs2,nbrs,d2s1,d2s2,d2s,nc1,nc2,nc)
 call graph_parts%kill()
 call graph%kill()
-call simple_end('**** SIMPLE_FLEX_DIFFMAP_GRAPH TEST NORMAL STOP ****')
+call simple_end('**** SIMPLE_DIFF_MAP_GRAPHS TEST NORMAL STOP ****')
 
-end program simple_test_flex_diffmap_graph
+end program simple_test_diff_map_graphs

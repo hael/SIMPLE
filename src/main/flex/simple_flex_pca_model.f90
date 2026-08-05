@@ -4,13 +4,14 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_builder,                    only: builder
 use simple_cmdline,                    only: cmdline
-use simple_flex_diffmap_rec3D,         only: reconstruct_flex_diffmap_weighted_states, flex_rec_box, flex_rec_smpd
+use simple_flex_pca_rec3D,         only: reconstruct_flex_weighted_states, flex_rec_box, flex_rec_smpd
 use simple_flex_pca_columns,    only: cov_env_int_pub, build_covariance_eigenbasis, embed_latents_with_contrast, &
     &estimate_covariance_mean, probe_subspace_iteration, align_basis_to_reference, probe_external_basis
 use simple_image,                      only: image
 use simple_parameters,                 only: parameters
 use simple_reconstructor,              only: reconstructor
 use simple_sigma2_files,               only: load_sigma2_groups
+use simple_sp_project,                 only: sp_project
 use simple_srch_sort_loc,              only: hpsort
 use simple_flex_pca_distr,             only: flex_pca_is_worker, flex_pca_is_master
 use simple_flex_pca_parts,             only: write_sigma_state, check_sigma_state, &
@@ -76,7 +77,7 @@ contains
             call cline%set('ml_reg','no')
             call build%esig%set_kfromto([1, max(1, fdim(flex_rec_box(params)) - 1)])
             call read_state_weights_round(pinds, nptcls, state_weights, nstates, l_split_eo)
-            call reconstruct_flex_diffmap_weighted_states(params, build, pinds, state_weights, &
+            call reconstruct_flex_weighted_states(params, build, pinds, state_weights, &
                 &nstates, floor_rho=.true., split_eo=l_split_eo)
             call qsys_job_finished(params, string('simple_flex_pca_model :: run_flex_pca states'))
             deallocate(pinds, state_weights)
@@ -282,12 +283,16 @@ contains
         endif
         call write_covariance_tables(build, pinds, z, eigvals, prior_precision, state_weights, labels, &
             &targets, bandwidths, neff, resid_energy, resid_mean_energy)
+        ! Hard state labels as a runnable project, so the embedding and its state assignment can be
+        ! judged by an INDEPENDENT reconstructor (plain reconstruct3D) rather than only through the
+        ! kernel-weighted backend below, which shares every upstream assumption with the embedding.
+        call write_discrete_state_project(build%spproj, pinds, labels, nstates, params%outfile)
 
         ! combined states and both halfsets in ONE pass through the gridding reconstructor
-        ! (see reconstruct_flex_diffmap_weighted_states: combined == even + odd exactly)
+        ! (see reconstruct_flex_weighted_states: combined == even + odd exactly)
         params%outvol = 'flex_pca_state_001.mrc'
         t_blk = tic()
-        call reconstruct_flex_diffmap_weighted_states(params, build, pinds, state_weights, nstates, &
+        call reconstruct_flex_weighted_states(params, build, pinds, state_weights, nstates, &
             &floor_rho=.true., outvol_even=string('flex_pca_even_state_001.mrc'), &
             &outvol_odd=string('flex_pca_odd_state_001.mrc'))
         write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE states_combined_eo seconds=', toc(t_blk)
@@ -357,7 +362,7 @@ contains
             endif
             params%outvol = 'flex_pca_traj_001.mrc'
             t_blk = tic()
-            call reconstruct_flex_diffmap_weighted_states(params, build, pinds, traj_weights, nstates, floor_rho=.true.)
+            call reconstruct_flex_weighted_states(params, build, pinds, traj_weights, nstates, floor_rho=.true.)
             write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE states_traj seconds=', toc(t_blk)
             call write_trajectory_targets(axis_sel, nstates, ncomp, traj_targets, traj_bandwidths, traj_neff)
             deallocate(traj_weights, traj_targets, traj_bandwidths, traj_neff, traj_labels)
@@ -1458,11 +1463,11 @@ contains
             whalf = wbin
             call mask_state_weights_by_half(build, pinds, 0, whalf)
             params%outvol = 'flex_pca_cv'//bstr//'_even_state_001.mrc'
-            call reconstruct_flex_diffmap_weighted_states(params, build, pinds, whalf, nstates, floor_rho=.true.)
+            call reconstruct_flex_weighted_states(params, build, pinds, whalf, nstates, floor_rho=.true.)
             whalf = wbin
             call mask_state_weights_by_half(build, pinds, 1, whalf)
             params%outvol = 'flex_pca_cv'//bstr//'_odd_state_001.mrc'
-            call reconstruct_flex_diffmap_weighted_states(params, build, pinds, whalf, nstates, floor_rho=.true.)
+            call reconstruct_flex_weighted_states(params, build, pinds, whalf, nstates, floor_rho=.true.)
             do state = 1, nstates
                 ! trial half maps are written at box_rec; the CV score is computed at box_crop
                 fn = 'flex_pca_cv'//bstr//'_even_state_'//int2str_pad(state,3)//MRC_EXT
@@ -3272,6 +3277,59 @@ contains
         end do
         close(u)
     end subroutine write_covariance_tables
+
+    !>  Write the hard state assignment as a runnable project: a copy of the input project in which
+    !!  ptcl3D/state carries the state label of every embedded particle and 0 everywhere else.
+    !!  This decouples the embedding and its state assignment from the kernel-weighted reconstruction
+    !!  backend, so the clusters can be judged with a plain
+    !!      simple_exec prg=reconstruct3D projfile=<outfile> nstates=<nstates>
+    !!  Particles the state stage left unassigned (label 0, see build_covariance_state_weights) stay at
+    !!  state 0 and are excluded by reconstruct3D, exactly as they are excluded from the kernel states.
+    subroutine write_discrete_state_project( spproj, pinds, labels, nstates, outfile )
+        type(sp_project), intent(inout) :: spproj
+        integer,          intent(in)    :: pinds(:), labels(:), nstates
+        type(string),     intent(in)    :: outfile
+        type(sp_project)     :: outproj
+        logical, allocatable :: assigned(:)
+        integer :: i, iptcl, state, nptcls, nexcluded
+        if( size(pinds) < 1 .or. size(labels) /= size(pinds) .or. nstates < 2 ) &
+            &THROW_HARD('invalid flex_pca discrete-state assignment')
+        if( len_trim(outfile%to_char()) == 0 ) THROW_HARD('flex_pca discrete-state output project is empty')
+        nptcls = spproj%os_ptcl3D%get_noris()
+        allocate(assigned(nptcls), source=.false.)
+        call outproj%copy(spproj)
+        call outproj%update_projinfo(outfile)
+        do iptcl = 1,nptcls
+            call outproj%os_ptcl3D%set_state(iptcl,0)
+        end do
+        nexcluded = 0
+        do i = 1,size(pinds)
+            iptcl = pinds(i)
+            state = labels(i)
+            if( iptcl < 1 .or. iptcl > nptcls ) THROW_HARD('flex_pca discrete-state particle index outside project')
+            if( assigned(iptcl) ) THROW_HARD('duplicate particle in flex_pca discrete-state assignment')
+            if( state > nstates ) THROW_HARD('flex_pca discrete-state label outside state range')
+            if( state < 1 )then
+                nexcluded = nexcluded + 1
+            else
+                call outproj%os_ptcl3D%set_state(iptcl,state)
+            endif
+            assigned(iptcl) = .true.
+        end do
+        call outproj%write(outfile)
+        write(logfhandle,'(A,A)') '>>> FLEX_PCA DISCRETE-STATE PROJECT: ',outfile%to_char()
+        do state = 1,nstates
+            write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA DISCRETE-STATE state=',state, &
+                &' population=',count(labels==state)
+        end do
+        if( nexcluded > 0 ) write(logfhandle,'(A,I0)') &
+            &'>>> FLEX_PCA DISCRETE-STATE unassigned particles left at state=0: ',nexcluded
+        write(logfhandle,'(A,A,A,I0)') '>>> RECONSTRUCT WITH: simple_exec prg=reconstruct3D projfile=', &
+            &outfile%to_char(),' nstates=',nstates
+        call flush(logfhandle)
+        call outproj%kill
+        deallocate(assigned)
+    end subroutine write_discrete_state_project
 
     !>  Latent targets of the automatically-placed conformational trajectory, so the sweep the
     !!  flex_pca_traj_###.mrc volumes represent can be read off without re-running.

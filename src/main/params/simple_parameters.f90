@@ -168,7 +168,6 @@ type :: parameters
     character(len=3)          :: updated='no'         !< whether parameters has been updated
     character(len=3)          :: use_model='yes'      !< use model for class-average rejection in sieve(yes|no){yes}
     character(len=3)          :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
-    character(len=3)          :: view_balance='yes'   !< equalize occupied projection-bin measure in flex diffusion maps
     character(len=3)          :: vis='no'             !< visualise(yes|no)
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
@@ -272,7 +271,6 @@ type :: parameters
     character(len=4)          :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
     character(len=5)          :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
     character(len=STDLEN)     :: center_type='mass'   !< Centering scheme used(mass|seg|params)
-    character(len=STDLEN)     :: chunk_mode='balanced' !< trajectory chunking mode(balanced|latent)
     character(len=STDLEN)     :: cls_init='ptcl'      !< Scheme to generate initial references for 2D analysis(ptcl|randcls|rand)
     character(len=STDLEN)     :: clustinds=''         !< comma-separated cluster indices
     character(len=STDLEN)     :: clust_crit='hybrid'  !< clustering criterion (fm|pow|hist|hybrid){hybrid}
@@ -287,7 +285,6 @@ type :: parameters
     character(len=STDLEN)     :: flipgain='no'        !< gain reference flipping (no|x|y|xy|yx)
     character(len=STDLEN)     :: graph='euc'          !< class split graph metric(euc|ori){euc}
     character(len=STDLEN)     :: bandwidth_mode='median' !< diffusion-map bandwidth mode(median|ferguson){median}
-    character(len=STDLEN)     :: preimage_mode='constant' !< diffusion-map output mode(constant|linear|discrete){constant}
     character(len=STDLEN)     :: multivol_mode='single' !< multivolume mode
     character(len=STDLEN)     :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN)     :: import_type='auto'   !< type of import(auto|mic|ptcl2D|ptcl3D){auto}
@@ -362,9 +359,6 @@ type :: parameters
     integer :: cn_min=4            !< min std coord number for atoms in nanos
     integer :: cn_stop=10          !< rotational symmetry order stop index{10}
     integer :: cs_thres=2          !< contact score threshold for discarding atoms during autorefine3D_nano
-    integer :: chunk_max_len=0     !< maximum frames in a flex-latent trajectory chunk
-    integer :: chunk_max_shift=0   !< maximum boundary displacement from balanced chunking
-    integer :: chunk_min_len=0     !< minimum frames in a flex-latent trajectory chunk
     integer :: device=-1           !< Device id for OpenMP offloading
     integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
     integer :: eer_fraction=20     !< # of EER raw frames to sum into a movie fraction
@@ -395,8 +389,6 @@ type :: parameters
     integer :: nboxes_max=0
     integer :: nchunks=0
     integer :: nchunks_in_parallel=1 !< max # of chunks run in parallel (0 = all at once)
-    integer :: nchunks_max=0       !< maximum candidate temporal chunk count for automatic selection
-    integer :: nchunks_min=0       !< minimum candidate temporal chunk count for automatic selection
     integer :: nchunksperset=0
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: ncls=500            !< # clusters
@@ -447,7 +439,6 @@ type :: parameters
     integer :: ncols=64            !< # selected 3D Fourier frequencies used as covariance columns
     integer :: column_separation=2 !< minimum grid separation between selected covariance columns
     integer :: n_probe_iters=0     !< flex_pca EM/probe subspace-iteration refinements of the column basis (0=off)
-    integer :: preimage_ndim=2     !< diffusion-map local-linear pre-image design dimension cap; d=min(preimage_ndim,neigs){2}
     integer :: nquanta=0           !< # quanta in quantization
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
@@ -518,7 +509,6 @@ type :: parameters
     real    :: bandwidth_tune=1.0  !< linear multiplier of the Ferguson-optimal bandwidth used when bandwidth_mode=ferguson(1.0=optimum){1.0}
     real    :: dm_alpha=0.0        !< diffusion-map Coifman-Lafon density normalization exponent(0=graph Laplacian|0.5=Fokker-Planck|1=Laplace-Beltrami){0.0}
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
-    real    :: chunk_count_penalty=0.05 !< complexity penalty per additional temporal chunk
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: corr_thres=0.5      !< per-atom validation correlation threshold for discarding atoms
     real    :: ctfresthreshold=CTFRES_THRESHOLD !< ctf resolution threshold{30A}

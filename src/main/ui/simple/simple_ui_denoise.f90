@@ -11,7 +11,6 @@ type(ui_program), target :: ppca_denoise_classes
 type(ui_program), target :: cls_split
 type(ui_program), target :: denoise_project
 type(ui_program), target :: map_params_from_den
-type(ui_program), target :: flex_analysis
 type(ui_program), target :: flex_pca
 type(ui_program), target :: ppca_volvar
 
@@ -26,7 +25,6 @@ contains
         call new_cls_split(prgtab)
         call new_denoise_project(prgtab)
         call new_map_params_from_den(prgtab)
-        call new_flex_analysis(prgtab)
         call new_flex_pca(prgtab)
         call new_ppca_volvar(prgtab)
     end subroutine construct_denoise_programs
@@ -405,91 +403,6 @@ subroutine new_icm2D( prgtab )
         call add_ui_program('map_params_from_den', map_params_from_den, prgtab, UI_CATEGORY)
     end subroutine new_map_params_from_den
 
-    subroutine new_flex_analysis( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        call flex_analysis%new(&
-        &'flex_analysis',&
-        &'Identify representative 3D states from conformational variability',&
-        &'builds a sparse diffusion map, selects k-medoids, fits a coupled projection-aware residual basis, and synthesizes Nyström 3D pre-images around the fixed mean',&
-        &'simple_exec',&
-        &.true., &
-        &visibility=UI_VIS_STANDARD, display_name='Analyze Conformational Variability')
-        call flex_analysis%add_input(UI_IMG, 'vol1', 'file', &
-            'Mean volume', 'Fixed mean volume used by the projection-aware residual model', &
-            'input volume e.g. vol1.mrc', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        call flex_analysis%add_input(UI_IMG, outvol, required_override=.false., &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_SRCH, nspace, required_override=.true., &
-        &visibility=UI_VIS_STANDARD)
-        call flex_analysis%add_input(UI_FILT, 'neigs', 'num', &
-            'Maximum number of diffusion modes (default 15)', &
-            'Positive eigenpair scan limit, bounded only by the nontrivial graph spectrum; all returned modes are retained when icm=no', &
-            '# modes >=1', .false., 15.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, 'icm', 'binary', &
-            'Automatic diffusion-mode selection', &
-            'Use ICM to select a spectral prefix; icm=no retains every mode returned by the neigs scan','', .false., 'yes', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, 'k_nn', 'num', &
-            'Nearest neighbors (default 100)', &
-            'Registered-residual neighbors retained per particle', '# neighbors', .false., 100.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, 'nang_nbrs', 'num', &
-            'Angular candidate cap (default 1000)', &
-            'Maximum orientation-gated candidate particles compared per particle', '# candidates', .false., 1000.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, 'bandwidth_mode', 'multi', &
-            'Diffusion-map bandwidth mode', &
-            'Kernel bandwidth policy for diffusion maps(median|ferguson){ferguson}','', .false., 'ferguson', &
-        &choices=ui_choices([character(len=8) :: 'median', 'ferguson']), &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, 'bandwidth_tune', 'num', &
-            'Ferguson bandwidth multiplier (default 1)', &
-            'Linear multiplier of the Ferguson-optimal kernel bandwidth (1=optimum); only used when bandwidth_mode=ferguson', &
-            'tune >= 0', .false., 1.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, 'view_balance', 'binary', &
-            'Correct uneven view distribution', &
-            'Give every occupied nspace projection bin equal total graph measure using fixed inverse-occupancy weights','', .false., 'yes', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, 'npreimages', 'num', &
-            'Representative state volumes (default 8)', &
-            'Number of k-medoids used as representative Nyström pre-image targets', &
-            '# state volumes', .false., 8.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, 'preimage_mode', 'multi', &
-            'Diffusion-map output mode', &
-            'constant=local-constant kernel pre-images; linear=local-linear WLS pre-images; discrete=writes hard k-medoids labels to ptcl3D/state without running the pre-image reconstruction','', .false., 'linear', &
-        &choices=ui_choices([character(len=8) :: 'constant', 'linear', 'discrete']), &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, 'preimage_ndim', 'num', &
-            'Local-linear pre-image design dimension (default 2)', &
-            'Cap on the number of leading diffusion coordinates used in the local-linear design; only used when preimage_mode=linear; d=min(preimage_ndim,neigs)', &
-            '# local dimensions >=1', .false., 2.0, &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILE, 'outfile', 'file', &
-            'Discrete-state project', &
-            'Output project whose selected ptcl3D rows receive hard k-medoids state labels; only used when preimage_mode=discrete', &
-            'e.g. flex_cluster_states.simple', .false., 'flex_cluster_states.simple', &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_FILT, lp, required_override=.false., &
-            placeholder_override='Graph-feature low-pass limit in Angstroms{6}; generative volumes are unfiltered', &
-            group="regularization", visibility=UI_VIS_STANDARD)
-        call flex_analysis%add_input(UI_PARM, 'oritype', 'str', &
-            'Particle orientation segment', 'Particle orientation segment fixed to ptcl3D', &
-            'ptcl3D', .false., 'ptcl3D', &
-        &visibility=UI_VIS_ADVANCED)
-        call flex_analysis%add_input(UI_MASK, mskdiam, required_override=.false., &
-            group="mask", visibility=UI_VIS_STANDARD)
-        call flex_analysis%add_input(UI_COMP, nparts, required_override=.false., &
-            group="compute", visibility=UI_VIS_STANDARD)
-        call flex_analysis%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
-        call add_ui_program('flex_analysis', flex_analysis, prgtab, UI_CATEGORY)
-    end subroutine new_flex_analysis
-
     subroutine new_flex_pca( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         call flex_pca%new(&
@@ -603,6 +516,13 @@ subroutine new_icm2D( prgtab )
             'Even box for the delivered state maps; decoupled from box_crop so the maps are not &
             &limited to the covariance Nyquist. Set to the native box for full-resolution states', &
             'pixels', .false., 0.0, &
+        &visibility=UI_VIS_ADVANCED)
+        call flex_pca%add_input(UI_FILE, 'outfile', 'file', &
+            'Discrete-state project', &
+            'Project written with the hard state label of every embedded particle in ptcl3D/state &
+            &(unassigned particles stay at state 0). Lets the embedding and its state assignment be &
+            &judged with a plain reconstruct3D, independently of the kernel-weighted state maps', &
+            'e.g. flex_pca_states.simple', .false., 'flex_pca_states.simple', &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_PARM, 'oritype', 'str', &
             'Particle orientation segment', 'Fixed to ptcl3D', 'ptcl3D', .false., 'ptcl3D', &
