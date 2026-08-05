@@ -6,10 +6,11 @@ use simple_image,            only: image
 use simple_parameters,       only: parameters
 use simple_reconstructor,    only: reconstructor
 use simple_flex_pca_distr,   only: flex_pca_is_master, flex_pca_is_worker, flex_pca_nparts, &
-    &flex_pca_run_stage, PCA_STAGE_SNR, PCA_STAGE_COLS, PCA_STAGE_SOLVE, PCA_STAGE_PROBE
+    &flex_pca_run_stage, PCA_STAGE_SNR, PCA_STAGE_COLS, PCA_STAGE_SOLVE, PCA_STAGE_PROBE, PCA_STAGE_EMBED
 use simple_flex_pca_parts,   only: flex_pca_part_fname, write_snr_part, reduce_snr_parts, &
     &write_cols_part, reduce_cols_parts, write_solve_part, reduce_solve_parts, &
     &write_probe_part, reduce_probe_parts, &
+    &write_embed_stats_part, reduce_embed_zhalf_parts, read_embed_stats_part, &
     &write_mean_scale, read_mean_scale, &
     &write_columns_hkl, read_columns_hkl
 use simple_kbinterpol,       only: kbinterpol
@@ -29,7 +30,7 @@ private
 public :: build_covariance_eigenbasis, embed_latents_with_contrast, estimate_covariance_mean
 public :: svec_idx, apply_packed_A, cg_solve_packed
 public :: probe_subspace_iteration, align_basis_to_reference, probe_external_basis
-public :: cov_env_int_pub
+public :: cov_env_int_pub, save_probe_state
 public :: test_flex_pca_svec_isometry, test_flex_pca_packed_solve
 
 ! Density observability floor, matching simple_image_arith::div_cmat_at_1 and the projected-latent coupled
@@ -43,6 +44,9 @@ real(dp), parameter :: COV_EIG_REL_FLOOR = 1.0d-6
 ! Cap on the column-subspace dimension. The accumulation is a batched dsyrk on the Van Loan-Pitsianis
 ! rearrangement (see unrearrange_kron_selfsum), which needs ONE shared d^4 array regardless of thread count.
 integer,  parameter :: COV_MAX_DTILDE    = 320
+!> Total particles the probe refines the basis on, summed across processes. The basis has a fixed
+!! parameter count, so this is a CAP rather than a fraction -- see the stride derivation below.
+integer,  parameter :: COV_PROBE_MAX_PTCLS = 25000
 !> probe stops when successive bases agree to this mean principal-angle cosine. 0.999 is tight
 !! enough that the remaining rotation cannot move a state target, and on Ribosembly it fires at the
 !! measured knee (iteration 2) rather than running the tuned count out.
@@ -165,6 +169,35 @@ contains
         read(envval(:ln), *, iostat=stat) ival
         if( stat == 0 ) off = ival == 0
     end function cov_env_int_off
+
+    !>  Write the two half-data latent solves so the per-particle error MODEL can be calibrated
+    !!  against the error actually observed. The halves are disjoint checkerboard subsets of ONE
+    !!  particle's own Fourier samples (see cov_herm_inner's `half` argument), so var(z1 - z2)
+    !!  measures that particle's estimation error directly -- including model misspecification,
+    !!  which the analytic posterior covariance cannot express. `prior` is written alongside because
+    !!  the half solves are shrunk by it and any calibration has to undo that.
+    !!  Gated on SIMPLE_COV_ZHALF; writes nothing and costs nothing when unset.
+    subroutine write_zhalf_replicates( zhalf, prior, nptcls, ncomp )
+        real(dp), intent(in) :: zhalf(nptcls,ncomp,2), prior(ncomp)
+        integer,  intent(in) :: nptcls, ncomp
+        integer :: enable, funit, io_stat
+        enable = 0
+        call cov_env_int('SIMPLE_COV_ZHALF', enable)
+        if( enable <= 0 ) return
+        call fopen(funit, file=string('flex_pca_zhalf.bin'), access='stream', action='WRITE', &
+            &status='REPLACE', iostat=io_stat)
+        if( io_stat /= 0 )then
+            THROW_WARN('could not open flex_pca_zhalf.bin; skipping half-solve export')
+            return
+        endif
+        write(funit) nptcls, ncomp
+        write(funit) zhalf
+        write(funit) prior
+        call fclose(funit)
+        write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA wrote flex_pca_zhalf.bin (nptcls=', &
+            &nptcls,' ncomp=',ncomp,')'
+        call flush(logfhandle)
+    end subroutine write_zhalf_replicates
 
     !>  Override an integer from the environment, if the variable is set and parses.
     subroutine cov_env_int_pub( name, val )
@@ -296,6 +329,7 @@ contains
         type(reconstructor), allocatable :: utilde(:)
         !> probe-worker handoff, read back from the master's flex_pca_probe.txt
         real(dp),            allocatable :: eig_probe(:)
+        real(dp),            allocatable :: zw(:,:), contrastw(:), precw(:,:,:), rew(:), rmew(:)
         real(dp) :: sig2_probe
         integer  :: ncomp_probe
         real(dp), allocatable :: vred(:,:)
@@ -325,6 +359,30 @@ contains
             call load_probe_basis(params, build, ncomp_probe, basis_recs)
             call probe_subspace_iteration(params, build, mean_rec, basis_recs, eig_probe, sig2_probe, &
                 &pinds, nptcls, ncomp_probe, 1)
+            do s = 1, size(basis_recs)
+                call basis_recs(s)%dealloc_rho; call basis_recs(s)%kill
+            end do
+            deallocate(basis_recs)
+            if( allocated(eig_probe) ) deallocate(eig_probe)
+            if( .not. allocated(eigvals) ) allocate(eigvals(0))
+            allocate(basis_recs(0))
+            ncomp_out = 0
+            sig2_out  = 0._dp
+            call work%dealloc_rho; call work%kill
+            return
+        endif
+        ! EMBED WORKER. Same handoff as the probe worker -- the basis is on disk as flex_pca_pc*.mrc
+        ! and flex_pca_probe.txt carries its dimension, prior variances and noise level -- but only ONE
+        ! round, because the basis is final by now and does not change under the workers.
+        if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_EMBED )then
+            call load_probe_state(ncomp_probe, eig_probe, sig2_probe)
+            call load_probe_basis(params, build, ncomp_probe, basis_recs)
+            allocate(zw(nptcls,ncomp_probe), contrastw(nptcls), precw(ncomp_probe,ncomp_probe,nptcls))
+            allocate(rew(nptcls), rmew(nptcls))
+            call embed_latents_with_contrast(params, build, mean_rec, basis_recs, ncomp_probe, &
+                &eig_probe, sig2_probe, pinds, nptcls, zw, contrastw, precw, rew, rmew, &
+                &stats_only=.true.)
+            deallocate(zw, contrastw, precw, rew, rmew)
             do s = 1, size(basis_recs)
                 call basis_recs(s)%dealloc_rho; call basis_recs(s)%kill
             end do
@@ -2757,7 +2815,8 @@ contains
 
     !> Contrast-aware MAP embedding (supplement S.E, eqs S.14-S.15).
     subroutine embed_latents_with_contrast( params, build, mean_rec, basis_recs, ncomp, eigvals, sig2_eff, &
-        &pinds, nptcls, z, contrast, precision, resid_energy, resid_mean_energy, rho_out )
+        &pinds, nptcls, z, contrast, precision, resid_energy, resid_mean_energy, rho_out, stats_only, &
+        &from_parts )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -2772,15 +2831,22 @@ contains
         ! path by how well each component is measured rather than by how much variance it carries.
         ! A high-variance, low-rho nuisance component otherwise dominates target placement.
         real(dp), optional,  intent(out)   :: rho_out(ncomp)
+        !> worker: run the image pass over THIS part's particles, ship the sufficient statistics, stop
+        logical,  optional,  intent(in)    :: stats_only
+        !> master: skip the image pass entirely, gather the parts, run the coupled phase
+        logical,  optional,  intent(in)    :: from_parts
         real(dp), parameter :: A_LO = 0.1d0, A_HI = 5.0d0
         type(fplane_type), allocatable :: fpls(:)
         type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpl(:), data_fpl(:)
         type(ori), allocatable :: orientations(:)
         real(dp), allocatable :: prior(:), rho(:), Gcache(:,:,:), bcache(:,:), ccache(:,:)
         real(dp), allocatable :: zhalf(:,:,:), Ghf(:,:,:,:), bhf(:,:,:), chf(:,:,:)
+        real(dp), allocatable :: Gpart(:,:,:), bpart(:,:), cpart(:,:)
+        integer,  allocatable :: prows(:)
+        integer :: ipart, pn_part
         real(dp), parameter   :: RHO_FLOOR = 1.d-3
         real(dp) :: rho_max, rrel
-        logical :: l_relprior
+        logical :: l_relprior, l_stats_only, l_from_parts
         integer :: ihf
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, q, r, ithr, nthr, ia, row
         integer, allocatable :: nzeroG_thr(:), nzeroR_thr(:), nzeroZ_thr(:)   ! dead-basis counters
@@ -2796,9 +2862,25 @@ contains
         sig2 = max(sig2_eff, DTINY)      ! whitened-noise variance for the MAP shrinkage
         allocate(nzeroG_thr(nthr), nzeroR_thr(nthr), nzeroZ_thr(nthr), source=0)   ! dead-basis counters
         l_relprior = .not. cov_env_int_off('SIMPLE_COV_RELPRIOR')
+        l_stats_only = .false.
+        l_from_parts = .false.
+        if( present(stats_only) ) l_stats_only = stats_only
+        if( present(from_parts) ) l_from_parts = from_parts
+        ! Distribution rides on the sufficient statistics the reliability prior needs. With
+        ! SIMPLE_COV_RELPRIOR=0 those caches are never formed, so there is nothing to ship and the
+        ! stage stays in process -- correct, just not parallel.
+        if( .not. l_relprior .and. (l_stats_only .or. l_from_parts) ) &
+            &THROW_HARD('distributed embedding requires the reliability prior; unset SIMPLE_COV_RELPRIOR')
         allocate(prior(ncomp))
         if( l_relprior )then
-            allocate(Gcache(ncomp,ncomp,nptcls), bcache(ncomp,nptcls), ccache(ncomp,nptcls), source=0.d0)
+            ! The reducing master never holds Gcache at nptcls: it reads one part's blocks at a time in
+            ! the re-solve below. At a million particles with ncomp=48 that is the difference between
+            ! 1.8 GB and 18.4 GB, on top of the precision array it must hold either way.
+            if( l_from_parts )then
+                allocate(Gcache(0,0,0), bcache(0,0), ccache(0,0))
+            else
+                allocate(Gcache(ncomp,ncomp,nptcls), bcache(ncomp,nptcls), ccache(ncomp,nptcls), source=0.d0)
+            endif
             allocate(zhalf(nptcls,ncomp,2), source=0.d0)
             allocate(Ghf(ncomp,ncomp,2,nthr), bhf(ncomp,2,nthr), chf(ncomp,2,nthr), source=0.d0)
         endif
@@ -2819,6 +2901,17 @@ contains
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         z = 0.d0; contrast = 1.d0; precision = 0.d0; resid_energy = 0.d0; resid_mean_energy = 0.d0
         t_phase = tic()
+        ! MASTER REDUCING PARTS. The image pass below is the whole cost of this stage and the workers
+        ! have already paid it; the master only needs their sufficient statistics to run the coupled
+        ! phase (rho over every particle, then the re-solve). Jump straight there.
+        if( l_from_parts )then
+            ! PASS 1 ONLY. zhalf and the per-particle scalars are all rho needs, and rho has to exist
+            ! before any particle can be solved. The Gram blocks stay on disk until the re-solve reads
+            ! them one part at a time -- Gcache below is deliberately never allocated at nptcls.
+            call reduce_embed_zhalf_parts(params, flex_pca_nparts(), pinds, contrast, resid_energy, &
+                &resid_mean_energy, zhalf, nptcls, ncomp)
+            goto 200
+        endif
         write(logfhandle,'(A)') '>>> FLEX_PCA CONTRAST-AWARE EMBEDDING'
         call flush(logfhandle)
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
@@ -2941,6 +3034,10 @@ contains
                 call flush(logfhandle)
             endif
         end do
+        ! The reducing master lands here rather than after the diagnostics, so it still frees the
+        ! per-thread Gram workspace. gcnt_thr is all zero when no batch loop ran, so the spectrum
+        ! report below skips itself -- those diagnostics are per-particle and belong to the parts.
+200     continue
         allocate(gspec(ncomp), source=0.d0)
         gcnt = sum(gcnt_thr)
         if( gcnt > 0 )then
@@ -2966,11 +3063,26 @@ contains
             &' zeroRHS=',sum(nzeroR_thr),' zeroZ=',sum(nzeroZ_thr),' of nptcls=',nptcls
         write(logfhandle,'(A,F8.1)') '>>> FLEX_PCA CONTRAST EMBED SECONDS: ', toc(t_phase)
         call flush(logfhandle)
+        ! WORKER. The image pass is done for this part's particles; everything below is coupled across
+        ! ALL of them, so it belongs to the master. Ship the sufficient statistics and stop.
+        if( l_stats_only )then
+            call write_embed_stats_part(flex_pca_part_fname('embedstats', params%part, params%numlen), &
+                &pinds, contrast, resid_energy, resid_mean_energy, Gcache, bcache, ccache, zhalf, &
+                &nptcls, ncomp)
+            if( present(rho_out) ) rho_out = 1.d0
+            goto 900
+        endif
         ! ---- RELIABILITY-WEIGHTED PRIOR ---- The plain prior precision sig2/Gamma_q hands the LARGEST
         ! eigenvalue the WEAKEST prior, so a high-variance but poorly measured component becomes
         ! near-unregularized least squares. Rescale each prior by the component's split-half reliability.
         if( l_relprior )then
             allocate(rho(ncomp))
+            ! OPTIONAL EXPORT of the two half-data solves themselves, for calibrating the per-particle
+            ! error MODEL against the error actually observed. rho below collapses the pair to one
+            ! correlation per component; the variance of their DIFFERENCE is what measures the error
+            ! directly, including the model misspecification that precision(:,:,row) cannot see.
+            ! Off unless SIMPLE_COV_ZHALF is set, and writes nothing else -- purely additive.
+            call write_zhalf_replicates(zhalf, prior, nptcls, ncomp)
             do q = 1, ncomp
                 rho(q) = corr_dp(zhalf(:,q,1), zhalf(:,q,2), nptcls)
                 rho(q) = max(0.d0, rho(q))
@@ -2984,28 +3096,57 @@ contains
                 rrel = (rho(q)*rho(q)) / (rho_max*rho_max)
                 prior(q) = 1.d0 / max(max(rrel, RHO_FLOOR) * eigvals(q), DTINY)
             end do
+            ! All components, not the leading 10: rho drives state-target placement via comp_rho, so
+            ! its ranking has to be checkable against a signal measure over the whole basis.
             write(logfhandle,'(A)') '>>> FLEX_PCA split-half reliability per component (rho, corrected):'
-            do q = 1, min(ncomp,10)
+            do q = 1, ncomp
                 write(logfhandle,'(A,I3,A,F7.4,A,ES11.3,A,ES11.3)') '>>>   z',q,'  rho=',rho(q), &
                     &'  eigval=',eigvals(q),'  prior_precision=',prior(q)
             end do
             call flush(logfhandle)
-            ! re-solve every particle in closed form from the cached sufficient statistics
-            !$omp parallel do default(shared) private(row,q,aa,ithr) schedule(static) proc_bind(close)
-            do row = 1, nptcls
-                ithr = omp_get_thread_num() + 1
-                aa   = contrast(row)*contrast(row)
-                Ath(:,:,ithr) = (aa/sig2)*Gcache(:,:,row)
-                do q = 1, ncomp
-                    Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
-                    zth(q,ithr)   = (contrast(row)*bcache(q,row) - aa*ccache(q,row))/sig2
+            ! re-solve every particle in closed form from the cached sufficient statistics.
+            ! Two routes to the SAME arithmetic: in process the blocks are already in Gcache, while a
+            ! reducing master streams them back one part at a time so its footprint does not grow with
+            ! the dataset. The solve is identical either way -- only where the blocks live differs.
+            if( l_from_parts )then
+                do ipart = 1, flex_pca_nparts()
+                    call read_embed_stats_part(params, ipart, pinds, prows, Gpart, bpart, cpart, &
+                        &pn_part, nptcls, ncomp)
+                    !$omp parallel do default(shared) private(i,row,q,aa,ithr) schedule(static) proc_bind(close)
+                    do i = 1, pn_part
+                        ithr = omp_get_thread_num() + 1
+                        row  = prows(i)
+                        aa   = contrast(row)*contrast(row)
+                        Ath(:,:,ithr) = (aa/sig2)*Gpart(:,:,i)
+                        do q = 1, ncomp
+                            Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
+                            zth(q,ithr)   = (contrast(row)*bpart(q,i) - aa*cpart(q,i))/sig2
+                        end do
+                        call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), ncomp)
+                        z(row,:) = zth(:,ithr)
+                        Gtilth(:,:,ithr) = (aa/sig2)*Gpart(:,:,i)
+                        call map_sampling_precision(Gtilth(:,:,ithr), prior, ncomp, precision(:,:,row))
+                    end do
+                    !$omp end parallel do
+                    deallocate(prows, Gpart, bpart, cpart)
                 end do
-                call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), ncomp)
-                z(row,:) = zth(:,ithr)
-                Gtilth(:,:,ithr) = (aa/sig2)*Gcache(:,:,row)
-                call map_sampling_precision(Gtilth(:,:,ithr), prior, ncomp, precision(:,:,row))
-            end do
-            !$omp end parallel do
+            else
+                !$omp parallel do default(shared) private(row,q,aa,ithr) schedule(static) proc_bind(close)
+                do row = 1, nptcls
+                    ithr = omp_get_thread_num() + 1
+                    aa   = contrast(row)*contrast(row)
+                    Ath(:,:,ithr) = (aa/sig2)*Gcache(:,:,row)
+                    do q = 1, ncomp
+                        Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
+                        zth(q,ithr)   = (contrast(row)*bcache(q,row) - aa*ccache(q,row))/sig2
+                    end do
+                    call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), ncomp)
+                    z(row,:) = zth(:,ithr)
+                    Gtilth(:,:,ithr) = (aa/sig2)*Gcache(:,:,row)
+                    call map_sampling_precision(Gtilth(:,:,ithr), prior, ncomp, precision(:,:,row))
+                end do
+                !$omp end parallel do
+            endif
             write(logfhandle,'(A)') '>>> FLEX_PCA latents re-solved with the reliability-weighted prior'
             call flush(logfhandle)
             if( present(rho_out) ) rho_out = rho
@@ -3014,6 +3155,7 @@ contains
             ! no split-half statistics available; treat every component as equally measured
             if( present(rho_out) ) rho_out = 1.d0
         endif
+900     continue
         do i = 1, size(orientations)
             call orientations(i)%kill
         end do
@@ -3025,6 +3167,10 @@ contains
         end do
         call cleanup_rec_buffers(build, fpls)
         deallocate(prior, Gth, Ath, zth, zbest, cth, bth, myth, Gtilth, basis_fpls, mean_fpl, data_fpl, orientations)
+        deallocate(nzeroG_thr, nzeroR_thr, nzeroZ_thr)
+        if( allocated(Gcache) ) deallocate(Gcache, bcache, ccache, zhalf)
+        if( allocated(Ghf)    ) deallocate(Ghf, bhf, chf)
+        if( allocated(gwork)  ) deallocate(gwork, gvec, gev, gspec_thr, gcnt_thr)
     end subroutine embed_latents_with_contrast
 
     !> Probe-based subspace iteration: alternate a Wiener E-step (per-particle latents in the current
@@ -3059,7 +3205,7 @@ contains
         real     :: fc
         real(dp) :: sig2, a, aa, e_mm, myv, mu_q, sd_q
         integer  :: it, q, r, i, ithr, nthr, batchlims(2), batchsz, ibatch, row, d_new, es(3), filtsz, sh
-        integer  :: npairs, nval, pstride, npp, ihalf, nkept
+        integer  :: npairs, nval, pstride, npp, ihalf, nkept, nprobe_max
         logical  :: l_probe_distr
         real(dp),            allocatable :: gam_sum(:)
         complex,             allocatable :: cme(:,:,:,:), cmo(:,:,:,:)
@@ -3085,7 +3231,22 @@ contains
         ! and leaves the other empty -- and every probe M-step is regularised by an even/odd FSC, which
         ! is then computed against nothing. Measured: the Wiener filter kills the basis and the run dies
         ! at the "embedding collapsed" guard. Striding per halfset keeps both populated at any stride.
-        pstride = 1
+        ! ---- ABSOLUTE CAP, not a fixed ratio ----
+        ! The probe refines ncomp band-limited, FSC-regularised volumes. That parameter count is FIXED
+        ! -- it does not grow when the dataset does -- so the number of particles needed to determine
+        ! it is fixed too, and a constant stride is the wrong control: at stride 4 a million-particle
+        ! project would still refine on 250k particles and the probe would still scale linearly,
+        ! staying the dominant stage (projected 5228 s of a 4.1 h run). Capping the COUNT instead
+        ! makes the probe O(1) in dataset size.
+        !
+        ! COV_PROBE_MAX_PTCLS is the total across all processes, so each one takes its share; a worker
+        ! sees only its own partition and would otherwise take the whole budget nparts times over.
+        ! 25000 is what the stride-4 benchmark actually validated at 100k particles: basis principal
+        ! angles 0.988557 vs 0.989457 against every-particle refinement, and 71 vs 70 delivered states.
+        ! SIMPLE_COV_PROBE_STRIDE still wins if set, so the old knob keeps working.
+        nprobe_max = max(1, COV_PROBE_MAX_PTCLS / max(1, params%nparts))
+        pstride    = 1
+        if( nptcls > nprobe_max ) pstride = (nptcls + nprobe_max - 1) / nprobe_max
         call cov_env_int('SIMPLE_COV_PROBE_STRIDE', pstride)
         pstride = max(1, pstride)
         allocate(ppinds(nptcls))

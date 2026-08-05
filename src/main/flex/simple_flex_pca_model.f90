@@ -6,14 +6,15 @@ use simple_builder,                    only: builder
 use simple_cmdline,                    only: cmdline
 use simple_flex_pca_rec3D,         only: reconstruct_flex_weighted_states, flex_rec_box, flex_rec_smpd
 use simple_flex_pca_columns,    only: cov_env_int_pub, build_covariance_eigenbasis, embed_latents_with_contrast, &
-    &estimate_covariance_mean, probe_subspace_iteration, align_basis_to_reference, probe_external_basis
+    &estimate_covariance_mean, probe_subspace_iteration, align_basis_to_reference, probe_external_basis, &
+    &save_probe_state
 use simple_image,                      only: image
 use simple_parameters,                 only: parameters
 use simple_reconstructor,              only: reconstructor
 use simple_sigma2_files,               only: load_sigma2_groups
 use simple_sp_project,                 only: sp_project
 use simple_srch_sort_loc,              only: hpsort
-use simple_flex_pca_distr,             only: flex_pca_is_worker, flex_pca_is_master
+use simple_flex_pca_distr,             only: flex_pca_is_worker, flex_pca_is_master, flex_pca_nparts, flex_pca_run_stage
 use simple_flex_pca_parts,             only: write_sigma_state, check_sigma_state, &
     &read_state_weights_round, write_embed_part
 use simple_flex_pca_distr,             only: PCA_STAGE_STATES, PCA_STAGE_EMBED
@@ -21,6 +22,7 @@ use simple_finch,                      only: finch_hierarchy, fit_finch, finch_r
     &                                          select_finch_level, refine_finch_level
 use simple_kd_tree,                    only: kd_tree, knn_table
 use simple_linalg,                     only: jacobi, eigsrt, matinv
+use simple_flex_pca_merge,             only: flex_pca_merge_enabled, two_gate_state_merge
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -53,7 +55,10 @@ contains
         real(dp), allocatable :: geo_targets(:,:)
         integer, allocatable :: traj_labels(:), comp_rank(:)
         integer :: nptcls, ncomp, nstates, min_neff, state_axis, ncols_req, col_sep, neigs_req, nkern
-        integer :: q, i, r, metric_valid_count, axis_sel, nfinch
+        integer :: q, i, r, s, metric_valid_count, axis_sel, nfinch
+        integer :: nstates_merged
+        integer, allocatable :: merge_label(:)
+        real,    allocatable :: merged_weights(:,:)
         real(dp), allocatable :: finch_targets(:,:)
         logical :: l_finch_states
         logical :: l_geo, l_rot
@@ -85,7 +90,16 @@ contains
         endif
 
         neigs_req  = max(1, min(48, params%neigs))
-        nstates    = max(3, min(20, params%npreimages))
+        ! The state count used to be capped at 20 and the excess SILENTLY dropped -- npreimages=24
+        ! delivered 20 with no warning. That is below the truth on any compositionally rich specimen
+        ! (Tomotwin-100 carries ~99 species) and it makes an OVER-provisioned run impossible to
+        ! express, which is the only regime in which the two-gate merge can recover K.
+        ! Nothing algorithmic wanted 20. What actually bounds the state count is memory:
+        ! reconstruct_flex_weighted_states holds all nstates reconstructors resident at once, and a
+        ! second set of nstates when the halfsets are fused. So the ceiling is a memory budget,
+        ! checked against an estimate and reported, rather than a constant.
+        nstates    = max(3, params%npreimages)
+        call check_state_memory_budget(params, nstates)
         min_neff   = max(20, min(nptcls, params%min_neff))
         state_axis = params%state_axis      ! <0 path, 0 k-means, >=1 legacy single axis
         ! nkern decouples the number of components the STATE STAGE uses from neigs, the number estimated.
@@ -191,9 +205,24 @@ contains
             ! contrast-aware MAP embedding (S.D/S.E)
             allocate(contrast(nptcls))
             allocate(comp_rho(ncomp), source=1.d0)
-            call embed_latents_with_contrast(params, build, mean_rec, basis_recs, ncomp, eigvals, sig2_eff, &
-                &pinds, nptcls, z, contrast, latent_second, resid_energy, resid_mean_energy, &
-                &rho_out=comp_rho)
+            ! ---- EMBEDDING: distributed when the master has parts ---- The image pass is by far the
+            ! cost here and it was the last compute stage still running master-only: measured at box
+            ! 96 it held 100k particles on one process at ~115 % CPU while 79 cores idled.
+            ! ONE qsys round, unlike the probe, because the basis does not change: the workers project
+            ! against a fixed basis, so they need no per-iteration refresh. What they cannot do is
+            ! finish -- the reliability prior couples every particle -- so they ship sufficient
+            ! statistics and the master owns rho and the re-solve. See write_embed_stats_part.
+            if( flex_pca_is_master() .and. flex_pca_nparts() > 1 )then
+                call save_probe_state(ncomp, eigvals, sig2_eff)
+                call flex_pca_run_stage(PCA_STAGE_EMBED, 'embedding')
+                call embed_latents_with_contrast(params, build, mean_rec, basis_recs, ncomp, eigvals, &
+                    &sig2_eff, pinds, nptcls, z, contrast, latent_second, resid_energy, &
+                    &resid_mean_energy, rho_out=comp_rho, from_parts=.true.)
+            else
+                call embed_latents_with_contrast(params, build, mean_rec, basis_recs, ncomp, eigvals, &
+                    &sig2_eff, pinds, nptcls, z, contrast, latent_second, resid_energy, &
+                    &resid_mean_energy, rho_out=comp_rho)
+            endif
         endif
         write(logfhandle,'(A,F7.3,A,F7.3)') '>>> FLEX_PCA per-particle contrast: mean=', &
             &real(sum(contrast)/real(nptcls,dp)),' sd=', &
@@ -296,6 +325,42 @@ contains
             &floor_rho=.true., outvol_even=string('flex_pca_even_state_001.mrc'), &
             &outvol_odd=string('flex_pca_odd_state_001.mrc'))
         write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE states_combined_eo seconds=', toc(t_blk)
+        ! ---- TWO-GATE MERGE ---- Collapse states that the orientations or the maps say are not
+        ! distinct, then reconstruct ONCE at the surviving count. Runs here because it needs the
+        ! half maps the pass above just wrote, and before the trajectory ordering, which should
+        ! order the states that are actually delivered.
+        if( flex_pca_merge_enabled() .and. nstates > 1 )then
+            t_blk = tic()
+            allocate(merge_label(nstates))
+            call two_gate_state_merge(params, pviews, state_weights, nptcls, nstates, &
+                &merge_label, nstates_merged)
+            if( nstates_merged < nstates )then
+                allocate(merged_weights(nptcls,nstates_merged), source=0.)
+                do s = 1, nstates
+                    merged_weights(:,merge_label(s)) = merged_weights(:,merge_label(s)) + state_weights(:,s)
+                end do
+                call move_alloc(merged_weights, state_weights)
+                do i = 1, nptcls
+                    if( labels(i) >= 1 .and. labels(i) <= nstates ) labels(i) = merge_label(labels(i))
+                end do
+                ! The re-reconstruction below writes 001..nstates_merged; the maps above that index
+                ! are from the pre-merge pass and MUST go. Everything downstream addresses the state
+                ! maps as the contiguous run flex_pca_state_001..NNN, so leaving the tail behind
+                ! silently delivers states the merge just decided do not exist.
+                do s = nstates_merged + 1, nstates
+                    call del_file('flex_pca_state_'     //int2str_pad(s,3)//MRC_EXT)
+                    call del_file('flex_pca_even_state_'//int2str_pad(s,3)//MRC_EXT)
+                    call del_file('flex_pca_odd_state_' //int2str_pad(s,3)//MRC_EXT)
+                end do
+                nstates = nstates_merged
+                call reconstruct_flex_weighted_states(params, build, pinds, state_weights, nstates, &
+                    &floor_rho=.true., outvol_even=string('flex_pca_even_state_001.mrc'), &
+                    &outvol_odd=string('flex_pca_odd_state_001.mrc'))
+                call write_discrete_state_project(build%spproj, pinds, labels, nstates, params%outfile)
+            endif
+            deallocate(merge_label)
+            write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE two_gate_merge seconds=', toc(t_blk)
+        endif
         allocate(half_weights(nptcls,nstates), source=state_weights)
         ! Order the reconstructed states along the dominant conformational motion in VOLUME space so the
         ! trajectory endpoints span the actual change; the covariance state axis need not order the
@@ -428,6 +493,59 @@ contains
             &count([(build%spproj_field%get_eo(pinds(q))==1,q=1,nptcls)]) < 20 ) &
             &THROW_HARD('flex_pca requires populated even and odd halfsets')
     end subroutine validate_covariance_inputs
+
+    !> Report, and bound, what the requested state count will cost in resident reconstructors.
+    !!
+    !! reconstruct_flex_weighted_states allocates ALL nstates reconstructors before the particle
+    !! loop, plus a second nstates when the halfsets are fused, and each one carries an expanded
+    !! complex grid and its rho at the RECONSTRUCTION box -- so the cost is linear in nstates and
+    !! cubic in box_rec, and it is paid up front rather than growing during the pass. Estimating it
+    !! here turns an out-of-memory kill deep inside the gridding loop into a message naming the two
+    !! knobs that actually control it.
+    subroutine check_state_memory_budget( params, nstates )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: nstates
+        real(dp) :: gb, gb_proc, budget_gb, nexp
+        integer  :: box_rec, dim_exp, nproc
+        character(len=32) :: envval
+        integer  :: stat, ln, io_stat
+        box_rec = flex_rec_box(params)
+        ! expanded grid half-width, as reconstructor::alloc_rho derives it: |lims| + ceiling(KBWINSZ)
+        dim_exp = box_rec/2 + ceiling(KBWINSZ) + 1
+        nexp    = (2.d0*real(dim_exp,dp) + 1.d0)**3
+        ! complex cmat_exp (8 B) + real rho_exp (4 B) per grid point, x2 when even and odd coexist
+        gb_proc = 2.d0 * real(nstates,dp) * nexp * 12.d0 / 1.d9
+        ! EVERY process pays this, not just the master: reconstruct_flex_weighted_states allocates
+        ! state_recs(nstates) in the worker path too, because a worker owns a particle subset but
+        ! all of the states. So the machine-wide peak is nparts+1 times the per-process figure, and
+        ! reporting only the latter understates it by an order of magnitude at nparts=10.
+        nproc   = max(1, params%nparts) + 1
+        gb      = gb_proc * real(nproc,dp)
+        budget_gb = 64.d0
+        call get_environment_variable('SIMPLE_FLEX_STATE_MEM_GB', envval, ln, stat)
+        if( stat == 0 .and. ln > 0 )then
+            read(envval, *, iostat=io_stat) budget_gb
+            if( io_stat /= 0 ) budget_gb = 64.d0
+        endif
+        write(logfhandle,'(A,I0,A,I0,A,F8.2,A,I0,A,F8.2,A)') '>>> FLEX_PCA states=',nstates, &
+            &' at reconstruction box ',box_rec,' -> approx ',gb_proc,' GB of reconstructors per &
+            &process x ',nproc,' processes = ',gb,' GB machine-wide'
+        ! The reconstructors are rarely what hurts. The reduced solve's accumulator is sized against
+        ! COV_ATHR_BUDGET, which is likewise PER PROCESS and predates distributed execution, so a
+        ! distributed run multiplies it by nproc as well -- measured on Tomotwin at box 96 with
+        ! nparts=10: d_tilde=250 gave 7.9 GB each, ~87 GB machine-wide, which dwarfed the volumes.
+        ! SIMPLE_COV_DTILDE pins d_tilde and is the knob that actually moves this.
+        if( params%nparts > 1 ) write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA NOTE: the reduced-solve &
+            &accumulator is also per process; at nparts=',params%nparts,' it is paid that many times &
+            &over. Cap it with SIMPLE_COV_DTILDE if the machine is tight.'
+        call flush(logfhandle)
+        if( gb > budget_gb )then
+            write(logfhandle,'(A,F8.2,A)') '>>> FLEX_PCA state reconstructors need approx ',gb, &
+                &' GB, above the budget below. Lower npreimages, lower box_rec, or raise &
+                &SIMPLE_FLEX_STATE_MEM_GB if the machine has the memory.'
+            THROW_HARD('flex_pca state count exceeds the reconstructor memory budget')
+        endif
+    end subroutine check_state_memory_budget
 
     subroutine load_and_validate_sigma( params, build, cline, pinds, loaded )
         type(parameters), intent(inout) :: params

@@ -16,6 +16,7 @@ public :: write_sigma_state, check_sigma_state
 public :: write_state_weights_round, read_state_weights_round
 public :: write_states_part, reduce_states_parts
 public :: write_embed_part,  reduce_embed_parts
+public :: write_embed_stats_part, reduce_embed_zhalf_parts, read_embed_stats_part
 public :: write_probe_part,  reduce_probe_parts
 public :: cleanup_flex_pca_parts
 
@@ -25,6 +26,7 @@ character(len=*), parameter :: SIGMA_STATE_FNAME= 'flex_pca_sigma_state.txt'
 character(len=*), parameter :: WEIGHTS_FNAME    = 'flex_pca_round_weights.bin'
 integer, parameter :: STATES_PART_VERSION = 1
 integer, parameter :: EMBED_PART_VERSION  = 1
+integer, parameter :: EMBED_STATS_VERSION = 1
 integer, parameter :: PROBE_PART_VERSION  = 1
 
 ! Every part file is magic + version + shape header + payload, written to a .tmp and renamed, so a
@@ -434,6 +436,171 @@ contains
         call simple_rename(tmp_fname, fname)
         call tmp_fname%kill
     end subroutine write_embed_part
+
+    !> Index of key in an ASCENDING array, 0 if absent. pinds arrive in project order, so the scatter
+    !! below can binary search: the linear scan the older reducers use is O(nptcls) per row and would
+    !! cost 1e11 comparisons on a 335k-particle project.
+    pure integer function binsrch_int( arr, n, key ) result( pos )
+        integer, intent(in) :: n, arr(n), key
+        integer :: lo, hi, mid
+        pos = 0
+        lo  = 1
+        hi  = n
+        do while( lo <= hi )
+            mid = (lo + hi)/2
+            if( arr(mid) == key )then
+                pos = mid
+                return
+            else if( arr(mid) < key )then
+                lo = mid + 1
+            else
+                hi = mid - 1
+            endif
+        end do
+    end function binsrch_int
+
+    !> One part's EMBEDDING SUFFICIENT STATISTICS, which is what the distributed embedding actually
+    !! has to ship.
+    !!
+    !! The embedding is NOT a clean partition, which is why write_embed_part above -- shipping each
+    !! part's finished latents -- was never wired to anything. The reliability prior is derived from
+    !! rho(q) = corr(zhalf(:,q,1), zhalf(:,q,2)) taken over EVERY particle, and each particle's final
+    !! z is then re-solved against that prior. Let each part compute its own rho and the parts are
+    !! solved against different priors, so the halves of the embedding are not comparable and every
+    !! downstream distance is wrong.
+    !!
+    !! So a part ships what it can compute independently -- the per-particle sufficient statistics
+    !! from the image pass, plus its own rows of the split-half latents -- and the master does the
+    !! coupled arithmetic: reduce zhalf over all particles, form rho and the prior ONCE, then re-solve
+    !! everything. The re-solve is a small SPD solve per particle and touches no images, so the stage
+    !! that actually costs (reading and projecting particles) is the part that distributes.
+    subroutine write_embed_stats_part( fname, pinds, contrast, resid_energy, resid_mean_energy, &
+        &Gcache, bcache, ccache, zhalf, nptcls, ncomp )
+        class(string), intent(in) :: fname
+        integer,       intent(in) :: pinds(:), nptcls, ncomp
+        real(dp),      intent(in) :: contrast(:), resid_energy(:), resid_mean_energy(:)
+        real(dp),      intent(in) :: Gcache(:,:,:), bcache(:,:), ccache(:,:), zhalf(:,:,:)
+        type(string) :: tmp_fname
+        integer :: funit, io_stat, header(4)
+        header = [FLEX_PCA_PART_MAGIC, EMBED_STATS_VERSION, nptcls, ncomp]
+        tmp_fname = fname//'.tmp'
+        call fopen(funit, file=tmp_fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
+        call fileiochk('write_embed_stats_part; open', io_stat)
+        write(funit, iostat=io_stat) header
+        call fileiochk('write_embed_stats_part; header', io_stat)
+        ! zhalf BEFORE Gcache, deliberately. The master needs two things from these files and they
+        ! differ in size by ncomp/4: the split-half latents, to form rho over every particle before it
+        ! can solve anything, and the per-particle Gram blocks, which it consumes one part at a time.
+        ! Putting the small arrays first lets the first pass stop reading at zhalf instead of pulling
+        ! ncomp^2 doubles per particle through memory for a quantity it does not use yet.
+        write(funit, iostat=io_stat) pinds(1:nptcls)
+        write(funit, iostat=io_stat) contrast(1:nptcls), resid_energy(1:nptcls), resid_mean_energy(1:nptcls)
+        write(funit, iostat=io_stat) zhalf(1:nptcls,1:ncomp,1:2)
+        write(funit, iostat=io_stat) Gcache(1:ncomp,1:ncomp,1:nptcls)
+        write(funit, iostat=io_stat) bcache(1:ncomp,1:nptcls), ccache(1:ncomp,1:nptcls)
+        call fileiochk('write_embed_stats_part; payload', io_stat)
+        call fclose(funit)
+        call simple_rename(tmp_fname, fname)
+        call tmp_fname%kill
+    end subroutine write_embed_stats_part
+
+    !> PASS 1: gather only what the master needs BEFORE it can solve anything -- the split-half
+    !! latents that form rho, plus the per-particle scalars. Reads no Gram blocks and deletes nothing;
+    !! the files are consumed by read_embed_stats_part below.
+    !!
+    !! Splitting the reduce in two is what keeps the master's footprint flat in dataset size. Pulling
+    !! every part's Gcache in at once costs ncomp^2 doubles per particle held simultaneously -- 18.4 GB
+    !! at a million particles with ncomp=48, on top of the same again for the precision output. One
+    !! part at a time costs that divided by nparts.
+    subroutine reduce_embed_zhalf_parts( params, nparts, gpinds, contrast, resid_energy, &
+        &resid_mean_energy, zhalf, nptcls, ncomp )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: nparts, gpinds(:), nptcls, ncomp
+        real(dp),          intent(inout) :: contrast(:), resid_energy(:), resid_mean_energy(:)
+        real(dp),          intent(inout) :: zhalf(:,:,:)
+        integer,  allocatable :: ppinds(:)
+        real(dp), allocatable :: pc(:), pre(:), prme(:), pzh(:,:,:)
+        type(string) :: fname
+        integer :: ipart, funit, io_stat, header(4), pn, i, hit, nfilled
+        integer(timer_int_kind) :: t_red
+        t_red   = tic()
+        nfilled = 0
+        do ipart = 1, nparts
+            fname = flex_pca_part_fname('embedstats', ipart, params%numlen)
+            if( .not. file_exists(fname) ) THROW_HARD('missing embed-stats part: '//fname%to_char())
+            call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+            call fileiochk('reduce_embed_zhalf_parts; open '//fname%to_char(), io_stat)
+            read(funit, iostat=io_stat) header
+            call fileiochk('reduce_embed_zhalf_parts; header', io_stat)
+            if( header(1) /= FLEX_PCA_PART_MAGIC ) THROW_HARD('bad embed-stats part magic')
+            if( header(2) /= EMBED_STATS_VERSION ) THROW_HARD('bad embed-stats part version')
+            if( header(4) /= ncomp               ) THROW_HARD('embed-stats part ncomp mismatch')
+            pn = header(3)
+            allocate(ppinds(pn), pc(pn), pre(pn), prme(pn), pzh(pn,ncomp,2))
+            read(funit, iostat=io_stat) ppinds
+            read(funit, iostat=io_stat) pc, pre, prme
+            read(funit, iostat=io_stat) pzh
+            call fileiochk('reduce_embed_zhalf_parts; payload', io_stat)
+            call fclose(funit)
+            ! match on pinds rather than assuming a contiguous layout, so a part boundary that does
+            ! not line up cannot silently misplace rows
+            do i = 1, pn
+                hit = binsrch_int(gpinds, nptcls, ppinds(i))
+                if( hit < 1 ) THROW_HARD('embed-stats part carries a particle not in the global set')
+                contrast(hit)          = pc(i)
+                resid_energy(hit)      = pre(i)
+                resid_mean_energy(hit) = prme(i)
+                zhalf(hit,:,:)         = pzh(i,:,:)
+                nfilled = nfilled + 1
+            end do
+            deallocate(ppinds, pc, pre, prme, pzh)
+            call fname%kill
+        end do
+        if( nfilled /= nptcls ) THROW_HARD('embed-stats parts did not cover every particle')
+        write(logfhandle,'(A,I0,A,I0,A,F8.1)') '>>> FLEX_PCA reduced embed-stats (zhalf) parts=',nparts, &
+            &'  particles=',nfilled,'  seconds=',toc(t_red)
+        call flush(logfhandle)
+    end subroutine reduce_embed_zhalf_parts
+
+    !> PASS 2: one part's Gram blocks and its global row indices, so the caller can re-solve just
+    !! those particles and free the buffer before reading the next. Deletes the part file.
+    subroutine read_embed_stats_part( params, ipart, gpinds, rows, Gpart, bpart, cpart, pn, nptcls, ncomp )
+        class(parameters),     intent(in)  :: params
+        integer,               intent(in)  :: ipart, gpinds(:), nptcls, ncomp
+        integer,  allocatable, intent(out) :: rows(:)
+        real(dp), allocatable, intent(out) :: Gpart(:,:,:), bpart(:,:), cpart(:,:)
+        integer,               intent(out) :: pn
+        integer,  allocatable :: ppinds(:)
+        real(dp), allocatable :: skip3(:), pzh(:,:,:)
+        type(string) :: fname
+        integer :: funit, io_stat, header(4), i, hit
+        fname = flex_pca_part_fname('embedstats', ipart, params%numlen)
+        if( .not. file_exists(fname) ) THROW_HARD('missing embed-stats part: '//fname%to_char())
+        call fopen(funit, file=fname, access='STREAM', action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('read_embed_stats_part; open '//fname%to_char(), io_stat)
+        read(funit, iostat=io_stat) header
+        if( header(1) /= FLEX_PCA_PART_MAGIC ) THROW_HARD('bad embed-stats part magic')
+        if( header(2) /= EMBED_STATS_VERSION ) THROW_HARD('bad embed-stats part version')
+        if( header(4) /= ncomp               ) THROW_HARD('embed-stats part ncomp mismatch')
+        pn = header(3)
+        allocate(ppinds(pn), skip3(3*pn), pzh(pn,ncomp,2))
+        allocate(Gpart(ncomp,ncomp,pn), bpart(ncomp,pn), cpart(ncomp,pn), rows(pn))
+        read(funit, iostat=io_stat) ppinds
+        read(funit, iostat=io_stat) skip3          ! contrast, resid_energy, resid_mean_energy: pass 1
+        read(funit, iostat=io_stat) pzh            ! zhalf: pass 1
+        read(funit, iostat=io_stat) Gpart
+        read(funit, iostat=io_stat) bpart, cpart
+        call fileiochk('read_embed_stats_part; payload', io_stat)
+        call fclose(funit)
+        do i = 1, pn
+            hit = binsrch_int(gpinds, nptcls, ppinds(i))
+            if( hit < 1 ) THROW_HARD('embed-stats part carries a particle not in the global set')
+            rows(i) = hit
+        end do
+        deallocate(ppinds, skip3, pzh)
+        call del_file(fname)
+        call fname%kill
+    end subroutine read_embed_stats_part
 
     !> Scatter each part's rows into the global arrays by matching pinds. The embedding is a partition
     !! of the particles, so this is a gather, not a sum -- and matching on pinds rather than assuming a
