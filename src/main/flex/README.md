@@ -42,10 +42,6 @@ strategy rather than a module of its own.
 8. `simple_flex_pca_model.f90` is the driver: it owns the embedding cache and its
    resume path, kernel state weights and bandwidth selection, weighted state
    reconstruction, and the volume-space trajectory ordering.
-9. `simple_flex_lot.f90` provides linearised optimal transport between state
-   volumes. Only `lot_pullback_metric` is intended for use: it supplies the optional
-   `zmetric` of `build_covariance_state_weights`, replacing latent Euclidean distance
-   with one that measures how much density actually moves. It is not yet wired.
 
 `flex_pca` reuses `simple_flex_diffmap_rec3D.f90` for weighted state
 reconstruction. That routine takes an optional `floor_rho` argument, off by

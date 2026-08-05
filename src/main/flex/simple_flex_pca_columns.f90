@@ -1,10 +1,17 @@
-! @descr:
+!@descr: covariance-column estimation, reduced covariance solve and latent embedding for flex_pca
 module simple_flex_pca_columns
 use simple_core_module_api
 use simple_builder,          only: builder
 use simple_image,            only: image
 use simple_parameters,       only: parameters
 use simple_reconstructor,    only: reconstructor
+use simple_flex_pca_distr,   only: flex_pca_is_master, flex_pca_is_worker, flex_pca_nparts, &
+    &flex_pca_run_stage, PCA_STAGE_SNR, PCA_STAGE_COLS, PCA_STAGE_SOLVE, PCA_STAGE_PROBE
+use simple_flex_pca_parts,   only: flex_pca_part_fname, write_snr_part, reduce_snr_parts, &
+    &write_cols_part, reduce_cols_parts, write_solve_part, reduce_solve_parts, &
+    &write_probe_part, reduce_probe_parts, &
+    &write_mean_scale, read_mean_scale, &
+    &write_columns_hkl, read_columns_hkl
 use simple_kbinterpol,       only: kbinterpol
 use simple_gridding,         only: prep3D_inv_instrfun4mul
 use simple_linalg,           only: jacobi, eigsrt, svd_solve
@@ -14,7 +21,7 @@ use simple_matcher_3Drec,    only: init_rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io,  only: discrete_read_imgbatch, prepimgbatch
 use simple_flex_reconstructor_latent_ops, only: project_fplane_mean, project_fplanes_mean_basis, &
     &insert_planes_oversamp_coupled_batch_scaled
-use simple_flex_projected_latent_model,   only: prep_imgs4projected_model
+use simple_flex_projected_latent_model,   only: prep_imgs4projected_model, solve_coupled_basis_exp
 implicit none
 private
 #include "simple_local_flags.inc"
@@ -33,20 +40,19 @@ real(dp), parameter :: COV_DENSITY_FLOOR = 1.0d-6
 real,     parameter :: COV_RIDGE_REL     = 5.0e-2
 ! Relative eigenvalue floor for retaining direct-column PCA components.
 real(dp), parameter :: COV_EIG_REL_FLOOR = 1.0d-6
-! Cap on the column-subspace dimension. The accumulation is now a batched dsyrk on the Van Loan-Pitsianis
-! rearrangement (see unrearrange_kron_selfsum), which needs ONE shared d^4 array regardless of thread count,
-! so the budget below buys d ~ nthr^(1/4) times more dimension -- 53 -> 126 at nthr=30 -- and the
-! accumulation runs at BLAS-3 rather than scalar-loop speed.
+! Cap on the column-subspace dimension. The accumulation is a batched dsyrk on the Van Loan-Pitsianis
+! rearrangement (see unrearrange_kron_selfsum), which needs ONE shared d^4 array regardless of thread count.
 integer,  parameter :: COV_MAX_DTILDE    = 320
+!> probe stops when successive bases agree to this mean principal-angle cosine. 0.999 is tight
+!! enough that the remaining rotation cannot move a state target, and on Ribosembly it fires at the
+!! measured knee (iteration 2) rather than running the tuned count out.
+real(dp), parameter :: COV_PROBE_CONV    = 0.97d0
 ! Memory budget for the shared A accumulator, in bytes.
 real(dp), parameter :: COV_ATHR_BUDGET   = 8.0d9
-! When .true. the per-particle contrast subtraction was helpful only while the generalized-FSC ridge was
-! inverted (fix 2.0). With the ridge corrected the 2.8 re-test shows a==1 is strictly better on IgG-100k --
-! subspace capture of the GT hinge 0.395 (a=a_i) -> 0.420 (a==1) -- because subtracting a_i*T*mu also
-! deletes the component of the conformational signal parallel to T*mu (proposal 2.8, point 1).
+! Accumulate the columns against the unscaled mean (a==1) rather than the per-particle ML contrast a_i.
+! Subtracting a_i*T*mu also deletes the component of the conformational signal parallel to T*mu.
 logical,  parameter :: COV_UNIT_CONTRAST  = .true.
-! contrast mean 2.000, sd 0.000 over all 100k particles, i.e. Earlier IgG-20k measurement also showed no
-! z-tau lift (a==1 0.045 vs grid 0.047).
+! Grid-search the per-particle contrast in the embedding instead of using the closed-form estimate.
 logical,  parameter :: COV_EMBED_CONTRAST_GRID = .false.
 integer,  parameter :: COV_CG_MAXIT = 2000     ! CG iteration cap; convergence is reported, not assumed
 real(dp), parameter :: COV_CG_TOL   = 1.d-10   ! relative residual target
@@ -58,32 +64,36 @@ real(dp), parameter :: COV_PINV_RCOND = 1.0d-6
 ! Source of the covariance mean mu.
 logical, parameter :: COV_MEAN_FROM_DATA = .false.
 
-! At box_crop=64 with mskdiam=200 the disc keeps ~21 % of the frame before the margin below, i.e. ~42 %
-! after it.
+! Soft-mask each particle image to the projected molecular envelope before the column accumulation, so
+! solvent (pure noise) does not enter the inner products.
 logical, parameter :: COV_MASK_IMAGES = .false.
-! Radial margin on that disc, as a multiple of the model radius. delocalisation is lambda*defocus/d, which
-! on this benchmark reaches ~70 A at 5.5 um defocus and 15 A resolution, against a model radius of 100 A.
-! 1.4 keeps the molecule plus that margin and still discards ~60 % of the frame.
+! Radial margin on that disc, as a multiple of the model radius. It must cover CTF delocalisation,
+! lambda*defocus/d, which reaches ~70 A at 5.5 um defocus and 15 A resolution.
 real, parameter :: COV_MASK_MARGIN = 1.4
 
-! Subtract the analytic per-sample noise bias K_R(.,q_s)|T|^2 from the column numerator. The per-shell
-! diagnostic shows the half-set column FSC collapsing there (0.00 / 0.00 / 0.01 / 0.13 / 0.35 at shells 0-4,
-! against 0.99), which drives the Wiener shrinkage <H>/(<H>+R) down to 0.001-0.13 and deletes the band.
+! Subtract the analytic per-sample noise bias K_R(.,q_s)|T|^2 from the column numerator. Without it the
+! bias survives into the half-set column FSC and the Wiener shrinkage deletes the low-frequency band.
 logical, parameter :: COV_COLUMN_NOISE_DEBIAS = .true.
 
 ! Width of the RIGHT kernel -- the one that reads each image's value AT the column frequency
-! (gather_column_values). SIMPLE historically used ONE shared 3-tap KB stencil for both, whose support is
+! (gather_column_values). Zero uses the shared 3-tap KB backprojection stencil for both, whose support is
 ! |d| <= 1.5 per axis against |d| < 2, so it gathers roughly half as many image samples into each column.
+character(len=*), parameter :: COV_UTILDE_FBODY = 'flex_pca_utilde'
+character(len=*), parameter :: COV_UTILDE_META  = 'flex_pca_utilde.txt'
+!> master -> probe-worker handoff: the basis dimension, its prior variances and the whitened-noise
+!! level. The basis volumes themselves are already on disk as flex_pca_pc*.mrc.
+character(len=*), parameter :: COV_PROBE_META   = 'flex_pca_probe.txt'
 real :: COV_RIGHT_KERNEL_W = 0.0
 logical :: cov_rkw_read = .false.
+! Half-width of the KB backprojection stencil in grid units, as cov_kb_weights derives it.
+integer, parameter :: COV_KB_IWINSZ = ceiling(KBWINSZ - 0.5)
 
 contains
 
-    !> HeteroPCA (Zhang, Cai & Wu, Ann. the top latent component carries 53% of the latent variance but its
-    !! between-conformation SNR is 0.007 -- it is a pure nuisance mode, and its eigenvalue is 4.7x the next.
-    !! the analytic debias Dmat = Sbb - 0.5*sig2_eff*SG subtracts a modelled noise term, and whatever it
-    !! fails to remove piles onto the diagonal, inflating the leading eigenvalue and tilting its eigenvector
-    !! toward the lowest-frequency mode.
+    !> HeteroPCA (Zhang, Cai & Wu): delete the noise-contaminated diagonal of S and re-impute it from the
+    !! rank-r reconstruction of the off-diagonals, iterating to a fixed point. Whatever the analytic debias
+    !! Dmat = Sbb - 0.5*sig2_eff*SG fails to remove piles onto the diagonal, where it inflates the leading
+    !! eigenvalue and tilts its eigenvector toward the lowest-frequency mode.
     subroutine heteropca_impute( S, n, r, niter )
         integer,           intent(in)    :: n, r
         real(dp),          intent(inout) :: S(n,n)
@@ -178,6 +188,41 @@ contains
         endif
     end subroutine cov_env_int
 
+    !>  Packed accumulation + matrix-free CG is the DEFAULT reduced solve, so an UNSET
+    !!  SIMPLE_COV_CGSOLVE selects packed. SIMPLE_COV_CGSOLVE=0 is the documented escape hatch back to
+    !!  the dense d^2 x d^2 accumulator + Cholesky; cov_env_int cannot express that (it ignores every
+    !!  value <= 0), which is why this goes through the presence-and-zero test in cov_env_int_off.
+    !!  EVERY site whose memory model depends on the choice must call this -- if the dimension budget
+    !!  and the solve disagree, d_tilde is sized against an accumulator that is never allocated.
+    logical function cov_packed_cgsolve() result( packed )
+        packed = .not. cov_env_int_off('SIMPLE_COV_CGSOLVE')
+    end function cov_packed_cgsolve
+
+    !>  Bytes in the reduced solve's ONE shared accumulator at column dimension d.
+    pure real(dp) function cov_accum_bytes( d, packed ) result( nbytes )
+        integer, intent(in) :: d
+        logical, intent(in) :: packed
+        real(dp) :: n
+        if( packed )then
+            n = real(d,dp)*real(d+1,dp)/2.d0   ! Mspk(npk,npk), npk = d(d+1)/2
+        else
+            n = real(d,dp)**2                  ! A(d^2,d^2)
+        endif
+        nbytes = 8.d0*n*n
+    end function cov_accum_bytes
+
+    !>  Largest d whose accumulator fits COV_ATHR_BUDGET under the model the solve will ACTUALLY use,
+    !!  i.e. cov_accum_bytes(d, packed) <= COV_ATHR_BUDGET.
+    pure integer function cov_dim_budget( packed ) result( d )
+        logical, intent(in) :: packed
+        if( packed )then
+            ! d(d+1)/2 = sqrt(BUDGET/8)  =>  d = (-1 + sqrt(1 + 8*sqrt(BUDGET/8)))/2
+            d = max(1, int((-1.d0 + sqrt(1.d0 + 8.d0*sqrt(COV_ATHR_BUDGET/8.d0)))/2.d0))
+        else
+            d = max(1, int((COV_ATHR_BUDGET/8.d0)**0.25d0))
+        endif
+    end function cov_dim_budget
+
     !>  One-shot read of the SIMPLE_COV_RKW override for COV_RIGHT_KERNEL_W.
     subroutine cov_init_right_kernel_width
         character(len=32) :: envval
@@ -199,7 +244,9 @@ contains
         call flush(logfhandle)
     end subroutine cov_init_right_kernel_width
 
-    !> a typical particle carried weight in 5.6 of 15 states.
+    !> Sampling precision of the MAP latent estimate, Q = A*Gtil^+*A with A = Gtil + diag(prior). This is
+    !! the precision of the ESTIMATOR z_hat, not the posterior precision A, so distances measured with it
+    !! reflect how well each component was actually determined for the particle.
     subroutine map_sampling_precision( Gtil, prior, n, Qout )
         integer,  intent(in)  :: n
         real(dp), intent(in)  :: Gtil(n,n), prior(n)
@@ -247,24 +294,90 @@ contains
         type(image), allocatable :: realvols(:), utilde_real(:)
         type(reconstructor) :: work
         type(reconstructor), allocatable :: utilde(:)
+        !> probe-worker handoff, read back from the master's flex_pca_probe.txt
+        real(dp),            allocatable :: eig_probe(:)
+        real(dp) :: sig2_probe
+        integer  :: ncomp_probe
         real(dp), allocatable :: vred(:,:)
         integer :: ncol, nreal, s, lb(3), ub(3), nyq_rec, d_tilde, q, directsvd
+        integer(timer_int_kind) :: t_blk
+        logical :: l_cols_ok
         real(dp), allocatable :: svals(:)
         ! one work reconstructor defines the expanded lattice / Nyquist / grid correction
         call init_column_reconstructor(params, build, work)
         lb      = lbound(work%cmat_exp)
         ub      = ubound(work%cmat_exp)
         nyq_rec = work%get_lfny(1)
-        ! column selection:
-        if( trim(params%column_sampling) == 'lowfreq' )then
+        ! NOTE: do not restrict the column sample sweep to the lp band. Everything above the lp shell is
+        ! hard-zeroed by realize_hermitian_volume, yet it still moves the eigenvalues by up to 1.2e-4
+        ! relative for only ~1.09x -- some path out of band escapes that argument. Find it first.
+        ! column selection. A WORKER in the COLS round must not re-run the SNR-greedy selection: its
+        ! own estimate_snr_volume call only produced this part's contribution, so the selection would
+        ! see a fraction of the variance. It reads the master's choice instead. A worker in the SNR
+        ! round runs the selection path only to reach estimate_snr_volume, and exits below.
+        ! PROBE WORKER. Like the SOLVE worker, nothing upstream is needed: the master refreshed
+        ! flex_pca_pc*.mrc and flex_pca_probe.txt before scheduling this round, so the worker rebuilds
+        ! the current basis from disk and contributes one EM half-pass over its own particle range.
+        ! niters=1 -- the iteration loop lives on the master, one qsys round per iteration, because
+        ! the basis the E-step projects against changes every iteration.
+        if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_PROBE )then
+            call load_probe_state(ncomp_probe, eig_probe, sig2_probe)
+            call load_probe_basis(params, build, ncomp_probe, basis_recs)
+            call probe_subspace_iteration(params, build, mean_rec, basis_recs, eig_probe, sig2_probe, &
+                &pinds, nptcls, ncomp_probe, 1)
+            do s = 1, size(basis_recs)
+                call basis_recs(s)%dealloc_rho; call basis_recs(s)%kill
+            end do
+            deallocate(basis_recs)
+            if( allocated(eig_probe) ) deallocate(eig_probe)
+            if( .not. allocated(eigvals) ) allocate(eigvals(0))
+            allocate(basis_recs(0))
+            ncomp_out = 0
+            sig2_out  = 0._dp
+            call work%dealloc_rho; call work%kill
+            return
+        endif
+        if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_SOLVE )then
+            ! nothing upstream of the solve is needed: the basis is on disk
+            call load_utilde_stack(params, build, utilde, utilde_real, d_tilde)
+            call reduced_covariance_solve(params, build, mean_rec, utilde, d_tilde, pinds, nptcls, &
+                &neigs_req, vred, eigvals, ncomp_out, sig2_out)
+            do s = 1, d_tilde
+                call utilde(s)%dealloc_rho; call utilde(s)%kill
+                call utilde_real(s)%kill
+            end do
+            deallocate(utilde, utilde_real)
+            if( allocated(vred) ) deallocate(vred)
+            if( .not. allocated(eigvals) ) allocate(eigvals(0))
+            allocate(basis_recs(0))
+            ncomp_out = 0
+            sig2_out  = 0._dp
+            call work%dealloc_rho; call work%kill
+            return
+        endif
+        if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_COLS )then
+            call read_columns_hkl(col_hkl, ncol, l_cols_ok)
+            if( .not. l_cols_ok ) THROW_HARD('flex_pca worker found no flex_pca_columns.bin from the master')
+        else if( trim(params%column_sampling) == 'lowfreq' )then
             call select_covariance_columns_lowfreq(params, ncols_req, col_sep, col_hkl, ncol)
         else
             call select_covariance_columns_snr(params, build, mean_rec, pinds, nptcls, &
                 &lb, ub, nyq_rec, ncols_req, col_sep, col_hkl, ncol)
         endif
+        if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_SNR )then
+            ! the SNR part file was written inside estimate_snr_volume; this round is done
+            ncomp_out = 0
+            sig2_out  = 0._dp
+            allocate(eigvals(0))
+            allocate(basis_recs(0))
+            call work%dealloc_rho; call work%kill
+            if( allocated(col_hkl) ) deallocate(col_hkl)
+            return
+        endif
         write(logfhandle,'(A,I0,A,A,A,I0)') '>>> FLEX_PCA selected covariance columns=',ncol, &
             &' sampling=',trim(params%column_sampling),' separation=',col_sep
         call flush(logfhandle)
+        if( flex_pca_is_master() ) call write_columns_hkl(col_hkl, ncol)
         call build_column_lookup(col_hkl, ncol, lb, ub, col_lookup)
         allocate(Bcol_e(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3),ncol), source=cmplx(0.,0.))
         allocate(Bcol_o(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3),ncol), source=cmplx(0.,0.))
@@ -272,32 +385,53 @@ contains
         allocate(Hcol_o(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3),ncol), source=0.)
         call accumulate_covariance_columns(params, build, mean_rec, pinds, nptcls, &
             &col_hkl, col_lookup, ncol, lb, ub, nyq_rec, Bcol_e, Hcol_e, Bcol_o, Hcol_o)
+        if( flex_pca_is_worker() )then
+            ! the column part file was written inside accumulate_covariance_columns; this round is done
+            ncomp_out = 0
+            sig2_out  = 0._dp
+            allocate(eigvals(0))
+            allocate(basis_recs(0))
+            deallocate(Bcol_e, Bcol_o, Hcol_e, Hcol_o, col_lookup, col_hkl)
+            call work%dealloc_rho; call work%kill
+            return
+        endif
         ! regularized merge + half-column FSC diagnostics
         allocate(colvol(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3),ncol), col_fsc(ncol))
+        t_blk = tic()
         call regularize_and_merge_columns(Bcol_e, Hcol_e, Bcol_o, Hcol_o, ncol, lb, colvol, col_fsc)
+        write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE merge_columns seconds=', toc(t_blk)
         call write_column_diagnostics(col_hkl, col_fsc, ncol)
         deallocate(Bcol_e, Bcol_o, Hcol_e, Hcol_o, col_lookup, col_hkl)
         ! Friedel-symmetrize each complex column into two real (cos/sin) volumes
+        t_blk = tic()
         call columns_to_real_representatives(params, work, colvol, ncol, lb, ub, realvols, nreal)
+        write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE real_representatives seconds=', toc(t_blk)
         deallocate(colvol)
         call work%dealloc_rho; call work%kill
         write(logfhandle,'(A,I0)') '>>> FLEX_PCA real column representatives=',nreal
         call flush(logfhandle)
-        ! NOTE:
+        t_blk = tic()
         call orthonormalize_representatives(params, build, realvols, nreal, utilde, utilde_real, d_tilde, svals)
+        write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE orthonormalize seconds=', toc(t_blk)
         do s = 1, nreal
             call realvols(s)%kill
         end do
         deallocate(realvols, col_fsc)
         write(logfhandle,'(A,I0)') '>>> FLEX_PCA column subspace dimension d_tilde=',d_tilde
         call flush(logfhandle)
+        ! Persist the orthonormal column basis for the solve round. orthonormalize_representatives
+        ! builds utilde(q) from utilde_real(q) with exactly set_rmat(.,.false.) -> fft -> expand_exp,
+        ! so shipping the real-space stack lets a worker reproduce the reconstructors bit-for-bit
+        ! rather than re-deriving the whole column pipeline.
+        if( flex_pca_is_master() ) call write_utilde_stack(utilde_real, d_tilde)
         ! S.B reduced projected-covariance solve (eqs S.6-S.9):
         call reduced_covariance_solve(params, build, mean_rec, utilde, d_tilde, pinds, nptcls, &
             &neigs_req, vred, eigvals, ncomp_out, sig2_out)
-        ! DIRECT-SVD BASIS (SIMPLE_COV_DIRECTSVD=1). SIMPLE instead uses the columns only to define a SPAN
-        ! and re-estimates the covariance inside it, which discards that weighting -- and measured, its
-        ! projected-Gram spectrum is more top-heavy (lam1/lam5 2.24 vs 1.70, effective rank 9.35 vs 10.52)
-        ! and it resolves 1 component per particle against 7.
+        ! the basis handoff has served its purpose; do not leave d_tilde volumes in the run directory
+        if( flex_pca_is_master() ) call cleanup_utilde_stack(d_tilde)
+        ! SIMPLE_COV_DIRECTSVD=1 takes the basis straight from the regularised-column SVD, bypassing the
+        ! reduced solve. The default path uses the columns only to define a SPAN and re-estimates the
+        ! covariance inside it, which conditions better.
         directsvd = 0
         call cov_env_int('SIMPLE_COV_DIRECTSVD', directsvd)
         if( directsvd /= 0 )then
@@ -316,14 +450,144 @@ contains
                 &eigvals(ncomp_out), '  lam1/lam5=', real(eigvals(1)/max(eigvals(min(5,ncomp_out)),DTINY))
             call flush(logfhandle)
         endif
+        t_blk = tic()
         call form_eigenbasis_from_reduced(params, build, mean_rec, utilde_real, d_tilde, vred, eigvals, &
             &ncomp_out, basis_recs, basis_imgs=basis_imgs, fprefix=fprefix)
+        write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE form_eigenbasis seconds=', toc(t_blk)
         do s = 1, d_tilde
             call utilde(s)%dealloc_rho; call utilde(s)%kill
             call utilde_real(s)%kill
         end do
         deallocate(utilde, utilde_real, vred)
     end subroutine build_covariance_eigenbasis
+
+    !> Persist / restore the orthonormal column basis across the master->worker boundary for the solve
+    !! round. Only the real-space volumes travel; the reconstructors are rebuilt with the same three
+    !! calls orthonormalize_representatives uses, so the worker's utilde is identical to the master's.
+    subroutine write_utilde_stack( utilde_real, d_tilde )
+        type(image), intent(inout) :: utilde_real(:)
+        integer,     intent(in)    :: d_tilde
+        type(string) :: fname
+        integer :: q, funit, io_stat
+        ! one file per basis volume: image%write refuses to place a 3D image into a stack
+        do q = 1, d_tilde
+            fname = string(COV_UTILDE_FBODY)//int2str_pad(q,3)//MRC_EXT
+            call utilde_real(q)%write(fname, del_if_exists=.true.)
+            call fname%kill
+        end do
+        call fopen(funit, file=string(COV_UTILDE_META), action='WRITE', status='REPLACE', iostat=io_stat)
+        call fileiochk('write_utilde_stack; meta', io_stat)
+        write(funit,'(I0)') d_tilde
+        call fclose(funit)
+    end subroutine write_utilde_stack
+
+    subroutine cleanup_utilde_stack( d_tilde )
+        integer, intent(in) :: d_tilde
+        type(string) :: fname
+        integer :: q
+        do q = 1, d_tilde
+            fname = string(COV_UTILDE_FBODY)//int2str_pad(q,3)//MRC_EXT
+            call del_file(fname)
+            call fname%kill
+        end do
+        call del_file(string(COV_UTILDE_META))
+    end subroutine cleanup_utilde_stack
+
+    subroutine load_utilde_stack( params, build, utilde, utilde_real, d_tilde )
+        class(parameters),   intent(inout) :: params
+        type(builder),       intent(inout) :: build
+        type(reconstructor), allocatable, intent(out) :: utilde(:)
+        type(image),         allocatable, intent(out) :: utilde_real(:)
+        integer,                          intent(out) :: d_tilde
+        type(string) :: fname
+        integer :: q, funit, io_stat
+        if( .not. file_exists(string(COV_UTILDE_META)) )then
+            THROW_HARD('flex_pca worker found no '//COV_UTILDE_META//' from the master')
+        endif
+        call fopen(funit, file=string(COV_UTILDE_META), action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('load_utilde_stack; meta', io_stat)
+        read(funit,*) d_tilde
+        call fclose(funit)
+        if( d_tilde < 1 ) THROW_HARD('invalid cached column-subspace dimension')
+        allocate(utilde(d_tilde), utilde_real(d_tilde))
+        do q = 1, d_tilde
+            fname = string(COV_UTILDE_FBODY)//int2str_pad(q,3)//MRC_EXT
+            if( .not. file_exists(fname) ) THROW_HARD('flex_pca worker missing '//fname%to_char())
+            call utilde_real(q)%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call utilde_real(q)%read(fname)
+            call fname%kill
+            call init_column_reconstructor(params, build, utilde(q))
+            call utilde(q)%set_rmat(utilde_real(q)%get_rmat(), .false.)
+            call utilde(q)%fft
+            call utilde(q)%expand_exp
+        end do
+        write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA worker restored the column basis, d_tilde=',d_tilde, &
+            &' from the master'
+        call flush(logfhandle)
+    end subroutine load_utilde_stack
+
+
+    !>  Master -> probe-worker handoff: basis dimension, prior variances, whitened-noise level.
+    subroutine save_probe_state( ncomp, eigvals, sig2_eff )
+        integer,  intent(in) :: ncomp
+        real(dp), intent(in) :: eigvals(:), sig2_eff
+        integer :: funit, io_stat, q
+        call fopen(funit, file=string(COV_PROBE_META), action='WRITE', status='REPLACE', iostat=io_stat)
+        call fileiochk('save_probe_state', io_stat)
+        write(funit,*) ncomp
+        write(funit,*) sig2_eff
+        do q = 1, ncomp
+            write(funit,*) eigvals(q)
+        end do
+        call fclose(funit)
+    end subroutine save_probe_state
+
+    subroutine load_probe_state( ncomp, eigvals, sig2_eff )
+        integer,               intent(out) :: ncomp
+        real(dp), allocatable, intent(out) :: eigvals(:)
+        real(dp),              intent(out) :: sig2_eff
+        integer :: funit, io_stat, q
+        if( .not. file_exists(string(COV_PROBE_META)) ) &
+            &THROW_HARD('flex_pca probe worker found no '//COV_PROBE_META//' from the master')
+        call fopen(funit, file=string(COV_PROBE_META), action='READ', status='OLD', iostat=io_stat)
+        call fileiochk('load_probe_state', io_stat)
+        read(funit,*) ncomp
+        read(funit,*) sig2_eff
+        if( ncomp < 1 ) THROW_HARD('invalid cached probe basis dimension')
+        allocate(eigvals(ncomp))
+        do q = 1, ncomp
+            read(funit,*) eigvals(q)
+        end do
+        call fclose(funit)
+    end subroutine load_probe_state
+
+    !>  Rebuild the projection-ready basis a probe worker needs from the master's flex_pca_pc*.mrc.
+    !!  Same idiom as load_utilde_stack and probe_external_basis: set_rmat then fft then expand_exp,
+    !!  never add(), which would leave the reconstructor flagged Fourier and propagate an
+    !!  untransformed grid.
+    subroutine load_probe_basis( params, build, ncomp, basis_recs )
+        class(parameters),   intent(inout) :: params
+        type(builder),       intent(inout) :: build
+        integer,             intent(in)    :: ncomp
+        type(reconstructor), allocatable, intent(out) :: basis_recs(:)
+        type(image)  :: vol
+        type(string) :: fname
+        integer      :: q
+        allocate(basis_recs(ncomp))
+        call vol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        do q = 1, ncomp
+            fname = string('flex_pca_pc')//int2str_pad(q,3)//MRC_EXT
+            if( .not. file_exists(fname) ) &
+                &THROW_HARD('flex_pca probe worker found no '//fname%to_char()//' from the master')
+            call vol%read(fname)
+            call init_column_reconstructor(params, build, basis_recs(q))
+            call basis_recs(q)%set_rmat(vol%get_rmat(), .false.)
+            call basis_recs(q)%fft
+            call basis_recs(q)%expand_exp
+            call fname%kill
+        end do
+        call vol%kill
+    end subroutine load_probe_basis
 
     !> SNR-greedy column selection (proposal 5.2, Algorithm 1).
     subroutine select_covariance_columns_snr( params, build, mean_rec, pinds, nptcls, &
@@ -377,8 +641,7 @@ contains
             if( ncol >= target ) exit
         end do
         if( ncol < 1 ) THROW_HARD('flex_pca SNR selection produced no columns')
-        ! Report the radial placement of the selected columns. greedy choice on this benchmark lands
-        ! entirely inside |xi| <= 8 of 64 shells ("Largest frequency computed:
+        ! Report the radial placement of the selected columns
         block
             real :: rad, rmin, rmax, rmean
             integer :: s2
@@ -400,7 +663,8 @@ contains
         deallocate(snr)
     end subroutine select_covariance_columns_snr
 
-    !> Per-voxel signal-variance (SNR proxy) from the whitened adjoint residuals:
+    !> Per-voxel signal-variance (SNR proxy) from the whitened adjoint residuals, backprojected and
+    !! normalized by sampling density, with the outer-shell noise floor subtracted.
     subroutine estimate_snr_volume( params, build, mean_rec, pinds, nptcls, lb, ub, nyq_rec, snr )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
@@ -415,10 +679,18 @@ contains
         real(dp) :: floor_noise
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, pf, h, k, l, nhi, sh, nyq_use
         real    :: inv_pf2, av
+        complex :: cval
         integer(timer_int_kind) :: t_phase
         pf = OSMPL_PAD_FAC; inv_pf2 = 1.0/real(pf*pf)
         allocate(var_acc(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)), source=0.)
         allocate(dens_acc(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)), source=0.)
+        ! DISTRIBUTED: the master fans the particle range out and reduces the two accumulators; the
+        ! finalisation below (noise floor, normalisation) then runs once, on the global sums.
+        if( flex_pca_is_master() )then
+            call flex_pca_run_stage(PCA_STAGE_SNR, 'SNR variance')
+            call reduce_snr_parts(params, flex_pca_nparts(), var_acc, dens_acc, lb, ub)
+            goto 100
+        endif
         call init_column_reconstructor(params, build, scratch)
         call mean_rec%expand_exp
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
@@ -440,8 +712,21 @@ contains
                 call form_adjoint_residual_plane(fpls(i), mean_fpl, adj_fpl, particle_contrast(mean_fpl, fpls(i)))
                 call scratch%reset_exp
                 call scratch%insert_plane_oversamp(build%pgrpsyms, orientation, adj_fpl)
-                var_acc  = var_acc  + (real(scratch%cmat_exp)*inv_pf2)**2 + (aimag(scratch%cmat_exp)*inv_pf2)**2
-                dens_acc = dens_acc + scratch%rho_exp
+                ! One threaded sweep instead of two serial whole-array expressions; each cell is
+                ! independent, so this is elementwise-identical to the array form it replaces.
+                !$omp parallel do default(shared) private(h,k,l,cval) collapse(2) &
+                !$omp& schedule(static) proc_bind(close)
+                do l = lb(3), ub(3)
+                    do k = lb(2), ub(2)
+                        do h = lb(1), ub(1)
+                            cval = scratch%cmat_exp(h,k,l)
+                            var_acc(h,k,l)  = var_acc(h,k,l) + (real(cval)*inv_pf2)**2 &
+                                &                            + (aimag(cval)*inv_pf2)**2
+                            dens_acc(h,k,l) = dens_acc(h,k,l) + scratch%rho_exp(h,k,l)
+                        end do
+                    end do
+                end do
+                !$omp end parallel do
             end do
         end do
         write(logfhandle,'(A,F8.1)') '>>> FLEX_PCA SNR VARIANCE SECONDS: ', toc(t_phase)
@@ -450,6 +735,15 @@ contains
         call cleanup_plane(mean_fpl); call cleanup_plane(adj_fpl)
         call scratch%dealloc_rho; call scratch%kill
         call cleanup_rec_buffers(build, fpls)
+        if( flex_pca_is_worker() )then
+            ! this part's contribution only; the master sums the parts and finalises
+            call write_snr_part(flex_pca_part_fname('snr', params%part, params%numlen), &
+                &var_acc, dens_acc, lb, ub)
+            deallocate(var_acc, dens_acc)
+            allocate(snr(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)), source=0.)
+            return
+        endif
+100     continue
         ! variance per unit coverage
         allocate(snr(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)), source=0.)
         where( dens_acc > real(COV_DENSITY_FLOOR) ) snr = var_acc / dens_acc
@@ -484,7 +778,8 @@ contains
         deallocate(var_acc, dens_acc, hi)
     end subroutine estimate_snr_volume
 
-    !> Deterministic low-frequency column selection:
+    !> Deterministic low-frequency column selection: repeatedly take the lowest-|xi| candidate in the
+    !! canonical Hermitian half that is at least col_sep away from every already-chosen column.
     subroutine select_covariance_columns_lowfreq( params, ncols_req, col_sep, col_hkl, ncol )
         class(parameters),    intent(in)  :: params
         integer,              intent(in)  :: ncols_req, col_sep
@@ -579,8 +874,9 @@ contains
         end do
     end subroutine build_column_lookup
 
-    !> EXTERNAL-BASIS PROBE. passing the known eigenvolumes through it gave rho = 0.30 where this machinery
-    !! gives 0.801 on the same particles.
+    !> EXTERNAL-BASIS PROBE: embed the particles in a basis read from disk (the run's own eigenvolumes,
+    !! optionally with extra probe volumes appended) and write the coefficients, so the embedding stage can
+    !! be exercised against a known basis without re-fitting the covariance.
     subroutine probe_external_basis( params, build, mean_rec, pinds, nptcls, eigdir, neigs, eigvals, &
         &sig2_eff, probe_prefix, nprobe )
         class(parameters),   intent(inout) :: params
@@ -597,9 +893,8 @@ contains
         real     :: dummy
         integer  :: ncomb, k, u, i, q
         real(dp) :: evmed
-        ! nprobe = 0 is legitimate and important: With a probe volume appended, its projected norm can
-        ! dominate the Gram spectrum and the reported conditioning then describes the probe rather than the
-        ! basis -- measured, an appended volume contributed a leading eigenvalue 60x the next.
+        ! nprobe = 0 is legitimate: an appended probe volume can dominate the projected Gram spectrum, in
+        ! which case the reported conditioning describes the probe rather than the basis.
         if( nprobe < 0 ) return
         ncomb = neigs + nprobe
         write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA EXTERNAL-BASIS PROBE: ', neigs, &
@@ -706,14 +1001,16 @@ contains
             call estimate_mean_from_data(params, build, mean_rec, pinds, nptcls)
         else
             call init_mean_reconstructor(params, build, mean_rec)
-            call estimate_mean_scale(params, build, mean_rec, pinds, nptcls)
+            if( flex_pca_is_worker() )then
+                call apply_cached_mean_scale(params, mean_rec)
+            else
+                call estimate_mean_scale(params, build, mean_rec, pinds, nptcls)
+            endif
         endif
     end subroutine estimate_covariance_mean
 
-    !> Kernel-regression mean of eq. on IgG-RL/100k the self-estimated mean moves the SNR-greedy column
-    !! choice from |xi| mean 6.2 / max 8.2 (which is where greedy choice lands, "Largest frequency computed:
-    !! 8") out to |xi| mean 9.4 / max 14.5, and the resulting eigenbasis captures 0.363 of the band-limited
-    !! ground-truth motion subspace against 0.596 for the vol1 path.
+    !> Kernel-regression consensus mean (eq. S.1) estimated from the particles themselves, as an
+    !! alternative to reading the supplied consensus volume. Selected by COV_MEAN_FROM_DATA.
     subroutine estimate_mean_from_data( params, build, mean_rec, pinds, nptcls )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
@@ -772,8 +1069,26 @@ contains
         call flush(logfhandle)
     end subroutine estimate_mean_from_data
 
-    !> Self-estimate the global amplitude scale of the consensus mean map relative to the whitened data
-    !! (proposal task:
+    !> Worker-side mean scaling: apply the radial scale the MASTER fitted, rather than re-fitting it
+    !! from this part's particles (which would use a different stride and hence a different subset).
+    subroutine apply_cached_mean_scale( params, mean_rec )
+        class(parameters),   intent(inout) :: params
+        type(reconstructor), intent(inout) :: mean_rec
+        real, allocatable :: filt(:)
+        integer :: nyq
+        logical :: ok
+        nyq = max(1, fdim(params%box_crop) - 1)
+        allocate(filt(nyq))
+        call read_mean_scale(nyq, filt, ok)
+        if( .not. ok ) THROW_HARD('flex_pca worker found no flex_pca_mean_scale.bin from the master')
+        call mean_rec%apply_filter(filt)
+        call mean_rec%expand_exp
+        deallocate(filt)
+    end subroutine apply_cached_mean_scale
+
+    !> Self-estimate the amplitude scale of the consensus mean map relative to the whitened data, which
+    !! carry SIMPLE's non-unitary gridding convention. A smoothed, clamped per-shell scale is applied to
+    !! the mean so that y - T*mu is a residual rather than a difference of two amplitude conventions.
     subroutine estimate_mean_scale( params, build, mean_rec, pinds, nptcls )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
@@ -783,7 +1098,8 @@ contains
         type(fplane_type), allocatable :: fpls(:)
         type(fplane_type) :: mean_fpl
         type(ori) :: orientation
-        integer  :: batchlims(2), batchsz, ibatch, i, iptcl, stride, used, nyq, sh
+        integer  :: batchlims(2), batchsz, ibatch, i, iptcl, stride, used, nyq, sh, j, nsub
+        integer, allocatable :: sub_pinds(:)
         real(dp) :: s_my, s_mm, s, sm
         real(dp), allocatable :: smy_sh(:), smm_sh(:), sprof(:)
         real,     allocatable :: filt(:)
@@ -794,15 +1110,27 @@ contains
         call mean_rec%expand_exp
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
-        do ibatch = 1, nptcls, MAXIMGBATCHSZ
-            batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
+        ! Select the strided sample UP FRONT, not inside the batch loop -- otherwise every particle is
+        ! read, normalised, padded, FFT'd and CTF-evaluated before ~(1 - 1/stride) of that is discarded.
+        ! Bit-exact: same particles in the same order, hence the same accumulation order.
+        nsub = 0
+        do j = 1, nptcls, stride
+            nsub = nsub + 1
+        end do
+        allocate(sub_pinds(nsub))
+        nsub = 0
+        do j = 1, nptcls, stride
+            nsub = nsub + 1
+            sub_pinds(nsub) = pinds(j)
+        end do
+        do ibatch = 1, nsub, MAXIMGBATCHSZ
+            batchlims = [ibatch, min(nsub, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
-            call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+            call discrete_read_imgbatch(params, build, nsub, sub_pinds, batchlims)
             call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
-                &pinds(batchlims(1):batchlims(2)), fpls(:batchsz), mskrad=cov_image_mask_radius(params))
+                &sub_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), mskrad=cov_image_mask_radius(params))
             do i = 1, batchsz
-                if( mod(batchlims(1)+i-2, stride) /= 0 ) cycle
-                iptcl = pinds(batchlims(1)+i-1)
+                iptcl = sub_pinds(batchlims(1)+i-1)
                 call build%spproj_field%get_ori(iptcl, orientation)
                 if( orientation%isstatezero() ) cycle
                 call project_fplane_mean(mean_rec, orientation, fpls(i), mean_fpl, apply_ctf_amp=.true.)
@@ -812,6 +1140,7 @@ contains
                 used = used + 1
             end do
         end do
+        deallocate(sub_pinds)
         call orientation%kill
         call cleanup_plane(mean_fpl)
         call cleanup_rec_buffers(build, fpls)
@@ -823,7 +1152,7 @@ contains
         if( s <= 0.d0 ) s = 1.d0
         write(logfhandle,'(A,ES12.4,A,I0,A)') '>>> FLEX_PCA mean amplitude self-scale s=',s, &
             &' (from ',used,' particles)'
-        ! Per-shell mean/data amplitude scale (fix 2.2, diagnostic D5).
+        ! Per-shell mean/data amplitude scale
         allocate(sprof(0:nyq), filt(nyq))
         write(logfhandle,'(A)') '>>> FLEX_PCA per-shell mean scale s(sh) and s(sh)/s_global (D5):'
         do sh = 0, nyq
@@ -849,11 +1178,12 @@ contains
         end do
         call mean_rec%apply_filter(filt)
         call mean_rec%expand_exp
+        if( flex_pca_is_master() ) call write_mean_scale(nyq, filt)
         deallocate(smy_sh, smm_sh, sprof, filt)
     end subroutine estimate_mean_scale
     !>  Accumulate per-shell mean/data cross power Re<T mu, y> and mean auto power |T mu|^2 over the
     !!  native k<=0 half. The per-shell ratio s(sh)=sum my_sh/sum mm_sh is the ML mean amplitude scale
-    !!  at each shell (fix 2.2); the k=0 double-count cancels in the ratio so no weighting is needed.
+    !!  at each shell; the k=0 double-count cancels in the ratio so no weighting is needed.
     subroutine plane_shell_cross_accum( mean_fpl, fpl, nyq, my_sh, mm_sh )
         type(fplane_type), intent(in)    :: mean_fpl, fpl
         integer,           intent(in)    :: nyq
@@ -889,7 +1219,7 @@ contains
         call mean_rec%fft
         call mean_rec%expand_exp
     end subroutine init_mean_reconstructor
-    !> Reconstruction-mode plane from a whitened observation-model plane:
+    !> Reconstruction-mode plane from a whitened observation-model plane: numerator T*y and density |T|^2.
     subroutine form_reconstruction_plane( fpl, num )
         type(fplane_type), intent(in)    :: fpl
         type(fplane_type), intent(inout) :: num
@@ -944,6 +1274,14 @@ contains
         t_phase = tic()
         write(logfhandle,'(A)') '>>> FLEX_PCA COLUMN ACCUMULATION'
         call flush(logfhandle)
+        if( flex_pca_is_master() )then
+            call flex_pca_run_stage(PCA_STAGE_COLS, 'column accumulation')
+            call reduce_cols_parts(params, flex_pca_nparts(), Bcol_e, Hcol_e, Bcol_o, Hcol_o, lb, ub, ncol)
+            call cleanup_plane(mean_fpl); call cleanup_plane(adj_fpl)
+            call cleanup_rec_buffers(build, fpls)
+            deallocate(cwin, cwx, cwy, cwz, cpl, cct, gcol, hcolv, cloc)
+            return
+        endif
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
@@ -981,6 +1319,10 @@ contains
         call cleanup_plane(adj_fpl)
         call cleanup_rec_buffers(build, fpls)
         deallocate(cwin, cwx, cwy, cwz, cpl, cct, gcol, hcolv, cloc)
+        if( flex_pca_is_worker() )then
+            call write_cols_part(flex_pca_part_fname('cols', params%part, params%numlen), &
+                &Bcol_e, Hcol_e, Bcol_o, Hcol_o, lb, ub, ncol)
+        endif
     end subroutine accumulate_covariance_columns
 
     !> T*r plane and |T|^2 plane for a particle.
@@ -1019,7 +1361,7 @@ contains
         real    :: rotmat(3,3), loc(3), wx(3), wy(3), wz(3), ctfval
         complex :: plval
         integer :: fpllims(3,2), fpllims_pd(3,2), pf, h, k, hp, kp, nyq_disk
-        integer :: h_sq, k_max_h, k_lo, k_hi, win(2,3), plb(2), pub(2)
+        integer :: h_sq, k_max_h, k_lo, k_hi, win(2,3), plb(2), pub(2), win_lo(3)
         rotmat     = o%get_mat()
         pf         = OSMPL_PAD_FAC
         plb        = lbound(adj%cmplx_plane)
@@ -1051,8 +1393,11 @@ contains
                 loc(1) = real(h)*rotmat(1,1) + real(k)*rotmat(2,1)
                 loc(2) = real(h)*rotmat(1,2) + real(k)*rotmat(2,2)
                 loc(3) = real(h)*rotmat(1,3) + real(k)*rotmat(2,3)
+                ! Reject out-of-grid samples BEFORE the Bessel evaluations: cov_kb_weights derives its
+                ! window from nint(loc) alone, so the same test can be made on the window corner first.
+                win_lo = nint(loc) - COV_KB_IWINSZ
+                if( any(win_lo < lb) .or. any(win_lo + 2*COV_KB_IWINSZ > ub) ) cycle
                 call cov_kb_weights(kbwin, loc, win, wx, wy, wz)
-                if( any(win(1,:) < lb) .or. any(win(2,:) > ub) ) cycle
                 ncache = ncache + 1
                 cwin(:,ncache) = win(1,:)
                 cwx(:,ncache)  = wx
@@ -1081,7 +1426,7 @@ contains
         hcolv = 0.
         rkw   = COV_RIGHT_KERNEL_W
         if( rkw > 0. .and. present(cloc) )then
-            ! reference-style independent right kernel:
+            ! independent right kernel: separable triangular window of half-width rkw
             iw = ceiling(rkw)
             do j = 1, ncache
                 h0 = nint(cloc(1,j)); k0 = nint(cloc(2,j)); m0 = nint(cloc(3,j))
@@ -1128,14 +1473,37 @@ contains
         real,    intent(in)    :: hcolv(ncol)
         complex, intent(inout) :: Bcol(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3),ncol)
         real,    intent(inout) :: Hcol(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3),ncol)
-        integer :: s, j, ix, iy, iz, hx, ky, mz, qh, qk, ql, iqx, iqy, iqz
+        integer :: s, is, nlive, j, ix, iy, iz, hx, ky, mz, qh, qk, ql, iqx, iqy, iqz
+        integer :: live(ncol)
         real    :: pf2, w, wqs, wyz, hs
         complex :: cg, cnum
         logical :: in_win
         pf2 = real(OSMPL_PAD_FAC*OSMPL_PAD_FAC)
+        ! A column only receives anything from this particle if some plane sample's KB window contains it,
+        ! which is what gather_column_values scores: gcol(s)==0 .and. hcolv(s)==0 means the whole body adds
+        ! exact zeros. Most columns are dead for any one particle. Compact rather than `cycle` so the
+        ! static schedule sees a dense iteration space. Only valid for the shared-stencil right kernel:
+        ! with COV_RIGHT_KERNEL_W > 0 the gather window differs from the KB window wqs is built on, so a
+        ! dead column can still carry a nonzero noise-debias term.
+        if( COV_RIGHT_KERNEL_W > 0. )then
+            nlive = ncol
+            do s = 1, ncol
+                live(s) = s
+            end do
+        else
+            nlive = 0
+            do s = 1, ncol
+                if( gcol(s) /= cmplx(0.,0.) .or. hcolv(s) /= 0. )then
+                    nlive = nlive + 1
+                    live(nlive) = s
+                endif
+            end do
+            if( nlive == 0 ) return
+        endif
         !$omp parallel do default(shared) schedule(static) proc_bind(close) &
-        !$omp& private(s,j,ix,iy,iz,hx,ky,mz,qh,qk,ql,iqx,iqy,iqz,w,wqs,wyz,hs,cg,cnum,in_win)
-        do s = 1, ncol
+        !$omp& private(is,s,j,ix,iy,iz,hx,ky,mz,qh,qk,ql,iqx,iqy,iqz,w,wqs,wyz,hs,cg,cnum,in_win)
+        do is = 1, nlive
+            s  = live(is)
             cg = pf2 * conjg(gcol(s))
             hs = hcolv(s)
             qh = col_hkl(1,s); qk = col_hkl(2,s); ql = col_hkl(3,s)
@@ -1170,7 +1538,8 @@ contains
         !$omp end parallel do
     end subroutine backproject_columns
 
-    !> KB separable stencil, replicating simple_flex_reconstructor_latent_ops::
+    !> KB separable stencil, replicating the one simple_flex_reconstructor_latent_ops uses, so the column
+    !! gather and the backprojection see identical interpolation weights.
     pure subroutine cov_kb_weights( kbwin, loc, win, wx, wy, wz )
         type(kbinterpol), intent(in)  :: kbwin
         real,             intent(in)  :: loc(3)
@@ -1231,12 +1600,10 @@ contains
                 end do
             end do
         end do
-        ! ---- Regularizer initialization. Taking w as the mean map's per-shell Fourier power and sigma^2 =
-        ! 1 (the supplement's whitened convention) was tried and MEASURED to break the stage -- v^2 lands
-        ! below the 1e-6 density floor, so P pins at the floor, R pins at ~1e6, the per-shell |Sigma|^2 sums
-        ! underflow the DTINY guard, and every column FSC comes out identically 0.0000 instead of a profile.
-        ! SIMPLE's non-unitary FFT/gridding convention means sigma^2 is ~3.9e-6 here, not 1, and the mean
-        ! map carries yet another amplitude convention, so v v^T cannot be formed without definition of w.
+        ! ---- Regularizer initialization. The supplement's v v^T prior cannot be formed here: it assumes
+        ! the whitened convention sigma^2 = 1, whereas SIMPLE's non-unitary FFT/gridding convention puts
+        ! sigma^2 at ~1e-6 and the mean map carries yet another amplitude convention. The prior is instead
+        ! seeded at the density floor and driven entirely by the generalized-FSC iterations below.
         do s = 1, ncol
             hbar_sum = 0.d0; num = 0.d0; nvox_sh = 0.d0
             do i3 = 1, n3; do i2 = 1, n2; do i1 = 1, n1
@@ -1245,8 +1612,7 @@ contains
                 num(sh) = num(sh) + 1.d0
                 nvox_sh(sh) = nvox_sh(sh) + 1.d0
             end do; end do; end do
-            ! Initial ridge. the per-shell Wiener factor was 0.001-0.13 at shells 0-3 while the merged
-            ! column magnitude at those shells was 1e-6 of its shell-13 value.
+            ! Initial ridge, at the density floor so the first iteration is essentially unregularized
             do sh = 0, nsh
                 Rsh(sh) = COV_DENSITY_FLOOR
                 Psh(sh) = 1.d0 / Rsh(sh)
@@ -1270,11 +1636,10 @@ contains
                     bot(sh) = bot(sh) + w2*hbar*hbar                  ! sum (H+R)^-2 H^2
                 end do; end do; end do
                 do sh = 0, nsh
-                    ! `den > DTINY` (1e-10) on a sum of |B/(H+R)|^2, a quantity carrying the pipeline's
-                    ! non-unitary Fourier convention (sig2_eff ~ 4e-6 here, not 1) and evaluated where H is
-                    ! LARGEST -- the lowest shells. Because the ridge is R = 1/P with P proportional to
-                    ! FSC/(1-FSC), that zero drove the Wiener factor <H>/(<H>+R) to 0.001-0.13 and DELETED
-                    ! the conformational band from every column.
+                    ! Guard at zero, NOT at DTINY: these are sums of |B/(H+R)|^2 in the pipeline's
+                    ! non-unitary Fourier convention (sig2_eff ~ 1e-6, not 1), so a DTINY floor zeroes the
+                    ! FSC at the lowest shells, and via R = 1/P with P proportional to FSC/(1-FSC) that
+                    ! deletes the conformational band from every column.
                     if( den_e(sh) > 0.d0 .and. den_o(sh) > 0.d0 )then
                         fsc(sh) = num(sh) / sqrt(den_e(sh)*den_o(sh))
                     else
@@ -1287,7 +1652,7 @@ contains
                     endif
                 end do
             end do
-            ! is REMOVED:
+            ! per-shell profiles for the log
             do sh = 0, nsh
                 fscbar = max(0.d0, min(0.999d0, fsc(sh)))
                 fsc_accum(sh) = fsc_accum(sh) + fscbar     ! raw FSC for the profile log
@@ -1302,7 +1667,7 @@ contains
             fscnum = 0.d0; fscden = 0.d0
             do i3 = 1, n3; do i2 = 1, n2; do i1 = 1, n1
                 sh = shell(i1,i2,i3)
-                ! Rsh, not 2*Rsh.
+                ! the halves are SUMMED, not averaged, so the ridge enters once: Rsh, not 2*Rsh
                 colvol(i1,i2,i3,s) = (Bcol_e(i1,i2,i3,s) + Bcol_o(i1,i2,i3,s)) &
                     &/ (Hcol_e(i1,i2,i3,s) + Hcol_o(i1,i2,i3,s) + real(Rsh(sh)))
             end do; end do; end do
@@ -1401,8 +1766,7 @@ contains
         work%cmat_exp = vherm
         call work%compress_exp
         ! Band-limit the covariance column to the signal band FIRST, in Fourier space, before any real-space
-        ! operation. at box_crop=64 with lp=15 (kstop=25) the out-of-band shells 26-27 come back at FSC
-        ! 0.997, i.e.
+        ! operation, so out-of-band shells never enter the masking or the Gram products downstream.
         if( params%lp > 2.0*params%smpd_crop + TINY ) call work%bp(0., params%lp)
         call work%ifft
         call work%div(real(params%box))
@@ -1426,8 +1790,10 @@ contains
         real(dp), allocatable, optional, intent(out) :: svals(:)
         real(dp), allocatable :: gram(:,:), evec(:,:), eval(:)
         real, pointer :: rmat_i(:,:,:), rmat_j(:,:,:)
-        integer :: i, q, nrot, keep, d_budget, cg_budget
+        integer :: i, q, nrot, keep, d_budget
         real(dp) :: lam_max, nrm
+        logical  :: l_packed
+        character(len=9) :: accum_model
         if( nreal < 1 ) THROW_HARD('flex_pca produced no covariance column representatives')
         allocate(gram(nreal,nreal), evec(nreal,nreal), eval(nreal))
         do i = 1, nreal
@@ -1445,24 +1811,27 @@ contains
         do q = 1, nreal
             if( eval(q) > COV_EIG_REL_FLOOR*lam_max ) keep = keep + 1
         end do
-        ! Largest d the reduced solve's accumulator can afford. one shared d^2 x d^2 array -> 8*d^4 bytes
-        ! packed + CG : one shared npk x npk array, npk = d(d+1)/2, and the operator is never formed ->
-        ! 8*[d(d+1)/2]^2 ~ 2*d^4 bytes The packed accumulator is 4x smaller, which is sqrt(2) in d -- at the
-        ! 8 GB budget, d 177 -> 250, past rank cap of 200.
-        cg_budget = 0
-        call cov_env_int('SIMPLE_COV_CGSOLVE', cg_budget)
-        if( cg_budget /= 0 )then
-            ! d(d+1)/2 = sqrt(BUDGET/8)  =>  d = (-1 + sqrt(1 + 8*sqrt(BUDGET/8)))/2
-            d_budget = max(1, int((-1.d0 + sqrt(1.d0 + 8.d0*sqrt(COV_ATHR_BUDGET/8.d0)))/2.d0))
-        else
-            d_budget = max(1, int((COV_ATHR_BUDGET / 8.d0)**0.25d0))
-        endif
-        ! SIMPLE_COV_DTILDE pins the subspace dimension, so a change to the accumulation or the
-        ! solver can be A/B'd at a FIXED d against an earlier run instead of confounding the two.
+        ! Largest d the reduced solve's accumulator can afford: one shared d^2 x d^2 array -> 8*d^4 bytes,
+        ! against 8*[d(d+1)/2]^2 ~ 2*d^4 bytes for the packed CG path, which never forms the operator.
+        ! Size it against the model the solve will ACTUALLY use -- sizing d for the dense accumulator and
+        ! then solving packed spends a quarter of the budget and caps the column subspace 41 % below what
+        ! the data supports (at 8 GB: d 177 instead of 250).
+        l_packed = cov_packed_cgsolve()
+        d_budget = cov_dim_budget(l_packed)
+        ! SIMPLE_COV_DTILDE pins the subspace dimension, so accumulation or solver changes can be compared
+        ! at a FIXED d instead of confounding the two
         call cov_env_int('SIMPLE_COV_DTILDE', d_budget)
         d_tilde  = max(1, min(keep, COV_MAX_DTILDE, d_budget))
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> FLEX_PCA d_tilde=',d_tilde, &
-            &'  (above energy floor=',keep,', memory cap=',d_budget,', rank cap=',COV_MAX_DTILDE
+        if( l_packed )then
+            accum_model = 'packed+CG'
+        else
+            accum_model = 'dense'
+        endif
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA d_tilde=',d_tilde, &
+            &'  (above energy floor=',keep,', memory cap=',d_budget,', rank cap=',COV_MAX_DTILDE,')'
+        write(logfhandle,'(A,A,A,F8.3,A,F6.3,A)') '>>> FLEX_PCA reduced-solve accumulator model: ', &
+            &trim(accum_model),', ',cov_accum_bytes(d_tilde, l_packed)/1.d9, &
+            &' GB at this d_tilde (budget ',COV_ATHR_BUDGET/1.d9,' GB)'
         if( d_tilde == d_budget .and. keep > d_budget )then
             write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA NOTE: the column subspace is limited by the &
                 &reduced-solve memory budget, not by the data; ',keep,' directions cleared the energy floor.'
@@ -1479,7 +1848,8 @@ contains
             do i = 1, nreal
                 call utilde_real(q)%add(realvols(i), real(evec(i,q)/nrm))
             end do
-            ! set_rmat(...,.false.) -- NOT add() -- see form_eigenbasis_from_reduced:
+            ! set_rmat(...,.false.) then fft then expand_exp -- NEVER add(), which leaves the reconstructor
+            ! flagged as Fourier and silently propagates an untransformed grid (see form_eigenbasis_from_reduced)
             call init_column_reconstructor(params, build, utilde(q))
             call utilde(q)%set_rmat(utilde_real(q)%get_rmat(), .false.)
             call utilde(q)%fft
@@ -1514,7 +1884,9 @@ contains
     end function packed_T
 
     !> Apply the packed operator A_s = P A P^T (A = sum_i G_i (x) G_i, P the svec projector) WITHOUT EVER
-    !! FORMING A_s.
+    !! FORMING A_s. Ms here is the RAW accumulator, never the output of rearrange_packed_selfsum.
+    !! The production solve rearranges once and uses dsymv instead; this remains the definition of
+    !! the operator and the reference the rearrangement is tested against.
     subroutine apply_packed_A( Ms, np, d, x, y )
         integer,  intent(in)  :: np, d
         real(dp), intent(in)  :: Ms(np,np), x(np)
@@ -1551,27 +1923,22 @@ contains
     end subroutine apply_packed_A
 
     !> Conjugate gradients on the packed normal equations A_s s = rhs, with Jacobi preconditioning.
-    subroutine cg_solve_packed( Ms, np, d, rhs, ridge, maxit, tol, x, iters, relres )
-        integer,  intent(in)    :: np, d, maxit
-        real(dp), intent(in)    :: Ms(np,np), rhs(np), ridge, tol
+    !! As must ALREADY have been through rearrange_packed_selfsum: this applies it with a single
+    !! dsymv per iteration, which is the entire point of rearranging. Passing the raw accumulator
+    !! here solves the wrong system silently.
+    subroutine cg_solve_packed( As, np, rhs, ridge, maxit, tol, x, iters, relres )
+        integer,  intent(in)    :: np, maxit
+        real(dp), intent(in)    :: As(np,np), rhs(np), ridge, tol
         real(dp), intent(out)   :: x(np)
         integer,  intent(out)   :: iters
         real(dp), intent(out)   :: relres
         real(dp), allocatable :: r(:), p(:), Ap(:), z(:), diag(:)
-        real(dp) :: rz, rz_new, alpha, beta_cg, pAp, nrm0, dg
-        integer  :: it, k, al, be
+        real(dp) :: rz, rz_new, alpha, beta_cg, pAp, nrm0
+        integer  :: it, k
         allocate(r(np), p(np), Ap(np), z(np), diag(np))
-        ! Jacobi preconditioner: the diagonal of A_s, read straight out of Ms
+        ! Jacobi preconditioner: after the rearrangement the operator diagonal IS the matrix diagonal
         do k = 1, np
-            be = int((sqrt(8.d0*real(k,dp)-7.d0)+1.d0)/2.d0)
-            if( svec_idx(1,be,d) > k ) be = be - 1
-            al = k - (be-1)*be/2
-            if( al == be )then
-                dg = packed_T(Ms, np, al, al, al, al, d)
-            else
-                dg = packed_T(Ms, np, al, al, be, be, d) + packed_T(Ms, np, al, be, be, al, d)
-            endif
-            diag(k) = max(dg + ridge, DTINY)
+            diag(k) = max(As(k,k) + ridge, DTINY)
         end do
         x = 0.d0
         r = rhs
@@ -1585,7 +1952,7 @@ contains
         rz = sum(r*z)
         iters = maxit; relres = 1.d0
         do it = 1, maxit
-            call apply_packed_A(Ms, np, d, p, Ap)
+            call dsymv('U', np, 1.d0, As, np, p, 1, 0.d0, Ap, 1)
             Ap  = Ap + ridge*p
             pAp = sum(p*Ap)
             if( pAp <= 0.d0 )then          ! loss of positive definiteness: stop, do not diverge
@@ -1606,6 +1973,109 @@ contains
         end do
         deallocate(r,p,Ap,z,diag)
     end subroutine cg_solve_packed
+
+    !> svec weight of packed index p: 1 on a diagonal pair (a,a), sqrt(2) otherwise.
+    pure real(dp) function packed_weight( p ) result( w )
+        integer, intent(in) :: p
+        integer :: b
+        b = int((sqrt(8.d0*real(p,dp)-7.d0)+1.d0)/2.d0)
+        if( (b-1)*b/2 + 1 > p ) b = b - 1
+        w = merge(1.d0, sqrt(2.d0), p - (b-1)*b/2 == b)
+    end function packed_weight
+
+    !> IN-PLACE packed counterpart of unrearrange_kron_selfsum: turns the accumulator
+    !! Ms = sum_i svec(G_i) svec(G_i)^T into the operator A_s = P (sum_i G_i (x) G_i) P^T, so CG can
+    !! apply it with ONE dsymv instead of apply_packed_A's scalar gather per term. Measured at
+    !! d=177: the gather runs ~20x below the bandwidth this matrix streams at, and the one-time
+    !! rearrangement below costs less than a single gathered apply -- it repays inside the first
+    !! CG iteration, and there are typically ~100.
+    !!
+    !! Every position of Ms is an unordered pair-of-pairs {P,Q} of four indices, and the THREE
+    !! pairings of four indices form a closed orbit. Orbits are disjoint and every orbit map is
+    !! invertible, so no second npk x npk buffer is needed. Writing T for the accumulator value with
+    !! the svec weights divided out, the orbit maps by index multiplicity are
+    !!
+    !!   4 distinct   3 positions   A1 = T2+T3,          A2 = T1+T3,  A3 = T1+T2
+    !!   {a,a,b,c}    2 positions   A(P) = sqrt2*T(Q),   A(Q) = T(P)+T(Q)
+    !!   {a,a,b,b}    2 positions   A(P) = T(Q),         A(Q) = T(P)+T(Q)
+    !!   {a,a,a,b}    1 position    A = sqrt2*T
+    !!   {a,a,a,a}    1 position    A = T
+    !!
+    !! The last four are exactly the positions whose row pair or column pair is diagonal, i.e. where
+    !! two of the three pairings collapse onto one and the generic sum would double-count. This is
+    !! verified against apply_packed_A entry by entry in test_flex_pca_packed_solve.
+    !!
+    !! NOTE the rearrangement is NOT a permutation -- it changes the spectrum (Ms has rank <= nptcls,
+    !! A_s is generically full rank), so it must run exactly once, and apply_packed_A must never be
+    !! handed the result.
+    subroutine rearrange_packed_selfsum( Ms, np, d )
+        integer,  intent(in)    :: np, d
+        real(dp), intent(inout) :: Ms(np,np)
+        integer  :: i, j, k, l, a, b, c, r1, c1, r2, c2, r3, c3
+        real(dp) :: T1, T2, T3, A1, A2, A3
+        !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
+        !$omp& private(i,j,k,l,a,b,c,r1,c1,r2,c2,r3,c3,T1,T2,T3,A1,A2,A3)
+        do i = 1, d
+            do j = i, d
+                do k = j, d
+                    do l = k, d
+                        if( i == l )then                                    ! {a,a,a,a}
+                            r1 = svec_idx(i,i,d)
+                            Ms(r1,r1) = packed_t_at(Ms,np,r1,r1)
+                        else if( i == k )then                               ! {a,a,a,b}, a=i b=l
+                            r1 = svec_idx(i,i,d); c1 = svec_idx(i,l,d)
+                            A1 = sqrt(2.d0)*packed_t_at(Ms,np,r1,c1)
+                            Ms(r1,c1) = A1; Ms(c1,r1) = A1
+                        else if( j == l )then                               ! {a,a,a,b}, a=j b=i
+                            r1 = svec_idx(j,j,d); c1 = svec_idx(j,i,d)
+                            A1 = sqrt(2.d0)*packed_t_at(Ms,np,r1,c1)
+                            Ms(r1,c1) = A1; Ms(c1,r1) = A1
+                        else if( i == j .and. k == l )then                  ! {a,a,b,b}
+                            r1 = svec_idx(i,i,d); c1 = svec_idx(k,k,d)
+                            r2 = svec_idx(i,k,d)
+                            T1 = packed_t_at(Ms,np,r1,c1); T2 = packed_t_at(Ms,np,r2,r2)
+                            A1 = T2; A2 = T1 + T2
+                            Ms(r1,c1) = A1; Ms(c1,r1) = A1
+                            Ms(r2,r2) = A2
+                        else if( i == j .or. j == k .or. k == l )then       ! {a,a,b,c}
+                            if( i == j )then
+                                a = i; b = k; c = l
+                            else if( j == k )then
+                                a = j; b = i; c = l
+                            else
+                                a = k; b = i; c = j
+                            endif
+                            r1 = svec_idx(a,a,d); c1 = svec_idx(b,c,d)
+                            r2 = svec_idx(a,b,d); c2 = svec_idx(a,c,d)
+                            T1 = packed_t_at(Ms,np,r1,c1); T2 = packed_t_at(Ms,np,r2,c2)
+                            A1 = sqrt(2.d0)*T2; A2 = T1 + T2
+                            Ms(r1,c1) = A1; Ms(c1,r1) = A1
+                            Ms(r2,c2) = A2; Ms(c2,r2) = A2
+                        else                                                ! four distinct
+                            r1 = svec_idx(i,j,d); c1 = svec_idx(k,l,d)
+                            r2 = svec_idx(i,k,d); c2 = svec_idx(j,l,d)
+                            r3 = svec_idx(i,l,d); c3 = svec_idx(j,k,d)
+                            T1 = packed_t_at(Ms,np,r1,c1)
+                            T2 = packed_t_at(Ms,np,r2,c2)
+                            T3 = packed_t_at(Ms,np,r3,c3)
+                            A1 = T2 + T3; A2 = T1 + T3; A3 = T1 + T2
+                            Ms(r1,c1) = A1; Ms(c1,r1) = A1
+                            Ms(r2,c2) = A2; Ms(c2,r2) = A2
+                            Ms(r3,c3) = A3; Ms(c3,r3) = A3
+                        endif
+                    end do
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine rearrange_packed_selfsum
+
+    !> T at a packed position: the stored entry with the svec weights divided back out.
+    pure real(dp) function packed_t_at( Ms, np, r, c ) result( t )
+        integer,  intent(in) :: np, r, c
+        real(dp), intent(in) :: Ms(np,np)
+        t = Ms(r,c)/(packed_weight(r)*packed_weight(c))
+    end function packed_t_at
 
     subroutine unrearrange_kron_selfsum( A, d )
         integer,  intent(in)    :: d
@@ -1648,9 +2118,19 @@ contains
         integer :: cgsolve, npk, cgit
         real(dp) :: cgres
         real(dp), allocatable :: Vg(:,:), Sbb_thr(:,:,:), SG_thr(:,:,:), Gi_thr(:,:,:)
+        ! TEMPORARY sub-stage instrumentation for the solve
+        real(dp), allocatable :: t_proj_thr(:), t_gram_thr(:), t_diag_thr(:)
+        real(dp) :: tw0, t_syrk
+        ! compacted per-particle basis samples for the BLAS-3 Gram, real interleaved (re,im,re,im,...)
+        real(dp),    allocatable :: gbuf(:,:,:)
+        integer,     allocatable :: slist(:,:,:)
+        complex(dp) :: gacc
+        integer     :: nsamp, nsamp_max, j
+        logical     :: l_gram_fast
+        real(dp), allocatable :: solve_scal(:)
         real(dp), allocatable :: hfpw_thr(:), hfcnt_thr(:)
-        real(dp), allocatable :: cvpw_thr(:), cvcnt_thr(:)   ! DIAGNOSTIC (see cov_herm_selfpower)
-        real(dp), allocatable :: babs_thr(:), bre_thr(:), gdi_thr(:)   ! DIAGNOSTIC: |b|^2 vs Re(b)^2 vs G_qq
+        real(dp), allocatable :: cvpw_thr(:), cvcnt_thr(:)   ! log only (see cov_herm_selfpower)
+        real(dp), allocatable :: babs_thr(:), bre_thr(:), gdi_thr(:)   ! log only: |b|^2 vs Re(b)^2 vs G_qq
         real(dp), allocatable :: pwsh_thr(:,:), cntsh_thr(:,:), pwsh(:), cntsh(:)   ! per-shell noise profile
         complex(dp), allocatable :: bc_thr(:,:)
         integer,  allocatable :: nvalid_thr(:)
@@ -1661,9 +2141,14 @@ contains
         integer(timer_int_kind) :: t_phase
         dd   = d_tilde*d_tilde
         nthr = nthr_glob
-        ! PACKED accumulation (SIMPLE_COV_CGSOLVE=1).
-        cgsolve = 0
-        call cov_env_int('SIMPLE_COV_CGSOLVE', cgsolve)
+        ! PACKED accumulation and matrix-free CG, on by default; SIMPLE_COV_CGSOLVE=0 restores the dense
+        ! -- through cov_packed_cgsolve, the SAME predicate that sized d_tilde in
+        ! orthonormalize_representatives, so the accumulator below is the one that budget paid for.
+        ! d^4 accumulator and direct solve. Packing exploits the symmetry of every G_i, so the rank-k
+        ! update runs on npk = d(d+1)/2 rather than d^2 rows -- 4x less memory, which matters more than
+        ! the speed: the dense accumulator is 8*d^4 bytes, 2.1 GB at ncols=64 and 34 GB at ncols=128.
+        ! CG at COV_CG_TOL shifts eigenvalues by ~1e-5 relative; convergence is reported, not assumed.
+        cgsolve = merge(1, 0, cov_packed_cgsolve())
         npk = d_tilde*(d_tilde+1)/2
         if( cgsolve /= 0 )then
             allocate(Mspk(npk,npk), source=0.d0)
@@ -1673,6 +2158,9 @@ contains
             call flush(logfhandle)
         else
             allocate(A(dd,dd), source=0.d0)
+            write(logfhandle,'(A,I0,A,F8.3,A)') '>>> FLEX_PCA DENSE solve: dd=',dd, &
+                &'  accumulator ', cov_accum_bytes(d_tilde, .false.)/1.d9, ' GB'
+            call flush(logfhandle)
         endif
         allocate(Sbb(d_tilde,d_tilde), source=0.d0)
         allocate(SG(d_tilde,d_tilde), source=0.d0)
@@ -1687,11 +2175,22 @@ contains
         allocate(Gi_thr(d_tilde,d_tilde,nthr), bc_thr(d_tilde,nthr))
         allocate(basis_fpls(d_tilde,nthr), mean_fpl(nthr), resid_fpl(nthr))
         allocate(orientations(MAXIMGBATCHSZ), nvalid_thr(nthr))
+        allocate(t_proj_thr(nthr), t_gram_thr(nthr), t_diag_thr(nthr), source=0.d0)
+        t_syrk = 0.d0
         allocate(hfpw_thr(nthr), hfcnt_thr(nthr), source=0.d0)
-        allocate(cvpw_thr(nthr), cvcnt_thr(nthr), source=0.d0)   ! DIAGNOSTIC: noise in cov_herm_inner's index convention
-        allocate(babs_thr(nthr), bre_thr(nthr), gdi_thr(nthr), source=0.d0)   ! DIAGNOSTIC
+        allocate(cvpw_thr(nthr), cvcnt_thr(nthr), source=0.d0)   ! log only: noise in cov_herm_inner's convention
+        allocate(babs_thr(nthr), bre_thr(nthr), gdi_thr(nthr), source=0.d0)   ! log only
         nyq_rec = utilde(1)%get_lfny(1)
         allocate(pwsh_thr(0:nyq_rec,nthr), cntsh_thr(0:nyq_rec,nthr), source=0.d0)
+        ! Upper bound on the Gram sample count: cov_herm_inner steps OSMPL_PAD_FAC in both axes over
+        ! |h|,|k| <= nyq_eff, and nyq_eff never exceeds the padded plane Nyquist. cov_herm_sample_list
+        ! reports -1 if it would overrun, and the pair loops then fall back to cov_herm_inner.
+        nsamp_max = (2*OSMPL_PAD_FAC*nyq_rec + 4) * (OSMPL_PAD_FAC*nyq_rec + 4) / (OSMPL_PAD_FAC*OSMPL_PAD_FAC)
+        allocate(slist(2, nsamp_max, nthr))
+        allocate(gbuf(2*nsamp_max, d_tilde, nthr))
+        write(logfhandle,'(A,F8.1,A,I0)') '>>> FLEX_PCA Gram sample buffer: ', &
+            &16.d0*real(nsamp_max,dp)*real(d_tilde,dp)*real(nthr,dp)/1.d6,' MB  max_samples=',nsamp_max
+        call flush(logfhandle)
         allocate(pwsh(0:nyq_rec), cntsh(0:nyq_rec), source=0.d0)
         nvalid_thr = 0
         call mean_rec%expand_exp
@@ -1703,6 +2202,30 @@ contains
         t_phase = tic()
         write(logfhandle,'(A,I0)') '>>> FLEX_PCA REDUCED COVARIANCE SOLVE d_tilde=',d_tilde
         call flush(logfhandle)
+        if( flex_pca_is_master() )then
+            call flex_pca_run_stage(PCA_STAGE_SOLVE, 'reduced solve')
+            allocate(solve_scal(8), source=0.d0)
+            if( cgsolve /= 0 )then
+                call reduce_solve_parts(params, flex_pca_nparts(), Mspk, npk, Sbb, SG, d_tilde, &
+                    &pwsh, cntsh, nyq_rec, solve_scal, nvalid)
+            else
+                call reduce_solve_parts(params, flex_pca_nparts(), A, dd, Sbb, SG, d_tilde, &
+                    &pwsh, cntsh, nyq_rec, solve_scal, nvalid)
+            endif
+            hfpw_thr(1)=solve_scal(1); hfcnt_thr(1)=solve_scal(2)
+            cvpw_thr(1)=solve_scal(3); cvcnt_thr(1)=solve_scal(4)
+            babs_thr(1)=solve_scal(5); bre_thr(1)=solve_scal(6); gdi_thr(1)=solve_scal(7)
+            if( nthr > 1 )then
+                hfpw_thr(2:)=0.d0; hfcnt_thr(2:)=0.d0; cvpw_thr(2:)=0.d0; cvcnt_thr(2:)=0.d0
+                babs_thr(2:)=0.d0; bre_thr(2:)=0.d0;  gdi_thr(2:)=0.d0
+            endif
+            nvalid_thr    = 0
+            nvalid_thr(1) = nvalid
+            Sbb_thr = 0.d0; SG_thr = 0.d0     ! already folded into Sbb/SG by the reduce
+            pwsh_thr = 0.d0; cntsh_thr = 0.d0 ! ditto for pwsh/cntsh
+            deallocate(solve_scal)
+            goto 200
+        endif
         do ibatch = 1, nptcls, MAXIMGBATCHSZ
             batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
             batchsz   = batchlims(2) - batchlims(1) + 1
@@ -1714,44 +2237,96 @@ contains
                 call build%spproj_field%get_ori(pinds(batchlims(1)+i-1), orientations(i))
             end do
             !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
-            !$omp& private(i,ithr,q,r,alpha,beta,gam1,delta,a1,a2,pw,cnt)
+            !$omp& private(i,ithr,q,r,alpha,beta,gam1,delta,a1,a2,pw,cnt,tw0) &
+            !$omp& private(j,nsamp,gacc,l_gram_fast)
             do i = 1, batchsz
                 if( orientations(i)%isstatezero() ) cycle
                 ithr = omp_get_thread_num() + 1
+                tw0 = omp_get_wtime()
                 call project_fplanes_mean_basis(mean_rec, utilde, orientations(i), fpls(i), &
                     &mean_fpl(ithr), basis_fpls(:,ithr), apply_ctf_amp=.true.)
+                t_proj_thr(ithr) = t_proj_thr(ithr) + (omp_get_wtime() - tw0)
                 call form_residual_plane(fpls(i), mean_fpl(ithr), resid_fpl(ithr), &
                     &particle_contrast(mean_fpl(ithr), fpls(i)))
+                tw0 = omp_get_wtime()
                 ! signal-free noise variance from the outer residual shells
                 call plane_hf_power(resid_fpl(ithr), nyq_rec, 0.7, pw, cnt)
                 hfpw_thr(ithr)  = hfpw_thr(ithr)  + pw
                 hfcnt_thr(ithr) = hfcnt_thr(ithr) + cnt
-                ! DIAGNOSTIC: same residual, measured in cov_herm_inner's index convention
+                ! log only: the same residual in cov_herm_inner's index convention
                 call cov_herm_selfpower(resid_fpl(ithr), pw, cnt)
                 cvpw_thr(ithr)  = cvpw_thr(ithr)  + pw
                 cvcnt_thr(ithr) = cvcnt_thr(ithr) + cnt
                 call plane_shell_power_accum(resid_fpl(ithr), nyq_rec, pwsh_thr(:,ithr), cntsh_thr(:,ithr))
+                t_diag_thr(ithr) = t_diag_thr(ithr) + (omp_get_wtime() - tw0)
+                tw0 = omp_get_wtime()
                 do q = 1, d_tilde
                     bc_thr(q,ithr) = cov_herm_inner(basis_fpls(q,ithr), resid_fpl(ithr))
-                    ! DIAGNOSTIC: is Re(b) anomalously small vs |b|, and how big is G_qq?
+                    ! log only: Re(b)^2 against |b|^2 and G_qq
                     babs_thr(ithr) = babs_thr(ithr) + real(bc_thr(q,ithr)*conjg(bc_thr(q,ithr)),dp)
                     bre_thr(ithr)  = bre_thr(ithr)  + real(bc_thr(q,ithr))**2
-                    do r = q, d_tilde
-                        Gi_thr(q,r,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), basis_fpls(r,ithr)), dp)
-                        Gi_thr(r,q,ithr) = Gi_thr(q,r,ithr)
+                end do
+                ! ---- per-particle Gram, d_tilde*(d_tilde+1)/2 inner products ----
+                ! Hottest loop in flex_pca. Gather each basis plane's samples once, in cov_herm_inner's
+                ! visit order, into a contiguous buffer, then form the whole Gram as one dsyrk per particle
+                ! (Re(G_qr) = sum_j re_q re_r + im_q im_r). Exact: each Gi(q,r) is an independent
+                ! reduction so pair order is free, and the (h,k) order WITHIN a reduction is preserved by
+                ! the sample list. gdi_thr stays in q order -- that one accumulator's order does matter.
+                ! Needs a common nyq across basis planes and the sample list to fit; else fall back.
+                l_gram_fast = nsamp_max > 0
+                if( l_gram_fast )then
+                    do q = 2, d_tilde
+                        if( basis_fpls(q,ithr)%nyq /= basis_fpls(1,ithr)%nyq )then
+                            l_gram_fast = .false.
+                            exit
+                        endif
                     end do
+                endif
+                if( l_gram_fast )then
+                    call cov_herm_sample_list(basis_fpls(1,ithr), slist(:,:,ithr), nsamp)
+                    l_gram_fast = nsamp > 0
+                endif
+                if( l_gram_fast )then
+                    ! Real interleaved layout: Re(G_qr) = sum_j (re_q re_r + im_q im_r), so stacking
+                    ! [re_1, im_1, re_2, im_2, ...] as a (2*nsamp x d_tilde) real matrix X makes the whole
+                    ! Gram exactly X^T X -- one dsyrk instead of d(d+1)/2 hand-rolled dot products.
+                    do q = 1, d_tilde
+                        do j = 1, nsamp
+                            gacc = cmplx(basis_fpls(q,ithr)%cmplx_plane(slist(1,j,ithr), &
+                                &slist(2,j,ithr)), kind=dp)
+                            gbuf(2*j-1,q,ithr) = real(gacc)
+                            gbuf(2*j,  q,ithr) = aimag(gacc)
+                        end do
+                    end do
+                    call dsyrk('U', 'T', d_tilde, 2*nsamp, 1.d0, gbuf(1,1,ithr), size(gbuf,1), &
+                        &0.d0, Gi_thr(1,1,ithr), d_tilde)
+                    do q = 1, d_tilde
+                        do r = q+1, d_tilde
+                            Gi_thr(r,q,ithr) = Gi_thr(q,r,ithr)
+                        end do
+                    end do
+                else
+                    do q = 1, d_tilde
+                        do r = q, d_tilde
+                            Gi_thr(q,r,ithr) = real(cov_herm_inner(basis_fpls(q,ithr), basis_fpls(r,ithr)), dp)
+                            Gi_thr(r,q,ithr) = Gi_thr(q,r,ithr)
+                        end do
+                    end do
+                endif
+                do q = 1, d_tilde
                     gdi_thr(ithr) = gdi_thr(ithr) + Gi_thr(q,q,ithr)
                 end do
+                t_gram_thr(ithr) = t_gram_thr(ithr) + (omp_get_wtime() - tw0)
                 do q = 1, d_tilde
                     do r = 1, d_tilde
-                        ! properness fix (2.1): E[Re(b_q)Re(b_r)]_noise = 0.5*sig2*G (see Dmat).
+                        ! properness: E[Re(b_q)Re(b_r)]_noise = 0.5*sig2*G, so the RHS uses Re(b), not |b|^2
                         Sbb_thr(q,r,ithr) = Sbb_thr(q,r,ithr) + real(bc_thr(q,ithr))*real(bc_thr(r,ithr))
                         SG_thr(q,r,ithr)  = SG_thr(q,r,ithr) + Gi_thr(q,r,ithr)
                     end do
                 end do
                 ! Stage vec(G_i) for the batched rank-k update below.
                 if( cgsolve /= 0 )then
-                    ! svec:
+                    ! svec packing: off-diagonals carry sqrt(2) so the packing is an isometry
                     do gam1 = 1, d_tilde
                         do alpha = 1, gam1
                             Vg(svec_idx(alpha,gam1,d_tilde),i) = &
@@ -1770,13 +2345,44 @@ contains
             end do
             !$omp end parallel do
             ! A_rearranged += Vg Vg^T over this batch, in ONE BLAS-3 call on the SHARED accumulator.
+            tw0 = omp_get_wtime()
             if( cgsolve /= 0 )then
                 call dsyrk('U', 'N', npk, batchsz, 1.d0, Vg, npk, 1.d0, Mspk, npk)
             else
                 call dsyrk('U', 'N', dd, batchsz, 1.d0, Vg, dd, 1.d0, A, dd)
             endif
             Vg(:,1:batchsz) = 0.d0
+            t_syrk = t_syrk + (omp_get_wtime() - tw0)
         end do
+        if( flex_pca_is_worker() )then
+            ! Fold this part's per-thread accumulators and ship them. The upper triangle alone is
+            ! populated by dsyrk; summing upper triangles across parts and mirroring once on the master
+            ! is equivalent to mirroring per part and summing, so the mirror stays master-side below.
+            allocate(solve_scal(8), source=0.d0)
+            do ithr = 1, nthr
+                Sbb = Sbb + Sbb_thr(:,:,ithr)
+                SG  = SG  + SG_thr(:,:,ithr)
+                pwsh  = pwsh  + pwsh_thr(:,ithr)
+                cntsh = cntsh + cntsh_thr(:,ithr)
+            end do
+            solve_scal(1)=sum(hfpw_thr);  solve_scal(2)=sum(hfcnt_thr)
+            solve_scal(3)=sum(cvpw_thr);  solve_scal(4)=sum(cvcnt_thr)
+            solve_scal(5)=sum(babs_thr);  solve_scal(6)=sum(bre_thr); solve_scal(7)=sum(gdi_thr)
+            nvalid = sum(nvalid_thr)
+            if( cgsolve /= 0 )then
+                call write_solve_part(flex_pca_part_fname('solve', params%part, params%numlen), &
+                    &Mspk, npk, Sbb, SG, d_tilde, pwsh, cntsh, nyq_rec, solve_scal, nvalid)
+            else
+                call write_solve_part(flex_pca_part_fname('solve', params%part, params%numlen), &
+                    &A, dd, Sbb, SG, d_tilde, pwsh, cntsh, nyq_rec, solve_scal, nvalid)
+            endif
+            deallocate(solve_scal)
+            ncomp_out = 0
+            sig2_out  = 0._dp
+            allocate(vred(0,0), gamma_out(0))
+            return
+        endif
+200     continue
         ! dsyrk touched only the upper triangle; mirror it before the un-rearrangement.
         if( cgsolve /= 0 )then
             !$omp parallel do default(shared) private(a1,a2) schedule(static)
@@ -1786,7 +2392,14 @@ contains
                 end do
             end do
             !$omp end parallel do
-            ! NO un-rearrangement: apply_packed_A reads the rearranged packed accumulator directly
+            ! Rearrange ONCE, here, so CG below is a dsymv per iteration rather than a scalar gather
+            ! per term. Mirrors the dense branch, which unrearranges at exactly this point -- so the
+            ! ridge and the trace diagnostics downstream now see the OPERATOR's diagonal in both
+            ! paths, where the packed path previously scaled its ridge by the raw accumulator's.
+            t_phase = tic()
+            call rearrange_packed_selfsum(Mspk, npk, d_tilde)
+            write(logfhandle,'(A,F8.2)') '>>> FLEX_PCA packed rearrangement seconds=', toc(t_phase)
+            call flush(logfhandle)
         else
             !$omp parallel do default(shared) private(a1,a2) schedule(static)
             do a2 = 1, dd
@@ -1803,6 +2416,10 @@ contains
             SG  = SG  + SG_thr(:,:,ithr)
         end do
         nvalid = sum(nvalid_thr)
+        write(logfhandle,'(A,F9.1,A,F9.1,A,F9.1,A,F9.1)') &
+            &'>>> FLEX_PCA SOLVE SPLIT (thread-seconds): projections=',sum(t_proj_thr), &
+            &'  gram=',sum(t_gram_thr),'  diagnostics=',sum(t_diag_thr),'  dsyrk(wall)=',t_syrk
+        call flush(logfhandle)
         write(logfhandle,'(A,I0,A,F10.1)') '>>> FLEX_PCA REDUCED SOLVE particles=',nvalid, &
             &' seconds=',toc(t_phase)
         call flush(logfhandle)
@@ -1817,13 +2434,14 @@ contains
         end do
         call cleanup_rec_buffers(build, fpls)
         deallocate(basis_fpls, mean_fpl, resid_fpl, Gi_thr, bc_thr, Vg, Sbb_thr, SG_thr, orientations, nvalid_thr)
+        deallocate(gbuf, slist)
         if( nvalid < 1 ) THROW_HARD('flex_pca reduced covariance solve found no valid particles')
-        ! Noise-bias scale sig2_eff = signal-free per-coefficient whitened-noise variance E|n|^2,
-        ! measured from the outer residual shells. With the properness-consistent RHS the debias is
-        ! D = Sbb - 0.5*sig2_eff*SG (see below), which removes the noise bias WITHOUT over-subtracting
-        ! the signal (unlike trace matching, which folds the signal into sig2_eff and collapses the rank).
+        ! Noise-bias scale sig2_eff = signal-free per-coefficient whitened-noise variance E|n|^2, measured
+        ! from the outer residual shells. With the properness-consistent RHS the debias is
+        ! D = Sbb - 0.5*sig2_eff*SG (below), which removes the noise bias WITHOUT over-subtracting the
+        ! signal, unlike trace matching, which folds the signal into sig2_eff and collapses the rank.
         sig2_eff = sum(hfpw_thr) / max(sum(hfcnt_thr), 1.d0)
-        ! per-shell whitened residual variance profile (DIAGNOSTIC):
+        ! per-shell whitened residual variance profile, for the log
         do ithr = 1, nthr
             pwsh  = pwsh  + pwsh_thr(:,ithr)
             cntsh = cntsh + cntsh_thr(:,ithr)
@@ -1840,9 +2458,8 @@ contains
             tr_g  = tr_g  + SG(q,q)
         end do
         ! The trace-match estimate tr(Sbb)/tr(SG) is only meaningful when tr(SG) is a real quantity rather
-        ! than a rounding residue. with a dead (identically zero) projected basis tr_g underflowed the
-        ! DTINY=1e-10 floor (measured tr_g=6.05e-18), so the "1.66e-13" it reported was simply tr_bb/1e-10
-        ! -- a pure floor artefact that read as a plausible noise scale and cost hours.
+        ! than a rounding residue: with a numerically dead projected basis tr_g underflows any fixed floor
+        ! and the ratio then reports the floor, not a noise scale. Gate it on the relative epsilon instead.
         l_trmatch = tr_g > epsilon(1.d0) * max(abs(tr_bb), 1.d0)
         tr_match  = 0.d0
         if( l_trmatch ) tr_match = tr_bb / tr_g
@@ -1855,7 +2472,7 @@ contains
                 &floor -- the projected basis is numerically dead; suspect a reconstructor loaded with add() &
                 &while flagged Fourier (see the D2 zeroG/zeroRHS/zeroZ counters).'
         endif
-        ! DIAGNOSTIC: The debias identity E[Re(b)Re(b)] = 0.5*sig2*G requires sig2 in THIS convention
+        ! log only: the debias identity E[Re(b)Re(b)] = 0.5*sig2*G requires sig2 in THIS convention
         write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4)') '>>> FLEX_PCA D1b mean|b|^2=', &
             &sum(babs_thr)/max(real(nvalid*d_tilde,dp),1.d0),'  meanRe(b)^2=', &
             &sum(bre_thr)/max(real(nvalid*d_tilde,dp),1.d0),'  meanG_qq=', &
@@ -1866,11 +2483,11 @@ contains
         if( .not. l_trmatch ) write(logfhandle,'(A)') &
             &'>>> FLEX_PCA D1 measured Sbb/SG is reported as 0: tr(SG) is at the rounding floor'
         allocate(Dmat(d_tilde,d_tilde))
-        ! Eq. SIMPLE's FFT/gridding convention is not unitary, so after whitening the noise covariance is
+        ! SIMPLE's FFT/gridding convention is not unitary, so after whitening the noise covariance is
         ! Lambda_i = sig2_conv * I with sig2_conv a pure convention constant (box, padding, gen_fplane4rec
-        ! scaling) -- measured at ~3.9e-6 at box 128, not 1. The 0.5 IS exact:
+        ! scaling), NOT the supplement's 1. The 0.5 is exact: it is E[Re(b)Re(b)] for proper complex noise.
         Dmat = Sbb - 0.5d0 * sig2_eff * SG
-        ! Same identity gives the embedding's noise scale: b = G z + n with Cov(n) = 0.5*sig2*G, so eq.
+        ! The same identity fixes the embedding's noise scale: b = G z + n with Cov(n) = 0.5*sig2*G
         sig2_out = 0.5d0 * sig2_eff
         write(logfhandle,'(A,ES12.4,A,ES12.4)') '>>> FLEX_PCA noise convention constant sig2_eff=', &
             &sig2_eff,'  debias coefficient=',0.5d0*sig2_eff
@@ -1899,7 +2516,7 @@ contains
             end do
         end do
         ! A = sum_i G_i (x) G_i + ridge*I is symmetric POSITIVE DEFINITE by construction (a sum of Kronecker
-        ! squares of symmetric matrices is PSD
+        ! squares of symmetric matrices is PSD), so Cholesky is the right factorization
         if( cgsolve /= 0 )then
             ! pack the RHS and solve matrix-free
             allocate(rhspk(npk), spk(npk))
@@ -1908,7 +2525,7 @@ contains
                     rhspk(svec_idx(q,r,d_tilde)) = merge(1.d0, sqrt(2.d0), q == r)*Dmat(q,r)
                 end do
             end do
-            call cg_solve_packed(Mspk, npk, d_tilde, rhspk, ridge, COV_CG_MAXIT, COV_CG_TOL, &
+            call cg_solve_packed(Mspk, npk, rhspk, ridge, COV_CG_MAXIT, COV_CG_TOL, &
                 &spk, cgit, cgres)
             write(logfhandle,'(A,I0,A,ES10.3)') '>>> FLEX_PCA CG iterations=',cgit, &
                 &'  relative residual=',cgres
@@ -1950,7 +2567,7 @@ contains
         allocate(V(d_tilde,d_tilde), gam(d_tilde))
         call jacobi(Sig, d_tilde, d_tilde, gam, V, nrot)
         call eigsrt(gam, V, d_tilde, d_tilde)          ! descending
-        ! Higham PSD projection:
+        ! Higham PSD projection: clamp the negative eigenvalues the debias can produce
         do q = 1, d_tilde
             if( gam(q) < 0.d0 ) gam(q) = 0.d0
         end do
@@ -1995,6 +2612,8 @@ contains
         type(image)  :: eigimg, meanimg
         type(string) :: fname
         real, pointer :: qr(:,:,:), ck(:,:,:), cl(:,:,:)
+        real, pointer :: esgn(:,:,:)
+        integer :: eloc(3)
         real(dp), allocatable :: gramC(:,:), W(:,:), lam(:)
         real(dp) :: qnrm2, ip, lam_m, max_ov, cnrm
         integer :: k, j, m, nrot
@@ -2056,7 +2675,15 @@ contains
             end do
             gamma(m) = lam_m
             if( params%msk_crop > TINY ) call eigimg%mask3D_soft(params%msk_crop, backgr=0.)
-            ! reliable direct write of the real-space eigenvolume
+            ! CANONICAL SIGN. Eigenvectors are defined up to sign and the solver's choice depends on the
+            ! last bits of the matrix, so the same data reduced in a different order (nparts, threads,
+            ! BLAS) gives the same subspace with arbitrary signs. Not cosmetic: the state ordering uses
+            ! the ordering eigenvolume's sign as the trajectory DIRECTION, so a flip plays the motion
+            ! backwards and swaps flex_pca_traj_001 with _00N. Making the dominant voxel positive is
+            ! stable -- the leading lobe sits far above the 1e-6 perturbations that flip the solver.
+            call eigimg%get_rmat_ptr(esgn)
+            eloc = maxloc(abs(esgn))
+            if( esgn(eloc(1),eloc(2),eloc(3)) < 0. ) call eigimg%mul(-1.)
             if( present(fprefix) )then
                 fname = trim(fprefix)//int2str_pad(k,3)//MRC_EXT
             else
@@ -2065,10 +2692,10 @@ contains
             call eigimg%write(fname, del_if_exists=.true.)
             call fname%kill
             if( present(basis_imgs) ) call basis_imgs(k)%copy(eigimg)
-            ! reconstructor for embedding projection (mean_rec idiom). add() then deposits into the shared
-            ! rmat/cmat buffer while the subsequent fft() is a no-op, so expand_exp propagates an
-            ! untransformed grid and the projected basis comes out IDENTICALLY ZERO for ~99% of particles
-            ! (measured:
+            ! Reconstructor for the embedding projection, built with the mean_rec idiom: set_rmat, fft,
+            ! expand_exp. NEVER add() -- it deposits into the shared rmat/cmat buffer of a reconstructor
+            ! still flagged Fourier, the following fft() is then a no-op, expand_exp propagates an
+            ! untransformed grid, and the projected basis comes out identically zero.
             call init_column_reconstructor(params, build, basis_recs(k))
             call basis_recs(k)%set_rmat(eigimg%get_rmat(), .false.)
             call basis_recs(k)%fft
@@ -2130,7 +2757,7 @@ contains
 
     !> Contrast-aware MAP embedding (supplement S.E, eqs S.14-S.15).
     subroutine embed_latents_with_contrast( params, build, mean_rec, basis_recs, ncomp, eigvals, sig2_eff, &
-        &pinds, nptcls, z, contrast, precision, resid_energy, resid_mean_energy )
+        &pinds, nptcls, z, contrast, precision, resid_energy, resid_mean_energy, rho_out )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(reconstructor), intent(inout) :: mean_rec
@@ -2141,6 +2768,10 @@ contains
         real(dp),            intent(out)   :: z(nptcls,ncomp), contrast(nptcls)
         real(dp),            intent(out)   :: precision(ncomp,ncomp,nptcls)
         real(dp),            intent(out)   :: resid_energy(nptcls), resid_mean_energy(nptcls)
+        ! per-component split-half reliability, exported so the STATE stage can order the latent
+        ! path by how well each component is measured rather than by how much variance it carries.
+        ! A high-variance, low-rho nuisance component otherwise dominates target placement.
+        real(dp), optional,  intent(out)   :: rho_out(ncomp)
         real(dp), parameter :: A_LO = 0.1d0, A_HI = 5.0d0
         type(fplane_type), allocatable :: fpls(:)
         type(fplane_type), allocatable :: basis_fpls(:,:), mean_fpl(:), data_fpl(:)
@@ -2152,7 +2783,7 @@ contains
         logical :: l_relprior
         integer :: ihf
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, q, r, ithr, nthr, ia, row
-        integer, allocatable :: nzeroG_thr(:), nzeroR_thr(:), nzeroZ_thr(:)   ! DIAGNOSTIC D2
+        integer, allocatable :: nzeroG_thr(:), nzeroR_thr(:), nzeroZ_thr(:)   ! dead-basis counters
         real(dp) :: a, a_best, e_yy, e_mm, best_res, res, aa, sig2
         integer(timer_int_kind) :: t_phase
         real(dp), allocatable :: Gth(:,:,:), Ath(:,:,:), zth(:,:), zbest(:,:), cth(:,:), bth(:,:), myth(:)
@@ -2162,8 +2793,8 @@ contains
         integer :: nrot_t, gcnt
         real(dp) :: gsum
         nthr = nthr_glob
-        sig2 = max(sig2_eff, DTINY)      ! whitened-noise variance for the MAP shrinkage (fix 2.4)
-        allocate(nzeroG_thr(nthr), nzeroR_thr(nthr), nzeroZ_thr(nthr), source=0)   ! DIAGNOSTIC D2
+        sig2 = max(sig2_eff, DTINY)      ! whitened-noise variance for the MAP shrinkage
+        allocate(nzeroG_thr(nthr), nzeroR_thr(nthr), nzeroZ_thr(nthr), source=0)   ! dead-basis counters
         l_relprior = .not. cov_env_int_off('SIMPLE_COV_RELPRIOR')
         allocate(prior(ncomp))
         if( l_relprior )then
@@ -2219,7 +2850,7 @@ contains
                         Gth(r,q,ithr) = Gth(q,r,ithr)
                     end do
                 end do
-                ! SPLIT-HALF:
+                ! split-half sufficient statistics, for the reliability-weighted prior below
                 if( l_relprior )then
                     do ihf = 1, 2
                         do q = 1, ncomp
@@ -2233,8 +2864,9 @@ contains
                     end do
                 endif
                 resid_mean_energy(row) = e_yy - 2.d0*myth(ithr) + e_mm                       ! contrast=1 mean residual
-                ! Contrast: For each a on linspace(0,2,51)[1:] solve the fixed-a MAP (a^2 G/sig2 + Gamma^-1)
-                ! z = (a b - a^2 c)/sig2 (fix 2.4, S.E
+                ! Contrast (S.E): for each a on the grid solve the fixed-a MAP
+                ! (a^2 G/sig2 + Gamma^-1) z = (a b - a^2 c)/sig2 and keep the a with the lowest residual.
+                ! With COV_EMBED_CONTRAST_GRID off this is a single pass at a = 1.
                 best_res = huge(1.d0)
                 a_best   = 1.d0
                 do ia = 1, NCONTRAST_GRID
@@ -2265,7 +2897,7 @@ contains
                     endif
                     if( .not. COV_EMBED_CONTRAST_GRID ) exit
                 end do
-                ! PROJECTED-GRAM CONDITIONING.
+                ! projected-Gram spectrum on a subsample, for the conditioning report below
                 if( mod(row, GRAM_DIAG_STRIDE) == 0 )then
                     gwork(:,:,ithr) = Gth(:,:,ithr)
                     call jacobi(gwork(:,:,ithr), ncomp, ncomp, gev(:,ithr), gvec(:,:,ithr), nrot_t)
@@ -2275,7 +2907,7 @@ contains
                     end do
                     gcnt_thr(ithr) = gcnt_thr(ithr) + 1
                 endif
-                ! DIAGNOSTIC D2: is the projected basis / rhs numerically dead for this particle?
+                ! count the particles whose projected basis or rhs came out numerically dead
                 if( maxval(abs(Gth(:,:,ithr))) <= 0.d0 ) nzeroG_thr(ithr) = nzeroG_thr(ithr) + 1
                 if( maxval(abs(bth(:,ithr) - cth(:,ithr))) <= 0.d0 ) nzeroR_thr(ithr) = nzeroR_thr(ithr) + 1
                 if( maxval(abs(zbest(:,ithr))) <= 0.d0 ) nzeroZ_thr(ithr) = nzeroZ_thr(ithr) + 1
@@ -2320,7 +2952,7 @@ contains
             write(logfhandle,'(A,10(1X,ES9.2))') '>>>   ', (gspec(q), q=1,min(10,ncomp))
             write(logfhandle,'(A,ES11.4,A,ES11.4)') '>>>   Gram condition number lam1/lamN = ', &
                 &gspec(1)/max(gspec(ncomp),DTINY), '   lam1/lam5 = ', gspec(1)/max(gspec(min(5,ncomp)),DTINY)
-            ! NORMALISE FIRST.
+            ! the participation ratio is only a rank if the spectrum is normalised first
             gsum = sum(gspec)
             if( gsum > 0.d0 )then
                 gspec = gspec / gsum
@@ -2334,11 +2966,9 @@ contains
             &' zeroRHS=',sum(nzeroR_thr),' zeroZ=',sum(nzeroZ_thr),' of nptcls=',nptcls
         write(logfhandle,'(A,F8.1)') '>>> FLEX_PCA CONTRAST EMBED SECONDS: ', toc(t_phase)
         call flush(logfhandle)
-        ! ---- RELIABILITY-WEIGHTED PRIOR ---- prior_precision = sig2/Gamma_q hands the LARGEST eigenvalue
-        ! the WEAKEST prior. component 1 has Gamma 4.66x the next and the smallest prior_precision of all
-        ! 20, so the MAP barely constrains it and it becomes near-unregularized least squares along a
-        ! direction the data hardly measures -- 53% of the latent variance at between-conformation SNR
-        ! 0.007, correlating with nothing (defocus 0.001, per-particle scale 0.037).
+        ! ---- RELIABILITY-WEIGHTED PRIOR ---- The plain prior precision sig2/Gamma_q hands the LARGEST
+        ! eigenvalue the WEAKEST prior, so a high-variance but poorly measured component becomes
+        ! near-unregularized least squares. Rescale each prior by the component's split-half reliability.
         if( l_relprior )then
             allocate(rho(ncomp))
             do q = 1, ncomp
@@ -2346,10 +2976,8 @@ contains
                 rho(q) = max(0.d0, rho(q))
                 rho(q) = 2.d0*rho(q) / (1.d0 + rho(q))            ! Spearman-Brown to full length
             end do
-            ! RELATIVE, not absolute. it fixed the nuisance mode (z1 left the top-8 by variance,
-            ! conformational share 0.352 -> 0.426) but over-shrank the informative components too (z2's
-            ! prior +34%), compressing the latent spread the trajectory depends on and costing swing
-            ! coverage 74.5% -> 64.0% and trajectory amplitude 0.726 -> 0.376.
+            ! Scale rho RELATIVE to the most reliable component, not absolutely: an absolute rho^2 shrinks
+            ! the informative components as well and compresses the latent spread the trajectory needs.
             rho_max = maxval(rho)
             if( rho_max <= DTINY ) rho_max = 1.d0
             do q = 1, ncomp
@@ -2380,7 +3008,11 @@ contains
             !$omp end parallel do
             write(logfhandle,'(A)') '>>> FLEX_PCA latents re-solved with the reliability-weighted prior'
             call flush(logfhandle)
+            if( present(rho_out) ) rho_out = rho
             deallocate(rho, Gcache, bcache, ccache, zhalf, Ghf, bhf, chf)
+        else
+            ! no split-half statistics available; treat every component as equally measured
+            if( present(rho_out) ) rho_out = 1.d0
         endif
         do i = 1, size(orientations)
             call orientations(i)%kill
@@ -2395,7 +3027,9 @@ contains
         deallocate(prior, Gth, Ath, zth, zbest, cth, bth, myth, Gtilth, basis_fpls, mean_fpl, data_fpl, orientations)
     end subroutine embed_latents_with_contrast
 
-    !> Native probe-based subspace iteration (proposal 4.1).
+    !> Probe-based subspace iteration: alternate a Wiener E-step (per-particle latents in the current
+    !! basis) with a weighted-backprojection M-step (Y_q += sum_i z_iq * backproject(r_i)), then
+    !! orthonormalize the refined probe volumes into the next basis.
     subroutine probe_subspace_iteration( params, build, mean_rec, basis_recs, eigvals, sig2_eff, &
         &pinds, nptcls, ncomp, niters )
         class(parameters),   intent(inout) :: params
@@ -2412,19 +3046,69 @@ contains
         type(image),         allocatable :: realvols(:), utilde_real(:)
         type(image) :: img_o
         real,                allocatable :: rho_e(:,:,:,:), rho_o(:,:,:,:), filt(:), corrs(:)
-        real(dp),            allocatable :: zbatch(:,:), dens_dummy(:,:,:), z(:,:), prior(:)
+        real(dp),            allocatable :: zbatch(:,:), dens(:,:,:), z(:,:), prior(:)
         real(dp),            allocatable :: Gth(:,:,:), Ath(:,:,:), bth(:,:), cth(:,:), zth(:,:)
+        !> per-thread posterior covariance A^-1 and the untouched copy of A it is taken from
+        real(dp),            allocatable :: Ainvth(:,:,:), Acpth(:,:,:)
+        !> per-thread accumulator for the EM Gamma update, and its reduction
+        real(dp),            allocatable :: gam_thr(:,:), gam_acc(:)
+        integer,             allocatable :: nval_thr(:)
         logical,             allocatable :: valid(:), valid_e(:), valid_o(:)
         integer,             allocatable :: eo(:)
         real, pointer :: rmatp(:,:,:)
         real     :: fc
         real(dp) :: sig2, a, aa, e_mm, myv, mu_q, sd_q
         integer  :: it, q, r, i, ithr, nthr, batchlims(2), batchsz, ibatch, row, d_new, es(3), filtsz, sh
+        integer  :: npairs, nval, pstride, npp, ihalf, nkept
+        logical  :: l_probe_distr
+        real(dp),            allocatable :: gam_sum(:)
+        complex,             allocatable :: cme(:,:,:,:), cmo(:,:,:,:)
+        real,                allocatable :: rhe(:,:,:,:), rhoo(:,:,:,:)
+        integer,             allocatable :: ppinds(:)
+        type(image),         allocatable :: prev_real(:)      ! previous iteration's orthonormal basis
+        real(dp),            allocatable :: Mconv(:,:), sconv(:)
+        real(dp) :: cos_mean
+        logical  :: l_converged
         type(string) :: fname
         integer(timer_int_kind) :: t_it
         nthr = nthr_glob
         sig2 = max(sig2_eff, DTINY)
-        allocate(z(nptcls,ncomp))
+        ! ---- optional STRIDE subsample, for the basis refinement only ----
+        ! The probe refines ncomp band-limited, FSC-regularised volumes, and every iteration costs a
+        ! full pass over the data -- far more particles than that many parameters need. A stride keeps
+        ! both halfsets and every state proportionally represented; fromp/top would NOT, because
+        ! particles are commonly ordered by state (on Ribosembly a contiguous window selects whole
+        ! states). The embedding stage that follows still uses every particle: only the basis
+        ! refinement is subsampled.
+        ! The stride MUST be applied within each halfset, not across the particle list. `eo` alternates
+        ! strictly by particle index (0,1,0,1,...), so a plain stride of 2 selects one halfset entirely
+        ! and leaves the other empty -- and every probe M-step is regularised by an even/odd FSC, which
+        ! is then computed against nothing. Measured: the Wiener filter kills the basis and the run dies
+        ! at the "embedding collapsed" guard. Striding per halfset keeps both populated at any stride.
+        pstride = 1
+        call cov_env_int('SIMPLE_COV_PROBE_STRIDE', pstride)
+        pstride = max(1, pstride)
+        allocate(ppinds(nptcls))
+        npp = 0
+        do ihalf = 0, 1
+            nkept = 0
+            do i = 1, nptcls
+                if( build%spproj_field%get_eo(pinds(i)) /= ihalf ) cycle
+                if( mod(nkept, pstride) == 0 )then
+                    npp = npp + 1
+                    ppinds(npp) = pinds(i)
+                endif
+                nkept = nkept + 1
+            end do
+        end do
+        if( npp < 2 ) THROW_HARD('probe stride left too few particles; lower SIMPLE_COV_PROBE_STRIDE')
+        call hpsort(ppinds(:npp))   ! restore project order so batched image reads stay sequential
+        if( pstride > 1 )then
+            write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA PROBE stride ',pstride, &
+                &': refining the basis on ',npp,' of ',nptcls,' particles'
+            call flush(logfhandle)
+        endif
+        allocate(z(npp,ncomp))
         do it = 1, niters
             t_it = tic()
             write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX_PCA PROBE SUBSPACE ITERATION ',it,' / ',niters, &
@@ -2434,38 +3118,71 @@ contains
             do q = 1, ncomp
                 prior(q) = 1.d0 / max(eigvals(q), DTINY)
             end do
-            ! even/odd Y_q accumulators (half-set FSC regularization) + shared sampling density
+            ! even/odd Y_q accumulators (half-set FSC regularization) + the COUPLED latent normal matrix.
+            ! rho carries one entry per (q,r) pair, not one shared density: the M-step below solves the
+            ! components together at every grid point.
             allocate(Yeven(ncomp), Yodd(ncomp))
             do q = 1, ncomp
                 call init_column_reconstructor(params, build, Yeven(q)); call Yeven(q)%reset; call Yeven(q)%reset_exp
                 call init_column_reconstructor(params, build, Yodd(q));  call Yodd(q)%reset;  call Yodd(q)%reset_exp
             end do
-            es = shape(Yeven(1)%cmat_exp)
-            allocate(rho_e(1,es(1),es(2),es(3)), rho_o(1,es(1),es(2),es(3)), source=0.)
+            es     = shape(Yeven(1)%cmat_exp)
+            npairs = (ncomp*(ncomp+1))/2
+            allocate(rho_e(npairs,es(1),es(2),es(3)), rho_o(npairs,es(1),es(2),es(3)), source=0.)
+            write(logfhandle,'(A,I0,A,F8.2,A)') '>>> FLEX_PCA PROBE coupled normal matrix pairs=',npairs, &
+                &'  rho even+odd ', 8.d0*real(npairs,dp)*real(es(1),dp)*real(es(2),dp)*real(es(3),dp)/1.d9,' GB'
+            call flush(logfhandle)
             allocate(Gth(ncomp,ncomp,nthr), Ath(ncomp,ncomp,nthr), bth(ncomp,nthr), cth(ncomp,nthr), zth(ncomp,nthr))
+            allocate(Ainvth(ncomp,ncomp,nthr), Acpth(ncomp,ncomp,nthr))
             allocate(basis_fpls(ncomp,nthr), mean_fpl(nthr), orientations(MAXIMGBATCHSZ))
-            allocate(zbatch(ncomp,MAXIMGBATCHSZ), dens_dummy(ncomp,ncomp,MAXIMGBATCHSZ))
+            allocate(zbatch(ncomp,MAXIMGBATCHSZ), dens(ncomp,ncomp,MAXIMGBATCHSZ))
             allocate(valid(MAXIMGBATCHSZ), valid_e(MAXIMGBATCHSZ), valid_o(MAXIMGBATCHSZ), eo(MAXIMGBATCHSZ))
-            dens_dummy = 0.d0
+            allocate(gam_thr(ncomp,nthr), source=0.d0)
+            allocate(gam_acc(ncomp), source=0.d0)
+            allocate(nval_thr(nthr), source=0)
+            dens = 0.d0
             call mean_rec%expand_exp
             do q = 1, ncomp
                 call basis_recs(q)%expand_exp
             end do
             call init_rec(params, build, MAXIMGBATCHSZ, fpls)
+            ! ---- ACCUMULATE: distributed when the master has parts, in-process otherwise ----
+            ! One qsys round per EM iteration, because the basis the E-step projects changes every
+            ! iteration: workers are relaunched against the master's refreshed flex_pca_pc*.mrc
+            ! rather than looping locally. Everything below the reduction -- the coupled M-step
+            ! solve, the FSC merge, the re-orthonormalisation -- stays master-only and unchanged, so
+            ! the shared-memory result remains the reference.
+            l_probe_distr = flex_pca_is_master() .and. flex_pca_nparts() > 1
+            allocate(gam_sum(ncomp), source=0.d0)
+            nval = 0
+            if( l_probe_distr )then
+                call save_probe_state(ncomp, eigvals, sig2_eff)
+                call flex_pca_run_stage(PCA_STAGE_PROBE, 'probe iteration')
+                allocate(cme(es(1),es(2),es(3),ncomp), cmo(es(1),es(2),es(3),ncomp), source=(0.,0.))
+                allocate(rhe(es(1),es(2),es(3),ncomp), rhoo(es(1),es(2),es(3),ncomp), source=0.)
+                call reduce_probe_parts(params, flex_pca_nparts(), cme, rhe, cmo, rhoo, &
+                    &rho_e, rho_o, gam_sum, nval, ncomp)
+                do q = 1, ncomp
+                    Yeven(q)%cmat_exp = cme(:,:,:,q); Yeven(q)%rho_exp = rhe(:,:,:,q)
+                    Yodd(q)%cmat_exp  = cmo(:,:,:,q); Yodd(q)%rho_exp  = rhoo(:,:,:,q)
+                end do
+                deallocate(cme, cmo, rhe, rhoo)
+            else
             call prepimgbatch(params, build, MAXIMGBATCHSZ)
             z = 0.d0
-            do ibatch = 1, nptcls, MAXIMGBATCHSZ
-                batchlims = [ibatch, min(nptcls, ibatch + MAXIMGBATCHSZ - 1)]
+            do ibatch = 1, npp, MAXIMGBATCHSZ
+                batchlims = [ibatch, min(npp, ibatch + MAXIMGBATCHSZ - 1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
-                call discrete_read_imgbatch(params, build, nptcls, pinds, batchlims)
+                call discrete_read_imgbatch(params, build, npp, ppinds, batchlims)
                 call prep_imgs4projected_model(params, build, batchsz, build%imgbatch(:batchsz), &
-                    &pinds(batchlims(1):batchlims(2)), fpls(:batchsz), mskrad=cov_image_mask_radius(params))
+                    &ppinds(batchlims(1):batchlims(2)), fpls(:batchsz), mskrad=cov_image_mask_radius(params))
                 do i = 1, batchsz
-                    call build%spproj_field%get_ori(pinds(batchlims(1)+i-1), orientations(i))
-                    eo(i) = build%spproj_field%get_eo(pinds(batchlims(1)+i-1))
+                    call build%spproj_field%get_ori(ppinds(batchlims(1)+i-1), orientations(i))
+                    eo(i) = build%spproj_field%get_eo(ppinds(batchlims(1)+i-1))
                 end do
                 valid(:batchsz) = .false.
                 zbatch(:,:batchsz) = 0.d0
+                dens(:,:,:batchsz) = 0.d0
                 !$omp parallel do default(shared) schedule(dynamic) proc_bind(close) &
                 !$omp& private(i,ithr,q,r,a,aa,e_mm,myv,row)
                 do i = 1, batchsz
@@ -2486,49 +3203,107 @@ contains
                             Gth(r,q,ithr) = Gth(q,r,ithr)
                         end do
                     end do
+                    ! Posterior precision A = (a^2/sig2) G + Gamma^-1. The whole normal system is already
+                    ! scaled by 1/sig2, so Cov[z|y] = A^-1 exactly -- no further sig2 factor.
                     Ath(:,:,ithr) = (aa/sig2)*Gth(:,:,ithr)
                     do q = 1, ncomp
                         Ath(q,q,ithr) = Ath(q,q,ithr) + prior(q)
                         zth(q,ithr)   = (a*bth(q,ithr) - aa*cth(q,ithr))/sig2
                     end do
+                    ! A^-1 comes off a COPY: spd_solve_dp rescales and ridges A in place.
+                    Acpth(:,:,ithr) = Ath(:,:,ithr)
+                    call spd_inv_dp(Acpth(:,:,ithr), Ainvth(:,:,ithr), ncomp)
                     call spd_solve_dp(Ath(:,:,ithr), zth(:,ithr), ncomp)
                     z(row,:)          = zth(:,ithr)
                     zbatch(:,i)       = zth(:,ithr)
+                    ! EM sufficient statistic E[z z'|y] = z z' + Cov[z|y]. BOTH the coupled M-step normal
+                    ! matrix and the Gamma update below need it. Dropping Cov underestimates Gamma, which
+                    ! tightens the prior, which shrinks z further: the bias compounds across iterations.
+                    do r = 1, ncomp
+                        do q = 1, ncomp
+                            dens(q,r,i) = zth(q,ithr)*zth(r,ithr) + Ainvth(q,r,ithr)
+                        end do
+                    end do
+                    do q = 1, ncomp
+                        gam_thr(q,ithr) = gam_thr(q,ithr) + dens(q,q,i)
+                    end do
+                    nval_thr(ithr)    = nval_thr(ithr) + 1
                     valid(i)          = .true.
                     ! residual observation r_i = y - a*(T mu) in place (transfer/ctfsq intact for backprojection)
                     fpls(i)%cmplx_plane = fpls(i)%cmplx_plane - real(a)*mean_fpl(ithr)%cmplx_plane
                 end do
                 !$omp end parallel do
-                ! M-step by halfset: Y_q += sum_i z_iq * backproject(r_i)   (shared density, batched KB)
+                ! M-step by halfset: Y_q += sum_i z_iq * backproject(r_i), and the coupled normal matrix
+                ! rho(q,r) += sum_i |CTF|^2 E[z_iq z_ir]   (batched KB)
                 do i = 1, batchsz
                     valid_e(i) = valid(i) .and. eo(i)==0
                     valid_o(i) = valid(i) .and. eo(i)==1
                 end do
                 call insert_planes_oversamp_coupled_batch_scaled(Yeven, rho_e, build%pgrpsyms, &
-                    &orientations(:batchsz), fpls(:batchsz), zbatch(:,:batchsz), dens_dummy(:,:,:batchsz), &
+                    &orientations(:batchsz), fpls(:batchsz), zbatch(:,:batchsz), dens(:,:,:batchsz), &
                     &valid_e(:batchsz), batchsz)
                 call insert_planes_oversamp_coupled_batch_scaled(Yodd, rho_o, build%pgrpsyms, &
-                    &orientations(:batchsz), fpls(:batchsz), zbatch(:,:batchsz), dens_dummy(:,:,:batchsz), &
+                    &orientations(:batchsz), fpls(:batchsz), zbatch(:,:batchsz), dens(:,:,:batchsz), &
                     &valid_o(:batchsz), batchsz)
                 if( batchlims(2)==nptcls .or. mod(batchlims(2), 5*MAXIMGBATCHSZ)==0 )then
-                    write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA PROBE PASS PARTICLES: ',batchlims(2),' / ',nptcls
+                    write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA PROBE PASS PARTICLES: ',batchlims(2),' / ',npp
                     call flush(logfhandle)
                 endif
             end do
+            ! reduce the EM Gamma accumulator BEFORE ncomp is replaced by d_new below.
+            ! Gamma travels between parts as a SUM and is divided by the REDUCED nval: dividing per
+            ! part would weight a small part equally with a large one.
+            nval = sum(nval_thr)
+            do q = 1, ncomp
+                gam_sum(q) = sum(gam_thr(q,:))
+            end do
+            if( flex_pca_is_worker() )then
+                allocate(cme(es(1),es(2),es(3),ncomp), cmo(es(1),es(2),es(3),ncomp))
+                allocate(rhe(es(1),es(2),es(3),ncomp), rhoo(es(1),es(2),es(3),ncomp))
+                do q = 1, ncomp
+                    cme(:,:,:,q) = Yeven(q)%cmat_exp; rhe(:,:,:,q)  = Yeven(q)%rho_exp
+                    cmo(:,:,:,q) = Yodd(q)%cmat_exp;  rhoo(:,:,:,q) = Yodd(q)%rho_exp
+                end do
+                call write_probe_part(flex_pca_part_fname('probe', params%part, params%numlen), &
+                    &cme, rhe, cmo, rhoo, rho_e, rho_o, gam_sum, nval, ncomp)
+                deallocate(cme, cmo, rhe, rhoo, gam_sum)
+                call cleanup_rec_buffers(build, fpls)
+                do q = 1, size(Yeven)
+                    call Yeven(q)%dealloc_rho; call Yeven(q)%kill
+                    call Yodd(q)%dealloc_rho;  call Yodd(q)%kill
+                end do
+                deallocate(Yeven, Yodd, rho_e, rho_o, prior)
+                deallocate(Gth, Ath, bth, cth, zth, basis_fpls, mean_fpl, orientations, zbatch, dens)
+                deallocate(valid, valid_e, valid_o, eo, Ainvth, Acpth, gam_thr, gam_acc, nval_thr)
+                deallocate(z, ppinds)
+                return
+            endif
+            endif
+            do q = 1, ncomp
+                gam_acc(q) = gam_sum(q) / real(max(1,nval),dp)
+            end do
+            deallocate(gam_sum)
+            ! COUPLED M-step solve. At every grid point the components share ONE k x k normal matrix
+            ! sum_i |CTF|^2 E[z_i z_i'], so the basis volumes have to be solved together. Dividing each
+            ! Y_q by the scalar density sum_i |CTF|^2 instead drops the cross-component coupling and
+            ! degrades the update to plain subspace iteration. Solve per halfset, then hand a unit
+            ! density to compress_exp and skip sampl_dens_correct -- the divide has already happened.
+            call solve_coupled_basis_exp(Yeven, rho_e, ncomp)
+            call solve_coupled_basis_exp(Yodd,  rho_o, ncomp)
             ! finalize even/odd Y_q, half-set FSC Wiener-merge -> clean band-limited masked basis volume.
             allocate(realvols(ncomp))
             filtsz = max(1, fdim(params%box_crop) - 1)
             allocate(filt(filtsz), corrs(filtsz))
             do q = 1, ncomp
                 ! even half -> band-limited real image (UNmasked, for an unbiased FSC)
-                Yeven(q)%rho_exp = rho_e(1,:,:,:)
-                call Yeven(q)%compress_exp; call Yeven(q)%sampl_dens_correct; call Yeven(q)%ifft
+                Yeven(q)%rho_exp = 1.0
+                call Yeven(q)%compress_exp; call Yeven(q)%ifft
                 call Yeven(q)%div(real(params%box))
                 call realvols(q)%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call Yeven(q)%get_rmat_ptr(rmatp); call realvols(q)%set_rmat(rmatp, .false.)
                 ! odd half
-                Yodd(q)%rho_exp = rho_o(1,:,:,:)
-                call Yodd(q)%compress_exp; call Yodd(q)%sampl_dens_correct; call Yodd(q)%ifft
+                Yodd(q)%rho_exp = 1.0
+                call Yodd(q)%compress_exp; call Yodd(q)%ifft
                 call Yodd(q)%div(real(params%box))
                 call img_o%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call Yodd(q)%get_rmat_ptr(rmatp); call img_o%set_rmat(rmatp, .false.)
@@ -2550,6 +3325,33 @@ contains
             deallocate(filt, corrs)
             ! orthonormalize the probe volumes -> refined basis
             call orthonormalize_representatives(params, build, realvols, ncomp, utilde, utilde_real, d_new)
+            ! ---- CONVERGENCE: principal angles between successive bases ----
+            ! This is what n_probe_iters should have been. The measured ladder on Ribosembly saturates
+            ! at 2 (25-NN 0.7712 -> 0.7715 from 2 to 3, ceiling pinned at 14/16) while the max-variance
+            ! that gets logged keeps oscillating 1.96e4 / 6.71e3 / 1.40e4 -- so the basis had settled
+            ! while the quantity being watched had not, and the iteration count was a tuned constant
+            ! standing in for a convergence test. Both bases come out of orthonormalize_representatives
+            ! ORTHONORMAL, so the singular values of their cross-Gram really are principal-angle
+            ! cosines here; align_basis_to_reference only per-vector normalises, which is a no-op on an
+            ! already-orthonormal set (it is NOT safe on arbitrary bases -- see its own caveat).
+            l_converged = .false.
+            if( allocated(prev_real) )then
+                call align_basis_to_reference(prev_real, size(prev_real), utilde_real, d_new, Mconv, sconv)
+                cos_mean = sum(sconv) / real(max(1,size(sconv)),dp)
+                write(logfhandle,'(A,I0,A,F9.6)') '>>> FLEX_PCA PROBE ITER ',it, &
+                    &'  mean principal-angle cosine vs previous basis=',cos_mean
+                call flush(logfhandle)
+                if( cos_mean >= COV_PROBE_CONV ) l_converged = .true.
+                deallocate(Mconv, sconv)
+                do q = 1, size(prev_real)
+                    call prev_real(q)%kill
+                end do
+                deallocate(prev_real)
+            endif
+            allocate(prev_real(d_new))
+            do q = 1, d_new
+                call prev_real(q)%copy(utilde_real(q))
+            end do
             ! replace basis_recs with the refined (projection-ready) basis; eigvals = latent variances
             do q = 1, size(basis_recs)
                 call basis_recs(q)%dealloc_rho; call basis_recs(q)%kill
@@ -2562,13 +3364,27 @@ contains
                 call basis_recs(q)%set_rmat(utilde_real(q)%get_rmat(), .false.)   ! NOT add(): see above
                 call basis_recs(q)%fft
                 call basis_recs(q)%expand_exp
-                mu_q = sum(z(:,min(q,ncomp))) / real(nptcls,dp)
-                sd_q = sum((z(:,min(q,ncomp))-mu_q)**2) / real(max(1,nptcls-1),dp)
-                eigvals(q) = max(sd_q, DTINY)
+                ! EM Gamma update: the POSTERIOR second moment (1/n) sum_i (z_iq^2 + [A_i^-1]_qq), not the
+                ! sample variance of the MAP point estimates. MAP latents are shrunk toward zero by the
+                ! prior, so the point-estimate variance underestimates Gamma, which sets a tighter prior
+                ! next iteration, which shrinks them further -- a self-reinforcing collapse.
+                eigvals(q) = max(gam_acc(min(q,ncomp)), DTINY)
                 ! overwrite the eigenvolume MRC with the refined basis vector
                 fname = 'flex_pca_pc'//int2str_pad(q,3)//MRC_EXT
                 call utilde_real(q)%write(fname, del_if_exists=.true.); call fname%kill
             end do
+            ! posterior_frac is the share of Gamma that the old point-estimate update was throwing away;
+            ! mean(z) should sit near zero -- drift there means the consensus mean mu is off.
+            write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA PROBE EM Gamma update (n=',nval,' valid particles):'
+            do q = 1, min(ncomp,10)
+                mu_q = sum(z(:,q)) / real(max(1,npp),dp)
+                sd_q = sum(z(:,q)**2) / real(max(1,nval),dp)
+                write(logfhandle,'(A,I3,A,ES11.3,A,ES11.3,A,F7.3,A,ES10.2)') '>>>   z',q, &
+                    &'  <z^2>=',sd_q,'  Gamma=',gam_acc(q), &
+                    &'  posterior_frac=',real(1.d0 - sd_q/max(gam_acc(q),DTINY)), &
+                    &'  mean(z)=',mu_q
+            end do
+            call flush(logfhandle)
             ncomp = d_new
             write(logfhandle,'(A,I0,A,ES12.4,A,ES12.4,A,F8.1)') '>>> FLEX_PCA PROBE ITER ',it, &
                 &' refined dim=',real(ncomp),' max var=',maxval(eigvals),' seconds=',toc(t_it)
@@ -2584,9 +3400,22 @@ contains
             do q = 1, size(utilde); call utilde(q)%dealloc_rho; call utilde(q)%kill; call utilde_real(q)%kill; end do
             do q = 1, size(realvols); call realvols(q)%kill; end do
             deallocate(Yeven, Yodd, utilde, utilde_real, realvols, rho_e, rho_o, prior)
-            deallocate(Gth, Ath, bth, cth, zth, basis_fpls, mean_fpl, orientations, zbatch, dens_dummy, valid, valid_e, valid_o, eo)
+            deallocate(Gth, Ath, bth, cth, zth, basis_fpls, mean_fpl, orientations, zbatch, dens, valid, valid_e, valid_o, eo)
+            deallocate(Ainvth, Acpth, gam_thr, gam_acc, nval_thr)
+            if( l_converged )then
+                write(logfhandle,'(A,I0,A,F6.4,A)') '>>> FLEX_PCA PROBE converged after ',it, &
+                    &' iterations (principal-angle cosine >= ',COV_PROBE_CONV,'); stopping early'
+                call flush(logfhandle)
+                exit
+            endif
         end do
-        deallocate(z)
+        if( allocated(prev_real) )then
+            do q = 1, size(prev_real)
+                call prev_real(q)%kill
+            end do
+            deallocate(prev_real)
+        endif
+        deallocate(z, ppinds)
     end subroutine probe_subspace_iteration
 
     !>  z' M z for symmetric M.
@@ -2603,10 +3432,10 @@ contains
         end do
     end function quad_form
 
-    !> In-place symmetric positive-definite solve A x = b (b overwritten by x) via Cholesky the
-    !! factorization then fails on rounding, the fixed 1e-8 ridge swamps the matrix by ~1e8, and the solve
-    !! returns the b=0 fallback for essentially every particle -- which collapsed 99% of particles onto one
-    !! latent and put 99.6% of them into a single state.
+    !> In-place symmetric positive-definite solve A x = b (b overwritten by x) via Cholesky. A is first
+    !! scaled by its mean diagonal, so the retry ridge is RELATIVE: an absolute ridge either swamps a
+    !! small-diagonal system or fails to rescue a large one, and the b=0 fallback then collapses the
+    !! latents of essentially every particle.
     subroutine spd_solve_dp( A, b, n )
         integer,  intent(in)    :: n
         real(dp), intent(inout) :: A(n,n), b(n)
@@ -2649,15 +3478,106 @@ contains
         b = 0.d0
     end subroutine spd_solve_dp
 
+    !>  Inverse of a symmetric positive-definite matrix by Cholesky, using the same diagonal rescaling
+    !!  and ridge-escalation policy as spd_solve_dp so a matrix that solves also inverts. A is DESTROYED.
+    !!  A rank-deficient input is rescued by the ridge exactly as in spd_solve_dp, so the result can be
+    !!  large; only a matrix that all three attempts fail on returns zeros. The embedding never hits that
+    !!  path: A = (a^2/sig2) G + diag(prior) with G PSD, so lambda_min(A) >= min(prior) and every
+    !!  [A^-1]_qq is bounded above by max(eigvals) -- a dead particle reproduces the prior, as it should.
+    subroutine spd_inv_dp( A, Ainv, n )
+        integer,  intent(in)    :: n
+        real(dp), intent(inout) :: A(n,n)
+        real(dp), intent(out)   :: Ainv(n,n)
+        real(dp) :: L(n,n), Linv(n,n), s, ridge, dscale
+        integer  :: i, j, attempt
+        Ainv   = 0.d0
+        dscale = 0.d0
+        do i = 1, n
+            dscale = dscale + abs(A(i,i))
+        end do
+        dscale = dscale / real(n,dp)
+        if( dscale > 0.d0 ) A = A / dscale
+        do attempt = 1, 3
+            L = 0.d0
+            do j = 1, n
+                s = A(j,j) - sum(L(j,1:j-1)**2)
+                if( s <= 0.d0 ) exit
+                L(j,j) = sqrt(s)
+                do i = j+1, n
+                    L(i,j) = (A(i,j) - sum(L(i,1:j-1)*L(j,1:j-1))) / L(j,j)
+                end do
+            end do
+            if( j > n )then
+                ! Linv = L^-1 by forward substitution on the identity, column by column
+                Linv = 0.d0
+                do j = 1, n
+                    Linv(j,j) = 1.d0 / L(j,j)
+                    do i = j+1, n
+                        Linv(i,j) = -sum(L(i,j:i-1)*Linv(j:i-1,j)) / L(i,i)
+                    end do
+                end do
+                ! A = L L' => A^-1 = (L^-1)' (L^-1), lower-triangular so the sum starts at max(i,j)
+                do i = 1, n
+                    do j = 1, i
+                        Ainv(i,j) = sum(Linv(i:n,i)*Linv(i:n,j))
+                        Ainv(j,i) = Ainv(i,j)
+                    end do
+                end do
+                ! undo the rescaling: A_orig = dscale*A_scaled, so A_orig^-1 = A_scaled^-1 / dscale
+                if( dscale > 0.d0 ) Ainv = Ainv / dscale
+                return
+            endif
+            ridge = 1.d-8 * (abs(A(1,1))+1.d0) * (10.d0**(attempt-1))
+            do i = 1, n
+                A(i,i) = A(i,i) + ridge
+            end do
+        end do
+    end subroutine spd_inv_dp
+
     !> Complex Hermitian-half plane inner product over the native k<=0 half (the planes are stored
-    !! half-plane, k in [kmin,0]). The properness fix (2.1) is applied at the Sbb accumulation (use
-    !! Re(b_q)Re(b_r), not |b|^2) together with the 0.5*sig2 noise scaling in reduced_covariance_solve,
-    !! since E[Re(b_q)Re(b_r)]_noise = 0.5*sig2*G.
+    !! half-plane, k in [kmin,0]). Properness is handled by the caller: reduced_covariance_solve
+    !! accumulates Re(b_q)Re(b_r), not |b|^2, and pairs it with the 0.5*sig2 noise scaling, since
+    !! E[Re(b_q)Re(b_r)]_noise = 0.5*sig2*G. The optional half selects a checkerboard sub-half.
+    !> The (h,k) sample sequence cov_herm_inner visits, in exactly its order, for a plane pair that
+    !! shares nyq and bounds with `ref` and is called without the `half` selector. Returns nsamp = -1
+    !! if the sequence does not fit `slist`, in which case the caller must use cov_herm_inner directly.
+    subroutine cov_herm_sample_list( ref, slist, nsamp )
+        type(fplane_type), intent(in)  :: ref
+        integer,           intent(out) :: slist(:,:)
+        integer,           intent(out) :: nsamp
+        integer :: h, k, hmin, hmax, kmin, kmax, nyq_eff, pf, h_hi, nyq_disk, k_sq
+        pf      = OSMPL_PAD_FAC
+        nyq_eff = ref%nyq
+        if( nyq_eff <= 0 ) nyq_eff = ubound(ref%cmplx_plane,1)
+        hmin = max(pf*ceil_div(lbound(ref%cmplx_plane,1),pf), pf*ceil_div(-nyq_eff,pf))
+        hmax = min(pf*floor_div(ubound(ref%cmplx_plane,1),pf), pf*floor_div(nyq_eff,pf))
+        kmin = max(pf*ceil_div(lbound(ref%cmplx_plane,2),pf), pf*ceil_div(-nyq_eff,pf))
+        kmax = min(0, pf*floor_div(nyq_eff,pf))
+        nyq_disk = nyq_eff * (nyq_eff + 1)
+        nsamp    = 0
+        do k = kmin, kmax, pf
+            h_hi = hmax
+            if( k == 0 ) h_hi = 0
+            k_sq = k*k
+            if( k_sq > nyq_disk ) cycle
+            do h = hmin, h_hi, pf
+                if( h*h + k_sq > nyq_disk ) cycle
+                nsamp = nsamp + 1
+                if( nsamp > size(slist,2) )then
+                    nsamp = -1
+                    return
+                endif
+                slist(1,nsamp) = h
+                slist(2,nsamp) = k
+            end do
+        end do
+    end subroutine cov_herm_sample_list
+
     function cov_herm_inner( lhs, rhs, half ) result( val )
         type(fplane_type), intent(in) :: lhs, rhs
         integer, optional, intent(in) :: half
         complex(dp) :: val, acc
-        integer :: h, k, hmin, hmax, kmin, kmax, nyq_eff, pf, h_hi, hlf, par
+        integer :: h, k, hmin, hmax, kmin, kmax, nyq_eff, pf, h_hi, hlf, par, nyq_disk, k_sq
         hlf = 0
         if( present(half) ) hlf = half
         acc = cmplx(0.d0,0.d0,dp)
@@ -2669,12 +3589,19 @@ contains
         hmax = min(pf*floor_div(ubound(lhs%cmplx_plane,1),pf), pf*floor_div(nyq_eff,pf))
         kmin = max(pf*ceil_div(lbound(lhs%cmplx_plane,2),pf), pf*ceil_div(-nyq_eff,pf))
         kmax = min(0, pf*floor_div(nyq_eff,pf))
+        ! Integer form of the shell test below. For integer x >= 0 and integer n >= 0,
+        ! nint(sqrt(x)) > n  <=>  sqrt(x) >= n+0.5  <=>  x >= n^2+n+0.25  <=>  x > n*(n+1),
+        ! so the disc gate selects exactly the same samples without a square root and a round per
+        ! element. This routine is called d_tilde*(d_tilde+1)/2 times per particle in the reduced solve.
+        nyq_disk = nyq_eff * (nyq_eff + 1)
         do k = kmin, kmax, pf
-            ! 2.6:
+            ! the k=0 line is its own Friedel mate, so only h<=0 there, or it is counted twice
             h_hi = hmax
             if( k == 0 ) h_hi = 0
+            k_sq = k*k
+            if( k_sq > nyq_disk ) cycle
             do h = hmin, h_hi, pf
-                if( nint(sqrt(real(h*h + k*k))) > nyq_eff ) cycle
+                if( h*h + k_sq > nyq_disk ) cycle
                 if( hlf /= 0 )then
                     par = modulo((h/pf) + (k/pf), 2) + 1
                     if( par /= hlf ) cycle
@@ -2698,12 +3625,13 @@ contains
         particle_contrast = real(max(0.1d0, min(5.0d0, emy / max(emm, DTINY))))
     end function particle_contrast
 
-    !> DIAGNOSTIC: The reduced-solve debias assumes E[Re(b_q)Re(b_r)]_noise = 0.5*sig2*G with b,G from
-    !! cov_herm_inner, so the sig2 fed to it must be the noise variance in THIS index convention.
+    !> Whitened self-power of a plane in cov_herm_inner's index convention. The reduced-solve debias
+    !! assumes E[Re(b_q)Re(b_r)]_noise = 0.5*sig2*G with b and G from cov_herm_inner, so the sig2 fed to
+    !! it has to be the noise variance measured in THAT convention; this is what the log compares against.
     subroutine cov_herm_selfpower( fpl, pw, cnt )
         type(fplane_type), intent(in)  :: fpl
         real(dp),          intent(out) :: pw, cnt
-        integer     :: h, k, hmin, hmax, kmin, kmax, nyq_eff, pf, h_hi
+        integer     :: h, k, hmin, hmax, kmin, kmax, nyq_eff, pf, h_hi, nyq_disk, k_sq
         complex(dp) :: c
         pf  = OSMPL_PAD_FAC
         pw  = 0.d0; cnt = 0.d0
@@ -2713,11 +3641,14 @@ contains
         hmax = min(pf*floor_div(ubound(fpl%cmplx_plane,1),pf), pf*floor_div(nyq_eff,pf))
         kmin = max(pf*ceil_div(lbound(fpl%cmplx_plane,2),pf), pf*ceil_div(-nyq_eff,pf))
         kmax = min(0, pf*floor_div(nyq_eff,pf))
+        nyq_disk = nyq_eff * (nyq_eff + 1)   ! see cov_herm_inner for why this replaces nint(sqrt(.))
         do k = kmin, kmax, pf
             h_hi = hmax
             if( k == 0 ) h_hi = 0
+            k_sq = k*k
+            if( k_sq > nyq_disk ) cycle
             do h = hmin, h_hi, pf
-                if( nint(sqrt(real(h*h + k*k))) > nyq_eff ) cycle
+                if( h*h + k_sq > nyq_disk ) cycle
                 c  = cmplx(fpl%cmplx_plane(h,k), kind=dp)
                 pw = pw + real(c*conjg(c), dp)
                 cnt= cnt + 1.d0
@@ -2818,7 +3749,8 @@ contains
 
     ! ============================ SELF-CONTAINED TESTS ============================ Synthetic inputs only.
 
-    !> svec packing is an ISOMETRY:
+    !> svec packing must be an ISOMETRY: <X,Y>_Frobenius == <svec(X),svec(Y)>, and the index map a
+    !! bijection onto 1..NP. The packed solve returns a wrong Sigma if either fails.
     subroutine test_flex_pca_svec_isometry()
         integer,  parameter :: D = 5, NP = D*(D+1)/2
         real(dp) :: X(D,D), Y(D,D), xs(NP), ys(NP), fro, pack_ip
@@ -2857,10 +3789,13 @@ contains
     end subroutine test_flex_pca_svec_isometry
 
     !> End-to-end recovery through the packed operator and CG.
+    !! D >= 4 matters: with fewer columns no orbit has four distinct indices, so the generic
+    !! three-cycle of rearrange_packed_selfsum would never be exercised.
     subroutine test_flex_pca_packed_solve()
-        integer,  parameter :: D = 3, NPK = D*(D+1)/2, NG = 3
+        integer,  parameter :: D = 5, NPK = D*(D+1)/2, NG = 3
         real(dp) :: G(D,D,NG), Sig(D,D), Dmat(D,D), Ms(NPK,NPK), rhs(NPK), x(NPK), Sig_est(D,D)
         real(dp) :: sv(NPK,NG), tmp(D,D), err, relres
+        real(dp) :: Aref(NPK,NPK), ei(NPK), col(NPK), err_rea
         integer  :: i, j, q, r, ig, k, l, iters
         write(logfhandle,'(A)') '>>> TEST flex_pca packed CG solve against a known Sigma'
         ! symmetric positive definite G_g = I*(g+1) + small symmetric perturbation
@@ -2913,7 +3848,18 @@ contains
                 rhs(svec_idx(q,r,D)) = merge(1.d0, sqrt(2.d0), q == r)*Dmat(q,r)
             end do
         end do
-        call cg_solve_packed(Ms, NPK, D, rhs, 0.d0, COV_CG_MAXIT, COV_CG_TOL, x, iters, relres)
+        ! the rearrangement must reproduce apply_packed_A entry for entry -- build the reference
+        ! operator column by column from the gathered routine, then rearrange in place and compare
+        do l = 1, NPK
+            ei = 0.d0; ei(l) = 1.d0
+            call apply_packed_A(Ms, NPK, D, ei, col)
+            Aref(:,l) = col
+        end do
+        call rearrange_packed_selfsum(Ms, NPK, D)
+        err_rea = maxval(abs(Ms - Aref))/max(maxval(abs(Aref)), DTINY)
+        write(logfhandle,'(A,ES10.3)') '>>>   rearranged vs gathered operator, max relative error=',err_rea
+        if( err_rea > 1.d-12 ) THROW_HARD('packed rearrangement does not reproduce the packed operator')
+        call cg_solve_packed(Ms, NPK, rhs, 0.d0, COV_CG_MAXIT, COV_CG_TOL, x, iters, relres)
         if( relres > 1.d-8 ) THROW_HARD('packed CG did not converge on a well-conditioned test system')
         do r = 1, D
             do q = 1, r

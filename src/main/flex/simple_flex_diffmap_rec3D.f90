@@ -11,6 +11,9 @@ use simple_parameters,             only: parameters
 use simple_flex_projected_latent_model, only: update_basis_from_latents, write_mstep_stats_part_file, &
     &update_basis_from_mstep_stats_part_files, cleanup_planes, &
     &prep_imgs4projected_model, solve_coupled_basis_exp
+use simple_flex_pca_distr, only: flex_pca_is_master, flex_pca_is_worker, flex_pca_nparts, &
+    &flex_pca_run_stage, PCA_STAGE_STATES
+use simple_flex_pca_parts, only: write_state_weights_round
 use simple_flex_reconstructor_latent_ops, only: project_fplane_mean
 use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_coupled_batch_scaled
 use simple_flex_reconstructor_latent_ops, only: insert_plane_oversamp_multi_scaled
@@ -228,8 +231,12 @@ contains
     !! Medoid-selected manifold descriptors are converted to soft particle
     !! weights upstream; this routine reconstructs each state from weighted
     !! contributions of all particles rather than from a global residual basis.
+    !> With outvol_even/outvol_odd present this performs the COMBINED, EVEN and ODD reconstructions in
+    !! ONE pass instead of three: plane insertion is linear in the weights and every nonlinear
+    !! finalisation runs after compress_exp, so the combined accumulator is exactly even+odd. Each
+    !! particle is inserted once, into its own halfset. Distributed, it collapses three qsys rounds into one.
     subroutine reconstruct_flex_diffmap_weighted_states( params, build, pinds, state_weights, nstates, fsc_projfile, &
-        &floor_rho )
+        &floor_rho, outvol_even, outvol_odd, split_eo )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: pinds(:), nstates
@@ -239,7 +246,15 @@ contains
         ! callers keep their previous behaviour exactly; flex_pca opts in. See the note at the
         ! floor call below for why the kernel-weighted path needs it.
         logical,      optional, intent(in) :: floor_rho
-        logical :: l_floor_rho
+        type(string), optional, intent(in) :: outvol_even, outvol_odd
+        !! Worker-side entry point for the halfset split: the master decides by supplying the two output
+        !! names, but a worker has none (it writes part files), so it is told through the round-weights
+        !! table. Both routes must set l_fuse identically or master and workers disagree on the halves.
+        logical,      optional, intent(in) :: split_eo
+        logical :: l_floor_rho, l_reduced, l_fuse
+        type(reconstructor), allocatable :: recs_o(:), recs_c(:), cur(:)
+        type(string) :: outvol_bak
+        integer :: eo_i, iview, nview
         type(reconstructor), allocatable :: state_recs(:)
         type(fplane_type), allocatable :: fpls(:)
         type(image) :: gridcorr_img, state_img
@@ -252,6 +267,8 @@ contains
         real    :: smpd_rec, smpd_crop_bak
         l_floor_rho = .false.
         if( present(floor_rho) ) l_floor_rho = floor_rho
+        l_fuse = present(outvol_even) .and. present(outvol_odd)
+        if( present(split_eo) ) l_fuse = l_fuse .or. split_eo
         if( size(pinds)<1 .or. nstates<1 ) THROW_HARD('invalid flex weighted state reconstruction dimensions')
         if( any(shape(state_weights)/=[size(pinds),nstates]) ) THROW_HARD('flex weighted state table mismatch')
         box_rec  = flex_rec_box(params)
@@ -266,6 +283,12 @@ contains
         do state=1,nstates
             call init_state_reconstructor(params,build,state_recs(state))
         end do
+        if( l_fuse )then
+            allocate(recs_o(nstates))
+            do state=1,nstates
+                call init_state_reconstructor(params,build,recs_o(state))
+            end do
+        endif
         call init_rec(params,build,MAXIMGBATCHSZ,fpls)
         call prepimgbatch(params,build,MAXIMGBATCHSZ)
         ! prep_imgs4rec builds the Fourier planes at params%smpd_crop, which fixes the physical
@@ -276,6 +299,49 @@ contains
         ! only consumer of smpd_crop in between: init_state_reconstructor sizes from
         ! flex_rec_box/flex_rec_smpd and init_rec uses boxpd/smpd. A no-op by default, since
         ! box_rec defaults to box_crop and therefore smpd_rec == smpd_crop.
+        ! DISTRIBUTED: the master ships this round's weight table, fans the particle range out and sums
+        ! the compressed partial reconstructions. Every nonlinear finalisation below -- the density
+        ! floor, sampl_dens_correct, zero_background, mask3D_soft -- then runs ONCE on the global sums,
+        ! which is what makes the reduction equivalent to the in-process accumulation.
+        l_reduced = .false.
+        if( flex_pca_is_master() )then
+            call write_state_weights_round(pinds, state_weights, size(pinds), nstates, l_fuse)
+            call flex_pca_run_stage(PCA_STAGE_STATES, 'state reconstruction')
+            block
+                type(reconstructor) :: rec_read
+                type(string) :: pf
+                integer :: ipart
+                integer(timer_int_kind) :: t_red
+                t_red = tic()
+                call init_state_reconstructor(params,build,rec_read)
+                do ipart = 1, flex_pca_nparts()
+                    do state = 1, nstates
+                        ! on a split round each part carries BOTH halfsets; reduce each into its own
+                        ! accumulator so combined = even + odd below is a sum of two populated halves
+                        do eo_i = 0, merge(1, 0, l_fuse)
+                            pf = flex_state_part_fbody(params, ipart, state, eo_i)
+                            if( .not. file_exists(pf//MRC_EXT) ) THROW_HARD('missing states part: '//pf%to_char())
+                            call rec_read%read(pf//MRC_EXT)
+                            call rec_read%read_rho(string('rho_')//pf//MRC_EXT)
+                            if( eo_i == 1 )then
+                                call recs_o(state)%sum_reduce(rec_read)
+                            else
+                                call state_recs(state)%sum_reduce(rec_read)
+                            endif
+                            call del_file(pf//MRC_EXT)
+                            call del_file(string('rho_')//pf//MRC_EXT)
+                            call pf%kill
+                        end do
+                    end do
+                end do
+                call rec_read%dealloc_rho; call rec_read%kill
+                write(logfhandle,'(A,I0,A,F8.1)') '>>> FLEX_PCA reduced states parts=', &
+                    &flex_pca_nparts(),' seconds=',toc(t_red)
+                call flush(logfhandle)
+            end block
+            l_reduced = .true.
+            goto 300
+        endif
         smpd_crop_bak    = params%smpd_crop
         params%smpd_crop = smpd_rec
         do ibatch=1,size(pinds),MAXIMGBATCHSZ
@@ -294,55 +360,116 @@ contains
                 call build%spproj_field%get_ori(iptcl,orientation)
                 if( orientation%isstatezero() ) cycle
                 scales=real(state_weights(batchlims(1)+i-1,:),dp)
-                call insert_plane_oversamp_multi_scaled(state_recs,build%pgrpsyms,orientation,fpls(i),scales,scales)
+                if( l_fuse )then
+                    ! one insertion per particle, into the halfset it belongs to; the union is the
+                    ! combined map and each half is its own deliverable
+                    eo_i = build%spproj_field%get_eo(iptcl)
+                    if( eo_i == 1 )then
+                        call insert_plane_oversamp_multi_scaled(recs_o,build%pgrpsyms,orientation,fpls(i),scales,scales)
+                    else
+                        call insert_plane_oversamp_multi_scaled(state_recs,build%pgrpsyms,orientation,fpls(i),scales,scales)
+                    endif
+                else
+                    call insert_plane_oversamp_multi_scaled(state_recs,build%pgrpsyms,orientation,fpls(i),scales,scales)
+                endif
             end do
         end do
         call orientation%kill
         params%smpd_crop = smpd_crop_bak
         call cleanup_rec_buffers(build,fpls)
+        if( flex_pca_is_worker() )then
+            block
+                type(string) :: pf
+                do state=1,nstates
+                    call state_recs(state)%compress_exp
+                    pf = flex_state_part_fbody(params, params%part, state, 0)
+                    call state_recs(state)%write(pf//MRC_EXT, del_if_exists=.true.)
+                    call state_recs(state)%write_rho(string('rho_')//pf//MRC_EXT)
+                    call pf%kill
+                    if( l_fuse )then
+                        call recs_o(state)%compress_exp
+                        pf = flex_state_part_fbody(params, params%part, state, 1)
+                        call recs_o(state)%write(pf//MRC_EXT, del_if_exists=.true.)
+                        call recs_o(state)%write_rho(string('rho_')//pf//MRC_EXT)
+                        call pf%kill
+                    endif
+                end do
+            end block
+            do state=1,nstates
+                call state_recs(state)%dealloc_rho; call state_recs(state)%kill
+                if( l_fuse )then
+                    call recs_o(state)%dealloc_rho; call recs_o(state)%kill
+                endif
+            end do
+            deallocate(state_recs,scales,lowpass_filters,has_lowpass_filter,lowpass_source_state)
+            if( l_fuse ) deallocate(recs_o)
+            return
+        endif
+300     continue
         gridcorr_img=prep3D_inv_instrfun4mul([box_rec,box_rec,box_rec], &
             &OSMPL_PAD_FAC*[box_rec,box_rec,box_rec],smpd_rec)
+        outvol_bak = params%outvol
+        nview = 1
+        if( l_fuse )then
+            ! Build the combined accumulator BEFORE any finalisation, because finalisation is
+            ! destructive (compress_exp, ifft, masking). combined = even + odd exactly.
+            do state=1,nstates
+                if( .not. l_reduced )then
+                    call state_recs(state)%compress_exp
+                    call recs_o(state)%compress_exp
+                endif
+            end do
+            allocate(recs_c(nstates))
+            do state=1,nstates
+                call init_state_reconstructor(params,build,recs_c(state))
+                call recs_c(state)%sum_reduce(state_recs(state))
+                call recs_c(state)%sum_reduce(recs_o(state))
+            end do
+            l_reduced = .true.
+            nview     = 3
+        endif
+        do iview = 1, nview
+            if( l_fuse )then
+                select case(iview)
+                    case(1); call move_alloc(recs_c,     cur); params%outvol = outvol_bak
+                    case(2); call move_alloc(state_recs, cur); params%outvol = outvol_even
+                    case(3); call move_alloc(recs_o,     cur); params%outvol = outvol_odd
+                end select
+            else
+                call move_alloc(state_recs, cur)
+            endif
         do state=1,nstates
-            call state_recs(state)%compress_exp
+            if( .not. l_reduced ) call cur(state)%compress_exp
             ! Kernel weights live in [0,1] with most near zero, so rho is small and highly
             ! variable here and an unfloored divide amplifies noise wherever occupancy is low.
             ! Opt-in: the platform reconstructor is unchanged, and so is the diffusion-map path.
-            if( l_floor_rho ) call state_recs(state)%floor_rho_shellwise
-            call state_recs(state)%sampl_dens_correct
-            call state_recs(state)%ifft
-            call state_recs(state)%div(real(params%box))
-            call state_recs(state)%mul(gridcorr_img)
-            call state_img%copy(state_recs(state))
+            if( l_floor_rho ) call cur(state)%floor_rho_shellwise
+            call cur(state)%sampl_dens_correct
+            call cur(state)%ifft
+            call cur(state)%div(real(params%box))
+            call cur(state)%mul(gridcorr_img)
+            call state_img%copy(cur(state))
             if( has_lowpass_filter(state) )then
                 call state_img%apply_filter(lowpass_filters(:,state))
                 write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE applied project-FSC low-pass filter to state=',state, &
                     &' using_source_state=',lowpass_source_state(state)
             endif
-            ! Background removal + soft spherical mask, matching the reference's finalisation
-            ! (heterogeneity_volume.py builds its estimates with use_spherical_mask=True, which
-            ! routes to relion_functions.post_process_from_filter_v2 -> soft_mask_outside_map).
-            ! Two distinct problems are fixed here, and both are why the delivered states looked
-            ! like one smeared map:
-            !  (1) DC / global level. Each state carries a different total kernel weight, and the
-            !      density correction does not equalise the resulting baseline. Measured on run
-            !      80: 59.6 % of the ENTIRE state-to-state difference power sat in the DC term
-            !      alone and 91.5 % at spatial scales larger than the particle, so the visible
-            !      difference between two states was dominated by a constant offset rather than
-            !      by the conformational change. zero_background estimates the level from the box
-            !      faces (pure solvent) and subtracts it, which is shape-preserving.
-            !  (2) Solvent noise. Only 12.7 % of the difference power lay on the molecule
-            !      (the reference: 97.2 %); the rest was unmasked solvent, which dominates any visual
-            !      or correlation comparison of the states.
-            ! The radius convention is the platform's own (reconstructor_eo line 103).
+            ! Background removal + soft spherical mask. Without both the states look like one smeared map:
+            ! each carries a different total kernel weight, so the difference between two states is
+            ! dominated by a constant baseline offset rather than by the conformational change
+            ! (zero_background reads the level off the box faces, shape-preserving), and solvent noise
+            ! dominates any unmasked comparison. Radius convention is the platform's (see reconstructor_eo).
             call state_img%zero_background
             call state_img%mask3D_soft(real(box_rec/2) - COSMSKHALFWIDTH - 1., backgr=0.)
             call write_state(params,state_img,state)
             call state_img%kill
-            call state_recs(state)%dealloc_rho
-            call state_recs(state)%kill
+            call cur(state)%dealloc_rho
+            call cur(state)%kill
         end do
+        end do
+        params%outvol = outvol_bak
         call gridcorr_img%kill
-        deallocate(state_recs,scales,lowpass_filters,has_lowpass_filter,lowpass_source_state)
+        deallocate(scales,lowpass_filters,has_lowpass_filter,lowpass_source_state)
     end subroutine reconstruct_flex_diffmap_weighted_states
 
     !> Local-linear diffusion-map pre-image reconstruction.  For each medoid
@@ -474,6 +601,18 @@ contains
         deallocate(zc,gvec,orientations,valid,data_scales,density_scales)
         deallocate(lowpass_filters,has_lowpass_filter,lowpass_source_state)
     end subroutine reconstruct_flex_diffmap_local_linear_states
+
+    !> Part-file body for one worker's partial reconstruction of one state. eo selects the halfset
+    !! accumulator on a split round: 0 is the even/single accumulator, 1 the odd one. A split round
+    !! writes both per state, so the two must not collide on disk.
+    function flex_state_part_fbody( params, part, state, eo ) result( fbody )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: part, state, eo
+        type(string) :: fbody
+        fbody = string('flex_pca_statepart')//int2str_pad(part,max(1,params%numlen))// &
+            &'_'//int2str_pad(state,2)
+        if( eo == 1 ) fbody = fbody//'_o'
+    end function flex_state_part_fbody
 
     subroutine prepare_project_fsc_lowpass_filters( params, build, nstates, lowpass_filters, has_filter, source_state, &
         &fsc_projfile )
@@ -664,13 +803,11 @@ contains
         call basis_rec%reset_exp
     end subroutine init_basis_reconstructor
 
-    !> Box/sampling of the DELIVERED state maps.  Decoupled from box_crop because the
-    !! covariance and the embedding are low-frequency objects -- the measured column FSC
-    !! on IgG-RL dies at ~27 A and the reference does not even estimate past 48 A -- whereas the
-    !! state maps are ordinary backprojections of the same particles and carry signal well
-    !! beyond the covariance Nyquist.  With box_rec==box_crop this is exactly the previous
-    !! behaviour.  The embedding never sees the extra band, so the added shells cannot be
-    !! selected on themselves and this cannot manufacture structure from noise.
+    !> Box/sampling of the DELIVERED state maps.  Decoupled from box_crop because the covariance and
+    !! the embedding are low-frequency objects whose column FSC dies well short of Nyquist, whereas
+    !! the state maps are ordinary backprojections of the same particles and carry signal beyond it.
+    !! With box_rec==box_crop this is a no-op.  The embedding never sees the extra band, so the added
+    !! shells cannot be selected on themselves and this cannot manufacture structure from noise.
     pure integer function flex_rec_box( params ) result( box_rec )
         class(parameters), intent(in) :: params
         box_rec = params%box_crop

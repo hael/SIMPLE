@@ -40,11 +40,20 @@ contains
 
     subroutine exec_flex_pca( self, cline )
         use simple_flex_pca_model, only: run_flex_pca
+        use simple_flex_pca_distr, only: flex_pca_distr_init, flex_pca_distr_kill
         class(commander_flex_pca), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        if( .not.cline%defined('mkdir') )       call cline%set('mkdir','yes')
+        ! a worker runs in the master's directory and must not descend into one of its own.
+        ! NOT merge('no ','yes',..): merge pads the shorter branch, yielding 'no ' with a trailing blank.
+        if( .not.cline%defined('mkdir') )then
+            if( cline%defined('part') )then
+                call cline%set('mkdir','no')
+            else
+                call cline%set('mkdir','yes')
+            endif
+        endif
         if( .not.cline%defined('oritype') )     call cline%set('oritype','ptcl3D')
         if( .not.cline%defined('nstates') )     call cline%set('nstates',1)
         if( .not.cline%defined('npreimages') )  call cline%set('npreimages',7)
@@ -55,9 +64,15 @@ contains
         if( .not.cline%defined('objfun') )      call cline%set('objfun','euclid')
         if( .not.cline%defined('outvol') )      call cline%set('outvol','flex_pca_state_001.mrc')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        call flex_pca_distr_init(params,cline)
         call run_flex_pca(params,build,cline)
+        call flex_pca_distr_kill(params)
         call build%kill_general_tbox
-        call simple_end('**** SIMPLE_FLEX_PCA NORMAL STOP ****')
+        if( cline%defined('part') )then
+            call simple_end('**** SIMPLE_FLEX_PCA WORKER NORMAL STOP ****',print_simple=.false.)
+        else
+            call simple_end('**** SIMPLE_FLEX_PCA NORMAL STOP ****')
+        endif
     end subroutine exec_flex_pca
 
 end module simple_commanders_flex_analysis

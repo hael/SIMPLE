@@ -41,8 +41,9 @@ contains
         real      :: data_scale_sp(size(recs)), density_scale_sp(size(recs))
         real      :: r11, r12, r13, r21, r22, r23
         integer   :: win(2, 3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3, 2)
-        integer   :: fpllims(3, 2), hp, kp, pf, ix, iy, iz, hx, ky, mz, q, ncomp
+        integer   :: fpllims(3, 2), hp, kp, pf, ix, iy, iz, hx, ky, mz, q, iq, ncomp
         integer   :: nyq_disk, nyq_eff, h_sq, k_max_h, k_lo, k_hi, exp_lb(3), exp_ub(3)
+        integer   :: act(size(recs)), nact
         real      :: pf2, eps_norm, inv_wdim
         ncomp = size(recs)
         if( ncomp <= 0 ) return
@@ -52,6 +53,22 @@ contains
         if( .not. allocated(recs(1)%cmat_exp) )then
             THROW_HARD('expanded matrix does not exist; insert_plane_oversamp_multi_scaled')
         endif
+        ! Kernel state weights have compact support (Epanechnikov), so a particle typically sits inside
+        ! only one or two of the nstates targets and the remaining scale pairs are EXACT zeros whose
+        ! updates are x + (0*c)*w. Collect the live components once and iterate those in the innermost
+        ! loop, and skip the whole plane when none are live -- which is the common case, and also covers
+        ! the halfset-masked passes where every weight of the complementary half has been zeroed.
+        ! Bit-for-bit: both expanded arrays start at +0 and only ever accumulate.
+        nact = 0
+        do q = 1, ncomp
+            data_scale_sp(q)    = real(data_scales(q))
+            density_scale_sp(q) = real(max(0.d0, density_scales(q)))
+            if( data_scale_sp(q) /= 0. .or. density_scale_sp(q) /= 0. )then
+                nact      = nact + 1
+                act(nact) = q
+            endif
+        end do
+        if( nact == 0 ) return
         kbwin    = kbinterpol(KBWINSZ, KBALPHA)
         iwinsz   = ceiling(KBWINSZ - 0.5)
         stride   = LATENT_SAFE_STRIDE
@@ -78,13 +95,9 @@ contains
         nyq_disk = nyq_eff * (nyq_eff + 1)
         eps_norm = epsilon(1.0)
         inv_wdim = 1.0 / real(LATENT_WDIM)
-        do q = 1, ncomp
-            data_scale_sp(q)    = real(data_scales(q))
-            density_scale_sp(q) = real(max(0.d0, density_scales(q)))
-        end do
         !$omp parallel default(shared) private(h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,&
         !$omp& ctfsq_raw,comp_base,wx,wy,wz,ww,win,loc,hrow,hp,kp,r11,r12,r13,r21,r22,r23,&
-        !$omp& isym,ix,iy,iz,hx,ky,mz,q) proc_bind(close)
+        !$omp& isym,ix,iy,iz,hx,ky,mz,q,iq) proc_bind(close)
         do isym = 1, nsym
             r11 = rotmats(isym,1,1); r12 = rotmats(isym,1,2); r13 = rotmats(isym,1,3)
             r21 = rotmats(isym,2,1); r22 = rotmats(isym,2,2); r23 = rotmats(isym,2,3)
@@ -128,7 +141,8 @@ contains
                                 do ix = 1, LATENT_WDIM
                                     hx = win(1,1) + ix - 1
                                     ww = wx(ix) * (wy(iy) * wz(iz))
-                                    do q = 1, ncomp
+                                    do iq = 1, nact
+                                        q = act(iq)
                                         recs(q)%cmat_exp(hx,ky,mz) = recs(q)%cmat_exp(hx,ky,mz) + &
                                             &(data_scale_sp(q) * comp_base) * ww
                                         recs(q)%rho_exp(hx,ky,mz) = recs(q)%rho_exp(hx,ky,mz) + &
@@ -1208,6 +1222,12 @@ contains
         integer :: fpllims_pd(3,2), fpllims(3,2), h, k, hp, kp, pf, q, ncomp
         integer :: h_sq, k_max_h, k_lo, k_hi, nyq_disk, nyq_eff, win(2,3)
         logical :: l_apply_ctf_amp, l_conjg
+        ! per-sample geometry, so the volume loop can be hoisted out of the (h,k) sweep
+        integer,     allocatable :: swin(:,:,:), shp(:), skp(:)
+        real,        allocatable :: swx(:,:), swy(:,:), swz(:,:)
+        complex,     allocatable :: stf(:)
+        logical,     allocatable :: scj(:)
+        integer :: ns, nsmax, j
         if( .not. allocated(mean_rec%cmat_exp) )then
             THROW_HARD('expanded mean matrix does not exist; project_fplanes_mean_basis')
         endif
@@ -1241,6 +1261,15 @@ contains
         nyq_eff = mean_rec%get_lfny(1)
         if( fpl_ref%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpl_ref%nyq / pf))
         nyq_disk = nyq_eff * (nyq_eff + 1)
+        ! The sample geometry -- location, KB window, interpolation weights, CTF transfer -- depends on
+        ! (h,k) and the orientation ALONE; the ncomp+1 volumes differ only in what is read through it.
+        ! Interleaving volumes inside the (h,k) loop leaves none of them resident, so essentially every
+        ! gather is a cold miss: build the sample list once, then hoist the volume loop outside it.
+        ! Bit-exact: every output element is an independent expression of its own sample and volume.
+        nsmax = (fpllims(1,2) - fpllims(1,1) + 1) * (nyq_eff + 1)
+        allocate(swin(2,3,nsmax), swx(LATENT_WDIM,nsmax), swy(LATENT_WDIM,nsmax), &
+            &swz(LATENT_WDIM,nsmax), stf(nsmax), shp(nsmax), skp(nsmax), scj(nsmax))
+        ns = 0
         do h = fpllims(1,1), fpllims(1,2)
             h_sq = h*h
             if( h_sq > nyq_disk ) cycle
@@ -1268,16 +1297,30 @@ contains
                         transfer = cmplx(ctfamp, 0.)
                     endif
                 endif
-                mean_val = weighted_expanded_cmat(mean_rec, win, wx, wy, wz)
-                if( l_conjg ) mean_val = conjg(mean_val)
-                mean_fpl%cmplx_plane(hp,kp) = transfer * mean_val
-                do q = 1, ncomp
-                    basis_val = weighted_expanded_cmat(basis_recs(q), win, wx, wy, wz)
-                    if( l_conjg ) basis_val = conjg(basis_val)
-                    basis_fpls(q)%cmplx_plane(hp,kp) = transfer * basis_val
-                end do
+                ns = ns + 1
+                swin(:,:,ns) = win
+                swx(:,ns)    = wx
+                swy(:,ns)    = wy
+                swz(:,ns)    = wz
+                stf(ns)      = transfer
+                shp(ns)      = hp
+                skp(ns)      = kp
+                scj(ns)      = l_conjg
             end do
         end do
+        do j = 1, ns
+            mean_val = weighted_expanded_cmat(mean_rec, swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
+            if( scj(j) ) mean_val = conjg(mean_val)
+            mean_fpl%cmplx_plane(shp(j),skp(j)) = stf(j) * mean_val
+        end do
+        do q = 1, ncomp
+            do j = 1, ns
+                basis_val = weighted_expanded_cmat(basis_recs(q), swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
+                if( scj(j) ) basis_val = conjg(basis_val)
+                basis_fpls(q)%cmplx_plane(shp(j),skp(j)) = stf(j) * basis_val
+            end do
+        end do
+        deallocate(swin, swx, swy, swz, stf, shp, skp, scj)
 
     end subroutine project_fplanes_mean_basis
 
@@ -1287,20 +1330,27 @@ contains
         logical :: l_realloc
         l_realloc = .not. allocated(fpl_out%cmplx_plane)
         if( .not. l_realloc )then
+            ! nyq is part of the test, not just the bounds: the projection writes only inside the disc
+            ! that nyq defines, and every consumer reads a disc derived from the same nyq. While the
+            ! geometry is unchanged the written set is identical for every particle, so the out-of-disc
+            ! remainder keeps the zeros it was given at allocation, and re-zeroing the whole plane once
+            ! per particle per basis volume is pure memory traffic -- at d_tilde=128, the plane, 129
+            ! times, for every particle. Worth ~35 % of the projection stage.
             l_realloc = any(lbound(fpl_out%cmplx_plane) /= lbound(fpl_in%cmplx_plane)) .or. &
-                &any(ubound(fpl_out%cmplx_plane) /= ubound(fpl_in%cmplx_plane))
+                &any(ubound(fpl_out%cmplx_plane) /= ubound(fpl_in%cmplx_plane)) .or. &
+                &fpl_out%nyq /= fpl_in%nyq
         endif
         if( l_realloc )then
             if( allocated(fpl_out%cmplx_plane) ) deallocate(fpl_out%cmplx_plane)
             allocate(fpl_out%cmplx_plane(lbound(fpl_in%cmplx_plane,1):ubound(fpl_in%cmplx_plane,1), &
                 &lbound(fpl_in%cmplx_plane,2):ubound(fpl_in%cmplx_plane,2)))
+            fpl_out%cmplx_plane = CMPLX_ZERO
         endif
         if( allocated(fpl_out%ctfsq_plane) ) deallocate(fpl_out%ctfsq_plane)
         if( allocated(fpl_out%transfer_plane) ) deallocate(fpl_out%transfer_plane)
         fpl_out%frlims  = fpl_in%frlims
         fpl_out%shconst = fpl_in%shconst
         fpl_out%nyq     = fpl_in%nyq
-        fpl_out%cmplx_plane = CMPLX_ZERO
     end subroutine ensure_latent_projection_plane
 
     pure subroutine latent_projection_weights( kbwin, loc, win, wx, wy, wz )
