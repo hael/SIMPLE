@@ -285,6 +285,7 @@ contains
         integer, allocatable          :: state_pops(:)
         logical, allocatable          :: l_state_dropped(:)
         real, allocatable             :: res0143s(:)
+        real, allocatable             :: nu_align_lps(:)
         real, allocatable             :: nu_work_lps(:)
         real, allocatable             :: update_frac_trail_recs(:)
         integer, allocatable          :: nu_work_finds(:)
@@ -352,6 +353,8 @@ contains
             l_nonuniform_mode = params%l_nonuniform
             allocate(res0143s(params%nstates))
             res0143s = 0.
+            allocate(nu_align_lps(params%nstates))
+            nu_align_lps = 0.
             allocate(nu_work_lps(params%nstates))
             nu_work_lps = 0.
             allocate(nu_work_finds(params%nstates))
@@ -749,10 +752,11 @@ contains
             if( .not. params%l_nonuniform ) return
             selected_lp = get_nu_filtmap_finest_selected_lp()
             if( selected_lp <= TINY ) return
+            nu_align_lps(state) = selected_lp
             if( NU_DEV_OUTPUT .and. params%part == 1 )then
                 write(logfhandle,'(A,I0,A,F8.3,A,F8.3,A)') &
                     &'>>> NU filter state ', state, ' finest selected local low-pass: ', selected_lp, &
-                    &' A; FSC-governed matching limit: ', nu_work_lps(state), ' A'
+                    &' A; FSC-governed extension ceiling: ', nu_work_lps(state), ' A'
             endif
         end subroutine record_nu_alignment_lowpass_limit
 
@@ -826,23 +830,23 @@ contains
             real    :: align_lp
             integer :: istate, selected_state
             if( .not. l_nonuniform_mode ) return
-            if( .not. allocated(nu_work_lps) ) return
+            if( .not. allocated(nu_align_lps) ) return
             if( .not. allocated(state_pops) ) return
             ! Match the classical multi-state policy: the best resolved
             ! populated state determines the single global matching bandwidth.
-            l_included = (nu_work_lps > TINY) .and. (state_pops > 0)
+            l_included = (nu_align_lps > TINY) .and. (state_pops > 0)
             if( NU_DEV_OUTPUT .and. params%part == 1 .and. params%nstates > 1 ) call log_nu_alignment_lowpass_summary(l_included)
             if( .not. any(l_included) )then
-                if( any(nu_work_lps > TINY) )then
+                if( any(nu_align_lps > TINY) )then
                     write(logfhandle,'(A)') &
                         &'>>> WARNING: no populated state has a valid NU filter matching low-pass limit'
                 endif
                 return
             endif
-            align_lp       = minval(nu_work_lps, mask=l_included)
+            align_lp       = minval(nu_align_lps, mask=l_included)
             selected_state = 0
             do istate = 1,params%nstates
-                if( l_included(istate) .and. abs(nu_work_lps(istate) - align_lp) <= TINY )then
+                if( l_included(istate) .and. abs(nu_align_lps(istate) - align_lp) <= TINY )then
                     selected_state = istate
                     exit
                 endif
@@ -858,10 +862,10 @@ contains
             logical, intent(in) :: l_included(:)
             integer :: istate
             write(logfhandle,'(A)') '>>> NU filter multi-state matching low-pass candidates'
-            write(logfhandle,'(A)') '    State       Pop   FSC(A) Work LP(A)   Used'
+            write(logfhandle,'(A)') '    State       Pop   FSC(A) Work LP(A)    NU LP(A)   Used'
             do istate = 1,params%nstates
-                write(logfhandle,'(I9,I10,F9.3,F10.3,5X,A)') &
-                    &istate, state_pops(istate), res0143s(istate), nu_work_lps(istate), &
+                write(logfhandle,'(I9,I10,F9.3,F11.3,F12.3,5X,A)') &
+                    &istate, state_pops(istate), res0143s(istate), nu_work_lps(istate), nu_align_lps(istate), &
                     &merge('yes', 'no ', l_included(istate))
             enddo
         end subroutine log_nu_alignment_lowpass_summary
@@ -888,6 +892,7 @@ contains
             if( allocated(state_pops)             ) deallocate(state_pops)
             if( allocated(l_state_dropped)        ) deallocate(l_state_dropped)
             if( allocated(res0143s)               ) deallocate(res0143s)
+            if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
             if( allocated(nu_work_lps)            ) deallocate(nu_work_lps)
             if( allocated(nu_work_finds)          ) deallocate(nu_work_finds)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)

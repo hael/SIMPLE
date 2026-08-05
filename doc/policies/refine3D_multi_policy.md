@@ -468,7 +468,7 @@ references:
 `envfsc` is an advanced filter control. Its default keeps each state automask
 out of FSC estimation. When both automasking and `envfsc=yes` are selected,
 `volassemble` performs phase-randomized solvent correction independently for
-each state before deriving the NU working bandwidth.
+each state before deriving the NU extension ceiling.
 
 `volassemble` remains the execution site for volume-domain work. In a default
 run it may restore per-state half maps, calculate FSCs, run ML regularization,

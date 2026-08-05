@@ -9,7 +9,8 @@ today.
 Nonuniform filtering is a volume-domain reference-generation feature. It
 selects a local low-pass limit inside a support mask and writes NU-filtered
 derived volumes. A separate global FSC policy governs the maximum NU candidate
-bandwidth and the matching bandwidth handed to later iterations.
+bandwidth, while the finest cutoff actually selected by the NU filter governs
+the matching bandwidth handed to later iterations.
 
 It is not a separate final-map postprocessing workflow. `postprocess` and the
 automatic `reconstruct3D` postprocess step use the ordinary global
@@ -90,7 +91,7 @@ For each state, `volassemble` then:
 7. optimizes the local filter map
 8. optionally runs `nu_refine` high-resolution shell extension within that ceiling
 9. writes NU-filtered even, odd, merged, and local-resolution products
-10. records the FSC working low-pass limit for later handoff
+10. records the finest locally selected NU low-pass limit for later handoff
 
 Low-resolution even/odd insertion is a registration-reference preparation
 trick. It must not feed `volassemble` FSC calculation, automasking, NU
@@ -281,11 +282,12 @@ kwork = k0.5 + max(10, k0.143 - k0.5 + 5)
 
 A high-side 0.5 safeguard tolerates a short dip followed by renewed evidence.
 `kwork` is capped by the final safe Fourier shell and by `lpstop` when supplied.
-It caps the NU bank and extension and is converted to the project-level
-matching `lp`. The finest locally selected NU label remains a diagnostic; it
-does not set the global bandwidth.
+It caps the NU bank and extension, but it is not itself handed to matching.
+The finest low-pass cutoff actually selected anywhere inside the NU support
+mask becomes the project-level matching `lp`. This keeps reference filtering
+and matcher bandwidth consistent and avoids an FSC-only positive-feedback loop.
 
-In multi-state runs, the populated state with the finest valid FSC working
+In multi-state runs, the populated state with the finest valid NU-selected
 limit determines the single project-level matching bandwidth, matching the
 classical global-bandwidth policy.
 

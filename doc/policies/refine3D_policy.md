@@ -173,8 +173,7 @@ policy explicitly asks for that range.
 The 3D low-pass range comes from one of these sources:
 
 - explicit LP-set `lp`
-- project-carried NU handoff when `nu_refine=yes` or `nonuniform_lpset`
-  permits it
+- project-carried NU-selected handoff in a continuing nonuniform refinement
 - current FSC files
 - an existing project `lp` field
 
