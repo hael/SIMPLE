@@ -28,6 +28,11 @@ the refinement iterations are delegated to `commander_refine3D`.
 - `lplim_crit=0.143`
 - `incrreslim=no`
 
+NU volume filtering is independent of `incrreslim`: the FSC does not cap the
+NU candidate bank or shell extension. Bootstrap NU filtering likewise never
+uses the generic parsed startup `lp` as a volume-filter ceiling because it is
+not evidence about the resolution of supplied half maps.
+
 It also supplies overridable defaults when the user has not provided them:
 
 - `mkdir=yes`

@@ -55,7 +55,7 @@ contains
         use simple_commanders_rec, only: commander_rec3D
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, NU_DEV_OUTPUT, &
-            &extend_nu_filter_highres_shells, calc_nu_fsc_working_find, write_nu_local_resolution_map
+            &extend_nu_filter_highres_shells, write_nu_local_resolution_map
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D
@@ -228,7 +228,7 @@ contains
             type(string) :: fsc_fname
             real, allocatable :: fsc(:), res(:)
             real :: fsc05, fsc0143
-            integer :: fsc_box, work_find, max_find
+            integer :: fsc_box
             if( .not. params%l_nonuniform_lpset ) return
             if( cline%defined('lp') ) return
             fsc_box = 0
@@ -252,16 +252,12 @@ contains
             if( fsc0143 <= TINY )then
                 THROW_HARD(WORKFLOW_LABEL//' filt_mode=nonuniform_lpset could not derive a positive starting resolution; set lp explicitly')
             endif
-            max_find = max(1, min(size(fsc)-1, fsc_box/2))
-            if( cline%defined('lpstop') ) max_find = min(max_find, &
-                &calc_fourier_index(params%lpstop, fsc_box, params%smpd))
-            work_find        = calc_nu_fsc_working_find(fsc, max_find)
-            params%lp         = calc_lowpass_lim(work_find, fsc_box, params%smpd)
+            params%lp         = fsc0143
             params%kfromto(2) = calc_fourier_index(params%lp, params%box, params%smpd)
             params%l_lpset    = .true.
             call cline%set('lp', params%lp)
             write(logfhandle,'(A,F8.3,A)') &
-                &'>>> '//WORKFLOW_LABEL//' nonuniform_lpset seeded RELION-style working low-pass from starting FSC: ', &
+                &'>>> '//WORKFLOW_LABEL//' nonuniform_lpset seeded matching low-pass from starting FSC 0.143: ', &
                 &params%lp, ' A'
             if( allocated(fsc) ) deallocate(fsc)
             if( allocated(res) ) deallocate(res)
@@ -281,7 +277,6 @@ contains
             logical, allocatable :: l_mask(:,:,:)
             integer, allocatable :: imat(:,:,:)
             integer              :: ldim_even(3), ldim_odd(3), ldim(3), nptcls_dummy, n_bootstrap_steps
-            integer              :: bootstrap_max_find
             real                 :: mskrad_px
             logical              :: l_reconstruct_bootstrap
             if( .not. params%l_nonuniform ) return
@@ -357,14 +352,13 @@ contains
                 mskrad_px = 0.5 * params%mskdiam / params%smpd
                 call vol_msk%disc(ldim, params%smpd, mskrad_px, l_mask)
             endif
-            bootstrap_max_find = vol_even_raw%get_filtsz() - 1
-            if( params%kfromto(2) > 0 ) bootstrap_max_find = min(bootstrap_max_find, params%kfromto(2))
-            call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::], max_find=bootstrap_max_find)
+            ! The parsed startup lp is a generic default, not evidence about
+            ! the supplied half maps. Let NU inspect its full candidate bank.
+            call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
             if( allocated(l_mask) ) deallocate(l_mask)
             call optimize_nu_cutoff_finds()
             if( params%l_nu_refine )then
-                call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps, &
-                    &max_find=bootstrap_max_find)
+                call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps)
                 if( NU_DEV_OUTPUT ) &
                     &write(logfhandle,'(A,I0)') '>>> NU bootstrap accepted high-resolution shell steps: ', n_bootstrap_steps
             endif

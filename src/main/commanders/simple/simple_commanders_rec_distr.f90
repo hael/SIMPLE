@@ -262,7 +262,7 @@ contains
             &set_nu_filter_report, NU_DEV_OUTPUT, &
             &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
             &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
-            &get_nu_filtmap_highres_shell_depth, calc_nu_fsc_working_find, write_nu_local_resolution_map
+            &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE, &
             &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
         class(commander_volassemble), intent(inout) :: self
@@ -286,9 +286,7 @@ contains
         logical, allocatable          :: l_state_dropped(:)
         real, allocatable             :: res0143s(:)
         real, allocatable             :: nu_align_lps(:)
-        real, allocatable             :: nu_work_lps(:)
         real, allocatable             :: update_frac_trail_recs(:)
-        integer, allocatable          :: nu_work_finds(:)
         real                          :: res05
         integer                       :: state, ldim(3), ldim_pd(3), numlen_part
         integer(timer_int_kind)       :: t_automask3D, t_nonuniform_filter, t_tot
@@ -355,10 +353,6 @@ contains
             res0143s = 0.
             allocate(nu_align_lps(params%nstates))
             nu_align_lps = 0.
-            allocate(nu_work_lps(params%nstates))
-            nu_work_lps = 0.
-            allocate(nu_work_finds(params%nstates))
-            nu_work_finds = 0
             allocate(update_frac_trail_recs(params%nstates))
             update_frac_trail_recs = 1.0
             allocate(state_pops(params%nstates))
@@ -477,7 +471,7 @@ contains
                     &pp_plan%mskfile_state%to_char()
             endif
             call run_state_automask()
-            if( l_nonuniform_mode ) call update_state_fsc_and_working_limit()
+            if( l_nonuniform_mode ) call apply_state_fsc_solvent_correction()
             if( l_nonuniform_mode ) call run_state_nonuniform_filter()
         end subroutine postprocess_state
 
@@ -490,24 +484,22 @@ contains
             endif
         end subroutine run_state_automask
 
-        subroutine update_state_fsc_and_working_limit()
+        subroutine apply_state_fsc_solvent_correction()
             use simple_fsc, only: phase_rand_fsc
             real, allocatable :: fsc(:), fsc_masked(:), fsc_random_masked(:), fsc_unmasked(:)
             type(string) :: fsc_txt_fname
-            integer :: max_find
             logical :: l_have_envelope
+            if( .not. params%l_envfsc ) return
             l_have_envelope = .false.
-            if( params%l_envfsc )then
-                select case( pp_plan%nu_mask_source )
-                    case( NU_MASK_SOURCE_FRESH_AUTOMASK )
-                        l_have_envelope = .true.
-                    case( NU_MASK_SOURCE_EXISTING_AUTOMASK )
-                        call mskvol%kill_bimg
-                        call mskvol%new_bimg(ldim, params%smpd_crop)
-                        call mskvol%read_bimg(pp_plan%mskfile_state)
-                        l_have_envelope = .true.
-                end select
-            endif
+            select case( pp_plan%nu_mask_source )
+                case( NU_MASK_SOURCE_FRESH_AUTOMASK )
+                    l_have_envelope = .true.
+                case( NU_MASK_SOURCE_EXISTING_AUTOMASK )
+                    call mskvol%kill_bimg
+                    call mskvol%new_bimg(ldim, params%smpd_crop)
+                    call mskvol%read_bimg(pp_plan%mskfile_state)
+                    l_have_envelope = .true.
+            end select
             if( l_have_envelope )then
                 call phase_rand_fsc(vol_nu_base_even, vol_nu_base_odd, mskvol, state, &
                     &vol_nu_base_even%get_filtsz(), fsc, fsc_masked, fsc_random_masked, fsc_unmasked)
@@ -522,23 +514,12 @@ contains
                 call fsc_txt_fname%kill
                 deallocate(fsc_masked, fsc_random_masked, fsc_unmasked)
             else
-                if( params%l_envfsc )then
-                    write(logfhandle,'(A,I0,A)') &
-                        &'>>> WARNING: state ', state, &
-                        &' has no compatible automask for solvent correction; using broad-sphere FSC'
-                endif
-                fsc = file2rarr(refine3D_fsc_fname(state))
+                write(logfhandle,'(A,I0,A)') &
+                    &'>>> WARNING: state ', state, &
+                    &' has no compatible automask for solvent correction; using broad-sphere FSC'
             endif
-            max_find = vol_nu_base_even%get_filtsz() - 1
-            if( cline%defined('lpstop') ) max_find = min(max_find, &
-                &calc_fourier_index(params%lpstop, params%box_crop, params%smpd_crop))
-            nu_work_finds(state) = calc_nu_fsc_working_find(fsc, max_find)
-            nu_work_lps(state) = calc_lowpass_lim(nu_work_finds(state), params%box_crop, params%smpd_crop)
-            write(logfhandle,'(A,I0,A,I0,A,F8.3,A)') &
-                &'>>> State ', state, ' FSC-governed NU/matching working limit: k=', &
-                &nu_work_finds(state), ' (', nu_work_lps(state), ' A)'
-            deallocate(fsc)
-        end subroutine update_state_fsc_and_working_limit
+            if( allocated(fsc) ) deallocate(fsc)
+        end subroutine apply_state_fsc_solvent_correction
 
         function corrected_fsc_txt_fname() result( fname )
             type(string) :: fname, ext
@@ -611,10 +592,10 @@ contains
                 call nu_aux_odd(1)%copy(vol_nu_aux_odd)
                 aux_resolution = nu_aux_effective_resolution()
                 call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [aux_resolution], &
-                    &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps, max_find=nu_work_finds(state))
+                    &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps)
             else
                 call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [real ::], &
-                    &n_highres_steps=n_highres_steps, max_find=nu_work_finds(state))
+                    &n_highres_steps=n_highres_steps)
             endif
         end subroutine setup_nonuniform_filter
 
@@ -641,8 +622,7 @@ contains
             n_highres_steps = nu_highres_steps_for_state()
             n_accepted_this_iteration = 0
             do
-                call extend_nu_filter_highres_shell_next(vol_nu_base_even, vol_nu_base_odd, &
-                    &stats=ext_stats, max_find=nu_work_finds(state))
+                call extend_nu_filter_highres_shell_next(vol_nu_base_even, vol_nu_base_odd, stats=ext_stats)
                 if( .not. ext_stats%attempted )then
                     if( NU_DEV_OUTPUT .and. params%part == 1 )then
                         if( ext_stats%n_mask == 0 )then
@@ -754,9 +734,8 @@ contains
             if( selected_lp <= TINY ) return
             nu_align_lps(state) = selected_lp
             if( NU_DEV_OUTPUT .and. params%part == 1 )then
-                write(logfhandle,'(A,I0,A,F8.3,A,F8.3,A)') &
-                    &'>>> NU filter state ', state, ' finest selected local low-pass: ', selected_lp, &
-                    &' A; FSC-governed extension ceiling: ', nu_work_lps(state), ' A'
+                write(logfhandle,'(A,I0,A,F8.3,A)') &
+                    &'>>> NU filter state ', state, ' matching low-pass limit for next iteration: ', selected_lp, ' A'
             endif
         end subroutine record_nu_alignment_lowpass_limit
 
@@ -862,10 +841,10 @@ contains
             logical, intent(in) :: l_included(:)
             integer :: istate
             write(logfhandle,'(A)') '>>> NU filter multi-state matching low-pass candidates'
-            write(logfhandle,'(A)') '    State       Pop   FSC(A) Work LP(A)    NU LP(A)   Used'
+            write(logfhandle,'(A)') '    State       Pop   FSC(A)   NU LP(A)   Used'
             do istate = 1,params%nstates
-                write(logfhandle,'(I9,I10,F9.3,F11.3,F12.3,5X,A)') &
-                    &istate, state_pops(istate), res0143s(istate), nu_work_lps(istate), nu_align_lps(istate), &
+                write(logfhandle,'(I9,I10,F9.3,F10.3,5X,A)') &
+                    &istate, state_pops(istate), res0143s(istate), nu_align_lps(istate), &
                     &merge('yes', 'no ', l_included(istate))
             enddo
         end subroutine log_nu_alignment_lowpass_summary
@@ -893,8 +872,6 @@ contains
             if( allocated(l_state_dropped)        ) deallocate(l_state_dropped)
             if( allocated(res0143s)               ) deallocate(res0143s)
             if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
-            if( allocated(nu_work_lps)            ) deallocate(nu_work_lps)
-            if( allocated(nu_work_finds)          ) deallocate(nu_work_finds)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             call cleanup_nu_filter()
             call state_mask_bin%kill_bimg

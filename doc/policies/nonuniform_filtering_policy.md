@@ -8,9 +8,9 @@ today.
 
 Nonuniform filtering is a volume-domain reference-generation feature. It
 selects a local low-pass limit inside a support mask and writes NU-filtered
-derived volumes. A separate global FSC policy governs the maximum NU candidate
-bandwidth, while the finest cutoff actually selected by the NU filter governs
-the matching bandwidth handed to later iterations.
+derived volumes. Its candidate bank is not truncated by the FSC. The finest
+cutoff actually selected by the NU filter separately governs the matching
+bandwidth handed to later iterations.
 
 It is not a separate final-map postprocessing workflow. `postprocess` and the
 automatic `reconstruct3D` postprocess step use the ordinary global
@@ -30,7 +30,7 @@ Supported values:
 - `nonuniform_lpset`
 
 `filt_mode=nonuniform` enables NU-filtered volume products. After the first
-iteration, the active gold-standard FSC supplies the working matching
+iteration, the finest cutoff selected by the NU filter supplies the matching
 bandwidth while the matcher retains independent half-map topology.
 
 `filt_mode=nonuniform_lpset` enables the same NU filter and promotes the
@@ -45,10 +45,11 @@ to `no` by staged `abinitio3D`.
 auxiliary even/odd pair for static NU filtering, but not for `nu_refine=yes`
 shell-extension runs.
 
-`envfsc=no` is the default: the automask is NU support only and the bandwidth
-governor uses the broad-sphere FSC. `envfsc=yes` opts into phase-randomized
-solvent correction using the same state automask before the bandwidth is
-derived.
+`envfsc=no` is the default: the automask is NU support only and the provisional
+broad-sphere FSC remains the reported curve. `envfsc=yes` opts into
+phase-randomized solvent correction using the same state automask. FSC
+correction changes the reported resolution metadata; it does not truncate the
+NU filter bank or directly set the NU matching bandwidth.
 
 ## 3. Ownership
 
@@ -85,13 +86,12 @@ For each state, `volassemble` then:
 1. plans the automask and NU mask source
 2. regenerates a state automask if needed
 3. optionally performs phase-randomized FSC solvent correction
-4. derives the global FSC working shell
-5. builds the NU support mask
-6. configures `simple_nu_filter` with the working-shell ceiling
-7. optimizes the local filter map
-8. optionally runs `nu_refine` high-resolution shell extension within that ceiling
-9. writes NU-filtered even, odd, merged, and local-resolution products
-10. records the finest locally selected NU low-pass limit for later handoff
+4. builds the NU support mask
+5. configures the full NU candidate bank
+6. optimizes the local filter map
+7. optionally runs `nu_refine` high-resolution shell extension
+8. writes NU-filtered even, odd, merged, and local-resolution products
+9. records the finest locally selected NU low-pass limit for later handoff
 
 Low-resolution even/odd insertion is a registration-reference preparation
 trick. It must not feed `volassemble` FSC calculation, automasking, NU
@@ -171,9 +171,7 @@ The current filter performs these steps:
 10. write the same-grid `_nu_locres` map
 
 The nominal static bank is `[20, 15, 12, 10, 8, 6, 5, 4]` Angstrom before any
-high-resolution extension. Candidates finer than the global FSC working shell
-are omitted. If the ceiling falls within the nominal bank, an exact terminal
-candidate is added at that shell.
+high-resolution extension. The FSC does not remove candidates from this bank.
 
 Auxiliary replacement is conservative. If supplied, the auxiliary pair replaces
 the finest discrete label only when its effective resolution is finer than that
@@ -224,7 +222,7 @@ The extension:
 - requires at least 5% challenger wins and a minimum absolute seed support
 - may accept multiple contiguous shell steps in one iteration
 - stops at the first unattempted, unsupported, or rejected challenger
-- never proposes a shell finer than the global FSC working shell
+- never proposes a shell beyond the Fourier grid
 
 The challenge test itself is unary-only. After one or more challengers are
 accepted, the final expanded label field is cleaned with the same ordered-label
@@ -258,9 +256,10 @@ The ordinary low-pass filter is not applied on top of the NU reference path.
 Reference preparation treats NU filtering, like ML regularization, as filtering
 already done during assembly.
 
-## 12. FSC Correction and Working-Bandwidth Handoff
+## 12. FSC Correction and Matching-Bandwidth Handoff
 
-The active FSC is selected before NU filtering:
+The active FSC is selected before NU filtering for resolution estimation and
+reporting:
 
 - `envfsc=no`: use the provisional broad-sphere FSC unchanged
 - `envfsc=yes` with a compatible automask: find the unmasked FSC 0.8 crossing,
@@ -274,18 +273,16 @@ The unmasked, masked, and randomized-masked diagnostics are written as
 `fscu_stateNN.bin`, `fsct_stateNN.bin`, and `fscn_stateNN.bin`. The corrected
 curve replaces `fsc_stateNN.bin` and its text resolution report.
 
-The global working shell is derived from the active FSC as:
+FSC estimation and NU filtering have separate bandwidth roles. The FSC never
+caps the local filter bank or its high-resolution extension. The NU filter
+chooses the cutoff applied at each volume voxel from its full bank. After that
+volume operation, the finest cutoff selected anywhere inside the NU support
+mask becomes the project-level matching `lp` for the next iteration.
 
-```text
-kwork = k0.5 + max(10, k0.143 - k0.5 + 5)
-```
-
-A high-side 0.5 safeguard tolerates a short dip followed by renewed evidence.
-`kwork` is capped by the final safe Fourier shell and by `lpstop` when supplied.
-It caps the NU bank and extension, but it is not itself handed to matching.
-The finest low-pass cutoff actually selected anywhere inside the NU support
-mask becomes the project-level matching `lp`. This keeps reference filtering
-and matcher bandwidth consistent and avoids an FSC-only positive-feedback loop.
+`incrreslim` retains its classical matcher meaning: on an FSC-driven matching
+path it permits ten shells beyond the selected FSC criterion. The NU-selected
+matching path takes precedence and does not repurpose `incrreslim` as a volume
+filter control.
 
 In multi-state runs, the populated state with the finest valid NU-selected
 limit determines the single project-level matching bandwidth, matching the

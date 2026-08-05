@@ -6,19 +6,19 @@ implicit none
 contains
 
     module subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps, max_find )
+            &n_highres_steps )
         class(image),          intent(in) :: vol_even, vol_odd
         logical,               intent(in) :: l_mask(:,:,:)
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
-        integer,     optional, intent(in) :: n_highres_steps, max_find
+        integer,     optional, intent(in) :: n_highres_steps
         type(image) :: vol_even_filt, vol_odd_filt
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
         real :: noise_sigma, finest_lp
         integer :: i, n_candidates, aux_replacement_idx
         real    :: x
-        call init_nu_filter(vol_even, vol_odd, n_highres_steps, max_find)
+        call init_nu_filter(vol_even, vol_odd, n_highres_steps)
         if( any(shape(l_mask) /= ldim) ) THROW_HARD('l_mask shape mismatch in setup_nu_dmats')
         if( allocated(nu_lmask) ) deallocate(nu_lmask)
         allocate(nu_lmask(ldim(1),ldim(2),ldim(3)), source=l_mask)
@@ -138,7 +138,7 @@ contains
         if( .not.allocated(cutoff_finds) ) return
         if( .not.allocated(filtmap)      ) return
         if( .not.allocated(nu_lmask)     ) return
-        base_n = min(nu_static_bank_size, size(cutoff_finds))
+        base_n = min(size(lowpass_limits), size(cutoff_finds))
         if( base_n < 1 ) return
         finest_label = 0
         do imask = 1, n_nu_mask
