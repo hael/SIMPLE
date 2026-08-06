@@ -102,7 +102,8 @@ partials, restoring even/odd volumes, calculating FSCs, running volume
 postprocessing, writing state volumes, and updating resolution metadata.
 
 `simple_vol_pproc_policy.f90` owns volume postprocessing decisions such as
-automask action, state-mask compatibility, and NU mask source.
+automask action and state-mask compatibility. The NU setup API owns its
+spherical `mskdiam` support invariant.
 
 ## 4. Project and Builder State
 
@@ -284,7 +285,7 @@ the strategy dispatches `volassemble`.
 - applies conical FSC curves for directional ML regularization when
   `ml_reg=yes` and `conical_fsc=yes`; this is opt-in
 - restores merged state volumes
-- runs automask and NU postprocessing decisions
+- runs automask postprocessing and NU filtering as independent operations
 - writes derived reference products
 - records resolution and NU matching metadata in the project
 

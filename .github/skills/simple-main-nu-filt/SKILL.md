@@ -18,13 +18,14 @@ state machine it calls.
 - `simple_nu_filter_apply.f90`
 - `simple_nu_filter_stats.f90`
 - `simple_nu_filter_state.f90`
+- `simple_nu_filter_envmask.f90`
 
 ## Core Lifecycle
 
 Normal callers follow:
 
 ```fortran
-call setup_nu_dmats(vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd)
+call setup_nu_dmats(vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd)
 call optimize_nu_cutoff_finds()
 call extend_nu_filter_highres_shell_next(...)
 call nu_filter_vols(vol_even_nu, vol_odd_nu)
@@ -38,6 +39,9 @@ The extension step is optional and controlled by workflow policy such as
 
 - Treat `simple_nu_filter` as stateful for one call sequence. Always preserve
   cleanup of module allocatables and scratch cache files.
+- `setup_nu_dmats` owns the NU support mask. It accepts `mskdiam` in Angstrom
+  and constructs spherical support internally; callers must not supply density
+  automasks or arbitrary logical envelopes.
 - Keep objective construction mask-packed; values outside the NU support mask
   must not influence smoothing or label selection.
 - Auxiliary even/odd pairs replace the finest retained bank member only when
@@ -47,3 +51,14 @@ The extension step is optional and controlled by workflow policy such as
 - High-resolution shell extension tests one frontier shell at a time, persists
   accepted depth by state through `volassemble`, and should stop conservatively
   when support is missing or acceptance is too weak.
+- NU-evidence envelope derivation must run before `nu_filter_vols`, which
+  releases unary storage. The current evidence baseline covers the static bank;
+  accepted `nu_refine` extension shells are not yet incorporated.
+
+## Mask Ownership
+
+- Spherical `mskdiam` support owns the NU objective domain.
+- Density-derived `automask3D_stateNN.mrc` remains independent and may be
+  consumed by `envfsc` or current `envref` behavior.
+- A future NU-evidence envelope must use its own artifact and must never feed
+  FSC correction or replace spherical NU support.

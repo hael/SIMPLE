@@ -4,15 +4,31 @@
 > `simple_exec prg=nu_filt3D nu_envmsk=yes`. Workflow integration described
 > in section 4 is **not implemented**. Validate the routine first (sections 6-8),
 > then implement.
+>
+> **Support decision:** NU filtering now uses only spherical `mskdiam` support.
+> `setup_nu_dmats` constructs the sphere internally, so density-derived and
+> NU-evidence envelopes cannot enter the normalized Huber objective domain.
+> Dilated-envelope support and collar-based null estimation are deferred unless
+> the spherical memory cost proves prohibitive in representative runs.
+>
+> **Validation snapshot:** the focused NU test executables build and link. On
+> the current synthetic fixture, spherical support contains 44,473 voxels and
+> the default absolute margin gives recall 1.000 with solvent false-positive
+> rate 0.054. The scale-free cost-improvement ratio gives recall 0.952 with
+> solvent false-positive rate 0.008 on the same fixture.
+
+The implemented standalone algorithm is described in
+[`NU-Evidence Envelope Mask in nu_filt3D`](../algorithms/nu_evidence_envelope_mask.md).
 
 ## 1. Summary
 
 The nonuniform filter's unary objective is a per-voxel cross-half prediction
 error. In solvent the half maps are uncorrelated at every bandwidth, so no
-candidate beats the coarsest one; inside ordered density the objective has a
-real minimum at the local SNR crossover. The per-voxel improvement over the
-coarsest baseline is therefore a direct measure of local orderedness, and it is
-what this routine segments on:
+candidate should beat the coarsest one systematically; finite noise and taking
+the minimum over several candidates still produce positive voxelwise margins.
+Inside ordered density the objective can have a real minimum at the local SNR
+crossover. The per-voxel improvement over the coarsest baseline is therefore an
+empirical measure of local orderedness, and it is what this routine segments on:
 
 ```
 margin(v) = cost(v, coarsest) - min over candidates of cost(v, c)
@@ -28,21 +44,26 @@ Two properties observed on a detergent-solubilised membrane protein:
 That combination is what makes the mask interesting: it discriminates *ordered*
 density from *disordered* density, which an amplitude threshold cannot do.
 
+The margin is a best-of-bank statistic. Its solvent distribution depends on
+candidate count, candidate correlation, objective smoothing, and any accepted
+high-resolution extension. The null must therefore be validated for the exact
+bank used to generate an envelope; it is not a universal zero-centered law.
+
 It is also what makes it dangerous in the wrong consumer. Section 2 is the
 central policy claim of this note.
 
 ## 2. Mask ownership: one envelope per consumer, not one artifact for all
 
-The current architecture treats `automask3D_stateNN.mrc` as a single artifact
-serving NU support, `envfsc`, and `envref`. That should not be extended to the
-NU-evidence envelope. The proposed split:
+Before the spherical-support refactor, `automask3D_stateNN.mrc` was a single
+artifact serving NU support, `envfsc`, and `envref`. The first role has now been
+removed. That separation should be preserved for the NU-evidence envelope:
 
 | Consumer | Mask source | Rationale |
 |---|---|---|
-| NU support mask | spherical `mskdiam`, or dilated previous envelope | needs solvent inside it to estimate the null |
+| NU support mask | spherical `mskdiam` | needs solvent inside it to estimate the noise scale and evidence null |
 | Matching reference before reprojection (`envref`) | **NU-evidence envelope** | highest-value use; belt removal is pure gain for alignment |
 | FSC solvent correction (`envfsc`) | density-derived (existing ICM/Otsu masker), or none | resolution-derived is circular |
-| Final map for display and deposition | NU-evidence envelope | best available envelope |
+| Derived map for display or deposition support | NU-evidence envelope | preserve unmasked base/half maps as primary artifacts |
 
 ### 2.1 Why not the FSC path
 
@@ -75,14 +96,16 @@ envelope erodes monotonically across iterations while looking plausible at every
 step.
 
 Practical: `dmats_mask` is `(n_nu_mask, n_candidates)` and support size is the
-dominant memory term. Using the envelope as NU support is a deliberate memory
-decision in the current policy. Switching to a full `mskdiam` sphere is not
-free — on a 300^3 box an envelope might be ~3M voxels against ~12M for the
-sphere, roughly 300 MB against 1.2 GB at the 24-candidate cap, plus full-grid
-temporaries.
+dominant memory term. Using the envelope as NU support was a deliberate memory
+decision in the former policy. A full `mskdiam` sphere is not free — on a 300^3
+box an envelope might be ~3M voxels against ~12M for the sphere, roughly 300 MB
+against 1.2 GB at the 24-candidate cap, plus full-grid temporaries.
 
-The compromise is a **dilated previous envelope**, which requires the null
-change in section 3.2.
+The initial implementation accepts this memory cost and uses only spherical
+support. This is the conservative choice for the current normalized Huber
+objective and whole-support evidence-null estimator. A dilated previous
+envelope remains a possible future memory optimization, but only together with
+the null change in section 3.2 and explicit shrinkage guards.
 
 ### 2.3 Why `envref` is the right consumer, and its one trap
 
@@ -96,8 +119,9 @@ region and it never improves — whether or not it was real. For the belt that i
 the desired outcome. For a flexible domain that fell below threshold on one
 iteration it is a trap that closes permanently.
 
-`AMSK_FREQ` regeneration only helps if the mask can *recover* ground, which is a
-further argument for a generous support and a real dilation.
+Periodic regeneration only helps if the mask can *recover* ground. Spherical NU
+support makes the omitted region observable to the evidence calculation, but a
+temporal shrink/recovery guard is still required before enabling `envref`.
 
 ## 3. Required changes to the routine before integration
 
@@ -115,7 +139,7 @@ once at a scale set by `amsklp`. Smoothing the difference is equivalent to
 smoothing both terms with the same kernel. The filter's own label selection is
 untouched.
 
-### 3.2 Collar-based null estimation (not done)
+### 3.2 Collar-based null estimation (deferred with spherical-only support)
 
 The current null is the median and MAD over the whole support, which assumes
 solvent is the **majority**. True for a generous sphere, false for a dilated
@@ -136,16 +160,20 @@ next envelope is tighter still. Guards:
 - a low quantile within the collar rather than the median;
 - a floor on how much the envelope may shrink per iteration.
 
-At `startit` there is no previous envelope: use the sphere, or the dilated
-density automask.
+This work is not required while NU support remains exclusively spherical. If
+dilated support is reconsidered, bootstrap from the sphere at `startit`; do not
+use a tight density automask as a substitute for a solvent-containing collar.
+The temporal shrink/recovery guard remains required before `envref` integration
+even with spherical NU support, because reference masking itself can make a
+false-negative region self-fulfilling.
 
 ### 3.3 `nu_refine` interaction (not done)
 
 Raw evidence is accumulated over the static bank only, inside the candidate loop
 in `setup_nu_dmats`. `extend_nu_filter_highres_shell_next` appends candidates
 afterwards and does not update it. Harmless for `nu_filt3D`, which never
-extends, but staged workflows do enable extension and the accepted shells must
-feed the baseline before this reaches `volassemble`.
+extends, but `refine3D_auto` enables extension and the accepted shells must feed
+the evidence field before envelope generation is integrated into `volassemble`.
 
 ## 4. Workflow integration (deferred)
 
@@ -153,8 +181,8 @@ feed the baseline before this reaches `volassemble`.
 
 Introduce a second per-state artifact rather than overloading the existing one:
 
-- `automask3D_stateNN.mrc` — unchanged, density-derived, consumed by NU support
-  and `envfsc`
+- `automask3D_stateNN.mrc` — unchanged, density-derived, consumed by `envfsc`
+  and retained as the fallback for `envref`
 - `nu_envmask3D_stateNN.mrc` — new, NU-evidence envelope, consumed by `envref`
   and final-map masking
 
@@ -176,21 +204,26 @@ with a fallback chain of `nu_envmask3D -> automask3D -> sphere`.
 ### 4.3 Hard constraints
 
 - the NU-evidence envelope must never reach `envfsc` (section 2.1);
-- the NU support must never be the tight envelope (section 2.2);
+- the NU support must remain the spherical `mskdiam` support (section 2.2);
 - envelope regeneration must not be able to shrink without bound (section 3.2).
 
 ## 5. Implementation phases
 
-- [ ] Phase 0: validate the standalone routine across the test set (section 7)
+- [x] Phase 0a: make spherical `mskdiam` support an invariant of the NU setup API.
+- [x] Phase 0b: align public policy and repository skills with spherical-only support.
+- [ ] Phase 0c: validate the standalone routine across the test set (section 7)
       and fix defaults from the parameter study (section 6).
-- [ ] Phase 1: collar-based null estimation (3.2) plus the shrink floor.
+- [ ] Phase 1: add the temporal shrink/recovery guard required by `envref`.
+- [ ] Deferred: collar-based null estimation (3.2), only if a future memory
+      optimization reintroduces dilated support.
 - [ ] Phase 2: feed accepted `nu_refine` extension shells into the raw evidence
       baseline (3.3).
 - [ ] Phase 3: `volassemble` writes `nu_envmask3D_stateNN.mrc` under lag-by-one;
       `simple_vol_pproc_policy` gains the second artifact in its plan type.
 - [ ] Phase 4: repoint `prepare_matching_reference_mask` at the new artifact
       with the three-step fallback chain.
-- [ ] Phase 5: promote to `doc/policies/automasking_policy.md` and
+- [ ] Phase 5: after workflow validation, promote the NU-evidence artifact and
+      consumer lifecycle to `doc/policies/automasking_policy.md` and
       `doc/policies/nonuniform_filtering_policy.md`.
 
 ## 6. Parameter optimization
@@ -203,7 +236,7 @@ with a fallback chain of `nu_envmask3D -> automask3D -> sphere`.
 | `amsklp` | 8.0 | envelope scale; margin smoothing radius is `min(1.5 x amsklp, 30 A)` |
 | `nu_msk_beta` | 1.0 | binary MRF boundary smoothness |
 | `nu_msk_dens` | 0.0 | weight of the local density term |
-| `nu_msk_rel` | no | scale-free (fractional) margin |
+| `nu_msk_rel` | no | scale-free cost-improvement ratio |
 | `nu_msk_minvol` | 0.1 | smallest connected component kept, as a fraction of the largest |
 | `binwidth` | 1 | dilation layers |
 | `edge` | 6 | cosine edge width |
@@ -225,11 +258,11 @@ Everything else is secondary:
   ordered protein from disordered lipid. Engage only if flexible density is
   still being lost after `nu_msk_sig`/`amsklp` are settled. Observed: 1.0 is far
   too high; expect the useful range below 0.4 if it is needed at all.
-- `nu_msk_rel` was observed to inflate the mask, because dividing by the baseline
-  amplifies exactly where the baseline is small — the periphery. Keep off unless
-  a genuinely low-occupancy domain is being lost. Its lever is the denominator
-  floor, currently hardcoded at 10% of the median baseline in
-  `nu_evidence_baseline_floor`.
+- `nu_msk_rel` is experimental. Its original bounded fractional reduction could
+  produce an empty envelope whenever `median + nu_msk_sig * MAD` exceeded one.
+  It now uses the unbounded ratio `baseline / best - 1`, with both costs
+  protected by the denominator floor. Keep it off by default until its intended
+  low-occupancy use has a dedicated fixture and real-data validation.
 - `nu_msk_minvol`, `binwidth`, `edge` are the topology and morphology tail. They
   determine the mask's *finish*, not its *quality*. Freeze them at sensible
   values before sweeping anything else, chosen from the consumer's needs —
@@ -270,6 +303,9 @@ solvent false-positive rate, and add:
   (30-50 A) lower-resolution appendage and score the fraction retained. This is
   the specific failure the symmetric-smoothing fix targets and it must have a
   regression pin.
+- Keep the default absolute-margin fixture as the required regression. Test
+  `nu_msk_rel` separately on an explicitly low-occupancy fixture; the present
+  general fixture must not assert that both statistics produce the same mask.
 
 **Tier 2 — real data with an atomic model.**
 
@@ -355,9 +391,10 @@ percentages, and component counts kept versus found. Emit these plus the section
 6.4 metrics as one CSV row per sweep point so surfaces can be plotted directly.
 
 Watch the signal percentage specifically: above 50% the median/MAD null is not
-trustworthy and the routine says so. On a generous spherical support that should
-never trigger; if it does, the support is too tight for the null estimator in
-use, which is the condition section 3.2 exists to remove.
+trustworthy and the routine says so. Spherical geometry does not guarantee this
+condition: if it triggers, `mskdiam` is too tight or the whole-support null model
+is unsuitable. Automatic workflow use of that envelope must stop rather than
+continuing after a warning.
 
 ## 9. Current state
 
@@ -369,9 +406,17 @@ Implemented and reachable through `nu_filt3D`:
   and morphology tail
 - `src/main/image/simple_image_bin.f90` — 3D hole filling unlocked, corner-seed
   guard added, `find_ccs` corrected to true 26-connectivity
-- `production/tests/simple_test_nu_envmask.f90` — synthetic regression
+- `production/tests/simple_test_nu_envmask.f90` — synthetic absolute-margin and
+  scale-free cost-improvement-ratio regressions
 - `production/tests/simple_test_cc_connectivity.f90` — connectivity regression
 
 Outputs `<vol>_nu_evidence.mrc` (raw margin field) and `<vol>_nu_envmask.mrc`
 (soft mask). The evidence map is the primary diagnostic: if it does not separate
 solvent from density, no threshold or smoothness setting will rescue the mask.
+
+Not yet implemented:
+
+- workflow-owned `nu_envmask3D_stateNN.mrc` artifacts
+- lag-by-one `envref` consumption and temporal recovery guards
+- evidence updates from accepted `nu_refine` extension shells
+- a purpose-built low-occupancy `nu_msk_rel` regression

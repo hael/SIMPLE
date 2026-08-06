@@ -1663,12 +1663,10 @@ contains
             &cleanup_nu_filter, write_nu_local_resolution_map, get_nu_filtmap_finest_selected_lp
         class(parameters), intent(in) :: params
         integer,           intent(in) :: nstates
-        type(image)  :: vol_e, vol_o, vin, vout, vmsk
+        type(image)  :: vol_e, vol_o, vin, vout
         type(string) :: fn, fn_out, spe, spo
         character(len=:), allocatable :: pe, po, base
-        logical, allocatable :: l_mask(:,:,:)
         integer :: s, ldim(3), ipass
-        real    :: mskrad_px
         ! consensus half maps: explicit vol_even/vol_odd if given, else derived from the vol1 stem
         base = params%vols(1)%to_char()
         if( len_trim(params%vol_even%to_char()) > 0 .and. len_trim(params%vol_odd%to_char()) > 0 )then
@@ -1697,10 +1695,7 @@ contains
         call vol_o%read_and_crop(spo, params%smpd, params%box_crop, params%smpd_crop)
         call spe%kill; call spo%kill
         ldim = [params%box_crop,params%box_crop,params%box_crop]
-        ! spherical support, as the rec_distr path does when no automask is available
-        mskrad_px = 0.5 * params%mskdiam / params%smpd_crop
-        call vmsk%disc(ldim, params%smpd_crop, mskrad_px, l_mask)
-        call setup_nu_dmats(vol_e, vol_o, l_mask, [real ::])
+        call setup_nu_dmats(vol_e, vol_o, params%mskdiam, [real ::])
         call optimize_nu_cutoff_finds()
         write(logfhandle,'(A,F8.2,A)') '>>> FLEX_PCA nufilt: finest selected local resolution ', &
             &get_nu_filtmap_finest_selected_lp(),' A'
@@ -1729,8 +1724,7 @@ contains
             end do
         end do
         call cleanup_nu_filter()
-        call vol_e%kill; call vol_o%kill; call vmsk%kill
-        if( allocated(l_mask) ) deallocate(l_mask)
+        call vol_e%kill; call vol_o%kill
         write(logfhandle,'(A)') '>>> FLEX_PCA nonuniform-filtered maps written as *_nu.mrc &
             &(originals retained); local resolution map: flex_pca_nu_locres.mrc'
         call flush(logfhandle)

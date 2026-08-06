@@ -9,8 +9,8 @@ The current architecture treats automasking as:
 - a workflow policy selected by `automsk`
 - a per-state artifact named by convention
 - a post-reconstruction operation owned by `volassemble`
-- NU-filter support that is independent of the default FSC mask
 - an opt-in input to phase-randomized FSC solvent correction
+- an opt-in input to matching-reference solvent flattening
 
 ## Public policy
 
@@ -30,6 +30,14 @@ reference with its compatible state automask. It changes only the references
 used to generate projections; particle images, FSC estimation, NU filtering,
 and matching-bandwidth selection are unchanged.
 
+NU filtering always uses the spherical support derived from `mskdiam`.
+Automasks do not define or restrict the NU objective domain.
+
+A future NU-evidence envelope is a separate correlation-derived artifact. It
+must not overwrite `automask3D_stateNN.mrc`, feed FSC correction, or replace
+spherical NU support. Its intended workflow consumer is matching-reference
+masking after independent validation and temporal recovery safeguards.
+
 `mskfile` is no longer part of the CLI policy. Passing `mskfile` is a hard error.
 
 ## Ownership
@@ -43,7 +51,6 @@ Responsibilities:
 - decide whether a state mask should exist
 - generate the mask from the current even/odd pair
 - persist the result as `automask3D_stateNN.mrc`
-- reuse the same state mask as input to nonuniform filtering when available
 
 ### `reconstructor_eo`
 
@@ -84,7 +91,7 @@ This avoids the old single-file collision problem in multi-state workflows and k
 1. `refine3D` or `abinitio3D` produces partial reconstructions.
 2. `volassemble` builds even, odd, and merged state volumes.
 3. If `automsk != 'no'`, `volassemble` may generate `automask3D_stateNN.mrc`.
-4. If a NU `filt_mode` is active, `volassemble` prefers that state mask as the nonuniform-filter support mask.
+4. If a NU `filt_mode` is active, the NU filter constructs spherical support from `mskdiam`.
 5. With `envfsc=no`, the FSC remains the broad-sphere curve and the automask has
    no FSC role.
 6. With `envfsc=yes`, `volassemble` calculates unmasked/broad-sphere, masked,
@@ -99,6 +106,7 @@ This avoids the old single-file collision problem in multi-state workflows and k
 - Masks are internal workflow artifacts; they are not recorded as explicit CLI outputs.
 - `tight` should be preserved end-to-end as a policy value, not collapsed to a boolean.
 - The implementation regenerates masks when they are missing or incompatible, at `startit`, and every `AMSK_FREQ` iterations.
+- NU filtering does not consume these masks.
 
 ## Compatibility rules
 

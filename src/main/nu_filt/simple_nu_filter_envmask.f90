@@ -9,6 +9,10 @@
 !
 !     margin(v) = dmats_mask(v, coarsest) - min over candidates of dmats_mask(v, c)
 !
+! The optional scale-free form is baseline / best - 1, with a robust cost
+! floor. Unlike a fractional reduction, this ratio remains compatible with an
+! unbounded median-plus-MAD decision threshold.
+!
 ! The selected label is a poor substitute: the coarsest bank member is a saturating
 ! bin that absorbs both solvent and genuinely coarse density, and taking the argmin
 ! discards the confidence.
@@ -29,7 +33,7 @@ contains
         real,    optional, intent(in)    :: lp_smooth
         logical, optional, intent(in)    :: l_relative
         real, allocatable :: full(:,:,:), base_full(:,:,:), tmp(:,:,:)
-        real    :: lp, floor_val, base_val
+        real    :: lp, floor_val, base_val, best_val
         logical :: l_rel
         integer :: imask, i, j, k
         if( .not.allocated(nu_ev_base) .or. .not.allocated(nu_ev_best) ) &
@@ -62,7 +66,7 @@ contains
         floor_val = 0.
         if( l_rel ) floor_val = nu_evidence_baseline_floor(base_full)
         !$omp parallel do schedule(static) default(shared) &
-        !$omp private(imask,i,j,k,base_val) proc_bind(close)
+        !$omp private(imask,i,j,k,base_val,best_val) proc_bind(close)
         do imask = 1, n_nu_mask
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
@@ -73,19 +77,23 @@ contains
             endif
             margin(imask) = max(0., full(i,j,k))
             if( l_rel )then
-                ! Fractional improvement rather than absolute, so that weak but
-                ! well-ordered density is not outvoted by a high-contrast core.
+                ! The cost-improvement ratio is scale-free without the hard
+                ! upper bound of a fractional reduction. That bound is
+                ! incompatible with a median-plus-MAD threshold, which can
+                ! legitimately exceed one.
                 base_val = base_full(i,j,k)
                 if( base_val >= NU_EVIDENCE_INVALID ) base_val = 0.
-                margin(imask) = margin(imask) / max(base_val, floor_val)
+                base_val = max(base_val, floor_val)
+                best_val = max(base_val - margin(imask), floor_val)
+                margin(imask) = base_val / best_val - 1.
             endif
         end do
         !$omp end parallel do
         deallocate(full, base_full, tmp)
     end subroutine calc_nu_evidence_margin
 
-    !>  Robust floor for the relative margin denominator, so that near-zero
-    !!  baseline costs cannot manufacture arbitrarily large evidence.
+    !>  Robust floor for the relative cost ratio, so that near-zero baseline or
+    !!  best-candidate costs cannot manufacture arbitrarily large evidence.
     module real function nu_evidence_baseline_floor( base_full ) result( floor_val )
         real, intent(in) :: base_full(:,:,:)
         real, allocatable :: work(:)
@@ -280,7 +288,10 @@ contains
         type(image) :: evmap
         real(kind=c_float), pointer :: rmat(:,:,:) => null()
         real, allocatable :: margin(:)
+        logical :: l_rel
         integer :: imask, i, j, k
+        l_rel = .false.
+        if( present(l_relative) ) l_rel = l_relative
         call calc_nu_evidence_margin(margin, lp_smooth, l_relative)
         call evmap%new(ldim, smpd, wthreads=.false.)
         call evmap%get_rmat_ptr(rmat)
@@ -295,7 +306,11 @@ contains
         !$omp end parallel do
         call evmap%write(fname, del_if_exists=.true.)
         write(logfhandle,'(A,A)') '>>> WROTE NU EVIDENCE MARGIN MAP: ', fname%to_char()
-        write(logfhandle,'(A)')   '    Units are normalized Huber objective improvement over the coarsest candidate.'
+        if( l_rel )then
+            write(logfhandle,'(A)') '    Values are dimensionless baseline-to-best Huber cost-improvement ratios.'
+        else
+            write(logfhandle,'(A)') '    Units are normalized Huber objective improvement over the coarsest candidate.'
+        endif
         call evmap%kill
         deallocate(margin)
     end subroutine write_nu_evidence_map

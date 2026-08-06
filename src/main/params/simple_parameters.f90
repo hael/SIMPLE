@@ -120,7 +120,7 @@ type :: parameters
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nu_envmsk='no'       !< derive an envelope mask from the nonuniform filter evidence margin(yes|no){no}
-    character(len=3)          :: nu_msk_rel='no'      !< use the scale-free (fractional) NU evidence margin for envelope masking(yes|no){no}
+    character(len=3)          :: nu_msk_rel='no'      !< use the scale-free cost-improvement ratio for NU evidence masking(yes|no){no}
     character(len=3)          :: nu_refine='no'       !< enable one-step high-resolution expansion refinement in the nonuniform filter(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}

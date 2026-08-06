@@ -17,7 +17,7 @@ Select the narrowest applicable skill before editing code:
 - `simple-refine3d`: probabilistic 3D refinement, matcher I/O, assembly handoffs, automasking, nonuniform filtering, and multi-state 3D behavior.
 - `simple-abinitio3d-importance-sampling`: abinitio3D `update_frac`/`nsample*`, `sampled`/`updatecnt`, `prob_align` reuse, and trailing-reconstruction coupling.
 - `simple-frac-update-trailing`: reference contract for fractional updates, online reconstruction I/O, previous halfmap/rho handoffs, and obsfield mirrors.
-- `simple-nonuniform-regularization`: `filt_mode=nonuniform|nonuniform_lpset`, `nu_refine`, `_nu_filt`/`_nu_locres` products, automask/mask precedence, and `simple_nu_filter` lifecycle.
+- `simple-nonuniform-regularization`: `filt_mode=nonuniform|nonuniform_lpset`, `nu_refine`, `_nu_filt`/`_nu_locres` products, spherical NU support, independent automask consumers, and `simple_nu_filter` lifecycle.
 - `simple-main-*`: subsystem guidance for `src/main` areas such as `ui`, `root`,
   `commanders`, `strategies`, `project`, `ori`, `pftc`, `image`, `params`,
   `nu_filt`, `volume`, and related modules.

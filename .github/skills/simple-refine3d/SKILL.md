@@ -92,8 +92,8 @@ Preserve that split when refactoring.
 - For fractional-update contracts, current partial reconstruction handoffs,
   previous even/odd/rho compatibility, or obsfield mirrors, read
   `.github/skills/simple-frac-update-trailing/SKILL.md`.
-- For `filt_mode=nonuniform`, `_nu_filt` reference products, automask/mask
-  precedence, or `simple_nu_filter` changes, read
+- For `filt_mode=nonuniform`, `_nu_filt` reference products, spherical NU
+  support, independent automask consumers, or `simple_nu_filter` changes, read
   `.github/skills/simple-nonuniform-regularization/SKILL.md`.
 
 ## Common Traps

@@ -5,24 +5,25 @@ implicit none
 
 contains
 
-    module subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, &
+    module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
             &n_highres_steps )
         class(image),          intent(in) :: vol_even, vol_odd
-        logical,               intent(in) :: l_mask(:,:,:)
+        real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps
-        type(image) :: vol_even_filt, vol_odd_filt
+        type(image) :: vol_even_filt, vol_odd_filt, vol_support
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
         real :: noise_sigma, finest_lp
         integer :: i, n_candidates, aux_replacement_idx
         real    :: x
         call init_nu_filter(vol_even, vol_odd, n_highres_steps)
-        if( any(shape(l_mask) /= ldim) ) THROW_HARD('l_mask shape mismatch in setup_nu_dmats')
+        if( mskdiam <= TINY ) THROW_HARD('mskdiam must be positive in setup_nu_dmats')
         if( allocated(nu_lmask) ) deallocate(nu_lmask)
-        allocate(nu_lmask(ldim(1),ldim(2),ldim(3)), source=l_mask)
-        if( .not. any(nu_lmask) ) THROW_HARD('l_mask has no true voxels in setup_nu_dmats')
+        call vol_support%disc(ldim, smpd, 0.5 * mskdiam / smpd, nu_lmask)
+        call vol_support%kill
+        if( .not. any(nu_lmask) ) THROW_HARD('spherical support has no true voxels in setup_nu_dmats')
         call setup_nu_mask_voxels
         aux_replacement_idx = 0
         if( present(aux_even) ) then

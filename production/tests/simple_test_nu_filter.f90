@@ -7,11 +7,10 @@ implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN)         :: even_file, odd_file, aux_even_file, aux_odd_file, out_even_file, out_odd_file
 character(len=:), allocatable :: smpd_char, mskdiam_char, aux_res_char
-type(image)                   :: vol_even, vol_odd, vol_even_nu, vol_odd_nu, vol_msk
+type(image)                   :: vol_even, vol_odd, vol_even_nu, vol_odd_nu
 type(image), allocatable      :: aux_even(:), aux_odd(:)
-logical, allocatable          :: l_mask(:,:,:)
 integer                       :: ldim_even(3), ldim_odd(3), ifoo, slen
-real                          :: smpd, mskdiam, mskrad_px, aux_res
+real                          :: smpd, mskdiam, aux_res
 integer(timer_int_kind)       :: t_start
 real(timer_int_kind)          :: rt_elapsed
 if( command_argument_count() /= 4 .and. command_argument_count() /= 6 .and. command_argument_count() /= 9 )then
@@ -77,19 +76,17 @@ if( command_argument_count() == 9 )then
     call aux_even(1)%set_smpd(smpd)
     call aux_odd(1)%set_smpd(smpd)
 endif
-mskrad_px = 0.5 * mskdiam / smpd
-call vol_msk%disc(ldim_even, smpd, mskrad_px, l_mask)
 t_start = tic()
 if( allocated(aux_even) )then
-    call setup_nu_dmats(vol_even, vol_odd, l_mask, [aux_res], aux_even, aux_odd)
+    call setup_nu_dmats(vol_even, vol_odd, mskdiam, [aux_res], aux_even, aux_odd)
 else
-    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
+    call setup_nu_dmats(vol_even, vol_odd, mskdiam, [real ::])
 endif
 call optimize_nu_cutoff_finds()
 call nu_filter_vols(vol_even_nu, vol_odd_nu)
 rt_elapsed = toc(t_start)
-call print_nu_filtmap_lowpass_stats(l_mask)
-call write_nu_local_resolution_map(string('nu_local_resolution_frequency.mrc'), l_mask)
+call print_nu_filtmap_lowpass_stats()
+call write_nu_local_resolution_map(string('nu_local_resolution_frequency.mrc'))
 call vol_even_nu%write(string(trim(out_even_file)))
 call vol_odd_nu%write(string(trim(out_odd_file)))
 write(logfhandle,'(a,f10.3,a)') 'nonuniform filtering elapsed wall time: ', rt_elapsed, ' s'
@@ -104,6 +101,5 @@ if( allocated(aux_even) )then
     call aux_odd(1)%kill
     deallocate(aux_even, aux_odd)
 endif
-call vol_msk%kill
 call cleanup_nu_filter()
 end program simple_test_nu_filter

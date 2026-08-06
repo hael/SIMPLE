@@ -195,8 +195,6 @@ subroutine new_filter( prgtab )
         ! mask controls
         call nu_filt3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)
-        call nu_filt3D%add_input(UI_MASK, automsk, &
-        &visibility=UI_VIS_ADVANCED)
         call nu_filt3D%add_input(UI_MASK, nu_envmsk, &
         &visibility=UI_VIS_ADVANCED)
         call nu_filt3D%add_input(UI_MASK, nu_msk_sig, &

@@ -66,7 +66,7 @@ if( count(l_supp) < 1 ) THROW_HARD('empty synthetic support mask')
 if( .not.all(l_supp .or. .not.l_true) ) THROW_HARD('ground-truth molecule is not inside the support')
 
 ! ---- NU setup and evidence ----------------------------------------------
-call setup_nu_dmats(even, odd, l_supp, [real ::])
+call setup_nu_dmats(even, odd, 2. * SUPP_RAD_PX * SMPD, [real ::])
 call optimize_nu_cutoff_finds()
 call calc_nu_evidence_margin(margin, LP_SMOOTH, .false.)
 if( size(margin) /= count(l_supp) ) THROW_HARD('evidence margin is not packed over the support')
@@ -124,8 +124,34 @@ if( recall < 0.70 ) THROW_HARD('envelope recovered too little of the ground-trut
 if( fpr    > 0.20 ) THROW_HARD('envelope admitted too much solvent')
 
 ! ---- the scale-free margin must recover the same molecule ----------------
+call calc_nu_evidence_margin(margin, LP_SMOOTH, .true.)
+if( any(.not.ieee_is_finite(margin)) ) THROW_HARD('scale-free evidence produced a non-finite value')
+if( any(margin < 0.) ) THROW_HARD('scale-free evidence must be non-negative by construction')
+mean_in  = 0.
+mean_out = 0.
+imask    = 0
+do k = 1,BOX
+    do j = 1,BOX
+        do i = 1,BOX
+            if( .not.l_supp(i,j,k) ) cycle
+            imask = imask + 1
+            if( l_true(i,j,k) )then
+                mean_in = mean_in + margin(imask)
+            else
+                mean_out = mean_out + margin(imask)
+            endif
+        enddo
+    enddo
+enddo
+mean_in  = mean_in  / real(n_in)
+mean_out = mean_out / real(n_out)
+write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,ES12.4)') &
+    &'mean relative margin, molecule: ', mean_in, '  solvent: ', mean_out, &
+    &'  range: ', minval(margin), ' to ', maxval(margin)
+if( mean_in <= 2. * mean_out ) THROW_HARD('scale-free evidence does not separate molecule from solvent')
 envp%l_relative = .true.
 call nu_evidence_envelope(envp, l_env_rel, envstats_rel)
+call print_nu_envmask_stats(envstats_rel)
 if( envstats_rel%n_signal < 1 ) THROW_HARD('scale-free segmentation produced an empty envelope')
 if( any(l_env_rel .and. .not.l_supp) ) THROW_HARD('scale-free envelope leaked outside the NU support')
 recall_rel = real(count(l_env_rel .and. l_true))                   / real(n_true)

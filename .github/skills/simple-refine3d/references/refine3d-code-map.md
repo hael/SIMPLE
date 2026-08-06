@@ -76,7 +76,8 @@ For public workflow policy, read `doc/policies/refine3D_policy.md` first.
   `POLAR_REFS*` availability checks and polar central-section loading for
   matcher/probability-table consumers.
 - `simple_vol_pproc_policy.f90`
-  Plan object for automask and nonuniform-filter mask selection.
+  Plan object for automask lifecycle and state-mask compatibility. NU support is
+  spherical and owned by `simple_nu_filter`.
 - `simple_reconstructor_eo.f90`
   FSC consumer of state masks.
 

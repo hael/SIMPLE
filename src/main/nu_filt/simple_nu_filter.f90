@@ -1,7 +1,7 @@
 !@descr: volume-domain nonuniform filtering of even/odd volumes
 !
 ! Static low-pass bank sequence:
-!    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
+!    call setup_nu_dmats(vol_even, vol_odd, mskdiam, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    call nu_filter_vols(vol_even_filt, vol_odd_filt)
 !    call cleanup_nu_filter()
@@ -18,7 +18,7 @@
 ! high-resolution bank is thinned to every second shell plus the current
 ! terminal shell. After the shell walk stops, the final accepted label map is
 ! cleaned with the ordered-label Potts prior over the expanded retained bank.
-!    call setup_nu_dmats(vol_even, vol_odd, l_mask, [real ::])
+!    call setup_nu_dmats(vol_even, vol_odd, mskdiam, [real ::])
 !    call optimize_nu_cutoff_finds()
 !    do
 !        call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=ext_stats)
@@ -164,7 +164,7 @@ type :: nu_envmask_params
     real    :: beta        = 1.0   ! binary MRF smoothness, same normalized units
     real    :: dens_weight = 0.0   ! weight of the local-density evidence term
     real    :: lp_smooth   = 8.0   ! scale, in Angstrom, at which the envelope is defined
-    logical :: l_relative  = .false. ! scale-free margin: improvement per unit baseline cost
+    logical :: l_relative  = .false. ! scale-free margin: baseline/best cost improvement ratio
     integer :: maxits      = 6     ! ICM sweeps
 end type nu_envmask_params
 
@@ -295,10 +295,10 @@ interface
     end subroutine delete_cached_filtered_pair
 
     ! In submodule: simple_nu_filter_bank.f90
-    module subroutine setup_nu_dmats( vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd, &
+    module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
             &n_highres_steps )
         class(image),          intent(in) :: vol_even, vol_odd
-        logical,               intent(in) :: l_mask(:,:,:)
+        real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps

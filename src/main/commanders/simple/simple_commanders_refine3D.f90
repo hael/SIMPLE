@@ -275,12 +275,8 @@ contains
         subroutine prepare_nu_bootstrap_refs_from_raw_halves()
             type(string)         :: init_even, init_odd, raw_even, raw_odd, candidate
             type(string)         :: out_even, out_odd, out_avg, out_locres
-            type(image)          :: vol_even_raw, vol_odd_raw, vol_even_nu, vol_odd_nu, vol_msk
-            type(image_msk)      :: envmsk
-            logical, allocatable :: l_mask(:,:,:)
-            integer, allocatable :: imat(:,:,:)
+            type(image)          :: vol_even_raw, vol_odd_raw, vol_even_nu, vol_odd_nu
             integer              :: ldim_even(3), ldim_odd(3), ldim(3), nptcls_dummy, n_bootstrap_steps
-            real                 :: mskrad_px
             logical              :: l_reconstruct_bootstrap
             if( .not. params%l_nonuniform ) return
             l_reconstruct_bootstrap = .false.
@@ -338,27 +334,11 @@ contains
                 call candidate%kill
                 call vol_even_raw%kill
                 call vol_odd_raw%kill
-                call vol_msk%kill
-                call envmsk%kill
-                if( allocated(l_mask) ) deallocate(l_mask)
-                if( allocated(imat)   ) deallocate(imat)
                 return
-            endif
-            if( params%automsk .ne. 'no' )then
-                call envmsk%automask3D(params, vol_even_raw, vol_odd_raw, l_tight=params%automsk.eq.'tight')
-                call envmsk%set_imat
-                call envmsk%get_imat(imat)
-                allocate(l_mask(ldim(1),ldim(2),ldim(3)))
-                l_mask = imat > 0
-                deallocate(imat)
-            else
-                mskrad_px = 0.5 * params%mskdiam / params%smpd
-                call vol_msk%disc(ldim, params%smpd, mskrad_px, l_mask)
             endif
             ! The parsed startup lp is a generic default, not evidence about
             ! the supplied half maps. Let NU inspect its full candidate bank.
-            call setup_nu_dmats(vol_even_raw, vol_odd_raw, l_mask, [real ::])
-            if( allocated(l_mask) ) deallocate(l_mask)
+            call setup_nu_dmats(vol_even_raw, vol_odd_raw, params%mskdiam, [real ::])
             call optimize_nu_cutoff_finds()
             if( params%l_nu_refine )then
                 call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps)
@@ -396,10 +376,6 @@ contains
             call vol_odd_raw%kill
             call vol_even_nu%kill
             call vol_odd_nu%kill
-            call vol_msk%kill
-            call envmsk%kill
-            if( allocated(l_mask) ) deallocate(l_mask)
-            if( allocated(imat)   ) deallocate(imat)
         end subroutine prepare_nu_bootstrap_refs_from_raw_halves
 
         subroutine set_refine3D_auto_sampling()

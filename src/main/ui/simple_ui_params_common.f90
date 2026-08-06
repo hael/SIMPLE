@@ -615,7 +615,7 @@ subroutine set_ui_params
                                    'fraction of largest{0.1}', .false., 0.1)
 
     call nu_msk_rel%set_param(     'nu_msk_rel',      'binary', 'Scale-free NU evidence margin', &
-                                   'Score the fractional rather than absolute objective improvement, so weak but well-ordered density is not outvoted by a high-contrast core(yes|no){no}','', .false., 'no', &
+                                   'Score the baseline-to-best objective improvement ratio, so weak but well-ordered density is not outvoted by a high-contrast core(yes|no){no}','', .false., 'no', &
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call nu_msk_sig%set_param(     'nu_msk_sig',      'num',    'NU envelope mask threshold', &

@@ -198,15 +198,13 @@ contains
         class(commander_nu_filt3D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)     :: params
-        type(image)          :: even, odd, even_nu, odd_nu, vol_msk, vol_dens
-        type(image_msk)      :: envmsk, nu_envelope
+        type(image)          :: even, odd, even_nu, odd_nu, vol_dens
+        type(image_msk)      :: nu_envelope
         type(nu_envmask_params) :: envp
         type(nu_envmask_stats)  :: envstats
         type(string)         :: even_out, odd_out, avg_out, locres_out, evid_out, envmsk_out
-        logical, allocatable :: l_mask(:,:,:), l_env(:,:,:)
-        integer, allocatable :: imat(:,:,:)
-        real                 :: mskrad_px
-        integer              :: ldim(3), n_ccs, n_ccs_kept
+        logical, allocatable :: l_env(:,:,:)
+        integer              :: n_ccs, n_ccs_kept
         logical              :: l_envmask
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -214,20 +212,7 @@ contains
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd%read(params%vols(1))
         call even%read(params%vols(2))
-        ldim = even%get_ldim()
-        if( params%automsk .ne. 'no' )then
-            call envmsk%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
-            call envmsk%set_imat
-            call envmsk%get_imat(imat)
-            allocate(l_mask(ldim(1),ldim(2),ldim(3)))
-            l_mask = imat > 0
-            deallocate(imat)
-        else
-            mskrad_px = 0.5 * params%mskdiam / params%smpd
-            call vol_msk%disc(ldim, params%smpd, mskrad_px, l_mask)
-        endif
-        call setup_nu_dmats(even, odd, l_mask, [real ::])
-        if( allocated(l_mask) ) deallocate(l_mask)
+        call setup_nu_dmats(even, odd, params%mskdiam, [real ::])
         call optimize_nu_cutoff_finds()
         odd_out  = add2fbody(params%vols(1), params%ext, NUFILT_SUFFIX)
         even_out = add2fbody(params%vols(2), params%ext, NUFILT_SUFFIX)
@@ -283,14 +268,11 @@ contains
         call even_nu%kill
         call odd%kill
         call even%kill
-        call vol_msk%kill
         call vol_dens%kill
-        call envmsk%kill
         call nu_envelope%kill
         call locres_out%kill
         call evid_out%kill
         call envmsk_out%kill
-        if( allocated(l_mask) ) deallocate(l_mask)
         if( allocated(l_env)  ) deallocate(l_env)
         call simple_end('**** SIMPLE_nu_filt3D NORMAL STOP ****')
     end subroutine exec_nu_filt3D

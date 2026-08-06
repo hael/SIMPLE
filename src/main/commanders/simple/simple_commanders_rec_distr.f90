@@ -263,25 +263,22 @@ contains
             &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
             &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
             &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map
-        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, AUTOMASK_ACTION_REGENERATE, &
-            &NU_MASK_SOURCE_FRESH_AUTOMASK, NU_MASK_SOURCE_EXISTING_AUTOMASK
+        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
+            &AUTOMASK_ACTION_REGENERATE, AUTOMASK_ACTION_REUSE
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
         type(image)                   :: vol_prev_even, vol_prev_odd, gridcorr_img, vol_merged
-        type(image)                   :: vol_even_nu, vol_odd_nu, vol_msk
+        type(image)                   :: vol_even_nu, vol_odd_nu
         type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
         type(image_msk)               :: mskvol
-        type(image_bin)               :: state_mask_bin
         type(string)                  :: volname, eonames(2)
         type(restore_timings_t)       :: restore_timings
         type(vol_pproc_plan)          :: pp_plan
-        logical, allocatable          :: l_mask(:,:,:)
         logical                       :: l_nonuniform_mode
-        integer, allocatable          :: imat(:,:,:)
         integer, allocatable          :: state_pops(:)
         logical, allocatable          :: l_state_dropped(:)
         real, allocatable             :: res0143s(:)
@@ -464,7 +461,7 @@ contains
             integer :: which_iter
             which_iter = 1
             if( cline%defined('which_iter') ) which_iter = params%which_iter
-            call plan_state_postprocess(params, state, which_iter, l_nonuniform_mode, pp_plan)
+            call plan_state_postprocess(params, state, which_iter, pp_plan)
             if( pp_plan%l_state_mask_incompatible )then
                 write(logfhandle,'(A,1X,A)') &
                     &'>>> Existing automask incompatible with current box/sampling, regenerating:', &
@@ -491,10 +488,10 @@ contains
             logical :: l_have_envelope
             if( .not. params%l_envfsc ) return
             l_have_envelope = .false.
-            select case( pp_plan%nu_mask_source )
-                case( NU_MASK_SOURCE_FRESH_AUTOMASK )
+            select case( pp_plan%automask_action )
+                case( AUTOMASK_ACTION_REGENERATE )
                     l_have_envelope = .true.
-                case( NU_MASK_SOURCE_EXISTING_AUTOMASK )
+                case( AUTOMASK_ACTION_REUSE )
                     call mskvol%kill_bimg
                     call mskvol%new_bimg(ldim, params%smpd_crop)
                     call mskvol%read_bimg(pp_plan%mskfile_state)
@@ -541,9 +538,7 @@ contains
 
         subroutine run_state_nonuniform_filter()
             if( L_BENCH_GLOB ) t_nonuniform_filter = tic()
-            call build_nonuniform_mask()
             call setup_nonuniform_filter()
-            if( allocated(l_mask) ) deallocate(l_mask)
             call release_nonuniform_aux_inputs()
             call optimize_nu_cutoff_finds()
             call refine_nonuniform_filter_bank()
@@ -556,31 +551,6 @@ contains
             if( L_BENCH_GLOB ) rt_nonuniform_filter = rt_nonuniform_filter + toc(t_nonuniform_filter)
         end subroutine run_state_nonuniform_filter
 
-        subroutine build_nonuniform_mask()
-            real :: mskrad_px
-            if( allocated(l_mask) ) deallocate(l_mask)
-            if( allocated(imat) ) deallocate(imat)
-            select case( pp_plan%nu_mask_source )
-                case( NU_MASK_SOURCE_FRESH_AUTOMASK )
-                    call mskvol%set_imat
-                    call mskvol%get_imat(imat)
-                case( NU_MASK_SOURCE_EXISTING_AUTOMASK )
-                    call state_mask_bin%new_bimg(ldim, params%smpd_crop)
-                    call state_mask_bin%read_bimg(pp_plan%mskfile_state)
-                    call state_mask_bin%get_imat(imat)
-                    call state_mask_bin%kill_bimg
-            end select
-            if( allocated(imat) )then
-                allocate(l_mask(ldim(1),ldim(2),ldim(3)))
-                l_mask = imat > 0
-                deallocate(imat)
-            endif
-            if( .not. allocated(l_mask) )then
-                mskrad_px = 0.5 * params%mskdiam / params%smpd_crop
-                call vol_msk%disc(ldim, params%smpd_crop, mskrad_px, l_mask)
-            endif
-        end subroutine build_nonuniform_mask
-
         subroutine setup_nonuniform_filter()
             integer :: n_highres_steps
             real    :: aux_resolution
@@ -591,10 +561,10 @@ contains
                 call nu_aux_even(1)%copy(vol_nu_aux_even)
                 call nu_aux_odd(1)%copy(vol_nu_aux_odd)
                 aux_resolution = nu_aux_effective_resolution()
-                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [aux_resolution], &
+                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, params%mskdiam, [aux_resolution], &
                     &nu_aux_even, nu_aux_odd, n_highres_steps=n_highres_steps)
             else
-                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, l_mask, [real ::], &
+                call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, params%mskdiam, [real ::], &
                     &n_highres_steps=n_highres_steps)
             endif
         end subroutine setup_nonuniform_filter
@@ -747,8 +717,6 @@ contains
             call vol_nu_aux_even%kill
             call vol_nu_aux_odd%kill
             call cleanup_nu_aux_images()
-            call vol_msk%kill
-            if( allocated(l_mask) ) deallocate(l_mask)
             call cleanup_nu_filter()
         end subroutine cleanup_nonuniform_state
 
@@ -864,17 +832,13 @@ contains
             call vol_nu_aux_odd%kill
             call vol_even_nu%kill
             call vol_odd_nu%kill
-            call vol_msk%kill
             call cleanup_nu_aux_images()
-            if( allocated(l_mask)                 ) deallocate(l_mask)
-            if( allocated(imat)                   ) deallocate(imat)
             if( allocated(state_pops)             ) deallocate(state_pops)
             if( allocated(l_state_dropped)        ) deallocate(l_state_dropped)
             if( allocated(res0143s)               ) deallocate(res0143s)
             if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             call cleanup_nu_filter()
-            call state_mask_bin%kill_bimg
             call mskvol%kill_bimg
             call pp_plan%mskfile_state%kill
             call volname%kill

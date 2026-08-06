@@ -7,10 +7,10 @@ today.
 ## 1. Scope
 
 Nonuniform filtering is a volume-domain reference-generation feature. It
-selects a local low-pass limit inside a support mask and writes NU-filtered
-derived volumes. Its candidate bank is not truncated by the FSC. The finest
-cutoff actually selected by the NU filter separately governs the matching
-bandwidth handed to later iterations.
+selects a local low-pass limit inside spherical `mskdiam` support and writes
+NU-filtered derived volumes. Its candidate bank is not truncated by the FSC.
+The finest cutoff actually selected by the NU filter separately governs the
+matching bandwidth handed to later iterations.
 
 It is not a separate final-map postprocessing workflow. `postprocess` and the
 automatic `reconstruct3D` postprocess step use the ordinary global
@@ -41,13 +41,14 @@ registration-reference topology.
 on by default in `refine3D_auto`, off by default elsewhere, and explicitly set
 to `no` by staged `abinitio3D`.
 
-`automsk` and `mskdiam` control the NU support mask. `ml_reg` can provide an
-auxiliary even/odd pair for static NU filtering, but not for `nu_refine=yes`
-shell-extension runs.
+`mskdiam` controls the spherical NU support mask. `automsk` is independent and
+may still produce density-derived masks for `envfsc` and `envref`. `ml_reg` can
+provide an auxiliary even/odd pair for static NU filtering, but not for
+`nu_refine=yes` shell-extension runs.
 
-`envfsc=no` is the default: the automask is NU support only and the provisional
-broad-sphere FSC remains the reported curve. `envfsc=yes` opts into
-phase-randomized solvent correction using the same state automask. FSC
+`envfsc=no` is the default and the provisional broad-sphere FSC remains the
+reported curve. `envfsc=yes` opts into phase-randomized solvent correction
+using the state automask. FSC
 correction changes the reported resolution metadata; it does not truncate the
 NU filter bank or directly set the NU matching bandwidth.
 
@@ -58,8 +59,8 @@ the FSC, particle images, or the selected matching low-pass limit.
 
 ## 3. Ownership
 
-`simple_vol_pproc_policy.f90` owns per-state postprocessing decisions:
-automask regeneration/reuse and the source of the NU support mask.
+`simple_vol_pproc_policy.f90` owns per-state automask regeneration/reuse
+decisions. NU support is fixed by the `simple_nu_filter` API.
 
 `commander_volassemble` in `simple_commanders_rec_distr.f90` owns execution:
 restoring half maps, planning postprocessing, running automask generation,
@@ -88,10 +89,10 @@ FSC/resolution metadata for the state has been calculated.
 
 For each state, `volassemble` then:
 
-1. plans the automask and NU mask source
+1. plans the automask action
 2. regenerates a state automask if needed
 3. optionally performs phase-randomized FSC solvent correction
-4. builds the NU support mask
+4. configures spherical NU support from `mskdiam`
 5. configures the full NU candidate bank
 6. optimizes the local filter map
 7. optionally runs `nu_refine` high-resolution shell extension
@@ -112,7 +113,7 @@ The NU filter consumes:
 
 - the current unfiltered even volume
 - the current unfiltered odd volume
-- a logical support mask
+- a spherical support diameter in Angstrom
 - optionally, an auxiliary even/odd replacement pair
 - optionally, the auxiliary pair's effective resolution in Angstrom
 
@@ -125,20 +126,38 @@ effective resolution comes from the state FSC(0.143) resolution,
 When `nu_refine=yes`, the ML-regularized auxiliary replacement is not supplied;
 the high-resolution shell challenger owns the resolution-extension experiment.
 
-## 6. Mask Selection
+## 6. Spherical Support Contract
 
-For workflow `volassemble`, NU mask precedence is:
+All NU entry paths use a spherical support mask derived from `mskdiam`.
+`setup_nu_dmats` constructs that mask internally; callers cannot supply an
+arbitrary logical envelope. This prevents density- or correlation-conditioned
+masks from changing the normalized Huber objective domain and keeps a broad
+solvent population available for future NU-evidence null estimation.
 
-1. a freshly regenerated state automask
-2. an existing compatible state automask when `automsk != 'no'`
-3. a spherical support mask derived from `mskdiam`
+Spherical geometry alone does not guarantee a valid solvent-majority null.
+`mskdiam` must be generous enough to include substantial solvent around the
+particle. If a NU-evidence segmentation reports more than half of support as
+signal, workflow integration must reject that envelope or use a statistically
+different null estimator; a warning alone is not sufficient for automatic
+reference masking.
 
-A reusable state automask must match the current cropped box and cropped
-sampling. Missing masks, incompatible masks, the stage start iteration, and
-`AMSK_FREQ` iterations trigger regeneration when automasking is enabled.
+The cost is memory: persistent objective storage scales as
+`n_support_voxels * n_candidates`. Any future proposal to reduce support with a
+dilated envelope must include a replacement null estimator, temporal recovery
+guards, and a measured memory justification. It must not silently weaken this
+API invariant.
 
-Standalone `nu_filt3D` follows the same practical mask choice: generate an
-automask when `automsk != 'no'`, otherwise use the spherical `mskdiam` mask.
+Automask generation and compatibility remain separate policies for `envfsc`
+and `envref`. Standalone `nu_filt3D` therefore exposes `mskdiam`, not `automsk`,
+for NU support.
+
+Mask ownership is strict:
+
+- spherical `mskdiam` support defines the NU objective domain
+- density-derived `automask3D_stateNN.mrc` may serve `envfsc` and current
+  `envref` behavior
+- a future correlation-derived NU-evidence envelope requires a distinct
+  artifact and must never feed FSC correction or NU support
 
 ## 7. Outputs
 

@@ -42,39 +42,37 @@ High-level order for each state:
 3. Reinsert low-resolution merged content into the even/odd pair.
 4. Apply gridding correction.
 5. Write base even, odd, and merged state volumes.
-6. Plan automask and nonuniform-mask behavior with `plan_state_postprocess`.
+6. Plan automask behavior with `plan_state_postprocess`.
 7. Generate or reuse the state automask if requested.
-8. Build a logical nonuniform support mask from automask or spherical `mskdiam`.
+8. Pass `mskdiam` to `setup_nu_dmats`, which constructs spherical NU support.
 9. Run `simple_nu_filter`.
 10. Write `_nu_filt` even, odd, merged, and `_nu_locres` derived products.
 11. Record the selected NU matching low-pass and refresh polar reference sections for the next matcher pass.
 
-## Mask Policy
+## Support and Automask Policy
 
 Policy owner:
 
 - `src/main/volume/simple_vol_pproc_policy.f90`
 
-`plan_state_postprocess(params, state, which_iter, l_nonuniform_mode, plan)` decides:
+`plan_state_postprocess(params, state, which_iter, plan)` decides:
 
 - whether automasking is enabled
 - whether an existing state mask exists
 - whether that mask is compatible with current `box_crop` and `smpd_crop`
 - whether to regenerate or reuse automask
-- which mask source nonuniform filtering should use
 
-Nonuniform mask source precedence:
-
-1. `NU_MASK_SOURCE_FRESH_AUTOMASK`
-2. `NU_MASK_SOURCE_EXISTING_AUTOMASK`
-3. `NU_MASK_SOURCE_SPHERICAL`
+NU support is not part of this plan. `setup_nu_dmats` accepts `mskdiam` in
+Angstrom and constructs spherical support internally. Callers cannot supply a
+density automask or arbitrary logical envelope.
 
 Automask file convention:
 
 - `automask3D_stateNN.mrc`
 
 Compatibility requires all three dimensions to match `box_crop` and sampling
-distance to match `smpd_crop` within tolerance.
+distance to match `smpd_crop` within tolerance. Those checks protect the
+independent `envfsc` and `envref` automask consumers, not NU support.
 
 ## Numerical Filter Module
 
@@ -86,7 +84,7 @@ Implementation owner:
 Required lifecycle:
 
 ```fortran
-call setup_nu_dmats(vol_even, vol_odd, l_mask, aux_resolutions, aux_even, aux_odd)
+call setup_nu_dmats(vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd)
 call optimize_nu_cutoff_finds()
 call nu_filter_vols(vol_even_nu, vol_odd_nu)
 call cleanup_nu_filter()
@@ -110,7 +108,7 @@ high-resolution extension only when `nu_refine=yes`.
 `setup_nu_dmats`:
 
 - validates input even/odd dimensions and sampling
-- validates mask shape and nonempty support
+- validates positive `mskdiam` and constructs nonempty spherical support
 - builds Butterworth filters for the cutoff bank
 - caches filtered base even/odd pairs on disk
 - computes mask-packed objective costs for each candidate
@@ -192,11 +190,13 @@ simple_test_nu_filter even.mrc odd.mrc smpd mskdiam [out_even.mrc out_odd.mrc] [
 For code changes, consider:
 
 - focused build/test of `simple_test_nu_filter`
+- building and running `simple_test_nu_envmask`; require both the default
+  absolute-margin and scale-free `nu_msk_rel` quality regressions to pass
 - checking cleanup removes `nu_filter_cache_even_k_*.mrc` and
   `nu_filter_cache_odd_k_*.mrc`
 - checking nonuniform mode still falls back to regular references before
   `_nu_filt` files exist
-- checking multi-state automask naming and compatibility behavior
+- checking multi-state automask naming and compatibility for `envfsc`/`envref`
 - checking `ml_reg=yes` static-NU auxiliary replacement
 - checking `nu_refine=yes` shell extension and `nu_highres_depth_stateNN.txt`
   persistence
@@ -205,8 +205,8 @@ For code changes, consider:
 
 - The base candidate bank is disk-backed, which creates avoidable filesystem traffic.
 - The module uses module-level state, which makes concurrent use awkward.
-- `volassemble` still contains substantial orchestration around mask creation,
-  auxiliary setup, logging, output naming, and cleanup.
+- `volassemble` still contains substantial orchestration around automask
+  generation, auxiliary setup, logging, output naming, and cleanup.
 
 Preferred architectural direction:
 

@@ -42,12 +42,14 @@ low-level postprocessing or polar-reference reduction logic.
 
 ## Important Current Behavior
 
-- `plan_state_postprocess` decides whether automask runs and whether the state
-  mask should feed nonuniform filtering.
+- `plan_state_postprocess` decides whether automask runs and whether an existing
+  state mask is compatible for automask consumers.
 - State masks are named `automask3D_stateNN.mrc`.
 - Compatibility is box plus sampling equality, not just dimensions.
-- Nonuniform filtering prefers the compatible state mask; otherwise it falls
-  back to a spherical mask from `mskdiam`.
+- Nonuniform filtering always uses spherical support from `mskdiam`, constructed
+  internally by `setup_nu_dmats`.
+- Density automasks remain independent inputs to `envfsc` and `envref`; they do
+  not restrict the NU objective domain.
 - `automsk=tight` is a real policy value and should not be silently collapsed away.
 - Cartesian assembly always refreshes polar central sections for subsequent 3D
   matching, even when the scientific output is Cartesian volumes.
@@ -70,5 +72,6 @@ low-level postprocessing or polar-reference reduction logic.
 - Reintroducing postprocessing logic back into refine3D strategy code.
 - Treating assembly commanders as distributed-only helpers or plain I/O combiners.
 - Using a mask compatibility rule in one place and a different one somewhere else.
-- Forgetting that nonuniform filtering and FSC may consume the same state mask for different purposes.
+- Reusing a density automask or future NU-evidence envelope as NU support.
+- Sending a correlation-derived NU-evidence envelope into FSC correction.
 - Having probability-table code reproject Cartesian volumes instead of consuming materialized polar reference files.

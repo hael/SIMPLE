@@ -1,6 +1,6 @@
 ---
 name: simple-nonuniform-regularization
-description: Use when working on SIMPLE's nonuniform filtering and volume-domain regularization path, including filt_mode=nonuniform or nonuniform_lpset, nu_refine, simple_nu_filter, nonuniform mask selection, _nu_filt/_nu_locres outputs, ML-regularized auxiliary replacement coupling, or volassemble postprocessing.
+description: Use when working on SIMPLE's nonuniform filtering and volume-domain regularization path, including filt_mode=nonuniform or nonuniform_lpset, nu_refine, simple_nu_filter, spherical NU support, _nu_filt/_nu_locres outputs, ML-regularized auxiliary replacement coupling, or volassemble postprocessing.
 ---
 
 # SIMPLE Nonuniform Regularization
@@ -19,7 +19,8 @@ nonuniform even/odd and merged reference volumes.
      `src/main/params`, `simple_abinitio_controller`.
    - Assembly orchestration: `commander_cartesian_volassemble` in
      `simple_commanders_rec_distr.f90`.
-   - Mask precedence and automask cadence: `simple_vol_pproc_policy.f90`.
+   - Automask cadence and compatibility: `simple_vol_pproc_policy.f90`.
+   - Spherical NU support: `src/main/nu_filt/simple_nu_filter_bank.f90`.
    - Numerical filter implementation: `src/main/nu_filt/simple_nu_filter.f90`.
    - Reference consumption by matchers: `simple_matcher_refvol_utils.f90`.
 3. Preserve the execution point: nonuniform filtering runs after even/odd
@@ -33,9 +34,11 @@ nonuniform even/odd and merged reference volumes.
 
 - Do not move nonuniform filtering into matcher/search code. Matchers may prefer
   NU references when available, but `volassemble` generates them.
-- Keep mask policy centralized in `plan_state_postprocess`. Nonuniform mask
-  precedence is fresh compatible automask, existing compatible state automask,
-  then spherical mask from `mskdiam`.
+- Keep spherical support as an invariant of `setup_nu_dmats`: it accepts
+  `mskdiam` in Angstrom and constructs the logical sphere internally. Do not
+  reintroduce caller-supplied automasks or arbitrary logical support.
+- Keep density automask lifecycle centralized in `plan_state_postprocess` for
+  its independent `envfsc` and `envref` consumers.
 - Preserve shared-memory and distributed parity by changing the Cartesian
   assembly path, not only a single execution mode.
 - Treat `simple_nu_filter` as stateful during a call sequence. The required
@@ -62,15 +65,16 @@ nonuniform even/odd and merged reference volumes.
 Describe it as local selection among candidate filtered even/odd pairs:
 
 - build a low-pass candidate bank from the unfiltered even/odd pair
+- construct spherical objective support from `mskdiam`
 - optionally replace the finest bank member with a finer auxiliary pair
 - compute mask-packed voxelwise objective costs
-- smooth each candidate objective inside the logical support mask
+- smooth each candidate objective inside spherical support
 - choose the best candidate per voxel
 - apply ordered-label Potts smoothing
 - synthesize filtered even/odd outputs, the merged `_nu_filt` volume, and the
   `_nu_locres` diagnostic map
 
-### Modify mask behavior
+### Modify support or automask behavior
 
 Read:
 
@@ -79,8 +83,11 @@ Read:
 - `src/main/volume/simple_vol_pproc_policy.f90`
 - `src/main/commanders/simple/simple_commanders_rec_distr.f90`
 
-Keep compatibility checks on dimensions and sampling distance. Do not bypass
-state-specific automask naming: `automask3D_stateNN.mrc`.
+For NU support changes, preserve the spherical-only `setup_nu_dmats` API unless
+an explicit policy change includes a statistically valid null estimator and a
+memory plan. For automask consumers, keep compatibility checks on dimensions
+and sampling distance and preserve state-specific naming:
+`automask3D_stateNN.mrc`.
 
 ### Modify filter optimization or performance
 
@@ -112,7 +119,8 @@ The intended behavior is:
 
 - "volume-domain nonuniform filtering"
 - "local low-pass candidate selection"
-- "support-mask precedence"
+- "spherical NU support"
+- "independent automask lifecycle"
 - "derived `_nu_filt` reference products"
 - "derived `_nu_locres` diagnostic products"
 - "assembly-owned postprocessing"
@@ -122,5 +130,6 @@ Avoid:
 
 - describing nonuniform filtering as a particle-domain regularizer
 - conflating `filt_mode=nonuniform` with FSC or uniform low-pass filtering
-- treating automask and nonuniform-mask policy as separate ad hoc decisions
+- implying density automasks define the NU objective domain
+- reusing a future NU-evidence envelope for FSC correction
 - implying `_nu_filt` volumes replace the base reconstruction outputs

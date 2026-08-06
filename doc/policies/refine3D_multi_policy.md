@@ -488,8 +488,8 @@ generation by default. If the user enables `automsk=yes` or `automsk=tight`,
 state-specific mask production and compatibility rules follow
 [automasking_policy.md](automasking_policy.md).
 
-When NU filtering is active, support-mask selection and matching-bandwidth
-handoff follow [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md).
+When NU filtering is active, spherical support and matching-bandwidth handoff
+follow [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md).
 `refine3D_multi` must not add a second source of NU handoff state.
 
 The workflow is LP-set multi-state refinement, not gold-standard-style terminal
