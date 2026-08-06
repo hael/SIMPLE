@@ -219,9 +219,15 @@ interface
 
 end interface
 
-! particle I/O concurrency, probed once per process by io_read_nstreams
-logical :: l_io_nstreams_probed = .false.
-integer :: io_nstreams_cap      = 8
+! Particle I/O concurrency, memoized per device by io_read_nstreams. A run can span
+! devices -- slow disk for the particle stacks, fast one for the cache -- so the
+! verdict is keyed on st_dev rather than being a single process-wide value.
+integer, parameter :: MAX_IO_DEVS = 8
+integer :: io_dev_ids(MAX_IO_DEVS)  = -1
+integer :: io_dev_caps(MAX_IO_DEVS) = 0
+integer :: n_io_devs                = 0
+logical :: l_io_env_probed          = .false.
+integer :: io_nstreams_env          = 0
 
 contains
 
@@ -358,45 +364,88 @@ contains
         end select
     end function fs_is_rotational
 
-    !> \brief How many stacks to read from concurrently, given nreq are available.
-    !!         The right queue depth is a property of the storage, not of the CPU,
-    !!         so nthr_glob is never the answer: on a spinning disk many concurrent
-    !!         readers turn per-stack sequential runs into head thrashing, while on
-    !!         flash a handful of streams already saturates the device. Probed once
-    !!         per process against fname; SIMPLE_IO_NSTREAMS overrides.
+    !> \brief How many files to read from concurrently, given nreq are available.
+    !!
+    !!  The right queue depth is a property of the storage, not of the CPU, so nthr_glob
+    !!  is never the answer: on a spinning disk many concurrent readers turn per-file
+    !!  sequential runs into head thrashing, while on flash a handful of streams already
+    !!  saturates the device.
+    !!
+    !!  The verdict is memoized per device rather than per process, because a run can
+    !!  legitimately span devices -- particle stacks on a slow disk and a particle cache
+    !!  on a fast one is exactly the case cache_dir exists to serve. Caching one global
+    !!  answer would apply whichever device happened to be touched first to both.
+    !!  SIMPLE_IO_NSTREAMS overrides every device.
     function io_read_nstreams( fname, nreq ) result( nstreams )
         class(*), intent(in) :: fname
         integer,  intent(in) :: nreq
-        integer            :: nstreams
-        character(len=32)  :: envval
-        integer            :: ival, envlen, envstat
-        if( .not. l_io_nstreams_probed )then
-            l_io_nstreams_probed = .true.
+        integer :: nstreams
+        nstreams = max(1, min(nreq, io_nstreams_for_device(fname)))
+    end function io_read_nstreams
+
+    !> \brief Concurrency cap for the device backing fname, probed once per device.
+    function io_nstreams_for_device( fname ) result( cap )
+        class(*), intent(in) :: fname
+        integer, allocatable :: statbuf(:)
+        character(len=32)    :: envval
+        integer :: cap, idev, ival, envlen, envstat, devid, stat_status
+        ! environment override, resolved once and applied to every device
+        if( .not. l_io_env_probed )then
+            l_io_env_probed = .true.
             call get_environment_variable(SIMPLE_IO_NSTREAMS, envval, envlen, envstat)
             if( envstat == 0 .and. envlen > 0 )then
                 read(envval(:envlen), *, iostat=envstat) ival
                 if( envstat == 0 .and. ival > 0 )then
-                    io_nstreams_cap = ival
-                    write(logfhandle,'(A,I4)') '>>> PARTICLE I/O STREAMS (SIMPLE_IO_NSTREAMS): ', io_nstreams_cap
-                    nstreams = max(1, min(nreq, io_nstreams_cap))
-                    return
+                    io_nstreams_env = ival
+                    write(logfhandle,'(A,I4)') '>>> PARTICLE I/O STREAMS (SIMPLE_IO_NSTREAMS): ', io_nstreams_env
                 endif
             endif
-            select case( fs_is_rotational(fname) )
-                case(1)
-                    ! spinning disk: keep the head on one run at a time, with just
-                    ! enough depth for the drive to overlap seek and transfer
-                    io_nstreams_cap = 2
-                    write(logfhandle,'(A)') '>>> PARTICLE I/O: rotational storage detected, limiting concurrent stack reads'
-                case(0)
-                    io_nstreams_cap = 16
-                case default
-                    ! macOS, network/distributed filesystems, device-mapper stacks
-                    io_nstreams_cap = 8
-            end select
         endif
-        nstreams = max(1, min(nreq, io_nstreams_cap))
-    end function io_read_nstreams
+        if( io_nstreams_env > 0 )then
+            cap = io_nstreams_env
+            return
+        endif
+        ! device identity: values(1) of the POSIX stat buffer is st_dev
+        call simple_file_stat(fname, stat_status, statbuf)
+        devid = -1
+        if( stat_status == 0 ) devid = statbuf(1)
+        do idev = 1, n_io_devs
+            if( io_dev_ids(idev) == devid )then
+                cap = io_dev_caps(idev)
+                return
+            endif
+        end do
+        select case( fs_is_rotational(fname) )
+            case(1)
+                ! spinning disk: keep the head on one run at a time, with just
+                ! enough depth for the drive to overlap seek and transfer
+                cap = 2
+                write(logfhandle,'(A)') '>>> PARTICLE I/O: rotational storage detected for '//&
+                    &trim(io_name_of(fname))//', limiting concurrent reads'
+            case(0)
+                cap = 16
+            case default
+                ! macOS, network/distributed filesystems, device-mapper stacks
+                cap = 8
+        end select
+        if( n_io_devs < MAX_IO_DEVS )then
+            n_io_devs             = n_io_devs + 1
+            io_dev_ids(n_io_devs) = devid
+            io_dev_caps(n_io_devs)= cap
+        endif
+    end function io_nstreams_for_device
+
+    function io_name_of( fname ) result( nm )
+        class(*), intent(in) :: fname
+        character(len=STDLEN) :: nm
+        nm = ''
+        select type(fname)
+            type is (string)
+                nm = fname%to_char()
+            type is (character(*))
+                nm = fname
+        end select
+    end function io_name_of
 
     !> \brief Touch file, create file if necessary
     subroutine simple_touch( fname )
