@@ -167,7 +167,7 @@ contains
             call simple_end('**** SIMPLE_ABINITIO2D CHECKPOINT NORMAL STOP ****')
             return
         endif
-        call execute_terminal_prob_pass
+        call execute_terminal_pass( terminal_policy=terminal_policy )
         ! transfer 2D shifts to 3D field only when no prior valid 3D alignment exists
         call spproj%read_segment(params%oritype,params%projfile)
         call spproj%read_segment('ptcl3D',params%projfile)
@@ -386,7 +386,8 @@ contains
             if( allocated(phase_label) ) deallocate(phase_label)
         end subroutine execute_cluster2D
 
-        subroutine execute_terminal_prob_pass
+        subroutine execute_terminal_pass( terminal_policy )
+            procedure(terminal_cline_policy), optional :: terminal_policy
             type(string) :: terminal_refs
             integer      :: terminal_start
             if( .not. any(stage_parms(:)%l_update_frac) ) return
@@ -408,7 +409,7 @@ contains
             call cline_cluster2D%delete('endit')
             call execute_cluster2D('terminal_prob', nstages + 1)
             call terminal_refs%kill
-        end subroutine execute_terminal_prob_pass
+        end subroutine execute_terminal_pass
 
         subroutine output_stats( prefix )
             character(len=*) :: prefix
