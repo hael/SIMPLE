@@ -126,9 +126,11 @@ contains
                     nframes_first = nframes
                 else
                     if( nframes /= nframes_first )then
-                        write(logfhandle,*) abs_moviename%to_char(), ' has ', nframes, ' frame(s)'
-                        write(logfhandle,*) 'Previous import have ', nframes_first, ' frame(s)'
-                        THROW_HARD('You cannot import both micrographs and movies at the same time! add_movies')
+                        if( (nframes_first==1) .or. (nframes==1) ) then
+                            write(logfhandle,*) abs_moviename%to_char(), ' has ', nframes, ' frame(s)'
+                            write(logfhandle,*) 'Previous import have ', nframes_first, ' frame(s)'
+                            THROW_HARD('You cannot import movies together with micrographs! add_movies')
+                        endif
                     endif
                 endif
             endif
