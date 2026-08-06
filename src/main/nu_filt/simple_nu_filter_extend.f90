@@ -13,14 +13,14 @@ contains
         real, optional, intent(in) :: accept_pct
         type(image)       :: vol_even_filt_new, vol_odd_filt_new
         type(string)      :: even_cache_fname, odd_cache_fname
-        real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest_mask(:)
+        real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest_mask(:), evidence_candidate(:)
         integer, allocatable :: frontier_vox(:)
         integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label
         integer           :: old_radius_px, new_radius_px, n_seed_min
         real              :: accept_pct_eff, pct_finest, x, noise_sigma, old_radius_angstrom, new_radius_angstrom
         integer(kind=NU_LABEL_KIND), allocatable :: extend_choice(:)
         type(nu_highres_extension_stats) :: local_stats
-        integer           :: i
+        integer           :: i, j, k, imask
         logical           :: l_permissive_accept
         local_stats%new_limit = new_limit
         accept_pct_eff = NU_HIGHRES_EXTENSION_ACCEPT_PCT
@@ -120,6 +120,15 @@ contains
             &nu_lmask, noise_sigma)
         call vol_even_filt_new%kill
         call vol_odd_filt_new%kill
+        allocate(evidence_candidate(n_nu_mask), source=huge(x))
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            evidence_candidate(imask) = dmat_new(i,j,k)
+        end do
+        !$omp end parallel do
         call smooth_nu_objective(dmat_new, dmat_tmp, new_limit)
         allocate(dmat_finest_mask(n_nu_mask), source=huge(x))
         if( allocated(dmat_finest_cached) )then
@@ -189,7 +198,7 @@ contains
             endif
             call delete_cached_filtered_pair(new_find)
             if( allocated(extend_choice) ) deallocate(extend_choice)
-            deallocate(dmat_new, dmat_finest_mask)
+            deallocate(dmat_new, dmat_finest_mask, evidence_candidate)
             if( present(stats) ) stats = local_stats
             return
         end if
@@ -205,7 +214,7 @@ contains
                         &NU_DMAT_CANDIDATE_CAP, ' candidates'
                 call delete_cached_filtered_pair(new_find)
                 if( allocated(extend_choice) ) deallocate(extend_choice)
-                deallocate(dmat_new, dmat_finest_mask)
+                deallocate(dmat_new, dmat_finest_mask, evidence_candidate)
                 if( present(stats) ) stats = local_stats
                 return
             endif
@@ -215,13 +224,17 @@ contains
         local_stats%old_limit = cutoff_find_to_lowpass_limit(sz_old)
         local_stats%n_extended = n_extended
         if( n_finest > 0 ) local_stats%pct_extended_tested = 100. * real(n_extended) / real(n_finest)
+        if( .not.allocated(nu_ev_best) ) THROW_HARD('NU evidence storage missing during accepted shell extension')
+        if( size(nu_ev_best) /= size(evidence_candidate) ) &
+            &THROW_HARD('NU evidence size mismatch during accepted shell extension')
+        nu_ev_best = min(nu_ev_best, evidence_candidate)
         call apply_nu_highres_extension_selection(frontier_vox, extend_choice, sz_old, sz_old + 1)
         call append_and_thin_nu_highres_candidate(dmat_new, sz_old, new_find)
         call cache_nu_highres_extension_frontier_after_selection(dmat_new, frontier_vox, extend_choice)
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &write(logfhandle,'(A,I12,A,F8.2,A)') '>>> Extended ', n_extended, ' voxels to ', new_limit, ' A'
         if( allocated(extend_choice) ) deallocate(extend_choice)
-        deallocate(dmat_new, dmat_finest_mask)
+        deallocate(dmat_new, dmat_finest_mask, evidence_candidate)
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres
 

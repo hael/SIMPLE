@@ -90,8 +90,6 @@ contains
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
         if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',           'no') ! broad spherical FSC by default
-        if( .not. cline%defined('envref')      ) &
-            &call cline%set('envref',           'no') ! spherical matching-reference mask by default
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',            'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',            'no') ! 4 now, probably fine
         if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est',     'global') ! 4 now, probably fine
@@ -190,7 +188,6 @@ contains
         call cline_rec3D%delete('objfun_den_w')
         call cline_rec3D%delete('sigma_est')
         call cline_rec3D%delete('update_frac')
-        call cline_rec3D%delete('envref')             ! matching-reference policy only
         call cline_rec3D%delete('box_crop')           ! original image dimensions
         call cline_rec3D%delete('smpd_crop')
         call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
@@ -213,6 +210,7 @@ contains
         call cline_rec3D%set('postprocess', 'yes')
         if( params%l_nonuniform )then
             call cline_rec3D%set('filt_mode', 'none')
+            call cline_rec3D%set('automsk', 'no')
         endif
         call cline_rec3D%set('nu_refine', 'no')
         call xrec3D%execute(cline_rec3D)
@@ -577,7 +575,6 @@ contains
         call cline%set('combine_eo',      'no')
         ! overridable defaults
         if( .not. cline%defined('envfsc')          ) call cline%set('envfsc',               'no')
-        if( .not. cline%defined('envref')          ) call cline%set('envref',               'no')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',            'yes')
         if( .not. cline%defined('center')          ) call cline%set('center',            'no')
         if( .not. cline%defined('sigma_est')       ) call cline%set('sigma_est',     'global')
@@ -643,7 +640,10 @@ contains
         call cline_rec3D%delete('box_crop')
         call cline_rec3D%delete('smpd_crop')
         call cline_rec3D%set('objfun', 'cc')
-        if( params%l_nonuniform ) call cline_rec3D%set('filt_mode', 'none')
+        if( params%l_nonuniform )then
+            call cline_rec3D%set('filt_mode', 'none')
+            call cline_rec3D%set('automsk', 'no')
+        endif
         call cline_rec3D%set('nu_refine', 'no')
         call xrec3D%execute(cline_rec3D)
         call params_final_rec%new(cline_rec3D)

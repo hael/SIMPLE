@@ -133,6 +133,7 @@ contains
                 call cline_rec%set('ml_reg',       'no')
                 call cline_rec%set('postprocess',  'no')
                 call cline_rec%set('filt_mode',    'none')
+                call cline_rec%set('automsk',      'no')
             endif
         end subroutine prepare_bootstrap_rec_cline
 

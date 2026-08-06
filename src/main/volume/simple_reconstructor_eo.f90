@@ -2,7 +2,6 @@
 module simple_reconstructor_eo
 use simple_core_module_api
 use simple_reconstructor,   only: reconstructor
-use simple_image_msk,       only: image_msk
 use simple_parameters,      only: parameters
 use simple_image,           only: image
 use simple_sp_project,      only: sp_project
@@ -20,7 +19,6 @@ type :: reconstructor_eo
     type(reconstructor), public :: even       !< Only made public for the sake of GPU implementation
     type(reconstructor), public :: odd        !< Only made public for the sake of GPU implementation
     type(reconstructor) :: eosum
-    type(image_msk)     :: envmask
     type(string)        :: ext
     real, allocatable   :: fsc(:)
     real                :: res_fsc05          !< target resolution at FSC=0.5
@@ -120,7 +118,6 @@ contains
         self%mag_correction = real(self%p_ptr %box) ! consistent with the current scheme
         self%ldim           = [self%box,self%box,self%box]
         ! create composites
-        call self%envmask%new([self%box,self%box,self%box],self%smpd)
         call self%even%new(self%ldim, self%p_ptr %smpd)
         call self%even%alloc_rho(self%p_ptr, spproj, expand=l_expand)
         call self%even%set_ft(.true.)
@@ -535,7 +532,7 @@ contains
                 endif
             else
                 ! masking: try to load state-specific mask if automsk enabled
-                call load_state_mask_or_fallback(self, state, even, odd)
+                call load_state_mask_or_fallback(self, even, odd)
                 ! calculate FSC
                 call even%fft()
                 call odd%fft()
@@ -598,7 +595,7 @@ contains
             call odd%write(fname_odd,   del_if_exists=.true.)
             if( .not. l_have_fsc )then
                 ! masking: try to load state-specific mask if automask/envfsc enabled
-                call load_state_mask_or_fallback(self, state, even, odd)
+                call load_state_mask_or_fallback(self, even, odd)
                 ! calculate FSC
                 call even%fft()
                 call odd%fft()
@@ -624,38 +621,15 @@ contains
         call cones_fsc%kill
     end subroutine sampl_dens_correct_eos
 
-    !> Load state-specific automask file if it exists, or use circular fallback
-    subroutine load_state_mask_or_fallback( self, state, even, odd )
-        use simple_vol_pproc_policy, only: state_mask_is_compatible
+    !> Apply the ordinary spherical FSC mask; envfsc is disabled until its
+    !!  on-the-fly density masker is implemented.
+    subroutine load_state_mask_or_fallback( self, even, odd )
         class(reconstructor_eo), intent(inout) :: self
-        integer,                 intent(in)    :: state
         class(image),            intent(inout) :: even, odd
-        type(string)  :: mskfile_state
-        logical       :: l_state_mask_exists, l_state_mask_compatible
-        if( self%p_ptr%l_envfsc .and. (trim(self%p_ptr%automsk).ne.'no') .and. &
-            &(.not.self%p_ptr%l_nonuniform) )then
-            ! Try to load state-specific automask if automasking/envfsc enabled
-            ! Construct state-specific filename: automask3D_state{N:02d}.mrc
-            mskfile_state = string(AUTOMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
-            call state_mask_is_compatible(mskfile_state, self%box, self%smpd, l_state_mask_exists, l_state_mask_compatible)
-            if( l_state_mask_compatible )then
-                ! Load existing compatible state-specific mask
-                call self%envmask%read_bimg(mskfile_state)
-                ! Apply mask
-                call even%zero_env_background(self%envmask)
-                call odd%zero_env_background(self%envmask)
-                call even%mul(self%envmask)
-                call odd%mul(self%envmask)
-            else
-                ! Spherical fallback
-                call even%mask3D_soft(self%msk, backgr=0.)
-                call odd%mask3D_soft(self%msk, backgr=0.)
-            endif
-        else
-            ! Spherical fallback
-            call even%mask3D_soft(self%msk, backgr=0.)
-            call odd%mask3D_soft(self%msk, backgr=0.)
-        endif
+        if( self%p_ptr%l_envfsc ) &
+            &THROW_HARD('envfsc=yes is unfinished; on-the-fly density-mask generation must be implemented first')
+        call even%mask3D_soft(self%msk, backgr=0.)
+        call odd%mask3D_soft(self%msk, backgr=0.)
     end subroutine load_state_mask_or_fallback
 
     subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc, state, cones )
@@ -671,8 +645,8 @@ contains
         ! create temporary e/o:s
         call even_tmp%copy(even)
         call odd_tmp%copy(odd)
-        ! masking: try to load state-specific mask if automask/envfsc enabled
-        call load_state_mask_or_fallback(self, state, even_tmp, odd_tmp)
+        ! mask temporary half maps for the ordinary FSC calculation
+        call load_state_mask_or_fallback(self, even_tmp, odd_tmp)
         ! calculate FSC
         call even_tmp%fft()
         call odd_tmp%fft()
@@ -734,7 +708,6 @@ contains
         class(reconstructor_eo), intent(inout) :: self !< instance
         if( self%exists )then
             ! kill composites
-            call self%envmask%kill_bimg
             call self%even%dealloc_rho
             call self%even%kill
             call self%odd%dealloc_rho

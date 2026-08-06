@@ -18,13 +18,12 @@ integer, parameter :: AUTOMASK_ACTION_REGENERATE = 1
 integer, parameter :: AUTOMASK_ACTION_REUSE       = 2
 
 type :: vol_pproc_plan
-    type(string) :: mskfile_state
-    integer      :: automask_action              = AUTOMASK_ACTION_NONE
-    logical      :: l_automask_enabled            = .false.
-    logical      :: automask_tight                = .false.
-    logical      :: l_state_mask_exists           = .false.
-    logical      :: l_state_mask_compatible       = .false.
-    logical      :: l_state_mask_incompatible     = .false.
+    type(string) :: nu_envmask_file
+    integer      :: nu_envmask_action                  = AUTOMASK_ACTION_NONE
+    logical      :: l_nu_envmask_enabled               = .false.
+    logical      :: l_nu_envmask_exists                = .false.
+    logical      :: l_nu_envmask_compatible            = .false.
+    logical      :: l_nu_envmask_incompatible          = .false.
 end type vol_pproc_plan
 
 contains
@@ -34,24 +33,21 @@ contains
         integer,                      intent(in)    :: state
         integer,                      intent(in)    :: which_iter
         type(vol_pproc_plan),         intent(inout) :: plan
-        plan%mskfile_state              = string(AUTOMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
-        plan%automask_action            = AUTOMASK_ACTION_NONE
-        plan%l_automask_enabled         = trim(params%automsk).ne.'no'
-        plan%automask_tight             = trim(params%automsk).eq.'tight'
-        plan%l_state_mask_exists        = .false.
-        plan%l_state_mask_compatible    = .false.
-        plan%l_state_mask_incompatible  = .false.
-        if( .not. plan%l_automask_enabled )then
-            return
-        endif
-        call state_mask_is_compatible(plan%mskfile_state, params%box_crop, params%smpd_crop, &
-            &plan%l_state_mask_exists, plan%l_state_mask_compatible)
-        plan%l_state_mask_incompatible = plan%l_state_mask_exists .and. (.not. plan%l_state_mask_compatible)
-        if( should_regenerate_automask(params, which_iter, plan%l_state_mask_exists, &
-            &plan%l_state_mask_compatible) )then
-            plan%automask_action = AUTOMASK_ACTION_REGENERATE
-        else if( plan%l_state_mask_compatible )then
-            plan%automask_action = AUTOMASK_ACTION_REUSE
+        plan%nu_envmask_file = string(NU_ENVMASK_FBODY)//int2str_pad(state,2)//string(MRC_EXT)
+        plan%nu_envmask_action                = AUTOMASK_ACTION_NONE
+        plan%l_nu_envmask_enabled             = params%l_nonuniform .and. trim(params%automsk).ne.'no'
+        plan%l_nu_envmask_exists              = .false.
+        plan%l_nu_envmask_compatible          = .false.
+        plan%l_nu_envmask_incompatible        = .false.
+        if( .not. plan%l_nu_envmask_enabled ) return
+        call state_mask_is_compatible(plan%nu_envmask_file, params%box_crop, params%smpd_crop, &
+            &plan%l_nu_envmask_exists, plan%l_nu_envmask_compatible)
+        plan%l_nu_envmask_incompatible = plan%l_nu_envmask_exists .and. (.not. plan%l_nu_envmask_compatible)
+        if( should_regenerate_automask(params, which_iter, plan%l_nu_envmask_exists, &
+            &plan%l_nu_envmask_compatible) )then
+            plan%nu_envmask_action = AUTOMASK_ACTION_REGENERATE
+        else if( plan%l_nu_envmask_compatible )then
+            plan%nu_envmask_action = AUTOMASK_ACTION_REUSE
         endif
     end subroutine plan_state_postprocess
 

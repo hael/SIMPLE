@@ -348,7 +348,23 @@ contains
 
         subroutine prepare_matching_reference_mask()
             l_use_envmask = .false.
-            if( .not. params%l_envref ) return
+            if( trim(params%automsk).eq.'no' ) return
+            if( .not. l_nonuniform_mode ) &
+                &THROW_HARD('automsk=yes|tight requires nonuniform filtering for matching-reference masking')
+            envmask_fname = string(NU_ENVMASK_FBODY)//int2str_pad(s,2)//string(MRC_EXT)
+            call state_mask_is_compatible(envmask_fname, params%box_crop, params%smpd_crop, &
+                &l_envmask_exists, l_envmask_compatible)
+            if( l_envmask_compatible )then
+                call envmask%read_and_crop(envmask_fname, params%smpd_crop, params%box_crop, params%smpd_crop)
+                l_use_envmask = .true.
+                write(logfhandle,'(A,I0,A,1X,A)') &
+                    &'>>> MATCHING REFERENCE NU EVIDENCE ENVELOPE: STATE ', s, ', MASK', envmask_fname%to_char()
+                return
+            else if( l_envmask_exists )then
+                write(logfhandle,'(A,I0,A)') &
+                    &'>>> WARNING: state ', s, &
+                    &' NU evidence envelope is incompatible; trying the legacy density envelope'
+            endif
             envmask_fname = string(AUTOMASK_FBODY)//int2str_pad(s,2)//string(MRC_EXT)
             call state_mask_is_compatible(envmask_fname, params%box_crop, params%smpd_crop, &
                 &l_envmask_exists, l_envmask_compatible)
@@ -356,15 +372,16 @@ contains
                 call envmask%read_and_crop(envmask_fname, params%smpd_crop, params%box_crop, params%smpd_crop)
                 l_use_envmask = .true.
                 write(logfhandle,'(A,I0,A,1X,A)') &
-                    &'>>> MATCHING REFERENCE ENVELOPE: STATE ', s, ', MASK', envmask_fname%to_char()
+                    &'>>> MATCHING REFERENCE LEGACY DENSITY ENVELOPE FALLBACK: STATE ', s, ', MASK', &
+                    &envmask_fname%to_char()
             else if( l_envmask_exists )then
                 write(logfhandle,'(A,I0,A)') &
                     &'>>> WARNING: state ', s, &
-                    &' matching-reference envelope is incompatible; using spherical reference mask'
+                    &' legacy density envelope is incompatible; using spherical reference mask'
             else
                 write(logfhandle,'(A,I0,A)') &
                     &'>>> WARNING: state ', s, &
-                    &' matching-reference envelope is not available yet; using spherical reference mask'
+                    &' NU evidence envelope is not available yet; using spherical reference mask'
             endif
         end subroutine prepare_matching_reference_mask
 

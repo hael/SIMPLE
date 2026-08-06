@@ -262,9 +262,12 @@ contains
             &set_nu_filter_report, NU_DEV_OUTPUT, &
             &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
             &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
-            &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map
+            &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, &
+            &nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, print_nu_envmask_stats, &
+            &NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT, NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, &
+            &NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
-            &AUTOMASK_ACTION_REGENERATE, AUTOMASK_ACTION_REUSE
+            &AUTOMASK_ACTION_REGENERATE
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
@@ -274,7 +277,7 @@ contains
         type(image)                   :: vol_even_nu, vol_odd_nu
         type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
-        type(image_msk)               :: mskvol
+        type(image_msk)               :: nu_envmask
         type(string)                  :: volname, eonames(2)
         type(restore_timings_t)       :: restore_timings
         type(vol_pproc_plan)          :: pp_plan
@@ -285,13 +288,13 @@ contains
         real, allocatable             :: nu_align_lps(:)
         real, allocatable             :: update_frac_trail_recs(:)
         real                          :: res05
-        integer                       :: state, ldim(3), ldim_pd(3), numlen_part
-        integer(timer_int_kind)       :: t_automask3D, t_nonuniform_filter, t_tot
+        integer                       :: state, which_iter, ldim(3), ldim_pd(3), numlen_part
+        integer(timer_int_kind)       :: t_nu_envmask, t_nonuniform_filter, t_tot
         integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_gridcorr, t_upd_proj, t_cleanup
         real(timer_int_kind)          :: rt_reduce_partials, rt_sum_eos
         real(timer_int_kind)          :: rt_restore_eos_and_write_fsc, rt_restore_merged_volume
         real(timer_int_kind)          :: rt_trail_restored_halves
-        real(timer_int_kind)          :: rt_automask3D, rt_nonuniform_filter, rt_tot
+        real(timer_int_kind)          :: rt_nu_envmask, rt_nonuniform_filter, rt_tot
         real(timer_int_kind)          :: rt_init_context, rt_trail_frac, rt_gridcorr, rt_upd_proj, rt_cleanup
         call initialize_bench_timers()
         if( L_BENCH_GLOB ) t_init_context = tic()
@@ -328,7 +331,7 @@ contains
             rt_restore_eos_and_write_fsc = 0.
             rt_restore_merged_volume     = 0.
             rt_trail_restored_halves     = 0.
-            rt_automask3D                = 0.
+            rt_nu_envmask                = 0.
             rt_nonuniform_filter         = 0.
             rt_init_context              = 0.
             rt_trail_frac                = 0.
@@ -458,83 +461,22 @@ contains
         end subroutine assemble_state
 
         subroutine postprocess_state()
-            integer :: which_iter
             which_iter = 1
             if( cline%defined('which_iter') ) which_iter = params%which_iter
             call plan_state_postprocess(params, state, which_iter, pp_plan)
-            if( pp_plan%l_state_mask_incompatible )then
+            if( pp_plan%l_nu_envmask_incompatible )then
                 write(logfhandle,'(A,1X,A)') &
-                    &'>>> Existing automask incompatible with current box/sampling, regenerating:', &
-                    &pp_plan%mskfile_state%to_char()
+                    &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
+                    &pp_plan%nu_envmask_file%to_char()
             endif
-            call run_state_automask()
             if( l_nonuniform_mode ) call apply_state_fsc_solvent_correction()
             if( l_nonuniform_mode ) call run_state_nonuniform_filter()
         end subroutine postprocess_state
 
-        subroutine run_state_automask()
-            if( pp_plan%automask_action == AUTOMASK_ACTION_REGENERATE )then
-                if( L_BENCH_GLOB ) t_automask3D = tic()
-                call mskvol%automask3D(params, build%vol, build%vol2, pp_plan%automask_tight)
-                if( L_BENCH_GLOB ) rt_automask3D = rt_automask3D + toc(t_automask3D)
-                call mskvol%write(pp_plan%mskfile_state)
-            endif
-        end subroutine run_state_automask
-
         subroutine apply_state_fsc_solvent_correction()
-            use simple_fsc, only: phase_rand_fsc
-            real, allocatable :: fsc(:), fsc_masked(:), fsc_random_masked(:), fsc_unmasked(:)
-            type(string) :: fsc_txt_fname
-            logical :: l_have_envelope
             if( .not. params%l_envfsc ) return
-            l_have_envelope = .false.
-            select case( pp_plan%automask_action )
-                case( AUTOMASK_ACTION_REGENERATE )
-                    l_have_envelope = .true.
-                case( AUTOMASK_ACTION_REUSE )
-                    call mskvol%kill_bimg
-                    call mskvol%new_bimg(ldim, params%smpd_crop)
-                    call mskvol%read_bimg(pp_plan%mskfile_state)
-                    l_have_envelope = .true.
-            end select
-            if( l_have_envelope )then
-                call phase_rand_fsc(vol_nu_base_even, vol_nu_base_odd, mskvol, state, &
-                    &vol_nu_base_even%get_filtsz(), fsc, fsc_masked, fsc_random_masked, fsc_unmasked)
-                call build%eorecvol%set_fsc(fsc)
-                call build%eorecvol%get_res(res05, res0143s(state))
-                call arr2file(fsc, refine3D_fsc_fname(state))
-                fsc_txt_fname = corrected_fsc_txt_fname()
-                call build%eorecvol%write_fsc2txt(fsc_txt_fname)
-                write(logfhandle,'(A,I0,A,F8.3,A,F8.3,A)') &
-                    &'>>> State ', state, ' phase-randomized solvent-corrected FSC: 0.5 = ', &
-                    &res05, ' A; 0.143 = ', res0143s(state), ' A'
-                call fsc_txt_fname%kill
-                deallocate(fsc_masked, fsc_random_masked, fsc_unmasked)
-            else
-                write(logfhandle,'(A,I0,A)') &
-                    &'>>> WARNING: state ', state, &
-                    &' has no compatible automask for solvent correction; using broad-sphere FSC'
-            endif
-            if( allocated(fsc) ) deallocate(fsc)
+            THROW_HARD('envfsc=yes is unfinished; on-the-fly density-mask generation must be implemented first')
         end subroutine apply_state_fsc_solvent_correction
-
-        function corrected_fsc_txt_fname() result( fname )
-            type(string) :: fname, ext
-            if( cline%defined('outfile') )then
-                fname = params%outfile
-                ext   = fname2ext(fname)
-                select case(ext%to_char())
-                    case('txt','simple')
-                        fname = get_fbody(fname, ext)
-                end select
-                fname = fname//'_STATE'//int2str_pad(state,2)
-                call ext%kill
-            else if( cline%defined('which_iter') )then
-                fname = refine3D_resolution_txt_fbody(state, params%which_iter)
-            else
-                fname = refine3D_resolution_txt_fbody(state)
-            endif
-        end function corrected_fsc_txt_fname
 
         subroutine run_state_nonuniform_filter()
             if( L_BENCH_GLOB ) t_nonuniform_filter = tic()
@@ -542,6 +484,7 @@ contains
             call release_nonuniform_aux_inputs()
             call optimize_nu_cutoff_finds()
             call refine_nonuniform_filter_bank()
+            call generate_state_nu_envmask()
             call release_nonuniform_base_inputs()
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call log_nonuniform_filter_stats()
@@ -550,6 +493,33 @@ contains
             call cleanup_nonuniform_state()
             if( L_BENCH_GLOB ) rt_nonuniform_filter = rt_nonuniform_filter + toc(t_nonuniform_filter)
         end subroutine run_state_nonuniform_filter
+
+        subroutine generate_state_nu_envmask()
+            type(nu_envmask_params) :: envp
+            type(nu_envmask_stats)  :: envstats
+            logical, allocatable    :: l_env(:,:,:)
+            integer                 :: n_ccs, n_ccs_kept, grow_px, edge_px
+            if( pp_plan%nu_envmask_action /= AUTOMASK_ACTION_REGENERATE ) return
+            if( L_BENCH_GLOB ) t_nu_envmask = tic()
+            envp%nsigma      = params%nu_msk_sig
+            envp%beta        = NU_ENVMASK_BETA
+            envp%dens_weight = NU_ENVMASK_DENS_WEIGHT
+            envp%lp_smooth   = params%amsklp
+            envp%l_relative  = NU_ENVMASK_RELATIVE
+            call nu_evidence_envelope(envp, l_env, envstats)
+            call print_nu_envmask_stats(envstats)
+            grow_px = max(1, nint(NU_ENVMASK_GROW_A / vol_nu_base_even%get_smpd()))
+            edge_px = max(1, nint(NU_ENVMASK_EDGE_A / vol_nu_base_even%get_smpd()))
+            call nu_envmask%kill
+            call nu_envmask%envmask3D_from_lmask(l_env, vol_nu_base_even%get_smpd(), grow_px, edge_px, &
+                &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
+            call nu_envmask%write(pp_plan%nu_envmask_file, del_if_exists=.true.)
+            call wait_for_closure(pp_plan%nu_envmask_file)
+            write(logfhandle,'(A,I0,A,1X,A)') &
+                &'>>> NU EVIDENCE ENVELOPE: STATE ', state, ', MASK', pp_plan%nu_envmask_file%to_char()
+            if( allocated(l_env) ) deallocate(l_env)
+            if( L_BENCH_GLOB ) rt_nu_envmask = rt_nu_envmask + toc(t_nu_envmask)
+        end subroutine generate_state_nu_envmask
 
         subroutine setup_nonuniform_filter()
             integer :: n_highres_steps
@@ -839,8 +809,8 @@ contains
             if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             call cleanup_nu_filter()
-            call mskvol%kill_bimg
-            call pp_plan%mskfile_state%kill
+            call nu_envmask%kill
+            call pp_plan%nu_envmask_file%kill
             call volname%kill
             call eonames(1)%kill
             call eonames(2)%kill
@@ -869,7 +839,7 @@ contains
                 rt_restore_eos_and_write_fsc
             write(fnr,'(a,1x,f0.2)') 'volassemble restore_merged_volume     :', rt_restore_merged_volume
             write(fnr,'(a,1x,f0.2)') 'volassemble trail_restored_halves     :', rt_trail_restored_halves
-            write(fnr,'(a,1x,f0.2)') 'volassemble automask3D                :', rt_automask3D
+            write(fnr,'(a,1x,f0.2)') 'volassemble nu_evidence_envelope      :', rt_nu_envmask
             write(fnr,'(a,1x,f0.2)') 'volassemble nonuniform_filter         :', rt_nonuniform_filter
             write(fnr,'(a,1x,f0.2)') 'volassemble init_context              :', rt_init_context
             write(fnr,'(a,1x,f0.2)') 'volassemble trail_frac_read           :', rt_trail_frac
@@ -879,8 +849,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'volassemble total time                :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'volassemble % accounted for           :', &
                 &((rt_reduce_partials + rt_sum_eos + rt_restore_eos_and_write_fsc +               &
-                &  rt_restore_merged_volume + rt_trail_restored_halves + rt_automask3D +          &
-                &  rt_nonuniform_filter +                                                         &
+                &  rt_restore_merged_volume + rt_trail_restored_halves + rt_nonuniform_filter +   &
                 &  rt_init_context + rt_trail_frac + rt_gridcorr + rt_upd_proj + rt_cleanup)      &
                 & / rt_tot) * 100.
             call fclose(fnr)

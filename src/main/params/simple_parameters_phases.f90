@@ -597,7 +597,8 @@ contains
         endif
         self%l_lpset  = cline%defined('lp')
         self%l_envfsc = self%envfsc .ne. 'no'
-        self%l_envref = self%envref .ne. 'no'
+        if( self%l_envfsc ) &
+            &THROW_HARD('envfsc=yes is unfinished; on-the-fly density-mask generation must be implemented first')
         if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
         if( cline%defined('heldout') ) self%l_heldout = (trim(self%heldout).eq.'yes')
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
@@ -718,18 +719,6 @@ contains
             case DEFAULT
                 THROW_HARD('nu_envmsk must be yes or no')
         end select
-        if( trim(self%nu_envmsk).eq.'yes' )then
-            if( self%nu_msk_sig < 0. ) THROW_HARD('nu_msk_sig must be non-negative')
-            if( self%amsklp <= 0. ) THROW_HARD('amsklp must be positive for NU evidence masking')
-        endif
-        select case(trim(self%envref))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('envref must be yes or no')
-        end select
-        if( self%l_envref .and. trim(self%automsk).eq.'no' )then
-            THROW_HARD('envref=yes requires automsk=yes or automsk=tight')
-        endif
         select case(trim(self%objfun))
             case('cc')
                 self%cc_objfun = OBJFUN_CC
@@ -833,6 +822,17 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported filt_mode flag')
         end select
+        if( trim(self%automsk).ne.'no' .and. .not.self%l_nonuniform )then
+            select case(trim(self%prg%to_char()))
+                case('refine3D','refine3D_auto','refine3D_multi','abinitio3D','volassemble')
+                    THROW_HARD('automsk=yes|tight requires filt_mode=nonuniform|nonuniform_lpset in 3D refinement')
+            end select
+        endif
+        if( trim(self%nu_envmsk).eq.'yes' .or. &
+            &(self%l_nonuniform .and. trim(self%automsk).ne.'no') )then
+            if( self%nu_msk_sig < 0. ) THROW_HARD('nu_msk_sig must be non-negative')
+            if( self%amsklp <= 0. ) THROW_HARD('amsklp must be positive for NU evidence masking')
+        endif
         self%l_noise_reg = cline%defined('snr_noise_reg')
         if( self%l_noise_reg )then
             self%eps_bounds(2) = self%snr_noise_reg

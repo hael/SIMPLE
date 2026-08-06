@@ -463,19 +463,19 @@ references:
 - `ml_reg=yes`
 - `automsk=no`
 - `envfsc=no`
-- `envref=no`
 - `lplim_crit=0.5`
 
-`envfsc` is an advanced filter control. Its default keeps each state automask
-out of FSC estimation. When both automasking and `envfsc=yes` are selected,
-`volassemble` performs phase-randomized solvent correction independently for
-each state. The corrected curve updates FSC resolution metadata but does not
-cap the NU filter bank or directly set the matching low-pass limit.
+`envfsc` is an advanced filter control and an **unfinished branch**. Its default
+keeps each state envelope out of FSC estimation. Selecting `envfsc=yes` exits
+with a hard error. Completing this route requires a simple, fast density-based
+mask generated on the fly for each state; a future corrected curve may update
+FSC resolution metadata but must not cap the NU filter bank or directly set the
+matching low-pass limit.
 
-`envref=yes` additionally requires `automsk=yes|tight`. Each populated state
-then uses its own compatible automask to solvent-flatten the selected matching
-reference before projection; particle images and state-specific NU products
-are not modified.
+When `automsk=yes|tight`, each populated state uses its own compatible NU
+envelope to solvent-flatten the selected matching reference before projection;
+particle images and state-specific NU products are not modified. There is no
+separate `envref` control.
 
 `volassemble` remains the execution site for volume-domain work. In a default
 run it may restore per-state half maps, calculate FSCs, run ML regularization,
@@ -486,7 +486,8 @@ LP-set matching bandwidth back through the project. It must not perform
 `automsk=no` means the wrapper does not request automatic state-mask
 generation by default. If the user enables `automsk=yes` or `automsk=tight`,
 state-specific mask production and compatibility rules follow
-[automasking_policy.md](automasking_policy.md).
+[automasking_policy.md](automasking_policy.md), and `filt_mode` must remain
+`nonuniform_lpset`; `fsc` and `none` require `automsk=no`.
 
 When NU filtering is active, spherical support and matching-bandwidth handoff
 follow [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md).

@@ -1,15 +1,33 @@
 # NU-Evidence Envelope Masking
 
-> Implementation note. The standalone routine exists and is reachable through
-> `simple_exec prg=nu_filt3D nu_envmsk=yes`. Workflow integration described
-> in section 4 is **not implemented**. Validate the routine first (sections 6-8),
-> then implement.
+> Implementation note. The standalone routine is reachable through
+> `simple_exec prg=nu_filt3D nu_envmsk=yes`. The workflow integration described
+> in section 4 is implemented in `volassemble` and matching-reference
+> preparation after real-volume validation by Cyril and Hans.
 >
 > **Support decision:** NU filtering now uses only spherical `mskdiam` support.
 > `setup_nu_dmats` constructs the sphere internally, so density-derived and
 > NU-evidence envelopes cannot enter the normalized Huber objective domain.
 > Dilated-envelope support and collar-based null estimation are deferred unless
 > the spherical memory cost proves prohibitive in representative runs.
+>
+> **Reference-masking decision:** the standalone `envref` control has been
+> removed. Matching references are solvent-flattened with the current
+> NU-evidence envelope whenever `automsk /= no`; there is no separate opt-in.
+> In refinement workflows `automsk=yes|tight` is valid only while
+> `filt_mode=nonuniform|nonuniform_lpset`; other filtering modes must use
+> `automsk=no`.
+> The lag-by-one envelope is regenerated freely each cycle and is allowed to
+> **shrink** as resolution improves. The former monotonic recovery guard and the
+> `pct_signal > 50%` regeneration failsafe have both been removed as too
+> conservative.
+>
+> **`envfsc` is an unfinished branch.** `envfsc=yes` is not currently supported:
+> the density automask that used to feed it is no longer generated in the loop,
+> and the NU-evidence envelope must never reach the FSC (section 2.1). The route
+> needs a simple, fast density-based mask generated on the fly before it can be
+> re-enabled. Until then `envfsc=yes` exits with a hard error; it never consumes
+> a pre-existing mask or silently degrades to the broad-sphere FSC.
 >
 > **Validation snapshot:** the focused NU test executables build and link. On
 > the current synthetic fixture, spherical support contains 44,473 voxels and
@@ -55,15 +73,22 @@ central policy claim of this note.
 ## 2. Mask ownership: one envelope per consumer, not one artifact for all
 
 Before the spherical-support refactor, `automask3D_stateNN.mrc` was a single
-artifact serving NU support, `envfsc`, and `envref`. The first role has now been
-removed. That separation should be preserved for the NU-evidence envelope:
+artifact serving NU support, `envfsc`, and reference masking. The first role has
+now been removed. That separation should be preserved for the NU-evidence
+envelope:
 
 | Consumer | Mask source | Rationale |
 |---|---|---|
 | NU support mask | spherical `mskdiam` | needs solvent inside it to estimate the noise scale and evidence null |
-| Matching reference before reprojection (`envref`) | **NU-evidence envelope** | highest-value use; belt removal is pure gain for alignment |
-| FSC solvent correction (`envfsc`) | density-derived (existing ICM/Otsu masker), or none | resolution-derived is circular |
+| Matching reference before reprojection | **NU-evidence envelope**, applied whenever `automsk /= no` | highest-value use; belt removal is pure gain for alignment |
+| FSC solvent correction (`envfsc`) | **unfinished branch; hard error** until a fast density mask can be generated on the fly | resolution-derived is circular; NU envelope must not enter FSC |
 | Derived map for display or deposition support | NU-evidence envelope | preserve unmasked base/half maps as primary artifacts |
+
+Reference masking is no longer gated by a separate `envref` control; that
+command-line and library variable has been removed. Whenever automasking is
+enabled (`automsk = yes|tight`), the matcher solvent-flattens each reference with
+the lagged NU-evidence envelope, falling back to the sphere only until the first
+envelope exists.
 
 ### 2.1 Why not the FSC path
 
@@ -83,8 +108,12 @@ agreement. Density and resolution do correlate, so it is not perfectly
 independent, but it is far less circular and it is the regime phase
 randomization was designed for.
 
-**The existing `automask3D` density masker must therefore be kept, not
-retired.** The two masks answer different questions.
+The density `automask3D` routine remains available for standalone and legacy
+consumers, but it is no longer generated in the refinement loop. `envfsc=yes` is
+therefore an **unfinished branch** that exits with a hard error. Re-enabling it
+properly requires a small, fast density-based masker selected on local mean and
+generated on the fly from the current map rather than loaded from persistent
+state. The two masks answer different questions.
 
 ### 2.2 Why not the NU support mask
 
@@ -107,21 +136,25 @@ objective and whole-support evidence-null estimator. A dilated previous
 envelope remains a possible future memory optimization, but only together with
 the null change in section 3.2 and explicit shrinkage guards.
 
-### 2.3 Why `envref` is the right consumer, and its one trap
+### 2.3 Why the matching reference is the right consumer, and its one trap
 
 Solvent-flattening the reference is where a good envelope pays off most: the
 detergent belt is noise for alignment, and removing it improves the signal in
 every reprojection.
 
-The trap is that `envref` makes the mask self-fulfilling. Anything zeroed in the
-reference produces no signal in the reprojections, so particles never align that
-region and it never improves — whether or not it was real. For the belt that is
-the desired outcome. For a flexible domain that fell below threshold on one
-iteration it is a trap that closes permanently.
+The trap is that reference masking makes the mask self-fulfilling. Anything
+zeroed in the reference produces no signal in the reprojections, so particles
+never align that region and it never improves — whether or not it was real. For
+the belt that is the desired outcome. For a flexible domain that fell below
+threshold on one iteration it is a trap that could close permanently.
 
-Periodic regeneration only helps if the mask can *recover* ground. Spherical NU
-support makes the omitted region observable to the evidence calculation, but a
-temporal shrink/recovery guard is still required before enabling `envref`.
+The mitigation is not a shrink guard but the opposite: the envelope is
+regenerated from scratch each cycle and is **free to shrink or grow** as the
+evidence changes. Spherical NU support keeps every omitted region observable to
+the evidence calculation, so a domain that recovers reproducible signal at higher
+resolution re-enters the envelope on the next regeneration. A monotonic
+grow-only guard was tried and rejected: it froze early, possibly loose, envelopes
+and defeated the resolution-driven tightening this feature exists to provide.
 
 ## 3. Required changes to the routine before integration
 
@@ -163,28 +196,27 @@ next envelope is tighter still. Guards:
 This work is not required while NU support remains exclusively spherical. If
 dilated support is reconsidered, bootstrap from the sphere at `startit`; do not
 use a tight density automask as a substitute for a solvent-containing collar.
-The temporal shrink/recovery guard remains required before `envref` integration
-even with spherical NU support, because reference masking itself can make a
-false-negative region self-fulfilling.
+With spherical NU support the envelope is regenerated from scratch each cycle and
+may shrink freely, so no temporal guard is needed on the reference-masking path.
 
-### 3.3 `nu_refine` interaction (not done)
+### 3.3 `nu_refine` interaction (done)
 
-Raw evidence is accumulated over the static bank only, inside the candidate loop
-in `setup_nu_dmats`. `extend_nu_filter_highres_shell_next` appends candidates
-afterwards and does not update it. Harmless for `nu_filt3D`, which never
-extends, but `refine3D_auto` enables extension and the accepted shells must feed
-the evidence field before envelope generation is integrated into `volassemble`.
+Raw evidence is accumulated over the static bank inside `setup_nu_dmats`.
+`extend_nu_filter_highres_shell_next` snapshots each challenger's raw,
+unsmoothed objective and commits it to the evidence minimum only after the shell
+is accepted. The refinement envelope therefore describes the completed accepted
+bank.
 
-## 4. Workflow integration (deferred)
+## 4. Workflow integration
 
 ### 4.1 Artifact and lifecycle
 
 Introduce a second per-state artifact rather than overloading the existing one:
 
-- `automask3D_stateNN.mrc` — unchanged, density-derived, consumed by `envfsc`
-  and retained as the fallback for `envref`
-- `nu_envmask3D_stateNN.mrc` — new, NU-evidence envelope, consumed by `envref`
-  and final-map masking
+- `automask3D_stateNN.mrc` — legacy density-derived artifact, no longer
+  generated or consumed by the FSC path in the refinement loop
+- `nu_envmask3D_stateNN.mrc` — new, NU-evidence envelope, consumed by
+  reference masking (whenever `automsk /= no`) and final-map masking
 
 Lifecycle is **lag-by-one**: iteration *N*'s evidence writes the envelope used by
 iteration *N+1*, mirroring how `nu_highres_depth_stateNN.txt` already persists
@@ -192,39 +224,52 @@ across iterations. This needs no reordering of the assembly sequence and no
 second NU pass. The envelope must be derived before `nu_filter_vols`, which
 calls `release_nu_filter_unary_storage` and frees `dmats_mask`.
 
+The envelope is regenerated on the ordinary automask cadence and simply
+overwrites the per-state file each time. There is no monotonic recovery guard and
+no `pct_signal > 50%` failsafe: the envelope is allowed to shrink as resolution
+improves. The over-occupancy condition is still reported in the stats block as a
+diagnostic, but it no longer suppresses regeneration.
+
 ### 4.2 Consumer plumbing
 
 `prepare_matching_reference_mask` in
-`src/main/strategies/search/simple_matcher_refvol_utils.f90:349` already reads a
+`src/main/strategies/search/simple_matcher_refvol_utils.f90:349` reads a
 per-state mask, checks it against `box_crop`/`smpd_crop`, and falls back to a
-spherical mask when missing or incompatible. That fallback is exactly the
-bootstrap behaviour lag-by-one needs at `startit`. Point it at the new filename
-with a fallback chain of `nu_envmask3D -> automask3D -> sphere`.
+spherical mask when missing or incompatible. It runs whenever `automsk /= no`
+(which requires an active NU filtering mode; there is no separate `envref`
+control) and follows the fallback chain
+`nu_envmask3D -> automask3D -> sphere`, which also provides the bootstrap at
+`startit`.
 
 ### 4.3 Hard constraints
 
 - the NU-evidence envelope must never reach `envfsc` (section 2.1);
 - the NU support must remain the spherical `mskdiam` support (section 2.2);
-- envelope regeneration must not be able to shrink without bound (section 3.2).
+- the envelope must be free to shrink as resolution improves; no monotonic
+  grow-only guard (section 2.3).
 
 ## 5. Implementation phases
 
 - [x] Phase 0a: make spherical `mskdiam` support an invariant of the NU setup API.
 - [x] Phase 0b: align public policy and repository skills with spherical-only support.
-- [ ] Phase 0c: validate the standalone routine across the test set (section 7)
-      and fix defaults from the parameter study (section 6).
-- [ ] Phase 1: add the temporal shrink/recovery guard required by `envref`.
+- [x] Phase 0c: validate the standalone routine across representative volumes
+      and fix the public defaults from the parameter study (section 6).
+- [x] Phase 1: allow free shrink/grow regeneration; no recovery guard, no
+      `pct_signal` failsafe (section 2.3, 4.1).
 - [ ] Deferred: collar-based null estimation (3.2), only if a future memory
       optimization reintroduces dilated support.
-- [ ] Phase 2: feed accepted `nu_refine` extension shells into the raw evidence
+- [x] Phase 2: feed accepted `nu_refine` extension shells into the raw evidence
       baseline (3.3).
-- [ ] Phase 3: `volassemble` writes `nu_envmask3D_stateNN.mrc` under lag-by-one;
+- [x] Phase 3: `volassemble` writes `nu_envmask3D_stateNN.mrc` under lag-by-one;
       `simple_vol_pproc_policy` gains the second artifact in its plan type.
-- [ ] Phase 4: repoint `prepare_matching_reference_mask` at the new artifact
-      with the three-step fallback chain.
-- [ ] Phase 5: after workflow validation, promote the NU-evidence artifact and
+- [x] Phase 4: reference masking (any `automsk /= no`) reads the new artifact
+      via `prepare_matching_reference_mask` with the three-step fallback chain;
+      the `envref` control is removed.
+- [x] Phase 5: after workflow validation, promote the NU-evidence artifact and
       consumer lifecycle to `doc/policies/automasking_policy.md` and
       `doc/policies/nonuniform_filtering_policy.md`.
+- [ ] Deferred: `envfsc=yes` needs a simple, fast density-based masker generated
+      on the fly before it can be re-enabled (section 2.1); until then it throws.
 
 ## 6. Parameter optimization
 
@@ -319,16 +364,16 @@ solvent false-positive rate, and add:
   and score exclusion on every sweep point thereafter.
 
 **Tier 4 — downstream, expensive and confounded.** Resolution and map quality
-after N `refine3D` iterations with `envref=yes`. Use only as a **final
-confirmation** on the one or two settings that survive tiers 1-3. Never as the
-sweep objective.
+after N `refine3D` iterations with reference masking active (`automsk /= no`).
+Use only as a **final confirmation** on the one or two settings that survive
+tiers 1-3. Never as the sweep objective.
 
 ### 6.5 Do not tune on the reported FSC resolution
 
-`envref` plus a resolution-derived mask is precisely the loop that inflates
-reported resolution (section 2.1). Optimising parameters against it selects for
-the mask that most aggressively retains only high-resolution voxels — the
-degenerate solution, which is a tight shell around the best-ordered core. It
+Reference masking plus a resolution-derived mask is precisely the loop that
+inflates reported resolution (section 2.1). Optimising parameters against it
+selects for the mask that most aggressively retains only high-resolution voxels —
+the degenerate solution, which is a tight shell around the best-ordered core. It
 will look like a large improvement.
 
 Tier 3 half-set reproducibility is the honest substitute: it rewards masks that
@@ -381,8 +426,9 @@ one CSV row per sweep point so surfaces can be plotted directly.
 Watch the signal percentage specifically: above 50% the median/MAD null is not
 trustworthy and the routine says so. Spherical geometry does not guarantee this
 condition: if it triggers, `mskdiam` is too tight or the whole-support null model
-is unsuitable. Automatic workflow use of that envelope must stop rather than
-continuing after a warning.
+is unsuitable. This is now reported as a diagnostic only; it no longer blocks
+regeneration, so a persistently high signal percentage is a signal to revisit
+`mskdiam` or the null model rather than an automatic stop.
 
 ## 9. Current state
 
@@ -402,9 +448,10 @@ Outputs `<vol>_nu_evidence.mrc` (raw margin field) and `<vol>_nu_envmask.mrc`
 (soft mask). The evidence map is the primary diagnostic: if it does not separate
 solvent from density, no threshold or smoothness setting will rescue the mask.
 
-Not yet implemented:
-
-- workflow-owned `nu_envmask3D_stateNN.mrc` artifacts
-- lag-by-one `envref` consumption and temporal recovery guards
-- evidence updates from accepted `nu_refine` extension shells
-- a purpose-built low-occupancy internal scale-free-evidence regression
+Workflow integration now provides `nu_envmask3D_stateNN.mrc`, lag-by-one
+reference-mask consumption (whenever `automsk /= no`; the `envref` control has
+been removed), free shrink/grow regeneration with no recovery guard or
+`pct_signal` failsafe, and accepted-shell evidence updates. `envfsc=yes` remains
+an unfinished hard-error branch pending a fast density-based mask generated on
+the fly. A purpose-built
+low-occupancy internal scale-free-evidence regression remains future work.

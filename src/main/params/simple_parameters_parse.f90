@@ -77,7 +77,6 @@ contains
         call reg%add_char('dw', self%dw)
         call reg%add_char('element', self%element)
         call reg%add_char('envfsc', self%envfsc)
-        call reg%add_char('envref', self%envref)
         call reg%add_char('eo_stage', self%eo_stage)
         call reg%add_char('even', self%even)
         call reg%add_char('extract', self%extract)

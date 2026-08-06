@@ -461,11 +461,6 @@ contains
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         call cline_refine3D%set('prg',    'refine3D')
         call cline_refine3D%set('envfsc', params%envfsc)
-        if( trim(cfg%automsk%to_char()).eq.'no' )then
-            call cline_refine3D%set('envref', 'no')
-        else
-            call cline_refine3D%set('envref', params%envref)
-        endif
         if( l_full_update_stage )then
             call cline_refine3D%delete('update_frac')
             call cline_refine3D%delete('fillin')

@@ -297,17 +297,22 @@ shell extension is reserved for `refine3D_auto` and explicit base
 Because `abinitio3D` currently keeps gold-standard refinement disabled,
 `GOLD_STD_STAGE` is off and `envfsc` defaults to `no`. The advanced `envfsc`
 control is nevertheless exposed with the existing automasking option and its
-value is propagated to every emitted refine3D stage. The controller keeps a
+value is propagated to every emitted refine3D stage; selecting `yes` exits with
+a hard error until fast on-the-fly density-mask generation is implemented. The controller keeps a
 scheduled `lp` on the refine3D command line. From `NU_FILTER_STAGE`, staged
 `nonuniform` is promoted to `nonuniform_lpset`, so the NU frontier can feed an
 explicit merged-reference LP-set matching run.
 
 Automasking is opt-in at the public interface and defaults to `no`. Even when
-enabled, staged automasking starts only from `AUTOMSK_STAGE`.
-`envref` is also opt-in. The controller emits `envref=no` before that stage and
-propagates the requested value once staged automasking is active, so early
-stages remain valid and later matching references can use the current state
-envelope.
+enabled, staged NU-evidence envelope generation starts only once both
+`AUTOMSK_STAGE` and the NU filtering stage are active.
+Selecting `automsk=yes|tight` therefore requires an NU `filt_mode`; non-NU
+filtering modes are rejected rather than producing a refinement configuration
+that cannot generate the requested envelope.
+Once staged automasking is active, matching references use the lagged state NU
+envelope; there is no separate reference-mask control (the former `envref`
+parameter has been removed), so early stages without automasking simply remain
+spherical.
 
 The default `multivol_mode=independent` stage limit stops at stage 5, before
 this NU-filtering policy is activated. Users who override `nstages` past that

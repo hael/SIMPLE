@@ -46,19 +46,23 @@ It also supplies overridable defaults when the user has not provided them:
 - `nu_refine=yes`
 - `automsk=yes`
 - `envfsc=no`
-- `envref=no`
 - `keepvol=no`
 
-The default `envfsc=no` keeps the automask out of FSC estimation. Explicit
-`envfsc=yes` enables the nonuniform workflow's phase-randomized solvent
-correction after the current state automask has been generated or loaded. The
-choice is exposed as an advanced filter control in the `refine3D_auto` UI/CLI
-contract.
+The default `envfsc=no` keeps envelope masks out of FSC estimation. `envfsc=yes`
+is an unfinished branch and exits with a hard error. The NU-evidence envelope
+never enters FSC correction. Completing the branch requires a simple, fast
+density-based mask generated on the fly. The choice remains an advanced filter
+control in the `refine3D_auto` UI/CLI contract.
 
-`envref=yes` is an independent advanced mask control for an A/B test against
-the default spherical matching-reference mask. Once a compatible state
-automask exists, it solvent-flattens the matching references before projection
-without changing the NU filter, FSC policy, particles, or matching low-pass.
+With `automsk=yes`, matching references consume the lagged
+`nu_envmask3D_stateNN.mrc`. The first iteration uses the spherical
+matching-reference mask; once volume assembly has written a compatible NU
+envelope, later references are solvent-flattened before projection without
+changing the NU filter, FSC policy, particles, or matching low-pass. There is no
+separate `envref` control.
+
+If `filt_mode` is overridden to a non-NU mode, `automsk` must also be set to
+`no`; other combinations are rejected.
 
 ## 3. Starting Reference
 
