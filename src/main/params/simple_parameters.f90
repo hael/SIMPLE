@@ -120,7 +120,6 @@ type :: parameters
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nu_envmsk='no'       !< derive an envelope mask from the nonuniform filter evidence margin(yes|no){no}
-    character(len=3)          :: nu_msk_rel='no'      !< use the scale-free cost-improvement ratio for NU evidence masking(yes|no){no}
     character(len=3)          :: nu_refine='no'       !< enable one-step high-resolution expansion refinement in the nonuniform filter(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
@@ -583,9 +582,6 @@ type :: parameters
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
-    real    :: nu_msk_beta=1.0     !< boundary smoothness of the NU evidence envelope mask{1.0}
-    real    :: nu_msk_dens=0.0     !< weight of the local density term in the NU evidence envelope mask{0.0}
-    real    :: nu_msk_minvol=0.1   !< min connected component size, as a fraction of the largest, kept in the NU envelope mask{0.1}
     real    :: nu_msk_sig=3.0      !< NU evidence envelope mask threshold, in MADs above the solvent null{3.0}
     real    :: objfun_den_w=0.3    !< denoised correlation weight in hybrid objective{0.3}
     real    :: osmpd=0.            !< target output pixel size

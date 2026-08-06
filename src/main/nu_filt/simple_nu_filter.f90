@@ -49,7 +49,8 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           nu_highres_extension_stats, get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
           get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
           nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, calc_nu_evidence_margin,&
-          write_nu_evidence_map, print_nu_envmask_stats
+          write_nu_evidence_map, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
+          NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
 private
 #include "simple_local_flags.inc"
 
@@ -97,6 +98,21 @@ real,             parameter   :: NU_LABEL_SMOOTH_BETA_FRAC   = 2.0
 real,             parameter   :: NU_LABEL_SMOOTH_QUAD_FRAC   = 1.0
 real,             parameter   :: NU_LABEL_SMOOTH_TIE_EPS     = 1.e-6
 integer,          parameter   :: NU_LABEL_KIND               = selected_int_kind(4)
+! Fixed standalone NU-envelope policy. Only the evidence threshold and scale
+! remain user-tunable; morphology lengths are physical and converted to pixels
+! by nu_filt3D at the input-map sampling distance.
+! Binary MRF boundary smoothness; higher values give smoother boundaries.
+real,             parameter   :: NU_ENVMASK_BETA              = 1.0
+! Weight of local density evidence, which can retain strong but poorly ordered density.
+real,             parameter   :: NU_ENVMASK_DENS_WEIGHT       = 0.0
+! A scale-free ratio can stop a high-contrast core outvoting weak, ordered density.
+logical,          parameter   :: NU_ENVMASK_RELATIVE          = .false.
+! Smallest connected component kept, expressed as a fraction of the largest.
+real,             parameter   :: NU_ENVMASK_MINVOL_FRAC       = 0.1
+! Physical binary growth applied before the soft edge.
+real,             parameter   :: NU_ENVMASK_GROW_A            = 1.0
+! Physical cosine-edge width used to soften the molecular envelope.
+real,             parameter   :: NU_ENVMASK_EDGE_A            = 6.0
 ! Sentinel floor above which a mask-packed unary entry is treated as unpopulated.
 ! Columns are allocated with huge() and compaction can leave stale members behind,
 ! so evidence comparisons must ignore anything at that magnitude.
@@ -161,10 +177,13 @@ end type nu_highres_extension_stats
 ! area only; connectivity and hole filling are the caller's responsibility.
 type :: nu_envmask_params
     real    :: nsigma      = 3.0   ! threshold, in null MADs above the null median
-    real    :: beta        = 1.0   ! binary MRF smoothness, same normalized units
-    real    :: dens_weight = 0.0   ! weight of the local-density evidence term
+    ! Binary MRF boundary smoothness; higher values give smoother boundaries.
+    real    :: beta        = NU_ENVMASK_BETA
+    ! Local density weight; positive values retain strong but poorly ordered density.
+    real    :: dens_weight = NU_ENVMASK_DENS_WEIGHT
     real    :: lp_smooth   = 8.0   ! scale, in Angstrom, at which the envelope is defined
-    logical :: l_relative  = .false. ! scale-free margin: baseline/best cost improvement ratio
+    ! Use a scale-free baseline-to-best ratio so weak ordered density is not outvoted.
+    logical :: l_relative  = NU_ENVMASK_RELATIVE
     integer :: maxits      = 6     ! ICM sweeps
 end type nu_envmask_params
 

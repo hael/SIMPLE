@@ -151,6 +151,21 @@ Automask generation and compatibility remain separate policies for `envfsc`
 and `envref`. Standalone `nu_filt3D` therefore exposes `mskdiam`, not `automsk`,
 for NU support.
 
+When standalone NU-evidence envelope generation is enabled, its public shape
+controls are limited to `nu_msk_sig` (robust evidence threshold) and `amsklp`
+(physical evidence scale, in Angstrom). Production fixes the evidence form to
+the absolute noise-normalized Huber-cost margin, density weight to zero, MRF
+beta to 1, and minimum component fraction to 0.1. It also fixes binary growth
+at 1 A and the cosine edge at 6 A; `nu_filt3D` converts those physical lengths
+to the nearest voxel counts at the input-map sampling, with a one-voxel
+minimum. These values reproduce the prior 1-pixel and 6-pixel defaults at the
+1 A/pixel reference sampling without creating additional public tuning knobs.
+Their meanings remain part of the contract: beta controls boundary smoothness;
+a positive density weight would retain strong but poorly ordered density; the
+component fraction removes components smaller than that fraction of the
+largest; and scale-free evidence would protect weak ordered density from being
+outvoted by a high-contrast core.
+
 Mask ownership is strict:
 
 - spherical `mskdiam` support defines the NU objective domain

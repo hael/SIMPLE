@@ -194,17 +194,19 @@ contains
     subroutine exec_nu_filt3D(self, cline)
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, &
             &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, write_nu_local_resolution_map, NU_DEV_OUTPUT,&
-            &nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, write_nu_evidence_map, print_nu_envmask_stats
+            &nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, write_nu_evidence_map, print_nu_envmask_stats,&
+            &NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT, NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC,&
+            &NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
         class(commander_nu_filt3D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)     :: params
-        type(image)          :: even, odd, even_nu, odd_nu, vol_dens
+        type(image)          :: even, odd, even_nu, odd_nu
         type(image_msk)      :: nu_envelope
         type(nu_envmask_params) :: envp
         type(nu_envmask_stats)  :: envstats
         type(string)         :: even_out, odd_out, avg_out, locres_out, evid_out, envmsk_out
         logical, allocatable :: l_env(:,:,:)
-        integer              :: n_ccs, n_ccs_kept
+        integer              :: n_ccs, n_ccs_kept, grow_px, edge_px
         logical              :: l_envmask
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -230,24 +232,18 @@ contains
             ! you whether the solvent null separates from the density mode at all,
             ! which is the precondition for the mask being meaningful.
             envp%nsigma      = params%nu_msk_sig
-            envp%beta        = params%nu_msk_beta
-            envp%dens_weight = params%nu_msk_dens
+            envp%beta        = NU_ENVMASK_BETA
+            envp%dens_weight = NU_ENVMASK_DENS_WEIGHT
             envp%lp_smooth   = params%amsklp
-            envp%l_relative  = params%nu_msk_rel .eq. 'yes'
+            envp%l_relative  = NU_ENVMASK_RELATIVE
             evid_out = add2fbody(avg_out, params%ext, NUEVIDENCE_SUFFIX)
             call write_nu_evidence_map(evid_out, envp%lp_smooth, envp%l_relative)
-            if( abs(envp%dens_weight) > TINY )then
-                call vol_dens%copy(even)
-                call vol_dens%add(odd)
-                call vol_dens%mul(0.5)
-                call vol_dens%bp(0., params%amsklp)
-                call nu_evidence_envelope(envp, l_env, envstats, vol_dens)
-            else
-                call nu_evidence_envelope(envp, l_env, envstats)
-            endif
+            call nu_evidence_envelope(envp, l_env, envstats)
             call print_nu_envmask_stats(envstats)
-            call nu_envelope%envmask3D_from_lmask(l_env, even%get_smpd(), params%binwidth, params%edge, &
-                &params%nu_msk_minvol, .true., n_ccs, n_ccs_kept)
+            grow_px = max(1, nint(NU_ENVMASK_GROW_A / even%get_smpd()))
+            edge_px = max(1, nint(NU_ENVMASK_EDGE_A / even%get_smpd()))
+            call nu_envelope%envmask3D_from_lmask(l_env, even%get_smpd(), grow_px, edge_px, &
+                &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
             envmsk_out = add2fbody(avg_out, params%ext, NUENVMSK_SUFFIX)
             call nu_envelope%write(envmsk_out, del_if_exists=.true.)
             call wait_for_closure(envmsk_out)
@@ -268,7 +264,6 @@ contains
         call even_nu%kill
         call odd%kill
         call even%kill
-        call vol_dens%kill
         call nu_envelope%kill
         call locres_out%kill
         call evid_out%kill

@@ -54,6 +54,18 @@ The extension step is optional and controlled by workflow policy such as
 - NU-evidence envelope derivation must run before `nu_filter_vols`, which
   releases unary storage. The current evidence baseline covers the static bank;
   accepted `nu_refine` extension shells are not yet incorporated.
+- Keep the standalone `nu_filt3D` envelope interface to two shape controls:
+  `nu_msk_sig` for evidence threshold and `amsklp` for physical evidence scale.
+  Absolute evidence, zero density weighting, MRF beta 1, and the 0.1 component
+  fraction are fixed production policy, even though the internal API retains
+  diagnostic variants. Preserve their semantics beside the constants: beta
+  controls boundary smoothness; density weighting can retain strong but poorly
+  ordered density; scale-free evidence can protect weak ordered density from a
+  high-contrast core; and the component fraction removes small components
+  relative to the largest.
+- Express standalone envelope morphology in Angstrom: 1 A binary growth and a
+  6 A cosine edge. Convert those lengths to the nearest voxel count at the
+  input-map sampling, with a minimum of one voxel.
 
 ## Mask Ownership
 

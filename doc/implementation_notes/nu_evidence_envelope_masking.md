@@ -228,65 +228,53 @@ with a fallback chain of `nu_envmask3D -> automask3D -> sphere`.
 
 ## 6. Parameter optimization
 
-### 6.1 The parameter set
+### 6.1 Public parameter set
 
 | Parameter | Default | Role |
 |---|---|---|
 | `nu_msk_sig` | 3.0 | threshold, in null MADs above the null median |
-| `amsklp` | 8.0 | envelope scale; margin smoothing radius is `min(1.5 x amsklp, 30 A)` |
-| `nu_msk_beta` | 1.0 | binary MRF boundary smoothness |
-| `nu_msk_dens` | 0.0 | weight of the local density term |
-| `nu_msk_rel` | no | scale-free cost-improvement ratio |
-| `nu_msk_minvol` | 0.1 | smallest connected component kept, as a fraction of the largest |
-| `binwidth` | 1 | dilation layers |
-| `edge` | 6 | cosine edge width |
+| `amsklp` | 8 A | physical envelope scale; margin smoothing radius is `min(1.5 x amsklp, 30 A)` |
 
-### 6.2 Structure of the space — do not grid all eight
+These are the only two public envelope-shape controls. `nu_envmsk` remains the
+feature toggle and `mskdiam` remains the mandatory spherical support diameter;
+neither is an envelope tuning constant.
+
+The secondary choices are fixed production policy:
+
+| Constant | Value | Role |
+|---|---:|---|
+| scale-free evidence | no | A baseline-to-best ratio can prevent weak but well-ordered density from being outvoted by a high-contrast core; production retains the absolute Huber-cost margin |
+| density weight | 0.0 | A positive local-density weight retains strong but poorly ordered density; zero keeps segmentation evidence-only |
+| MRF beta | 1.0 | Binary MRF boundary smoothness; higher values produce smoother boundaries |
+| minimum component fraction | 0.1 | Smallest connected component kept, expressed as a fraction of the largest |
+| binary growth | 1 A | slightly expand the accepted support |
+| cosine edge | 6 A | soften the final mask boundary |
+
+The last two values translate the previous 1-pixel and 6-pixel defaults under
+the requested 1 A/pixel reference sampling. At run time each is converted to
+the nearest voxel count from the actual input sampling, with a minimum of one
+voxel. This changes units and sampling behavior, not the masking sequence.
+
+### 6.2 Structure of the two-dimensional space
 
 `nu_msk_sig` and `amsklp` are the dominant pair and are **coupled**: larger
 `amsklp` pools evidence over a wider support, which raises the margin in weak
 regions and is therefore equivalent to loosening the threshold. They trade off
 along a ridge and must be swept jointly.
 
-Everything else is secondary:
-
-- `nu_msk_beta` mostly controls speckle and boundary regularity once the evidence
-  is right. Weakly coupled to `nu_msk_sig`, since higher beta can partially
-  rescue a slightly-too-high threshold by filling in. Sweep third, coarsely.
-- `nu_msk_dens` is a **rescue lever, not a default**. It reintroduces the
-  detergent belt in proportion to its weight, since density cannot distinguish
-  ordered protein from disordered lipid. Engage only if flexible density is
-  still being lost after `nu_msk_sig`/`amsklp` are settled. Observed: 1.0 is far
-  too high; expect the useful range below 0.4 if it is needed at all.
-- `nu_msk_rel` is experimental. Its original bounded fractional reduction could
-  produce an empty envelope whenever `median + nu_msk_sig * MAD` exceeded one.
-  It now uses the unbounded ratio `baseline / best - 1`, with both costs
-  protected by the denominator floor. Keep it off by default until its intended
-  low-occupancy use has a dedicated fixture and real-data validation.
-- `nu_msk_minvol`, `binwidth`, `edge` are the topology and morphology tail. They
-  determine the mask's *finish*, not its *quality*. Freeze them at sensible
-  values before sweeping anything else, chosen from the consumer's needs —
-  `envref` wants a soft, slightly generous mask.
-
-**Recommended procedure**: freeze the tail, sweep `(nu_msk_sig, amsklp)` as a 2D
-grid, then `nu_msk_beta`, then rescue levers only if needed.
+All secondary values are intentionally frozen. This preserves the validated
+algorithm and makes `(nu_msk_sig, amsklp)` the complete optimization space.
+The internal NU API retains alternate evidence and segmentation options for
+diagnostic tests, but they are not standalone `nu_filt3D` controls.
 
 ### 6.3 Sweep efficiency
 
-The expensive step is `setup_nu_dmats`. Structure the sweep to exploit what each
-parameter actually invalidates:
-
-- `amsklp` and `nu_msk_rel` change the **evidence field** (`calc_nu_evidence_margin`);
-- `nu_msk_sig`, `nu_msk_beta`, `nu_msk_dens` change only the **segmentation**
-  (`calc_nu_evidence_score`, `segment_nu_evidence`);
-- `nu_msk_minvol`, `binwidth`, `edge` change only the **tail**
-  (`envmask3D_from_lmask`).
-
-So the natural sweep is an outer loop over `amsklp` and an inner loop over
-everything else, with `setup_nu_dmats` and `optimize_nu_cutoff_finds` run once
-per outer iteration. A dedicated sweep driver in `production/tests/` doing this
-in-process is worth the small effort; a shell loop over `nu_filt3D` re-pays the
-NU setup on every point.
+The expensive step is `setup_nu_dmats`. `amsklp` changes the evidence field
+(`calc_nu_evidence_margin`), whereas `nu_msk_sig` changes only the segmentation
+threshold (`calc_nu_evidence_score`). The natural sweep is therefore an outer
+loop over `amsklp` and an inner loop over `nu_msk_sig`, reusing NU setup and
+cutoff optimization. A dedicated in-process driver can exploit this; a shell
+loop over `nu_filt3D` repeats setup at every point.
 
 ### 6.4 Objective functions
 
@@ -303,9 +291,9 @@ solvent false-positive rate, and add:
   (30-50 A) lower-resolution appendage and score the fraction retained. This is
   the specific failure the symmetric-smoothing fix targets and it must have a
   regression pin.
-- Keep the default absolute-margin fixture as the required regression. Test
-  `nu_msk_rel` separately on an explicitly low-occupancy fixture; the present
-  general fixture must not assert that both statistics produce the same mask.
+- Keep the production absolute-margin fixture as the required regression. Any
+  internal scale-free diagnostic belongs in a separate, explicitly
+  low-occupancy fixture and must not change the standalone interface.
 
 **Tier 2 — real data with an atomic model.**
 
@@ -374,21 +362,21 @@ The set must span the failure modes, not just the easy case:
 
 1. **Detergent-solubilised membrane protein** — the belt case. Already
    validated qualitatively; needs a quantitative baseline.
-2. **Flexible multi-domain complex** — the cut-off-domains case, and the
-   strongest test of whether `nu_msk_dens` is needed.
+2. **Flexible multi-domain complex** — the cut-off-domains case and strongest
+   test of whether the two public controls transfer across local resolution.
 3. **Small rigid globular protein** — baseline sanity; should be easy.
 4. **Map with an internal cavity or channel** — exercises 3D hole filling.
-5. **Low-occupancy or partially-occupied subunit** — the case `nu_msk_rel` was
-   built for.
+5. **Low-occupancy or partially-occupied subunit** — tests whether the absolute
+   margin remains useful at weak occupancy.
 6. **One specimen at several particle counts** (for example full, 1/4, 1/16) —
    the SNR-dependence check underpinning section 6.7.
 
 ## 8. What to record per run
 
-The routine already logs null median, null MAD, threshold, envelope scale,
-scale-free flag, ICM beta and iteration count, seed and signal voxel counts and
-percentages, and component counts kept versus found. Emit these plus the section
-6.4 metrics as one CSV row per sweep point so surfaces can be plotted directly.
+The routine already logs null median, null MAD, threshold, envelope scale, ICM
+beta and iteration count, seed and signal voxel counts and percentages, and
+component counts kept versus found. Emit these plus the section 6.4 metrics as
+one CSV row per sweep point so surfaces can be plotted directly.
 
 Watch the signal percentage specifically: above 50% the median/MAD null is not
 trustworthy and the routine says so. Spherical geometry does not guarantee this
@@ -419,4 +407,4 @@ Not yet implemented:
 - workflow-owned `nu_envmask3D_stateNN.mrc` artifacts
 - lag-by-one `envref` consumption and temporal recovery guards
 - evidence updates from accepted `nu_refine` extension shells
-- a purpose-built low-occupancy `nu_msk_rel` regression
+- a purpose-built low-occupancy internal scale-free-evidence regression

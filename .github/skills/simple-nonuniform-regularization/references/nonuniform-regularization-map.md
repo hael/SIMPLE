@@ -190,8 +190,9 @@ simple_test_nu_filter even.mrc odd.mrc smpd mskdiam [out_even.mrc out_odd.mrc] [
 For code changes, consider:
 
 - focused build/test of `simple_test_nu_filter`
-- building and running `simple_test_nu_envmask`; require both the default
-  absolute-margin and scale-free `nu_msk_rel` quality regressions to pass
+- building and running `simple_test_nu_envmask`; require both the production
+  absolute-margin regression and the internal scale-free diagnostic regression
+  to pass (scale-free evidence is not a `nu_filt3D` CLI parameter)
 - checking cleanup removes `nu_filter_cache_even_k_*.mrc` and
   `nu_filter_cache_odd_k_*.mrc`
 - checking nonuniform mode still falls back to regular references before

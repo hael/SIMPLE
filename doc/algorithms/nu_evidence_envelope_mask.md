@@ -97,35 +97,16 @@ is equivalent to smoothing baseline and best terms identically. It avoids the
 boundary bias that would result from comparing costs smoothed at their
 candidate-dependent NU scales.
 
-By default the evidence value is the smoothed absolute improvement:
+The production evidence value is the smoothed absolute improvement:
 
 \[
 e(v)=\widetilde D(v).
 \]
 
-With `nu_msk_rel=yes`, SIMPLE also smooths `B` at the same scale and uses a
-scale-free cost-improvement ratio. Define
-
-\[
-f=0.1\,\operatorname{median}_v \widetilde B(v),
-\]
-
-with a positive numerical floor, then
-
-\[
-B_f(v)=\max(\widetilde B(v),f),\qquad
-M_f(v)=\max(B_f(v)-\widetilde D(v),f),
-\]
-
-and
-
-\[
-e(v)=\frac{B_f(v)}{M_f(v)}-1.
-\]
-
-The floor prevents near-zero costs from producing arbitrarily large ratios.
-Unlike a bounded fractional reduction, this statistic remains compatible with
-the unbounded robust threshold used by the segmentation.
+This absolute margin matches the candidate-independent, noise-normalized Huber
+objective directly. A scale-free cost-ratio variant remains available inside
+the NU module for diagnostic regression tests, but `nu_filt3D` deliberately
+does not expose it as a second production evidence definition.
 
 ## Robust Evidence Score
 
@@ -150,26 +131,6 @@ Because `e` is a best-of-bank statistic, solvent values are not exactly zero:
 finite noise can make one candidate win by chance. The null therefore applies
 to the exact candidate bank and smoothing configuration being evaluated.
 
-## Optional Density Rescue Term
-
-When `nu_msk_dens` is nonzero, `nu_filt3D` forms the even/odd average, filters
-it to `amsklp`, and robustly standardizes its density inside the sphere:
-
-\[
-z_\rho(v)=\frac{\rho(v)-\operatorname{median}(\rho)}
-{1.4826\,\operatorname{median}|\rho-\operatorname{median}(\rho)|}.
-\]
-
-The segmentation score becomes
-
-\[
-q'(v)=q(v)+\texttt{nu_msk_dens}\,z_\rho(v).
-\]
-
-The default weight is zero. A positive value can retain strong but poorly
-ordered peripheral density, but it weakens the method's ability to distinguish
-ordered molecular signal from disordered density.
-
 ## Binary MRF Segmentation
 
 The initial binary field labels voxels with positive score as signal. SIMPLE
@@ -179,16 +140,16 @@ For voxel `v`, let `d(v)` be the number of supported voxels in its
 signal. The two local energies are
 
 \[
-E_{\mathrm{signal}}(v)=-q'(v)+\beta\frac{d(v)-n_s(v)}{d(v)},
+E_{\mathrm{signal}}(v)=-q(v)+\beta\frac{d(v)-n_s(v)}{d(v)},
 \]
 
 \[
-E_{\mathrm{solvent}}(v)=q'(v)+\beta\frac{n_s(v)}{d(v)},
+E_{\mathrm{solvent}}(v)=q(v)+\beta\frac{n_s(v)}{d(v)},
 \]
 
-where `nu_msk_beta` supplies \(\beta\). The voxel takes the lower-energy label.
-Degree normalization prevents voxels at the spherical boundary from receiving
-a different effective regularization strength.
+where the production policy fixes \(\beta=1\). The voxel takes the lower-energy
+label. Degree normalization prevents voxels at the spherical boundary from
+receiving a different effective regularization strength.
 
 Updates use an eight-color 3D schedule, so voxels updated concurrently are not
 26-neighbors. Iteration stops when no label changes or after six sweeps. This
@@ -199,11 +160,16 @@ prior regularizes boundary area but does not enforce connectivity.
 The binary MRF result is converted to the final soft envelope as follows:
 
 1. find all 26-connected signal components;
-2. retain every component whose size is at least `nu_msk_minvol` times the
-   largest component size;
+2. retain every component whose size is at least 0.1 times the largest
+   component size;
 3. fill enclosed background cavities;
-4. grow the binary field by `binwidth` voxel layers; and
-5. apply a cosine soft edge of `edge` voxels.
+4. grow the binary field by 1 A; and
+5. apply a cosine soft edge of 6 A.
+
+The two physical lengths are converted independently to the nearest number of
+voxels from the input-map sampling distance, with a minimum of one voxel. Thus
+the current 1-voxel growth and 6-voxel edge are reproduced exactly at 1 A/pixel,
+while the physical finish remains approximately constant for other samplings.
 
 Keeping components relative to the largest, rather than keeping only one
 component, permits separated ordered domains to survive when their linker is
@@ -215,22 +181,27 @@ not reproducible enough to pass the evidence threshold.
 |---|---:|---|
 | `nu_envmsk` | `no` | Enable evidence-map and envelope generation |
 | `mskdiam` | required | Diameter in Angstrom of spherical NU/evidence support |
-| `amsklp` | `8` A | Evidence smoothing scale and optional density low-pass |
+| `amsklp` | `8` A | Physical evidence scale; sets the margin-smoothing radius |
 | `nu_msk_sig` | `3.0` | Threshold in Gaussian-scaled MADs above the evidence median |
-| `nu_msk_beta` | `1.0` | Binary MRF boundary regularization |
-| `nu_msk_dens` | `0.0` | Optional robust density-score weight |
-| `nu_msk_rel` | `no` | Use the scale-free baseline-to-best cost ratio |
-| `nu_msk_minvol` | `0.1` | Minimum component size relative to the largest |
-| `binwidth` | `1` voxel | Binary dilation before softening |
-| `edge` | `6` voxels | Cosine soft-edge width |
+
+`nu_msk_sig` and `amsklp` are the only public envelope-shape tuning parameters.
+The remaining algorithm parameters are fixed but retain explicit roles:
+
+| Fixed choice | Value | Effect |
+|---|---:|---|
+| Scale-free evidence | no | A baseline-to-best ratio can prevent weak but ordered density from being outvoted by a high-contrast core; production uses the absolute Huber-cost margin |
+| Density weight | 0.0 | Positive weight retains strong but poorly ordered density; zero keeps the mask evidence-only |
+| MRF beta | 1.0 | Boundary smoothness; higher values give smoother boundaries |
+| Minimum component fraction | 0.1 | Smallest connected component kept relative to the largest |
+| Binary growth | 1 A | Expands the accepted binary support before softening |
+| Cosine edge | 6 A | Softens the molecular-envelope boundary |
 
 ## Outputs and Interpretation
 
 With envelope generation enabled, `nu_filt3D` writes two additional products
 beside its NU-filtered maps:
 
-- `*_nu_evidence.mrc`: the smoothed absolute evidence margin, or the
-  dimensionless cost-improvement ratio when `nu_msk_rel=yes`;
+- `*_nu_evidence.mrc`: the smoothed absolute evidence margin;
 - `*_nu_envmask.mrc`: the component-filtered, hole-filled, dilated, soft
   envelope mask.
 

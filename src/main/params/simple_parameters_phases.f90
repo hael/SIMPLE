@@ -718,17 +718,9 @@ contains
             case DEFAULT
                 THROW_HARD('nu_envmsk must be yes or no')
         end select
-        select case(trim(self%nu_msk_rel))
-            case('yes','no')
-            case DEFAULT
-                THROW_HARD('nu_msk_rel must be yes or no')
-        end select
         if( trim(self%nu_envmsk).eq.'yes' )then
             if( self%nu_msk_sig < 0. ) THROW_HARD('nu_msk_sig must be non-negative')
-            if( self%nu_msk_beta < 0. ) THROW_HARD('nu_msk_beta must be non-negative')
-            if( self%nu_msk_minvol < 0. .or. self%nu_msk_minvol > 1. )then
-                THROW_HARD('nu_msk_minvol must be a fraction in [0,1]')
-            endif
+            if( self%amsklp <= 0. ) THROW_HARD('amsklp must be positive for NU evidence masking')
         endif
         select case(trim(self%envref))
             case('yes','no')
