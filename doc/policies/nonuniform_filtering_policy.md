@@ -188,8 +188,8 @@ Actual names append `NUFILT_SUFFIX`, currently `_nu_filt`, to the even, odd,
 and merged state volume names. The local-resolution map appends
 `NULOCRES_SUFFIX`, currently `_nu_locres`, to the merged state volume name.
 
-The `_nu_locres` map stores spatial frequency in inverse Angstrom. Voxels
-outside the NU support mask, and values above Nyquist, are written as zero.
+The `_nu_locres` map stores the resolutions in Angstroms. Voxels outside the NU
+support mask, and values above Nyquist, are written as zero.
 
 Base even/odd and merged volumes remain the primary reconstruction outputs.
 NU-filtered products are derived references and diagnostics.

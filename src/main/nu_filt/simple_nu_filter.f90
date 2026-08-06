@@ -474,10 +474,9 @@ interface
         logical, optional, intent(in) :: mask(:,:,:)
     end subroutine analyze_filtmap_neighbor_continuity
 
-    module subroutine write_nu_local_resolution_map( fname, mask, max_frequency )
+    module subroutine write_nu_local_resolution_map( fname, mask )
         class(string), intent(in) :: fname
         logical, optional, intent(in) :: mask(:,:,:)
-        real,    optional, intent(in) :: max_frequency
     end subroutine write_nu_local_resolution_map
 
     module subroutine accumulate_nu_evidence_raw( dmat_full, icand )
