@@ -138,8 +138,8 @@ contains
         ! This developer-only append point is intentionally separate from the
         ! conventional descriptor, so standard abinitio2D cannot inherit an
         ! experimental control through a future shared-descriptor branch.
-        call program%add_input(UI_SRCH, 'sgd_stage4_mode', 'multi', 'Stage-4 SGD policy', &
-            &'Stage-4 stream policy(on|alternate){on}', '', .false., 'on', group="search", &
+        call program%add_input(UI_SRCH, 'sgd_stage4_mode', 'multi', 'SGD stage policy', &
+            &'Stream policy(on|alternate){on}', '', .false., 'on', group="search", &
             &visibility=UI_VIS_DEVELOPER, choices=ui_choices([character(len=9) :: 'on', 'alternate']))
         call program%add_input(UI_SRCH, 'sgd_diagnostic', 'binary', 'SGD diagnostics', &
             &'Emit SGD diagnostic and safety logs(yes|no){no}', '', .false., 'no', group="search", &

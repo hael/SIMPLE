@@ -46,8 +46,8 @@ contains
         endif
 
         ! off is the conventional abinitio2D mode.  This development command
-        ! requires an active stream and permits either fully streamed stage 4
-        ! or the legacy/stream alternating schedule.
+        ! requires an active stream and permits either fully streamed stages
+        ! or the boundary-warmup schedule selected by alternate.
         if( .not. cline%defined('sgd_stage4_mode') ) call cline%set('sgd_stage4_mode', 'on')
         if( cline%get_carg('sgd_stage4_mode') .ne. 'on' .and. &
             &cline%get_carg('sgd_stage4_mode') .ne. 'alternate' )then

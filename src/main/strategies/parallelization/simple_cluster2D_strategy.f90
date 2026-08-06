@@ -544,26 +544,23 @@ contains
         requested = trim(params%sgd_stage4_mode) /= 'off'
         select case(trim(params%sgd_stage4_mode))
             case('alternate')
-                ! Stage 4 alternates at iteration granularity.  Global parity
-                ! is restart-stable: an interrupted run resumes with the same
-                ! legacy/stream choice for a given iteration number.
-                ! Stage-4 SGD is enabled on odd global iterations (17, 19, ...)
-                ! and the legacy path remains active on the intervening even
-                ! iterations (16, 18, ...).  Global parity makes restart
-                ! behavior deterministic.
-                params%l_sgd_streaming_active = requested .and. mod(params%which_iter, 2) == 1
+                ! Boundary-warmup schedule: retain SIMPLE's established
+                ! probabilistic matcher for the first iteration of stages 3--5
+                ! (global iterations 11, 16, and 21), then use streaming SGD.
+                ! Stage 6 is passed as mode=on by the controller and therefore
+                ! remains fully streamed.  Comparing with startit keeps the
+                ! schedule restart-stable without hard-coding global numbers.
+                params%l_sgd_streaming_active = requested
             case('on')
                 params%l_sgd_streaming_active = requested
             case DEFAULT
                 params%l_sgd_streaming_active = .false.
         end select
-        ! Warm up each later stage with SIMPLE's established probabilistic
+        ! Warm up stages 3--5 with SIMPLE's established probabilistic
         ! assignment once before switching to the streaming optimizer.  The
-        ! controller enters stage 5 at global iteration 21 and stage 6 at
-        ! global iteration 26; comparing which_iter with startit keeps this
-        ! policy tied to the actual stage boundary rather than hard-coding
-        ! iteration numbers, and remains restart-stable.
-        if( params%l_sgd_streaming_active .and. params%startit > 16 .and. &
+        ! controller enters these stages at global iterations 11, 16, and 21;
+        ! comparing which_iter with startit keeps the policy restart-stable.
+        if( params%l_sgd_streaming_active .and. params%startit > 10 .and. &
             params%which_iter == params%startit )then
             params%l_sgd_streaming_active = .false.
         endif

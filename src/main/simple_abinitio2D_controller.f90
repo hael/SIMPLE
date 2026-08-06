@@ -77,15 +77,14 @@ contains
         call emit_cluster2D_stage_cfg( cline_cluster2D, cfg, stage_parms, istage )
         ! Preserve continuous refinement explicitly on every child stage.
         call cline_cluster2D%set('inpl_cont', params%inpl_cont)
-        ! sgd_stage4_mode is the sole public activation switch. The stream
-        ! implementation is passed only to stage 4 and later; stages 1-3
-        ! retain the ordinary SIMPLE path unchanged.
-        l_enable_sgd = trim(params%sgd_stage4_mode) /= 'off' .and. istage >= 4
-        if( l_enable_sgd .and. istage == 4 .and. trim(params%sgd_stage4_mode) == 'alternate' )then
-            ! cfg%iter is the global iteration that this stage invocation will run.
-            ! Alternate mode deliberately uses SGD on odd stage-4 iterations
-            ! (for example 17 and 19) and the unchanged matcher on even ones.
-            l_enable_sgd = mod(cfg%iter, 2) == 1
+        ! sgd_stage4_mode is the sole public activation switch.  The ordinary
+        ! on mode starts at stage 4.  Alternate mode uses the established
+        ! matcher for the first iteration of stages 3--5, then streams the
+        ! remaining iterations; stage 6 is streamed completely.
+        if( trim(params%sgd_stage4_mode) == 'alternate' )then
+            l_enable_sgd = istage >= 3
+        else
+            l_enable_sgd = trim(params%sgd_stage4_mode) == 'on' .and. istage >= 4
         endif
         if( params%sgd_diagnostic )then
             write(logfhandle,'(A,1X,A,I0,1X,A,I0,1X,A,1X,A,1X,A,L1)') &
@@ -95,23 +94,14 @@ contains
         if( l_enable_sgd )then
             call cline_cluster2D%set('sgd', 'yes')
             call cline_cluster2D%set('sgd_path', 'stream')
-            if( istage >= 5 )then
+            if( istage >= 6 )then
                 call cline_cluster2D%set('sgd_stage4_mode', 'on')
             else
                 call cline_cluster2D%set('sgd_stage4_mode', params%sgd_stage4_mode)
             endif
         else
             call cline_cluster2D%set('sgd', 'no')
-            ! Keep stages 1-3 on the ordinary path even when the user
-            ! enables SGD for stage 4 onward.
-            ! Preserve stage-4 alternate mode across its first legacy
-            ! iteration; the per-iteration policy in cluster2D_strategy must
-            ! be able to reactivate streaming on the following odd iteration.
-            if( istage == 4 .and. trim(params%sgd_stage4_mode) == 'alternate' )then
-                call cline_cluster2D%set('sgd_stage4_mode', 'alternate')
-            else
-                call cline_cluster2D%set('sgd_stage4_mode', 'off')
-            endif
+            call cline_cluster2D%set('sgd_stage4_mode', 'off')
         endif
     end subroutine set_cline_cluster2D_stage
 

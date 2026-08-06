@@ -327,7 +327,7 @@ type :: parameters
     ! Internal compatibility value; the user-facing activation switch is
     ! sgd_stage4_mode. The obsolete table path is no longer supported.
     character(len=STDLEN)     :: sgd_path='stream'    !< internal SGD assignment path(stream){stream}
-    character(len=STDLEN)     :: sgd_stage4_mode='off' !< stage-4 stream policy(off|on|alternate){off}
+    character(len=STDLEN)     :: sgd_stage4_mode='off' !< staged stream policy(off|on|alternate){off}
     character(len=STDLEN)     :: sigma_est='group'    !< sigma estimation kind (group|global){group}
     character(len=STDLEN)     :: sort=''              !< key to sort oris on
     character(len=STDLEN)     :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
