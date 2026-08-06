@@ -40,7 +40,7 @@ use simple_discrete_stack_io, only: dstack_io
 use simple_stack_io,          only: stack_io
 use simple_imgarr_utils,      only: alloc_imgarr, dealloc_imgarr
 use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, killimgbatch
-use simple_syslib,            only: io_read_nstreams, simple_mkdir, dir_exists, simple_file_stat, simple_rename
+use simple_syslib,            only: simple_mkdir, dir_exists, simple_file_stat, simple_rename
 implicit none
 #include "simple_local_flags.inc"
 
@@ -532,9 +532,9 @@ contains
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: n, pinds(n), batchlims(2)
-        type(dstack_io), allocatable :: dstkios(:)
+        type(dstack_io) :: dstkio
         type(string) :: stkname
-        integer :: nbatch, nstreams, istream, chunk, from_i, to_i, i, ii, irec
+        integer :: i, ii, irec
         if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
             write(logfhandle,*) 'batchlims: ', batchlims
             write(logfhandle,*) 'n        : ', n
@@ -549,34 +549,28 @@ contains
                 THROW_HARD('particle absent from the cache; ptcl_cache_read_batch')
             endif
         end do
-        nbatch   = batchlims(2) - batchlims(1) + 1
-        stkname  = cache_stkname(params)
-        nstreams = io_read_nstreams(stkname, nbatch)
-        chunk    = ceiling(real(nbatch) / real(nstreams))
-        nstreams = ceiling(real(nbatch) / real(chunk))
-        allocate(dstkios(nstreams))
-        do istream = 1, nstreams
-            call dstkios(istream)%new(params%smpd_crop, params%box_crop)
-            call dstkios(istream)%cache_stack_info(stkname, &
-                &[params%box_crop, params%box_crop, 1], maxval(cache_ind))
-            call dstkios(istream)%open(stkname)
+        stkname = cache_stkname(params)
+        ! One handle, read serially.
+        !
+        ! The whole cache is a single file, and Fortran allows a file to be connected to
+        ! at most one unit at a time, so the several-readers-over-one-file arrangement
+        ! used for particle stacks is not available here -- a second open of the same
+        ! path fails. Nor would it buy anything: libgfortran serializes access per unit,
+        ! so threads sharing one connection queue up regardless.
+        !
+        ! This is much less costly than it sounds. Records are box_crop-sized and pinds
+        ! arrive sorted, so this is a forward scan over a file an order of magnitude
+        ! smaller than the originals it replaces.
+        call dstkio%new(params%smpd_crop, params%box_crop)
+        call dstkio%cache_stack_info(stkname, &
+            &[params%box_crop, params%box_crop, 1], maxval(cache_ind))
+        call dstkio%open(stkname)
+        do i = batchlims(1), batchlims(2)
+            ii   = i - batchlims(1) + 1
+            irec = cache_ind(pinds(i))
+            call dstkio%read(stkname, irec, build%imgbatch(ii))
         end do
-        !$omp parallel do default(shared) private(istream,from_i,to_i,i,ii,irec) schedule(static) &
-        !$omp& proc_bind(close) num_threads(nstreams) if(nstreams > 1)
-        do istream = 1, nstreams
-            from_i = (istream - 1) * chunk + 1
-            to_i   = min(from_i + chunk - 1, nbatch)
-            do ii = from_i, to_i
-                i    = batchlims(1) + ii - 1
-                irec = cache_ind(pinds(i))
-                call dstkios(istream)%read(stkname, irec, build%imgbatch(ii))
-            end do
-        end do
-        !$omp end parallel do
-        do istream = 1, nstreams
-            call dstkios(istream)%kill
-        end do
-        deallocate(dstkios)
+        call dstkio%kill
         call stkname%kill
     end subroutine ptcl_cache_read_batch
 
