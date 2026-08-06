@@ -267,7 +267,7 @@ contains
             &NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT, NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, &
             &NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
-            &AUTOMASK_ACTION_REGENERATE
+            &NU_ENVMASK_ACTION_REGENERATE
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
@@ -288,7 +288,7 @@ contains
         real, allocatable             :: nu_align_lps(:)
         real, allocatable             :: update_frac_trail_recs(:)
         real                          :: res05
-        integer                       :: state, which_iter, ldim(3), ldim_pd(3), numlen_part
+        integer                       :: state, ldim(3), ldim_pd(3), numlen_part
         integer(timer_int_kind)       :: t_nu_envmask, t_nonuniform_filter, t_tot
         integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_gridcorr, t_upd_proj, t_cleanup
         real(timer_int_kind)          :: rt_reduce_partials, rt_sum_eos
@@ -461,6 +461,7 @@ contains
         end subroutine assemble_state
 
         subroutine postprocess_state()
+            integer :: which_iter
             which_iter = 1
             if( cline%defined('which_iter') ) which_iter = params%which_iter
             call plan_state_postprocess(params, state, which_iter, pp_plan)
@@ -469,14 +470,8 @@ contains
                     &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
                     &pp_plan%nu_envmask_file%to_char()
             endif
-            if( l_nonuniform_mode ) call apply_state_fsc_solvent_correction()
             if( l_nonuniform_mode ) call run_state_nonuniform_filter()
         end subroutine postprocess_state
-
-        subroutine apply_state_fsc_solvent_correction()
-            if( .not. params%l_envfsc ) return
-            THROW_HARD('envfsc=yes is unfinished; on-the-fly density-mask generation must be implemented first')
-        end subroutine apply_state_fsc_solvent_correction
 
         subroutine run_state_nonuniform_filter()
             if( L_BENCH_GLOB ) t_nonuniform_filter = tic()
@@ -499,7 +494,7 @@ contains
             type(nu_envmask_stats)  :: envstats
             logical, allocatable    :: l_env(:,:,:)
             integer                 :: n_ccs, n_ccs_kept, grow_px, edge_px
-            if( pp_plan%nu_envmask_action /= AUTOMASK_ACTION_REGENERATE ) return
+            if( pp_plan%nu_envmask_action /= NU_ENVMASK_ACTION_REGENERATE ) return
             if( L_BENCH_GLOB ) t_nu_envmask = tic()
             envp%nsigma      = params%nu_msk_sig
             envp%beta        = NU_ENVMASK_BETA
@@ -510,13 +505,20 @@ contains
             call print_nu_envmask_stats(envstats)
             grow_px = max(1, nint(NU_ENVMASK_GROW_A / vol_nu_base_even%get_smpd()))
             edge_px = max(1, nint(NU_ENVMASK_EDGE_A / vol_nu_base_even%get_smpd()))
-            call nu_envmask%kill
+            call nu_envmask%kill_bimg
             call nu_envmask%envmask3D_from_lmask(l_env, vol_nu_base_even%get_smpd(), grow_px, edge_px, &
                 &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
             call nu_envmask%write(pp_plan%nu_envmask_file, del_if_exists=.true.)
             call wait_for_closure(pp_plan%nu_envmask_file)
             write(logfhandle,'(A,I0,A,1X,A)') &
                 &'>>> NU EVIDENCE ENVELOPE: STATE ', state, ', MASK', pp_plan%nu_envmask_file%to_char()
+            ! One greppable line per state per cycle. The envelope is allowed to
+            ! shrink as resolution improves, but reference masking suppresses
+            ! whatever it excludes, so a monotonically falling occupancy is the
+            ! signal that it is clipping rather than tightening.
+            write(logfhandle,'(A,I0,A,F8.3,A,I0,A,I0)') &
+                &'>>> NU ENVELOPE OCCUPANCY: STATE ', state, ', SUPPORT FRACTION ', &
+                &envstats%pct_signal, ' %, COMPONENTS KEPT ', n_ccs_kept, ' OF ', n_ccs
             if( allocated(l_env) ) deallocate(l_env)
             if( L_BENCH_GLOB ) rt_nu_envmask = rt_nu_envmask + toc(t_nu_envmask)
         end subroutine generate_state_nu_envmask
@@ -809,7 +811,7 @@ contains
             if( allocated(nu_align_lps)           ) deallocate(nu_align_lps)
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             call cleanup_nu_filter()
-            call nu_envmask%kill
+            call nu_envmask%kill_bimg
             call pp_plan%nu_envmask_file%kill
             call volname%kill
             call eonames(1)%kill

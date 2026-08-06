@@ -4,6 +4,13 @@ use simple_sp_project, only: sp_project
 implicit none
 #include "simple_local_flags.inc"
 
+! Programs whose matching references are solvent-flattened with the NU-evidence
+! envelope, and which therefore require a nonuniform filt_mode when automsk is on.
+! prepare_matching_reference_mask is the authoritative runtime check; this list
+! exists only so the failure is reported at parameter-parse time instead.
+character(len=14), parameter :: NU_ENVMASK_REF_PRGS(4) = &
+    &[character(len=14) :: 'refine3D', 'refine3D_auto', 'refine3D_multi', 'abinitio3D']
+
 contains
 
     module subroutine new(self, cline, silent)
@@ -719,6 +726,12 @@ contains
             case DEFAULT
                 THROW_HARD('nu_envmsk must be yes or no')
         end select
+        select case(trim(self%nu_msk_rel))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('nu_msk_rel must be yes or no')
+        end select
+        if( self%nu_msk_beta < 0. ) THROW_HARD('nu_msk_beta must be non-negative')
         select case(trim(self%objfun))
             case('cc')
                 self%cc_objfun = OBJFUN_CC
@@ -822,11 +835,18 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported filt_mode flag')
         end select
+        ! automsk=tight only ever meant Otsu tightness in the density masker. The
+        ! NU-evidence envelope has no tight variant; nu_msk_sig controls tightness.
+        if( self%l_nonuniform .and. trim(self%automsk).eq.'tight' )then
+            THROW_HARD('automsk=tight is not supported with nonuniform filtering; use nu_msk_sig to set envelope tightness')
+        endif
+        ! Programs that solvent-flatten the matching reference with the NU-evidence
+        ! envelope. Keep in sync with prepare_matching_reference_mask, which is the
+        ! authoritative runtime check for programs not listed here.
         if( trim(self%automsk).ne.'no' .and. .not.self%l_nonuniform )then
-            select case(trim(self%prg%to_char()))
-                case('refine3D','refine3D_auto','refine3D_multi','abinitio3D','volassemble')
-                    THROW_HARD('automsk=yes|tight requires filt_mode=nonuniform|nonuniform_lpset in 3D refinement')
-            end select
+            if( any(NU_ENVMASK_REF_PRGS == self%prg%to_char()) )then
+                THROW_HARD('automsk=yes requires filt_mode=nonuniform|nonuniform_lpset in 3D refinement')
+            endif
         endif
         if( trim(self%nu_envmsk).eq.'yes' .or. &
             &(self%l_nonuniform .and. trim(self%automsk).ne.'no') )then

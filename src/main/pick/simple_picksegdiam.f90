@@ -114,7 +114,7 @@ contains
             subroutine dealloc_objs
                 if( allocated(cc_imat)      ) deallocate(cc_imat)
                 if( allocated(cc_imat_copy) ) deallocate(cc_imat_copy)
-                call mic_shrink%kill
+                call mic_shrink%kill_bimg
                 call mic_den%kill
                 call mic_bin%kill_bimg
                 call img_cc%kill_bimg
@@ -260,7 +260,7 @@ contains
             subroutine dealloc_objs
                 if( allocated(cc_imat)      ) deallocate(cc_imat)
                 if( allocated(cc_imat_copy) ) deallocate(cc_imat_copy)
-                call mic_shrink%kill
+                call mic_shrink%kill_bimg
                 call mic_den%kill
                 call mic_bin%kill_bimg
                 call img_cc%kill_bimg

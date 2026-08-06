@@ -10,6 +10,7 @@ type(ui_param) :: angerr
 type(ui_param) :: astigthreshold
 type(ui_param) :: astigtol
 type(ui_param) :: automsk
+type(ui_param) :: automsk_binary
 type(ui_param) :: backgr_subtr
 type(ui_param) :: bfac
 type(ui_param) :: blocktree
@@ -109,6 +110,9 @@ type(ui_param) :: outside
 type(ui_param) :: outstk
 type(ui_param) :: outvol
 type(ui_param) :: nu_envmsk
+type(ui_param) :: nu_msk_beta
+type(ui_param) :: nu_msk_dens
+type(ui_param) :: nu_msk_rel
 type(ui_param) :: nu_msk_sig
 type(ui_param) :: nu_refine
 type(ui_param) :: particle_density
@@ -202,6 +206,10 @@ subroutine set_ui_params
     call automsk%set_param(        'automsk',         'multi',  'Perform envelope masking', &
                                    'Generate/apply the NU-evidence envelope; yes|tight requires nonuniform filtering(yes|tight|no){no}','', .false., 'no', &
     &choices=ui_choices([character(len=5) :: 'yes', 'tight', 'no']))
+
+    call automsk_binary%set_param( 'automsk',         'binary', 'Perform envelope masking', &
+                                   'Whether to generate/apply the NU-evidence envelope mask; tightness is controlled by nu_msk_sig(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call backgr_subtr%set_param(   'backgr_subtr',    'binary', 'Perform micrograph background subtraction(new picker only)', &
                                    'Perform micrograph background subtraction before picking/extraction(yes|no){no}','', .false., 'no', &
@@ -590,6 +598,20 @@ subroutine set_ui_params
 
     call nu_envmsk%set_param(      'nu_envmsk',       'binary', 'NU evidence envelope mask', &
                                    'Derive an envelope mask from the nonuniform-filter evidence margin(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+
+    ! Tuning knobs for nu_filt3D only. Defaults mirror the NU_ENVMASK_* constants
+    ! in simple_nu_filter, which remain authoritative for the refinement path.
+    call nu_msk_beta%set_param(    'nu_msk_beta',     'num',    'NU envelope boundary smoothness', &
+                                   'Binary MRF smoothness of the NU evidence envelope; higher gives smoother boundaries{1.0}', &
+                                   'smoothness{1.0}', .false., 1.0)
+
+    call nu_msk_dens%set_param(    'nu_msk_dens',     'num',    'NU envelope density weight', &
+                                   'Weight of the local density term, which retains strong but poorly ordered density such as a detergent belt{0.0}', &
+                                   'density weight{0.0}', .false., 0.0)
+
+    call nu_msk_rel%set_param(     'nu_msk_rel',      'binary', 'Scale-free NU evidence margin', &
+                                   'Score the cost-improvement ratio rather than the absolute margin, so weak but well-ordered density is not outvoted by a high-contrast core(yes|no){no}','', .false., 'no', &
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call nu_msk_sig%set_param(     'nu_msk_sig',      'num',    'NU envelope mask threshold', &

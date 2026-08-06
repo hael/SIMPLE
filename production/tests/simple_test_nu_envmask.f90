@@ -181,7 +181,7 @@ call cleanup_nu_filter()
 call even%kill
 call odd%kill
 call vol_supp%kill
-call envelope%kill
+call envelope%kill_bimg
 deallocate(margin, l_supp, l_env, l_true)
 if( allocated(l_env_rel) ) deallocate(l_env_rel)
 write(logfhandle,'(A)') 'NU evidence envelope masking test passed'

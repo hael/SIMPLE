@@ -146,7 +146,7 @@ contains
         call plot_fsc_area_score(result, fbody%to_char())
         call even%kill
         call odd%kill
-        call mskvol%kill
+        call mskvol%kill_bimg
         call result%kill
         call simple_end('**** SIMPLE_FSC_AREA_SCORE NORMAL STOP ****')
     end subroutine exec_fsc_area_score
@@ -186,7 +186,7 @@ contains
         call odd%kill
         call odd_filt%kill
         call even%kill
-        call mskvol%kill
+        call mskvol%kill_bimg
         ! end gracefully
         call simple_end('**** SIMPLE_UNIFORM_FILTER3D NORMAL STOP ****')
     end subroutine exec_uniform_filter3D
@@ -195,12 +195,11 @@ contains
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, cleanup_nu_filter, &
             &print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, write_nu_local_resolution_map, NU_DEV_OUTPUT,&
             &nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, write_nu_evidence_map, print_nu_envmask_stats,&
-            &NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT, NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC,&
-            &NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
+            &NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
         class(commander_nu_filt3D), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)     :: params
-        type(image)          :: even, odd, even_nu, odd_nu
+        type(image)          :: even, odd, even_nu, odd_nu, vol_dens
         type(image_msk)      :: nu_envelope
         type(nu_envmask_params) :: envp
         type(nu_envmask_stats)  :: envstats
@@ -232,13 +231,26 @@ contains
             ! you whether the solvent null separates from the density mode at all,
             ! which is the precondition for the mask being meaningful.
             envp%nsigma      = params%nu_msk_sig
-            envp%beta        = NU_ENVMASK_BETA
-            envp%dens_weight = NU_ENVMASK_DENS_WEIGHT
             envp%lp_smooth   = params%amsklp
-            envp%l_relative  = NU_ENVMASK_RELATIVE
+            ! beta, dens_weight and l_relative default to the NU_ENVMASK_* constants
+            ! through the type definition, so the tuning knobs this program exposes
+            ! deviate from the refinement policy only when explicitly supplied.
+            if( cline%defined('nu_msk_beta') ) envp%beta        = params%nu_msk_beta
+            if( cline%defined('nu_msk_dens') ) envp%dens_weight = params%nu_msk_dens
+            if( cline%defined('nu_msk_rel')  ) envp%l_relative  = params%nu_msk_rel .eq. 'yes'
             evid_out = add2fbody(avg_out, params%ext, NUEVIDENCE_SUFFIX)
             call write_nu_evidence_map(evid_out, envp%lp_smooth, envp%l_relative)
-            call nu_evidence_envelope(envp, l_env, envstats)
+            if( abs(envp%dens_weight) > TINY )then
+                ! The density term needs the low-passed e/o average; without it the
+                ! weight would be accepted and silently ignored.
+                call vol_dens%copy(even)
+                call vol_dens%add(odd)
+                call vol_dens%mul(0.5)
+                call vol_dens%bp(0., params%amsklp)
+                call nu_evidence_envelope(envp, l_env, envstats, vol_dens)
+            else
+                call nu_evidence_envelope(envp, l_env, envstats)
+            endif
             call print_nu_envmask_stats(envstats)
             grow_px = max(1, nint(NU_ENVMASK_GROW_A / even%get_smpd()))
             edge_px = max(1, nint(NU_ENVMASK_EDGE_A / even%get_smpd()))
@@ -264,7 +276,8 @@ contains
         call even_nu%kill
         call odd%kill
         call even%kill
-        call nu_envelope%kill
+        call vol_dens%kill
+        call nu_envelope%kill_bimg
         call locres_out%kill
         call evid_out%kill
         call envmsk_out%kill
@@ -301,7 +314,7 @@ contains
             call envmsk%one_at_edge ! to expand before masking of reference internally
             l_msk = envmsk%bin2logical()
             call even_icm%ICM3D_eo(odd_icm, params%lambda, l_msk)
-            call envmsk%kill
+            call envmsk%kill_bimg
         else
             call even_icm%ICM3D_eo(odd_icm, params%lambda)
         endif

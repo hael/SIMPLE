@@ -119,6 +119,7 @@ type :: parameters
     character(len=3)          :: noise_norm ='yes'    !< image normalization based on background/foreground standardization(yes|no){yes}
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nu_envmsk='no'       !< derive an envelope mask from the nonuniform filter evidence margin(yes|no){no}
+    character(len=3)          :: nu_msk_rel='no'      !< nu_filt3D only: scale-free NU evidence margin(yes|no){no}
     character(len=3)          :: nu_refine='no'       !< enable one-step high-resolution expansion refinement in the nonuniform filter(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
@@ -581,6 +582,11 @@ type :: parameters
     real    :: ndev=2.5            !< # deviations in one-cluster clustering
     real    :: ndev2D=CLS_REJECT_STD    !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
+    ! nu_msk_beta/dens/rel are tuning knobs exposed by nu_filt3D only; refinement
+    ! always uses the NU_ENVMASK_* constants in simple_nu_filter. Declaration
+    ! defaults mirror those constants and must be kept in step with them.
+    real    :: nu_msk_beta=1.0     !< nu_filt3D only: NU envelope boundary smoothness{1.0}
+    real    :: nu_msk_dens=0.0     !< nu_filt3D only: weight of the local density term in the NU envelope{0.0}
     real    :: nu_msk_sig=3.0      !< NU evidence envelope mask threshold, in MADs above the solvent null{3.0}
     real    :: objfun_den_w=0.3    !< denoised correlation weight in hybrid objective{0.3}
     real    :: osmpd=0.            !< target output pixel size

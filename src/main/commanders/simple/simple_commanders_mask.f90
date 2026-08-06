@@ -66,7 +66,7 @@ contains
                     call build%vol%zero_env_background(mskvol)
                     call build%vol%mul(mskvol)
                 endif
-                call mskvol%kill
+                call mskvol%kill_bimg
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else if( cline%defined('mskdiam') )then
                 ! spherical

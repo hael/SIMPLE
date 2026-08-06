@@ -56,6 +56,11 @@ type, extends(image) :: image_bin
     procedure          :: dilate
     procedure          :: erode
     ! DESTRUCT
+    ! kill is overridden so that a bare %kill on a binary image can never leave
+    ! bimat behind. Forgetting kill_bimg was a recurring source of retained
+    ! integer volumes; making the inherited destructor complete removes the
+    ! whole failure mode rather than relying on every call site to remember.
+    procedure          :: kill => kill_bimg
     procedure          :: kill_bimg
 end type
 
@@ -166,8 +171,8 @@ contains
         class(image_bin),   intent(inout) :: ccimage
         logical, optional, intent(in)    :: black, update_imat
         integer,           allocatable   :: dqueue(:,:)     ! queue data structure
-        integer :: i, j, k, comp_ind, queue_first, queue_last
-        logical :: visited(self%bldim(1),self%bldim(2),self%bldim(3))
+        logical,           allocatable   :: visited(:,:,:)
+        integer :: i, j, k, comp_ind, queue_first, queue_last, nforeground
         logical :: l_black
         if( present(update_imat) )then
             if( update_imat ) call self%set_imat
@@ -176,9 +181,13 @@ contains
         if( present(black) ) l_black = black
         if( l_black ) self%bimat = -1 * (self%bimat - 1)
         call ccimage%new_bimg(self%bldim, self%bsmpd)
-        visited  = .false.
+        allocate(visited(self%bldim(1),self%bldim(2),self%bldim(3)), source=.false.)
         comp_ind = 0
-        allocate(dqueue(3,self%bldim(1)*self%bldim(2)*self%bldim(3)))
+        ! Every voxel is enqueued at most once, and only foreground voxels are
+        ! enqueued at all, so the foreground count bounds the queue. Sizing to the
+        ! whole box costs 12 bytes per voxel of the volume for no benefit.
+        nforeground = count(self%bimat > 0)
+        allocate(dqueue(3,max(1,nforeground)))
         do k = 1, self%bldim(3)
             do j = 1, self%bldim(2)
                 do i = 1, self%bldim(1)
@@ -1011,9 +1020,12 @@ contains
     subroutine kill_bimg( self )
         class(image_bin), intent(inout) :: self
         if(allocated(self%bimat)) deallocate(self%bimat)
-        self%nccs = 0
+        self%bldim        = 0
+        self%bsmpd        = 0.
+        self%nccs         = 0
         self%bimat_is_set = .false.
-        call self%kill
+        ! Explicitly the parent binding: self%kill now resolves back to here.
+        call self%image%kill
     end subroutine kill_bimg
 
 end module simple_image_bin

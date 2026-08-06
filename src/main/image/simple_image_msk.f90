@@ -382,7 +382,7 @@ contains
                 mm = cc_min_dist%minmax()
                 min_diams(i) = 2.*mm(2)*imgs(i)%get_smpd()
                 write(logfhandle,'(A,I0,A,F7.2,A)') '>>> MIN DIAMETER OF MASK FOR IMAGE ', i, ': ', min_diams(i), ' A'
-                call cc_min_dist%kill()
+                call cc_min_dist%kill_bimg()
             end do
         end if
         ! destruct

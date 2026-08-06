@@ -199,6 +199,14 @@ subroutine new_filter( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call nu_filt3D%add_input(UI_MASK, nu_msk_sig, &
         &visibility=UI_VIS_ADVANCED)
+        ! nu_filt3D is the envelope-tuning program: these three are deliberately
+        ! not offered anywhere else, where the NU_ENVMASK_* constants govern.
+        call nu_filt3D%add_input(UI_MASK, nu_msk_beta, &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, nu_msk_dens, &
+        &visibility=UI_VIS_ADVANCED)
+        call nu_filt3D%add_input(UI_MASK, nu_msk_rel, &
+        &visibility=UI_VIS_ADVANCED)
         call nu_filt3D%add_input(UI_FILT, 'amsklp', 'num', 'NU envelope evidence scale',&
         &'Physical scale for smoothing the NU evidence margin, in Angstroms{8}', &
         &'evidence scale in Angstroms{8}', .false., 8., &

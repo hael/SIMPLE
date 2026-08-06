@@ -47,18 +47,29 @@ contains
         if( present(l_relative) ) l_rel = l_relative
         if( allocated(margin) ) deallocate(margin)
         allocate(margin(n_nu_mask), source=0.)
-        allocate(full(ldim(1),ldim(2),ldim(3)),      source=0.)
-        allocate(base_full(ldim(1),ldim(2),ldim(3)), source=0.)
-        allocate(tmp(ldim(1),ldim(2),ldim(3)),       source=0.)
+        allocate(full(ldim(1),ldim(2),ldim(3)), source=0.)
+        allocate(tmp(ldim(1),ldim(2),ldim(3)),  source=0.)
+        ! The baseline grid is only needed by the scale-free form. Allocating it
+        ! unconditionally costs a whole box^3 real per state for nothing.
+        if( l_rel ) allocate(base_full(ldim(1),ldim(2),ldim(3)), source=0.)
         !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
         do imask = 1, n_nu_mask
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
-            full(i,j,k)      = max(0., nu_ev_base(imask) - nu_ev_best(imask))
-            base_full(i,j,k) = nu_ev_base(imask)
+            full(i,j,k) = max(0., nu_ev_base(imask) - nu_ev_best(imask))
         end do
         !$omp end parallel do
+        if( l_rel )then
+            !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+            do imask = 1, n_nu_mask
+                i = nu_mask_vox(1,imask)
+                j = nu_mask_vox(2,imask)
+                k = nu_mask_vox(3,imask)
+                base_full(i,j,k) = nu_ev_base(imask)
+            end do
+            !$omp end parallel do
+        endif
         ! Smoothing the difference is equivalent to smoothing both terms with the
         ! same kernel, which is exactly what the candidate-scale path fails to do.
         call smooth_nu_objective(full, tmp, lp)
@@ -89,7 +100,8 @@ contains
             endif
         end do
         !$omp end parallel do
-        deallocate(full, base_full, tmp)
+        deallocate(full, tmp)
+        if( allocated(base_full) ) deallocate(base_full)
     end subroutine calc_nu_evidence_margin
 
     !>  Robust floor for the relative cost ratio, so that near-zero baseline or

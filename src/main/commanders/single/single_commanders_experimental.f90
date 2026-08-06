@@ -311,7 +311,7 @@ contains
             call vol%read(volnames(ivol))
             call mskvol%estimate_spher_mask_diam(params, vol, AMSKLP_NANO, msk_in_pix(ivol))
             write(logfhandle,*) ivol, 'mask diameter in A: ', 2. * msk_in_pix(ivol) * params%smpd
-            call mskvol%kill
+            call mskvol%kill_bimg
         end do
         loc = minloc(msk_in_pix) ! use the smallest NP to drive the radial averaging
         call vol_ref%new(ldim, params%smpd)

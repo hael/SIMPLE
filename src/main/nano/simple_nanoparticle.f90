@@ -274,7 +274,7 @@ contains
             call mskvol%estimate_spher_mask_diam(params, self%img, AMSKLP_NANO, msk_in_pix)
             write(logfhandle,*) 'mask diameter in A: ', 2. * msk_in_pix * self%smpd
             call self%img%mask3D_soft(msk_in_pix)
-            call mskvol%kill
+            call mskvol%kill_bimg
         endif
         if( DEBUG ) call self%img%write(string('masked_input_vol.mrc'))
         call self%img_raw%copy(self%img)
@@ -883,7 +883,7 @@ contains
         else
             call img_split_ccs%write(string('split_ccs.mrc'))
         endif
-        call img_split_ccs%kill
+        call img_split_ccs%kill_bimg
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%update_img_rmat()
         call self%img_bin%find_ccs(self%img_cc)

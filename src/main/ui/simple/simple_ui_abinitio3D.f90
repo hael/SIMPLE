@@ -114,9 +114,9 @@ subroutine new_abinitio3D( prgtab )
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call abinitio3D%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
-        call abinitio3D%add_input(UI_MASK, 'automsk', 'multi', 'Perform envelope masking', &
-            &'Generate/apply the NU-evidence envelope from the staged automasking point; requires NU filtering(yes|tight|no){no}','', .false., 'no', group="mask", visibility=UI_VIS_STANDARD, &
-        &choices=ui_choices([character(len=5) :: 'yes', 'tight', 'no']))
+        call abinitio3D%add_input(UI_MASK, 'automsk', 'binary', 'Perform envelope masking', &
+            &'Generate/apply the NU-evidence envelope from the staged automasking point; requires NU filtering(yes|no){no}','', .false., 'no', group="mask", visibility=UI_VIS_STANDARD, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         ! computer controls
         call abinitio3D%add_input(UI_COMP, nparts, required_override=.false., group="compute", visibility=UI_VIS_STANDARD)
         call abinitio3D%add_input(UI_COMP, nthr,                              group="compute", visibility=UI_VIS_STANDARD)

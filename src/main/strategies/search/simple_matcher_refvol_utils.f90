@@ -237,7 +237,7 @@ contains
         real    :: cur_fil(params%box_crop)
         integer :: filtsz
         logical :: have_even, have_odd, have_avg, l_nonuniform_mode, l_use_merged_nu_ref
-        logical :: l_envmask_exists, l_envmask_compatible, l_use_envmask
+        logical :: l_envmask_exists, l_envmask_compatible, l_use_envmask, l_nu_envmask_present
         l_nonuniform_mode    = params%l_nonuniform
         l_use_merged_nu_ref  = params%l_nonuniform_lpset .and. params%l_lpset
         vol_avg = params%vols(s)
@@ -360,7 +360,9 @@ contains
                 write(logfhandle,'(A,I0,A,1X,A)') &
                     &'>>> MATCHING REFERENCE NU EVIDENCE ENVELOPE: STATE ', s, ', MASK', envmask_fname%to_char()
                 return
-            else if( l_envmask_exists )then
+            endif
+            l_nu_envmask_present = l_envmask_exists
+            if( l_nu_envmask_present )then
                 write(logfhandle,'(A,I0,A)') &
                     &'>>> WARNING: state ', s, &
                     &' NU evidence envelope is incompatible; trying the legacy density envelope'
@@ -378,6 +380,10 @@ contains
                 write(logfhandle,'(A,I0,A)') &
                     &'>>> WARNING: state ', s, &
                     &' legacy density envelope is incompatible; using spherical reference mask'
+            else if( l_nu_envmask_present )then
+                write(logfhandle,'(A,I0,A)') &
+                    &'>>> WARNING: state ', s, &
+                    &' has no usable envelope; using spherical reference mask'
             else
                 write(logfhandle,'(A,I0,A)') &
                     &'>>> WARNING: state ', s, &

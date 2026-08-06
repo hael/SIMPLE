@@ -286,7 +286,7 @@ contains
         call pdb%kill
         call vol_bfac%kill
         call vol_pdb%kill
-        call vol_pdbin%kill
+        call vol_pdbin%kill_bimg
         call vol_no_bfac%kill
         call simple_end('**** SIMPLE_SHARPVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_sharpvol
@@ -555,7 +555,7 @@ contains
                     call mskvol%new(build%vol%get_ldim(), build%vol%get_smpd())
                     call mskvol%automask3D(params, build%vol, build%vol, l_tight=params%automsk.eq.'tight')
                     call build%vol%lp_background(mskvol, params%lp_backgr)
-                    call mskvol%kill
+                    call mskvol%kill_bimg
                 else
                     THROW_HARD('lp_backgr requires automsk=yes|tight under current masking policy')
                 endif

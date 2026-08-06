@@ -532,7 +532,7 @@ contains
                 endif
             else
                 ! masking: try to load state-specific mask if automsk enabled
-                call load_state_mask_or_fallback(self, even, odd)
+                call apply_spherical_fsc_mask(self, even, odd)
                 ! calculate FSC
                 call even%fft()
                 call odd%fft()
@@ -595,7 +595,7 @@ contains
             call odd%write(fname_odd,   del_if_exists=.true.)
             if( .not. l_have_fsc )then
                 ! masking: try to load state-specific mask if automask/envfsc enabled
-                call load_state_mask_or_fallback(self, even, odd)
+                call apply_spherical_fsc_mask(self, even, odd)
                 ! calculate FSC
                 call even%fft()
                 call odd%fft()
@@ -621,16 +621,14 @@ contains
         call cones_fsc%kill
     end subroutine sampl_dens_correct_eos
 
-    !> Apply the ordinary spherical FSC mask; envfsc is disabled until its
-    !!  on-the-fly density masker is implemented.
-    subroutine load_state_mask_or_fallback( self, even, odd )
+    !> Apply the spherical FSC mask. Envelope-masked FSC is rejected in
+    !!  validate_parameter_consistency until its on-the-fly density masker exists.
+    subroutine apply_spherical_fsc_mask( self, even, odd )
         class(reconstructor_eo), intent(inout) :: self
         class(image),            intent(inout) :: even, odd
-        if( self%p_ptr%l_envfsc ) &
-            &THROW_HARD('envfsc=yes is unfinished; on-the-fly density-mask generation must be implemented first')
         call even%mask3D_soft(self%msk, backgr=0.)
         call odd%mask3D_soft(self%msk, backgr=0.)
-    end subroutine load_state_mask_or_fallback
+    end subroutine apply_spherical_fsc_mask
 
     subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc, state, cones )
         class(reconstructor_eo),                intent(inout) :: self
@@ -646,7 +644,7 @@ contains
         call even_tmp%copy(even)
         call odd_tmp%copy(odd)
         ! mask temporary half maps for the ordinary FSC calculation
-        call load_state_mask_or_fallback(self, even_tmp, odd_tmp)
+        call apply_spherical_fsc_mask(self, even_tmp, odd_tmp)
         ! calculate FSC
         call even_tmp%fft()
         call odd_tmp%fft()

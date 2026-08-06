@@ -109,7 +109,11 @@ real,             parameter   :: NU_ENVMASK_DENS_WEIGHT       = 0.0
 logical,          parameter   :: NU_ENVMASK_RELATIVE          = .false.
 ! Smallest connected component kept, expressed as a fraction of the largest.
 real,             parameter   :: NU_ENVMASK_MINVOL_FRAC       = 0.1
-! Physical binary growth applied before the soft edge.
+! Physical binary growth applied before the soft edge. Callers floor the pixel
+! conversion at one layer, so at any sampling coarser than ~1 A this is a
+! single-voxel dilation rather than a true 1 A margin. Raise it if envelopes are
+! observed to clip flexible periphery: reference masking suppresses whatever it
+! excludes, so a slightly generous margin is much cheaper than a clipped domain.
 real,             parameter   :: NU_ENVMASK_GROW_A            = 1.0
 ! Physical cosine-edge width used to soften the molecular envelope.
 real,             parameter   :: NU_ENVMASK_EDGE_A            = 6.0

@@ -80,7 +80,7 @@ contains
             call doit
             call img_or_vol%write(params%outvol)
         endif
-        call img_or_vol%kill
+        call img_or_vol%kill_bimg
         ! end gracefully
         call simple_end('**** SIMPLE_BINARIZE NORMAL STOP ****')
 
@@ -113,7 +113,7 @@ contains
                 if( cline%defined('edge') ) then
                     call img_or_vol%cos_edge(params%edge,cos_img)
                     call img_or_vol%copy_bimg(cos_img)
-                    call cos_img%kill
+                    call cos_img%kill_bimg
                 endif
                 if( cline%defined('neg')  ) call img_or_vol%inv_bimg
             end subroutine doit
