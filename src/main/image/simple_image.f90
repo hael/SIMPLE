@@ -122,6 +122,8 @@ contains
     procedure          :: norm_noise_mask_pad_fft
     procedure          :: norm_noise_fft_clip_shift
     procedure          :: norm_noise_fft_clip_shift_ctf_flip
+    procedure          :: fft_clip_shift
+    procedure          :: fft_clip_shift_ctf_flip
     procedure          :: norm_noise_mask_fft_powspec
     procedure          :: mask_fft
     procedure          :: mask_pad_fft
@@ -839,10 +841,11 @@ interface
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
     end subroutine norm_noise_fft
 
-    module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out)
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
-        class(image), intent(inout) :: self_out
+    module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out, renorm)
+        class(image),      intent(inout) :: self
+        logical,           intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        class(image),      intent(inout) :: self_out
+        logical, optional, intent(in)    :: renorm
     end subroutine norm_noise_taper_edge_pad_fft
 
     module subroutine norm_noise_mask_pad_fft(self, lmsk, mskrad, self_out)
@@ -867,6 +870,20 @@ interface
         class(image), intent(inout) :: self_out
         real,         intent(in)    :: shvec(2)
     end subroutine norm_noise_fft_clip_shift
+
+    module subroutine fft_clip_shift( self, self_out, shvec )
+        class(image), intent(inout) :: self
+        class(image), intent(inout) :: self_out
+        real,         intent(in)    :: shvec(2)
+    end subroutine fft_clip_shift
+
+    module subroutine fft_clip_shift_ctf_flip( self, self_out, shvec, tfun, ctfparms )
+        class(image),    intent(inout) :: self
+        class(image),    intent(inout) :: self_out
+        real,            intent(in)    :: shvec(2)
+        class(ctf),      intent(inout) :: tfun     !< CTF object
+        type(ctfparams), intent(in)    :: ctfparms !< CTF parameters
+    end subroutine fft_clip_shift_ctf_flip
 
     module subroutine norm_noise_mask_fft_powspec( self, lmsk, mskrad, spec )
         class(image), intent(inout) :: self

@@ -26,7 +26,11 @@ struct FTW { int dummy; };
 #include <fcntl.h> // for open, O_RDWR, O_CREAT
 #include <fts.h>               /* file traversal */
 #include <sys/wait.h>
-#else
+#endif
+#if defined(__linux__)
+#include <sys/sysmacros.h>     /* major()/minor() on modern glibc */
+#endif
+#ifdef _WIN32
 #include <windows.h>
 #include <direct.h> // for _mkdir
 #define mkdir _mkdir
@@ -864,6 +868,51 @@ int64_t simple_current_rss_bytes(void)
     if (page_size <= 0) return -1;
     return (int64_t)resident_pages * (int64_t)page_size;
 #else
+    return -1;
+#endif
+}
+
+/* Is the block device backing PATH a spinning disk?  Returns 1 for rotational,
+ * 0 for solid state and -1 when the question cannot be answered -- which covers
+ * macOS, Windows, network and distributed filesystems, and device-mapper stacks
+ * whose st_dev has no /sys/dev/block entry.  Callers must treat -1 as unknown
+ * rather than as either answer.  For a partition the queue/ directory belongs
+ * to the parent disk, hence the second probe through "..". */
+int simple_fs_is_rotational(char *path, int *len)
+{
+#if defined(__linux__)
+    struct stat sbuf;
+    char syspath[256];
+    char *cpath;
+    FILE *stream;
+    int value, scanned, probe;
+
+    cpath = F90to_cstring(path, *len);
+    if(cpath == NULL) return -1;
+    if(stat(cpath, &sbuf) != 0) {
+        free(cpath);
+        return -1;
+    }
+    free(cpath);
+    for(probe = 0; probe < 2; probe++) {
+        if(probe == 0) {
+            snprintf(syspath, sizeof(syspath), "/sys/dev/block/%u:%u/queue/rotational",
+                     major(sbuf.st_dev), minor(sbuf.st_dev));
+        } else {
+            /* partition: queue/ lives on the parent whole-disk node */
+            snprintf(syspath, sizeof(syspath), "/sys/dev/block/%u:%u/../queue/rotational",
+                     major(sbuf.st_dev), minor(sbuf.st_dev));
+        }
+        stream = fopen(syspath, "r");
+        if(stream == NULL) continue;
+        scanned = fscanf(stream, "%d", &value);
+        fclose(stream);
+        if(scanned == 1) return value != 0 ? 1 : 0;
+    }
+    return -1;
+#else
+    (void)path;
+    (void)len;
     return -1;
 #endif
 }

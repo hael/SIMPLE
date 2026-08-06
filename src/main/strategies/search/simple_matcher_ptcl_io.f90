@@ -4,6 +4,7 @@ use simple_pftc_srch_api
 use simple_builder,           only: builder
 use simple_discrete_stack_io, only: dstack_io
 use simple_imghead,           only: find_ldim_nptcls
+use simple_syslib,            only: io_read_nstreams
 implicit none
 #include "simple_local_flags.inc"
 
@@ -18,20 +19,81 @@ end interface read_imgbatch
 
 type(stack_io) :: stkio_r
 
+! Per-stack dimensions, memoized by stack index for the lifetime of the process.
+! The physical MRC header stays the source of truth -- os_stk's 'box' is never
+! repaired and 'nptcls_stk' may hold a project range count rather than the real
+! image count, so trusting either would risk wrong record offsets after a stack is
+! replaced. Memoizing just removes the repeated open+header read per batch.
+integer, allocatable :: memo_ldim(:,:), memo_nptcls(:)
+
 contains
 
-    subroutine prepimgbatch( params, build, batchsz, box )
+    !>  Logical dimensions and image count of a particle stack, read from the file once
+    !!  per stack per process. stkind < 1 means the caller has no os_stk row to key on
+    !!  (cls3D, alternate particle sources) and the header is read every time.
+    subroutine stk_dims( params, build, stkind, stkname, ldim, nptcls )
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: stkind
+        class(string),     intent(in)    :: stkname
+        integer,           intent(out)   :: ldim(3), nptcls
+        integer :: nstks
+        if( stkind < 1 )then
+            call find_ldim_nptcls(stkname, ldim, nptcls)
+        else
+            nstks = build%spproj%os_stk%get_noris()
+            if( allocated(memo_nptcls) )then
+                if( size(memo_nptcls) /= nstks ) call forget_stk_dims
+            endif
+            if( .not. allocated(memo_nptcls) )then
+                allocate(memo_ldim(3,nstks), source=0)
+                allocate(memo_nptcls(nstks), source=0)
+            endif
+            if( stkind > nstks )then
+                call find_ldim_nptcls(stkname, ldim, nptcls)
+            else
+                if( memo_nptcls(stkind) < 1 )then
+                    call find_ldim_nptcls(stkname, memo_ldim(:,stkind), memo_nptcls(stkind))
+                endif
+                ldim   = memo_ldim(:,stkind)
+                nptcls = memo_nptcls(stkind)
+            endif
+        endif
+        if( (ldim(1) /= params%box) .or. (ldim(2) /= params%box) )then
+            write(logfhandle,*) 'ldim ', ldim
+            write(logfhandle,*) 'box ', params%box
+            write(logfhandle,*) 'stkname ', stkname%to_char()
+            THROW_HARD('Incompatible dimensions! stk_dims')
+        endif
+    end subroutine stk_dims
+
+    subroutine forget_stk_dims
+        if( allocated(memo_ldim)   ) deallocate(memo_ldim)
+        if( allocated(memo_nptcls) ) deallocate(memo_nptcls)
+    end subroutine forget_stk_dims
+
+    subroutine prepimgbatch( params, build, batchsz, box, smpd )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: batchsz
         integer, optional, intent(in)    :: box
-        integer :: currsz, ibatch, box_here
+        real,    optional, intent(in)    :: smpd
+        integer :: currsz, ibatch, box_here, ldim_curr(3)
+        real    :: smpd_here
         logical :: doprep
+        box_here  = params%box
+        smpd_here = params%smpd
+        if( present(box)  ) box_here  = box
+        if( present(smpd) ) smpd_here = smpd
         if( .not. allocated(build%imgbatch) )then
             doprep = .true.
         else
-            currsz = size(build%imgbatch)
-            if( batchsz > currsz )then
+            currsz    = size(build%imgbatch)
+            ldim_curr = build%imgbatch(1)%get_ldim()
+            ! a batch read from the downscaled cache needs box_crop buffers at
+            ! smpd_crop, so both have to be honoured on reuse, not just the batch size
+            if( batchsz > currsz .or. ldim_curr(1) /= box_here .or. &
+               &abs(build%imgbatch(1)%get_smpd() - smpd_here) > 1.e-6 )then
                 call killimgbatch(build)
                 doprep = .true.
             else
@@ -39,12 +101,10 @@ contains
             endif
         endif
         if( doprep )then
-            box_here = params%box
-            if( present(box) ) box_here = box
             allocate(build%imgbatch(batchsz))
             !$omp parallel do default(shared) private(ibatch) schedule(static) proc_bind(close)
             do ibatch = 1,batchsz
-                call build%imgbatch(ibatch)%new([box_here, box_here, 1], params%smpd, wthreads=.false.)
+                call build%imgbatch(ibatch)%new([box_here, box_here, 1], smpd_here, wthreads=.false.)
             end do
             !$omp end parallel do
         endif
@@ -189,7 +249,7 @@ contains
                 THROW_HARD('particle indstk out of source stack range; discrete_read_imgbatch_source')
             endif
         enddo
-        nthr_read = min(max(1,nthr_glob), nstks)
+        nthr_read = io_read_nstreams(uniq_stknames(1), nstks)
         allocate(dstkios(nthr_read))
         ! A batch can touch hundreds of stacks; keep simultaneous file handles bounded.
         do stk_from = 1,nstks,nthr_read
@@ -225,9 +285,9 @@ contains
         integer,           intent(in)    :: n, pinds(n), batchlims(2)
         type(dstack_io), allocatable :: dstkios(:)
         type(string), allocatable :: stknames(:), uniq_stknames(:)
-        integer,      allocatable :: inds_in_stk(:), stk_ids(:), uniq_ldims(:,:), uniq_nptcls(:)
-        integer :: i, ii, istk, nbatch, nstks, nthr_read, stk_from, stk_to, iopen, nopen
-        logical :: l_known_stack, l_verbose
+        integer,      allocatable :: inds_in_stk(:), stk_ids(:), uniq_ldims(:,:), uniq_nptcls(:), uniq_stkinds(:)
+        integer :: i, ii, istk, nbatch, nstks, nthr_read, stk_from, stk_to, iopen, nopen, stkind, ind_in_stk
+        logical :: l_known_stack, l_verbose, l_cls3D
         if( batchlims(1) < 1 .or. batchlims(2) > n .or. batchlims(1) > batchlims(2) )then
             write(logfhandle,*) 'batchlims: ', batchlims
             write(logfhandle,*) 'n        : ', n
@@ -243,8 +303,9 @@ contains
         endif
         if( read_sorted_stack_runs() ) return
         allocate(stknames(nbatch), inds_in_stk(nbatch), stk_ids(nbatch))
-        allocate(uniq_stknames(nbatch), uniq_ldims(3,nbatch), uniq_nptcls(nbatch))
-        nstks = 0
+        allocate(uniq_stknames(nbatch), uniq_ldims(3,nbatch), uniq_nptcls(nbatch), uniq_stkinds(nbatch))
+        l_cls3D = trim(params%oritype) == 'cls3D'
+        nstks   = 0
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
             call build%spproj%get_stkname_and_ind(params%oritype, pinds(i), stknames(ii), inds_in_stk(ii))
@@ -260,6 +321,13 @@ contains
                 nstks = nstks + 1
                 uniq_stknames(nstks) = stknames(ii)
                 stk_ids(ii) = nstks
+                ! os_stk row backing this stack, so its dimensions can be read from
+                ! the project rather than from the file header; cls3D has no such row
+                uniq_stkinds(nstks) = 0
+                if( .not. l_cls3D )then
+                    call build%spproj%map_ptcl_ind2stk_ind(params%oritype, pinds(i), stkind, ind_in_stk)
+                    uniq_stkinds(nstks) = stkind
+                endif
             endif
             if( l_verbose .and. n <= 32 )then
                 write(logfhandle,'(A,I8,A,I8,A,I8,A,A)') 'discrete_read_imgbatch item: batch_i=', i, &
@@ -268,15 +336,10 @@ contains
             endif
         end do
         do istk = 1,nstks
-            call find_ldim_nptcls(uniq_stknames(istk), uniq_ldims(:,istk), uniq_nptcls(istk))
-            if( (uniq_ldims(1,istk) /= params%box) .or. (uniq_ldims(2,istk) /= params%box) )then
-                write(logfhandle,*) 'ldim ', uniq_ldims(:,istk)
-                write(logfhandle,*) 'box ', params%box
-                write(logfhandle,*) 'stkname ', uniq_stknames(istk)%to_char()
-                THROW_HARD('Incompatible dimensions! discrete_read_imgbatch')
-            endif
+            call stk_dims(params, build, uniq_stkinds(istk), uniq_stknames(istk), &
+                &uniq_ldims(:,istk), uniq_nptcls(istk))
         enddo
-        nthr_read = min(max(1,nthr_glob), nstks)
+        nthr_read = io_read_nstreams(uniq_stknames(1), nstks)
         allocate(dstkios(nthr_read))
         ! A batch can touch hundreds of stacks; keep simultaneous file handles bounded.
         do stk_from = 1,nstks,nthr_read
@@ -303,7 +366,7 @@ contains
         enddo
         call stknames(:)%kill
         call uniq_stknames(:)%kill
-        deallocate(dstkios, stknames, inds_in_stk, stk_ids, uniq_stknames, uniq_ldims, uniq_nptcls)
+        deallocate(dstkios, stknames, inds_in_stk, stk_ids, uniq_stknames, uniq_ldims, uniq_nptcls, uniq_stkinds)
 
     contains
 
@@ -346,15 +409,10 @@ contains
             allocate(run_stknames(nstks), run_ldims(3,nstks), run_nptcls(nstks))
             do irun = 1, nstks
                 run_stknames(irun) = build%spproj%os_stk%get_str(run_stkinds(irun), 'stk')
-                call find_ldim_nptcls(run_stknames(irun), run_ldims(:,irun), run_nptcls(irun))
-                if( (run_ldims(1,irun) /= params%box) .or. (run_ldims(2,irun) /= params%box) )then
-                    write(logfhandle,*) 'ldim ', run_ldims(:,irun)
-                    write(logfhandle,*) 'box ', params%box
-                    write(logfhandle,*) 'stkname ', run_stknames(irun)%to_char()
-                    THROW_HARD('Incompatible dimensions! discrete_read_imgbatch')
-                endif
+                call stk_dims(params, build, run_stkinds(irun), run_stknames(irun), &
+                    &run_ldims(:,irun), run_nptcls(irun))
             end do
-            nthr_run = min(max(1,nthr_glob), nstks)
+            nthr_run = io_read_nstreams(run_stknames(1), nstks)
             allocate(dstkios_run(nthr_run))
             do run_from_i = 1,nstks,nthr_run
                 run_to_i = min(run_from_i + nthr_run - 1, nstks)

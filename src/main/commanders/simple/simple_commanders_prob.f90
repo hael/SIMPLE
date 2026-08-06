@@ -323,7 +323,7 @@ contains
                                               ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad
         use simple_matcher_pftc_prep,      only: prep_pftc4align2D
         use simple_matcher_ptcl_batch,  only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
-        use simple_imgarr_utils,        only: alloc_imgarr
+        use simple_ptcl_cache,          only: ptcl_cache_in_use, ptcl_cache_assert_ready
         use simple_classaverager,       only: cavger_new, cavger_read_all, cavger_kill
         use simple_eul_prob_tab2D,      only: eul_prob_tab2D
         class(commander_prob_tab2D), intent(inout) :: self
@@ -355,8 +355,16 @@ contains
         batches     = split_nobjs_even(nptcls, nbatches)
         batchsz_max = maxval(batches(:,2) - batches(:,1) + 1)
         call set_b_p_ptrs2D(params, build)
-        call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
-        call alloc_imgarr(batchsz_max, [params%box, params%box, 1], params%smpd, ptcl_imgs)
+        ! no ptcl_imgs here: prob_tab2D scores against the references and never
+        ! restores class averages, so the raw full-size images are not needed and the
+        ! batch can be served from the downscaled cache
+        call ptcl_cache_assert_ready(params, build)
+        if( ptcl_cache_in_use(params, build) )then
+            call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max, &
+                &imgbatch_box=params%box_crop, imgbatch_smpd=params%smpd_crop)
+        else
+            call alloc_ptcl_imgs(params, build, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+        endif
         ! mirror cluster2D_exec reference setup
         call cavger_new(params, build)
         if( .not. cline%defined('refs') ) THROW_HARD('exec_prob_tab2D requires refs on the command line')
@@ -371,7 +379,7 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             call build_batch_particles2D(params, build, batchsz, pinds(batch_start:batch_end),&
-                &ptcl_imgs(1:batchsz), ptcl_match_imgs, ptcl_match_imgs_pad)
+                &ptcl_match_imgs=ptcl_match_imgs, ptcl_match_imgs_pad=ptcl_match_imgs_pad)
             call eulprob_obj_part%fill_tab_range(batch_start, batch_end)
         end do
         ! write the 2D probability table
@@ -390,6 +398,7 @@ contains
         use simple_eul_prob_tab2D,          only: eul_prob_tab2D
         use simple_strategy2D_matcher,      only: set_b_p_ptrs2D
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4update2D
+        use simple_ptcl_cache,              only: ptcl_cache_ensure
         use simple_builder,                 only: builder
         class(commander_prob_align2D), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -422,6 +431,11 @@ contains
         call flush(logfhandle)
         ! write sampling to project
         call build%spproj%write_segment_inside(params%oritype)
+        ! Build the downscaled particle cache before the workers start, so they all
+        ! find it ready. A no-op once it exists, so the per-iteration cost is a file
+        ! and key check; this is also the first point in the workflow where the same
+        ! particles get read twice per iteration, once here and once in cluster2D.
+        call ptcl_cache_ensure(params, build)
         ! generate partition-wise dist tables
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab2D')

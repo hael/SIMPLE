@@ -16,6 +16,7 @@ use simple_matcher_pftc_prep,        only: prep_pftc4align2D
 use simple_matcher_smpl_and_lplims,  only: set_bp_range2d, sample_ptcls4update2D, cluster2D_requires_full_assignment, &
                                            all_active_ptcls_2D_assigned
 use simple_matcher_ptcl_batch,       only: alloc_ptcl_imgs, build_batch_particles2D, clean_batch_particles2D
+use simple_ptcl_cache,               only: ptcl_cache_in_use, ptcl_cache_assert_ready
 use simple_imgarr_utils,             only: alloc_imgarr
 use simple_strategy2D_greedy,        only: strategy2D_greedy
 use simple_strategy2D_greedy_smpl,   only: strategy2D_greedy_smpl
@@ -61,6 +62,7 @@ type :: cluster2D_ctrl
     logical :: l_prob_align
     logical :: l_restore_cavgs
     logical :: l_require_full_assignment
+    logical :: l_cached
     logical :: do_bench
   contains
     procedure :: display
@@ -139,8 +141,16 @@ contains
             rt_build_batch_particles2D = 0.0
             t_alloc_ptcl_imgs2D        = tic()
         endif
-        call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
-        call alloc_imgarr(batchsz_max, [p_ptr%box, p_ptr%box, 1], p_ptr%smpd, ptcl_imgs)
+        ! ptcl_imgs holds the raw images handed to class-average restoration; from the
+        ! cache they arrive already Fourier-cropped, so both buffers shrink to box_crop
+        if( ctrl%l_cached )then
+            call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max, &
+                &imgbatch_box=p_ptr%box_crop, imgbatch_smpd=p_ptr%smpd_crop)
+            call alloc_imgarr(batchsz_max, [p_ptr%box_crop, p_ptr%box_crop, 1], p_ptr%smpd_crop, ptcl_imgs)
+        else
+            call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+            call alloc_imgarr(batchsz_max, [p_ptr%box, p_ptr%box, 1], p_ptr%smpd, ptcl_imgs)
+        endif
         if( ctrl%do_bench )then
             rt_alloc_ptcl_imgs2D = toc(t_alloc_ptcl_imgs2D)
             t_prep_pftc_refs2D   = tic()
@@ -266,6 +276,14 @@ contains
                 if( trim(ctrl%refine_flag) == 'snhc' ) ctrl%refine_flag = 'snhc_smpl'
             endif
             ctrl%l_ctf = b_ptr%spproj%get_ctfflag('ptcl2D',iptcl=p_ptr%fromp) .ne. 'no'
+            ! Serve both the alignment and the class-average restoration from the
+            ! downscaled cache. Decided here because it sizes the image buffers and the
+            ! class-averager work images below. Mandatory when requested: a rank that
+            ! quietly fell back would contribute partial sums built by a different
+            ! preprocessing path than its peers.
+            call ptcl_cache_assert_ready(p_ptr, b_ptr)
+            ctrl%l_cached = ptcl_cache_in_use(p_ptr, b_ptr)
+            if( ctrl%l_cached ) write(logfhandle,'(A)') '>>> CLUSTER2D: reading particles from the downscaled cache'
         end subroutine init_ctrl
 
         subroutine sample_particles_for_update()
@@ -315,7 +333,7 @@ contains
                 THROW_HARD('need refs to be part of command line for cluster2D execution')
             endif
             call cavger_read_all
-            call cavger_init_online(batchsz_max, ctrl%l_frac_restore)
+            call cavger_init_online(batchsz_max, ctrl%l_frac_restore, cropped_ptcls=ctrl%l_cached)
         end subroutine prepare_class_averages_and_restoration
 
         subroutine prepare_alignment_references(batchsz_max)

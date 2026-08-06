@@ -939,6 +939,12 @@ contains
         if( self%l_ptcl_src_den .and. trim(self%oritype) /= 'ptcl3D' )then
             THROW_HARD('Denoised particle sources are supported only for oritype=ptcl3D')
         endif
+        select case(trim(self%cache))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('Unsupported cache='//trim(self%cache)//'; expected yes|no')
+        end select
+        self%l_cache = trim(self%cache) == 'yes'
         select case(trim(self%objfun_den))
             case('yes','no')
             case DEFAULT

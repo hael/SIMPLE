@@ -46,6 +46,7 @@ contains
         call reg%add_char('bandwidth_mode', self%bandwidth_mode)
         call reg%add_char('bin', self%bin)
         call reg%add_char('boxes', self%boxes)
+        call reg%add_char('cache', self%cache)
         call reg%add_char('cavg_ini', self%cavg_ini)
         call reg%add_char('cavg_ini_ext', self%cavg_ini_ext)
         call reg%add_char('center', self%center)
@@ -295,6 +296,7 @@ contains
     module subroutine bind_input_dirs(self, reg)
         class(parameters),   target, intent(inout) :: self
         class(param_registry),       intent(inout) :: reg
+        call reg%add_dir('cache_dir', self%cache_dir)
         call reg%add_dir('dir', self%dir)
         call reg%add_dir('dir_box', self%dir_box)
         call reg%add_dir('dir_meta', self%dir_meta)

@@ -239,6 +239,8 @@ contains
         call cmd_dict%push('boxfile',       'file with EMAN particle coordinates(.txt)')
         call cmd_dict%push('boxtab',        'table (text file) of files with EMAN particle coordinates(.txt)')
         call cmd_dict%push('bw_ratio',      'ratio between foreground-background pixels to obtain in edge detection')
+        call cmd_dict%push('cache',         'cache Fourier-cropped particles to cut per-iteration I/O(yes|no){no}')
+        call cmd_dict%push('cache_dir',     'directory for the downscaled particle cache{execution directory}')
         call cmd_dict%push('cenlp',         'low-pass limit for binarisation in centering(in A){30 A}')
         call cmd_dict%push('center',        'center image(s)/class average(s)/volume(s)(yes|no){no}')
         call cmd_dict%push('center_type',   'Centering scheme used(mass|seg|params)')

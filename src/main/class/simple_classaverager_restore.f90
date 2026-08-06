@@ -158,10 +158,16 @@ contains
     ! Calculators
 
     ! Initialize objects for on-the-fly classes update
-    module subroutine cavger_init_online( maxbatchsz, do_frac_update )
-        integer, intent(in) :: maxbatchsz
-        logical, intent(in) :: do_frac_update
+    module subroutine cavger_init_online( maxbatchsz, do_frac_update, cropped_ptcls )
+        integer,           intent(in) :: maxbatchsz
+        logical,           intent(in) :: do_frac_update
+        logical, optional, intent(in) :: cropped_ptcls
         real, allocatable :: class_update_fracs(:)
+        ! Whether cavger_update_sums will be fed box_crop particles (from the
+        ! downscaled cache) rather than the full-size originals. Set explicitly by
+        ! the caller rather than inferred, so the offline assembly path is unaffected.
+        l_cropped_ptcls = .false.
+        if( present(cropped_ptcls) ) l_cropped_ptcls = cropped_ptcls
         ! Preserve the last restored model before clearing the accumulators.
         ! This lets a zero-support class retain its own previous average.
         call backup_previous_cavgs()
@@ -172,8 +178,15 @@ contains
             call b_ptr%spproj_field%get_class_update_fracs(ncls, class_update_fracs)
             call apply_weights2cavgs(class_update_fracs)
         endif
-        ! Work images
-        call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
+        ! Work images. box_croppd and boxpd cover the same physical extent, so their
+        ! Fourier grids share a spacing and index hp means the same spatial frequency
+        ! in both; stack_accumulate_fplane only ever reads |hp| <= 2*nyq of the class
+        ! average, which is exactly the extent of the cropped padded grid.
+        if( l_cropped_ptcls )then
+            call alloc_imgarr(nthr_glob, ldim_croppd, smpd_crop, tmp_pad_imgs)
+        else
+            call alloc_imgarr(nthr_glob, ldim_pd, smpd, tmp_pad_imgs)
+        endif
         ! particle records
         allocate(precs(maxbatchsz))
         precs(:)%pind = 0
@@ -274,18 +287,32 @@ contains
         integer,      intent(in)    :: nptcls
         class(image), intent(inout) :: ptcl_imgs(nptcls)
         type(fplane_type) :: fplanes(nthr_glob)
+        type(ctfparams) :: ctfparms_here
         integer :: sigma2_kfromto(2)
         integer :: iptcl, ithr, icls, i, nyq_crop
-        ! Memoization for full padded image (tmp_pad_imgs is allocated with ldim_pd)
-        call memoize_ft_maps(ldim_pd(1:2), p_ptr%smpd)
+        real    :: crop_factor, shift_here(2)
+        ! Memoization for the padded image tmp_pad_imgs was allocated with. The
+        ! (ldim,smpd) pair fixes the physical extent, and boxpd*smpd == box_croppd*
+        ! smpd_crop, so a given index h denotes the same spatial frequency either way.
+        if( l_cropped_ptcls )then
+            call memoize_ft_maps(ldim_croppd(1:2), p_ptr%smpd_crop)
+        else
+            call memoize_ft_maps(ldim_pd(1:2), p_ptr%smpd)
+        endif
+        crop_factor = real(p_ptr%box_crop) / real(p_ptr%box)
         ! Dimensions & limits
         nyq_crop       = cavgs%even%fit%get_lfny(1)
         sigma2_kfromto = [1, nyq_crop]
         if( p_ptr%l_ml_reg ) then
             sigma2_kfromto(1) = lbound(b_ptr%esig%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(b_ptr%esig%sigma2_noise,1)
+            ! gen_fplane4rec derives the sigma2 source range from the box it is handed
+            ! (box_croppd/OSMPL_PAD_FAC). That is params%box for the full-size buffer
+            ! but box_crop for the cropped one, so the spectrum has to be truncated to
+            ! the shells the cropped grid actually spans.
+            if( l_cropped_ptcls ) sigma2_kfromto(2) = min(sigma2_kfromto(2), nyq_crop)
         end if
-        !$omp parallel do default(shared) private(icls,i,iptcl,ithr)&
+        !$omp parallel do default(shared) private(icls,i,iptcl,ithr,ctfparms_here,shift_here)&
         !$omp schedule(static,1) proc_bind(close)
         do icls = 1, ncls
             do i = 1, nptcls
@@ -294,15 +321,36 @@ contains
                 ithr  = omp_get_thread_num() + 1
                 iptcl = precs(i)%pind
                 ! particle: normalize, pad & forward FT
-                call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk, tmp_pad_imgs(ithr))
+                ! The mask has to match the box the particle actually has. Cached
+                ! particles were already noise-normalized at the full box before being
+                ! Fourier-cropped, and cropping discards most of the noise power, so
+                ! re-normalizing here would scale them up by the crop factor while
+                ! leaving ctfsq_plane and sigma2 alone.
+                if( l_cropped_ptcls )then
+                    call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk_crop, &
+                        &tmp_pad_imgs(ithr), renorm=.false.)
+                else
+                    call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(b_ptr%lmsk, tmp_pad_imgs(ithr))
+                endif
                 ! shift, CTF and ML regularization in Fourier plane generation
+                ctfparms_here = precs(i)%ctfparams
+                shift_here    = precs(i)%shift
+                if( l_cropped_ptcls )then
+                    ! shconst is PI/(ldim/2), so shifts must be in the pixel units of
+                    ! the padded box. boxpd shares the original pixel size and needs no
+                    ! conversion; box_croppd is in smpd_crop pixels and does. Likewise
+                    ! the CTF kernel reads spatial frequency in cycles/pixel of the
+                    ! current grid, so the CTF must be told the cropped pixel size.
+                    ctfparms_here%smpd = ctfparms_here%smpd / crop_factor != smpd_crop
+                    shift_here         = shift_here * crop_factor
+                endif
                 if( p_ptr%l_ml_reg ) then
                     call tmp_pad_imgs(ithr)%gen_fplane4rec(sigma2_kfromto, p_ptr%smpd_crop, &
-                        precs(i)%ctfparams, precs(i)%shift, fplanes(ithr), &
+                        ctfparms_here, shift_here, fplanes(ithr), &
                         b_ptr%esig%sigma2_noise(sigma2_kfromto(1):sigma2_kfromto(2), iptcl) )
                 else
                     call tmp_pad_imgs(ithr)%gen_fplane4rec(sigma2_kfromto, p_ptr%smpd_crop, &
-                        precs(i)%ctfparams, precs(i)%shift, fplanes(ithr) )
+                        ctfparms_here, shift_here, fplanes(ithr) )
                 endif
                 ! rotation, interpolation and accumulation
                 select case(precs(i)%eo)

@@ -146,6 +146,7 @@ integer                          :: ldim_pd(3)     = [0,0,0]  !< logical dimensi
 integer                          :: ldim_croppd(3) = [0,0,0]  !< logical dimension of cropped image, padded
 real                             :: smpd       = 0.           !< sampling distance
 real                             :: smpd_crop  = 0.           !< cropped sampling distance
+logical                          :: l_cropped_ptcls = .false. !< particles handed to cavger_update_sums are at box_crop
 
 interface
 
@@ -362,9 +363,10 @@ interface
 
     ! Restoration
 
-    module subroutine cavger_init_online( maxbatchsz, do_frac_update )
-        integer, intent(in) :: maxbatchsz
-        logical, intent(in) :: do_frac_update
+    module subroutine cavger_init_online( maxbatchsz, do_frac_update, cropped_ptcls )
+        integer,           intent(in) :: maxbatchsz
+        logical,           intent(in) :: do_frac_update
+        logical, optional, intent(in) :: cropped_ptcls
     end subroutine cavger_init_online
 
     module subroutine cavger_dealloc_online()

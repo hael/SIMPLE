@@ -300,10 +300,16 @@ contains
         self%ft    = .true.
     end subroutine norm_noise_fft
 
-    module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out)
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
-        class(image), intent(inout) :: self_out
+    !>  renorm=.false. skips the noise normalization, for input that already carries it.
+    !!  This matters for Fourier-cropped input: cropping removes most of the noise power,
+    !!  so re-normalizing against the cropped background would rescale the image by the
+    !!  crop factor while leaving the CTF and sigma2 weights untouched.
+    module subroutine norm_noise_taper_edge_pad_fft(self, lmsk, self_out, renorm)
+        class(image),      intent(inout) :: self
+        logical,           intent(in)    :: lmsk(self%ldim(1), self%ldim(2), self%ldim(3))
+        class(image),      intent(inout) :: self_out
+        logical, optional, intent(in)    :: renorm
+        logical       :: l_renorm
         integer       :: n1, n2, n1o, n2o, h1o, h2o
         integer       :: i, j, npix, starts(3), x0, y0, xo, yo, winsz
         ! Normalization stats in DP (scalars only)
@@ -320,6 +326,8 @@ contains
         real(c_float) :: y_start(self%ldim(1)), y_stop(self%ldim(1))
         real(c_float) :: y_smooth_start(self%ldim(1)), y_smooth_stop(self%ldim(1))
         real(c_float) :: edge_avg(self%ldim(1))
+        l_renorm = .true.
+        if( present(renorm) ) l_renorm = renorm
         winsz = nint(COSMSKHALFWIDTH)
         ! n3 is always 1 here
         n1  = self%ldim(1)
@@ -419,7 +427,7 @@ contains
         var_dp    = 0.0_dp
         invstd_dp = 1.0_dp
         do_norm   = .false.
-        if (npix > 1) then
+        if (npix > 1 .and. l_renorm) then
             rnpix   = real(npix, dp)
             mean_dp = sum_dp / rnpix
             var_dp  = (sum_sq_dp - sum_dp * sum_dp / rnpix) / real(npix - 1, dp)
@@ -936,6 +944,177 @@ contains
         call self_out%set_smpd(self%smpd * ratio)
         self_out%ft = .true.
     end subroutine norm_noise_fft_clip_shift_ctf_flip
+
+    !>  As norm_noise_fft_clip_shift, but for an image whose noise normalization has
+    !!  already been applied. Used by the downscaled particle cache, whose entries are
+    !!  stored normalized: normalization is iteration-independent, the shift is not.
+    !!  The FFT/clip/shift stages are kept identical to the fused routine above so the
+    !!  cached and uncached paths produce the same coefficients.
+    module subroutine fft_clip_shift( self, self_out, shvec )
+        class(image), intent(inout) :: self
+        class(image), intent(inout) :: self_out
+        real,         intent(in)    :: shvec(2)
+        real,         parameter     :: SHTHRESH = 0.001
+        complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
+        real(dp)      :: sh(2)
+        integer       :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo
+        real(c_float) :: scale_cmat, ratio, rswap
+        logical       :: k_neg
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        h1 = n1/2
+        h2 = n2/2
+        ! SHIFT TO PHASE ORIGIN (fftshift)
+        do j = 1, h2
+            jj = h2 + j
+            do i = 1, h1
+                ii = h1 + i
+                rswap = self%rmat(i, j, 1)
+                self%rmat(i, j, 1)   = self%rmat(ii, jj, 1)
+                self%rmat(ii, jj, 1) = rswap
+                rswap = self%rmat(i, jj, 1)
+                self%rmat(i, jj, 1)  = self%rmat(ii, j, 1)
+                self%rmat(ii, j, 1)  = rswap
+            end do
+        end do
+        ! FFT (FFTW r2c) + scale with reciprocal
+        call fftwf_execute_dft_r2c(self%plan_fwd, self%rmat, self%cmat)
+        scale_cmat = 1.0_c_float / real(n1*n2, c_float)
+        self%cmat  = self%cmat * scale_cmat
+        self%ft    = .true.
+        ! CLIP (+ optional SHIFT in Fourier space) using phase recurrence
+        lims  = self_out%fit%loop_lims(2)
+        ratio = real(n1, c_float) / real(self_out%ldim(1), c_float)
+        if (abs(shvec(1)) > SHTHRESH .or. abs(shvec(2)) > SHTHRESH) then
+            sh = real(shvec * self_out%shconst(1:2), dp)
+            w1 = cmplx( real(cos(sh(1)), c_float), real(sin(sh(1)), c_float), kind=c_float_complex )
+            w2 = cmplx( real(cos(sh(2)), c_float), real(sin(sh(2)), c_float), kind=c_float_complex )
+            ph0 = cmplx( real(cos(real(lims(1,1),dp)*sh(1)), c_float), &
+                        real(sin(real(lims(1,1),dp)*sh(1)), c_float), kind=c_float_complex )
+            ph_k = cmplx( real(cos(real(lims(2,1),dp)*sh(2)), c_float), &
+                        real(sin(real(lims(2,1),dp)*sh(2)), c_float), kind=c_float_complex )
+            do k = lims(2,1), lims(2,2)
+                k_neg =  k < 0
+                kpi   = merge(k + 1 + n2              , k + 1, k_neg)
+                kpo   = merge(k + 1 + self_out%ldim(2), k + 1, k_neg)
+                ph_h  = ph0
+                do h = lims(1,1), lims(1,2)
+                    hp    = h + 1
+                    phase = ph_k * ph_h
+                    self_out%cmat(hp, kpo, 1) = self%cmat(hp, kpi, 1) * phase
+                    ph_h = ph_h * w1
+                end do
+                ph_k = ph_k * w2
+            end do
+        else
+            ! CLIP only
+            do k = lims(2,1), lims(2,2)
+                k_neg =  k < 0
+                kpi   = merge(k + 1 + n2              , k + 1, k_neg)
+                kpo   = merge(k + 1 + self_out%ldim(2), k + 1, k_neg)
+                do h = lims(1,1), lims(1,2)
+                    hp = h + 1
+                    self_out%cmat(hp, kpo, 1) = self%cmat(hp, kpi, 1)
+                end do
+            end do
+        endif
+        call self_out%set_smpd(self%smpd * ratio)
+        self_out%ft = .true.
+    end subroutine fft_clip_shift
+
+    !>  As norm_noise_fft_clip_shift_ctf_flip, for an already noise-normalized image.
+    !!  See fft_clip_shift.
+    module subroutine fft_clip_shift_ctf_flip( self, self_out, shvec, tfun, ctfparms )
+        use simple_ctf,      only: ctf
+        use simple_math_ctf, only: ft_map_ctf_kernel
+        class(image),    intent(inout) :: self
+        class(image),    intent(inout) :: self_out
+        real,            intent(in)    :: shvec(2)
+        class(ctf),      intent(inout) :: tfun     !< CTF object
+        type(ctfparams), intent(in)    :: ctfparms !< CTF parameters
+        real,            parameter     :: SHTHRESH = 0.001
+        complex(c_float_complex) :: w1, w2, ph0, ph_h, ph_k, phase
+        real(dp)        :: sh(2)
+        integer         :: n1, n2, h1, h2, i, j, ii, jj, h, k, hp, lims(3,2), kpi, kpo
+        real(c_float)   :: scale_cmat, ratio, rswap
+        logical         :: k_neg
+        type(ctfvars)   :: ctfvals
+        real, parameter :: ONE = 1.0
+        real            :: sum_df, diff_df, angast, amp_contr_const, wl, half_wl2_cs, tval
+        n1 = self%ldim(1)
+        n2 = self%ldim(2)
+        h1 = n1/2
+        h2 = n2/2
+        ! SHIFT TO PHASE ORIGIN (fftshift)
+        do j = 1, h2
+            jj = h2 + j
+            do i = 1, h1
+                ii = h1 + i
+                rswap = self%rmat(i, j, 1)
+                self%rmat(i, j, 1)   = self%rmat(ii, jj, 1)
+                self%rmat(ii, jj, 1) = rswap
+                rswap = self%rmat(i, jj, 1)
+                self%rmat(i, jj, 1)  = self%rmat(ii, j, 1)
+                self%rmat(ii, j, 1)  = rswap
+            end do
+        end do
+        ! FFT (FFTW r2c) + scale with reciprocal
+        call fftwf_execute_dft_r2c(self%plan_fwd, self%rmat, self%cmat)
+        scale_cmat = 1.0_c_float / real(n1*n2, c_float)
+        self%cmat  = self%cmat * scale_cmat
+        self%ft    = .true.
+         !---initialize CTF
+        call tfun%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast) ! conversions
+        ctfvals         = tfun%get_ctfvars(ctfparms%phshift)
+        wl              = ctfvals%wl
+        half_wl2_cs     = 0.5 * wl * wl * ctfvals%cs
+        sum_df          = ctfvals%dfx + ctfvals%dfy
+        diff_df         = ctfvals%dfx - ctfvals%dfy
+        angast          = ctfvals%angast
+        amp_contr_const = ctfvals%amp_contr_const
+        !---end initialize CTF
+        lims  = self_out%fit%loop_lims(2)
+        ratio = real(n1, c_float) / real(self_out%ldim(1), c_float)
+        if (abs(shvec(1)) > SHTHRESH .or. abs(shvec(2)) > SHTHRESH) then
+            sh = real(shvec * self_out%shconst(1:2), dp)
+            w1 = cmplx( real(cos(sh(1)), c_float), real(sin(sh(1)), c_float), kind=c_float_complex )
+            w2 = cmplx( real(cos(sh(2)), c_float), real(sin(sh(2)), c_float), kind=c_float_complex )
+            ph0 = cmplx( real(cos(real(lims(1,1),dp)*sh(1)), c_float), &
+                        real(sin(real(lims(1,1),dp)*sh(1)), c_float), kind=c_float_complex )
+            ph_k = cmplx( real(cos(real(lims(2,1),dp)*sh(2)), c_float), &
+                        real(sin(real(lims(2,1),dp)*sh(2)), c_float), kind=c_float_complex )
+            do k = lims(2,1), lims(2,2)
+                k_neg =  k < 0
+                kpi   = merge(k + 1 + n2              , k + 1, k_neg)
+                kpo   = merge(k + 1 + self_out%ldim(2), k + 1, k_neg)
+                ph_h  = ph0
+                do h = lims(1,1), lims(1,2)
+                    hp    = h + 1
+                    phase = ph_k * ph_h
+                    tval  = sign(ONE,ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                        &amp_contr_const, wl, half_wl2_cs))
+                    self_out%cmat(hp, kpo, 1) = self%cmat(hp, kpi, 1) * phase * tval
+                    ph_h = ph_h * w1
+                end do
+                ph_k = ph_k * w2
+            end do
+        else
+            ! CLIP only
+            do k = lims(2,1), lims(2,2)
+                k_neg =  k < 0
+                kpi   = merge(k + 1 + n2              , k + 1, k_neg)
+                kpo   = merge(k + 1 + self_out%ldim(2), k + 1, k_neg)
+                do h = lims(1,1), lims(1,2)
+                    hp = h + 1
+                    tval = sign(ONE,ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                        &amp_contr_const, wl, half_wl2_cs))
+                    self_out%cmat(hp, kpo, 1) = self%cmat(hp, kpi, 1) * tval
+                end do
+            end do
+        endif
+        call self_out%set_smpd(self%smpd * ratio)
+        self_out%ft = .true.
+    end subroutine fft_clip_shift_ctf_flip
 
     !>  \brief  Fused: noise-normalize (on unmasked bg) + fftshift + soft-avg mask + FFT + power spectrum
     !!

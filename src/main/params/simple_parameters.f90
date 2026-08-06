@@ -58,6 +58,7 @@ type :: parameters
     character(len=3)          :: beamtilt='no'        !< use beamtilt values when generating optics groups
     character(len=3)          :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)          :: boxes='no'           !< add box coordinates to JSON output(yes|no){no}
+    character(len=3)          :: cache='no'           !< cache Fourier-cropped particles to cut per-iteration I/O(yes|no){no}
     character(len=3)          :: cavg_ini='no'        !< use class averages for initialization(yes|no){no}
     character(len=3)          :: cavg_ini_ext='no'    !< use class averages for (external) initialization(yes|no){no}
     character(len=3)          :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
@@ -179,7 +180,8 @@ type :: parameters
     ! default initialization is done in the init_strings method below
     type(string)              :: boxfile              !< file with EMAN particle coordinates(.txt)
     type(string)              :: boxtab               !< table (text file) of files with EMAN particle coordinates(.txt)
-    type(string)              :: ciffile              !< xPDB/mmCIF file          
+    type(string)              :: cache_dir            !< where to keep the downscaled particle cache
+    type(string)              :: ciffile              !< xPDB/mmCIF file
     type(string)              :: class_assignment     !< text file listing class ids assigned to a worker
     type(string)              :: classdoc             !< doc with per-class stats(.txt)
     type(string)              :: cwd
@@ -633,6 +635,7 @@ type :: parameters
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale       = .false.
     logical :: l_bfac            = .false.
+    logical :: l_cache           = .false.
     logical :: l_corrw           = .false.
     logical :: l_distr_worker    = .false.
     logical :: l_dose_weight     = .false.

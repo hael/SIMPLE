@@ -4,7 +4,8 @@ use simple_pftc_srch_api
 use simple_builder,         only: builder
 use simple_euclid_sigma2,   only: sigma2_star_from_iter
 use simple_matcher_ptcl_io, only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source, killimgbatch
-use simple_matcher_2Dprep,  only: prepimg4align
+use simple_matcher_2Dprep,  only: prepimg4align, prepimg4align_cached
+use simple_ptcl_cache,      only: ptcl_cache_in_use, ptcl_cache_read_batch
 implicit none
 
 public :: prep_sigmas_objfun, alloc_ptcl_imgs
@@ -36,14 +37,29 @@ contains
         end if
     end subroutine prep_sigmas_objfun
 
-    subroutine alloc_ptcl_imgs( params, build, ptcl_imgs, ptcl_imgs_pad, batchsz )
+    !>  imgbatch_box/imgbatch_smpd size the raw read buffer; pass params%box_crop and
+    !!  params%smpd_crop when the batch will be filled from the downscaled particle
+    !!  cache rather than the originals. The sampling distance has to travel with the
+    !!  box: prepimg4align_cached derives img_out's smpd from the input image, so a
+    !!  buffer left at params%smpd would stamp the wrong sampling onto ptcl_match_imgs.
+    subroutine alloc_ptcl_imgs( params, build, ptcl_imgs, ptcl_imgs_pad, batchsz, imgbatch_box, imgbatch_smpd )
         class(parameters),        intent(inout) :: params
         class(builder),           intent(inout) :: build
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
         type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
         integer,                  intent(in)    :: batchsz
+        integer, optional,        intent(in)    :: imgbatch_box
+        real,    optional,        intent(in)    :: imgbatch_smpd
         integer           :: ithr
-        call prepimgbatch(params, build, batchsz)
+        if( present(imgbatch_box) )then
+            if( present(imgbatch_smpd) )then
+                call prepimgbatch(params, build, batchsz, box=imgbatch_box, smpd=imgbatch_smpd)
+            else
+                call prepimgbatch(params, build, batchsz, box=imgbatch_box)
+            endif
+        else
+            call prepimgbatch(params, build, batchsz)
+        endif
         allocate(ptcl_imgs(nthr_glob), ptcl_imgs_pad(nthr_glob))
         !$omp parallel do default(shared) private(ithr) schedule(static) proc_bind(close)
         do ithr = 1,nthr_glob
@@ -139,16 +155,28 @@ contains
         call build%pftc%memoize_ptcls_den
     end subroutine polarize_batch_particles3D_den
 
+    !>  ptcl_imgs receives the raw full-size images, which only callers that restore
+    !!  class averages from them need; omit it to skip both the buffer and the copy.
     subroutine build_batch_particles2D( params, build, nptcls_here, pinds, ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad )
-        class(parameters), intent(in)    :: params
-        class(builder),    intent(inout) :: build
-        integer,           intent(in)    :: nptcls_here
-        integer,           intent(in)    :: pinds(nptcls_here)
-        class(image),      intent(inout) :: ptcl_imgs(nptcls_here)
-        class(image),      intent(inout) :: ptcl_match_imgs(params%nthr)
-        class(image),      intent(inout) :: ptcl_match_imgs_pad(params%nthr)
+        class(parameters),      intent(in)    :: params
+        class(builder),         intent(inout) :: build
+        integer,                intent(in)    :: nptcls_here
+        integer,                intent(in)    :: pinds(nptcls_here)
+        class(image), optional, intent(inout) :: ptcl_imgs(nptcls_here)
+        class(image),           intent(inout) :: ptcl_match_imgs(params%nthr)
+        class(image),           intent(inout) :: ptcl_match_imgs_pad(params%nthr)
         integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
-        call discrete_read_imgbatch(params, build, nptcls_here, pinds, [1,nptcls_here])
+        logical :: l_keep_raw, l_cached
+        l_keep_raw = present(ptcl_imgs)
+        ! When cached, ptcl_imgs receives the Fourier-cropped particle rather than the
+        ! full-size original, so callers that pass it must have sized it at box_crop and
+        ! told cavger_init_online to expect cropped particles.
+        l_cached   = ptcl_cache_in_use(params, build)
+        if( l_cached )then
+            call ptcl_cache_read_batch(params, build, nptcls_here, pinds, [1,nptcls_here])
+        else
+            call discrete_read_imgbatch(params, build, nptcls_here, pinds, [1,nptcls_here])
+        endif
         call build%pftc%reallocate_ptcls(nptcls_here, pinds)
         pdim_interp = build%pftc%get_pdim_interp()
         call ptcl_match_imgs_pad(1)%memoize4polarize_oversamp(pdim_interp)
@@ -158,8 +186,14 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds(iptcl_batch)
-            call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
-            call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
+            if( l_keep_raw ) call ptcl_imgs(iptcl_batch)%copy_fast(build%imgbatch(iptcl_batch))
+            if( l_cached )then
+                call prepimg4align_cached(params, build, iptcl, build%imgbatch(iptcl_batch), &
+                    &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
+            else
+                call prepimg4align(params, build, iptcl, build%imgbatch(iptcl_batch), &
+                    &ptcl_match_imgs(ithr), ptcl_match_imgs_pad(ithr))
+            endif
             call build%pftc%polarize_ptcl_pft(ptcl_match_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
             call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
         end do

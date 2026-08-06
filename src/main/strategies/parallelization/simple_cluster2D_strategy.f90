@@ -6,6 +6,7 @@ use simple_cmdline,     only: cmdline
 use simple_qsys_env,    only: qsys_env
 use simple_convergence, only: convergence
 use simple_matcher_smpl_and_lplims, only: cluster2D_requires_full_assignment, all_active_ptcls_2D_assigned
+use simple_ptcl_cache,  only: ptcl_cache_ensure
 use simple_gui_utils,   only: mrc2jpeg_tiled
 use simple_progress,    only: progressfile_update
 use simple_euclid_sigma2, only: sigma2_group_iter
@@ -131,6 +132,8 @@ contains
         if( startit == 1 )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
+        ! once per cluster2D invocation, before any iteration reads particles
+        call ptcl_cache_ensure(params, build)
     end subroutine inmem_initialize
 
     subroutine inmem_execute_iteration( self, params, build, cline, converged)
@@ -235,6 +238,8 @@ contains
         if( params%startit == 1 )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
+        ! master-side, before any job is scheduled, so the workers find it ready
+        call ptcl_cache_ensure(params, build)
         call set_master_num_threads(self%nthr_master, string('CLUSTER2D'))
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)

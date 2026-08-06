@@ -1,6 +1,7 @@
 !@descr: System utilities & POSIX/OS wrappers
 module simple_syslib
 use simple_defs
+use simple_defs_environment, only: SIMPLE_IO_NSTREAMS
 use simple_defs_fname
 use simple_error
 use simple_string
@@ -143,6 +144,14 @@ interface
         integer(c_long), intent(inout) :: peakBuf            !> this process's peak RAM usage
     end function get_sysinfo
 
+    function fs_is_rotational_c(path, len) bind(c,name="simple_fs_is_rotational")
+        use, intrinsic :: iso_c_binding
+        implicit none
+        integer(c_int) :: fs_is_rotational_c                                 !> 1 rotational, 0 solid state, -1 unknown
+        character(kind=c_char,len=1),dimension(*),intent(in) :: path         !> path on the filesystem of interest
+        integer(c_int), intent(in) :: len                                    !> path string length
+    end function fs_is_rotational_c
+
     function get_peak_rss_bytes() bind(c,name="simple_peak_rss_bytes")
         use, intrinsic :: iso_c_binding, only: c_int64_t
         implicit none
@@ -209,6 +218,10 @@ interface
     end function
 
 end interface
+
+! particle I/O concurrency, probed once per process by io_read_nstreams
+logical :: l_io_nstreams_probed = .false.
+integer :: io_nstreams_cap      = 8
 
 contains
 
@@ -330,6 +343,60 @@ contains
         end if
         envval = trim(adjustl(retval))
     end function simple_getenv
+
+    !> \brief Is the storage backing fname a spinning disk? 1 yes, 0 no, -1 unknown
+    function fs_is_rotational( fname ) result( rotational )
+        class(*), intent(in) :: fname
+        integer :: rotational
+        select type(fname)
+            type is (string)
+                rotational = int(fs_is_rotational_c(fname%to_char(), fname%strlen_trim()))
+            type is (character(*))
+                rotational = int(fs_is_rotational_c(fname, len_trim(fname)))
+            class default
+                rotational = -1
+        end select
+    end function fs_is_rotational
+
+    !> \brief How many stacks to read from concurrently, given nreq are available.
+    !!         The right queue depth is a property of the storage, not of the CPU,
+    !!         so nthr_glob is never the answer: on a spinning disk many concurrent
+    !!         readers turn per-stack sequential runs into head thrashing, while on
+    !!         flash a handful of streams already saturates the device. Probed once
+    !!         per process against fname; SIMPLE_IO_NSTREAMS overrides.
+    function io_read_nstreams( fname, nreq ) result( nstreams )
+        class(*), intent(in) :: fname
+        integer,  intent(in) :: nreq
+        integer            :: nstreams
+        character(len=32)  :: envval
+        integer            :: ival, envlen, envstat
+        if( .not. l_io_nstreams_probed )then
+            l_io_nstreams_probed = .true.
+            call get_environment_variable(SIMPLE_IO_NSTREAMS, envval, envlen, envstat)
+            if( envstat == 0 .and. envlen > 0 )then
+                read(envval(:envlen), *, iostat=envstat) ival
+                if( envstat == 0 .and. ival > 0 )then
+                    io_nstreams_cap = ival
+                    write(logfhandle,'(A,I4)') '>>> PARTICLE I/O STREAMS (SIMPLE_IO_NSTREAMS): ', io_nstreams_cap
+                    nstreams = max(1, min(nreq, io_nstreams_cap))
+                    return
+                endif
+            endif
+            select case( fs_is_rotational(fname) )
+                case(1)
+                    ! spinning disk: keep the head on one run at a time, with just
+                    ! enough depth for the drive to overlap seek and transfer
+                    io_nstreams_cap = 2
+                    write(logfhandle,'(A)') '>>> PARTICLE I/O: rotational storage detected, limiting concurrent stack reads'
+                case(0)
+                    io_nstreams_cap = 16
+                case default
+                    ! macOS, network/distributed filesystems, device-mapper stacks
+                    io_nstreams_cap = 8
+            end select
+        endif
+        nstreams = max(1, min(nreq, io_nstreams_cap))
+    end function io_read_nstreams
 
     !> \brief Touch file, create file if necessary
     subroutine simple_touch( fname )
