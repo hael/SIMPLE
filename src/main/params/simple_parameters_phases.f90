@@ -778,8 +778,6 @@ contains
             inpl_policy_error = refine3D_inpl_cont_policy_error(self%inpl_cont, &
                 &self%objfun, self%objfun_den, self%ptcl_src, self%projrec)
             if( len_trim(inpl_policy_error) > 0 ) THROW_HARD(trim(inpl_policy_error))
-        elseif( trim(self%inpl_cont) /= 'no' .and. self%cc_objfun /= OBJFUN_EUCLID )then
-            THROW_HARD('inpl_cont=yes is supported only with objfun=euclid')
         endif
         select case(trim(self%sgd))
             case('yes')
