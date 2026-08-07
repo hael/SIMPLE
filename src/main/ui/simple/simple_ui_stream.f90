@@ -193,6 +193,7 @@ subroutine new_abinitio2D_stream( prgtab )
         call master%add_input(UI_FILE, 'dir_preprocess', 'dir',           'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '', .false., '', visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, 'nicedispid',     'int',           'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '', visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, 'thres',          'float',         'Distance threshold for peak picking(A)', 'Distance threshold for peak picking(A)', '0', .false., '', visibility=UI_VIS_DEVELOPER)
+        call master%add_input(UI_PARM, 'nmics',          'int',           'Number of micrographs', 'Number of micrographs to collect before termination', '0', .false., '', visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! search controls
         ! filter controls

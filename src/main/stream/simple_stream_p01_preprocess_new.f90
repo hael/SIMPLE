@@ -86,6 +86,7 @@ contains
         call cline%set('mkdir',       'yes')
         call cline%set('reject_mics', 'no')
         if( .not. cline%defined('walltime')         ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('nmics')            ) call cline%set('nmics',            0)
         ! motion correction
         if( .not. cline%defined('trs')              ) call cline%set('trs',              20.)
         if( .not. cline%defined('lpstart')          ) call cline%set('lpstart',          8.)
@@ -538,6 +539,13 @@ contains
                     endif
                 endif
             enddo
+            ! early termination if nmics present
+            if( params%nmics > 0 ) then
+                if(spproj_glob%os_mic%get_noris() >= params%nmics) then
+                    write(logfhandle,'(A,I8)')'>>> TERMINATING PROCESS: requested number of micrographs reached: ', params%nmics
+                    l_terminate = .true.
+                end if
+            end if
             call flush(logfhandle)
         end do
         ! termination

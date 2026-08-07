@@ -241,6 +241,7 @@ contains
         logical                                    :: l_existing_pickrefs, l_existing_box, l_existing_preprocess
         integer                                    :: stat, rc, max_msgsize, i_val, snapshot_id
         integer                                    :: loop_counter
+        integer                                    :: nmics_stop
         real(kind=dp)                              :: r_val
         type(pipe_rx_state)                        :: rx_state(N_STREAM_PIPES)
         type(pipe_tx_state),                target :: tx_state(N_STREAM_PIPES)
@@ -248,8 +249,13 @@ contains
         l_existing_pickrefs   = .false.
         l_existing_box        = .false.
         l_existing_preprocess = .false.
+        nmics_stop            = 0
         if( cline%defined('pickrefs')       ) l_existing_pickrefs = .true.
         if( cline%defined('box_extract')    ) l_existing_box      = .true.
+        if( cline%defined('nmics')          ) then
+            nmics_stop = cline%get_iarg('nmics')
+            call cline%delete('nmics')
+        end if
         if( .not.cline%defined('memreport') ) call cline%set('memreport', 'yes')
         ! init params
         call cline%printline()
@@ -1054,6 +1060,7 @@ contains
                 call cline_preprocess%set('memreport', 'yes')
                 call cline_preprocess%set('memreport_interval', params%memreport_interval)
             endif
+            if( nmics_stop > 0 ) call cline_preprocess%set('nmics', nmics_stop)
         end subroutine init_cline_preprocess
 
         subroutine init_metadata_preprocess()
