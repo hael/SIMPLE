@@ -6,6 +6,7 @@ implicit none
 
 public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
 public :: ref_state_from_index, ref_proj_from_index
+public :: seed_continuous_inplane_candidate
 private
 
 type strategy3D_alloc
@@ -19,7 +20,9 @@ type strategy3D_alloc
     type(ran_tabu), allocatable :: rts_sub(:)               !< stochastic search order generators, subspace
     real,           allocatable :: proj_space_shift(:,:,:)  !< shift vectors
     real,           allocatable :: proj_space_corrs(:,:)    !< reference vs. particle correlations
+    real,           allocatable :: proj_space_inplcoords(:,:)!< fractional in-plane grid coordinates
     integer,        allocatable :: proj_space_inplinds(:,:) !< in-plane indices
+    logical,        allocatable :: proj_space_inplvalid(:,:)!< accepted continuous coordinate validity
     integer,        allocatable :: srch_order(:,:)          !< stochastic search index
     integer,        allocatable :: inpl_order(:,:)          !< stochastic inpl search index
     integer,        allocatable :: srch_order_sub(:,:)      !< stochastic search index, subspace
@@ -48,7 +51,9 @@ contains
         if( .not. l_prob_mode )then
             allocate(s3D%proj_space_shift(2,nrefs,nthr_glob),&
                 &s3D%proj_space_corrs(nrefs,nthr_glob),&
-                &s3D%proj_space_inplinds(nrefs,nthr_glob))
+                &s3D%proj_space_inplcoords(nrefs,nthr_glob),&
+                &s3D%proj_space_inplinds(nrefs,nthr_glob),&
+                &s3D%proj_space_inplvalid(nrefs,nthr_glob))
         endif
         ! states existence
         if( .not.build%spproj%is_virgin_field(params%oritype) )then
@@ -62,6 +67,8 @@ contains
         endif
         if( allocated(s3D%proj_space_shift) ) s3D%proj_space_shift = 0.
         if( allocated(s3D%proj_space_corrs) ) s3D%proj_space_corrs = -HUGE(areal)
+        if( allocated(s3D%proj_space_inplcoords) ) s3D%proj_space_inplcoords = 0.
+        if( allocated(s3D%proj_space_inplvalid) ) s3D%proj_space_inplvalid = .false.
         ! search orders allocation
         select case( trim(params%refine) )
             case( 'cluster','clustersym','clustersoft','prob','prob_state','prob_neigh')
@@ -100,7 +107,9 @@ contains
         real(sp)            :: areal
         if( allocated(s3D%proj_space_corrs) )    s3D%proj_space_corrs(:,ithr)       = -HUGE(areal)
         if( allocated(s3D%proj_space_shift) )    s3D%proj_space_shift(:,:,ithr)     = 0.
+        if( allocated(s3D%proj_space_inplcoords) ) s3D%proj_space_inplcoords(:,ithr) = 0.
         if( allocated(s3D%proj_space_inplinds) ) s3D%proj_space_inplinds(:,ithr)    = 0
+        if( allocated(s3D%proj_space_inplvalid) ) s3D%proj_space_inplvalid(:,ithr)   = .false.
         if(srch_order_allocated)then
             s3D%srch_order(    :,ithr) = 0
             if( allocated(s3D%srch_order_sub) ) s3D%srch_order_sub(:,ithr) = 0
@@ -115,7 +124,9 @@ contains
         if( allocated(s3D%srch_order_sub)      ) deallocate(s3D%srch_order_sub)
         if( allocated(s3D%proj_space_shift)    ) deallocate(s3D%proj_space_shift)
         if( allocated(s3D%proj_space_corrs)    ) deallocate(s3D%proj_space_corrs)
+        if( allocated(s3D%proj_space_inplcoords) ) deallocate(s3D%proj_space_inplcoords)
         if( allocated(s3D%proj_space_inplinds) ) deallocate(s3D%proj_space_inplinds)
+        if( allocated(s3D%proj_space_inplvalid) ) deallocate(s3D%proj_space_inplvalid)
         if( allocated(s3D%smpl_refs_athres)    ) deallocate(s3D%smpl_refs_athres)
         if( allocated(s3D%smpl_inpl_athres)    ) deallocate(s3D%smpl_inpl_athres)
         if( allocated(s3D%rts) )then
@@ -143,5 +154,13 @@ contains
         integer, intent(in) :: iref, nspace
         proj = modulo(iref - 1, nspace) + 1
     end function ref_proj_from_index
+
+    pure subroutine seed_continuous_inplane_candidate( inpl, coordinate, valid )
+        integer, intent(in)  :: inpl
+        real,    intent(out) :: coordinate
+        logical, intent(out) :: valid
+        coordinate = real(inpl)
+        valid      = .false.
+    end subroutine seed_continuous_inplane_candidate
 
 end module simple_strategy3D_alloc

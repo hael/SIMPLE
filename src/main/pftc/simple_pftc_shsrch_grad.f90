@@ -390,15 +390,21 @@ contains
 
     !> Classical Euclidean joint refinement over (sx,sy,rotind_frac).
     !! The PFTC objective is periodic, so rotation-index bounds may safely
-    !! straddle the first or last grid index.
-    function grad_shsrch_minimize_joint( self, irot, rotind_frac_in, xy_in, sh_rot, rotind_frac ) result(cxy)
+    !! straddle the first or last grid index. Optional status outputs separate
+    !! a numerically valid evaluation from a strictly improving result so a
+    !! caller can distinguish no improvement from numerical failure.
+    function grad_shsrch_minimize_joint( self, irot, rotind_frac_in, xy_in, sh_rot, rotind_frac, &
+            &evaluation_valid, improved, initial_cost_out ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(inout) :: irot
         real,                    intent(in)    :: rotind_frac_in, xy_in(2)
         logical,                 intent(in)    :: sh_rot
         real(dp),                intent(out)   :: rotind_frac
+        logical,       optional, intent(out)   :: evaluation_valid, improved
+        real(dp),      optional, intent(out)   :: initial_cost_out
         real :: cxy(3), rotmat(2,2), lowest_cost
         real(dp) :: initial_cost, final_cost, improve_tol
+        logical :: valid_result, improved_result
 
         if( self%search_mode /= SHSRCH_JOINT )then
             THROW_HARD('joint minimization requested from a non-joint search object')
@@ -415,9 +421,14 @@ contains
         call self%opt_obj%minimize(self%ospec, self, lowest_cost)
         initial_cost = self%joint_initial_cost
         final_cost = real(lowest_cost,dp)
+        if( present(initial_cost_out) ) initial_cost_out = initial_cost
         improve_tol = 64.d0 * epsilon(1.d0) * max(1.d0, abs(initial_cost), abs(final_cost))
-        if( .not. self%joint_initial_cost_valid .or. .not. ieee_is_finite(initial_cost) .or. &
-            &.not. ieee_is_finite(final_cost) .or. final_cost >= initial_cost - improve_tol )then
+        valid_result = self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) .and. &
+            &ieee_is_finite(final_cost)
+        improved_result = valid_result .and. final_cost < initial_cost - improve_tol
+        if( present(evaluation_valid) ) evaluation_valid = valid_result
+        if( present(improved) ) improved = improved_result
+        if( .not. improved_result )then
             irot = 0
             cxy = 0.
             rotind_frac = 0.

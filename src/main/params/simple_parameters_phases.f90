@@ -749,6 +749,19 @@ contains
         if( trim(self%inpl_cont) /= 'no' .and. self%cc_objfun /= OBJFUN_EUCLID )then
             THROW_HARD('inpl_cont=yes is supported only with objfun=euclid')
         endif
+        if( trim(self%inpl_cont) == 'yes' .and. &
+            &trim(self%prg%to_char()) == 'refine3D' )then
+            if( trim(self%objfun_den) /= 'no' ) &
+                &THROW_HARD('refine3D inpl_cont=yes does not support objfun_den=yes')
+            if( trim(self%ptcl_src) /= 'raw' ) &
+                &THROW_HARD('refine3D inpl_cont=yes requires ptcl_src=raw')
+            if( trim(self%projrec) /= 'no' ) &
+                &THROW_HARD('refine3D inpl_cont=yes does not support projrec=yes')
+            if( trim(self%refine) == 'eval' .or. trim(self%refine) == 'sigma' ) &
+                &THROW_HARD('refine3D inpl_cont=yes does not support refine=eval or refine=sigma')
+            if( index(trim(self%refine), 'prob') > 0 ) &
+                &THROW_HARD('refine3D inpl_cont=yes does not support probabilistic refinement modes')
+        endif
         select case(trim(self%sgd))
             case('yes')
                 self%l_sgd = .true.

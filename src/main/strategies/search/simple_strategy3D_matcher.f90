@@ -63,13 +63,17 @@ contains
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
         type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
+        integer(int64),            allocatable :: cont_attempted(:), cont_improved(:)
+        integer(int64),            allocatable :: cont_no_improvement(:), cont_fallback(:)
         real,                      allocatable :: incr_shifts(:,:)
         type(ori)           :: orientation
         type(refine3D_ctrl) :: ctrl
         real                :: frac_greedy
         integer             :: nbatches, batchsz_max, batch_start, batch_end, batchsz
         integer             :: iptcl, fnr, ithr, iptcl_batch, iptcl_map, ibatch, nptcls2update
+        integer             :: inpl_diagnostic_status
         logical             :: has_been_searched
+        character(len=8)    :: inpl_diagnostic_env
         ! benchmarking
         integer(int64) :: peak_rss, rss_after_teardown, rss_after_reconstruction
         real(real64)    :: peak_rss_gib, rss_after_teardown_gib, rss_after_reconstruction_gib
@@ -82,6 +86,9 @@ contains
         real(timer_int_kind)    :: rt_prep_refs, rt_memoize_refs, rt_rec_accum, rt_rec_write
         p_ptr => params
         b_ptr => build
+        inpl_diagnostic_env = ''
+        call get_environment_variable('SIMPLE_INPL_DIAGNOSTIC', inpl_diagnostic_env, &
+            &status=inpl_diagnostic_status)
         rss_after_teardown      = -1_int64
         rss_after_reconstruction = -1_int64
         call init_ctrl()
@@ -136,6 +143,11 @@ contains
             rt_align            = 0.0
         endif
         allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0)
+        if( inpl_diagnostic_status == 0 .and. trim(inpl_diagnostic_env) == 'yes' .and. &
+            &trim(p_ptr%inpl_cont) == 'yes' )then
+            allocate(cont_attempted(p_ptr%nthr), cont_improved(p_ptr%nthr), source=0_int64)
+            allocate(cont_no_improvement(p_ptr%nthr), cont_fallback(p_ptr%nthr), source=0_int64)
+        endif
         allocate(incr_shifts(2,batchsz_max), source=0.0)
         do ibatch = 1, nbatches
             batch_start = batches(ibatch,1)
@@ -169,6 +181,7 @@ contains
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
         call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
+        call report_continuous_route_counts()
         if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
         if( ctrl%do_projrec ) call b_ptr%spproj_field%set_projs(b_ptr%eulspace)
         call maybe_write_orientations()
@@ -177,6 +190,8 @@ contains
         enddo
         deallocate(strategy3Dsrch, strategy3Dspecs, batches)
         deallocate(cnt_greedy, cnt_all, incr_shifts)
+        if( allocated(cont_attempted) ) deallocate(cont_attempted, cont_improved)
+        if( allocated(cont_no_improvement) ) deallocate(cont_no_improvement, cont_fallback)
         call eulprob_obj_part%kill
         call clean_strategy3D
         call b_ptr%kill_strategy3D_tbox
@@ -325,6 +340,7 @@ contains
         subroutine choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
             integer, intent(in) :: iptcl, iptcl_batch, ithr
             logical, intent(in) :: has_been_searched
+            logical :: attempted, improved, no_improvement, fallback
             select case(ctrl%refine_mode)
                 case('shc')
                     if( .not. has_been_searched )then
@@ -371,6 +387,14 @@ contains
             if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
                 call strategy3Dsrch(iptcl_batch)%ptr%new(p_ptr, strategy3Dspecs(iptcl_batch), b_ptr)
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field, ithr)
+                if( allocated(cont_attempted) )then
+                    call strategy3Dsrch(iptcl_batch)%ptr%s%get_continuous_route_status( &
+                        &attempted, improved, no_improvement, fallback)
+                    if( attempted )      cont_attempted(ithr)      = cont_attempted(ithr) + 1_int64
+                    if( improved )       cont_improved(ithr)       = cont_improved(ithr) + 1_int64
+                    if( no_improvement ) cont_no_improvement(ithr) = cont_no_improvement(ithr) + 1_int64
+                    if( fallback )       cont_fallback(ithr)       = cont_fallback(ithr) + 1_int64
+                endif
                 incr_shifts(:,iptcl_batch) = b_ptr%spproj_field%get_2Dshift(iptcl) - &
                     strategy3Dsrch(iptcl_batch)%ptr%s%prev_shvec
                 call strategy3Dsrch(iptcl_batch)%ptr%kill
@@ -378,6 +402,22 @@ contains
                 nullify(strategy3Dsrch(iptcl_batch)%ptr)
             endif
         end subroutine choose_and_run_strategy
+
+        subroutine report_continuous_route_counts()
+            integer(int64) :: attempted, improved, no_improvement, fallback
+
+            if( .not. allocated(cont_attempted) ) return
+            attempted      = sum(cont_attempted)
+            improved       = sum(cont_improved)
+            no_improvement = sum(cont_no_improvement)
+            fallback       = sum(cont_fallback)
+            if( attempted /= improved + no_improvement + fallback )then
+                THROW_HARD('continuous refine3D route counts do not balance')
+            endif
+            write(logfhandle,'(A,I0,A,4(I0,1X))') '>>> REFINE3D CONTINUOUS PART=', p_ptr%part, &
+                &' ATTEMPTED/IMPROVED/NO_IMPROVEMENT/FALLBACK: ', attempted, improved, &
+                &no_improvement, fallback
+        end subroutine report_continuous_route_counts
 
         subroutine maybe_write_orientations()
             if( .not. ctrl%do_write_oris ) return

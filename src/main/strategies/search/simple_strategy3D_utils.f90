@@ -5,21 +5,39 @@ use simple_strategy3D_alloc, only: s3D, ref_state_from_index, ref_proj_from_inde
 use simple_strategy3D_srch, only: strategy3D_srch
 implicit none
 
-public :: extract_peak_ori, extract_peak_oris, assign_ori
+public :: extract_peak_ori, extract_peak_oris, assign_ori, resolve_inplane_e3
 private
 #include "simple_local_flags.inc"
 
 contains
 
-    subroutine assign_ori( s, ref, inpl, corr, sh )
+    pure real function resolve_inplane_e3( inpl, continuous_coord, continuous_valid, &
+            &continuous_active, dang ) result(e3)
+        integer, intent(in) :: inpl
+        real,    intent(in) :: continuous_coord, dang
+        logical, intent(in) :: continuous_valid, continuous_active
+        real(dp) :: selected_coord
+        selected_coord = real(inpl,dp)
+        if( continuous_active .and. continuous_valid )then
+            selected_coord = real(continuous_coord,dp)
+            e3 = real(modulo(360.d0 - (selected_coord - 1.d0) * real(dang,dp), 360.d0))
+        else
+            e3 = real(360.d0 - (selected_coord - 1.d0) * real(dang,dp))
+        endif
+    end function resolve_inplane_e3
+
+    subroutine assign_ori( s, ref, inpl, corr, sh, continuous_coord, continuous_valid )
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: ref, inpl  ! ref here is multi-state ref index
         real,                   intent(in)    :: corr
         real,                   intent(in)    :: sh(2)
+        real,          optional, intent(in)    :: continuous_coord
+        logical,       optional, intent(in)    :: continuous_valid
         type(ori) :: osym, o_prev, o_new
         integer   :: state, proj, neff_states, nrefs_eval, nrefs_tot
         real      :: euler(3), shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, mi_proj, frac
-        logical   :: l_multistates
+        real      :: inpl_coord
+        logical   :: l_multistates, inpl_valid
         ! stash previous ori
         call s%b_ptr%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)
@@ -29,8 +47,21 @@ contains
         ! in-plane (inpl)
         call s%b_ptr%spproj_field%set(s%iptcl, 'inpl', real(inpl))
         ! Euler angle
-        euler    = s%b_ptr%eulspace%get_euler(proj)
-        euler(3) = 360. - s%b_ptr%pftc%get_rot(inpl)
+        if( present(continuous_coord) .neqv. present(continuous_valid) )then
+            THROW_HARD('continuous in-plane metadata requires coordinate and validity together')
+        endif
+        if( present(continuous_coord) )then
+            inpl_coord = continuous_coord
+            inpl_valid = continuous_valid
+            euler    = s%b_ptr%eulspace%get_euler(proj)
+            euler(3) = resolve_inplane_e3(inpl, inpl_coord, inpl_valid, &
+                &s%continuous_active, s%b_ptr%pftc%get_dang())
+        else
+            ! Preserve the original metadata assignment exactly when the
+            ! continuous route is absent or disabled.
+            euler    = s%b_ptr%eulspace%get_euler(proj)
+            euler(3) = 360. - s%b_ptr%pftc%get_rot(inpl)
+        endif
         call s%b_ptr%spproj_field%set_euler(s%iptcl, euler)
         ! shift
         shvec      = s%prev_shvec
@@ -112,11 +143,21 @@ contains
         real    :: corr, sh(2)
         loc  = maxloc(s3D%proj_space_corrs(:,s%ithr))
         ref  = loc(1)
+        ! The discrete state/projection winner is fixed before the optional
+        ! continuous (sx,sy,theta) polish.  Rejection leaves this candidate
+        ! unchanged.
+        if( s%uses_continuous_refinement() ) call s%refine_selected_continuously(ref)
         corr = s3D%proj_space_corrs(   ref,s%ithr)
         sh   = s3D%proj_space_shift(:, ref,s%ithr)
         inpl = s3D%proj_space_inplinds(ref,s%ithr)
         if( s%p_ptr%cc_objfun == OBJFUN_CC .and. corr < 0. ) corr = 0.
-        call assign_ori( s, ref, inpl, corr, sh )
+        if( s%uses_continuous_refinement() )then
+            call assign_ori(s, ref, inpl, corr, sh, &
+                &s3D%proj_space_inplcoords(ref,s%ithr), &
+                &s3D%proj_space_inplvalid(ref,s%ithr))
+        else
+            call assign_ori(s, ref, inpl, corr, sh)
+        endif
     end subroutine extract_peak_ori
 
     subroutine extract_peak_oris( s, npeaks )

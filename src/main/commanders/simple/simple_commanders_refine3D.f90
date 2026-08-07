@@ -1268,6 +1268,7 @@ contains
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         call cline%set('oritype', 'ptcl3D')
         call cline%set('prg', 'refine3D')
+        call validate_refine3D_inpl_cont(cline)
         ! Select execution strategy (shared-memory vs distributed master)
         strategy = create_refine3D_strategy(cline)
         call strategy%initialize(params, build, cline)
@@ -1301,6 +1302,71 @@ contains
         call build%pftc%kill
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D
+
+    ! Validate the command shape before strategy setup. Parameter validation
+    ! repeats these restrictions so distributed workers cannot bypass the gate.
+    subroutine validate_refine3D_inpl_cont( cline )
+        class(cmdline), intent(in) :: cline
+        type(string) :: value
+
+        if( .not. cline%defined('inpl_cont') ) return
+        value = cline%get_carg('inpl_cont')
+        select case(trim(value%to_char()))
+        case('no')
+            call value%kill
+            return
+        case('yes')
+            call value%kill
+        case default
+            call value%kill
+            THROW_HARD('inpl_cont must be yes or no')
+        end select
+        if( cline%defined('objfun') )then
+            value = cline%get_carg('objfun')
+            if( trim(value%to_char()) /= 'euclid' )then
+                call value%kill
+                THROW_HARD('refine3D inpl_cont=yes requires objfun=euclid')
+            endif
+            call value%kill
+        endif
+        if( cline%defined('objfun_den') )then
+            value = cline%get_carg('objfun_den')
+            if( trim(value%to_char()) /= 'no' )then
+                call value%kill
+                THROW_HARD('refine3D inpl_cont=yes does not support objfun_den=yes')
+            endif
+            call value%kill
+        endif
+        if( cline%defined('ptcl_src') )then
+            value = cline%get_carg('ptcl_src')
+            if( trim(value%to_char()) /= 'raw' )then
+                call value%kill
+                THROW_HARD('refine3D inpl_cont=yes requires ptcl_src=raw')
+            endif
+            call value%kill
+        endif
+        if( cline%defined('projrec') )then
+            value = cline%get_carg('projrec')
+            if( trim(value%to_char()) /= 'no' )then
+                call value%kill
+                THROW_HARD('refine3D inpl_cont=yes does not support projrec=yes')
+            endif
+            call value%kill
+        endif
+        if( cline%defined('refine') )then
+            value = cline%get_carg('refine')
+            if( trim(value%to_char()) == 'eval' .or. &
+                &trim(value%to_char()) == 'sigma' )then
+                call value%kill
+                THROW_HARD('refine3D inpl_cont=yes does not support refine=eval or refine=sigma')
+            endif
+            if( index(trim(value%to_char()), 'prob') > 0 )then
+                call value%kill
+                THROW_HARD('refine3D inpl_cont=yes does not support probabilistic refinement modes')
+            endif
+            call value%kill
+        endif
+    end subroutine validate_refine3D_inpl_cont
 
     !> Distributed worker (single-iteration execution). This should be the command
     !> invoked by the scheduler for each partition.

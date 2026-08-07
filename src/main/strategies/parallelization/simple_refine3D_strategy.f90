@@ -15,6 +15,7 @@ implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
 public :: create_refine3D_strategy
+public :: strip_refine3D_search_only_args
 
 private
 #include "simple_local_flags.inc"
@@ -140,6 +141,13 @@ end interface
 
 contains
 
+    !> Remove refine3D matcher-only options before invoking child workflows.
+    !! The parent and distributed matcher workers retain these options.
+    subroutine strip_refine3D_search_only_args( cline )
+        type(cmdline), intent(inout) :: cline
+        call cline%delete('inpl_cont')
+    end subroutine strip_refine3D_search_only_args
+
     !> Strategy selection based on command-line shape.
     function create_refine3D_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
@@ -161,6 +169,7 @@ contains
         type(string) :: volname, vol_in
         integer      :: state
         cline_assembly = cline
+        call strip_refine3D_search_only_args(cline_assembly)
         call cline_assembly%set('which_iter', params%which_iter)
         call cline_assembly%set('nthr',       nthr)
         call cline_assembly%set('combine_eo', params%combine_eo)
@@ -516,6 +525,7 @@ contains
         ! objfun=euclid initialisation
         self%l_sigma = (params%cc_objfun == OBJFUN_EUCLID)
         self%cline_calc_group_sigmas = cline
+        call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
         call self%cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
         if( self%l_sigma )then
             ! Ensure e/o partitioning prior to calc_pspec
@@ -525,6 +535,7 @@ contains
             endif
             if( sigma2_stage_needs_bootstrap(startit) )then
                 cline_calc_pspec = cline
+                call strip_refine3D_search_only_args(cline_calc_pspec)
                 call cline_calc_pspec%set('prg', 'calc_pspec')
                 if( L_BENCH_GLOB ) t_calc_pspec = tic()
                 call xcalc_pspec%execute( cline_calc_pspec )
@@ -620,6 +631,7 @@ contains
         endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
+            call strip_refine3D_search_only_args(cline_prob_align)
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else
@@ -806,6 +818,11 @@ contains
         self%cline_prob_align_distr    = cline
         self%cline_postprocess         = cline
         self%cline_calc_group_sigmas   = cline
+        call strip_refine3D_search_only_args(self%cline_rec3D)
+        call strip_refine3D_search_only_args(self%cline_calc_pspec_distr)
+        call strip_refine3D_search_only_args(self%cline_prob_align_distr)
+        call strip_refine3D_search_only_args(self%cline_postprocess)
+        call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         l_prob_state_mode = trim(params%refine) == 'prob_state'
@@ -1031,6 +1048,7 @@ contains
         endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
+            call strip_refine3D_search_only_args(cline_prob_align)
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else
