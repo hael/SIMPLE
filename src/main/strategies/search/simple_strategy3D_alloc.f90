@@ -51,9 +51,11 @@ contains
         if( .not. l_prob_mode )then
             allocate(s3D%proj_space_shift(2,nrefs,nthr_glob),&
                 &s3D%proj_space_corrs(nrefs,nthr_glob),&
-                &s3D%proj_space_inplcoords(nrefs,nthr_glob),&
-                &s3D%proj_space_inplinds(nrefs,nthr_glob),&
-                &s3D%proj_space_inplvalid(nrefs,nthr_glob))
+                &s3D%proj_space_inplinds(nrefs,nthr_glob))
+            if( trim(params%inpl_cont) == 'yes' )then
+                allocate(s3D%proj_space_inplcoords(nrefs,nthr_glob),&
+                    &s3D%proj_space_inplvalid(nrefs,nthr_glob))
+            endif
         endif
         ! states existence
         if( .not.build%spproj%is_virgin_field(params%oritype) )then

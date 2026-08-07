@@ -38,13 +38,15 @@ contains
         groups_run = 0
         groups_skipped = 0
         write(*,'(a)') 'Continuous in-plane refine3D regression suite: START'
-        if( argument_defined('projfile') )then
+        if( argument_defined('projfile') .and. &
+            &argument_defined('expected_snapshot') )then
             call run_case_in_child('baseline', failures)
             groups_run = groups_run + 1
         else
             groups_skipped = groups_skipped + 1
             write(*,'(/,a)') '>>> TEST [baseline] SKIP'
-            write(*,'(a)') '    NOTICE: baseline requires projfile=/absolute/path/refine3D_output.simple.'
+            write(*,'(a)') '    NOTICE: baseline comparison requires projfile and expected_snapshot.'
+            write(*,'(a)') '    Generate the expected TSV first with case=baseline and snapshot=xx.tsv.'
             write(*,'(a)') '    The self-contained policy and search tests will continue.'
         endif
         call run_case_in_child('policy_suite', failures)
@@ -137,11 +139,13 @@ contains
         call run_rejection_in_child('policy_denoised', 'requires ptcl_src=raw', failures)
         call run_rejection_in_child('policy_projrec', 'does not support projrec=yes', failures)
         call run_rejection_in_child('policy_eval', &
-            &'does not support refine=eval or refine=sigma', failures)
+            &'currently supports only refine=shc', failures)
         call run_rejection_in_child('policy_sigma', &
-            &'does not support refine=eval or refine=sigma', failures)
+            &'currently supports only refine=shc', failures)
         call run_rejection_in_child('policy_probabilistic', &
-            &'does not support probabilistic refinement modes', failures)
+            &'currently supports only refine=shc', failures)
+        call run_rejection_in_child('policy_neigh', &
+            &'currently supports only refine=shc', failures)
         if( failures /= 0 )then
             write(*,'(a,i0,a)') 'Continuous in-plane refine3D policy suite: FAIL (', &
                 &failures, ' failure(s))'
@@ -151,6 +155,7 @@ contains
     end subroutine run_policy_suite
 
     subroutine run_rejection_in_child(label, expected_text, failures)
+        use simple_syslib, only: get_process_id
         character(len=*), intent(in) :: label, expected_text
         integer, intent(inout) :: failures
         character(len=4096) :: executable, child_command, logfile
@@ -159,7 +164,8 @@ contains
         call get_command_argument(0, executable, executable_len, command_status)
         if( command_status /= 0 .or. executable_len < 1 ) &
             &error stop 'could not determine refine3D suite executable path'
-        logfile = 'simple_test_continuous_inplane_refine3D_'//trim(label)//'.log'
+        write(logfile,'(a,i0,a)') 'simple_test_continuous_inplane_refine3D_', &
+            &get_process_id(), '_'//trim(label)//'.log'
         child_command = '"'//trim(executable(:executable_len))//'" case='//trim(label)// &
             &' > "'//trim(logfile)//'" 2>&1'
         write(*,'(/,a)') '>>> TEST ['//trim(label)//'] START'
@@ -224,7 +230,7 @@ contains
             call run_synthetic_recovery_contract()
         case('policy_bad_value', 'policy_cc', 'policy_hybrid', &
             &'policy_denoised', 'policy_projrec', 'policy_eval', &
-            &'policy_sigma', 'policy_probabilistic')
+            &'policy_sigma', 'policy_probabilistic', 'policy_neigh')
             call run_policy_rejection(trim(label))
         case default
             error stop 'unknown continuous in-plane refine3D regression case: '//trim(label)

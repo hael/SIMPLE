@@ -39,7 +39,7 @@ use simple_decay_funs
 use simple_parameters_registry, only: param_registry
 implicit none
 
-public :: parameters
+public :: parameters, refine3D_inpl_cont_policy_error
 private
 #include "simple_local_flags.inc"
 
@@ -779,6 +779,13 @@ interface
         class(parameters), intent(in) :: self
         logical :: final_planned
     end function is_final_planned_iter
+
+    module pure function refine3D_inpl_cont_policy_error( inpl_cont, objfun, &
+        &objfun_den, ptcl_src, projrec, refine ) result(error_message)
+        character(len=*), intent(in) :: inpl_cont, objfun, objfun_den
+        character(len=*), intent(in) :: ptcl_src, projrec, refine
+        character(len=STDLEN) :: error_message
+    end function refine3D_inpl_cont_policy_error
 end interface
 
 end module simple_parameters

@@ -403,8 +403,8 @@ contains
         logical,       optional, intent(out)   :: evaluation_valid, improved
         real(dp),      optional, intent(out)   :: initial_cost_out
         real :: cxy(3), rotmat(2,2), lowest_cost
-        real(dp) :: initial_cost, final_cost, improve_tol
-        logical :: valid_result, improved_result
+        real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(3)
+        logical :: valid_result, improved_result, valid_coordinates
 
         if( self%search_mode /= SHSRCH_JOINT )then
             THROW_HARD('joint minimization requested from a non-joint search object')
@@ -423,8 +423,18 @@ contains
         final_cost = real(lowest_cost,dp)
         if( present(initial_cost_out) ) initial_cost_out = initial_cost
         improve_tol = 64.d0 * epsilon(1.d0) * max(1.d0, abs(initial_cost), abs(final_cost))
+        coordinate_tol = 64.d0 * real(epsilon(1.0),dp) * &
+            &max(1.d0, max(abs(real(self%ospec%limits(:,1),dp)), &
+            &abs(real(self%ospec%limits(:,2),dp))))
+        valid_coordinates = all(ieee_is_finite(self%ospec%x))
+        if( valid_coordinates )then
+            valid_coordinates = all(real(self%ospec%x,dp) >= &
+                &real(self%ospec%limits(:,1),dp)-coordinate_tol) .and. &
+                &all(real(self%ospec%x,dp) <= &
+                &real(self%ospec%limits(:,2),dp)+coordinate_tol)
+        endif
         valid_result = self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) .and. &
-            &ieee_is_finite(final_cost)
+            &ieee_is_finite(final_cost) .and. valid_coordinates
         improved_result = valid_result .and. final_cost < initial_cost - improve_tol
         if( present(evaluation_valid) ) evaluation_valid = valid_result
         if( present(improved) ) improved = improved_result

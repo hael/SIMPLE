@@ -28,7 +28,9 @@ simple_exec \
 Omit `inpl_cont`, or set `inpl_cont=no`, to use the unchanged legacy path.
 The opt-in route rejects CC, hybrid or denoised objectives, projection
 reconstruction, `refine=eval`, `refine=sigma`, and probabilistic refinement
-modes.
+modes. The initial hardened contract supports only `refine=shc`; other
+explicit deterministic modes are rejected until they receive equivalent
+production validation.
 
 The tests are organized under `production/tests`. Build and invoke the mother
 test from an already configured build tree:
@@ -47,13 +49,25 @@ simple_test_continuous_inplane_refine3D
 
 The parameter-free command runs the self-contained policy and search-state
 groups and reports the project-backed baseline and synthetic recovery groups as
-skipped. Supply both inputs to run all seven groups:
+skipped. Supply the project, expected baseline, and volume inputs to run all
+seven groups:
 
 ```bash
 simple_test_continuous_inplane_refine3D \
   projfile=/absolute/path/refine3D_output.simple \
-  snapshot="$PWD/refine3D_legacy_baseline.tsv" \
+  snapshot="$PWD/refine3D_current_baseline.tsv" \
+  expected_snapshot=/absolute/path/refine3D_legacy_baseline.tsv \
   vol1=/absolute/path/reference_volume.mrc
+```
+
+Create the expected baseline once from the accepted legacy project before
+running the comparison:
+
+```bash
+simple_test_continuous_inplane_refine3D \
+  case=baseline \
+  projfile=/absolute/path/legacy_refine3D_output.simple \
+  snapshot="$PWD/refine3D_legacy_baseline.tsv"
 ```
 
 An individual group can be rerun with `case=<name>`, for example
@@ -80,7 +94,9 @@ objective. The default behavior must remain unchanged.
 
 ## Final completion audit
 
-Overall status on 2026-08-07: **complete and verified on Oracle Linux**.
+Core feature status on 2026-08-07: **complete and verified on Oracle Linux**.
+The subsequent P2/P3 hardening corrections are also complete and verified by
+the Oracle acceptance run recorded in the peer-review follow-up section.
 
 Phases 3D-0 through 3D-5 are implemented. The policy, search-state, joint-state,
 direct-route, metadata, restart, default-off, opt-in, and multi-iteration
@@ -146,9 +162,112 @@ no-improvement branch executed in production. Output
 particles, 1,930 continuous angles, and zero invalid indices, non-finite values,
 or integer/angle mismatches on the 440-angle grid.
 
-The plan may be marked fully complete after those outputs are observed. Another
-long multi-iteration run is not required unless the short smoke run exposes a
-regression.
+Those outputs completed the original feature acceptance. The peer-review
+hardening added afterward must pass its targeted Oracle checks before the
+current worktree is committed. Another long multi-iteration run is not
+required unless the short smoke checks expose a regression.
+
+## Peer-review follow-up: P2 and P3 findings
+
+The 2026-08-07 peer review of commit `6e8b0d521` found no P0 or P1
+correctness blocker. It identified the following hardening and maintainability
+work. The detailed review is recorded in the Obsidian report
+`302 Executive peer review and code walkthrough - continuous in-plane refine3D.md`.
+
+### P2 findings to resolve first
+
+1. **Default-off continuous-state overhead.** The non-probabilistic 3D search
+   currently allocates, resets, and writes fractional in-plane coordinates and
+   validity flags even when `inpl_cont=no`. The numerical legacy result is
+   unchanged, but the default route pays continuous-only memory and hot-path
+   write costs. Allocate and update these arrays only for the opt-in route.
+2. **Incomplete joint-result validity check.** `minimize_joint` verifies that
+   its initial and final costs are finite, but it does not verify that the
+   returned optimizer coordinate vector is finite and inside its active
+   bounds before using `nint` and returning metadata. Invalid coordinates must
+   set `evaluation_valid=.false.` and enter the existing legacy fallback.
+3. **Enabled deterministic-mode surface exceeds production validation.** The
+   gate rejects known unsupported modes but otherwise admits deterministic
+   modes beyond the distributed `refine=shc` route validated with biological
+   data. Until those modes and shared-memory execution are tested, restrict the
+   public opt-in contract to `refine=shc` and reject other explicit modes with
+   a clear message.
+4. **Baseline helper is not a comparator.** The baseline test validates a
+   project and replaces a TSV snapshot, but it does not compare the snapshot
+   with an expected result. Add an explicit expected-snapshot comparison mode
+   with exact integer checks and documented floating-point tolerances.
+
+### P3 findings and remediation
+
+1. The public commander and typed parameter layer duplicated the compatibility
+   policy, while the focused negative tests directly exercised only the
+   commander gate. **Resolved locally:** both layers now call the same pure
+   `refine3D_inpl_cont_policy_error` decision function owned by
+   `simple_parameters`; the commander only gathers effective command values,
+   and typed worker validation supplies resolved parameter values.
+2. The reviewed commander refinement-mode block called `value%kill` on fatal
+   branches and then contained a later test of the same value. The P2
+   refinement-mode allowlist removed this pattern incidentally; it remains
+   recorded here as a resolved peer-review observation.
+3. Rejection tests used fixed log filenames in the build directory. Concurrent
+   mother-suite runs could overwrite one another. **Resolved locally:** every
+   rejection log now includes the mother-suite process ID and case label.
+4. Historical pending statements remained in this plan after final Oracle
+   acceptance, and the definition of done inherited an `abinitio2D` coarse
+   stage split that standalone `refine3D` does not have. **Resolved locally:**
+   completion language now records both accepted core behavior and completed
+   peer-review validation, and the final criteria describe per-iteration
+   `refine3D` activation rather than early and late stages.
+
+P2 remediation is tracked as part of the feature before the implementation is
+described as hardened beyond the validated distributed `refine=shc` route.
+
+### P2 remediation status
+
+Implementation status on 2026-08-07: all four P2 corrections are implemented
+and verified by Oracle Linux compilation, focused contracts, the complete
+mother suite, and matched production smoke settings.
+
+1. **Default-off continuous-state overhead: implemented.**
+   `simple_strategy3D_alloc.f90` now allocates the fractional-coordinate and
+   validity arrays only for `inpl_cont=yes`. `store_solution` preserves the
+   historical score, shift, and integer-angle writes when those optional
+   arrays are absent. The search-state contract now exercises this default-off
+   storage route and verifies that it does not create continuous-only state.
+2. **Joint-result coordinate validity: implemented.**
+   `simple_pftc_shsrch_grad.f90` now requires every returned optimizer
+   coordinate to be finite and inside the active L-BFGS-B limits, allowing a
+   small floating-point tolerance. A violation sets
+   `evaluation_valid=.false.` and therefore uses the established legacy
+   fallback in `simple_strategy3D_srch.f90`.
+3. **Deterministic-mode surface: implemented.** Both the public commander
+   gate and typed parameter validation now permit the opt-in route only with
+   base `refine=shc`. The strategy repeats this condition as defense in depth.
+   `policy_neigh` was added alongside the existing `eval`, `sigma`, and
+   probabilistic rejection cases.
+4. **Baseline comparison: implemented.** The baseline helper retains an
+   explicit generate-only mode and adds `expected_snapshot`, `snapshot_atol`,
+   and `snapshot_rtol`. Comparison mode checks the header, row count, integer
+   fields, finite floating values, and floating values within the documented
+   absolute-plus-relative tolerance. The mother suite runs this group only
+   when both the project and expected snapshot are supplied.
+
+Observed acceptance:
+
+```text
+policy suite: all eligible and nine rejection cases passed
+search state: default-off allocation and candidate storage passed
+baseline: generate-only and exact comparison passed for 3,081 active particles
+mother suite: 7/7 groups passed, zero skipped, zero failed
+default-off smoke: 3,081 active, 0 continuous, 0 invalid/non-finite/mismatch
+opt-in smoke: 3,081 attempted, 2,848 improved, 233 no-improvement, 0 fallback
+opt-in metadata: 1,937 continuous, 0 invalid/non-finite/mismatch
+```
+
+The second P3 finding was removed incidentally by the P2 mode allowlist: the
+commander now reads each command value before `value%kill` and never inspects a
+killed `string`. All four P3 corrections passed the same Oracle acceptance
+boundary as the P2 work.
 
 ## Existing 2D contract to preserve
 
@@ -285,29 +404,34 @@ simple_test_continuous_inplane_refine3D
 ```
 
 A parameter-free mother-suite run skips the project-dependent baseline with a
-clear notice and continues with every self-contained test group. Supplying
-`projfile` enables the baseline and includes it in the pass/fail summary.
+clear notice and continues with every self-contained test group. Supplying both
+`projfile` and `expected_snapshot` enables baseline comparison and includes it
+in the pass/fail summary. A focused `case=baseline` invocation without
+`expected_snapshot` generates and validates a candidate snapshot but clearly
+reports `MODE: GENERATE_ONLY` rather than claiming a comparison.
 
 Phase-specific test implementations use the non-registered dependency naming
 pattern `simple_continuous_inplane_refine3D_*.f90`. The Phase 3D-0 dependency
 is `simple_continuous_inplane_refine3D_baseline.f90`. New phase tests will be
 added to the mother test as named child cases.
 
-Run it on the output project from a completed legacy `refine3D` invocation:
-
-```text
-simple_test_continuous_inplane_refine3D \
-  "projfile=/absolute/path/to/refine3D_output.simple" \
-  "snapshot=refine3D_legacy_baseline.tsv"
-```
-
-Run only this case with:
+Generate the expected snapshot from an accepted legacy `refine3D` invocation:
 
 ```text
 simple_test_continuous_inplane_refine3D \
   "case=baseline" \
   "projfile=/absolute/path/to/refine3D_output.simple" \
   "snapshot=refine3D_legacy_baseline.tsv"
+```
+
+Compare a current default-off project against that expected snapshot with:
+
+```text
+simple_test_continuous_inplane_refine3D \
+  "case=baseline" \
+  "projfile=/absolute/path/to/current_refine3D_output.simple" \
+  "snapshot=refine3D_current_baseline.tsv" \
+  "expected_snapshot=refine3D_legacy_baseline.tsv"
 ```
 
 The snapshot records one deterministic row per active `ptcl3D` orientation:
@@ -319,8 +443,10 @@ Euler angles, two-dimensional shift, stored objective
 
 The checker rejects missing or non-positive legacy indices and non-finite pose
 or objective values. It also prints aggregate correlation and squared-shift
-sums for a quick run-to-run comparison. Reproducibility is established by
-running the same legacy workflow twice and comparing the two snapshot files.
+sums for a quick run-to-run comparison. In comparison mode it requires exact
+particle, state, projection, and integer in-plane indices. Euler angles,
+shifts, and scores use configurable absolute and relative tolerances, both
+defaulting to $10^{-6}$.
 
 The normal workflow log remains the authority for iteration count, refinement
 mode, normal completion, and shared-memory or distributed execution behavior.
@@ -330,8 +456,9 @@ mode, normal completion, and shared-memory or distributed execution behavior.
 Implementation status: complete and verified on Oracle Linux. No continuous
 `refine3D` numerical path is enabled by this phase.
 
-The focused policy suite passed the eligible default/off/on contract and all
-eight rejection cases, including the two cases added by the final audit:
+The original focused policy suite passed the eligible default/off/on contract
+and eight rejection cases. The P2 hardening update adds `policy_neigh`, making
+the current rejection matrix nine cases:
 
 ```text
 policy
@@ -343,6 +470,7 @@ policy_projrec
 policy_eval
 policy_sigma
 policy_probabilistic
+policy_neigh
 ```
 
 The run ended with `Continuous in-plane refine3D policy suite: PASS`.
@@ -362,11 +490,11 @@ hybrid objectives, probabilistic assignment modes, and `projrec=yes`. Each
 route must be declared supported or excluded according to whether it provides
 the same raw Euclidean objective and metadata semantics as the joint polish.
 
-The initial gate deliberately supports only deterministic raw-Euclidean
-matching with `projrec=no`. It rejects `objfun=cc`, `objfun_den=yes`,
-`ptcl_src=den`, `projrec=yes`, `refine=eval`, `refine=sigma`, and
-`refine=prob*` when `inpl_cont=yes`. Omitting `inpl_cont`, or setting it to
-`no`, does not apply these restrictions.
+The initial hardened gate deliberately supports only raw-Euclidean
+`refine=shc` matching with `projrec=no`. It rejects `objfun=cc`,
+`objfun_den=yes`, `ptcl_src=den`, `projrec=yes`, and every explicit refinement
+mode other than `shc` when `inpl_cont=yes`. Omitting `inpl_cont`, or setting it
+to `no`, does not apply these restrictions.
 
 The focused Phase 3D-1 test does not require a project:
 
@@ -510,7 +638,7 @@ Oracle Linux.
 The implementation does not introduce an `abinitio2D`-style stage number.
 Omitted `inpl_cont` and explicit `inpl_cont=no` leave
 `strategy3D_srch%continuous_active` false. Explicit `inpl_cont=yes` constructs
-and invokes the joint optimizer only for deterministic raw-Euclidean matching.
+and invokes the joint optimizer only for raw-Euclidean `refine=shc` matching.
 State selection, projection-direction selection, symmetry handling, and the
 initial integer in-plane candidate remain discrete. Unsupported CC, hybrid,
 denoised, projection-reconstruction, and probabilistic combinations are
@@ -525,7 +653,7 @@ The intended policy is:
 
 ```text
 inpl_cont omitted or no -> historical refine3D path
-inpl_cont=yes and eligible deterministic raw-Euclidean search
+inpl_cont=yes and raw-Euclidean refine=shc search
                         -> discrete search followed by joint polish
 unsupported objective or search mode -> reject or retain legacy path by an
                                         explicit documented rule
@@ -868,41 +996,40 @@ refine=sigma inpl_cont=yes
 This gate must not alter the normal CC path when `inpl_cont` is omitted or set
 to `no`.
 
-## Files expected to change later
+## Implemented file ownership
 
-The exact edits will be determined after the baseline review. The likely
-classes are:
+The implementation follows these ownership boundaries:
 
 - `simple_ui_refine3D` for the opt-in user key;
 - `simple_parameters` and `simple_parameters_phases` for defaults and gates;
 - `simple_commanders_refine3D` for policy propagation;
-- `simple_refine3D_strategy` only where stage or lifecycle propagation is
-  required;
+- `simple_refine3D_strategy` for lifecycle propagation and stripping
+  matcher-only arguments from child workflows;
 - `simple_strategy3D_srch` for candidate state and joint refinement;
-- `simple_pftc_shsrch_grad` only if the existing joint API needs a 3D-safe
-  extension;
-- `simple_polarft_calc` and `simple_polarft_corr` only if a 3D-specific
-  derivative evaluator is required;
-- focused `production/tests` programs for the 3D acceptance gates.
-
-No production code should be changed until Phase 3D-0 is complete and the
-current 3D objective, metadata, and stage behavior are documented.
+- `simple_pftc_shsrch_grad` for the bounded joint API and result validation;
+- the existing `simple_polarft_calc` and `simple_polarft_corr` Euclidean
+  objective and derivative implementation, without a duplicate 3D evaluator;
+- focused `production/tests` helper modules and one registered mother test for
+  the 3D acceptance gates.
 
 ## Definition of done
 
-Current result: all eight completion items are implemented and verified. The
+The original eight feature-completion items are implemented and verified. The
 seven-group mother suite, expanded policy suite, synthetic recovery fixture,
 default-off and opt-in workflows, restart and multi-iteration checks, final
-production smoke, and metadata validation all passed on Oracle Linux.
+production smoke, and metadata validation passed on Oracle Linux. The P2/P3
+hardening changes documented above also passed their targeted Oracle rerun.
 
 The transfer is complete only when:
 
 1. `inpl_cont=no` is the default and preserves the historical `refine3D`
    path.
 2. `inpl_cont=yes` is explicitly accepted only for supported Euclidean paths.
-3. Early coarse stages remain grid-only.
-4. Later eligible stages perform bounded joint $(s_x,s_y,\theta)$ refinement
-   in the image plane. This phase does not add $s_z$.
+3. Standalone `refine3D` does not invent an `abinitio2D`-style stage split;
+   every default-off matcher iteration remains on the historical grid route.
+4. Every eligible opt-in `refine3D` matcher iteration performs bounded joint
+   $(s_x,s_y,\theta)$ refinement after discrete winner selection. This phase
+   does not add $s_z$.
 5. Integer and continuous orientation metadata remain consistent.
 6. Restarted runs preserve the selected representation.
 7. CC behavior is unchanged and unsupported opt-in combinations are rejected.

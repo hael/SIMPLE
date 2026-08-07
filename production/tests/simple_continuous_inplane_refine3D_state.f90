@@ -23,6 +23,25 @@ call seed_continuous_inplane_candidate(288, coordinate, valid)
 if( coordinate /= 288. ) error stop 'upper grid index was not preserved as the continuous seed'
 if( valid ) error stop 'upper grid seed was incorrectly marked as a valid continuous result'
 
+! Default-off storage contains only the historical score, shift, and integer
+! angle arrays. Storing a candidate must not require or create continuous-only
+! state.
+allocate(s3D%proj_space_shift(2,2,1), s3D%proj_space_corrs(2,1), &
+    &s3D%proj_space_inplinds(2,1))
+s3D%proj_space_shift    = 0.
+s3D%proj_space_corrs    = -huge(1.)
+s3D%proj_space_inplinds = 0
+search%ithr = 1
+call search%store_solution(1, 9, 0.25, sh=[0.5, -0.25])
+if( s3D%proj_space_inplinds(1,1) /= 9 .or. &
+    &abs(s3D%proj_space_corrs(1,1)-0.25) > 1.e-6 ) &
+    &error stop 'default-off candidate storage failed without continuous arrays'
+if( allocated(s3D%proj_space_inplcoords) .or. &
+    &allocated(s3D%proj_space_inplvalid) ) &
+    &error stop 'default-off candidate storage created continuous-only state'
+call clean_strategy3D
+search%nsolns = 0
+
 allocate(s3D%proj_space_shift(2,2,1), s3D%proj_space_corrs(2,1), &
     &s3D%proj_space_inplcoords(2,1), s3D%proj_space_inplinds(2,1), &
     &s3D%proj_space_inplvalid(2,1))
@@ -60,7 +79,7 @@ if( s3D%proj_space_inplinds(2,1) /= 19 .or. &
 
 call clean_strategy3D
 
-write(*,'(a)') 'REFINE3D_INPL_CONT_STATE GRID_SEED/STORE/REPLACE: PASS'
+write(*,'(a)') 'REFINE3D_INPL_CONT_STATE GRID_SEED/DEFAULT_OFF/STORE/REPLACE: PASS'
 end subroutine run_search_state_contract
 
 end module continuous_inplane_refine3D_state_test

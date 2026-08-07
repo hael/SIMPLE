@@ -8,7 +8,7 @@ contains
 subroutine run_policy_gate()
 use simple_cmdline, only: cmdline
 use simple_commanders_refine3D, only: validate_refine3D_inpl_cont
-use simple_parameters, only: parameters
+use simple_parameters, only: parameters, refine3D_inpl_cont_policy_error
 use simple_refine3D_strategy, only: strip_refine3D_search_only_args
 use simple_ui, only: make_ui
 implicit none
@@ -16,6 +16,7 @@ implicit none
 type(cmdline)    :: cline
 type(cmdline)    :: child_cline
 type(parameters) :: defaults
+character(len=256) :: policy_error
 
 if( trim(defaults%inpl_cont) /= 'no' ) &
     &error stop 'refine3D continuous in-plane default is not no'
@@ -26,6 +27,15 @@ if( has_search_input('refine3D_auto', 'inpl_cont') ) &
     &error stop 'refine3D_auto unexpectedly exposes inpl_cont'
 if( has_search_input('refine3D_multi', 'inpl_cont') ) &
     &error stop 'refine3D_multi unexpectedly exposes inpl_cont'
+
+policy_error = refine3D_inpl_cont_policy_error('no', 'cc', 'yes', &
+    &'den', 'yes', 'prob_neigh')
+if( len_trim(policy_error) > 0 ) &
+    &error stop 'shared refine3D policy altered an explicit default-off route'
+policy_error = refine3D_inpl_cont_policy_error('yes', 'euclid', 'no', &
+    &'raw', 'no', 'shc')
+if( len_trim(policy_error) > 0 ) &
+    &error stop 'shared refine3D policy rejected the eligible opt-in route'
 
 call cline%set('prg', 'refine3D')
 call validate_refine3D_inpl_cont(cline)
@@ -45,7 +55,7 @@ if( child_cline%defined('inpl_cont') ) &
 call child_cline%kill
 call cline%kill
 
-write(*,'(a)') 'REFINE3D_INPL_CONT_POLICY DEFAULT/OFF/ELIGIBLE: PASS'
+write(*,'(a)') 'REFINE3D_INPL_CONT_POLICY SHARED/DEFAULT/OFF/ELIGIBLE: PASS'
 end subroutine run_policy_gate
 
 subroutine run_policy_rejection(label)
@@ -80,6 +90,8 @@ case('policy_sigma')
     call cline%set('refine', 'sigma')
 case('policy_probabilistic')
     call cline%set('refine', 'prob_neigh')
+case('policy_neigh')
+    call cline%set('refine', 'neigh')
 case default
     error stop 'unknown refine3D policy rejection case'
 end select

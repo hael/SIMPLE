@@ -13,6 +13,35 @@ character(len=14), parameter :: NU_ENVMASK_REF_PRGS(4) = &
 
 contains
 
+    module pure function refine3D_inpl_cont_policy_error( inpl_cont, objfun, &
+        &objfun_den, ptcl_src, projrec, refine ) result(error_message)
+        character(len=*), intent(in) :: inpl_cont, objfun, objfun_den
+        character(len=*), intent(in) :: ptcl_src, projrec, refine
+        character(len=STDLEN) :: error_message
+
+        error_message = ''
+        select case(trim(inpl_cont))
+        case('no')
+            return
+        case('yes')
+            continue
+        case default
+            error_message = 'inpl_cont must be yes or no'
+            return
+        end select
+        if( trim(objfun) /= 'euclid' )then
+            error_message = 'refine3D inpl_cont=yes requires objfun=euclid'
+        elseif( trim(objfun_den) /= 'no' )then
+            error_message = 'refine3D inpl_cont=yes does not support objfun_den=yes'
+        elseif( trim(ptcl_src) /= 'raw' )then
+            error_message = 'refine3D inpl_cont=yes requires ptcl_src=raw'
+        elseif( trim(projrec) /= 'no' )then
+            error_message = 'refine3D inpl_cont=yes does not support projrec=yes'
+        elseif( trim(refine) /= 'shc' )then
+            error_message = 'refine3D inpl_cont=yes currently supports only refine=shc'
+        endif
+    end function refine3D_inpl_cont_policy_error
+
     module subroutine new(self, cline, silent)
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
@@ -670,6 +699,7 @@ contains
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         type(atoms) :: atoms_obj
+        character(len=STDLEN) :: inpl_policy_error
         select case(trim(self%memreport))
             case('yes','no')
             case DEFAULT
@@ -746,21 +776,12 @@ contains
             case DEFAULT
                 THROW_HARD('inpl_cont must be yes or no')
         end select
-        if( trim(self%inpl_cont) /= 'no' .and. self%cc_objfun /= OBJFUN_EUCLID )then
+        if( trim(self%prg%to_char()) == 'refine3D' )then
+            inpl_policy_error = refine3D_inpl_cont_policy_error(self%inpl_cont, &
+                &self%objfun, self%objfun_den, self%ptcl_src, self%projrec, self%refine)
+            if( len_trim(inpl_policy_error) > 0 ) THROW_HARD(trim(inpl_policy_error))
+        elseif( trim(self%inpl_cont) /= 'no' .and. self%cc_objfun /= OBJFUN_EUCLID )then
             THROW_HARD('inpl_cont=yes is supported only with objfun=euclid')
-        endif
-        if( trim(self%inpl_cont) == 'yes' .and. &
-            &trim(self%prg%to_char()) == 'refine3D' )then
-            if( trim(self%objfun_den) /= 'no' ) &
-                &THROW_HARD('refine3D inpl_cont=yes does not support objfun_den=yes')
-            if( trim(self%ptcl_src) /= 'raw' ) &
-                &THROW_HARD('refine3D inpl_cont=yes requires ptcl_src=raw')
-            if( trim(self%projrec) /= 'no' ) &
-                &THROW_HARD('refine3D inpl_cont=yes does not support projrec=yes')
-            if( trim(self%refine) == 'eval' .or. trim(self%refine) == 'sigma' ) &
-                &THROW_HARD('refine3D inpl_cont=yes does not support refine=eval or refine=sigma')
-            if( index(trim(self%refine), 'prob') > 0 ) &
-                &THROW_HARD('refine3D inpl_cont=yes does not support probabilistic refinement modes')
         endif
         select case(trim(self%sgd))
             case('yes')

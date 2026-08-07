@@ -3,6 +3,7 @@ module simple_commanders_refine3D
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_refine3D_fnames,   only: refine3D_state_vol_fname, refine3D_fsc_fname
+use simple_parameters,        only: refine3D_inpl_cont_policy_error
 implicit none
 #include "simple_local_flags.inc"
 
@@ -1308,64 +1309,47 @@ contains
     subroutine validate_refine3D_inpl_cont( cline )
         class(cmdline), intent(in) :: cline
         type(string) :: value
+        character(len=STDLEN) :: inpl_cont, objfun, objfun_den, ptcl_src, projrec, refine
+        character(len=STDLEN) :: policy_error
 
         if( .not. cline%defined('inpl_cont') ) return
+        inpl_cont = 'no'
+        objfun    = 'euclid'
+        objfun_den = 'no'
+        ptcl_src  = 'raw'
+        projrec   = 'no'
+        refine    = 'shc'
         value = cline%get_carg('inpl_cont')
-        select case(trim(value%to_char()))
-        case('no')
-            call value%kill
-            return
-        case('yes')
-            call value%kill
-        case default
-            call value%kill
-            THROW_HARD('inpl_cont must be yes or no')
-        end select
+        inpl_cont = value%to_char()
+        call value%kill
         if( cline%defined('objfun') )then
             value = cline%get_carg('objfun')
-            if( trim(value%to_char()) /= 'euclid' )then
-                call value%kill
-                THROW_HARD('refine3D inpl_cont=yes requires objfun=euclid')
-            endif
+            objfun = value%to_char()
             call value%kill
         endif
         if( cline%defined('objfun_den') )then
             value = cline%get_carg('objfun_den')
-            if( trim(value%to_char()) /= 'no' )then
-                call value%kill
-                THROW_HARD('refine3D inpl_cont=yes does not support objfun_den=yes')
-            endif
+            objfun_den = value%to_char()
             call value%kill
         endif
         if( cline%defined('ptcl_src') )then
             value = cline%get_carg('ptcl_src')
-            if( trim(value%to_char()) /= 'raw' )then
-                call value%kill
-                THROW_HARD('refine3D inpl_cont=yes requires ptcl_src=raw')
-            endif
+            ptcl_src = value%to_char()
             call value%kill
         endif
         if( cline%defined('projrec') )then
             value = cline%get_carg('projrec')
-            if( trim(value%to_char()) /= 'no' )then
-                call value%kill
-                THROW_HARD('refine3D inpl_cont=yes does not support projrec=yes')
-            endif
+            projrec = value%to_char()
             call value%kill
         endif
         if( cline%defined('refine') )then
             value = cline%get_carg('refine')
-            if( trim(value%to_char()) == 'eval' .or. &
-                &trim(value%to_char()) == 'sigma' )then
-                call value%kill
-                THROW_HARD('refine3D inpl_cont=yes does not support refine=eval or refine=sigma')
-            endif
-            if( index(trim(value%to_char()), 'prob') > 0 )then
-                call value%kill
-                THROW_HARD('refine3D inpl_cont=yes does not support probabilistic refinement modes')
-            endif
+            refine = value%to_char()
             call value%kill
         endif
+        policy_error = refine3D_inpl_cont_policy_error(inpl_cont, objfun, &
+            &objfun_den, ptcl_src, projrec, refine)
+        if( len_trim(policy_error) > 0 ) THROW_HARD(trim(policy_error))
     end subroutine validate_refine3D_inpl_cont
 
     !> Distributed worker (single-iteration execution). This should be the command

@@ -122,6 +122,7 @@ contains
         self%refine        = trim(self%p_ptr%refine)
         self%l_greedy      = str_has_substr(self%p_ptr%refine, 'greedy')
         self%continuous_active = trim(self%p_ptr%inpl_cont) == 'yes' .and. &
+            &trim(self%refine) == 'shc' .and. &
             &self%b_ptr%pftc%is_raw_euclid_objfun() .and. &
             &(.not. self%p_ptr%l_objfun_den) .and. &
             &(.not. str_has_substr(self%refine, 'prob'))
@@ -315,9 +316,15 @@ contains
         endif
         if( present(sh) ) s3D%proj_space_shift(:,ref,self%ithr) = sh
         s3D%proj_space_inplinds(ref,self%ithr) = inpl_ind
-        call seed_continuous_inplane_candidate(inpl_ind, &
-            &s3D%proj_space_inplcoords(ref,self%ithr), &
-            &s3D%proj_space_inplvalid(ref,self%ithr))
+        if( allocated(s3D%proj_space_inplcoords) .neqv. &
+            &allocated(s3D%proj_space_inplvalid) )then
+            THROW_HARD('incomplete continuous in-plane candidate storage')
+        endif
+        if( allocated(s3D%proj_space_inplcoords) )then
+            call seed_continuous_inplane_candidate(inpl_ind, &
+                &s3D%proj_space_inplcoords(ref,self%ithr), &
+                &s3D%proj_space_inplvalid(ref,self%ithr))
+        endif
         s3D%proj_space_corrs(   ref,self%ithr) = corr
     end subroutine store_solution
 
