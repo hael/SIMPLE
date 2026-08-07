@@ -1,6 +1,70 @@
 # Continuous in-plane rotation transfer plan for `refine3D`
 
-## Scope
+## Project summary and quick start
+
+This project adds an opt-in continuous in-plane refinement step to the
+standalone `refine3D` workflow. The existing search still selects the discrete
+state and projection direction. For the selected winner, the new route jointly
+refines the two image-plane shifts and in-plane angle,
+$(s_x,s_y,\theta)$, with the raw Euclidean objective. The historical
+grid-angle route remains the default.
+
+Enable the feature by supplying `inpl_cont=yes` together with
+`objfun=euclid`:
+
+```bash
+simple_exec \
+  prg=refine3D \
+  projfile=/absolute/path/input.simple \
+  mkdir=yes \
+  objfun=euclid \
+  inpl_cont=yes \
+  maxits=1 \
+  mskdiam=180 \
+  nparts=10 \
+  nthr=8
+```
+
+Omit `inpl_cont`, or set `inpl_cont=no`, to use the unchanged legacy path.
+The opt-in route rejects CC, hybrid or denoised objectives, projection
+reconstruction, `refine=eval`, `refine=sigma`, and probabilistic refinement
+modes.
+
+The tests are organized under `production/tests`. Build and invoke the mother
+test from an already configured build tree:
+
+```bash
+repo=/absolute/path/hael_SIMPLE
+build="$repo/build"
+
+cmake --build "$build" \
+  --target simple_test_continuous_inplane_refine3D \
+  --parallel 12
+
+cd "$build"
+simple_test_continuous_inplane_refine3D
+```
+
+The parameter-free command runs the self-contained policy and search-state
+groups and reports the project-backed baseline and synthetic recovery groups as
+skipped. Supply both inputs to run all seven groups:
+
+```bash
+simple_test_continuous_inplane_refine3D \
+  projfile=/absolute/path/refine3D_output.simple \
+  snapshot="$PWD/refine3D_legacy_baseline.tsv" \
+  vol1=/absolute/path/reference_volume.mrc
+```
+
+An individual group can be rerun with `case=<name>`, for example
+`case=policy_suite`, `case=direct_route`, `case=synthetic_recovery`, or
+`case=metadata_project`. The files named
+`simple_continuous_inplane_refine3D_*.f90` are helper modules compiled into the
+mother executable; they are not separate test executables.
+
+---
+
+## Plan Scope
 
 This plan transfers the validated 2D continuous in-plane refinement design from
 `abinitio2D` to the standalone `refine3D` workflow.
