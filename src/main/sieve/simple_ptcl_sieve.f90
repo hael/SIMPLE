@@ -908,8 +908,14 @@ contains
     end do
 
     ! Flush a final small fine chunk when final ingestion is signaled.
-    if( self%final_ingestion .and. &
-        self%get_n_pass_1_non_rejected_ptcls() > 0 .and. all(self%chunks_coarse(:)%rejection_complete .or. self%chunks_coarse(:)%failed) ) then
+    ! NB: nested if statements are used here (rather than a single .and.-combined
+    ! condition) because Fortran does not guarantee short-circuit evaluation of
+    ! .and./.or.; referencing self%chunks_coarse(:) when chunks_coarse is
+    ! unallocated (e.g. before any coarse chunk has been generated) is undefined
+    ! behaviour and previously caused a segfault here.
+    if( self%final_ingestion .and. self%get_n_chunks_coarse() > 0 ) then
+     if( self%get_n_pass_1_non_rejected_ptcls() > 0 .and. &
+         all(self%chunks_coarse(:)%rejection_complete .or. self%chunks_coarse(:)%failed) ) then
       allocate(projfiles(self%get_n_chunks_coarse()), consumed(self%get_n_chunks_coarse()))
       chunk_nptcls          = 0
       chunk_nptcls_selected = 0
@@ -954,6 +960,7 @@ contains
           ' GENERATED WITH ', chunk_nptcls_selected, '/', chunk_nptcls, ' PARTICLES'
       end if
       deallocate(projfiles, consumed)
+     end if
     end if
 
     call timer_stop(t0, string('generate_chunks_fine'))
@@ -1183,6 +1190,9 @@ contains
           self%n_accepted_ptcls = self%n_accepted_ptcls + non_zero
           self%n_accepted_mics  = self%n_accepted_mics + spproj%os_mic%count_state_gt_zero()
           self%n_rejected_ptcls = self%n_rejected_ptcls + spproj%os_ptcl2D%get_noris() - non_zero
+          ! chunks fast-tracked by final-ingestion (or with no surviving classes) may have
+          ! an empty os_out/cls2D segment; skip the jpeg preview refresh for those
+          if( spproj%os_out%get_noris() > 0 )then
           call spproj%get_cavgs_stk(self%latest_stkname, ncls, smpd_dummy)
           self%latest_jpeg = swap_suffix(self%latest_stkname, JPG_EXT, MRC_EXT)
           call spproj%cavgs2jpg(self%latest_jpeg_inds, self%latest_jpeg, self%latest_jpeg_xtiles, self%latest_jpeg_ytiles, ignore_states=.true.)
@@ -1195,6 +1205,7 @@ contains
           self%latest_jpeg_res        = pack(self%latest_jpeg_res,  cls_msk)
           self%latest_jpeg_selection  = pack(self%latest_jpeg_selection, cls_msk)
           deallocate(cls_msk)
+          end if
           call spproj%kill()
           call simple_copy_file(chunk%projfile, self%completedir // '/' // basename(chunk%projfile))
           call simple_touch(chunk%folder%to_char() // '/COMPLETE')
@@ -1205,18 +1216,22 @@ contains
           if( self%get_n_chunks_fine() == 0 ) then
               call spproj%read_segment('cls2D',  chunk%projfile)
               call spproj%read_segment('out',    chunk%projfile)
-              call spproj%get_cavgs_stk(self%latest_stkname, ncls, smpd_dummy)
-              self%latest_jpeg = swap_suffix(self%latest_stkname, JPG_EXT, MRC_EXT)
-              call spproj%cavgs2jpg(self%latest_jpeg_inds, self%latest_jpeg, self%latest_jpeg_xtiles, self%latest_jpeg_ytiles, ignore_states=.true.)
-              self%latest_jpeg_pops       = spproj%os_cls2D%get_all_asint('pop')
-              self%latest_jpeg_res        = spproj%os_cls2D%get_all('res')
-              self%latest_jpeg_selection  = spproj%os_cls2D%get_all_asint('state')
-              allocate(cls_msk, source=self%latest_jpeg_inds /= 0)
-              self%latest_jpeg_inds       = pack(self%latest_jpeg_inds, cls_msk)
-              self%latest_jpeg_pops       = pack(self%latest_jpeg_pops, cls_msk)
-              self%latest_jpeg_res        = pack(self%latest_jpeg_res,  cls_msk)
-              self%latest_jpeg_selection  = pack(self%latest_jpeg_selection, cls_msk)
-              deallocate(cls_msk)
+              ! chunks fast-tracked by final-ingestion skip 2D classification entirely, so
+              ! their os_out/cls2D segments are empty; skip the jpeg preview refresh for those
+              if( spproj%os_out%get_noris() > 0 )then
+                call spproj%get_cavgs_stk(self%latest_stkname, ncls, smpd_dummy)
+                self%latest_jpeg = swap_suffix(self%latest_stkname, JPG_EXT, MRC_EXT)
+                call spproj%cavgs2jpg(self%latest_jpeg_inds, self%latest_jpeg, self%latest_jpeg_xtiles, self%latest_jpeg_ytiles, ignore_states=.true.)
+                self%latest_jpeg_pops       = spproj%os_cls2D%get_all_asint('pop')
+                self%latest_jpeg_res        = spproj%os_cls2D%get_all('res')
+                self%latest_jpeg_selection  = spproj%os_cls2D%get_all_asint('state')
+                allocate(cls_msk, source=self%latest_jpeg_inds /= 0)
+                self%latest_jpeg_inds       = pack(self%latest_jpeg_inds, cls_msk)
+                self%latest_jpeg_pops       = pack(self%latest_jpeg_pops, cls_msk)
+                self%latest_jpeg_res        = pack(self%latest_jpeg_res,  cls_msk)
+                self%latest_jpeg_selection  = pack(self%latest_jpeg_selection, cls_msk)
+                deallocate(cls_msk)
+              end if
               call spproj%kill()
           end if
           if( chunk%nptcls_selected == 0 ) then
@@ -1248,18 +1263,22 @@ contains
           self%n_accepted_ptcls = self%n_accepted_ptcls + non_zero
           self%n_accepted_mics  = self%n_accepted_mics + spproj%os_mic%count_state_gt_zero()
           self%n_rejected_ptcls = self%n_rejected_ptcls + spproj%os_ptcl2D%get_noris() - non_zero
-          call spproj%get_cavgs_stk(self%latest_stkname, ncls, smpd_dummy)
-          self%latest_jpeg = swap_suffix(self%latest_stkname, JPG_EXT, MRC_EXT)
-          call spproj%cavgs2jpg(self%latest_jpeg_inds, self%latest_jpeg, self%latest_jpeg_xtiles, self%latest_jpeg_ytiles, ignore_states=.true.)
-          self%latest_jpeg_pops       = spproj%os_cls2D%get_all_asint('pop')
-          self%latest_jpeg_res        = spproj%os_cls2D%get_all('res')
-          self%latest_jpeg_selection  = spproj%os_cls2D%get_all_asint('state')
-          allocate(cls_msk, source=self%latest_jpeg_inds /= 0)
-          self%latest_jpeg_inds      = pack(self%latest_jpeg_inds, cls_msk)
-          self%latest_jpeg_pops      = pack(self%latest_jpeg_pops, cls_msk)
-          self%latest_jpeg_res       = pack(self%latest_jpeg_res,  cls_msk)
-          self%latest_jpeg_selection = pack(self%latest_jpeg_selection, cls_msk)
-          deallocate(cls_msk)
+          ! chunks with no surviving classes (e.g. all classes rejected) may have an
+          ! empty os_out/cls2D segment; skip the jpeg preview refresh for those
+          if( spproj%os_out%get_noris() > 0 )then
+            call spproj%get_cavgs_stk(self%latest_stkname, ncls, smpd_dummy)
+            self%latest_jpeg = swap_suffix(self%latest_stkname, JPG_EXT, MRC_EXT)
+            call spproj%cavgs2jpg(self%latest_jpeg_inds, self%latest_jpeg, self%latest_jpeg_xtiles, self%latest_jpeg_ytiles, ignore_states=.true.)
+            self%latest_jpeg_pops       = spproj%os_cls2D%get_all_asint('pop')
+            self%latest_jpeg_res        = spproj%os_cls2D%get_all('res')
+            self%latest_jpeg_selection  = spproj%os_cls2D%get_all_asint('state')
+            allocate(cls_msk, source=self%latest_jpeg_inds /= 0)
+            self%latest_jpeg_inds      = pack(self%latest_jpeg_inds, cls_msk)
+            self%latest_jpeg_pops      = pack(self%latest_jpeg_pops, cls_msk)
+            self%latest_jpeg_res       = pack(self%latest_jpeg_res,  cls_msk)
+            self%latest_jpeg_selection = pack(self%latest_jpeg_selection, cls_msk)
+            deallocate(cls_msk)
+          end if
           call spproj%kill()
           call simple_copy_file(chunk%projfile, self%completedir // '/' // basename(chunk%projfile))
           call simple_touch(chunk%folder%to_char() // '/COMPLETE')
