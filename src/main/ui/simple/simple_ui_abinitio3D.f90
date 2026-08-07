@@ -74,6 +74,12 @@ subroutine new_abinitio3D( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, objfun_den_w, group="search", &
         &visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_SRCH, 'inpl_cont', 'binary', &
+        &'Continuous in-plane refinement', &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
+        &.false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, ptcl_src, group="search", &
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction reconstruction', &
@@ -162,6 +168,12 @@ subroutine new_abinitio3D( prgtab )
         call abinitio3D_cavgs%add_input(UI_SRCH, 'overlap', 'num', 'Convergence overlap target', &
         &'Required overlap of class-average assignments for ab-initio convergence', 'overlap fraction', .false., .95, &
         &group="search", visibility=UI_VIS_DEVELOPER)
+        call abinitio3D_cavgs%add_input(UI_SRCH, 'inpl_cont', 'binary', &
+        &'Continuous in-plane refinement', &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
+        &.false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         ! filter controls
         call abinitio3D_cavgs%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)

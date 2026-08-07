@@ -357,6 +357,12 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, sigma_est, group="search", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'inpl_cont', 'binary', &
+        &'Continuous in-plane refinement', &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
+        &.false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
         &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -430,6 +436,12 @@ subroutine new_automask( prgtab )
         &'Prob-neigh neighborhood mode(state|geom){geom}','', .false., 'geom', &
         &group="search", &
         &choices=ui_choices([character(len=5) :: 'state', 'geom']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_multi%add_input(UI_SRCH, 'inpl_cont', 'binary', &
+        &'Continuous in-plane refinement', &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
+        &.false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_multi%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)
         call refine3D_multi%add_input(UI_SRCH, ptcl_src, group="search", &

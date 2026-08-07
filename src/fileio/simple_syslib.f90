@@ -228,6 +228,7 @@ integer :: io_dev_caps(MAX_IO_DEVS) = 0
 integer :: n_io_devs                = 0
 logical :: l_io_env_probed          = .false.
 integer :: io_nstreams_env          = 0
+logical :: l_io_rot_notice_emitted  = .false.
 
 contains
 
@@ -420,8 +421,12 @@ contains
                 ! spinning disk: keep the head on one run at a time, with just
                 ! enough depth for the drive to overlap seek and transfer
                 cap = 2
-                write(logfhandle,'(A)') '>>> PARTICLE I/O: rotational storage detected for '//&
-                    &trim(io_name_of(fname))//', limiting concurrent reads'
+                if( .not. l_io_rot_notice_emitted )then
+                    l_io_rot_notice_emitted = .true.
+                    write(logfhandle,'(A)') '>>> PARTICLE I/O: rotational storage detected for '//&
+                        &trim(io_name_of(fname))//', limiting concurrent reads'
+                    write(logfhandle,'(A)') '>>> PARTICLE I/O: further rotational-storage notices suppressed'
+                endif
             case(0)
                 cap = 16
             case default

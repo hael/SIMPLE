@@ -23,10 +23,10 @@ if( trim(defaults%inpl_cont) /= 'no' ) &
 call make_ui
 if( .not. has_search_input('refine3D', 'inpl_cont', expected_default='no') ) &
     &error stop 'refine3D UI does not expose inpl_cont=no'
-if( has_search_input('refine3D_auto', 'inpl_cont') ) &
-    &error stop 'refine3D_auto unexpectedly exposes inpl_cont'
-if( has_search_input('refine3D_multi', 'inpl_cont') ) &
-    &error stop 'refine3D_multi unexpectedly exposes inpl_cont'
+if( .not. has_search_input('refine3D_auto', 'inpl_cont', expected_default='no') ) &
+    &error stop 'refine3D_auto UI does not expose inpl_cont=no'
+if( .not. has_search_input('refine3D_multi', 'inpl_cont', expected_default='no') ) &
+    &error stop 'refine3D_multi UI does not expose inpl_cont=no'
 
 policy_error = refine3D_inpl_cont_policy_error('no', 'cc', 'yes', &
     &'den', 'yes')
