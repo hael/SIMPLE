@@ -92,10 +92,10 @@ contains
         neigs_req  = max(1, min(48, params%neigs))
         ! No fixed ceiling on the state count: a compositionally rich specimen can carry far more
         ! states than any constant would allow, and an over-provisioned run is the only regime in
-        ! which the two-gate merge can recover K. What actually bounds it is memory, so it is checked
-        ! against a budget instead.
+        ! which the two-gate merge can recover K. What actually bounds it is memory, which is
+        ! REPORTED below rather than enforced.
         nstates    = max(3, params%npreimages)
-        call check_state_memory_budget(params, nstates)
+        call report_state_memory(params, nstates)
         ! env-only: inert on the default path (the GMM replaces the kernel weights and bandwidth),
         ! live on the nbins>1 and SIMPLE_COV_GMM=0 opt-outs
         min_neff = params%min_neff
@@ -492,20 +492,24 @@ contains
             &THROW_HARD('flex_pca requires populated even and odd halfsets')
     end subroutine validate_covariance_inputs
 
-    !> Report, and bound, what the requested state count will cost in resident reconstructors.
+    !> Report what the requested state count will cost in resident reconstructors.
     !!
     !! reconstruct_flex_weighted_states allocates all nstates reconstructors before the particle
     !! loop, plus a second nstates when the halfsets are fused, each carrying an expanded complex
     !! grid and its rho at the reconstruction box. The cost is therefore linear in nstates, cubic in
-    !! box_rec, and paid up front -- so estimating it here turns an out-of-memory kill deep inside
-    !! the gridding loop into a message naming the knobs that control it.
-    subroutine check_state_memory_budget( params, nstates )
+    !! box_rec, and paid up front -- so it can be estimated here and named alongside the knobs that
+    !! control it.
+    !!
+    !! REPORT ONLY. This used to refuse to run above a fixed 64 GB budget, which is not a number this
+    !! code can know: the figure below is an estimate of ONE allocation on a machine whose memory,
+    !! other tenants and swap are all unknown here, and the nparts multiplier assumes every process is
+    !! resident at once. Refusing on it blocked runs that fit and never caught the cases that did not.
+    !! The operator sees the number and decides.
+    subroutine report_state_memory( params, nstates )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: nstates
-        real(dp) :: gb, gb_proc, budget_gb, nexp
+        real(dp) :: gb, gb_proc, nexp
         integer  :: box_rec, dim_exp, nproc
-        character(len=32) :: envval
-        integer  :: stat, ln, io_stat
         box_rec = flex_rec_box(params)
         ! expanded grid half-width, as reconstructor::alloc_rho derives it: |lims| + ceiling(KBWINSZ)
         dim_exp = box_rec/2 + ceiling(KBWINSZ) + 1
@@ -516,15 +520,11 @@ contains
         ! the states, so the machine-wide peak is nparts+1 times the per-process figure
         nproc   = max(1, params%nparts) + 1
         gb      = gb_proc * real(nproc,dp)
-        budget_gb = 64.d0
-        call get_environment_variable('SIMPLE_FLEX_STATE_MEM_GB', envval, ln, stat)
-        if( stat == 0 .and. ln > 0 )then
-            read(envval, *, iostat=io_stat) budget_gb
-            if( io_stat /= 0 ) budget_gb = 64.d0
-        endif
         write(logfhandle,'(A,I0,A,I0,A,F8.2,A,I0,A,F8.2,A)') '>>> FLEX_PCA states=',nstates, &
             &' at reconstruction box ',box_rec,' -> approx ',gb_proc,' GB of reconstructors per &
             &process x ',nproc,' processes = ',gb,' GB machine-wide'
+        write(logfhandle,'(A)') '>>> FLEX_PCA the knobs that move it are npreimages (linear) and &
+            &box_crop (cubic)'
         ! the reconstructors are rarely what hurts: the reduced solve's accumulator is sized against
         ! COV_ATHR_BUDGET, which is likewise per process and predates distributed execution, so a
         ! distributed run multiplies it by nproc too. SIMPLE_COV_DTILDE is the knob that moves it.
@@ -532,13 +532,7 @@ contains
             &accumulator is also per process; at nparts=',params%nparts,' it is paid that many times &
             &over. Cap it with SIMPLE_COV_DTILDE if the machine is tight.'
         call flush(logfhandle)
-        if( gb > budget_gb )then
-            write(logfhandle,'(A,F8.2,A)') '>>> FLEX_PCA state reconstructors need approx ',gb, &
-                &' GB, above the budget below. Lower npreimages, lower box_rec, or raise &
-                &SIMPLE_FLEX_STATE_MEM_GB if the machine has the memory.'
-            THROW_HARD('flex_pca state count exceeds the reconstructor memory budget')
-        endif
-    end subroutine check_state_memory_budget
+    end subroutine report_state_memory
 
     subroutine load_and_validate_sigma( params, build, cline, pinds, loaded )
         type(parameters), intent(inout) :: params
