@@ -141,7 +141,7 @@ contains
         real,         allocatable   :: ccmat(:,:)
         complex,      allocatable   :: pft(:,:)
         integer :: ldim(3), box, kfromto(2), ithr, i, j, loc, nrots, irot, nimgs
-        real    :: smpd, lims(2,2), lims_init(2,2), cxy(3)
+        real    :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), cxy(3)
         nimgs      = size(imgs)
         ldim       = imgs(1)%get_ldim()
         box        = ldim(1)
@@ -156,9 +156,16 @@ contains
         lims(:,2)      =  trs
         lims_init(:,1) = -SHC_INPL_TRSHWDTH
         lims_init(:,2) =  SHC_INPL_TRSHWDTH
+        nrots = build%pftc%get_nrots()
+        joint_lims(1:2,:) = lims
+        joint_lims(3,:) = [1.-2., real(nrots)+2.]
         do ithr = 1, nthr_glob
-            call grad_shsrch_obj(ithr)%new(build, lims, lims_init=lims_init, &
-            &maxits=MAXITS_SH, opt_angle=.true.)
+            if( trim(params%inpl_cont) == 'yes' )then
+                call grad_shsrch_obj(ithr)%new_joint(build, joint_lims, MAXITS_SH)
+            else
+                call grad_shsrch_obj(ithr)%new_legacy(build, lims, lims_init=lims_init, &
+                    &maxits=MAXITS_SH)
+            endif
         end do
         !$omp parallel do default(shared)  private(i,ithr,pft) proc_bind(close) schedule(static)
         do i = 1, nimgs
@@ -174,7 +181,6 @@ contains
         call build%pftc%memoize_refs
         call build%pftc%memoize_ptcls
         ! register imgs
-        nrots = build%pftc%get_nrots()
         allocate(inpl_corrs(nrots), ccmat(nimgs,nimgs))
         ccmat = 1. ! takes care of diagonal elements
         !$omp parallel do private(i,j,ithr,inpl_corrs,loc,irot,cxy)&
@@ -186,7 +192,11 @@ contains
                 loc  = maxloc(inpl_corrs,dim=1)
                 irot = loc
                 call grad_shsrch_obj(ithr)%set_indices(j, i)
-                cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
+                if( trim(params%inpl_cont) == 'yes' )then
+                    cxy = grad_shsrch_obj(ithr)%minimize_joint_rounded(irot, sh_rot=.true.)
+                else
+                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
+                endif
                 if( irot == 0 )then ! no improved solution found, put back the old one
                     cxy(1) = inpl_corrs(loc)
                     cxy(2) = 0.

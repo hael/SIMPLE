@@ -781,9 +781,9 @@ interface
     end function is_final_planned_iter
 
     module pure function refine3D_inpl_cont_policy_error( inpl_cont, objfun, &
-        &objfun_den, ptcl_src, projrec, refine ) result(error_message)
+        &objfun_den, ptcl_src, projrec ) result(error_message)
         character(len=*), intent(in) :: inpl_cont, objfun, objfun_den
-        character(len=*), intent(in) :: ptcl_src, projrec, refine
+        character(len=*), intent(in) :: ptcl_src, projrec
         character(len=STDLEN) :: error_message
     end function refine3D_inpl_cont_policy_error
 end interface

@@ -94,6 +94,11 @@ contains
         continuous_eligible = self%b_ptr%pftc%is_raw_euclid_objfun() .and. &
             &(.not. self%p_ptr%l_objfun_den) .and. &
             &(.not. self%p_ptr%l_sgd_streaming_active) .and. trim(self%p_ptr%tseries) /= 'yes'
+        if( trim(self%p_ptr%inpl_cont) == 'yes' .and. &
+            &(.not. self%p_ptr%l_sgd_streaming_active) .and. &
+            &trim(self%p_ptr%tseries) /= 'yes' .and. (.not. continuous_eligible) )then
+            THROW_HARD('inpl_cont=yes requires the raw Euclidean joint objective')
+        endif
         self%continuous_active = continuous_eligible .and. trim(self%p_ptr%inpl_cont) == 'yes'
         self%has_continuous_e3 = .false.
         ! construct composites
@@ -119,19 +124,25 @@ contains
             endif
         else if( trim(self%p_ptr%tseries).eq.'yes' )then
             ! shift only search
-            call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init,&
-            maxits=self%p_ptr%maxits_sh, opt_angle=.false.)
-            call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init,&
-            maxits=self%p_ptr%maxits_sh, opt_angle=.false., coarse_init=.true.)
-        else
-            call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init,&
+            call self%grad_shsrch_obj%new_fixed(self%b_ptr, lims, lims_init=lims_init,&
             maxits=self%p_ptr%maxits_sh)
-            call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init,&
-            maxits=self%p_ptr%maxits_sh, coarse_init=.true., &
-            &opt_angle=.not. self%continuous_active)
+            call self%grad_shsrch_first_obj%new_fixed(self%b_ptr, lims, lims_init=lims_init,&
+            maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
+        else
+            if( self%continuous_active )then
+                joint_lims(1:2,:) = lims
+                joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
+                call self%grad_shsrch_first_obj%new_joint(self%b_ptr, joint_lims, &
+                    &self%p_ptr%maxits_sh)
+            else
+                call self%grad_shsrch_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init,&
+                    &maxits=self%p_ptr%maxits_sh)
+                call self%grad_shsrch_first_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init,&
+                    &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
+            endif
         endif
-        call self%grad_shsrch_obj2%new(self%b_ptr, lims, lims_init=lims_init,&
-        &maxits=self%p_ptr%maxits_sh, opt_angle=.false.)
+        call self%grad_shsrch_obj2%new_fixed(self%b_ptr, lims, lims_init=lims_init,&
+        &maxits=self%p_ptr%maxits_sh)
         if( self%continuous_active )then
             joint_lims(1:2,:) = lims
             joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
@@ -236,6 +247,9 @@ contains
             cxy = self%grad_shsrch_first_obj%minimize_direct(irot=irot, xy_in=[0.,0.],&
                 &step_size=self%p_ptr%sgd_eta_shift, max_steps=self%p_ptr%sgd_shift_its,&
                 &sh_rot=.false., raw_euclid=.true.)
+        else if( self%continuous_active )then
+            irot = self%prev_rot
+            cxy = self%grad_shsrch_first_obj%minimize_joint_rounded(irot, sh_rot=.false.)
         else
             if( .not.self%grad_shsrch_first_obj%does_opt_angle() )then
                 ! shift-only optimization
@@ -333,7 +347,9 @@ contains
     end subroutine inpl_srch
 
     !> Jointly refine the shift and in-plane angle of one selected candidate.
-    !! Probabilistic selection is complete before this routine is entered.
+    !! Probabilistic selection is complete before this routine is entered. The
+    !! incoming integer angle is used only to recover the native shift frame;
+    !! the joint optimizer reselects the best grid angle at that shift.
     subroutine refine_selected_continuously( self )
         class(strategy2D_srch), intent(inout) :: self
         real :: rotmat(2,2), xy_native(2)
@@ -352,12 +368,11 @@ contains
             joint_lims(1,:) = xy_native(1)
             joint_lims(2,:) = xy_native(2)
         endif
-        joint_lims(3,:) = [real(self%best_rot)-2., real(self%best_rot)+2.]
+        joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
         call self%joint_inpl_optimizer%set_indices(self%best_class, self%iptcl)
         call self%joint_inpl_optimizer%set_limits(joint_lims)
-        irot = self%best_rot
-        cxy = self%joint_inpl_optimizer%minimize_joint(irot, &
-            &real(self%best_rot), xy_native, sh_rot=.true., rotind_frac=rotind_frac)
+        cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
+            &sh_rot=.true., rotind_frac=rotind_frac)
         if( irot <= 0 ) return
         self%best_rot   = irot
         self%best_corr  = cxy(1)

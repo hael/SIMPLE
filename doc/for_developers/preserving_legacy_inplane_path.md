@@ -170,7 +170,7 @@ The route is resolved before the numerical objects are constructed.
 
 ### `inpl_cont=no`
 
-- Constructs the historical shift optimizer.
+- Constructs the historical shift optimizer explicitly with `new_legacy`.
 - Uses the historical discrete angle update.
 - Does not construct either continuous implementation.
 - Does not create or propagate continuous pose state.
@@ -178,29 +178,55 @@ The route is resolved before the numerical objects are constructed.
 
 ### `inpl_cont=yes`
 
-- Explicitly constructs the three-variable object with `new_joint`.
-- Applies joint refinement only after discrete candidate selection.
+- Explicitly constructs three-variable objects with `new_joint` at every site
+  that would otherwise construct the callback-based optimizer.
+- Before each joint solve, keeps the selected class/reference but discards all
+  incoming in-plane state, then calls the shared discrete selector once at the
+  supplied native shift. This matches one callback invocation without attaching
+  a callback to L-BFGS-B.
+- Bounds the continuous angle to plus or minus two cells around that freshly
+  selected index. It does not use the legacy 5-by-5 shift/all-angle coarse
+  initializer.
+- Uses joint optimization while profiling deterministic and probabilistic
+  candidates, but carries only the rounded in-plane index through probability
+  artifacts.
+- Reruns discrete-at-shift initialization plus joint optimization after final
+  assignment and only then persists a fractional `e3` together with the integer
+  `inpl`, shift, and score. Persisted fractional `e3` is not a restart seed.
+- Commits the freshly selected grid seed on valid non-improving joint work and
+  retains the incoming candidate on invalid work; it never invokes
+  `new_legacy` as a fallback.
 
-The active route additionally requires the raw Euclidean capability. An
-ineligible request resolves to effective mode `no`.
+The active route additionally requires the raw Euclidean capability.
+Ineligible user requests fail explicitly rather than resolving to effective
+mode `no`. Streaming SGD and time-series fixed-angle paths do not use the
+callback and retain their separately documented restrictions.
 
-The low-level properties default to false. Thus default construction once again
-means legacy behavior; continuous behavior cannot be inferred from the
-objective type alone.
+The low-level API has no ambiguous general constructor. `new_legacy`,
+`new_fixed`, `new_direct`, and `new_joint` name their numerical contracts, and
+only `new_legacy` attaches the callback. Continuous behavior therefore cannot
+be inferred from objective type alone.
 
 ## Required regression tests
 
 The route-identity test should assert the construction itself:
 
-| Mode | Joint optimizer | Legacy seed angle update |
+| Mode | Joint optimizer | Legacy angle callback |
 |---|---:|---:|
 | `no` | off | on |
 | `yes` | on | off |
 
 It should also verify:
 
-- a hybrid/denoised request resolves to effective `no`;
+- a hybrid/denoised opt-in request is rejected;
 - probabilistic stages retain the requested active implementation;
+- a deliberately wrong incoming `inpl` does not affect the discrete joint seed,
+  which must equal the all-angle maximum at the supplied shift;
+- joint initialization does not invoke the 5-by-5 coarse shift scan;
+- probabilistic artifacts retain a rounded `inpl` and do not persist a
+  fractional coordinate before final assignment;
+- final probabilistic assignment reruns the joint solve and writes one coupled
+  angle/shift/score pose;
 - `no` produces only grid-consistent `e3` values;
 - `yes` can produce continuous `e3` values; and
 - the `abinitio2D` controller propagates the option through every child and
@@ -223,7 +249,7 @@ When adding an opt-in numerical algorithm:
 1. Define the off-state invariant before implementing the new method.
 2. Carry the activation state down to the lowest layer where behavior changes.
 3. Keep capability checks separate from activation checks.
-4. Make legacy behavior the constructor default.
+4. Make legacy construction explicit and unambiguous.
 5. Construct new numerical objects only inside the active route.
 6. Keep new metadata invalid unless an active route explicitly produces it.
 7. Test the negative path before testing the new path.

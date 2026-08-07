@@ -3,6 +3,14 @@
 **Date:** May 10, 2026  
 **Status:** Design note / first-draft implementation plan
 
+> In-plane policy update (August 7, 2026): the callback mentioned in this
+> proposal is now explicitly the `inpl_cont=no` legacy route. Any implementation
+> of this idea must preserve `inpl_cont=yes` as a callback-free joint
+> `(sx,sy,rotind_frac)` route and must not reintroduce callback fallback. Joint
+> initialization fixes the chosen class/projection direction, discards prior
+> in-plane metadata, selects the best discrete in-plane cell once at the
+> supplied native shift, and does not run the legacy 5-by-5 shift scan.
+
 ## Purpose
 
 SIMPLE already has a strong continuum formulation for origin-shift registration in polar Fourier space. The current 3D projection-direction search, however, remains fundamentally discrete: reference polar central sections are extracted from the 3D reference volume over an Euler-space grid, and each section is compared against the particle PFT while all in-plane rotations are evaluated efficiently.
@@ -28,7 +36,7 @@ The core projection-to-PFT extraction path is:
   - `gen_euclids`
   - `gen_corr_grad_for_rot_8`
 - `src/main/pftc/simple_pftc_shsrch_grad.f90`
-  - existing L-BFGS shift optimizer with discrete in-plane-angle callback
+  - explicit legacy callback, fixed-angle, direct, and joint constructors
 - `src/main/strategies/search/simple_strategy3D_srch.f90`
   - shift/in-plane refinement hooks after discrete projection search
 - `src/main/strategies/search/simple_strategy3D_greedy.f90`
@@ -102,8 +110,10 @@ The recommended first policy is local refinement of shortlisted discrete candida
 1. Run the current discrete projection-direction search.
 2. Keep the top `npeaks` or `npeaks_inpl` projection candidates.
 3. For each candidate, run a local tangent-plane optimizer over two projection-direction variables.
-4. Keep the in-plane angle discrete.
-5. During optimization, periodically reselect the best in-plane angle, mirroring the shift optimizer's `opt_angle` callback pattern.
+4. Under `inpl_cont=no`, keep the in-plane angle discrete.
+5. Under `inpl_cont=no`, periodically reselect the best in-plane angle using
+   the legacy callback. Under eligible `inpl_cont=yes`, use the joint
+   angle/shift contract instead; do not call the callback.
 6. Accept the continuous-refined candidate only if it improves the stored score.
 
 This avoids asking a local optimizer to solve the global spherical search problem. The discrete grid remains responsible for global coverage; the continuous step sharpens local peaks and may eventually allow a coarser projection grid.
@@ -222,7 +232,8 @@ simple_pftc_projdir_srch_grad
   - generates the perturbed orientation
   - extracts `P`, `dP/da`, `dP/db`
   - evaluates all in-plane rotations or evaluates the current `irot`
-  - updates the best in-plane rotation through a callback, as `pftc_shsrch_grad` already does
+  - follows the selected in-plane policy: legacy callback for `inpl_cont=no`,
+    joint callback-free refinement for eligible `inpl_cont=yes`
   - returns score and gradient
 
 Expected result:

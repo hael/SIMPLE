@@ -267,6 +267,55 @@ shifts, and sometimes in-plane rotation, after stochastic candidate selection.
 The stored assignment distance is then the refined/profiled objective value.
 This is intended current behavior, not a full soft-assignment EM update.
 
+### Continuous in-plane policy
+
+`inpl_cont` has exactly two values. `no` is the default and preserves the
+historical alternating search: continuous shift optimization with the
+discrete in-plane angle callback. `yes` replaces every use of that callback
+with the joint raw-Euclidean `(sx,sy,rotind_frac)` optimizer. The numerical
+route is selected before shift-search objects are constructed; objective type
+is a capability check and must never activate continuous-angle behavior by
+itself.
+
+The refine3D opt-in requires `objfun=euclid`, `objfun_den=no`,
+`ptcl_src=raw`, and `projrec=no`. It is not restricted to `refine=shc`:
+deterministic, neighborhood, evaluation, and probabilistic matcher routes use
+the same policy wherever they perform pose search. A mode with no pose search,
+such as sigma-only setup, naturally invokes neither optimizer. Unsupported
+capability combinations fail validation rather than silently reverting to the
+callback.
+
+Every joint invocation fixes the already selected state and projection but
+discards all prior in-plane rotation information. It evaluates every discrete
+in-plane cell once at the caller-supplied native `(x,y)` shift and chooses the
+best index, exactly matching one legacy callback selection. The continuous
+three-parameter solve starts from that index and is bounded to plus or minus
+two cells around it. The `inpl_cont=yes` initializer never searches other
+shifts; in particular, it does not use the legacy 5-by-5 shift/all-angle coarse
+initializer.
+
+For probabilistic refinement, the probability-table schema remains discrete.
+Joint optimization may evaluate a fractional in-plane coordinate while
+profiling a candidate, but the assignment artifact carries only the canonical
+rounded `inpl`, its score, and its shift. That shift is expressed in the
+rounded-index frame so the matcher can recover the exact native shift seed
+without storing a fractional coordinate in the table.
+
+After hard state/projection/in-plane assignment, the matcher reruns the joint
+three-parameter optimizer for the selected state and projection. The stored
+assignment index is used only to convert its shift back to the native particle
+frame and is then discarded before the one-time all-angle seed selection. An
+accepted result persists one coupled pose: fractional Euler `e3`, nearest integer
+`inpl`, shift, and score. A finite non-improving evaluation commits the newly
+selected grid seed and its score/shift; a numerically invalid evaluation
+retains the incoming candidate. It must never invoke the legacy callback as a
+fallback. State and projection identity remain fixed during the final joint
+solve. A persisted fractional `e3` is not reused as the next joint seed.
+
+Shared-memory and distributed probabilistic child commands must retain
+`inpl_cont`; reconstruction, sigma, assembly, and postprocessing children must
+not receive matcher-only search policy.
+
 For multi-state alignment (`nstates > 1`), shift-first candidate scoring is
 disabled. The matcher and probability-table paths may still refine shifts after
 candidate/state selection, but they must not use a shift seed estimated from a
@@ -375,3 +424,12 @@ handoff artifacts for a later `refine3D` execution.
 - Treat assignment maps, partition-local partials, state volumes, even/odd
   volumes, FSC files, automasks, and NU outputs as explicit workflow
   contracts.
+- Preserve the two-mode in-plane boundary: only `new_legacy` may attach the
+  callback, and no `inpl_cont=yes` path may invoke it.
+- Initialize every joint solve with one callback-equivalent all-angle selection
+  at the supplied shift; do not seed it from previous in-plane metadata or run
+  the 5-by-5 coarse shift initializer.
+- Keep probabilistic in-plane artifacts rounded and run durable fractional
+  refinement only after final hard assignment.
+- Keep `inpl_cont` on shared-memory and distributed matcher/probability child
+  commands while stripping it from non-matcher children.

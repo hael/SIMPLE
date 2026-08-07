@@ -6,16 +6,11 @@ public :: run_metadata_state_contract, run_metadata_project_contract
 contains
 
 subroutine run_metadata_state_contract()
-use simple_core_module_api, only: dp
-use simple_strategy3D_srch, only: strategy3D_srch
 use simple_strategy3D_utils, only: resolve_inplane_e3
 implicit none
 
-type(strategy3D_srch) :: search
 real, parameter :: dang = 1.25
 real :: e3
-real(dp) :: coordinate
-logical :: coordinate_valid
 
 e3 = resolve_inplane_e3(17, 17.4, .true., .false., dang)
 if( abs(e3 - 340.) > 1.e-5 ) &
@@ -29,23 +24,7 @@ e3 = resolve_inplane_e3(17, 17.4, .true., .true., dang)
 if( abs(e3 - 339.5) > 1.e-5 ) &
     &error stop 'accepted continuous coordinate was not converted to e3'
 
-search%nrots = 288
-call search%resolve_restart_inpl_coordinate(339.5, 17, real(dang,dp), &
-    &coordinate, coordinate_valid)
-if( .not. coordinate_valid .or. abs(coordinate - 17.4d0) > 1.d-6 ) &
-    &error stop 'opt-in restart did not recover the stored continuous coordinate'
-
-call search%resolve_restart_inpl_coordinate(0.1, 1, real(dang,dp), &
-    &coordinate, coordinate_valid)
-if( .not. coordinate_valid .or. abs(coordinate - 0.92d0) > 1.d-6 ) &
-    &error stop 'opt-in restart did not unwrap a periodic boundary coordinate'
-
-call search%resolve_restart_inpl_coordinate(339.5, 18, real(dang,dp), &
-    &coordinate, coordinate_valid)
-if( coordinate_valid ) &
-    &error stop 'opt-in restart accepted inconsistent integer and continuous metadata'
-
-write(*,'(a)') 'REFINE3D_INPL_CONT_METADATA GRID/CONTINUOUS/RESTART: PASS'
+write(*,'(a)') 'REFINE3D_INPL_CONT_METADATA GRID/CONTINUOUS: PASS'
 end subroutine run_metadata_state_contract
 
 subroutine run_metadata_project_contract()

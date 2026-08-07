@@ -1309,7 +1309,7 @@ contains
     subroutine validate_refine3D_inpl_cont( cline )
         class(cmdline), intent(in) :: cline
         type(string) :: value
-        character(len=STDLEN) :: inpl_cont, objfun, objfun_den, ptcl_src, projrec, refine
+        character(len=STDLEN) :: inpl_cont, objfun, objfun_den, ptcl_src, projrec
         character(len=STDLEN) :: policy_error
 
         if( .not. cline%defined('inpl_cont') ) return
@@ -1318,7 +1318,6 @@ contains
         objfun_den = 'no'
         ptcl_src  = 'raw'
         projrec   = 'no'
-        refine    = 'shc'
         value = cline%get_carg('inpl_cont')
         inpl_cont = value%to_char()
         call value%kill
@@ -1342,13 +1341,8 @@ contains
             projrec = value%to_char()
             call value%kill
         endif
-        if( cline%defined('refine') )then
-            value = cline%get_carg('refine')
-            refine = value%to_char()
-            call value%kill
-        endif
         policy_error = refine3D_inpl_cont_policy_error(inpl_cont, objfun, &
-            &objfun_den, ptcl_src, projrec, refine)
+            &objfun_den, ptcl_src, projrec)
         if( len_trim(policy_error) > 0 ) THROW_HARD(trim(policy_error))
     end subroutine validate_refine3D_inpl_cont
 

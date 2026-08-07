@@ -14,9 +14,9 @@ character(len=14), parameter :: NU_ENVMASK_REF_PRGS(4) = &
 contains
 
     module pure function refine3D_inpl_cont_policy_error( inpl_cont, objfun, &
-        &objfun_den, ptcl_src, projrec, refine ) result(error_message)
+        &objfun_den, ptcl_src, projrec ) result(error_message)
         character(len=*), intent(in) :: inpl_cont, objfun, objfun_den
-        character(len=*), intent(in) :: ptcl_src, projrec, refine
+        character(len=*), intent(in) :: ptcl_src, projrec
         character(len=STDLEN) :: error_message
 
         error_message = ''
@@ -37,8 +37,6 @@ contains
             error_message = 'refine3D inpl_cont=yes requires ptcl_src=raw'
         elseif( trim(projrec) /= 'no' )then
             error_message = 'refine3D inpl_cont=yes does not support projrec=yes'
-        elseif( trim(refine) /= 'shc' )then
-            error_message = 'refine3D inpl_cont=yes currently supports only refine=shc'
         endif
     end function refine3D_inpl_cont_policy_error
 
@@ -778,7 +776,7 @@ contains
         end select
         if( trim(self%prg%to_char()) == 'refine3D' )then
             inpl_policy_error = refine3D_inpl_cont_policy_error(self%inpl_cont, &
-                &self%objfun, self%objfun_den, self%ptcl_src, self%projrec, self%refine)
+                &self%objfun, self%objfun_den, self%ptcl_src, self%projrec)
             if( len_trim(inpl_policy_error) > 0 ) THROW_HARD(trim(inpl_policy_error))
         elseif( trim(self%inpl_cont) /= 'no' .and. self%cc_objfun /= OBJFUN_EUCLID )then
             THROW_HARD('inpl_cont=yes is supported only with objfun=euclid')

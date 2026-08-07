@@ -18,19 +18,18 @@ type(parameters) :: params
 type(cmdline) :: cline
 type(builder) :: build
 type(ori) :: reference_ori, particle_ori
-type(pftc_shsrch_grad) :: seed_search, joint_search
+type(pftc_shsrch_grad) :: joint_search
 real(sp), allocatable, target :: sigma2_noise(:,:)
 real(sp), allocatable :: raw_losses(:)
 character(len=4096) :: vol_file
 real :: mskdiam, smpd, lp, truth_angle, truth_shift(2)
-real :: seed_limits(2,2), seed_limits_init(2,2), seed_result(3)
 real :: joint_limits(3,2), joint_result(3)
 real(dp) :: grid_coord, joint_coord, grid_loss, joint_loss, initial_loss
 real(dp) :: grid_angle, joint_angle, grid_angle_error, joint_angle_error
 real(dp) :: seed_shift(2), expected_shift(2), recovered_shift(2)
 real(dp) :: shift_rms, objective_tolerance
 real(dp) :: theta_rad, unused_gradient(3)
-integer :: projection_index, grid_index, seed_index, joint_index, nrots
+integer :: projection_index, grid_index, joint_index, nrots
 logical :: evaluation_valid, improved, volume_exists
 
 call parse_recovery_arguments(vol_file, mskdiam, smpd, lp, truth_angle, truth_shift)
@@ -77,21 +76,10 @@ allocate(raw_losses(nrots))
 call build%pftc%gen_raw_euclid_vals(1, 1, [0._sp,0._sp], raw_losses)
 grid_index = minloc(raw_losses, dim=1)
 
-! Reproduce refine3D's production pre-selection seed. The selected reference
-! first receives an alternating discrete-angle/continuous-shift search, and the
-! resulting native-frame xy_first is then used to score all grid candidates.
-seed_limits(:,1) = -params%trs
-seed_limits(:,2) =  params%trs
-seed_limits_init(:,1) = -SHC_INPL_TRSHWDTH
-seed_limits_init(:,2) =  SHC_INPL_TRSHWDTH
-call seed_search%new(build, seed_limits, lims_init=seed_limits_init, &
-    &maxits=params%maxits_sh, opt_angle=.true., coarse_init=.true.)
-call seed_search%set_indices(1, 1)
-seed_index = grid_index
-seed_result = seed_search%minimize(irot=seed_index, sh_rot=.false.)
-if( seed_index < 1 ) &
-    &error stop 'synthetic refine3D pre-selection shift search found no improving seed'
-seed_shift = real(seed_result(2:3),dp)
+! Continuous refinement starts from the caller's native x/y seed. The joint
+! search itself performs one callback-equivalent all-angle selection there;
+! it does not use the legacy 5x5 shift/all-angle coarse initializer.
+seed_shift = 0.d0
 call build%pftc%gen_raw_euclid_vals(1, 1, real(seed_shift,sp), raw_losses)
 grid_index = minloc(raw_losses, dim=1)
 grid_coord = real(grid_index,dp)
@@ -104,7 +92,7 @@ joint_limits(3,:) = [real(grid_index)-2., real(grid_index)+2.]
 call joint_search%new_joint(build, joint_limits, 100)
 call joint_search%set_indices(1, 1)
 joint_index = grid_index
-joint_result = joint_search%minimize_joint(joint_index, real(grid_coord), real(seed_shift), &
+joint_result = joint_search%minimize_joint(joint_index, real(seed_shift), &
     &sh_rot=.false., rotind_frac=joint_coord, evaluation_valid=evaluation_valid, &
     &improved=improved, initial_cost_out=initial_loss)
 if( .not. evaluation_valid ) error stop 'synthetic refine3D joint evaluation was invalid'
@@ -151,7 +139,6 @@ if( shift_rms > 0.25d0 ) &
     &error stop 'synthetic refine3D joint refinement did not recover the known shift'
 
 call joint_search%kill
-call seed_search%kill
 call build%kill_strategy3D_tbox
 call build%kill_general_tbox
 deallocate(raw_losses, sigma2_noise)

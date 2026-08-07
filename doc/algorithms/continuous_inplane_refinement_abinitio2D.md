@@ -7,14 +7,16 @@ inpl_cont=yes|no
 ```
 
 `no` is the default and preserves the legacy discrete shift/angle search.
-`yes` enables joint continuous refinement of `(sx,sy,theta)` after the
-discrete polar search selects a candidate. There is no alternating continuous
-callback route.
+`yes` replaces every alternating callback-based angle/shift optimization with
+joint continuous refinement of `(sx,sy,theta)`. There is no continuous
+callback route and no callback fallback from the joint route.
 
 Continuous refinement is active only for the raw Euclidean objective. It is
-disabled for hybrid/denoised objectives, streaming SGD, and time-series
-shift-only search. The `abinitio2D` controller propagates the option to every
-`cluster2D` child, including terminal probabilistic and dense passes.
+unsupported for hybrid/denoised objectives; those opt-in requests fail rather
+than falling back to the callback. `abinitio2D_sgd` rejects `inpl_cont=yes`,
+while time-series shift-only search invokes neither an angle callback nor the
+joint angle optimizer. The `abinitio2D` controller propagates the option to
+every `cluster2D` child, including terminal probabilistic and dense passes.
 
 ## Discrete mode
 
@@ -31,38 +33,75 @@ index. No joint optimizer or continuous pose state is constructed.
 
 ## Continuous mode
 
-With eligible `inpl_cont=yes`, candidate selection remains discrete. The one
-selected candidate is then refined as follows:
+With eligible `inpl_cont=yes`, class/reference support and probabilistic
+sampling remain discrete, but every local angle/shift profile that formerly
+used the callback runs the three-variable optimizer:
 
-1. start from `(sx_seed,sy_seed,theta_grid)`;
-2. limit `theta` to plus or minus two grid units around the candidate;
-3. run one three-variable L-BFGS-B solve;
-4. evaluate the raw Euclidean objective and all three analytic derivatives at
+1. retain the selected class but discard the incoming integer or fractional
+   in-plane rotation;
+2. evaluate all discrete rotations once at the caller-supplied
+   `(sx_seed,sy_seed)` and select the best index, exactly as one legacy
+   callback invocation would;
+3. start from `(sx_seed,sy_seed,theta_best)` and limit `theta` to plus or minus
+   two grid units around `theta_best`;
+4. run one three-variable L-BFGS-B solve;
+5. evaluate the raw Euclidean objective and all three analytic derivatives at
    the same continuous pose; and
-5. accept only a finite, round-off-significant improvement.
+6. accept a finite, round-off-significant improvement, otherwise retain the
+   newly selected discrete seed.
 
-The nearest integer angle remains in `inpl` for compatibility, while the
-accepted continuous angle is stored in `e3`. Probabilistic sampling therefore
-remains discrete; only its selected result receives continuous refinement.
+The starting shift is authoritative. Continuous initialization never performs
+the legacy 5-by-5 shift/all-rotation coarse scan and never seeds the solve from
+previous `inpl` or fractional `e3` metadata. Only the selected class and the
+supplied native shift survive into initialization.
+
+During probabilistic table construction the fractional coordinate is
+transient. The table stores only the nearest integer `inpl`, score, and shift;
+the shift is rotated into the rounded-index frame. This preserves the existing
+assignment format and lets the matcher recover the exact native shift seed.
+
+After the final probabilistic class/in-plane decision, the matcher uses the
+rounded index only to recover the native shift, then discards it and repeats
+the all-angle seed selection before rerunning the joint optimizer. Only this final
+assignment persists
+the accepted continuous angle in `e3`; the nearest integer remains in `inpl`
+for compatibility, and the final shift and score are written from the same
+joint pose. A valid non-improving solve commits the newly selected discrete
+seed; an invalid solve retains the incoming assignment. Neither invokes the
+legacy callback.
 
 ## Joint evaluator
 
 The evaluator uses thread-local coefficient workspaces. For each pose it
-prepares the shifted reference once, accumulates the objective, x-gradient,
-y-gradient, and angle-gradient coefficients in one traversal, and evaluates
-them directly at `theta`. It performs no inverse FFT, constructs no discrete
-loss vector, and makes no per-evaluation allocation.
+forms the shift-phase products on the polar samples — `argtransf_x·S·REF` and
+`argtransf_y·S·REF`, extended to the second half-circle as `-conjg(...)`
+because the phase arguments flip sign across the Friedel mate, plus `S·REF`
+itself when shifted — and forward-transforms them: two angular FFT batches at
+zero shift, three otherwise. The resulting coefficient series for the
+objective and both shift gradients evaluate directly at `theta`, and the
+angle gradient follows from differentiating the series. It performs no
+inverse FFT, constructs no discrete loss vector, and makes no per-evaluation
+allocation. The `argtransf` products must be formed before the angular
+transform; multiplying after it is not equivalent (it would require a
+convolution in angular frequency) and silently corrupts the shift gradient.
 
 ## Shift-search API
 
 `pftc_shsrch_grad` exposes separate constructors for its valid configurations:
 
-- `new`: legacy L-BFGS-B shift search with an optional discrete angle update;
+- `new_legacy`: legacy L-BFGS-B shift search with the discrete angle callback;
+- `new_fixed`: fixed-angle L-BFGS-B shift search;
 - `new_direct`: fixed-angle bounded direct-gradient shift updates; and
 - `new_joint`: joint `(sx,sy,theta)` L-BFGS-B refinement.
 
-This avoids combinations of optional mode flags. The obsolete `shbarrier`
-option was also removed because it did not affect the implementation.
+The callback is attached only by `new_legacy`. This makes route audits
+mechanical and avoids optional mode-flag combinations. The obsolete
+`shbarrier` option was also removed because it did not affect the
+implementation.
+
+`select_best_discrete_angle` is shared by the legacy callback and joint
+initialization. Joint code calls it once at the supplied shift; it does not
+attach the callback to L-BFGS-B.
 
 ## Primary code locations
 

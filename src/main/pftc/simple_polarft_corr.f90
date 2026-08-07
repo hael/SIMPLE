@@ -1463,12 +1463,15 @@ contains
     end subroutine gen_raw_euclid_grad_for_rot_8
 
     ! Candidate Phase 3 API: evaluate the normalized raw Euclidean residual and
-    ! its gradient at a continuous angular grid coordinate.  One fused polar-ring
-    ! traversal accumulates the objective and both shift-derivative coefficient
-    ! series.  At nonzero shift the shifted reference is prepared and transformed
-    ! once.  The coefficient series are evaluated directly at the fractional
-    ! rotation index, so this hot path allocates no temporary arrays and
-    ! performs no inverse FFTs.
+    ! its gradient at a continuous angular grid coordinate.  Shift
+    ! differentiation must happen in the angular sample domain, so per
+    ! evaluation the products argtransf_x*S*REF and argtransf_y*S*REF are
+    ! formed on the polar samples and transformed (plus S*REF itself when
+    ! shifted), giving the coefficient series of the objective and both shift
+    ! derivatives; all three then evaluate at the fractional rotation index in
+    ! O(pftsz).  The shift-phase arguments flip sign across the Friedel mate,
+    ! so the derivative products carry the anti-Friedel extension -conjg on
+    ! the second half-circle.  No inverse FFTs and no temporary allocations.
     module subroutine gen_raw_euclid_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
@@ -1478,7 +1481,7 @@ contains
         complex(sp), pointer :: shmat(:,:)
         complex(sp) :: cross_term, ref2_term
         real(sp) :: A_sp, shift(2), shift_mag_sq, wk
-        integer :: i, ithr, k, k0, kk, p, ieo
+        integer :: i, ithr, k, k0, kk, p, ieo, deriv, poff
         logical :: shifted
 
         if( .not. self%is_raw_euclid_objfun() )then
@@ -1490,12 +1493,49 @@ contains
         ieo          = merge(REF_EVEN, REF_ODD, self%iseven(i))
         shift        = real(shvec,sp)
         shift_mag_sq = sum(shift*shift)
-        shifted      = shift_mag_sq > SHERRSQ
+        ! gate on exact zero: at shift 0 the shifted path reduces to the
+        ! memoized ft_ref bitwise, so skipping it is a pure optimization;
+        ! a SHERRSQ-style dead zone would return the zero-shift derivative
+        ! for small nonzero shifts and break smoothness for L-BFGS-B
+        shifted      = shift_mag_sq > 0._sp
         coeffs       => self%heap_vars(ithr)%joint_coeffs
         coeffs       = cmplx(0._sp,0._sp,kind=sp)
         if( shifted )then
             shmat => self%heap_vars(ithr)%shmat
             call self%gen_shmat4aln(ithr, shift, shmat)
+        endif
+        ! shift-derivative coefficient series, x (deriv=1) then y (deriv=2)
+        do deriv = 1,2
+            poff = merge(0, self%pftsz, deriv == 1)
+            do k = self%kfromto(1), self%kfromto(2)
+                kk = k - k0 + 1
+                if( shifted )then
+                    self%cmat2_many(ithr)%c(1:self%pftsz,kk) = &
+                        &real(self%argtransf(poff+1:poff+self%pftsz,k),sp) * &
+                        &(shmat(:,k) * self%pfts_refs(:,k,iref,ieo))
+                else
+                    self%cmat2_many(ithr)%c(1:self%pftsz,kk) = &
+                        &real(self%argtransf(poff+1:poff+self%pftsz,k),sp) * &
+                        &self%pfts_refs(:,k,iref,ieo)
+                endif
+                self%cmat2_many(ithr)%c(self%pftsz+1:self%nrots,kk) = &
+                    &-conjg(self%cmat2_many(ithr)%c(1:self%pftsz,kk))
+            enddo
+            call fftwf_execute_dft(self%plan_fwd1_many, &
+                &self%cmat2_many(ithr)%c, self%cmat2_many(ithr)%c)
+            do k = self%kfromto(1), self%kfromto(2)
+                wk = real(k,sp) / self%sigma2_noise(k,iptcl)
+                kk = k - k0 + 1
+                do p = 1,self%pftsz
+                    cross_term = self%ft_ptcl_ctf(p,k,i) * &
+                        &conjg(self%cmat2_many(ithr)%c(p,kk))
+                    coeffs(p,1+deriv) = coeffs(p,1+deriv) + &
+                        &wk * cmplx(0._sp,2._sp,kind=sp) * cross_term
+                enddo
+            enddo
+        enddo
+        ! objective coefficient series
+        if( shifted )then
             do k = self%kfromto(1), self%kfromto(2)
                 kk = k - k0 + 1
                 self%cmat2_many(ithr)%c(1:self%pftsz,kk) = &
@@ -1517,9 +1557,7 @@ contains
                 else
                     cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
                 endif
-                call accumulate_joint_coeffs(coeffs(p,1), coeffs(p,2), coeffs(p,3), &
-                    &wk, ref2_term, cross_term, &
-                    &self%argtransf(p,k), self%argtransf(self%pftsz+p,k))
+                coeffs(p,1) = coeffs(p,1) + wk * (ref2_term - 2._sp*cross_term)
             enddo
         enddo
         A_sp = real(self%wsqsums_ptcls(i) * real(2*self%nrots,dp),sp)
@@ -1527,18 +1565,6 @@ contains
         coeffs(1,1) = coeffs(1,1) + cmplx(1._sp,0._sp,kind=sp)
         call eval_joint_coeffs_at_rotind(self, coeffs, rotind_frac, f, grad)
     end subroutine gen_raw_euclid_grad_at_angle
-
-    pure subroutine accumulate_joint_coeffs(coeff, coeff_x, coeff_y, wk, ref2_term, cross_term, argx, argy)
-        complex(sp), intent(inout) :: coeff, coeff_x, coeff_y
-        real(sp),    intent(in)    :: wk
-        complex(sp), intent(in)    :: ref2_term, cross_term
-        real(dp),    intent(in)    :: argx, argy
-        coeff = coeff + wk * (ref2_term - 2._sp*cross_term)
-        coeff_x = coeff_x + wk * &
-            &cmplx(0._sp,2._sp*real(argx,sp),kind=sp) * cross_term
-        coeff_y = coeff_y + wk * &
-            &cmplx(0._sp,2._sp*real(argy,sp),kind=sp) * cross_term
-    end subroutine accumulate_joint_coeffs
 
     subroutine eval_joint_coeffs_at_rotind(self, coeffs, rotind_frac, f, grad)
         class(polarft_calc), intent(in)  :: self

@@ -142,7 +142,7 @@ subroutine exec_test_eval_polarftcc( self, cline )
     ! searching
     lims(:,1) = -5.
     lims(:,2) =  5.
-    call grad_shsrch_obj%new(b, lims)
+    call grad_shsrch_obj%new_legacy(b, lims)
     call grad_shsrch_obj%set_indices(1, 1)
     loc = 1
     tfft = tic()

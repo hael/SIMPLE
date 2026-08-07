@@ -631,7 +631,6 @@ contains
         endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
-            call strip_refine3D_search_only_args(cline_prob_align)
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else
@@ -820,7 +819,6 @@ contains
         self%cline_calc_group_sigmas   = cline
         call strip_refine3D_search_only_args(self%cline_rec3D)
         call strip_refine3D_search_only_args(self%cline_calc_pspec_distr)
-        call strip_refine3D_search_only_args(self%cline_prob_align_distr)
         call strip_refine3D_search_only_args(self%cline_postprocess)
         call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
@@ -1048,7 +1046,6 @@ contains
         endif
         if( params%l_prob_align_mode )then
             cline_prob_align = cline
-            call strip_refine3D_search_only_args(cline_prob_align)
             if( l_prob_neigh_mode .and. (.not. l_prob_state_mode) )then
                 call cline_prob_align%set('prg', 'prob_align_neigh')
             else

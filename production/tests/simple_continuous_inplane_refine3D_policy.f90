@@ -29,14 +29,13 @@ if( has_search_input('refine3D_multi', 'inpl_cont') ) &
     &error stop 'refine3D_multi unexpectedly exposes inpl_cont'
 
 policy_error = refine3D_inpl_cont_policy_error('no', 'cc', 'yes', &
-    &'den', 'yes', 'prob_neigh')
+    &'den', 'yes')
 if( len_trim(policy_error) > 0 ) &
     &error stop 'shared refine3D policy altered an explicit default-off route'
 policy_error = refine3D_inpl_cont_policy_error('yes', 'euclid', 'no', &
-    &'raw', 'no', 'shc')
+    &'raw', 'no')
 if( len_trim(policy_error) > 0 ) &
     &error stop 'shared refine3D policy rejected the eligible opt-in route'
-
 call cline%set('prg', 'refine3D')
 call validate_refine3D_inpl_cont(cline)
 call cline%set('inpl_cont', 'no')
@@ -47,6 +46,8 @@ call cline%set('objfun_den', 'no')
 call cline%set('ptcl_src', 'raw')
 call cline%set('projrec', 'no')
 call cline%set('refine', 'shc')
+call validate_refine3D_inpl_cont(cline)
+call cline%set('refine', 'prob_neigh')
 call validate_refine3D_inpl_cont(cline)
 child_cline = cline
 call strip_refine3D_search_only_args(child_cline)
@@ -84,14 +85,6 @@ case('policy_denoised')
     call cline%set('ptcl_src', 'den')
 case('policy_projrec')
     call cline%set('projrec', 'yes')
-case('policy_eval')
-    call cline%set('refine', 'eval')
-case('policy_sigma')
-    call cline%set('refine', 'sigma')
-case('policy_probabilistic')
-    call cline%set('refine', 'prob_neigh')
-case('policy_neigh')
-    call cline%set('refine', 'neigh')
 case default
     error stop 'unknown refine3D policy rejection case'
 end select

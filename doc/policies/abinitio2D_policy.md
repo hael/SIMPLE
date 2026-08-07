@@ -163,6 +163,41 @@ Stage policy:
 
 The desired restoration model is class-local: each class average should carry forward previous sums according to the realized sampled fraction for that class. The current implementation has moved toward this policy; changes in this area should preserve class-local semantics where available and avoid reintroducing a single ambiguous global owner for sampled-update state.
 
+### Continuous in-plane policy
+
+`inpl_cont=no|yes` is propagated by the `abinitio2D` controller to every
+`cluster2D` child, including probabilistic staged calls, the final staged
+invocation, and the terminal dense all-particle refresh. `no` is the default
+and preserves the historical alternating shift/discrete-angle callback route.
+`yes` replaces every callback-based angle/shift optimization with the joint
+raw-Euclidean `(sx,sy,rotind_frac)` optimizer.
+
+Each joint invocation keeps the selected class fixed but discards every
+incoming in-plane index or fractional coordinate. At the caller-supplied native
+`(x,y)` shift seed, it performs exactly one all-angle discrete evaluation and
+selects the best grid index, matching one invocation of the legacy callback.
+The joint solve then starts from that index with a local plus-or-minus-two-cell
+angular bound. This initialization never scans alternative shifts: the legacy
+5-by-5 shift/all-angle coarse initializer is not part of `inpl_cont=yes`.
+
+The active joint route is supported only by non-streaming, non-time-series raw
+Euclidean search. CC and hybrid/denoised objectives are not continuous-angle
+capabilities and fail rather than silently selecting the legacy callback;
+`abinitio2D_sgd` also rejects `inpl_cont=yes`. Time-series shift-only search
+uses its fixed-angle optimizer and invokes neither angle route.
+
+Probabilistic particle and class/reference sampling remain discrete. During
+candidate profiling, the joint optimizer may evaluate a fractional angle, but
+the probability artifact carries the rounded `inpl`, score, and shift only.
+The shift is stored in the rounded-index frame. Once the final class/in-plane
+assignment has been selected, the matcher reruns the full joint optimizer and
+persists the accepted fractional `e3`, nearest integer `inpl`, shift, and score
+as one pose. That final invocation again reselects the best discrete index at
+the selected native shift; it does not use the probability-table `inpl` as the
+continuous seed. A valid non-improving joint run retains the newly selected
+grid seed, while a numerically invalid run retains the incoming assignment.
+Neither outcome falls back to the callback.
+
 ## 5. Iteration Semantics
 
 For `cluster2D`:
@@ -210,6 +245,13 @@ For any `abinitio2D` or `cluster2D` change, check:
 - When staged updates are sampled, does terminal dense probabilistic assignment refresh all active
   particles before final class-average generation?
 - Does the change preserve Cartesian-only `abinitio2D`?
+- Does `inpl_cont=no` retain the callback route and `inpl_cont=yes` avoid it
+  throughout deterministic and probabilistic search?
+- Does each joint invocation reselect its discrete seed at the supplied shift,
+  without using a previous `inpl`, fractional restart coordinate, or 5-by-5
+  shift scan?
+- Do probability artifacts remain rounded while final assignment alone owns
+  durable fractional `e3`?
 
 ## 8. Rules to Preserve During Refactors
 
@@ -225,3 +267,7 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Do not re-read particle stacks in the online matcher/restoration path when the
   raw batch images are already available.
 - Do not delete class-average partial sums at the start of a fractional-update iteration; workers need them as previous-sum carry-over.
+- Do not add fractional in-plane coordinates to probabilistic assignment
+  artifacts; rerun the joint optimizer after final assignment instead.
+- Do not invoke the legacy angle callback from any `inpl_cont=yes` failure or
+  no-improvement path.

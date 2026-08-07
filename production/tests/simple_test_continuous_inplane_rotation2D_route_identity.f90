@@ -13,14 +13,15 @@ type(cmdline)   :: cline
 type(builder)   :: b
 type(ori)       :: o
 type(pftc_shsrch_grad) :: legacy_shift_search
+type(pftc_shsrch_grad) :: joint_search
 type(strategy2D_srch) :: probabilistic_refine_search
 type(strategy2D_spec) :: probabilistic_refine_spec
 real(sp), allocatable :: legacy_scores(:), raw_losses(:)
 real(dp), allocatable :: scalar_losses(:)
 real(sp), allocatable :: sigma2_noise(:,:)
 real(dp) :: max_legacy_error, max_route_error, tol, scalar_loss, grad(2)
-real :: shift_limits(2,2)
-integer :: irot, nrots
+real :: shift_limits(2,2), joint_limits(3,2), seed_shift(2), selected_corr
+integer :: irot, nrots, selected_irot, expected_irot
 
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') &
@@ -59,7 +60,7 @@ call b%pftc%memoize_sqsum_ptcl(1)
 
 shift_limits(:,1) = -1.
 shift_limits(:,2) =  1.
-call legacy_shift_search%new(b, shift_limits, opt_angle=.true.)
+call legacy_shift_search%new_legacy(b, shift_limits)
 call legacy_shift_search%kill
 
 probabilistic_refine_spec%iptcl       = 1
@@ -88,7 +89,7 @@ if( .not. probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() 
     error stop 'inpl_cont=yes did not construct the joint optimizer'
 endif
 if( probabilistic_refine_search%grad_shsrch_first_obj%does_opt_angle() )then
-    error stop 'inpl_cont=yes unexpectedly changed the discrete candidate during shift seeding'
+    error stop 'inpl_cont=yes unexpectedly attached the legacy callback during shift seeding'
 endif
 call probabilistic_refine_search%kill
 p%l_prob_align_mode = .true.
@@ -106,7 +107,7 @@ p%l_objfun_den = .true.
 if( b%pftc%is_raw_euclid_objfun() )then
     error stop 'Hybrid Euclidean objective unexpectedly reports raw continuous derivative support'
 endif
-call legacy_shift_search%new(b, shift_limits, opt_angle=.true.)
+call legacy_shift_search%new_legacy(b, shift_limits)
 call legacy_shift_search%kill
 call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
 if( probabilistic_refine_search%uses_continuous_refinement() )then
@@ -132,6 +133,26 @@ do irot = 1, nrots
     max_route_error = max(max_route_error, &
         abs(scalar_loss - real(raw_losses(irot), dp)))
 enddo
+
+! Continuous refinement must initialize exactly like one invocation of the
+! legacy discrete callback at the caller's x/y seed. It must not use the
+! incoming particle angle or search a 5x5 grid of alternative shifts.
+seed_shift = [0.5, -0.25]
+call b%pftc%gen_objfun_vals(1, 1, seed_shift, legacy_scores)
+expected_irot = maxloc(legacy_scores, dim=1)
+joint_limits(1:2,1) = -1.
+joint_limits(1:2,2) =  1.
+joint_limits(3,:) = [1.-2., real(nrots)+2.]
+call joint_search%new_joint(b, joint_limits, 100)
+call joint_search%set_indices(1, 1)
+call joint_search%select_best_discrete_angle(seed_shift, selected_irot, selected_corr)
+if( joint_search%does_opt_angle() ) &
+    &error stop 'joint seed selector unexpectedly attached the legacy callback'
+if( selected_irot /= expected_irot ) &
+    &error stop 'joint seed selector did not reproduce the callback index at x/y seed'
+if( abs(selected_corr-legacy_scores(expected_irot)) > 5.e-6 ) &
+    &error stop 'joint seed selector did not reproduce the callback score at x/y seed'
+call joint_search%kill
 
 tol = 5.0e-4_dp * (1.0_dp + maxval(abs(real(raw_losses, dp))))
 write(logfhandle,'(a,i0)')    'ROUTE_IDENTITY_NROTS: ', nrots

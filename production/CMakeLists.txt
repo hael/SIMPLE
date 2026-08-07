@@ -174,6 +174,11 @@ if(BUILD_TESTS)
   if(NOT USE_COARRAYS)
     list(FILTER TEST_MAINS EXCLUDE REGEX "coarray|coarrays")
   endif()
+  # Tests whose fixtures require an external reference volume (vol1=)
+  set(VOL1_FIXTURE_TESTS
+    continuous_inplane_rotation2D_stage1_validation
+    continuous_inplane_refine3D
+  )
   foreach(main_src IN LISTS TEST_MAINS)
     get_filename_component(main_we "${main_src}" NAME_WE)         # simple_test_ft_expanded
     string(REGEX REPLACE "^simple_test_" "" test_id "${main_we}") # ft_expanded
@@ -230,6 +235,12 @@ if(BUILD_TESTS)
         NAME ${test_name}
         COMMAND "${Coarray_CAFRUN_EXECUTABLE}" -np 2 $<TARGET_FILE:${test_exe}>
       )
+    elseif(test_id IN_LIST VOL1_FIXTURE_TESTS)
+      # These fixtures error stop without a reference volume; register them
+      # only when one is supplied via -DSIMPLE_TEST_VOL1=<path.mrc>
+      if(SIMPLE_TEST_VOL1)
+        add_test(NAME ${test_name} COMMAND ${test_exe} vol1=${SIMPLE_TEST_VOL1})
+      endif()
     else()
       add_test(NAME ${test_name} COMMAND ${test_exe})
     endif()

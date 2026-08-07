@@ -31,12 +31,20 @@ type :: recovery_result
     real(dp) :: loss_parabola = 0.d0
     real(dp) :: loss_joint = 0.d0
     real(dp) :: joint_gradient_max_error = 0.d0
+    real(dp) :: joint_gradient_tol = 0.d0
     logical :: joint_gradient_finite = .false.
+    logical :: joint_gradient_ok = .false.
+    real(dp) :: parity_max_error = 0.d0
+    real(dp) :: parity_tol = 0.d0
+    logical :: parity_ok = .false.
     logical :: finite = .false.
 end type recovery_result
 
 type(cmdline) :: args
 integer, parameter :: ncases = 3
+! FD noise floor: single-precision coefficient series differentiated with
+! h=1e-3 leaves ~1e-3 absolute noise; a broken gradient errs at O(|grad|)
+real(dp), parameter :: GRAD_FD_RTOL = 1.d-2
 type(recovery_result) :: low_band(ncases), full_band(ncases), recovery(ncases)
 character(len=512) :: vol_file
 real :: smpd, mskdiam, lp_low, lp_full, truth_angle, shift_truth(2)
@@ -92,8 +100,12 @@ do icase = 1, ncases
         &recovery(icase)%shift_est_parabola
     write(logfhandle,'(a,2f12.5)') 'SYNTHETIC_INPL_CONT_YES_SHIFT_ESTIMATE: ', &
         &recovery(icase)%shift_est_joint
-    write(logfhandle,'(a,es16.8,1x,l1)') 'PHASE3_GRADIENT_MAX_ERROR/FINITE: ', &
-        &recovery(icase)%joint_gradient_max_error, recovery(icase)%joint_gradient_finite
+    write(logfhandle,'(a,2es16.8,2l2)') 'PHASE3_GRADIENT_MAX_ERROR/TOL/FINITE/OK: ', &
+        &recovery(icase)%joint_gradient_max_error, recovery(icase)%joint_gradient_tol, &
+        &recovery(icase)%joint_gradient_finite, recovery(icase)%joint_gradient_ok
+    write(logfhandle,'(a,2es16.8,1x,l1)') 'PHASE3_PARITY_MAX_ERROR/TOL/OK: ', &
+        &recovery(icase)%parity_max_error, recovery(icase)%parity_tol, &
+        &recovery(icase)%parity_ok
     write(logfhandle,'(a,3l2)') 'SYNTHETIC_SHIFT_ACCEPTED_GRID/PARAB/INPL_CONT_YES: ', &
         &recovery(icase)%shift_grid_accepted, recovery(icase)%shift_parabola_accepted, &
         &recovery(icase)%joint_accepted
@@ -111,6 +123,14 @@ write(logfhandle,'(a)') 'SYNTHETIC_RECOVERY_TABLE_END'
 if( any(.not. low_band%finite) .or. any(.not. full_band%finite) .or. any(.not. recovery%finite) .or. &
     &.not. ieee_is_finite(low_alias_err) .or. .not. ieee_is_finite(full_alias_err) )then
     error stop 'Stage 1 validation produced a non-finite result'
+endif
+if( any(.not. low_band%joint_gradient_ok) .or. any(.not. full_band%joint_gradient_ok) .or. &
+    &any(.not. recovery%joint_gradient_ok) )then
+    error stop 'Stage 1 validation: joint analytic gradient disagrees with central differences'
+endif
+if( any(.not. low_band%parity_ok) .or. any(.not. full_band%parity_ok) .or. &
+    &any(.not. recovery%parity_ok) )then
+    error stop 'Stage 1 validation: continuous evaluator disagrees with the discrete reference at integer angles'
 endif
 write(logfhandle,'(a)') 'SIMPLE_TEST_CONT_INPL_ROT2D_STAGE1_VALIDATION NORMAL STOP'
 
@@ -168,10 +188,10 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     real(dp) :: objective_final_grid, objective_final_parabola
     real(dp) :: theta_rad
     real(dp) :: rotind_joint, joint_loss
-    real(dp) :: joint_grad(3), joint_grad_ref(3), probe_grad(3)
-    real(dp) :: fd_plus, fd_minus, fd_step, fd_error, probe_shift(2), probe_rotind
+    real(dp) :: joint_grad(3)
+    real(dp) :: fd_error, fd_scale, grad_scale, parity_scale
     integer :: nrots, igrid, irot_direct, irot_joint
-    integer :: idim
+    logical :: fd_ok, parity_finite
     logical :: shift_grid_accepted, shift_parabola_accepted, joint_accepted
 
     call cline%set('vol1', vol_file)
@@ -244,7 +264,7 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     call joint_search%new_joint(b, joint_limits, 100)
     call joint_search%set_indices(1,1)
     irot_joint = igrid
-    joint_cxy = joint_search%minimize_joint(irot_joint, real(rotind_grid), [0.,0.], &
+    joint_cxy = joint_search%minimize_joint(irot_joint, [0.,0.], &
         &sh_rot=.false., rotind_frac=rotind_joint)
     joint_accepted = irot_joint > 0
     if( joint_accepted )then
@@ -254,32 +274,28 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
         rotind_joint = rotind_grid
     endif
     call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, shift_joint, rotind_joint, joint_loss, joint_grad)
-    joint_grad_ref = joint_grad
-    fd_step = 1.e-3_dp
-    result%joint_gradient_max_error = 0.d0
-    result%joint_gradient_finite = ieee_is_finite(joint_loss) .and. all(ieee_is_finite(joint_grad))
-    do idim = 1, 3
-        probe_shift = shift_joint
-        probe_rotind = rotind_joint
-        if( idim <= 2 )then
-            probe_shift(idim) = probe_shift(idim) + fd_step
-        else
-            probe_rotind = probe_rotind + fd_step
-        endif
-        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_rotind, fd_plus, probe_grad)
-        probe_shift = shift_joint
-        probe_rotind = rotind_joint
-        if( idim <= 2 )then
-            probe_shift(idim) = probe_shift(idim) - fd_step
-        else
-            probe_rotind = probe_rotind - fd_step
-        endif
-        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_rotind, fd_minus, probe_grad)
-        fd_error = abs((fd_plus-fd_minus)/(2.d0*fd_step) - joint_grad_ref(idim))
-        result%joint_gradient_max_error = max(result%joint_gradient_max_error, fd_error)
-    enddo
-    result%joint_gradient_finite = result%joint_gradient_finite .and. &
-        &ieee_is_finite(result%joint_gradient_max_error)
+    ! central-difference check at the optimized pose AND at a deliberately
+    ! non-stationary fractional pose, so near-zero gradients at the optimum
+    ! cannot mask a broken component
+    call fd_gradient_check(b, shift_joint, rotind_joint, fd_error, fd_scale, fd_ok)
+    result%joint_gradient_max_error = fd_error
+    result%joint_gradient_finite    = fd_ok .and. &
+        &ieee_is_finite(joint_loss) .and. all(ieee_is_finite(joint_grad))
+    grad_scale = fd_scale
+    call fd_gradient_check(b, shift_joint + [0.3d0,-0.2d0], rotind_joint + 0.37d0, &
+        &fd_error, fd_scale, fd_ok)
+    result%joint_gradient_max_error = max(result%joint_gradient_max_error, fd_error)
+    result%joint_gradient_finite    = result%joint_gradient_finite .and. fd_ok
+    grad_scale = max(grad_scale, fd_scale)
+    result%joint_gradient_tol = GRAD_FD_RTOL * max(1.d0, grad_scale)
+    result%joint_gradient_ok  = result%joint_gradient_finite .and. &
+        &result%joint_gradient_max_error <= result%joint_gradient_tol
+    ! integer-angle parity: continuous evaluator vs the discrete-rotation
+    ! reference implementation at several nonzero shifts
+    call parity_check(b, nrots, igrid, result%parity_max_error, parity_scale, parity_finite)
+    result%parity_tol = GRAD_FD_RTOL * max(1.d0, parity_scale)
+    result%parity_ok  = parity_finite .and. &
+        &result%parity_max_error <= result%parity_tol
 
     call joint_search%kill
 
@@ -322,6 +338,76 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     call b%kill_general_tbox
     deallocate(raw_losses, sigma2_noise)
 end subroutine run_fixture
+
+! Central-difference check of the joint analytic gradient at one pose.
+! Returns the max component error, the gradient magnitude scale for
+! tolerance construction, and whether all evaluations were finite.
+subroutine fd_gradient_check(b, at_shift, at_rotind, max_error, grad_scale, ok)
+    type(builder), intent(inout) :: b
+    real(dp), intent(in)  :: at_shift(2), at_rotind
+    real(dp), intent(out) :: max_error, grad_scale
+    logical,  intent(out) :: ok
+    real(dp), parameter :: FD_STEP = 1.d-3
+    real(dp) :: f0, g0(3), gtmp(3), fd_plus, fd_minus
+    real(dp) :: probe_shift(2), probe_rotind
+    integer :: idim
+    call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, at_shift, at_rotind, f0, g0)
+    ok         = ieee_is_finite(f0) .and. all(ieee_is_finite(g0))
+    max_error  = 0.d0
+    grad_scale = maxval(abs(g0))
+    do idim = 1, 3
+        probe_shift  = at_shift
+        probe_rotind = at_rotind
+        if( idim <= 2 )then
+            probe_shift(idim) = probe_shift(idim) + FD_STEP
+        else
+            probe_rotind = probe_rotind + FD_STEP
+        endif
+        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_rotind, fd_plus, gtmp)
+        probe_shift  = at_shift
+        probe_rotind = at_rotind
+        if( idim <= 2 )then
+            probe_shift(idim) = probe_shift(idim) - FD_STEP
+        else
+            probe_rotind = probe_rotind - FD_STEP
+        endif
+        call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shift, probe_rotind, fd_minus, gtmp)
+        max_error = max(max_error, abs((fd_plus-fd_minus)/(2.d0*FD_STEP) - g0(idim)))
+    enddo
+    ok = ok .and. ieee_is_finite(max_error)
+end subroutine fd_gradient_check
+
+! Integer-angle parity: at grid rotation indices the continuous evaluator's
+! loss and x/y gradient must match the discrete-rotation reference
+! implementation gen_raw_euclid_grad_for_rot_8 at nonzero shifts.
+subroutine parity_check(b, nrots, igrid, max_error, scale, ok)
+    type(builder), intent(inout) :: b
+    integer,  intent(in)  :: nrots, igrid
+    real(dp), intent(out) :: max_error, scale
+    logical,  intent(out) :: ok
+    real(dp), parameter :: probe_shifts(2,3) = reshape( &
+        &[1.7d0,-2.3d0, -0.6d0,0.4d0, 3.1d0,1.2d0], [2,3])
+    real(dp) :: f_cont, g_cont(3), f_disc, g_disc(2)
+    integer :: irots(3), j, m
+    irots = [igrid, modulo(igrid-1+nrots/3, nrots)+1, modulo(igrid-1+(2*nrots)/3, nrots)+1]
+    max_error = 0.d0
+    scale     = 0.d0
+    ok        = .true.
+    do j = 1, 3
+        do m = 1, 3
+            call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, probe_shifts(:,m), &
+                &real(irots(j),dp), f_cont, g_cont)
+            call b%pftc%gen_raw_euclid_grad_for_rot_8(1, 1, probe_shifts(:,m), &
+                &irots(j), f_disc, g_disc)
+            ok = ok .and. ieee_is_finite(f_cont) .and. all(ieee_is_finite(g_cont)) .and. &
+                &ieee_is_finite(f_disc) .and. all(ieee_is_finite(g_disc))
+            max_error = max(max_error, abs(f_cont-f_disc), &
+                &abs(g_cont(1)-g_disc(1)), abs(g_cont(2)-g_disc(2)))
+            scale = max(scale, abs(f_disc), maxval(abs(g_disc)))
+        enddo
+    enddo
+    ok = ok .and. ieee_is_finite(max_error)
+end subroutine parity_check
 
 pure real function parabolic_peak_offset(vals, j) result(offset)
     real,    intent(in) :: vals(:)

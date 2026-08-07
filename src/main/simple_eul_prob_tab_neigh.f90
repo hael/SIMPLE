@@ -144,7 +144,7 @@ contains
         real,           allocatable :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:), corrs_inpl(:,:)
         integer :: i, istate, ithr, max_refs_to_refine, nfull_refs
         integer :: iptcl, si, i_from, i_to, nrots
-        real    :: lims(2,2), lims_init(2,2), shift_seed(3)
+        real    :: lims(2,2), lims_init(2,2), joint_lims(3,2), shift_seed(3)
         logical :: l_shc_neigh, l_snhc_neigh, l_seed_sh_first
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
@@ -174,9 +174,16 @@ contains
             lims(:,2)      =  self%p_ptr%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            joint_lims(1:2,:) = lims
+            joint_lims(3,:) = [1.-2., real(nrots)+2.]
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, &
-                    &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+                if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                    call grad_shsrch_obj(ithr)%new_joint(self%b_ptr, joint_lims, &
+                        &self%p_ptr%maxits_sh)
+                else
+                    call grad_shsrch_obj(ithr)%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                        &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
+                endif
             end do
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed)&
             !$omp proc_bind(close) schedule(static)
@@ -341,7 +348,7 @@ contains
         real,    allocatable   :: inpl_athres(:), dists_inpl(:,:), dists_inpl_sorted(:,:)
         integer :: i, istate, ithr, max_refs_to_refine, nsubs, npeak_target, npooled_capacity
         integer :: iptcl, si, i_from, i_to, nrots
-        real    :: lims(2,2), lims_init(2,2), shift_seed(3)
+        real    :: lims(2,2), lims_init(2,2), joint_lims(3,2), shift_seed(3)
         logical :: l_geom_neigh, l_state_neigh, l_seed_sh_first
         nrots = self%b_ptr%pftc%get_nrots()
         self%seed_nrots = nrots
@@ -371,9 +378,16 @@ contains
             lims(:,2)      =  self%p_ptr%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            joint_lims(1:2,:) = lims
+            joint_lims(3,:) = [1.-2., real(nrots)+2.]
             do ithr = 1,nthr_glob
-                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, &
-                    &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+                if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                    call grad_shsrch_obj(ithr)%new_joint(self%b_ptr, joint_lims, &
+                        &self%p_ptr%maxits_sh)
+                else
+                    call grad_shsrch_obj(ithr)%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                        &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
+                endif
             end do
             !$omp parallel do default(shared) private(i,iptcl,ithr,shift_seed) proc_bind(close) schedule(static)
             do i = i_from, i_to
@@ -1292,7 +1306,11 @@ contains
                 irot = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())
                 iref = (prev_state-1)*self%p_ptr%nspace + prev_proj
                 call grad_obj(ithr)%set_indices(iref, iptcl)
-                shift_seed = grad_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                    shift_seed = grad_obj(ithr)%minimize_joint_rounded(irot, sh_rot=.false.)
+                else
+                    shift_seed = grad_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                endif
                 if( irot == 0 ) shift_seed(2:3) = 0.
             endif
         endif
@@ -1337,10 +1355,19 @@ contains
                 call grad_obj(ithr)%set_indices(self%ref_full(ri), iptcl)
                 irot = self%candidate_buffers(ithr)%get_inpl(i, self%ref_full(ri))
                 if( l_seed_sh_first )then
-                    refined_shift = grad_obj(ithr)%minimize(irot=irot, sh_rot=.true.,&
-                        &xy_in=shift_seed(2:3))
+                    if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                        refined_shift = grad_obj(ithr)%minimize_joint_rounded(irot, sh_rot=.true.,&
+                            &xy_in=shift_seed(2:3))
+                    else
+                        refined_shift = grad_obj(ithr)%minimize(irot=irot, sh_rot=.true.,&
+                            &xy_in=shift_seed(2:3))
+                    endif
                 else
-                    refined_shift = grad_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
+                    if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                        refined_shift = grad_obj(ithr)%minimize_joint_rounded(irot, sh_rot=.true.)
+                    else
+                        refined_shift = grad_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
+                    endif
                 endif
                 if( irot > 0 )then
                     call record_sparse_eval(self, i, ithr, ri, &

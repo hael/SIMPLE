@@ -138,14 +138,6 @@ contains
         call run_rejection_in_child('policy_hybrid', 'does not support objfun_den=yes', failures)
         call run_rejection_in_child('policy_denoised', 'requires ptcl_src=raw', failures)
         call run_rejection_in_child('policy_projrec', 'does not support projrec=yes', failures)
-        call run_rejection_in_child('policy_eval', &
-            &'currently supports only refine=shc', failures)
-        call run_rejection_in_child('policy_sigma', &
-            &'currently supports only refine=shc', failures)
-        call run_rejection_in_child('policy_probabilistic', &
-            &'currently supports only refine=shc', failures)
-        call run_rejection_in_child('policy_neigh', &
-            &'currently supports only refine=shc', failures)
         if( failures /= 0 )then
             write(*,'(a,i0,a)') 'Continuous in-plane refine3D policy suite: FAIL (', &
                 &failures, ' failure(s))'

@@ -40,13 +40,16 @@ type :: pftc_shsrch_grad
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
 contains
-    procedure          :: new             => grad_shsrch_new
+    procedure          :: new_legacy      => grad_shsrch_new_legacy
+    procedure          :: new_fixed       => grad_shsrch_new_fixed
     procedure          :: new_direct      => grad_shsrch_new_direct
     procedure          :: new_joint       => grad_shsrch_new_joint
     procedure          :: set_indices     => grad_shsrch_set_indices
     procedure          :: minimize        => grad_shsrch_minimize
     procedure          :: minimize_direct => grad_shsrch_minimize_direct
     procedure          :: minimize_joint  => grad_shsrch_minimize_joint
+    procedure          :: minimize_joint_rounded => grad_shsrch_minimize_joint_rounded
+    procedure          :: select_best_discrete_angle
     procedure          :: kill            => grad_shsrch_kill
     procedure          :: does_opt_angle
     procedure          :: uses_joint_inplane
@@ -76,14 +79,34 @@ contains
         grad_shsrch_diagnostic_failed = self%raw_roundtrip_failed
     end function grad_shsrch_diagnostic_failed
 
-    subroutine grad_shsrch_new( self, build, lims, lims_init, maxits, opt_angle, coarse_init )
+    subroutine grad_shsrch_new_legacy( self, build, lims, lims_init, maxits, coarse_init )
+        class(pftc_shsrch_grad),     intent(inout) :: self
+        class(builder),      target, intent(in)    :: build
+        real,                        intent(in)    :: lims(:,:)
+        real,              optional, intent(in)    :: lims_init(:,:)
+        integer,           optional, intent(in)    :: maxits
+        logical,           optional, intent(in)    :: coarse_init
+        call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .true., coarse_init)
+    end subroutine grad_shsrch_new_legacy
+
+    subroutine grad_shsrch_new_fixed( self, build, lims, lims_init, maxits, coarse_init )
+        class(pftc_shsrch_grad),     intent(inout) :: self
+        class(builder),      target, intent(in)    :: build
+        real,                        intent(in)    :: lims(:,:)
+        real,              optional, intent(in)    :: lims_init(:,:)
+        integer,           optional, intent(in)    :: maxits
+        logical,           optional, intent(in)    :: coarse_init
+        call grad_shsrch_new_mode(self, build, lims, lims_init, maxits, .false., coarse_init)
+    end subroutine grad_shsrch_new_fixed
+
+    subroutine grad_shsrch_new_mode( self, build, lims, lims_init, maxits, opt_angle, coarse_init )
         use simple_opt_factory, only: opt_factory
         class(pftc_shsrch_grad),     intent(inout) :: self           !< instance
         class(builder),      target, intent(in)    :: build          !< builder object for pftc access
         real,                        intent(in)    :: lims(:,:)      !< limits for barrier constraint
         real,              optional, intent(in)    :: lims_init(:,:) !< limits for simplex initialisation by randomised bounds
         integer,           optional, intent(in)    :: maxits         !< maximum iterations
-        logical,           optional, intent(in)    :: opt_angle      !< alternate discrete in-plane and shift optimization
+        logical,                     intent(in)    :: opt_angle      !< alternate discrete in-plane and shift optimization
         logical,           optional, intent(in)    :: coarse_init    !< coarse inital search
         type(opt_factory) :: opt_fact
         call self%kill
@@ -92,8 +115,7 @@ contains
         self%b_ptr => build
         self%maxits = 100
         if( present(maxits) ) self%maxits = maxits
-        self%opt_angle = .true.
-        if( present(opt_angle) ) self%opt_angle = opt_angle
+        self%opt_angle = opt_angle
         self%coarse_init = .false.
         if( present(coarse_init) ) self%coarse_init = coarse_init
         self%search_mode = SHSRCH_LEGACY
@@ -109,7 +131,7 @@ contains
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
         self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
         if( self%opt_angle ) self%ospec%opt_callback => grad_shsrch_update_discrete_angle_wrapper
-    end subroutine grad_shsrch_new
+    end subroutine grad_shsrch_new_mode
 
     subroutine grad_shsrch_new_direct( self, build, lims )
         class(pftc_shsrch_grad),     intent(inout) :: self
@@ -140,6 +162,7 @@ contains
         self%maxits         = maxits
         self%opt_angle      = .false.
         self%search_mode     = SHSRCH_JOINT
+        self%coarse_init     = .false.
         call self%ospec%specify('lbfgsb', 3, factr=1.0d+7, pgtol=1.0d-5, limits=lims, &
             &max_step=0.01, maxits=self%maxits)
         call opt_fact%new(self%ospec, self%opt_obj)
@@ -256,11 +279,26 @@ contains
 
     subroutine grad_shsrch_update_discrete_angle( self )
         class(pftc_shsrch_grad), intent(inout) :: self
-        real :: objective(self%nrots)
-        call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, self%ospec%x, objective)
-        self%cur_inpl_idx = maxloc(objective, dim=1)
+        real :: corr
+        call self%select_best_discrete_angle(self%ospec%x(1:2), self%cur_inpl_idx, corr)
         self%cur_inpl_rotind = real(self%cur_inpl_idx)
     end subroutine grad_shsrch_update_discrete_angle
+
+    !> Apply the legacy callback's discrete all-angle selection once at a
+    !! caller-supplied native-frame shift. This does not attach an optimizer
+    !! callback and does not search alternative shifts.
+    subroutine select_best_discrete_angle( self, xy, irot, corr )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        real,                    intent(in)    :: xy(2)
+        integer,                 intent(out)   :: irot
+        real,                    intent(out)   :: corr
+        real :: objective(self%nrots)
+
+        self%profile_objective_evals = self%profile_objective_evals + int(self%nrots,int64)
+        call self%b_ptr%pftc%gen_objfun_vals(self%reference, self%particle, xy, objective)
+        irot = maxloc(objective, dim=1)
+        corr = objective(irot)
+    end subroutine select_best_discrete_angle
 
     real function grad_shsrch_get_angle( self ) result(angle)
         class(pftc_shsrch_grad), intent(in) :: self
@@ -389,20 +427,23 @@ contains
     end function grad_shsrch_minimize
 
     !> Classical Euclidean joint refinement over (sx,sy,rotind_frac).
-    !! The PFTC objective is periodic, so rotation-index bounds may safely
-    !! straddle the first or last grid index. Optional status outputs separate
-    !! a numerically valid evaluation from a strictly improving result so a
-    !! caller can distinguish no improvement from numerical failure.
-    function grad_shsrch_minimize_joint( self, irot, rotind_frac_in, xy_in, sh_rot, rotind_frac, &
+    !! The selected reference/class is fixed, but any incoming in-plane state
+    !! is discarded.  The callback-equivalent discrete all-angle scan chooses
+    !! the best grid cell at xy_in, and the continuous solve starts from that
+    !! cell with bounds of plus or minus two rotation indices.  The PFTC
+    !! objective is periodic, so those bounds may safely straddle the first or
+    !! last grid index.  A valid non-improving solve returns the selected grid
+    !! seed; only a numerically invalid evaluation returns irot=0.
+    function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
             &evaluation_valid, improved, initial_cost_out ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
-        integer,                 intent(inout) :: irot
-        real,                    intent(in)    :: rotind_frac_in, xy_in(2)
+        integer,                 intent(out)   :: irot
+        real,                    intent(in)    :: xy_in(2)
         logical,                 intent(in)    :: sh_rot
         real(dp),                intent(out)   :: rotind_frac
         logical,       optional, intent(out)   :: evaluation_valid, improved
         real(dp),      optional, intent(out)   :: initial_cost_out
-        real :: cxy(3), rotmat(2,2), lowest_cost
+        real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(3,2)
         real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(3)
         logical :: valid_result, improved_result, valid_coordinates
 
@@ -412,10 +453,17 @@ contains
         if( .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
             THROW_HARD('joint minimization requires raw Euclidean objective; hybrid derivative is unavailable')
         endif
-        self%ospec%x = [xy_in, rotind_frac_in]
+        ! Reuse the exact discrete selection performed by the legacy callback,
+        ! but invoke it once at the supplied shift rather than attaching it to
+        ! every L-BFGS-B iterate.
+        call self%select_best_discrete_angle(xy_in, irot, seed_corr)
+        self%cur_inpl_idx    = irot
+        self%cur_inpl_rotind = real(irot)
+        joint_lims = self%ospec%limits
+        joint_lims(3,:) = [real(irot)-2., real(irot)+2.]
+        call self%set_limits(joint_lims)
+        self%ospec%x = [xy_in, real(irot)]
         self%ospec%x_8 = dble(self%ospec%x)
-        self%cur_inpl_rotind = rotind_frac_in
-        self%cur_inpl_idx = modulo(nint(rotind_frac_in)-1,self%nrots)+1
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
         call self%opt_obj%minimize(self%ospec, self, lowest_cost)
@@ -438,10 +486,20 @@ contains
         improved_result = valid_result .and. final_cost < initial_cost - improve_tol
         if( present(evaluation_valid) ) evaluation_valid = valid_result
         if( present(improved) ) improved = improved_result
-        if( .not. improved_result )then
+        if( .not. valid_result )then
             irot = 0
             cxy = 0.
             rotind_frac = 0.
+            return
+        endif
+        if( .not. improved_result )then
+            rotind_frac = real(irot,dp)
+            cxy(1)  = seed_corr
+            cxy(2:) = xy_in
+            if( sh_rot )then
+                call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
+                cxy(2:) = matmul(cxy(2:), rotmat)
+            endif
             return
         endif
         self%cur_inpl_rotind = self%ospec%x(3)
@@ -455,6 +513,40 @@ contains
             cxy(2:) = matmul(cxy(2:), rotmat)
         endif
     end function grad_shsrch_minimize_joint
+
+    !> Jointly profile shift and continuous in-plane rotation while returning
+    !! only the canonical integer rotation cell. Probabilistic searches use
+    !! this form so their existing assignment artifacts remain integer based;
+    !! the selected assignment is refined once more when durable e3 metadata
+    !! is written.
+    function grad_shsrch_minimize_joint_rounded( self, irot, sh_rot, xy_in, evaluation_valid ) result(cxy)
+        class(pftc_shsrch_grad), intent(inout) :: self
+        integer,                 intent(inout) :: irot
+        logical,                 intent(in)    :: sh_rot
+        real,          optional, intent(in)    :: xy_in(2)
+        logical,       optional, intent(out)   :: evaluation_valid
+        real :: cxy(3), xy_seed(2), rotmat(2,2)
+        real(dp) :: rotind_frac
+        integer :: selected_irot
+        logical :: valid_result
+
+        if( self%search_mode /= SHSRCH_JOINT )then
+            THROW_HARD('rounded joint minimization requested from a non-joint search object')
+        endif
+        xy_seed   = 0.
+        if( present(xy_in) ) xy_seed = xy_in
+        ! The probability artifact drops rotind_frac, so retain its shift in
+        ! the frame of the rounded integer cell.  This makes the later inverse
+        ! transform recover the exact native shift used by the joint score.
+        cxy = self%minimize_joint(selected_irot, xy_seed, .false., rotind_frac, &
+            &evaluation_valid=valid_result)
+        irot = selected_irot
+        if( present(evaluation_valid) ) evaluation_valid = valid_result
+        if( irot > 0 .and. sh_rot )then
+            call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
+            cxy(2:) = matmul(cxy(2:), rotmat)
+        endif
+    end function grad_shsrch_minimize_joint_rounded
 
     !> Bounded direct-gradient minimization for the streaming SGD path.
     !! The PFTC routine supplies grad(C) for the correlation objective.  We

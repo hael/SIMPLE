@@ -3,8 +3,18 @@
 > Historical development record. The experimental continuous callback route
 > and its coefficient API have been removed. The production interface is now
 > `inpl_cont=yes|no`, where `yes` selects only the optimized joint formulation.
-> See `doc/algorithms/continuous_inplane_refinement_abinitio2D.md` for the
-> current design.
+> `no` explicitly constructs the legacy callback route; eligible `yes`
+> replaces every callback consumer, including probabilistic table profiling,
+> with joint `(sx,sy,rotind_frac)` optimization. Probability artifacts retain
+> only the rounded index/shift/score, and the final assignment reruns the joint
+> solve before durable fractional `e3` is written. Current joint initialization
+> discards incoming in-plane state, performs one callback-equivalent all-angle
+> selection at the supplied shift, and never runs the legacy 5-by-5 shift scan
+> or uses persisted fractional `e3` as its seed. Joint failure never falls back
+> to the callback. See
+> `doc/algorithms/continuous_inplane_refinement_abinitio2D.md` and the workflow
+> policy documents for the current design. All callback-mode and three-valued
+> interface statements below are retained only as development history.
 
 ## Summary
 

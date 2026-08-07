@@ -13,7 +13,7 @@ implicit none
 integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED = 0
 integer, parameter :: CONT_ROUTE_IMPROVED       = 1
 integer, parameter :: CONT_ROUTE_NO_IMPROVEMENT = 2
-integer, parameter :: CONT_ROUTE_FALLBACK       = 3
+integer, parameter :: CONT_ROUTE_INVALID        = 3
 
 public :: strategy3D_srch, strategy3D_spec
 private
@@ -60,9 +60,7 @@ type strategy3D_srch
     real                       :: prev_shvec(2)   = 0.        !< previous origin shift vector
     real                       :: xy_first(2)     = 0.        !< initial shifts identified by searching the previous best reference
     real                       :: xy_first_rot(2) = 0.        !< initial shifts identified by searching the previous best reference, rotated
-    real                       :: prev_rotind_frac = 0.       !< durable continuous restart coordinate for the previous pose
     logical                    :: xy_first_valid  = .false.   !< pre-selection shift seed was evaluated for this particle
-    logical                    :: prev_rotind_frac_valid = .false. !< previous coordinate is finite and coupled to prev_roind
     logical                    :: l_neigh         = .false.   !< neighbourhood refinement flag
     logical                    :: l_greedy        = .false.   !< greedy        refinement flag
     logical                    :: l_sh_first      = .false.   !< use previous-ref shift seed before orientation/state scoring
@@ -78,15 +76,14 @@ type strategy3D_srch
     procedure :: inpl_srch
     procedure :: inpl_srch_peaks
     procedure :: refine_selected_continuously
+    procedure :: refine_assignment_continuously
     procedure :: store_solution
     procedure :: store_continuous_solution
-    procedure :: retain_selected_seed_shift
+    procedure :: store_discrete_seed_solution
     procedure :: uses_continuous_refinement
     procedure :: bypasses_legacy_post_refinement
-    procedure :: requires_legacy_fallback
+    procedure :: joint_evaluation_invalid
     procedure :: get_continuous_route_status
-    procedure :: resolve_restart_inpl_coordinate
-    procedure :: prepare_restart_inplane_seed
     procedure :: kill
 end type strategy3D_srch
 
@@ -121,11 +118,13 @@ contains
         self%l_neigh       = self%p_ptr%l_neigh
         self%refine        = trim(self%p_ptr%refine)
         self%l_greedy      = str_has_substr(self%p_ptr%refine, 'greedy')
+        if( trim(self%p_ptr%inpl_cont) == 'yes' .and. &
+            &((.not. self%b_ptr%pftc%is_raw_euclid_objfun()) .or. self%p_ptr%l_objfun_den) )then
+            THROW_HARD('inpl_cont=yes requires the raw Euclidean joint objective')
+        endif
         self%continuous_active = trim(self%p_ptr%inpl_cont) == 'yes' .and. &
-            &trim(self%refine) == 'shc' .and. &
             &self%b_ptr%pftc%is_raw_euclid_objfun() .and. &
-            &(.not. self%p_ptr%l_objfun_den) .and. &
-            &(.not. str_has_substr(self%refine, 'prob'))
+            &(.not. self%p_ptr%l_objfun_den)
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
         lims(:,1)          = -self%p_ptr%trs
         lims(:,2)          =  self%p_ptr%trs
@@ -136,17 +135,24 @@ contains
         ! create in-plane search objects
         self%nrots = self%b_ptr%pftc%get_nrots()
         if( .not. str_has_substr(self%refine, 'prob') )then
-            call self%grad_shsrch_obj%new(self%b_ptr, lims, lims_init=lims_init, &
-            &maxits=self%p_ptr%maxits_sh, opt_angle=.true.)
-            call self%grad_shsrch_obj2%new(self%b_ptr, lims, lims_init=lims_init, maxits=self%p_ptr%maxits_sh,&
-            &opt_angle=.false.)
-            call self%grad_shsrch_first_obj%new(self%b_ptr, lims, lims_init=lims_init, &
-            &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
             if( self%continuous_active )then
                 joint_lims(1:2,:) = lims
                 joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
+                call self%grad_shsrch_first_obj%new_joint(self%b_ptr, joint_lims, &
+                    &self%p_ptr%maxits_sh)
                 call self%joint_inpl_optimizer%new_joint(self%b_ptr, joint_lims, self%p_ptr%maxits_sh)
+            else
+                call self%grad_shsrch_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                    &maxits=self%p_ptr%maxits_sh)
+                call self%grad_shsrch_first_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                    &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             endif
+            call self%grad_shsrch_obj2%new_fixed(self%b_ptr, lims, lims_init=lims_init, &
+                &maxits=self%p_ptr%maxits_sh)
+        else if( self%continuous_active )then
+            joint_lims(1:2,:) = lims
+            joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
+            call self%joint_inpl_optimizer%new_joint(self%b_ptr, joint_lims, self%p_ptr%maxits_sh)
         endif
         self%exists = .true.
     end subroutine new
@@ -156,7 +162,6 @@ contains
         call self%b_ptr%spproj_field%get_ori(self%iptcl, self%o_prev)         ! previous ori
         self%prev_state = self%o_prev%get_state()                             ! state index
         self%prev_roind = self%b_ptr%pftc%get_roind(360.-self%o_prev%e3get()) ! in-plane angle index
-        call self%prepare_restart_inplane_seed()
         self%prev_shvec = self%o_prev%get_2Dshift()                           ! shift vector
         self%prev_proj  = self%b_ptr%eulspace%find_closest_proj(self%o_prev)  ! previous projection direction
         self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj
@@ -183,7 +188,6 @@ contains
         call self%b_ptr%spproj_field%get_ori(self%iptcl, self%o_prev)         ! previous ori
         self%prev_state = self%o_prev%get_state()                             ! state index
         self%prev_roind = self%b_ptr%pftc%get_roind(360.-self%o_prev%e3get()) ! in-plane angle index
-        call self%prepare_restart_inplane_seed()
         self%prev_shvec = self%o_prev%get_2Dshift()                           ! shift vector
         self%prev_proj  = self%b_ptr%eulspace%find_closest_proj(self%o_prev)  ! previous projection direction
         ! map previous projection direction (always use full-space ref index)
@@ -235,10 +239,13 @@ contains
         real    :: cxy(3), rotmat(2,2)
         integer :: irot
         if( .not. self%l_sh_first ) return
-        ! BFGS over shifts with in-plane rot exhaustive callback
         irot = self%prev_roind
         call self%grad_shsrch_first_obj%set_indices(self%prev_ref, self%iptcl)
-        cxy = self%grad_shsrch_first_obj%minimize(irot=irot, sh_rot=.false.)
+        if( self%continuous_active )then
+            cxy = self%grad_shsrch_first_obj%minimize_joint_rounded(irot, sh_rot=.false.)
+        else
+            cxy = self%grad_shsrch_first_obj%minimize(irot=irot, sh_rot=.false.)
+        endif
         if( irot == 0 ) cxy(2:3) = 0.
         self%xy_first = cxy(2:3)
         self%xy_first_rot = 0.
@@ -250,18 +257,14 @@ contains
         self%xy_first_valid = .true.
     end subroutine inpl_srch_first
 
-    subroutine inpl_srch( self, ref, irot_in, force_legacy )
+    subroutine inpl_srch( self, ref, irot_in )
         class(strategy3D_srch), intent(inout) :: self
         integer, optional,      intent(in)    :: ref
         integer, optional,      intent(inout) :: irot_in
-        logical, optional,      intent(in)    :: force_legacy
         real    :: cxy(3)
         integer :: iref, irot, loc(1)
-        logical :: run_legacy
         if( .not. self%doshift ) return
-        run_legacy = .false.
-        if( present(force_legacy) ) run_legacy = force_legacy
-        if( self%bypasses_legacy_post_refinement() .and. .not. run_legacy ) return
+        if( self%bypasses_legacy_post_refinement() ) return
         if( present(ref) )then
             iref = ref
         else
@@ -330,24 +333,24 @@ contains
 
     !> Jointly refine shifts and in-plane rotation for the selected 3D
     !! reference. The state and projection direction encoded by ref remain
-    !! fixed. A valid non-improving result retains the discrete score and angle
-    !! while coupling them to the shift used during candidate scoring. A
-    !! numerically invalid result invokes the original legacy post-selection
-    !! optimizer for this same reference.
+    !! fixed. The incoming in-plane state is used only to recover the native
+    !! shift frame; a one-time all-angle scan at that shift selects the grid
+    !! seed for joint refinement. A valid non-improving result commits that
+    !! newly selected discrete seed. A numerically invalid result retains the
+    !! incoming selected candidate.
     subroutine refine_selected_continuously( self, ref )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
-        real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2), xy_seed_rot(2)
-        real(dp) :: rotind_frac, rotind_seed, initial_cost
-        integer  :: irot, selected_irot
-        logical  :: evaluation_valid, improved, preserve_restart_seed
+        real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2)
+        real(dp) :: rotind_frac
+        integer  :: irot, incoming_irot
+        logical  :: evaluation_valid, improved
 
         if( .not. self%continuous_active ) return
         if( ref < 1 .or. ref > self%nrefs ) return
-        irot = s3D%proj_space_inplinds(ref,self%ithr)
-        if( irot < 1 .or. irot > self%nrots )then
-            self%continuous_route_outcome = CONT_ROUTE_FALLBACK
-            call self%inpl_srch(ref=ref, force_legacy=.true.)
+        incoming_irot = s3D%proj_space_inplinds(ref,self%ithr)
+        if( incoming_irot < 1 .or. incoming_irot > self%nrots )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
         endif
 
@@ -359,13 +362,11 @@ contains
         else
             ! Stored 3D-search shifts are in the selected reference frame.
             ! The PFTC joint objective consumes the native particle frame.
-            call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
+            call rotmat2d(self%b_ptr%pftc%get_rot(incoming_irot), rotmat)
             xy_native = matmul(s3D%proj_space_shift(:,ref,self%ithr), transpose(rotmat))
         endif
-        if( .not. all(ieee_is_finite(xy_native)) .or. &
-            &.not. ieee_is_finite(s3D%proj_space_inplcoords(ref,self%ithr)) )then
-            self%continuous_route_outcome = CONT_ROUTE_FALLBACK
-            call self%inpl_srch(ref=ref, force_legacy=.true.)
+        if( .not. all(ieee_is_finite(xy_native)) )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
         endif
         joint_lims(1,:) = [-self%p_ptr%trs, self%p_ptr%trs]
@@ -374,55 +375,105 @@ contains
             joint_lims(1,:) = xy_native(1)
             joint_lims(2,:) = xy_native(2)
         endif
-        joint_lims(3,:) = [real(irot)-2., real(irot)+2.]
-        rotind_seed = real(s3D%proj_space_inplcoords(ref,self%ithr),dp)
-        preserve_restart_seed = self%prev_rotind_frac_valid .and. &
-            &ref == self%prev_ref .and. irot == self%prev_roind .and. &
-            &abs(real(self%prev_rotind_frac,dp) - real(irot,dp)) > 1.d-6
-        if( preserve_restart_seed ) rotind_seed = real(self%prev_rotind_frac,dp)
-        selected_irot = irot
+        joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
 
         call self%joint_inpl_optimizer%set_indices(ref, self%iptcl)
         call self%joint_inpl_optimizer%set_limits(joint_lims)
-        cxy = self%joint_inpl_optimizer%minimize_joint(irot, &
-            &real(rotind_seed), xy_native, &
+        cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, &
-            &evaluation_valid=evaluation_valid, improved=improved, &
-            &initial_cost_out=initial_cost)
-        if( self%requires_legacy_fallback(evaluation_valid) )then
-            self%continuous_route_outcome = CONT_ROUTE_FALLBACK
-            call self%inpl_srch(ref=ref, force_legacy=.true.)
+            &evaluation_valid=evaluation_valid, improved=improved)
+        if( self%joint_evaluation_invalid(evaluation_valid) )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
         endif
         if( .not. improved )then
             self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
-            if( preserve_restart_seed )then
-                call rotmat2d(real((rotind_seed - 1.d0) * &
-                    &real(self%b_ptr%pftc%get_dang(),dp)), rotmat)
-                xy_seed_rot = matmul(xy_native, rotmat)
-                call self%store_continuous_solution(ref, self%prev_roind, &
-                    &rotind_seed, real(exp(-initial_cost)), xy_seed_rot)
-            elseif( self%xy_first_valid )then
-                ! The discrete winner was scored at xy_first in the native
-                ! particle frame. Retain that same seed in the selected-angle
-                ! reference frame so the stored score and shift describe one
-                ! pose even when the joint optimizer finds no improvement.
-                ! minimize_joint returns irot=0 for this outcome, so use the
-                ! selected grid index saved before invoking the optimizer.
-                call rotmat2d(self%b_ptr%pftc%get_rot(selected_irot), rotmat)
-                xy_seed_rot = matmul(xy_native, rotmat)
-                call self%retain_selected_seed_shift(ref, xy_seed_rot)
-            endif
+            call self%store_discrete_seed_solution(ref, irot, cxy(1), cxy(2:3))
             return
         endif
         if( irot <= 0 )then
-            self%continuous_route_outcome = CONT_ROUTE_FALLBACK
-            call self%inpl_srch(ref=ref, force_legacy=.true.)
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
         endif
         call self%store_continuous_solution(ref, irot, rotind_frac, cxy(1), cxy(2:3))
         self%continuous_route_outcome = CONT_ROUTE_IMPROVED
     end subroutine refine_selected_continuously
+
+    !> Run the durable joint refinement after a probabilistic assignment has
+    !! selected its state, projection, integer in-plane cell, and shift.  The
+    !! probability table deliberately carries no fractional angle. The incoming
+    !! in-plane index is used only to recover the shift frame and is then
+    !! discarded. Failure leaves the incoming assignment intact; a valid
+    !! non-improving solve commits the newly selected discrete seed.
+    subroutine refine_assignment_continuously( self, ref, inpl, corr, sh, inpl_coord, inpl_valid )
+        class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(in)    :: ref
+        integer,                intent(inout) :: inpl
+        real,                   intent(inout) :: corr, sh(2)
+        real,                   intent(out)   :: inpl_coord
+        logical,                intent(out)   :: inpl_valid
+        real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2)
+        real(dp) :: rotind_frac
+        integer  :: refined_inpl
+        logical  :: evaluation_valid, improved
+
+        inpl_coord = real(inpl)
+        inpl_valid = .false.
+        if( .not. self%continuous_active ) return
+        if( ref < 1 .or. ref > self%nrefs )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+        if( inpl < 1 .or. inpl > self%nrots )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+        if( .not. all(ieee_is_finite(sh)) .or. .not. ieee_is_finite(corr) )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+
+        ! Probabilistic assignment shifts are stored in the selected reference
+        ! frame; the joint PFTC objective consumes the native particle frame.
+        call rotmat2d(self%b_ptr%pftc%get_rot(inpl), rotmat)
+        xy_native = matmul(sh, transpose(rotmat))
+        joint_lims(1,:) = [-self%p_ptr%trs, self%p_ptr%trs]
+        joint_lims(2,:) = [-self%p_ptr%trs, self%p_ptr%trs]
+        if( .not. self%doshift )then
+            joint_lims(1,:) = xy_native(1)
+            joint_lims(2,:) = xy_native(2)
+        endif
+        joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
+
+        call self%joint_inpl_optimizer%set_indices(ref, self%iptcl)
+        call self%joint_inpl_optimizer%set_limits(joint_lims)
+        cxy = self%joint_inpl_optimizer%minimize_joint(refined_inpl, xy_native, &
+            &sh_rot=.true., rotind_frac=rotind_frac, evaluation_valid=evaluation_valid, &
+            &improved=improved)
+        if( .not. evaluation_valid )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+        if( .not. improved )then
+            inpl       = refined_inpl
+            corr       = cxy(1)
+            sh         = cxy(2:3)
+            inpl_coord = real(refined_inpl)
+            self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
+            return
+        endif
+        if( refined_inpl < 1 .or. refined_inpl > self%nrots )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+
+        inpl       = refined_inpl
+        corr       = cxy(1)
+        sh         = cxy(2:3)
+        inpl_coord = real(rotind_frac)
+        inpl_valid = .true.
+        self%continuous_route_outcome = CONT_ROUTE_IMPROVED
+    end subroutine refine_assignment_continuously
 
     !> Commit an already accepted joint result without changing its selected
     !! state or projection reference.
@@ -439,25 +490,19 @@ contains
         s3D%proj_space_corrs(ref,self%ithr)      = corr
     end subroutine store_continuous_solution
 
-    !> Retain the shift used to score an already-selected grid candidate.
-    !! The score, integer angle, fractional grid seed, and validity flag must
-    !! remain unchanged because no continuous improvement was accepted.
-    subroutine retain_selected_seed_shift( self, ref, sh )
+    !> Commit the callback-equivalent grid seed selected at the supplied shift
+    !! when the continuous joint solve is valid but cannot improve that seed.
+    subroutine store_discrete_seed_solution( self, ref, inpl_ind, corr, sh )
         class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: ref
-        real,                   intent(in)    :: sh(2)
+        integer,                intent(in)    :: ref, inpl_ind
+        real,                   intent(in)    :: corr, sh(2)
 
-        if( ref < 1 .or. ref > size(s3D%proj_space_corrs,1) )then
-            THROW_HARD('selected reference outside stored search space; retain_selected_seed_shift')
-        endif
-        if( self%ithr < 1 .or. self%ithr > size(s3D%proj_space_corrs,2) )then
-            THROW_HARD('thread index outside stored search space; retain_selected_seed_shift')
-        endif
-        if( .not. all(ieee_is_finite(sh)) )then
-            THROW_HARD('non-finite selected seed shift; retain_selected_seed_shift')
-        endif
-        s3D%proj_space_shift(:,ref,self%ithr) = sh
-    end subroutine retain_selected_seed_shift
+        s3D%proj_space_shift(:,ref,self%ithr)    = sh
+        s3D%proj_space_inplinds(ref,self%ithr)   = inpl_ind
+        s3D%proj_space_inplcoords(ref,self%ithr) = real(inpl_ind)
+        s3D%proj_space_inplvalid(ref,self%ithr)  = .false.
+        s3D%proj_space_corrs(ref,self%ithr)      = corr
+    end subroutine store_discrete_seed_solution
 
     pure logical function uses_continuous_refinement( self )
         class(strategy3D_srch), intent(in) :: self
@@ -469,61 +514,21 @@ contains
         bypasses_legacy_post_refinement = self%continuous_active
     end function bypasses_legacy_post_refinement
 
-    pure logical function requires_legacy_fallback( self, evaluation_valid )
+    pure logical function joint_evaluation_invalid( self, evaluation_valid )
         class(strategy3D_srch), intent(in) :: self
         logical,                intent(in) :: evaluation_valid
-        requires_legacy_fallback = self%continuous_active .and. .not. evaluation_valid
-    end function requires_legacy_fallback
+        joint_evaluation_invalid = self%continuous_active .and. .not. evaluation_valid
+    end function joint_evaluation_invalid
 
-    pure subroutine get_continuous_route_status( self, attempted, improved, no_improvement, fallback )
+    pure subroutine get_continuous_route_status( self, attempted, improved, no_improvement, invalid )
         class(strategy3D_srch), intent(in)  :: self
-        logical,                intent(out) :: attempted, improved, no_improvement, fallback
+        logical,                intent(out) :: attempted, improved, no_improvement, invalid
 
         attempted      = self%continuous_route_outcome /= CONT_ROUTE_NOT_ATTEMPTED
         improved       = self%continuous_route_outcome == CONT_ROUTE_IMPROVED
         no_improvement = self%continuous_route_outcome == CONT_ROUTE_NO_IMPROVEMENT
-        fallback       = self%continuous_route_outcome == CONT_ROUTE_FALLBACK
+        invalid        = self%continuous_route_outcome == CONT_ROUTE_INVALID
     end subroutine get_continuous_route_status
-
-    !> Recover the continuous rotation-index coordinate from the durable Euler
-    !! angle on the current PFTC grid and unwrap it to the periodic copy nearest
-    !! the current e3-derived integer index. The persisted integer `inpl` is
-    !! not used because refine3D may rebuild a different grid on restart.
-    pure subroutine resolve_restart_inpl_coordinate( self, e3, current_inpl, dang, coordinate, valid )
-        class(strategy3D_srch), intent(in)  :: self
-        real,                   intent(in)  :: e3
-        integer,                intent(in)  :: current_inpl
-        real(dp),               intent(in)  :: dang
-        real(dp),               intent(out) :: coordinate
-        logical,                intent(out) :: valid
-        real(dp) :: raw_coordinate, period
-        integer :: nearest_inpl
-
-        coordinate = 0.d0
-        valid = .false.
-        if( self%nrots < 1 .or. current_inpl < 1 .or. current_inpl > self%nrots ) return
-        if( dang <= 0.d0 .or. .not. ieee_is_finite(e3) ) return
-        period = real(self%nrots,dp)
-        raw_coordinate = modulo(360.d0 - real(e3,dp), 360.d0) / dang + 1.d0
-        nearest_inpl = modulo(nint(raw_coordinate)-1,self%nrots)+1
-        if( nearest_inpl /= current_inpl ) return
-        coordinate = real(current_inpl,dp) + modulo(raw_coordinate - real(current_inpl,dp) + &
-            &0.5d0*period, period) - 0.5d0*period
-        valid = ieee_is_finite(coordinate)
-    end subroutine resolve_restart_inpl_coordinate
-
-    subroutine prepare_restart_inplane_seed( self )
-        class(strategy3D_srch), intent(inout) :: self
-        real(dp) :: coordinate, dang
-        self%prev_rotind_frac = 0.
-        self%prev_rotind_frac_valid = .false.
-        if( .not. self%continuous_active ) return
-        dang = real(self%b_ptr%pftc%get_dang(),dp)
-        call self%resolve_restart_inpl_coordinate(self%o_prev%e3get(), self%prev_roind, dang, &
-            &coordinate, self%prev_rotind_frac_valid)
-        if( .not. self%prev_rotind_frac_valid ) return
-        self%prev_rotind_frac = real(coordinate)
-    end subroutine prepare_restart_inplane_seed
 
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
@@ -537,8 +542,6 @@ contains
         self%continuous_active = .false.
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
         self%xy_first_valid = .false.
-        self%prev_rotind_frac = 0.
-        self%prev_rotind_frac_valid = .false.
         nullify(self%b_ptr)
     end subroutine kill
 

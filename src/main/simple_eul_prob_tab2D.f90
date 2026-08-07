@@ -206,7 +206,7 @@ contains
         integer :: i_from, i_to
         integer :: active_cls(self%nclasses)
         integer :: loc(1), vec_nrots(self%b_ptr%pftc%get_nrots())
-        real    :: lims(2,2), lims_init(2,2), cxy(3), cxy_prob(3)
+        real    :: lims(2,2), lims_init(2,2), joint_lims(3,2), cxy(3), cxy_prob(3)
         real    :: inpl_corrs(self%b_ptr%pftc%get_nrots()), cls_dists(self%nclasses), cls_dists_work(self%nclasses)
         real    :: inpl_corr, inpl_dist, neigh_frac
         logical :: class_active(self%nclasses)
@@ -243,9 +243,16 @@ contains
             lims(:,2)      =  self%p_ptr%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            joint_lims(1:2,:) = lims
+            joint_lims(3,:) = [1.-2., real(self%seed_nrots)+2.]
             do ithr = 1, nthr_glob
-                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, &
-                    &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+                if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                    call grad_shsrch_obj(ithr)%new_joint(self%b_ptr, joint_lims, &
+                        &self%p_ptr%maxits_sh)
+                else
+                    call grad_shsrch_obj(ithr)%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                        &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
+                endif
             end do
             ! fill the table
             !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,irot,irot0,cxy,icls,icls_prev,inpl_corrs,loc,&
@@ -263,7 +270,11 @@ contains
                     if( class_active(icls_prev) )then
                         irot = irot0
                         call grad_shsrch_obj(ithr)%set_indices(icls_prev, iptcl)
-                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                        if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                            cxy = grad_shsrch_obj(ithr)%minimize_joint_rounded(irot, sh_rot=.false.)
+                        else
+                            cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.false.)
+                        endif
                         if( irot == 0 )then
                             cxy(2:3) = 0.
                             irot = irot0
@@ -289,7 +300,12 @@ contains
                     if( cls_dists_work(icls) >= huge(1.0)/2.0 ) exit
                     call grad_shsrch_obj(ithr)%set_indices(icls, iptcl)
                     irot     = self%candidate_buffers(ithr)%get_inpl(i, icls)
-                    cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                    if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                        cxy_prob = grad_shsrch_obj(ithr)%minimize_joint_rounded(irot, &
+                            &sh_rot=.true., xy_in=cxy(2:3))
+                    else
+                        cxy_prob = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true., xy_in=cxy(2:3))
+                    endif
                     if( irot > 0 )then
                         call self%record_sparse_eval(i, ithr, icls,&
                             &eulprob_dist_switch(cxy_prob(1), self%p_ptr%cc_objfun), irot,&
@@ -335,7 +351,7 @@ contains
         type(ran_tabu), allocatable :: direct_rts(:)
         integer :: ithr, i, iptcl, nrefs_bound, smpl_ncls, ninpl_smpl, nrots
         integer :: i_from, i_to
-        real    :: lims(2,2), lims_init(2,2), neigh_frac, cxy(3)
+        real    :: lims(2,2), lims_init(2,2), joint_lims(3,2), neigh_frac, cxy(3)
         i_from = max(1, i_first)
         i_to   = min(self%nptcls, i_last)
         if( i_to < i_from ) return
@@ -359,9 +375,16 @@ contains
             lims(:,2)      =  self%p_ptr%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
+            joint_lims(1:2,:) = lims
+            joint_lims(3,:) = [1.-2., real(nrots)+2.]
             do ithr = 1, nthr_glob
-                call grad_shsrch_obj(ithr)%new(self%b_ptr, lims, lims_init=lims_init, &
-                    &maxits=self%p_ptr%maxits_sh, opt_angle=.true., coarse_init=.true.)
+                if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                    call grad_shsrch_obj(ithr)%new_joint(self%b_ptr, joint_lims, &
+                        &self%p_ptr%maxits_sh)
+                else
+                    call grad_shsrch_obj(ithr)%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                        &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
+                endif
             end do
             !$omp parallel do default(shared) private(i,iptcl,ithr,cxy) proc_bind(close) schedule(static)
             do i = i_from, i_to
@@ -410,7 +433,11 @@ contains
                 irot0_loc = self%b_ptr%pftc%get_roind(360. - o_prev_loc%e3get())
                 irot_loc  = irot0_loc
                 call grad_shsrch_obj(ithr_loc)%set_indices(icls_prev_loc, iptcl_loc)
-                cxy_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.false.)
+                if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                    cxy_loc = grad_shsrch_obj(ithr_loc)%minimize_joint_rounded(irot_loc, sh_rot=.false.)
+                else
+                    cxy_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.false.)
+                endif
                 if( irot_loc == 0 ) cxy_loc(2:3) = 0.
             endif
             sh_loc = 0.
@@ -459,7 +486,13 @@ contains
                 if( icls_loc < 1 ) cycle
                 call grad_shsrch_obj(ithr_loc)%set_indices(icls_loc, iptcl_loc)
                 irot_loc = self%candidate_buffers(ithr_loc)%get_inpl(i_loc, icls_loc)
-                cxy_prob_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true., xy_in=sh_loc)
+                if( trim(self%p_ptr%inpl_cont) == 'yes' )then
+                    cxy_prob_loc = grad_shsrch_obj(ithr_loc)%minimize_joint_rounded(irot_loc, &
+                        &sh_rot=.true., xy_in=sh_loc)
+                else
+                    cxy_prob_loc = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, &
+                        &sh_rot=.true., xy_in=sh_loc)
+                endif
                 if( irot_loc > 0 )then
                     call self%record_sparse_eval(i_loc, ithr_loc, icls_loc,&
                         &eulprob_dist_switch(cxy_prob_loc(1), self%p_ptr%cc_objfun),&

@@ -1,5 +1,18 @@
 # Continuous in-plane rotation transfer plan for `refine3D`
 
+> **Current policy (2026-08-07).** This file is a historical implementation
+> record. The earlier `refine=shc`-only gate, rejection of probabilistic modes,
+> and invalid-result callback fallback described in later phase notes are
+> superseded. The authoritative policy is
+> `doc/policies/refine3D_policy.md`: `inpl_cont=no` uses the legacy callback;
+> eligible `inpl_cont=yes` replaces every callback use with joint
+> `(sx,sy,rotind_frac)` optimization, including probabilistic candidate
+> profiling, and never falls back to the callback. Each joint solve discards
+> incoming in-plane state, selects the best discrete cell once at the supplied
+> native shift, and then optimizes within plus or minus two cells. The continuous
+> route does not use the legacy 5-by-5 shift/all-angle coarse initializer or a
+> persisted fractional restart seed.
+
 ## Project summary and quick start
 
 This project adds an opt-in continuous in-plane refinement step to the
@@ -26,11 +39,21 @@ simple_exec \
 ```
 
 Omit `inpl_cont`, or set `inpl_cont=no`, to use the unchanged legacy path.
-The opt-in route rejects CC, hybrid or denoised objectives, projection
-reconstruction, `refine=eval`, `refine=sigma`, and probabilistic refinement
-modes. The initial hardened contract supports only `refine=shc`; other
-explicit deterministic modes are rejected until they receive equivalent
-production validation.
+The opt-in route requires raw Euclidean matching: `objfun=euclid`,
+`objfun_den=no`, `ptcl_src=raw`, and `projrec=no`. There is no `refine=shc`
+restriction. Deterministic, neighborhood, evaluation, and probabilistic
+matcher routes follow the same callback-replacement policy wherever they
+perform pose search; modes with no pose search invoke neither optimizer.
+
+Probability tables keep their established artifact format. They carry the
+rounded in-plane index, score, and rounded-frame shift while the fractional
+coordinate remains transient. After the final hard assignment, refine3D
+uses the stored rounded index only to recover the native shift, discards all
+prior in-plane state, selects the best discrete cell once at that shift, and
+reruns the joint optimizer. It persists fractional `e3`, integer `inpl`, shift,
+and score from one pose. Valid non-improving work commits the newly selected
+grid seed; invalid work retains the incoming candidate. Neither invokes the
+callback.
 
 The tests are organized under `production/tests`. Build and invoke the mother
 test from an already configured build tree:
@@ -78,6 +101,11 @@ mother executable; they are not separate test executables.
 
 ---
 
+> **Historical record boundary.** The remaining sections preserve the staged
+> transfer history and validation observations. Any statements below that
+> limit activation to `refine=shc`, reject `refine=prob*`, or prescribe a
+> legacy callback fallback are descriptions of superseded intermediate policy.
+
 ## Plan Scope
 
 This plan transfers the validated 2D continuous in-plane refinement design from
@@ -105,23 +133,15 @@ one-iteration run also accounted for all 3,081 active particles: 2,839 joint
 refinements improved the objective, 242 were finite but non-improving, and none
 entered the legacy fallback.
 
-The final review identified one production-state blocker. For the common
-single-state search, `inpl_srch_first` computes `xy_first`, and the discrete
-winner is scored using that shift. `store_solution` records the score and angle
-but does not record the shift. When joint refinement is finite but finds no
-additional improvement, `refine_selected_continuously` returns without storing
-`xy_first` unless it is preserving an already-continuous restart seed. The
-orientation assignment can therefore retain a zero candidate shift while its
-stored score was evaluated at `xy_first`. This affects the semantic consistency
-of the 242 observed no-improvement outcomes.
-
-The local correction now rotates `xy_first` into the selected grid-angle
-reference frame and stores only that selected candidate shift when the joint
-evaluation is finite but non-improving. It deliberately preserves the selected
-score, integer angle, fractional grid seed, and false continuous-validity flag.
-The existing continuous restart seed remains continuous-valid, and only an
-invalid numerical evaluation requests the legacy fallback. The focused
-`direct_route` contract now verifies this score/shift invariant.
+The later initialization correction supersedes the restart-seed and
+selected-angle retention behavior measured in that audit. For the common
+single-state search, `xy_first` remains the native shift seed, but the joint
+route now discards the incoming integer/fractional angle and selects the best
+discrete cell once at `xy_first`. A finite non-improving solve stores that new
+grid cell, score, and rotated shift with false continuous validity. Persisted
+fractional metadata is not reused as a restart seed, and invalid numerical work
+retains the incoming candidate without requesting the legacy callback. The
+focused `direct_route` and route-identity contracts cover the new behavior.
 
 The planned truth-controlled 3D recovery fixture is implemented as the named
 `synthetic_recovery` case. It fixes the 3D projection direction,

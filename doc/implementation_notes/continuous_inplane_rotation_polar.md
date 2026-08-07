@@ -1,5 +1,17 @@
 # Continuous in-plane rotation in the polar representation (`objfun=euclid`)
 
+> Historical mathematical design note. Its discussion of adding a continuous
+> angle callback predates the current policy. Production exposes only
+> `inpl_cont=no|yes`: `no` uses the legacy discrete-angle callback, while
+> eligible `yes` uses the fused joint `(sx,sy,rotind_frac)` evaluator at every
+> former callback site, carries rounded angles through probabilistic artifacts,
+> and persists a fractional angle only after final assignment. Each joint solve
+> first discards prior in-plane metadata and performs one callback-equivalent
+> all-angle selection at the supplied shift; it does not use the legacy 5-by-5
+> shift initializer. The mathematics
+> below remains the basis of the joint evaluator; callback-oriented sequencing
+> is not current policy.
+
 Implementation proposal. The in-plane angle is the only alignment parameter
 SIMPLE never refines below its search grid. In the polar representation a
 continuous rotation is a *phase factor* — exact, analytically differentiable,
@@ -266,7 +278,11 @@ Two routes for the objective at continuous θ, both needing measurement:
   then `r`, `∂r/∂θ`, `∂r/∂s_x`, `∂r/∂s_y` all evaluate at continuous θ in
   `O(pftsz)`. **The `FT(CTF²)·FT(REF²)` term is shift-independent, so it is
   hoisted entirely out of the search loop** — a saving specific to this
-  structure.
+  structure. The `argtransf` multiplication must happen on the polar samples
+  *before* the angular FFT (post-FFT pointwise multiplication is not
+  equivalent — it would be a convolution in angular frequency), and the
+  shift-phase arguments flip sign across the Friedel mate, so the derivative
+  products extend to the second half-circle as `−conjg(...)`, not `conjg(...)`.
 - **2b — direct-sum route.** Rotate reference and `dref_dphi` to continuous θ
   (`IFFT[e^{-imθ}·ft_ref]`, likewise for the derivative) once per evaluation,
   then reuse `gen_euclid_residual_grad`'s loop with `∂_φSH` from §3.5 added.

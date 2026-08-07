@@ -40,7 +40,8 @@ contains
         class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
         integer :: iproj, iptcl_map, irot, istate, iref
-        real    :: corr, frac
+        real    :: corr, frac, sh(2), inpl_coord
+        logical :: inpl_valid
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -63,16 +64,20 @@ contains
             if( trim(self%s%p_ptr%multivol_mode).eq.'input_oris_fixed' .and. &
                 &trim(self%s%p_ptr%refine).eq.'prob_state' )then
                 call assign_state_fixed(self, istate, corr)
-            else if( self%s%doshift )then
-                if( self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
-                    call assign_ori(self%s, iref, irot, corr,&
-                    &[self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
-                    & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y])
-                else
-                    call assign_ori(self%s, iref, irot, corr, [0.,0.])
-                endif
             else
-                call assign_ori(self%s, iref, irot, corr, [0.,0.])
+                sh = 0.
+                if( self%s%doshift .and. &
+                    &self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
+                    sh = [self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
+                        & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y]
+                endif
+                if( self%s%uses_continuous_refinement() )then
+                    call self%s%refine_assignment_continuously(iref, irot, corr, sh, &
+                        &inpl_coord, inpl_valid)
+                    call assign_ori(self%s, iref, irot, corr, sh, inpl_coord, inpl_valid)
+                else
+                    call assign_ori(self%s, iref, irot, corr, sh)
+                endif
             endif
             call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
         else
