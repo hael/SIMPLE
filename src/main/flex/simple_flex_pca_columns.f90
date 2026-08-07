@@ -44,9 +44,19 @@ real(dp), parameter :: COV_EIG_REL_FLOOR = 1.0d-6
 ! Cap on the column-subspace dimension. The accumulation is a batched dsyrk on the Van Loan-Pitsianis
 ! rearrangement (see unrearrange_kron_selfsum), which needs ONE shared d^4 array regardless of thread count.
 integer,  parameter :: COV_MAX_DTILDE    = 320
-!> Total particles the probe refines the basis on, summed across processes. The basis has a fixed
-!! parameter count, so this is a cap rather than a fraction -- see the stride derivation below.
-integer,  parameter :: COV_PROBE_MAX_PTCLS = 25000
+! Default column-subspace dimension, applied as a min against the memory budget so the rank follows
+! the data rather than free RAM. Override with SIMPLE_COV_DTILDE.
+integer,  parameter :: COV_DEFAULT_DTILDE = 128
+! Total particles the probe / SNR / column-accumulation initialiser fit on, summed across processes.
+! 0 = OFF: capping cost a recovered state on Ribosembly (14/16 -> 13/16) for 2.35x, while IgG held at
+! 20/20 either way. Enable per-run with SIMPLE_COV_PROBE_MAX / SIMPLE_COV_BASIS_MAX.
+integer,  parameter :: COV_PROBE_MAX_PTCLS = 0
+integer,  parameter :: COV_BASIS_MAX_PTCLS = 0
+! How far above the spectrum's noise bulk a direction must stand to count as signal. Loose by design:
+! keeping a noise direction costs one rank, dropping a real one costs a conformation.
+real(dp), parameter :: COV_SIGNAL_FACTOR = 4.0d0
+! Samples per free parameter for the rank bound d ~ sqrt(2N/R). REPORT ONLY.
+real(dp), parameter :: COV_SAMPLES_PER_PARAM = 10.0d0
 !> probe stops when successive bases agree to this mean principal-angle cosine. 0.999 is tight
 !! enough that the remaining rotation cannot move a state target, and on Ribosembly it fires at the
 !! measured knee (iteration 2) rather than running the tuned count out.
@@ -169,6 +179,110 @@ contains
         read(envval(:ln), *, iostat=stat) ival
         if( stat == 0 ) off = ival == 0
     end function cov_env_int_off
+
+    ! True only when set AND non-zero. Not the complement of cov_env_int_off: an opt-in reads unset as OFF.
+    logical function cov_env_int_on( name ) result(on)
+        character(len=*), intent(in) :: name
+        character(len=32) :: envval
+        integer :: stat, ln, ival
+        on = .false.
+        call get_environment_variable(name, envval, ln, stat)
+        if( stat /= 0 .or. ln < 1 ) return
+        read(envval(:ln), *, iostat=stat) ival
+        if( stat == 0 ) on = ival /= 0
+    end function cov_env_int_on
+
+    ! Rank at which the Gram spectrum enters its noise bulk. Noise level = median of the lower half,
+    ! so the leading signal directions cannot inflate it. Scale-free.
+    pure integer function cov_signal_rank( eval, n ) result( d )
+        integer,  intent(in) :: n
+        real(dp), intent(in) :: eval(n)          !< DESCENDING eigenvalues
+        real(dp) :: noise
+        integer  :: lo, m
+        d = 1
+        if( n < 4 ) return
+        lo    = n/2 + 1
+        m     = n - lo + 1
+        noise = eval(lo + m/2)
+        if( noise <= DTINY )then
+            d = n
+            return
+        endif
+        d = 0
+        do while( d < n )
+            if( eval(d+1) <= COV_SIGNAL_FACTOR*noise ) exit
+            d = d + 1
+        end do
+        d = max(1, min(n, d))
+    end function cov_signal_rank
+
+    ! Halfset-safe capped subsample, shared by the column-subspace initialiser and the probe EM.
+    ! `eo` alternates strictly by particle index, so a plain stride of 2 selects one halfset entirely
+    ! and the even/odd FSC that regularises every M-step is then computed against nothing; stride
+    ! WITHIN each halfset instead. `maxtot` is a total across processes, so only a WORKER passes
+    ! nparts -- the master holds every particle and dividing there inflates the stride by nparts.
+    subroutine cov_stage_subsample( build, pinds, nptcls, nparts, maxtot, env_stride, env_max, &
+        &label, spinds, nsel )
+        type(builder),        intent(inout) :: build
+        integer,              intent(in)    :: pinds(:), nptcls, nparts, maxtot
+        character(len=*),     intent(in)    :: env_stride, env_max, label
+        integer, allocatable, intent(out)   :: spinds(:)
+        integer,              intent(out)   :: nsel
+        integer :: stride, nmax_tot, nmax_part, ihalf, i, nkept, n_half, ntgt
+        logical :: l_stride
+        nmax_tot = maxtot
+        call cov_env_int(env_max, nmax_tot)
+        ! cap off (the default): hand back every particle, in project order
+        if( nmax_tot < 1 )then
+            allocate(spinds(nptcls), source=pinds(:nptcls))
+            nsel = nptcls
+            call hpsort(spinds)
+            return
+        endif
+        nmax_part = max(1, nmax_tot / max(1, nparts))
+        ! integer stride quantises the budget badly (100000 against a cap of 80000 wants 1.25, gets 2,
+        ! keeps 50000), so default to exact-count Bresenham. env_stride restores it; =1 keeps all.
+        stride   = 0
+        call cov_env_int(env_stride, stride)
+        l_stride = stride > 0
+        stride   = max(1, stride)
+        allocate(spinds(nptcls))
+        nsel = 0
+        do ihalf = 0, 1
+            n_half = 0
+            do i = 1, nptcls
+                if( build%spproj_field%get_eo(pinds(i)) == ihalf ) n_half = n_half + 1
+            end do
+            if( n_half < 1 ) cycle
+            ! split the per-part budget evenly between halfsets, never starving one
+            ntgt  = min(n_half, max(1, (nmax_part + 1 - ihalf)/2))
+            nkept = 0
+            do i = 1, nptcls
+                if( build%spproj_field%get_eo(pinds(i)) /= ihalf ) cycle
+                if( l_stride )then
+                    if( mod(nkept, stride) == 0 )then
+                        nsel = nsel + 1
+                        spinds(nsel) = pinds(i)
+                    endif
+                else
+                    ! real(dp) rather than integer products: nkept*ntgt overflows int32 at these sizes
+                    if( int(real(nkept+1,dp)*real(ntgt,dp)/real(n_half,dp)) > &
+                       &int(real(nkept,  dp)*real(ntgt,dp)/real(n_half,dp)) )then
+                        nsel = nsel + 1
+                        spinds(nsel) = pinds(i)
+                    endif
+                endif
+                nkept = nkept + 1
+            end do
+        end do
+        if( nsel < 2 ) THROW_HARD('stage subsample left too few particles; raise '//trim(env_max))
+        call hpsort(spinds(:nsel))   ! restore project order so batched image reads stay sequential
+        if( nsel < nptcls )then
+            write(logfhandle,'(A,A,A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA ',trim(label),' subsample (', &
+                &merge(1,0,l_stride),'=stride): using ',nsel,' of ',nptcls,' particles'
+            call flush(logfhandle)
+        endif
+    end subroutine cov_stage_subsample
 
     !>  Write the two half-data latent solves so the per-particle error model can be calibrated
     !!  against the error actually observed. The halves are disjoint checkerboard subsets of one
@@ -326,6 +440,10 @@ contains
         type(image), allocatable :: realvols(:), utilde_real(:)
         type(reconstructor) :: work
         type(reconstructor), allocatable :: utilde(:)
+        !> capped, halfset-balanced particle subset the column-subspace initialiser runs on. Equals
+        !! pinds when the cap is off, which is the default.
+        integer, allocatable :: bpinds(:)
+        integer :: nbp, nparts_sub
         !> probe-worker handoff, read back from the master's flex_pca_probe.txt
         real(dp),            allocatable :: eig_probe(:)
         real(dp),            allocatable :: zw(:,:), contrastw(:), precw(:,:,:), rew(:), rmew(:)
@@ -394,10 +512,21 @@ contains
             call work%dealloc_rho; call work%kill
             return
         endif
+        ! ---- INITIALISER SUBSAMPLE ----
+        ! Everything below (SNR volume -> column selection -> column accumulation -> reduced solve)
+        ! produces the column subspace the probe EM then refines, so it is capped on particle count
+        ! for the same reason the probe is. The EMBEDDING and the state reconstructions are NOT
+        ! capped: they emit one record per particle and run on the caller's full pinds.
+        ! OFF by default (COV_BASIS_MAX_PTCLS = 0) -- see the constant for the measured cost.
+        ! Only a WORKER divides by nparts; the master holds every particle. See cov_stage_subsample.
+        nparts_sub = 1
+        if( flex_pca_is_worker() ) nparts_sub = params%nparts
+        call cov_stage_subsample(build, pinds, nptcls, nparts_sub, COV_BASIS_MAX_PTCLS, &
+            &'SIMPLE_COV_BASIS_STRIDE', 'SIMPLE_COV_BASIS_MAX', 'INITIALISER', bpinds, nbp)
         if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_SOLVE )then
             ! nothing upstream of the solve is needed: the basis is on disk
             call load_utilde_stack(params, build, utilde, utilde_real, d_tilde)
-            call reduced_covariance_solve(params, build, mean_rec, utilde, d_tilde, pinds, nptcls, &
+            call reduced_covariance_solve(params, build, mean_rec, utilde, d_tilde, bpinds, nbp, &
                 &neigs_req, vred, eigvals, ncomp_out, sig2_out)
             do s = 1, d_tilde
                 call utilde(s)%dealloc_rho; call utilde(s)%kill
@@ -418,7 +547,7 @@ contains
         else if( trim(params%column_sampling) == 'lowfreq' )then
             call select_covariance_columns_lowfreq(params, ncols_req, col_sep, col_hkl, ncol)
         else
-            call select_covariance_columns_snr(params, build, mean_rec, pinds, nptcls, &
+            call select_covariance_columns_snr(params, build, mean_rec, bpinds, nbp, &
                 &lb, ub, nyq_rec, ncols_req, col_sep, col_hkl, ncol)
         endif
         if( flex_pca_is_worker() .and. params%stage == PCA_STAGE_SNR )then
@@ -440,7 +569,7 @@ contains
         allocate(Bcol_o(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3),ncol), source=cmplx(0.,0.))
         allocate(Hcol_e(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3),ncol), source=0.)
         allocate(Hcol_o(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3),ncol), source=0.)
-        call accumulate_covariance_columns(params, build, mean_rec, pinds, nptcls, &
+        call accumulate_covariance_columns(params, build, mean_rec, bpinds, nbp, &
             &col_hkl, col_lookup, ncol, lb, ub, nyq_rec, Bcol_e, Hcol_e, Bcol_o, Hcol_o)
         if( flex_pca_is_worker() )then
             ! the column part file was written inside accumulate_covariance_columns; this round is done
@@ -468,7 +597,8 @@ contains
         write(logfhandle,'(A,I0)') '>>> FLEX_PCA real column representatives=',nreal
         call flush(logfhandle)
         t_blk = tic()
-        call orthonormalize_representatives(params, build, realvols, nreal, utilde, utilde_real, d_tilde, svals)
+        call orthonormalize_representatives(params, build, realvols, nreal, utilde, utilde_real, d_tilde, svals, &
+            &nptcls_basis=nbp)
         write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE orthonormalize seconds=', toc(t_blk)
         do s = 1, nreal
             call realvols(s)%kill
@@ -482,7 +612,7 @@ contains
         ! rather than re-deriving the whole column pipeline.
         if( flex_pca_is_master() ) call write_utilde_stack(utilde_real, d_tilde)
         ! S.B reduced projected-covariance solve (eqs S.6-S.9):
-        call reduced_covariance_solve(params, build, mean_rec, utilde, d_tilde, pinds, nptcls, &
+        call reduced_covariance_solve(params, build, mean_rec, utilde, d_tilde, bpinds, nbp, &
             &neigs_req, vred, eigvals, ncomp_out, sig2_out)
         ! the basis handoff has served its purpose; do not leave d_tilde volumes in the run directory
         if( flex_pca_is_master() ) call cleanup_utilde_stack(d_tilde)
@@ -1752,9 +1882,104 @@ contains
                 &'  prior=', real(pri_accum(sh)/real(ncol,dp)), &
                 &'  shrink=', real(shr_accum(sh)/real(ncol,dp))
         end do
+        call column_generalization_curve(Bcol_e, Hcol_e, Bcol_o, Hcol_o, ncol, shell, Rsh, nsh)
         deallocate(shell, Rsh, Psh, fsc, num, den_e, den_o, top, bot, hbar_sum, fsc_accum, &
             &nvox_sh, pri_accum, shr_accum, den_accum)
     end subroutine regularize_and_merge_columns
+
+    !> CROSS-HALFSET GENERALIZATION CURVE -- report-only estimate of the column-subspace rank.
+    !!
+    !!  WHY, and why not the spectrum. d_tilde is the smallest of an energy floor, a rank cap and a
+    !!  MEMORY budget, and the memory term is what binds in practice -- which makes the rank depend
+    !!  on the machine rather than the specimen. But no threshold on the spectrum can find the right
+    !!  rank either: a direction that fits noise has a LARGE Gram eigenvalue precisely because it fit
+    !!  that noise.
+    !!
+    !!  WHAT this measures instead. Fit the subspace on the EVEN halfset, then ask how much of the
+    !!  ODD halfset's column energy each successive even-direction explains. A real direction explains
+    !!  independent data; one that fit even's noise is uncorrelated with odd's noise. Compare each
+    !!  direction's held-out response to its OWN even eigenvalue, so the test is scale-free -- testing
+    !!  capture against an absolute chance level instead rejects low-ENERGY directions for being
+    !!  low-energy, which is the same failure that makes eigenvalue order useless for ranking here.
+    !!
+    !!  Everything is done on the raw halfset accumulators already in scope, in the Fourier domain
+    !!  (Parseval), on a strided voxel subsample -- this is a diagnostic and must not cost real time.
+    !!
+    !!  REPORT ONLY. It binds nothing.
+    subroutine column_generalization_curve( Bcol_e, Hcol_e, Bcol_o, Hcol_o, ncol, shell, Rsh, nsh )
+        complex,  intent(in) :: Bcol_e(:,:,:,:), Bcol_o(:,:,:,:)
+        real,     intent(in) :: Hcol_e(:,:,:,:), Hcol_o(:,:,:,:)
+        integer,  intent(in) :: ncol, nsh
+        integer,  intent(in) :: shell(:,:,:)
+        real(dp), intent(in) :: Rsh(0:nsh)
+        !> A direction is kept while the odd halfset confirms at least this fraction of the variance
+        !! the even halfset claims for it. 0.5 = "half the claimed variance is reproducible".
+        real(dp), parameter :: GEN_AGREE  = 0.5d0
+        integer,  parameter :: GEN_STRIDE = 4        !< voxel stride; diagnostic precision only
+        complex(dp), allocatable :: ve(:,:), vo(:,:)
+        real(dp),    allocatable :: Ge(:,:), Cx(:,:), evec(:,:), eval(:), cap(:), proj(:)
+        real(dp) :: tot_o, r, cum
+        integer  :: n1, n2, n3, i1, i2, i3, s, q, j, nsub, iv, nrot, d_gen
+        n1 = size(Bcol_e,1); n2 = size(Bcol_e,2); n3 = size(Bcol_e,3)
+        nsub = 0
+        do i3 = 1, n3, GEN_STRIDE; do i2 = 1, n2, GEN_STRIDE; do i1 = 1, n1, GEN_STRIDE
+            nsub = nsub + 1
+        end do; end do; end do
+        if( nsub < ncol .or. ncol < 4 ) return          ! under-determined: nothing to say
+        allocate(ve(nsub,ncol), vo(nsub,ncol))
+        do s = 1, ncol
+            iv = 0
+            do i3 = 1, n3, GEN_STRIDE; do i2 = 1, n2, GEN_STRIDE; do i1 = 1, n1, GEN_STRIDE
+                iv = iv + 1
+                r  = Rsh(shell(i1,i2,i3))
+                ! same Wiener/MAP division the merge uses, but per halfset so the two are independent
+                ve(iv,s) = cmplx(Bcol_e(i1,i2,i3,s), kind=dp) / max(real(Hcol_e(i1,i2,i3,s),dp)+r, DTINY)
+                vo(iv,s) = cmplx(Bcol_o(i1,i2,i3,s), kind=dp) / max(real(Hcol_o(i1,i2,i3,s),dp)+r, DTINY)
+            end do; end do; end do
+        end do
+        allocate(Ge(ncol,ncol), Cx(ncol,ncol), evec(ncol,ncol), eval(ncol), cap(ncol), proj(ncol))
+        do s = 1, ncol
+            do j = s, ncol
+                Ge(s,j) = sum(real(conjg(ve(:,s))*ve(:,j), dp))
+                Ge(j,s) = Ge(s,j)
+            end do
+            do j = 1, ncol
+                Cx(s,j) = sum(real(conjg(ve(:,s))*vo(:,j), dp))
+            end do
+        end do
+        tot_o = 0.d0
+        do j = 1, ncol
+            tot_o = tot_o + sum(real(conjg(vo(:,j))*vo(:,j), dp))
+        end do
+        if( tot_o <= DTINY )then
+            deallocate(ve, vo, Ge, Cx, evec, eval, cap, proj); return
+        endif
+        call jacobi(Ge, ncol, ncol, eval, evec, nrot)
+        call eigsrt(eval, evec, ncol, ncol)
+        ! capture(q): odd-halfset energy explained by the q-th even direction, u_q = sum_i V(i,q) e_i
+        ! normalised by sqrt(eval(q)) so u_q is a unit vector.
+        do q = 1, ncol
+            if( eval(q) <= DTINY )then
+                cap(q) = 0.d0; cycle
+            endif
+            do j = 1, ncol
+                proj(j) = sum(evec(:,q)*Cx(:,j))
+            end do
+            cap(q) = sum(proj*proj)/eval(q)
+        end do
+        d_gen = 0
+        do q = 1, ncol
+            if( eval(q) <= DTINY ) exit
+            if( cap(q)/eval(q) <= GEN_AGREE ) exit
+            d_gen = q
+        end do
+        d_gen = max(1, d_gen)
+        cum = sum(cap(1:d_gen))/tot_o
+        write(logfhandle,'(A,I0,A,F6.3,A)') '>>> FLEX_PCA d_generalizing=',d_gen, &
+            &'  (cross-halfset agreement; explains ',cum,' of held-out column energy) -- REPORT ONLY'
+        call flush(logfhandle)
+        deallocate(ve, vo, Ge, Cx, evec, eval, cap, proj)
+    end subroutine column_generalization_curve
 
     !> Convert each merged complex column C_q into its two real spatial representatives Re(ifft
     !! C_q)=Sigma*cos_q and Im(ifft C_q)=Sigma*sin_q.
@@ -1835,7 +2060,8 @@ contains
 
     !> Orthonormalize the real column representatives into the column subspace Utilde by Gram
     !! eigendecomposition, keeping every direction above a relative energy floor.
-    subroutine orthonormalize_representatives( params, build, realvols, nreal, utilde, utilde_real, d_tilde, svals )
+    subroutine orthonormalize_representatives( params, build, realvols, nreal, utilde, utilde_real, d_tilde, svals, &
+        &nptcls_basis )
         class(parameters),   intent(inout) :: params
         type(builder),       intent(inout) :: build
         type(image),         intent(inout) :: realvols(:)
@@ -1845,9 +2071,12 @@ contains
         integer,             intent(out)   :: d_tilde
         !> squared singular values of the representative set.
         real(dp), allocatable, optional, intent(out) :: svals(:)
+        !> particles that actually reached the basis stages. Only used to REPORT the
+        !! samples-per-parameter rank bound; it selects nothing.
+        integer, optional, intent(in) :: nptcls_basis
         real(dp), allocatable :: gram(:,:), evec(:,:), eval(:)
         real, pointer :: rmat_i(:,:,:), rmat_j(:,:,:)
-        integer :: i, q, nrot, keep, d_budget
+        integer :: i, q, nrot, keep, d_budget, d_cap, d_signal, d_samples, nbasis
         real(dp) :: lam_max, nrm
         logical  :: l_packed
         character(len=9) :: accum_model
@@ -1875,23 +2104,47 @@ contains
         ! the data supports (at 8 GB: d 177 instead of 250).
         l_packed = cov_packed_cgsolve()
         d_budget = cov_dim_budget(l_packed)
-        ! SIMPLE_COV_DTILDE pins the subspace dimension, so accumulation or solver changes can be compared
-        ! at a FIXED d instead of confounding the two
-        call cov_env_int('SIMPLE_COV_DTILDE', d_budget)
-        d_tilde  = max(1, min(keep, COV_MAX_DTILDE, d_budget))
+        ! data-driven rank, REPORT ONLY: the energy floor and the memory budget never ask how many
+        ! directions are real, so log what the data would support and let the discrepancy show
+        d_signal = cov_signal_rank(eval, nreal)
+        nbasis   = 0
+        if( present(nptcls_basis) ) nbasis = nptcls_basis
+        d_samples = 0
+        if( nbasis > 0 ) d_samples = &
+            &max(1, int((-1.d0 + sqrt(1.d0 + 8.d0*real(nbasis,dp)/COV_SAMPLES_PER_PARAM))/2.d0))
+        ! memory budget is a GUARD, not the chooser. SIMPLE_COV_DTILDE replaces both, so a fixed-d A/B
+        ! is never silently clamped by the box's RAM.
+        d_cap = min(d_budget, COV_DEFAULT_DTILDE)
+        call cov_env_int('SIMPLE_COV_DTILDE', d_cap)
+        d_tilde  = max(1, min(keep, COV_MAX_DTILDE, d_cap))
+        if( cov_env_int_on('SIMPLE_COV_DSIGNAL') ) d_tilde = max(1, min(d_tilde, d_signal))
+        if( d_samples > 0 )then
+            write(logfhandle,'(A,I0,A,I0,A,F4.1,A)') '>>> FLEX_PCA d_samples=',d_samples, &
+                &'  (samples-per-parameter bound from N=',nbasis,' at R=',COV_SAMPLES_PER_PARAM, &
+                &') -- REPORT ONLY'
+        endif
+        write(logfhandle,'(A,I0,A,A,A)') '>>> FLEX_PCA d_signal=',d_signal, &
+            &' (spectrum noise-bulk estimate; ', &
+            &trim(merge('BINDING ','reported',cov_env_int_on('SIMPLE_COV_DSIGNAL'))), &
+            &' -- set SIMPLE_COV_DSIGNAL=1 to bind it)'
         if( l_packed )then
             accum_model = 'packed+CG'
         else
             accum_model = 'dense'
         endif
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA d_tilde=',d_tilde, &
-            &'  (above energy floor=',keep,', memory cap=',d_budget,', rank cap=',COV_MAX_DTILDE,')'
+        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA d_tilde=',d_tilde, &
+            &'  (above energy floor=',keep,', memory cap=',d_budget,', rank cap=',COV_MAX_DTILDE, &
+            &', default=',COV_DEFAULT_DTILDE,')'
         write(logfhandle,'(A,A,A,F8.3,A,F6.3,A)') '>>> FLEX_PCA reduced-solve accumulator model: ', &
             &trim(accum_model),', ',cov_accum_bytes(d_tilde, l_packed)/1.d9, &
             &' GB at this d_tilde (budget ',COV_ATHR_BUDGET/1.d9,' GB)'
         if( d_tilde == d_budget .and. keep > d_budget )then
             write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA NOTE: the column subspace is limited by the &
                 &reduced-solve memory budget, not by the data; ',keep,' directions cleared the energy floor.'
+        else if( d_tilde == COV_DEFAULT_DTILDE .and. d_budget > COV_DEFAULT_DTILDE )then
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA NOTE: d_tilde is the measured default; the &
+                &memory budget would have allowed ',d_budget,'. Override with SIMPLE_COV_DTILDE=',d_budget, &
+                &' to restore the budget-chosen rank.'
         endif
         call flush(logfhandle)
         allocate(utilde(d_tilde), utilde_real(d_tilde))
@@ -3199,7 +3452,7 @@ contains
         real     :: fc
         real(dp) :: sig2, a, aa, e_mm, myv, mu_q, sd_q
         integer  :: it, q, r, i, ithr, nthr, batchlims(2), batchsz, ibatch, row, d_new, es(3), filtsz, sh
-        integer  :: npairs, nval, pstride, npp, ihalf, nkept, nprobe_max
+        integer  :: npairs, nval, npp, nparts_sub
         logical  :: l_probe_distr
         real(dp),            allocatable :: gam_sum(:)
         complex,             allocatable :: cme(:,:,:,:), cmo(:,:,:,:)
@@ -3234,31 +3487,13 @@ contains
         ! COV_PROBE_MAX_PTCLS is the total across all processes, so each takes its share -- a worker
         ! sees only its own partition and would otherwise take the whole budget nparts times over.
         ! SIMPLE_COV_PROBE_STRIDE still wins if set.
-        nprobe_max = max(1, COV_PROBE_MAX_PTCLS / max(1, params%nparts))
-        pstride    = 1
-        if( nptcls > nprobe_max ) pstride = (nptcls + nprobe_max - 1) / nprobe_max
-        call cov_env_int('SIMPLE_COV_PROBE_STRIDE', pstride)
-        pstride = max(1, pstride)
-        allocate(ppinds(nptcls))
-        npp = 0
-        do ihalf = 0, 1
-            nkept = 0
-            do i = 1, nptcls
-                if( build%spproj_field%get_eo(pinds(i)) /= ihalf ) cycle
-                if( mod(nkept, pstride) == 0 )then
-                    npp = npp + 1
-                    ppinds(npp) = pinds(i)
-                endif
-                nkept = nkept + 1
-            end do
-        end do
-        if( npp < 2 ) THROW_HARD('probe stride left too few particles; lower SIMPLE_COV_PROBE_STRIDE')
-        call hpsort(ppinds(:npp))   ! restore project order so batched image reads stay sequential
-        if( pstride > 1 )then
-            write(logfhandle,'(A,I0,A,I0,A,I0,A)') '>>> FLEX_PCA PROBE stride ',pstride, &
-                &': refining the basis on ',npp,' of ',nptcls,' particles'
-            call flush(logfhandle)
-        endif
+        ! Only a WORKER divides the total by nparts: it holds one fromp/top partition. The master
+        ! holds every particle, so passing nparts there divides twice and inflates the stride by
+        ! exactly nparts. See cov_stage_subsample, which the initialiser shares.
+        nparts_sub = 1
+        if( flex_pca_is_worker() ) nparts_sub = params%nparts
+        call cov_stage_subsample(build, pinds, nptcls, nparts_sub, COV_PROBE_MAX_PTCLS, &
+            &'SIMPLE_COV_PROBE_STRIDE', 'SIMPLE_COV_PROBE_MAX', 'PROBE', ppinds, npp)
         allocate(z(npp,ncomp))
         do it = 1, niters
             t_it = tic()

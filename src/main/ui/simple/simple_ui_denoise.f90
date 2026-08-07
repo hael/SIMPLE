@@ -474,10 +474,8 @@ subroutine new_icm2D( prgtab )
             &even/odd agreement is kept per state. Costs 2*nbins extra reconstruction passes', &
             '# bins, 1=off', .false., 1.0, &
         &visibility=UI_VIS_ADVANCED)
-        call flex_pca%add_input(UI_FILT, 'min_neff', 'num', &
-            'Minimum effective particles per state', 'Kernel bandwidth is expanded until this effective support is reached', &
-            '# particles', .false., 2000.0, &
-        &visibility=UI_VIS_ADVANCED)
+        ! min_neff is not a flex_pca input: on the default path the GMM replaces the kernel weights and
+        ! bandwidth, so it cannot change the maps. Reachable as SIMPLE_COV_MIN_NEFF for the opt-out paths.
         call flex_pca%add_input(UI_FILT, 'heldout', 'binary', &
             'Cross-halfset (held-out) embedding', &
             'Fit the covariance basis on one halfset and embed the other, then swap, so no particle is &

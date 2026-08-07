@@ -11,7 +11,8 @@ use simple_parameters,             only: parameters
 use simple_flex_pca_distr, only: flex_pca_is_master, flex_pca_is_worker, flex_pca_nparts, &
     &flex_pca_run_stage, PCA_STAGE_STATES
 use simple_flex_pca_parts, only: write_state_weights_round
-use simple_flex_reconstructor_latent_ops, only: insert_plane_oversamp_multi_scaled
+use simple_flex_reconstructor_latent_ops, only: insert_plane_oversamp_multi_scaled, &
+    &insert_planes_oversamp_multi_scaled_batch
 use simple_reconstructor,          only: reconstructor
 implicit none
 private
@@ -54,6 +55,10 @@ contains
         type(fplane_type), allocatable :: fpls(:)
         type(image) :: gridcorr_img, state_img
         type(ori) :: orientation
+        ! batch buffers for insert_planes_oversamp_multi_scaled_batch; bvalid_c/bvalid_o are disjoint
+        type(ori),            allocatable :: borientations(:)
+        real(dp),             allocatable :: bscales(:,:)
+        logical,              allocatable :: bvalid_c(:), bvalid_o(:)
         real(dp), allocatable :: scales(:)
         real, allocatable :: lowpass_filters(:,:)
         logical, allocatable :: has_lowpass_filter(:)
@@ -139,6 +144,8 @@ contains
         endif
         smpd_crop_bak    = params%smpd_crop
         params%smpd_crop = smpd_rec
+        allocate(borientations(MAXIMGBATCHSZ), bscales(nstates,MAXIMGBATCHSZ))
+        allocate(bvalid_c(MAXIMGBATCHSZ), bvalid_o(MAXIMGBATCHSZ))
         do ibatch=1,size(pinds),MAXIMGBATCHSZ
             batchlims=[ibatch,min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
             batchsz=batchlims(2)-batchlims(1)+1
@@ -150,25 +157,40 @@ contains
             endif
             call prep_imgs4rec(params,build,batchsz,build%imgbatch(:batchsz), &
                 &pinds(batchlims(1):batchlims(2)),fpls(:batchsz))
+            ! gather serially (get_ori/get_eo are not guaranteed thread-safe), then one parallel
+            ! region per target; under l_fuse each halfset gets its own mask and call
             do i=1,batchsz
                 iptcl=pinds(batchlims(1)+i-1)
                 call build%spproj_field%get_ori(iptcl,orientation)
-                if( orientation%isstatezero() ) cycle
-                scales=real(state_weights(batchlims(1)+i-1,:),dp)
-                if( l_fuse )then
+                bscales(:,i) = real(state_weights(batchlims(1)+i-1,:),dp)
+                bvalid_c(i)  = .not. orientation%isstatezero()
+                bvalid_o(i)  = .false.
+                if( bvalid_c(i) .and. l_fuse )then
                     ! one insertion per particle, into the halfset it belongs to; the union is the
                     ! combined map and each half is its own deliverable
                     eo_i = build%spproj_field%get_eo(iptcl)
                     if( eo_i == 1 )then
-                        call insert_plane_oversamp_multi_scaled(recs_o,build%pgrpsyms,orientation,fpls(i),scales,scales)
-                    else
-                        call insert_plane_oversamp_multi_scaled(state_recs,build%pgrpsyms,orientation,fpls(i),scales,scales)
+                        bvalid_o(i) = .true.
+                        bvalid_c(i) = .false.
                     endif
-                else
-                    call insert_plane_oversamp_multi_scaled(state_recs,build%pgrpsyms,orientation,fpls(i),scales,scales)
                 endif
+                call borientations(i)%copy(orientation)
             end do
+            if( l_fuse .and. any(bvalid_o(:batchsz)) )then
+                call insert_planes_oversamp_multi_scaled_batch(recs_o, build%pgrpsyms, &
+                    &borientations(:batchsz), fpls(:batchsz), bscales(:,:batchsz), &
+                    &bscales(:,:batchsz), bvalid_o(:batchsz), batchsz)
+            endif
+            if( any(bvalid_c(:batchsz)) )then
+                call insert_planes_oversamp_multi_scaled_batch(state_recs, build%pgrpsyms, &
+                    &borientations(:batchsz), fpls(:batchsz), bscales(:,:batchsz), &
+                    &bscales(:,:batchsz), bvalid_c(:batchsz), batchsz)
+            endif
         end do
+        do i = 1, MAXIMGBATCHSZ
+            call borientations(i)%kill
+        end do
+        deallocate(borientations, bscales, bvalid_c, bvalid_o)
         call orientation%kill
         params%smpd_crop = smpd_crop_bak
         call cleanup_rec_buffers(build,fpls)

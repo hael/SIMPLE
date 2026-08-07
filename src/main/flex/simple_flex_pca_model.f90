@@ -96,7 +96,11 @@ contains
         ! against a budget instead.
         nstates    = max(3, params%npreimages)
         call check_state_memory_budget(params, nstates)
-        min_neff   = max(20, min(nptcls, params%min_neff))
+        ! env-only: inert on the default path (the GMM replaces the kernel weights and bandwidth),
+        ! live on the nbins>1 and SIMPLE_COV_GMM=0 opt-outs
+        min_neff = params%min_neff
+        call cov_env_int_pub('SIMPLE_COV_MIN_NEFF', min_neff)
+        min_neff = max(20, min(nptcls, min_neff))
         state_axis = params%state_axis      ! <0 path, 0 k-means, >=1 legacy single axis
         ! nkern decouples the number of components the STATE STAGE uses from neigs, the number estimated.
         nkern      = params%nkern

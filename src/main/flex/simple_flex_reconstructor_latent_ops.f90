@@ -5,6 +5,7 @@ use simple_reconstructor, only: reconstructor
 implicit none
 
 public :: insert_plane_oversamp_multi_scaled, insert_plane_oversamp_coupled_scaled
+public :: insert_planes_oversamp_multi_scaled_batch
 public :: insert_planes_oversamp_coupled_batch_scaled
 public :: accumulate_planes_oversamp_coupled_stats_batch
 public :: test_coupled_batch_accumulation
@@ -195,6 +196,197 @@ contains
         end subroutine kb_apod_vecs_3d_fast
 
     end subroutine insert_plane_oversamp_multi_scaled
+
+    ! Batched insert_plane_oversamp_multi_scaled: identical arithmetic, one OpenMP region per batch
+    ! instead of one per particle. Same shape as insert_planes_oversamp_coupled_batch_scaled -- every
+    ! per-record quantity is derived serially up front (se%apply goes through oris%get_ori, not
+    ! guaranteed thread-safe) and only the h-line sweep is threaded, with the stride keeping
+    ! concurrent lines off any one interpolation cell, so no privatisation and no atomics. Bit-for-bit
+    ! identical to calling the per-particle routine in a loop.
+    subroutine insert_planes_oversamp_multi_scaled_batch( recs, se, orientations, fpls, &
+        &data_scales, density_scales, valid, nrecords )
+        use simple_math, only: ceil_div, floor_div
+        type(reconstructor), intent(inout) :: recs(:)
+        class(sym),          intent(inout) :: se
+        type(ori),           intent(inout) :: orientations(:)
+        type(fplane_type),   intent(in)    :: fpls(:)
+        real(dp),            intent(in)    :: data_scales(:,:), density_scales(:,:)
+        logical,             intent(in)    :: valid(:)
+        integer,             intent(in)    :: nrecords
+        type(kbinterpol) :: kbwin
+        type(ori) :: o_sym
+        complex   :: comp_base, cmplx_raw
+        real, allocatable :: rotmats(:,:,:,:), dscale(:,:), rscale(:,:)
+        integer, allocatable :: fpllims(:,:,:), nyq_disks(:), act_all(:,:), nact_all(:)
+        real      :: loc(3), hrow(3), ctfsq_raw
+        real      :: wx(LATENT_WDIM), wy(LATENT_WDIM), wz(LATENT_WDIM), ww
+        real      :: r11, r12, r13, r21, r22, r23
+        integer   :: win(2,3), h, k, l, nsym, isym, iwinsz, stride, fpllims_pd(3,2)
+        integer   :: hp, kp, pf, ix, iy, iz, hx, ky, mz, q, iq, ncomp, i, nact
+        integer   :: nyq_eff, h_sq, k_max_h, k_lo, k_hi, exp_lb(3), exp_ub(3)
+        real      :: pf2, eps_norm, inv_wdim
+        ncomp = size(recs)
+        if( ncomp <= 0 .or. nrecords <= 0 ) return
+        if( size(orientations) < nrecords .or. size(fpls) < nrecords .or. size(valid) < nrecords )then
+            THROW_HARD('record array smaller than batch; insert_planes_oversamp_multi_scaled_batch')
+        endif
+        if( size(data_scales,1) < ncomp .or. size(data_scales,2) < nrecords .or. &
+            &size(density_scales,1) < ncomp .or. size(density_scales,2) < nrecords )then
+            THROW_HARD('scale array smaller than batch; insert_planes_oversamp_multi_scaled_batch')
+        endif
+        if( .not. allocated(recs(1)%cmat_exp) )then
+            THROW_HARD('expanded matrix does not exist; insert_planes_oversamp_multi_scaled_batch')
+        endif
+        kbwin    = kbinterpol(KBWINSZ, KBALPHA)
+        iwinsz   = ceiling(KBWINSZ - 0.5)
+        stride   = LATENT_SAFE_STRIDE
+        exp_lb   = lbound(recs(1)%cmat_exp)
+        exp_ub   = ubound(recs(1)%cmat_exp)
+        nsym     = se%get_nsym()
+        pf       = OSMPL_PAD_FAC
+        pf2      = real(pf*pf)
+        eps_norm = epsilon(1.0)
+        inv_wdim = 1.0 / real(LATENT_WDIM)
+        allocate(rotmats(3,3,nsym,nrecords), source=0.)
+        allocate(dscale(ncomp,nrecords), rscale(ncomp,nrecords), source=0.)
+        allocate(fpllims(3,2,nrecords), nyq_disks(nrecords), nact_all(nrecords), source=0)
+        allocate(act_all(ncomp,nrecords), source=0)
+        do i = 1, nrecords
+            if( .not. valid(i) ) cycle
+            ! live components only -- the kernel state weights have compact support, so a particle
+            ! typically sits inside one or two of the nstates targets and the rest are exact zeros
+            nact = 0
+            do q = 1, ncomp
+                dscale(q,i) = real(data_scales(q,i))
+                rscale(q,i) = real(max(0.d0, density_scales(q,i)))
+                if( dscale(q,i) /= 0. .or. rscale(q,i) /= 0. )then
+                    nact = nact + 1
+                    act_all(nact,i) = q
+                endif
+            end do
+            nact_all(i) = nact
+            if( nact == 0 ) cycle
+            rotmats(:,:,1,i) = orientations(i)%get_mat()
+            do isym = 2, nsym
+                call se%apply(orientations(i), isym, o_sym)
+                rotmats(:,:,isym,i) = o_sym%get_mat()
+            end do
+            fpllims_pd     = fpls(i)%frlims
+            fpllims(:,:,i) = fpllims_pd
+            fpllims(1,1,i) = ceil_div (fpllims_pd(1,1), pf)
+            fpllims(1,2,i) = floor_div(fpllims_pd(1,2), pf)
+            fpllims(2,1,i) = ceil_div (fpllims_pd(2,1), pf)
+            fpllims(2,2,i) = floor_div(fpllims_pd(2,2), pf)
+            nyq_eff = recs(1)%get_lfny(1)
+            if( fpls(i)%nyq > 0 ) nyq_eff = min(nyq_eff, max(1, fpls(i)%nyq / pf))
+            nyq_disks(i) = nyq_eff * (nyq_eff + 1)
+        end do
+        call o_sym%kill
+        !$omp parallel default(shared) private(i,h,k,l,h_sq,k_max_h,k_lo,k_hi,cmplx_raw,&
+        !$omp& ctfsq_raw,comp_base,wx,wy,wz,ww,win,loc,hrow,hp,kp,r11,r12,r13,r21,r22,r23,&
+        !$omp& isym,ix,iy,iz,hx,ky,mz,q,iq,nact) proc_bind(close)
+        do i = 1, nrecords
+            if( .not. valid(i) ) cycle
+            nact = nact_all(i)
+            if( nact == 0 ) cycle
+            do isym = 1, nsym
+                r11 = rotmats(1,1,isym,i); r12 = rotmats(1,2,isym,i); r13 = rotmats(1,3,isym,i)
+                r21 = rotmats(2,1,isym,i); r22 = rotmats(2,2,isym,i); r23 = rotmats(2,3,isym,i)
+                do l = 0, stride-1
+                    !$omp do schedule(static,1)
+                    do h = fpllims(1,1,i)+l, fpllims(1,2,i), stride
+                        h_sq = h*h
+                        if( h_sq > nyq_disks(i) ) cycle
+                        k_max_h = int(sqrt(real(nyq_disks(i) - h_sq)))
+                        k_lo    = max(fpllims(2,1,i), -k_max_h)
+                        k_hi    = min(fpllims(2,2,i),  k_max_h)
+                        hp      = h * pf
+                        hrow(1) = real(h) * r11
+                        hrow(2) = real(h) * r12
+                        hrow(3) = real(h) * r13
+                        do k = k_lo, k_hi
+                            kp = k * pf
+                            if( kp <= 0 )then
+                                cmplx_raw = fpls(i)%cmplx_plane(hp,kp)
+                                ctfsq_raw = fpls(i)%ctfsq_plane(hp,kp)
+                            else
+                                cmplx_raw = conjg(fpls(i)%cmplx_plane(-hp,-kp))
+                                ctfsq_raw = fpls(i)%ctfsq_plane(-hp,-kp)
+                            endif
+                            if( abs(real(cmplx_raw)) + abs(aimag(cmplx_raw)) <= TINY .and. &
+                                &ctfsq_raw <= TINY ) cycle
+                            loc(1) = hrow(1) + real(k) * r21
+                            loc(2) = hrow(2) + real(k) * r22
+                            loc(3) = hrow(3) + real(k) * r23
+                            win(1,:) = nint(loc)
+                            win(2,:) = win(1,:) + iwinsz
+                            win(1,:) = win(1,:) - iwinsz
+                            if( win(2,1) < NONREDUNDANT_HMIN ) cycle
+                            if( any(win(1,:) < exp_lb) .or. any(win(2,:) > exp_ub) ) cycle
+                            comp_base = pf2 * cmplx_raw
+                            call kb_apod_vecs_3d_fast_b(loc, wx, wy, wz)
+                            do iz = 1, LATENT_WDIM
+                                mz = win(1,3) + iz - 1
+                                do iy = 1, LATENT_WDIM
+                                    ky = win(1,2) + iy - 1
+                                    do ix = 1, LATENT_WDIM
+                                        hx = win(1,1) + ix - 1
+                                        ww = wx(ix) * (wy(iy) * wz(iz))
+                                        do iq = 1, nact
+                                            q = act_all(iq,i)
+                                            recs(q)%cmat_exp(hx,ky,mz) = recs(q)%cmat_exp(hx,ky,mz) + &
+                                                &(dscale(q,i) * comp_base) * ww
+                                            recs(q)%rho_exp(hx,ky,mz) = recs(q)%rho_exp(hx,ky,mz) + &
+                                                &(rscale(q,i) * ctfsq_raw) * ww
+                                        end do
+                                    end do
+                                end do
+                            end do
+                        end do
+                    end do
+                    !$omp end do
+                end do
+            end do
+        end do
+        !$omp end parallel
+        deallocate(rotmats, dscale, rscale, fpllims, nyq_disks, act_all, nact_all)
+
+    contains
+
+        subroutine kb_apod_vecs_3d_fast_b( loc, wx, wy, wz )
+            real, intent(in)  :: loc(3)
+            real, intent(out) :: wx(:), wy(:), wz(:)
+            integer :: i2, win_lo(3)
+            real    :: base(3), ww3(3), sx, sy, sz
+            win_lo = nint(loc) - iwinsz
+            base   = real(win_lo) - loc
+            do i2 = 1, LATENT_WDIM
+                ww3    = kbwin%apod_fast(base + real(i2-1))
+                wx(i2) = ww3(1)
+                wy(i2) = ww3(2)
+                wz(i2) = ww3(3)
+            end do
+            sx = sum(wx)
+            sy = sum(wy)
+            sz = sum(wz)
+            if( abs(sx) > eps_norm )then
+                wx = wx * (1.0 / sx)
+            else
+                wx = inv_wdim
+            endif
+            if( abs(sy) > eps_norm )then
+                wy = wy * (1.0 / sy)
+            else
+                wy = inv_wdim
+            endif
+            if( abs(sz) > eps_norm )then
+                wz = wz * (1.0 / sz)
+            else
+                wz = inv_wdim
+            endif
+        end subroutine kb_apod_vecs_3d_fast_b
+
+    end subroutine insert_planes_oversamp_multi_scaled_batch
 
     subroutine insert_plane_oversamp_coupled_scaled( recs, rho_cross_exp, se, o, fpl, data_scales, density_scales )
         use simple_math, only: ceil_div, floor_div
@@ -1394,6 +1586,9 @@ contains
         endif
     end subroutine latent_projection_weights
 
+    ! Out-of-lattice windows return zero. Keep this test INSIDE: bounds are per volume, and callers
+    ! pass volumes (utilde) that need not share mean_rec's lattice, so hoisting it to the caller and
+    ! testing once against mean_rec is an out-of-bounds read.
     pure function weighted_expanded_cmat( rec, win, wx, wy, wz ) result( val )
         type(reconstructor), intent(in) :: rec
         integer,             intent(in) :: win(2,3)
