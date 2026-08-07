@@ -81,7 +81,7 @@ contains
         class(stream_p03_initial_analysis), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         integer,                   parameter       :: NCLS_MIN = 10, NCLS_MAX = 100, NPARTS2D = 8, NTHUMB_MAX = 10
-        integer,                   parameter       :: NMICS_PLAN(2) = [20, 50]    ! number of micrographs to import for each cycle of the opening2D plan; must have at least 2 steps and no more than 9 (for IPC routing via single-digit cluster counts)]
+        integer,                   parameter       :: NMICS_PLAN(2) = [100, 500]    ! number of micrographs to import for each cycle of the opening2D plan; must have at least 2 steps and no more than 9 (for IPC routing via single-digit cluster counts)]
         real,                      parameter       :: LPSTOP2D = 8.                 ! low-pass stop resolution (A) for abinitio2D/3D setup
         integer,                   parameter       :: NSAMPLE2D = 2000              ! number of particles to sample for abinitio2D setup
         integer,                   parameter       :: NSTATES3D = 3                 ! number of classes for abinitio3D
