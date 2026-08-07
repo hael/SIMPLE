@@ -36,6 +36,7 @@ contains
         class(strategy2D_snhc_smpl_many), intent(inout) :: self
         class(oris),                 intent(inout) :: os
         real    :: inpl_corrs(self%s%nrots)
+        real    :: cls_corrs(self%s%nrefs)
         real    :: inpl_corr, inpl_dist
         integer :: sorted_cls_inds(self%s%nrefs), vec_nrots(self%s%nrots)
         integer :: iref, isample, inpl_ind, order_ind, class_rank
@@ -85,8 +86,11 @@ contains
             end do
             ! Performs shift search for top scoring subset
             call self%s%inpl_srch_peaks(min(s2D%snhc_smpl_ncls, self%s%nsolns))
-            ! Class selection
-            call power_sampling( s2D%power, self%s%nrefs, s2D%class_space_corrs(:, self%s%ithr), &
+            ! Class selection: sample from a working copy, power_sampling sorts
+            ! its correlation argument in place and class_space_corrs must stay
+            ! class-indexed for store_solution/assign_ori
+            cls_corrs = s2D%class_space_corrs(:, self%s%ithr)
+            call power_sampling( s2D%power, self%s%nrefs, cls_corrs, &
                                 &sorted_cls_inds, s2D%snhc_smpl_ncls, &
                                 &self%s%best_class, class_rank, self%s%best_corr )
             self%s%nrefs_eval = nrefs_coarse_eval

@@ -23,7 +23,6 @@ type strategy2D_alloc
     logical, allocatable :: do_inplsrch(:)
     ! per thread
     real,    allocatable :: class_space_corrs(:,:)     !< class vs. particle correlations
-    real,    allocatable :: class_space_e3s(:,:)       !< in-plane Euler angles (e3)
     integer, allocatable :: class_space_inplinds(:,:)  !< in-plane rotation indices
 end type strategy2D_alloc
 
@@ -46,7 +45,6 @@ contains
         if( allocated(s2D%do_inplsrch)         ) deallocate(s2D%do_inplsrch)
         ! per thread
         if( allocated(s2D%class_space_corrs)   ) deallocate(s2D%class_space_corrs)
-        if( allocated(s2D%class_space_e3s)     ) deallocate(s2D%class_space_e3s)
         if( allocated(s2D%class_space_inplinds)) deallocate(s2D%class_space_inplinds)
     end subroutine clean_strategy2D
 
@@ -122,13 +120,10 @@ contains
         endif
         ! per-thread class-space arrays
         if( allocated(s2D%class_space_corrs)    ) deallocate(s2D%class_space_corrs)
-        if( allocated(s2D%class_space_e3s)      ) deallocate(s2D%class_space_e3s)
         if( allocated(s2D%class_space_inplinds) ) deallocate(s2D%class_space_inplinds)
         allocate(s2D%class_space_corrs(   params%ncls, nthr_glob),&
-                &s2D%class_space_e3s(     params%ncls, nthr_glob),&
                 &s2D%class_space_inplinds(params%ncls, nthr_glob))
         s2D%class_space_corrs    = -huge(1.0)
-        s2D%class_space_e3s      = 0.
         s2D%class_space_inplinds = 0
     end subroutine prep_strategy2D_glob
 
@@ -171,14 +166,13 @@ contains
     !> init thread-specific class-space search arrays (call per-particle before searching)
     subroutine prep_strategy2D_thread( ithr )
         integer, intent(in) :: ithr
-        if( .not.allocated(s2D%class_space_corrs) .or. .not.allocated(s2D%class_space_e3s) .or. .not.allocated(s2D%class_space_inplinds) )then
+        if( .not.allocated(s2D%class_space_corrs) .or. .not.allocated(s2D%class_space_inplinds) )then
             THROW_HARD('prep_strategy2D_thread called before class-space arrays were allocated')
         endif
         if( ithr < 1 .or. ithr > size(s2D%class_space_corrs,2) )then
             THROW_HARD('prep_strategy2D_thread received invalid thread index')
         endif
         s2D%class_space_corrs(   :,ithr) = -huge(1.0)
-        s2D%class_space_e3s(     :,ithr) = 0.
         s2D%class_space_inplinds(:,ithr) = 0
     end subroutine prep_strategy2D_thread
 

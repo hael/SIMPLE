@@ -78,7 +78,7 @@ type :: polarft_calc
     complex(sp), allocatable :: pfts_ptcls_den(:,:,:)    !< denoised-particle polar sections for hybrid objective
     ! FFTW plans
     ! batched FFT plans for vectors of length nrots (nk transforms)
-    type(c_ptr) :: plan_fwd1_many, plan_bwd1_single, plan_mem_r2c_many
+    type(c_ptr) :: plan_fwd1_many, plan_fwd3_many, plan_bwd1_single, plan_mem_r2c_many
     ! batched FFT plans for vectors of length nrots (nrefs transforms)
     type(c_ptr) :: plan_bwd_many_refs
     ! Memoized terms
@@ -90,6 +90,9 @@ type :: polarft_calc
     complex(kind=c_float_complex), allocatable :: ft_ref2(:,:,:,:)
     ! buffer: (nrots,nk) holding cvec2 for all k
     type(fftw_cmat),               allocatable :: cmat2_many(:)  ! per thread
+    ! buffer: (nrots,3*nk) for the joint continuous evaluator; column sections
+    ! are objective | d/dsx | d/dsy, transformed in one batched execution
+    type(fftw_cmat),               allocatable :: cmat_joint_many(:)  ! per thread
     ! batched backward (c2r) plan: nrefs transforms of length nrots, in-place
     type(fftw_crmat),              allocatable :: crmat_many(:) ! per thread
     ! batched backward (c2r) plan: nk transforms of length nrots, in-place

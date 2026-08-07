@@ -32,11 +32,21 @@ contains
     subroutine srch_eval( self, os )
         class(strategy2D_eval), intent(inout) :: self
         class(oris),            intent(inout) :: os
+        real :: e3_in
         if( os%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch(os)
             self%s%nrefs_eval = self%s%nrefs
+            e3_in = os%e3get(self%s%iptcl)
             call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
             call self%s%assign_ori(os)
+            ! evaluation-only pass: the pose is unchanged by definition, so
+            ! restore the incoming e3 rather than the grid angle assign_ori
+            ! reconstructs from the integer index; this preserves fractional
+            ! e3 written by the continuous in-plane route.  With e3 unchanged
+            ! the in-plane distance is zero by definition; assign_ori computed
+            ! it against the temporary rounded angle, so overwrite it too
+            call os%e3set(self%s%iptcl, e3_in)
+            call os%set(self%s%iptcl, 'dist_inpl', 0.)
         else
             call os%reject(self%s%iptcl)
         endif

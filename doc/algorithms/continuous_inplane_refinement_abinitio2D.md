@@ -70,18 +70,31 @@ joint pose. A valid non-improving solve commits the newly selected discrete
 seed; an invalid solve retains the incoming assignment. Neither invokes the
 legacy callback.
 
+The final `store_solution` of the joint pose bypasses the score-improvement
+guard: the joint result restarts from the native shift, so its score is not
+comparable to the stored peak-search score (obtained at a shift that is
+discarded), and rejecting the store would couple the committed joint shift
+with a stale integer angle in `assign_ori`. When `assign_ori`'s class argmax
+selects a class other than the jointly refined one, that class's grid angle
+is written (the coupled-pose guard), preserving legacy selection semantics.
+Evaluation-only passes (`refine=eval`) restore the incoming `e3` verbatim; a
+pass that performs no search must not degrade a fractional angle to its grid
+cell.
+
 ## Joint evaluator
 
 The evaluator uses thread-local coefficient workspaces. For each pose it
-forms the shift-phase products on the polar samples — `argtransf_x·S·REF` and
-`argtransf_y·S·REF`, extended to the second half-circle as `-conjg(...)`
-because the phase arguments flip sign across the Friedel mate, plus `S·REF`
-itself when shifted — and forward-transforms them: two angular FFT batches at
-zero shift, three otherwise. The resulting coefficient series for the
-objective and both shift gradients evaluate directly at `theta`, and the
-angle gradient follows from differentiating the series. It performs no
-inverse FFT, constructs no discrete loss vector, and makes no per-evaluation
-allocation. The `argtransf` products must be formed before the angular
+fills a `(nrots, 3·nk)` buffer with three column sections on the polar
+samples — `S·REF`, `argtransf_x·S·REF`, and `argtransf_y·S·REF`, the latter
+two extended to the second half-circle as `-conjg(...)` because the phase
+arguments flip sign across the Friedel mate — and forward-transforms all
+three sections in a single batched FFT execution (`plan_fwd3_many`). The
+resulting coefficient series for the objective and both shift gradients
+evaluate directly at `theta`, and the angle gradient follows from
+differentiating the series. It performs no inverse FFT, constructs no
+discrete loss vector, and makes no per-evaluation allocation. At exactly
+zero shift only the shift-phase multiplication is skipped; there is no
+dead-zone threshold, so the evaluator is smooth in the shift variables. The `argtransf` products must be formed before the angular
 transform; multiplying after it is not equivalent (it would require a
 convolution in angular frequency) and silently corrupts the shift gradient.
 

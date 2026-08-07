@@ -281,13 +281,16 @@ contains
         integer(kind=c_int) :: wsdm_ret, rank, howmany, n(1),  inembed(1), onembed(1), istride, ostride, idist, odist
         integer             :: ithr
         call self%kill_memo_workspace
-        allocate(self%drvec(nthr_glob), self%cmat2_many(nthr_glob), self%crmat1_many(nthr_glob), self%crvec1(nthr_glob))
+        allocate(self%drvec(nthr_glob), self%cmat2_many(nthr_glob), self%cmat_joint_many(nthr_glob),&
+            &self%crmat1_many(nthr_glob), self%crvec1(nthr_glob))
         ! convenience objects
         do ithr = 1,nthr_glob
             self%drvec(ithr)%p = fftw_alloc_real(int(self%nrots, c_size_t))
             call c_f_pointer(self%drvec(ithr)%p, self%drvec(ithr)%r, [self%nrots])
             self%cmat2_many(ithr)%p = fftwf_alloc_complex(int(self%nrots * self%nk, c_size_t))
             call c_f_pointer(self%cmat2_many(ithr)%p, self%cmat2_many(ithr)%c, [self%nrots, self%nk])
+            self%cmat_joint_many(ithr)%p = fftwf_alloc_complex(int(self%nrots * 3 * self%nk, c_size_t))
+            call c_f_pointer(self%cmat_joint_many(ithr)%p, self%cmat_joint_many(ithr)%c, [self%nrots, 3*self%nk])
             ! Allocate complex storage for (pftsz+1) * nk transforms
             self%crmat1_many(ithr)%p = fftwf_alloc_complex(int((self%pftsz+1) * self%nk, c_size_t))
             ! Complex view: (pftsz+1, nk)
@@ -320,6 +323,14 @@ contains
         &self%cmat2_many(1)%c, inembed, istride, idist, &
         &self%cmat2_many(1)%c, onembed, ostride, odist, &
         &FFTW_FORWARD, ior(FFTW_MEASURE, FFTW_USE_WISDOM))
+        ! joint continuous evaluator: objective + d/dsx + d/dsy sections in
+        ! one batched execution over 3*nk contiguous columns
+        howmany = int(3 * self%nk, c_int)
+        self%plan_fwd3_many = fftwf_plan_many_dft( rank, n, howmany, &
+        &self%cmat_joint_many(1)%c, inembed, istride, idist, &
+        &self%cmat_joint_many(1)%c, onembed, ostride, odist, &
+        &FFTW_FORWARD, ior(FFTW_MEASURE, FFTW_USE_WISDOM))
+        howmany = int(self%nk, c_int)
         ! Input complex length is (n/2+1) = pftsz+1
         inembed(1) = int(self%pftsz+1, c_int)
         idist      = int(self%pftsz+1, c_int)
@@ -398,12 +409,14 @@ contains
             do ithr = 1,size(self%drvec)
                 call fftw_free( self%drvec(ithr)%p)
                 call fftwf_free(self%cmat2_many(ithr)%p)
+                call fftwf_free(self%cmat_joint_many(ithr)%p)
                 call fftwf_free(self%crmat1_many(ithr)%p)
                 call fftwf_free(self%crvec1(ithr)%p)
             enddo
-            deallocate(self%drvec, self%cmat2_many, self%crmat1_many, self%crvec1)
+            deallocate(self%drvec, self%cmat2_many, self%cmat_joint_many, self%crmat1_many, self%crvec1)
             call fftwf_destroy_plan(self%plan_mem_r2c_many)
             call fftwf_destroy_plan(self%plan_fwd1_many)
+            call fftwf_destroy_plan(self%plan_fwd3_many)
             call fftwf_destroy_plan(self%plan_bwd1_single)
         endif
         if( allocated(self%crmat_many) )then

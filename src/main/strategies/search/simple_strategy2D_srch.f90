@@ -12,6 +12,12 @@ public :: strategy2D_srch, strategy2D_spec
 private
 #include "simple_local_flags.inc"
 
+! continuous joint-route outcomes, mirroring strategy3D_srch
+integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED  = 0
+integer, parameter :: CONT_ROUTE_IMPROVED       = 1
+integer, parameter :: CONT_ROUTE_NO_IMPROVEMENT = 2
+integer, parameter :: CONT_ROUTE_INVALID        = 3
+
 type strategy2D_spec
     type(eul_prob_tab2D), pointer :: eulprob_obj_part2D => null()
     real    :: stoch_bound = 0.
@@ -56,6 +62,7 @@ type strategy2D_srch
     logical                 :: continuous_active = .false. !< selected candidates receive continuous refinement
     logical                 :: has_continuous_e3 = .false. !< whether continuous_e3 is valid
     real                    :: continuous_e3 = 0. !< continuous e3 angle for the selected candidate
+    integer                 :: continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED !< joint-route outcome for the selected candidate
   contains
     procedure :: new
     procedure :: prep4srch
@@ -66,6 +73,8 @@ type strategy2D_srch
     procedure :: store_solution
     procedure :: assign_ori
     procedure :: uses_continuous_refinement
+    procedure :: continuous_pose_committed
+    procedure :: get_continuous_route_status
     procedure :: kill
 end type strategy2D_srch
 
@@ -101,6 +110,7 @@ contains
         endif
         self%continuous_active = continuous_eligible .and. trim(self%p_ptr%inpl_cont) == 'yes'
         self%has_continuous_e3 = .false.
+        self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
         ! construct composites
         self%trs        =  self%p_ptr%trs
         lims(:,1)       = -self%p_ptr%trs
@@ -162,6 +172,7 @@ contains
         self%sgd_accepted_steps    = 0
         self%sgd_used              = .false.
         self%has_continuous_e3 = .false.
+        self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
         self%ithr       = omp_get_thread_num() + 1
         ! find previous discrete alignment parameters
         self%l_fresh_start = is_fresh_2D_start(self%p_ptr, self%p_ptr%which_iter)
@@ -354,14 +365,21 @@ contains
         class(strategy2D_srch), intent(inout) :: self
         real :: rotmat(2,2), xy_native(2)
         if( .not. self%continuous_active ) return
-        if( self%best_class < 1 .or. self%best_class > self%nrefs ) return
-        if( self%best_rot < 1 .or. self%best_rot > self%nrots ) return
+        if( self%best_class < 1 .or. self%best_class > self%nrefs )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+        if( self%best_rot < 1 .or. self%best_rot > self%nrots )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
         call rotmat2d(self%b_ptr%pftc%get_rot(self%best_rot), rotmat)
         xy_native = matmul(self%best_shvec, transpose(rotmat))
         block
         real     :: cxy(3), joint_lims(3,2)
         real(dp) :: rotind_frac
         integer  :: irot
+        logical  :: evaluation_valid, improved
         joint_lims(1,:) = [-self%trs, self%trs]
         joint_lims(2,:) = [-self%trs, self%trs]
         if( .not. self%p_ptr%l_doshift )then
@@ -372,12 +390,28 @@ contains
         call self%joint_inpl_optimizer%set_indices(self%best_class, self%iptcl)
         call self%joint_inpl_optimizer%set_limits(joint_lims)
         cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
-            &sh_rot=.true., rotind_frac=rotind_frac)
-        if( irot <= 0 ) return
+            &sh_rot=.true., rotind_frac=rotind_frac, &
+            &evaluation_valid=evaluation_valid, improved=improved)
+        if( .not. evaluation_valid )then
+            ! numerically invalid solve: retain the incoming assignment
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
+        if( irot < 1 .or. irot > self%nrots )then
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
         self%best_rot   = irot
         self%best_corr  = cxy(1)
         self%best_shvec = cxy(2:3)
-        call store_continuous_e3(self, rotind_frac)
+        if( improved )then
+            call store_continuous_e3(self, rotind_frac)
+            self%continuous_route_outcome = CONT_ROUTE_IMPROVED
+        else
+            ! valid non-improving solve: commit the newly selected grid seed;
+            ! has_continuous_e3 stays false so assign_ori writes the grid angle
+            self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
+        endif
         end block
     end subroutine refine_selected_continuously
 
@@ -394,6 +428,24 @@ contains
         class(strategy2D_srch), intent(in) :: self
         uses_continuous_refinement = self%continuous_active
     end function uses_continuous_refinement
+
+    !> whether the joint route ran to a committed pose (improved or grid-seed
+    !! commit) for the currently selected candidate
+    pure logical function continuous_pose_committed( self )
+        class(strategy2D_srch), intent(in) :: self
+        continuous_pose_committed = &
+            &self%continuous_route_outcome == CONT_ROUTE_IMPROVED .or. &
+            &self%continuous_route_outcome == CONT_ROUTE_NO_IMPROVEMENT
+    end function continuous_pose_committed
+
+    pure subroutine get_continuous_route_status( self, attempted, improved, no_improvement, invalid )
+        class(strategy2D_srch), intent(in)  :: self
+        logical,                intent(out) :: attempted, improved, no_improvement, invalid
+        attempted      = self%continuous_route_outcome /= CONT_ROUTE_NOT_ATTEMPTED
+        improved       = self%continuous_route_outcome == CONT_ROUTE_IMPROVED
+        no_improvement = self%continuous_route_outcome == CONT_ROUTE_NO_IMPROVEMENT
+        invalid        = self%continuous_route_outcome == CONT_ROUTE_INVALID
+    end subroutine get_continuous_route_status
 
     subroutine inpl_srch_peaks( self, npeaks_inpl )
         class(strategy2D_srch), intent(inout) :: self
@@ -415,7 +467,6 @@ contains
         endif
         ! reset class-space arrays so only shift-refined entries will be valid
         s2D%class_space_corrs(   :,self%ithr) = -1.
-        s2D%class_space_e3s(     :,self%ithr) = 0.
         s2D%class_space_inplinds(:,self%ithr) = 0
         do isample = self%nrefs-npeaks_inpl+1,self%nrefs
             iref     = sorted_cls_inds(isample)
@@ -460,11 +511,18 @@ contains
         endif
         if( s2D%class_space_corrs(ref, self%ithr) <= -huge(1.0)/2.0 )then
             self%nsolns = self%nsolns + 1
+        elseif( self%continuous_pose_committed() .and. ref == self%best_class .and. &
+            &inpl_ind == self%best_rot )then
+            ! the joint continuous solve owns the final pose for this class
+            ! (improved or grid-seed commit): its discrete index must be
+            ! stored even when its score does not exceed the stored
+            ! peak-search score (obtained at a shift that is discarded),
+            ! otherwise assign_ori couples the committed joint shift with a
+            ! stale integer angle and drops the fractional e3
         elseif( corr <= s2D%class_space_corrs(ref, self%ithr) )then
             return
         endif
         s2D%class_space_inplinds(ref,self%ithr) = inpl_ind
-        s2D%class_space_e3s(     ref,self%ithr) = 360. - self%b_ptr%pftc%get_rot(inpl_ind)
         s2D%class_space_corrs(   ref,self%ithr) = corr
     end subroutine store_solution
 
@@ -564,6 +622,7 @@ contains
         call self%joint_inpl_optimizer%kill
         self%continuous_active = .false.
         self%has_continuous_e3 = .false.
+        self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
     end subroutine kill
 
 end module simple_strategy2D_srch
