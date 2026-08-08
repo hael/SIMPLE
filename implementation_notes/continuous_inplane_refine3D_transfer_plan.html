@@ -1,0 +1,4596 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/continuous_inplane_refine3D_transfer_plan.html">
+      
+      
+        <link rel="prev" href="continuous_3D_refinement_on_pcg_operator.html">
+      
+      
+        <link rel="next" href="continuous_inplane_rotation_development_plan.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Continuous in-plane rotation transfer plan for refine3D - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#continuous-in-plane-rotation-transfer-plan-for-refine3d" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Continuous in-plane rotation transfer plan for refine3D
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement in abinitio2D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Mask in nu_filt3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#project-summary-and-quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project summary and quick start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plan-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plan Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#final-completion-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Final completion audit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#peer-review-follow-up-p2-and-p3-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Peer-review follow-up: P2 and P3 findings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Peer-review follow-up: P2 and P3 findings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p2-findings-to-resolve-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2 findings to resolve first
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p3-findings-and-remediation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3 findings and remediation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-remediation-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2 remediation status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#existing-2d-contract-to-preserve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing 2D contract to preserve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-refine3d-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current refine3D path
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exact-transfer-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exact transfer boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-0-establish-the-legacy-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-0: establish the legacy baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-1-add-the-policy-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-1: add the policy gate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-2-extend-the-3d-search-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-2: extend the 3D search state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-3-add-joint-refinement-after-candidate-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-3: add joint refinement after candidate selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-4-activation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-4: activation policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-45-direct-joint-refinement-with-legacy-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-4.5: direct joint refinement with legacy fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-5-metadata-and-restart-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-5: metadata and restart behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation gates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation gates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gate-a-numerical-unit-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate A: numerical unit tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-b-3d-synthetic-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate B: 3D synthetic recovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-c-real-data-refine3d-default-off-regression" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate C: real-data refine3D default-off regression
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-d-real-data-opt-in-regression" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate D: real-data opt-in regression
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-e-rejection-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate E: rejection tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-file-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented file ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#definition-of-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Definition of done
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_reconstruction_as_gridding_replacement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D_pcg workflow integration: implementation note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D_pcg policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_28" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_28" id="__nav_10_28_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_28_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_28">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_7" id="__nav_11_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#project-summary-and-quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project summary and quick start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#plan-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plan Scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#final-completion-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Final completion audit
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#peer-review-follow-up-p2-and-p3-findings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Peer-review follow-up: P2 and P3 findings
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Peer-review follow-up: P2 and P3 findings">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#p2-findings-to-resolve-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2 findings to resolve first
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p3-findings-and-remediation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P3 findings and remediation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#p2-remediation-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        P2 remediation status
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#existing-2d-contract-to-preserve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing 2D contract to preserve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-refine3d-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current refine3D path
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exact-transfer-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exact transfer boundary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-0-establish-the-legacy-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-0: establish the legacy baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-1-add-the-policy-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-1: add the policy gate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-2-extend-the-3d-search-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-2: extend the 3D search state
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-3-add-joint-refinement-after-candidate-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-3: add joint refinement after candidate selection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-4-activation-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-4: activation policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-45-direct-joint-refinement-with-legacy-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-4.5: direct joint refinement with legacy fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3d-5-metadata-and-restart-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3D-5: metadata and restart behavior
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-gates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation gates
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Validation gates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gate-a-numerical-unit-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate A: numerical unit tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-b-3d-synthetic-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate B: 3D synthetic recovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-c-real-data-refine3d-default-off-regression" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate C: real-data refine3D default-off regression
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-d-real-data-opt-in-regression" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate D: real-data opt-in regression
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-e-rejection-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate E: rejection tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-file-ownership" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented file ownership
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#definition-of-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Definition of done
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="continuous-in-plane-rotation-transfer-plan-for-refine3d">Continuous in-plane rotation transfer plan for <code>refine3D</code><a class="headerlink" href="#continuous-in-plane-rotation-transfer-plan-for-refine3d" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Current policy (2026-08-07).</strong> This file is a historical implementation
+record. The earlier <code>refine=shc</code>-only gate, rejection of probabilistic modes,
+and invalid-result callback fallback described in later phase notes are
+superseded. The authoritative policy is
+<code>doc/policies/refine3D_policy.md</code>: <code>inpl_cont=no</code> uses the legacy callback;
+eligible <code>inpl_cont=yes</code> replaces every callback use with joint
+<code>(sx,sy,rotind_frac)</code> optimization, including probabilistic candidate
+profiling, and never falls back to the callback. Each joint solve discards
+incoming in-plane state, selects the best discrete cell once at the supplied
+native shift, and then optimizes within plus or minus two cells. The continuous
+route does not use the legacy 5-by-5 shift/all-angle coarse initializer or a
+persisted fractional restart seed.</p>
+</blockquote>
+<h2 id="project-summary-and-quick-start">Project summary and quick start<a class="headerlink" href="#project-summary-and-quick-start" title="Permanent link">&para;</a></h2>
+<p>This project adds an opt-in continuous in-plane refinement step to the
+standalone <code>refine3D</code> workflow. The existing search still selects the discrete
+state and projection direction. For the selected winner, the new route jointly
+refines the two image-plane shifts and in-plane angle,
+$(s_x,s_y,\theta)$, with the raw Euclidean objective. The historical
+grid-angle route remains the default.</p>
+<p>Enable the feature by supplying <code>inpl_cont=yes</code> together with
+<code>objfun=euclid</code>:</p>
+<pre><code class="language-bash">simple_exec \
+  prg=refine3D \
+  projfile=/absolute/path/input.simple \
+  mkdir=yes \
+  objfun=euclid \
+  inpl_cont=yes \
+  maxits=1 \
+  mskdiam=180 \
+  nparts=10 \
+  nthr=8
+</code></pre>
+<p>Omit <code>inpl_cont</code>, or set <code>inpl_cont=no</code>, to use the unchanged legacy path.
+The opt-in route requires raw Euclidean matching: <code>objfun=euclid</code>,
+<code>objfun_den=no</code>, <code>ptcl_src=raw</code>, and <code>projrec=no</code>. There is no <code>refine=shc</code>
+restriction. Deterministic, neighborhood, evaluation, and probabilistic
+matcher routes follow the same callback-replacement policy wherever they
+perform pose search; modes with no pose search invoke neither optimizer.</p>
+<p>Probability tables keep their established artifact format. They carry the
+rounded in-plane index, score, and rounded-frame shift while the fractional
+coordinate remains transient. After the final hard assignment, refine3D
+uses the stored rounded index only to recover the native shift, discards all
+prior in-plane state, selects the best discrete cell once at that shift, and
+reruns the joint optimizer. It persists fractional <code>e3</code>, integer <code>inpl</code>, shift,
+and score from one pose. Valid non-improving work commits the newly selected
+grid seed; invalid work retains the incoming candidate. Neither invokes the
+callback.</p>
+<p>The tests are organized under <code>production/tests</code>. Build and invoke the mother
+test from an already configured build tree:</p>
+<pre><code class="language-bash">repo=/absolute/path/hael_SIMPLE
+build=&quot;$repo/build&quot;
+
+cmake --build &quot;$build&quot; \
+  --target simple_test_continuous_inplane_refine3D \
+  --parallel 12
+
+cd &quot;$build&quot;
+simple_test_continuous_inplane_refine3D
+</code></pre>
+<p>The parameter-free command runs the self-contained policy and search-state
+groups and reports the project-backed baseline and synthetic recovery groups as
+skipped. Supply the project, expected baseline, and volume inputs to run all
+seven groups:</p>
+<pre><code class="language-bash">simple_test_continuous_inplane_refine3D \
+  projfile=/absolute/path/refine3D_output.simple \
+  snapshot=&quot;$PWD/refine3D_current_baseline.tsv&quot; \
+  expected_snapshot=/absolute/path/refine3D_legacy_baseline.tsv \
+  vol1=/absolute/path/reference_volume.mrc
+</code></pre>
+<p>Create the expected baseline once from the accepted legacy project before
+running the comparison:</p>
+<pre><code class="language-bash">simple_test_continuous_inplane_refine3D \
+  case=baseline \
+  projfile=/absolute/path/legacy_refine3D_output.simple \
+  snapshot=&quot;$PWD/refine3D_legacy_baseline.tsv&quot;
+</code></pre>
+<p>An individual group can be rerun with <code>case=&lt;name&gt;</code>, for example
+<code>case=policy_suite</code>, <code>case=direct_route</code>, <code>case=synthetic_recovery</code>, or
+<code>case=metadata_project</code>. The files named
+<code>simple_continuous_inplane_refine3D_*.f90</code> are helper modules compiled into the
+mother executable; they are not separate test executables.</p>
+<hr />
+<blockquote>
+<p><strong>Historical record boundary.</strong> The remaining sections preserve the staged
+transfer history and validation observations. Any statements below that
+limit activation to <code>refine=shc</code>, reject <code>refine=prob*</code>, or prescribe a
+legacy callback fallback are descriptions of superseded intermediate policy.</p>
+</blockquote>
+<h2 id="plan-scope">Plan Scope<a class="headerlink" href="#plan-scope" title="Permanent link">&para;</a></h2>
+<p>This plan transfers the validated 2D continuous in-plane refinement design from
+<code>abinitio2D</code> to the standalone <code>refine3D</code> workflow.</p>
+<p>The scope is deliberately limited to:</p>
+<pre><code class="language-text">simple_exec -&gt; prg=refine3D
+</code></pre>
+<p>This phase does not modify <code>abinitio3D</code>, <code>abinitio3D_cavgs</code>, SGD, or the CC
+objective. The default behavior must remain unchanged.</p>
+<h2 id="final-completion-audit">Final completion audit<a class="headerlink" href="#final-completion-audit" title="Permanent link">&para;</a></h2>
+<p>Core feature status on 2026-08-07: <strong>complete and verified on Oracle Linux</strong>.
+The subsequent P2/P3 hardening corrections are also complete and verified by
+the Oracle acceptance run recorded in the peer-review follow-up section.</p>
+<p>Phases 3D-0 through 3D-5 are implemented. The policy, search-state, joint-state,
+direct-route, metadata, restart, default-off, opt-in, and multi-iteration
+real-data checks described below have passed on Oracle Linux. A diagnostic
+one-iteration run also accounted for all 3,081 active particles: 2,839 joint
+refinements improved the objective, 242 were finite but non-improving, and none
+entered the legacy fallback.</p>
+<p>The later initialization correction supersedes the restart-seed and
+selected-angle retention behavior measured in that audit. For the common
+single-state search, <code>xy_first</code> remains the native shift seed, but the joint
+route now discards the incoming integer/fractional angle and selects the best
+discrete cell once at <code>xy_first</code>. A finite non-improving solve stores that new
+grid cell, score, and rotated shift with false continuous validity. Persisted
+fractional metadata is not reused as a restart seed, and invalid numerical work
+retains the incoming candidate without requesting the legacy callback. The
+focused <code>direct_route</code> and route-identity contracts cover the new behavior.</p>
+<p>The planned truth-controlled 3D recovery fixture is implemented as the named
+<code>synthetic_recovery</code> case. It fixes the 3D projection direction,
+constructs a particle with a known off-grid in-plane angle and known image-plane
+shift, and checks finite evaluation, non-worsening raw Euclidean loss, improved
+angular recovery, and bounded shift recovery through the production PFTC joint
+optimizer. Its first Oracle run exposed a fixture mismatch: starting the joint
+optimizer at zero shift reduced the objective but converged to an
+angle/translation-coupled local minimum. Production <code>refine3D</code> does not start
+there. It first runs the legacy alternating angle/shift preselection search and
+uses the resulting native-frame <code>xy_first</code> to score the discrete candidates.
+The fixture now reproduces that production seed with an explicit five-pixel
+translation range before invoking the joint optimizer. The corrected fixture,
+<code>direct_route</code>, and all seven mother-suite groups subsequently passed on Oracle
+Linux.</p>
+<p>The final policy audit found that <code>inpl_cont=yes</code> still accepted the non-search
+<code>refine=eval</code> and <code>refine=sigma</code> modes. <code>eval</code> could reach the continuous pose
+update even though it should only evaluate a pose; <code>sigma</code> accepted the option
+without performing refinement. Both modes are now rejected in the commander
+command-shape gate and the typed parameter-consistency gate. Focused
+<code>policy_eval</code> and <code>policy_sigma</code> rejection cases passed on Oracle Linux together
+with the eligible default/off/on contract and every earlier rejection case.
+The first post-audit smoke attempt exposed one additional no-improvement-route
+defect. <code>minimize_joint</code> preserves its legacy API by returning <code>irot=0</code> when a
+valid evaluation finds no strict improvement. The new seed-retention branch
+then used that output value in <code>get_rot</code>, producing an out-of-range failure on
+multiple distributed partitions. <code>refine_selected_continuously</code> now preserves
+the selected grid index before calling the optimizer and uses that saved index
+only to rotate and retain the non-improving seed. The optimizer API and its
+legacy callers remain unchanged.</p>
+<p>The corrected Oracle smoke completed and accounted for all 3,081 active
+particles: 2,830 improved, 251 produced a finite no-improvement result, and
+zero entered fallback. The totals balanced exactly, proving that the corrected
+no-improvement branch executed in production. Output
+<code>27_refine3D/betagal.simple</code> then passed the metadata contract with 3,081 active
+particles, 1,930 continuous angles, and zero invalid indices, non-finite values,
+or integer/angle mismatches on the 440-angle grid.</p>
+<p>Those outputs completed the original feature acceptance. The peer-review
+hardening added afterward must pass its targeted Oracle checks before the
+current worktree is committed. Another long multi-iteration run is not
+required unless the short smoke checks expose a regression.</p>
+<h2 id="peer-review-follow-up-p2-and-p3-findings">Peer-review follow-up: P2 and P3 findings<a class="headerlink" href="#peer-review-follow-up-p2-and-p3-findings" title="Permanent link">&para;</a></h2>
+<p>The 2026-08-07 peer review of commit <code>6e8b0d521</code> found no P0 or P1
+correctness blocker. It identified the following hardening and maintainability
+work. The detailed review is recorded in the Obsidian report
+<code>302 Executive peer review and code walkthrough - continuous in-plane refine3D.md</code>.</p>
+<h3 id="p2-findings-to-resolve-first">P2 findings to resolve first<a class="headerlink" href="#p2-findings-to-resolve-first" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Default-off continuous-state overhead.</strong> The non-probabilistic 3D search
+   currently allocates, resets, and writes fractional in-plane coordinates and
+   validity flags even when <code>inpl_cont=no</code>. The numerical legacy result is
+   unchanged, but the default route pays continuous-only memory and hot-path
+   write costs. Allocate and update these arrays only for the opt-in route.</li>
+<li><strong>Incomplete joint-result validity check.</strong> <code>minimize_joint</code> verifies that
+   its initial and final costs are finite, but it does not verify that the
+   returned optimizer coordinate vector is finite and inside its active
+   bounds before using <code>nint</code> and returning metadata. Invalid coordinates must
+   set <code>evaluation_valid=.false.</code> and enter the existing legacy fallback.</li>
+<li><strong>Enabled deterministic-mode surface exceeds production validation.</strong> The
+   gate rejects known unsupported modes but otherwise admits deterministic
+   modes beyond the distributed <code>refine=shc</code> route validated with biological
+   data. Until those modes and shared-memory execution are tested, restrict the
+   public opt-in contract to <code>refine=shc</code> and reject other explicit modes with
+   a clear message.</li>
+<li><strong>Baseline helper is not a comparator.</strong> The baseline test validates a
+   project and replaces a TSV snapshot, but it does not compare the snapshot
+   with an expected result. Add an explicit expected-snapshot comparison mode
+   with exact integer checks and documented floating-point tolerances.</li>
+</ol>
+<h3 id="p3-findings-and-remediation">P3 findings and remediation<a class="headerlink" href="#p3-findings-and-remediation" title="Permanent link">&para;</a></h3>
+<ol>
+<li>The public commander and typed parameter layer duplicated the compatibility
+   policy, while the focused negative tests directly exercised only the
+   commander gate. <strong>Resolved locally:</strong> both layers now call the same pure
+   <code>refine3D_inpl_cont_policy_error</code> decision function owned by
+   <code>simple_parameters</code>; the commander only gathers effective command values,
+   and typed worker validation supplies resolved parameter values.</li>
+<li>The reviewed commander refinement-mode block called <code>value%kill</code> on fatal
+   branches and then contained a later test of the same value. The P2
+   refinement-mode allowlist removed this pattern incidentally; it remains
+   recorded here as a resolved peer-review observation.</li>
+<li>Rejection tests used fixed log filenames in the build directory. Concurrent
+   mother-suite runs could overwrite one another. <strong>Resolved locally:</strong> every
+   rejection log now includes the mother-suite process ID and case label.</li>
+<li>Historical pending statements remained in this plan after final Oracle
+   acceptance, and the definition of done inherited an <code>abinitio2D</code> coarse
+   stage split that standalone <code>refine3D</code> does not have. <strong>Resolved locally:</strong>
+   completion language now records both accepted core behavior and completed
+   peer-review validation, and the final criteria describe per-iteration
+   <code>refine3D</code> activation rather than early and late stages.</li>
+</ol>
+<p>P2 remediation is tracked as part of the feature before the implementation is
+described as hardened beyond the validated distributed <code>refine=shc</code> route.</p>
+<h3 id="p2-remediation-status">P2 remediation status<a class="headerlink" href="#p2-remediation-status" title="Permanent link">&para;</a></h3>
+<p>Implementation status on 2026-08-07: all four P2 corrections are implemented
+and verified by Oracle Linux compilation, focused contracts, the complete
+mother suite, and matched production smoke settings.</p>
+<ol>
+<li><strong>Default-off continuous-state overhead: implemented.</strong>
+   <code>simple_strategy3D_alloc.f90</code> now allocates the fractional-coordinate and
+   validity arrays only for <code>inpl_cont=yes</code>. <code>store_solution</code> preserves the
+   historical score, shift, and integer-angle writes when those optional
+   arrays are absent. The search-state contract now exercises this default-off
+   storage route and verifies that it does not create continuous-only state.</li>
+<li><strong>Joint-result coordinate validity: implemented.</strong>
+   <code>simple_pftc_shsrch_grad.f90</code> now requires every returned optimizer
+   coordinate to be finite and inside the active L-BFGS-B limits, allowing a
+   small floating-point tolerance. A violation sets
+   <code>evaluation_valid=.false.</code> and therefore uses the established legacy
+   fallback in <code>simple_strategy3D_srch.f90</code>.</li>
+<li><strong>Deterministic-mode surface: implemented.</strong> Both the public commander
+   gate and typed parameter validation now permit the opt-in route only with
+   base <code>refine=shc</code>. The strategy repeats this condition as defense in depth.
+   <code>policy_neigh</code> was added alongside the existing <code>eval</code>, <code>sigma</code>, and
+   probabilistic rejection cases.</li>
+<li><strong>Baseline comparison: implemented.</strong> The baseline helper retains an
+   explicit generate-only mode and adds <code>expected_snapshot</code>, <code>snapshot_atol</code>,
+   and <code>snapshot_rtol</code>. Comparison mode checks the header, row count, integer
+   fields, finite floating values, and floating values within the documented
+   absolute-plus-relative tolerance. The mother suite runs this group only
+   when both the project and expected snapshot are supplied.</li>
+</ol>
+<p>Observed acceptance:</p>
+<pre><code class="language-text">policy suite: all eligible and nine rejection cases passed
+search state: default-off allocation and candidate storage passed
+baseline: generate-only and exact comparison passed for 3,081 active particles
+mother suite: 7/7 groups passed, zero skipped, zero failed
+default-off smoke: 3,081 active, 0 continuous, 0 invalid/non-finite/mismatch
+opt-in smoke: 3,081 attempted, 2,848 improved, 233 no-improvement, 0 fallback
+opt-in metadata: 1,937 continuous, 0 invalid/non-finite/mismatch
+</code></pre>
+<p>The second P3 finding was removed incidentally by the P2 mode allowlist: the
+commander now reads each command value before <code>value%kill</code> and never inspects a
+killed <code>string</code>. All four P3 corrections passed the same Oracle acceptance
+boundary as the P2 work.</p>
+<h2 id="existing-2d-contract-to-preserve">Existing 2D contract to preserve<a class="headerlink" href="#existing-2d-contract-to-preserve" title="Permanent link">&para;</a></h2>
+<p>The public option is:</p>
+<pre><code class="language-text">inpl_cont=no|yes
+</code></pre>
+<p><code>no</code> is the default. It preserves the historical grid-angle path.</p>
+<p><code>yes</code> is an explicit opt-in. It applies only to an eligible Euclidean search.
+The search first selects a discrete candidate. It then jointly refines</p>
+<p>$$
+\mathbf{x} = (s_x, s_y, \theta).
+$$</p>
+<p>Here $s_x$ and $s_y$ are the two-dimensional particle-image shifts used by
+the polar Fourier matching objective. They are not the three components of a
+free-space 3D translation.</p>
+<p>The integer rotation index remains available for legacy consumers. The
+continuous angle is retained separately in orientation metadata.</p>
+<p>The 3D transfer must preserve this same sequence:</p>
+<pre><code class="language-text">discrete candidate selection
+    -&gt; optional continuous joint refinement
+    -&gt; legacy integer metadata plus continuous angle metadata
+</code></pre>
+<h2 id="current-refine3d-path">Current <code>refine3D</code> path<a class="headerlink" href="#current-refine3d-path" title="Permanent link">&para;</a></h2>
+<pre><code class="language-text">simple_exec
+  -&gt; simple_exec_refine3D.f90
+  -&gt; simple_commanders_refine3D.f90
+  -&gt; simple_refine3D_strategy.f90
+  -&gt; simple_strategy3D_matcher.f90
+  -&gt; simple_strategy3D_* search strategy
+  -&gt; simple_strategy3D_srch.f90
+  -&gt; simple_pftc_shsrch_grad.f90
+  -&gt; simple_polarft_corr.f90
+</code></pre>
+<p>The numerical integration point is <code>simple_strategy3D_srch.f90</code>.
+The commander and parallel strategy should carry policy and lifecycle state;
+they should not implement the angular mathematics.</p>
+<p>The current 3D search already performs continuous optimization of the
+two-dimensional image shift through <code>pftc_shsrch_grad</code>, but it stores only an
+integer in-plane rotation index. The transfer therefore extends the existing
+3D search result rather than replacing the 3D search architecture.</p>
+<p>The orientation object also exposes <code>get_3Dshift()</code>, and it can contain a
+<code>z</code> field. That does not mean that <code>refine3D</code> currently optimizes $s_z$ in the
+particle-matching loop. The current search calls <code>get_2Dshift()</code> and passes a
+two-component shift to the PFTC objective. A viewing-direction translation is
+not an independently identifiable image shift in this projection-matching
+step. It must not be added to the continuous optimizer unless a separate 3D
+objective and a clear metadata/update contract are designed.</p>
+<h2 id="exact-transfer-boundary">Exact transfer boundary<a class="headerlink" href="#exact-transfer-boundary" title="Permanent link">&para;</a></h2>
+<p>The transfer follows the same candidate-selection boundary as <code>abinitio2D</code>.</p>
+<p>In 2D, class identity and the initial angle index are selected discretely. The
+selected class is kept fixed, while the angle and two image shifts are jointly
+refined as</p>
+<p>$$
+\mathbf{x}_{2D}=(s_x,s_y,\theta).
+$$</p>
+<p>In <code>refine3D</code>, state identity, projection direction, and the initial in-plane
+angle index are selected discretely. The selected state and projection
+direction remain fixed, while the in-plane angle and two image shifts are
+jointly refined as</p>
+<p>$$
+\mathbf{x}_{3D}=(s_x,s_y,\gamma).
+$$</p>
+<p>The existing PFTC reference is already a two-dimensional reprojection for the
+selected 3D projection direction. Therefore this three-variable polish is the
+direct, testable transfer of the validated 2D algorithm.</p>
+<p>Full continuous viewing-direction or five-parameter pose refinement is outside
+this plan. It would require a new arbitrary-orientation central-slice evaluator
+and derivatives with respect to the 3D rotation. Those are not part of the
+current PFTC reference-table contract and are not needed for continuous
+in-plane rotation in <code>refine3D</code>.</p>
+<h2 id="phase-3d-0-establish-the-legacy-baseline">Phase 3D-0: establish the legacy baseline<a class="headerlink" href="#phase-3d-0-establish-the-legacy-baseline" title="Permanent link">&para;</a></h2>
+<p>Implementation status: complete and verified on Oracle Linux. No <code>refine3D</code>
+production file is changed by this phase.</p>
+<p>The verified project was the interrupted real-data beta-galactosidase
+<code>refine3D_auto</code> checkpoint after two fully assembled iterations and the third
+distributed matcher pass. The baseline reader reported:</p>
+<pre><code class="language-text">total particles:       4231
+active particles:      3081
+invalid indices:          0
+non-finite records:       0
+correlation sum:       1.1696115581989288E+03
+squared-shift sum:     6.8470346561560500E+05
+</code></pre>
+<p>The run ended with <code>SIMPLE_TEST_CONT_INPL_REFINE3D_BASELINE NORMAL STOP</code>.</p>
+<p>Before changing code, run <code>refine3D</code> with the current checkout and record:</p>
+<ul>
+<li>normal completion;</li>
+<li>output orientation metadata;</li>
+<li>integer in-plane indices;</li>
+<li>shifts and objective values;</li>
+<li>refinement-mode and iteration behavior;</li>
+<li>shared-memory and distributed execution behavior, where available.</li>
+</ul>
+<p>The baseline must use the default with no continuous option supplied.</p>
+<p>Acceptance condition: the current <code>refine3D</code> result is reproducible and the
+existing grid-only path is understood before the opt-in path is introduced.</p>
+<p>The registered mother test is:</p>
+<pre><code class="language-text">simple_test_continuous_inplane_refine3D
+</code></pre>
+<p>A parameter-free mother-suite run skips the project-dependent baseline with a
+clear notice and continues with every self-contained test group. Supplying both
+<code>projfile</code> and <code>expected_snapshot</code> enables baseline comparison and includes it
+in the pass/fail summary. A focused <code>case=baseline</code> invocation without
+<code>expected_snapshot</code> generates and validates a candidate snapshot but clearly
+reports <code>MODE: GENERATE_ONLY</code> rather than claiming a comparison.</p>
+<p>Phase-specific test implementations use the non-registered dependency naming
+pattern <code>simple_continuous_inplane_refine3D_*.f90</code>. The Phase 3D-0 dependency
+is <code>simple_continuous_inplane_refine3D_baseline.f90</code>. New phase tests will be
+added to the mother test as named child cases.</p>
+<p>Generate the expected snapshot from an accepted legacy <code>refine3D</code> invocation:</p>
+<pre><code class="language-text">simple_test_continuous_inplane_refine3D \
+  &quot;case=baseline&quot; \
+  &quot;projfile=/absolute/path/to/refine3D_output.simple&quot; \
+  &quot;snapshot=refine3D_legacy_baseline.tsv&quot;
+</code></pre>
+<p>Compare a current default-off project against that expected snapshot with:</p>
+<pre><code class="language-text">simple_test_continuous_inplane_refine3D \
+  &quot;case=baseline&quot; \
+  &quot;projfile=/absolute/path/to/current_refine3D_output.simple&quot; \
+  &quot;snapshot=refine3D_current_baseline.tsv&quot; \
+  &quot;expected_snapshot=refine3D_legacy_baseline.tsv&quot;
+</code></pre>
+<p>The snapshot records one deterministic row per active <code>ptcl3D</code> orientation:</p>
+<pre><code class="language-text">particle, state, projection index, in-plane index,
+Euler angles, two-dimensional shift, stored objective
+</code></pre>
+<p>The checker rejects missing or non-positive legacy indices and non-finite pose
+or objective values. It also prints aggregate correlation and squared-shift
+sums for a quick run-to-run comparison. In comparison mode it requires exact
+particle, state, projection, and integer in-plane indices. Euler angles,
+shifts, and scores use configurable absolute and relative tolerances, both
+defaulting to $10^{-6}$.</p>
+<p>The normal workflow log remains the authority for iteration count, refinement
+mode, normal completion, and shared-memory or distributed execution behavior.</p>
+<h2 id="phase-3d-1-add-the-policy-gate">Phase 3D-1: add the policy gate<a class="headerlink" href="#phase-3d-1-add-the-policy-gate" title="Permanent link">&para;</a></h2>
+<p>Implementation status: complete and verified on Oracle Linux. No continuous
+<code>refine3D</code> numerical path is enabled by this phase.</p>
+<p>The original focused policy suite passed the eligible default/off/on contract
+and eight rejection cases. The P2 hardening update adds <code>policy_neigh</code>, making
+the current rejection matrix nine cases:</p>
+<pre><code class="language-text">policy
+policy_bad_value
+policy_cc
+policy_hybrid
+policy_denoised
+policy_projrec
+policy_eval
+policy_sigma
+policy_probabilistic
+policy_neigh
+</code></pre>
+<p>The run ended with <code>Continuous in-plane refine3D policy suite: PASS</code>.</p>
+<p>Add <code>inpl_cont=no|yes</code> to the <code>refine3D</code> interface and parameter propagation.
+The default must be <code>no</code>.</p>
+<p>The gate must reject unsupported combinations before search setup. Initially:</p>
+<pre><code class="language-text">inpl_cont=yes and objfun=cc      -&gt; reject
+inpl_cont=yes and objfun=euclid -&gt; eligible for further checks
+</code></pre>
+<p>The gate must also preserve the current <code>refine3D</code> contracts for denoised or
+hybrid objectives, probabilistic assignment modes, and <code>projrec=yes</code>. Each
+route must be declared supported or excluded according to whether it provides
+the same raw Euclidean objective and metadata semantics as the joint polish.</p>
+<p>The initial hardened gate deliberately supports only raw-Euclidean
+<code>refine=shc</code> matching with <code>projrec=no</code>. It rejects <code>objfun=cc</code>,
+<code>objfun_den=yes</code>, <code>ptcl_src=den</code>, <code>projrec=yes</code>, and every explicit refinement
+mode other than <code>shc</code> when <code>inpl_cont=yes</code>. Omitting <code>inpl_cont</code>, or setting it
+to <code>no</code>, does not apply these restrictions.</p>
+<p>The focused Phase 3D-1 test does not require a project:</p>
+<pre><code class="language-text">simple_test_continuous_inplane_refine3D case=policy_suite
+</code></pre>
+<p>Acceptance conditions:</p>
+<ul>
+<li>omitted <code>inpl_cont</code> behaves exactly like <code>inpl_cont=no</code>;</li>
+<li>explicit <code>inpl_cont=no</code> behaves exactly like the omitted option;</li>
+<li>unsupported objective combinations fail clearly;</li>
+<li>no <code>inpl_cont</code> value changes 2D or SGD behavior.</li>
+</ul>
+<h2 id="phase-3d-2-extend-the-3d-search-state">Phase 3D-2: extend the 3D search state<a class="headerlink" href="#phase-3d-2-extend-the-3d-search-state" title="Permanent link">&para;</a></h2>
+<p>Implementation status: complete and verified on Oracle Linux. The new state is
+not consumed by orientation metadata or any numerical refinement path in this
+phase.</p>
+<p>The focused search-state test verified grid seeding, real <code>store_solution</code>
+integration, rejection preservation, improving-candidate replacement, and
+continuous-validity reset. It reported:</p>
+<pre><code class="language-text">REFINE3D_INPL_CONT_STATE GRID_SEED/STORE/REPLACE: PASS
+</code></pre>
+<p>Extend the per-particle and per-reference search state used by
+<code>simple_strategy3D_srch</code> so that a selected candidate can carry:</p>
+<ul>
+<li>the legacy integer in-plane index;</li>
+<li>the continuous rotation coordinate;</li>
+<li>the refined shifts;</li>
+<li>the reference/projection identity associated with the candidate;</li>
+<li>a validity flag for the continuous result.</li>
+</ul>
+<p>The continuous angle must remain attached to the selected 3D reference and
+particle. It must not be stored as a global or shared value.</p>
+<p>The integer index remains the fallback whenever refinement is rejected,
+non-finite, non-improving, or outside the bounded search interval.</p>
+<p>The implementation adds a fractional grid coordinate and validity flag beside
+the existing per-reference integer in-plane index. Every legacy
+<code>store_solution</code> call seeds the fractional coordinate from the integer index
+and clears validity. Allocation, per-thread reset, and teardown include both
+new arrays.</p>
+<p>The focused Phase 3D-2 test does not require a project:</p>
+<pre><code class="language-text">simple_test_continuous_inplane_refine3D case=search_state
+</code></pre>
+<h2 id="phase-3d-3-add-joint-refinement-after-candidate-selection">Phase 3D-3: add joint refinement after candidate selection<a class="headerlink" href="#phase-3d-3-add-joint-refinement-after-candidate-selection" title="Permanent link">&para;</a></h2>
+<p>Implementation status: complete and verified on Oracle Linux with the
+focused joint-state test and a one-iteration distributed production-context
+opt-in <code>refine3D</code> run.</p>
+<p>The implementation constructs the existing raw-Euclidean joint PFTC optimizer
+only when <code>inpl_cont=yes</code> passes the Phase 3D-1 policy. Immediately before the
+final orientation is assigned, it fixes the selected state and projection
+reference and refines only $(s_x,s_y,\theta)$. The accepted result updates the
+selected reference's shifts, nearest legacy integer index, continuous grid
+coordinate, validity flag, and score. The existing <code>minimize_joint</code> acceptance
+contract rejects non-finite or non-improving continuous updates. The
+post-audit correction additionally ensures that a non-improving grid candidate
+retains the same selected-angle shift used to compute its discrete score.</p>
+<p>At this phase the accepted continuous coordinate remains in the 3D search
+state. Final project metadata still uses the legacy integer angle until Phase
+3D-5 adds the explicit continuous-angle assignment and restart contract.</p>
+<p>The focused state-commit case is:</p>
+<pre><code class="language-text">simple_test_continuous_inplane_refine3D case=joint_state
+</code></pre>
+<p>The observed focused result was:</p>
+<pre><code class="language-text">REFINE3D_INPL_CONT_JOINT SELECTED_REFERENCE/STORE: PASS
+</code></pre>
+<p>The parameter-free mother suite also passed all three self-contained groups.
+It skipped the baseline with a clear missing-<code>projfile</code> notice and reported
+three groups run, one skipped, three passed, and zero failures. The full suite
+with the beta-galactosidase project passed all four groups.</p>
+<p>The first distributed production smoke run exposed a command-propagation
+defect before matching began. The parent <code>inpl_cont=yes</code> key was copied into an
+internal <code>reconstruct3D objfun=cc</code> startup command, where the global objective
+gate rejected it. The refine3D strategy now removes matcher-only arguments
+from reconstruction, sigma, power-spectrum, probabilistic, assembly, and
+postprocessing child commands while retaining <code>inpl_cont=yes</code> in the parent
+and scheduled matcher workers.</p>
+<p>After that correction, the policy test passed and the beta-galactosidase smoke
+run completed one distributed <code>refine3D</code> iteration with
+<code>objfun=euclid inpl_cont=yes</code>, <code>nparts=10</code>, and 3,081 active particles. The run
+completed sigma estimation, matching, volume assembly, and postprocessing. It
+reported 100% of active particles sampled and updated, then ended with:</p>
+<pre><code class="language-text">**** SIMPLE_REFINE3D NORMAL STOP ****
+</code></pre>
+<p>This establishes production execution and child-workflow isolation for Phase
+3D-3. Continuous-angle project metadata and restart persistence remain Phase
+3D-5 work.</p>
+<p>The 3D search should follow the 2D control flow:</p>
+<pre><code class="language-text">1. Search the 3D projection/reference candidates on the existing grid.
+2. Select the best discrete candidate.
+3. Search the two image-plane shifts using the existing 3D objective path.
+4. If inpl_cont=yes and the activation policy permits it, seed theta from the
+   selected integer in-plane index.
+5. Evaluate the joint objective and gradient for (sx, sy, theta).
+6. Apply bounded L-BFGS-B refinement to $(s_x,s_y,\theta)$.
+7. Accept only finite, improving results.
+8. Retain the integer index and store the continuous angle separately.
+9. Fall back completely to the legacy candidate on rejection.
+</code></pre>
+<p>The existing <code>minimize_joint</code> interface should be reused only if its objective
+and derivative semantics are valid for the 3D reference projection. If the
+3D objective requires a different evaluator, add that evaluator in the PFTC
+owner module rather than duplicating numerical logic in the matcher.</p>
+<h2 id="phase-3d-4-activation-policy">Phase 3D-4: activation policy<a class="headerlink" href="#phase-3d-4-activation-policy" title="Permanent link">&para;</a></h2>
+<p>Implementation status: complete and accepted. The focused policy suite and
+both opt-in and default-off one-iteration production workflows passed on
+Oracle Linux.</p>
+<p>The implementation does not introduce an <code>abinitio2D</code>-style stage number.
+Omitted <code>inpl_cont</code> and explicit <code>inpl_cont=no</code> leave
+<code>strategy3D_srch%continuous_active</code> false. Explicit <code>inpl_cont=yes</code> constructs
+and invokes the joint optimizer only for raw-Euclidean <code>refine=shc</code> matching.
+State selection, projection-direction selection, symmetry handling, and the
+initial integer in-plane candidate remain discrete. Unsupported CC, hybrid,
+denoised, projection-reconstruction, and probabilistic combinations are
+rejected before strategy setup. Matcher-only arguments are removed from all
+non-matcher child workflows.</p>
+<p>Base <code>prg=refine3D</code> owns an iteration loop, not the staged coarse-to-fine
+schedule used by <code>abinitio2D</code>. This phase must not invent a stage number or
+reuse the <code>abinitio2D</code> stage-3 rule.</p>
+<p>The intended policy is:</p>
+<pre><code class="language-text">inpl_cont omitted or no -&gt; historical refine3D path
+inpl_cont=yes and raw-Euclidean refine=shc search
+                        -&gt; discrete search followed by joint polish
+unsupported objective or search mode -&gt; reject or retain legacy path by an
+                                        explicit documented rule
+</code></pre>
+<p>Probabilistic pre-alignment, hard assignment, symmetry selection, state
+selection, and global projection-direction exploration remain discrete. A
+probabilistic candidate may receive deterministic polishing only after its
+assignment contract and stored objective semantics are verified separately.</p>
+<p>The default-off run omitted <code>inpl_cont</code>, processed all 3,081 active particles,
+completed reconstruction, matching, assembly, and postprocessing, and ended
+with <code>SIMPLE_REFINE3D NORMAL STOP</code>. Its total runtime was 414.8 seconds,
+compared with 420.1 seconds for the opt-in run. The observed 5.3-second or
+approximately 1.3% difference does not establish a performance regression and
+is small enough to include normal run-to-run variation. A later scientific
+off/on comparison should still use matched copies of the same checkpoint and
+schedule.</p>
+<h2 id="phase-3d-45-direct-joint-refinement-with-legacy-fallback">Phase 3D-4.5: direct joint refinement with legacy fallback<a class="headerlink" href="#phase-3d-45-direct-joint-refinement-with-legacy-fallback" title="Permanent link">&para;</a></h2>
+<p>Implementation status: complete and verified on Oracle Linux. Focused routing,
+the parameter-free mother suite, and matched-source opt-in/default-off
+production workflows passed. No commit has been created.</p>
+<p>The opt-in route must replace, rather than follow, the legacy post-selection
+alternating optimizer. The pre-selection shift seed remains part of the
+existing discrete candidate search. After that search, the control flow is:</p>
+<pre><code class="language-text">global discrete state/projection/angle selection
+    -&gt; select the final discrete winner
+    -&gt; directly refine (sx,sy,theta) for that fixed state/projection
+    -&gt; accept a finite improving joint result
+    -&gt; retain the discrete winner when a valid joint run finds no improvement
+    -&gt; run the legacy post-selection alternating optimizer only when the
+       joint evaluation is numerically invalid
+</code></pre>
+<p>The joint route is considered numerically invalid when it cannot produce
+finite initial and final objective values or when its required seed is invalid.
+A finite joint run that finds no strict improvement is complete and successful:
+it retains the discrete score, integer angle, and grid-validity state, commits
+the shift that was used to score that winner, and does not invoke the legacy
+optimizer. This no-improvement policy may be revisited after advisor review.</p>
+<p>The default-off route must continue to call the original post-selection
+alternating optimizer without any new branch or changed numerical input. The
+opt-in fallback must call that same legacy implementation with the untouched
+discrete winner. It must not duplicate the legacy algorithm.</p>
+<p>Acceptance conditions:</p>
+<ul>
+<li><code>inpl_cont=no</code> follows the historical post-selection path;</li>
+<li><code>inpl_cont=yes</code> does not run the legacy post-selection optimizer before the
+  joint attempt;</li>
+<li>a finite improving joint result is committed;</li>
+<li>a finite non-improving joint result retains the discrete seed without
+  invoking legacy refinement;</li>
+<li>an invalid joint evaluation invokes the legacy optimizer once for the fixed
+  final reference;</li>
+<li>state and projection identity remain fixed throughout joint refinement and
+  fallback.</li>
+</ul>
+<p>The implementation keeps the existing pre-selection shift search because its
+result is used to score the discrete reference/angle candidates. For
+<code>inpl_cont=yes</code>, the ordinary <code>inpl_srch</code> and <code>inpl_srch_peaks</code> calls return
+before invoking the legacy post-selection optimizer. The final winner then
+enters <code>refine_selected_continuously</code> directly. Its joint seed is the native
+pre-selection shift when discrete scoring used that shift; otherwise it is the
+selected candidate's stored reference-frame shift converted back to the native
+particle frame.</p>
+<p><code>minimize_joint</code> now reports numerical validity separately from strict
+improvement. A valid non-improving result preserves the discrete candidate and
+couples it to the shift used by its score. An invalid result calls the unchanged
+legacy <code>inpl_srch</code> routine with an explicit fallback override for the fixed
+final reference. Default-off calls continue through the ordinary legacy route.</p>
+<p>The focused routing contract is registered through the mother suite as:</p>
+<pre><code class="language-text">simple_test_continuous_inplane_refine3D case=direct_route
+</code></pre>
+<p>It checks default-off legacy retention, opt-in legacy bypass, valid
+no-improvement completion without fallback, score/shift consistency, and
+invalid-result fallback selection. After the post-audit update, the expected
+focused result is:</p>
+<pre><code class="language-text">REFINE3D_INPL_CONT_DIRECT BYPASS/NO_IMPROVEMENT/SCORE_SHIFT/FALLBACK: PASS
+</code></pre>
+<p>The parameter-free mother suite also passed its four self-contained groups:
+policy, search state, joint state, and direct routing. It skipped only the
+project-dependent baseline and reported five groups scheduled, four run, one
+skipped, four passed, and zero failures.</p>
+<p>Production-context validation used two one-iteration beta-galactosidase
+<code>refine3D</code> executions from the same source project and with identical workflow
+arguments except for the opt-in key. The <code>inpl_cont=yes</code> run completed normally
+in 405.2 seconds. The default-off run, with <code>inpl_cont</code> omitted, completed
+normally in 411.1 seconds. Both ended with:</p>
+<pre><code class="language-text">**** SIMPLE_REFINE3D NORMAL STOP ****
+</code></pre>
+<p>The opt-in observation was 5.9 seconds, or approximately 1.4%, faster. One
+pair of runs is insufficient to establish a performance improvement because
+search ordering and system load can vary. It does show that replacing the
+legacy post-selection optimizer did not introduce an obvious runtime penalty
+in this workflow. Repeated profiling may be performed later without blocking
+Phase 3D-5.</p>
+<h2 id="phase-3d-5-metadata-and-restart-behavior">Phase 3D-5: metadata and restart behavior<a class="headerlink" href="#phase-3d-5-metadata-and-restart-behavior" title="Permanent link">&para;</a></h2>
+<p>Implementation status: complete and verified on Oracle Linux. Focused state,
+opt-in metadata, default-off metadata, and opt-in restart metadata checks
+passed. No commit has been created.</p>
+<p>After each accepted update, verify that the 3D orientation metadata contains:</p>
+<ul>
+<li>the correct projection direction;</li>
+<li>the correct state assignment;</li>
+<li>the legacy integer in-plane index;</li>
+<li>the continuous angle in the project convention;</li>
+<li>the refined shifts.</li>
+</ul>
+<p>Restarted <code>refine3D</code> runs must preserve the continuous angle when the opt-in
+mode is enabled. Default-off runs must remain grid-aligned and restart exactly
+as before.</p>
+<p>The durable representation keeps two coupled values:</p>
+<ul>
+<li><code>inpl</code> remains the nearest integer rotation-grid index for legacy consumers
+  within the producing iteration;</li>
+<li>Euler <code>e3</code> stores the accepted continuous in-plane angle when
+  <code>inpl_cont=yes</code> is active.</li>
+</ul>
+<p>The default-off assignment is unchanged:</p>
+<pre><code class="language-text">inpl = selected integer grid index
+e3   = 360 - grid_rotation(inpl)
+</code></pre>
+<p>The opt-in assignment converts the accepted fractional rotation coordinate to
+the project Euler convention while retaining its nearest integer index. On
+restart, <code>refine3D</code> may rebuild the PFTC at a different crop or resolution, so
+the previous integer <code>inpl</code> is not authoritative on the new grid. Both the
+current integer seed and fractional coordinate are reconstructed from <code>e3</code>
+using the current PFTC spacing. The coordinate is unwrapped to the periodic
+copy nearest that current integer seed, so a coordinate near the end of one
+period can safely enter local bounds around index <code>1</code> through its equivalent
+coordinate near <code>1</code>.</p>
+<p>If the restarted particle selects the same state, projection, and integer
+in-plane index, the recovered continuous coordinate becomes the joint seed. A
+valid joint evaluation that finds no improvement retains this continuous
+restart pose. A changed winner starts from its newly selected grid seed. An
+invalid joint evaluation still enters the Phase 3D-4.5 legacy fallback.</p>
+<p>The self-contained metadata and restart contract is registered as:</p>
+<pre><code class="language-text">simple_test_continuous_inplane_refine3D case=metadata_state
+</code></pre>
+<p>The project-backed contract is available as <code>case=metadata_project</code>. It checks
+active particles for finite pose values, valid integer indices, nearest-index
+agreement between <code>inpl</code> and <code>e3</code>, grid-only metadata in default-off output,
+and continuous metadata in opt-in output. The producing grid must be supplied
+explicitly as <code>dang=...</code> or <code>nrots=...</code>; it must not be inferred from another
+project because separate refine3D runs may use different PFTC grids.</p>
+<p>The first project-backed opt-in check incorrectly inferred <code>dang=1.25</code> from a
+separate default-off project. Against the opt-in project this reported 1,113
+invalid indices and 1,954 nearest-index mismatches among 3,081 active
+particles. A second diagnostic run with an assumed 576-angle grid showed that
+both projects actually contained indices from 1 through 440. The producing
+grid was therefore confirmed as <code>nrots=440</code>, with <code>dang=0.818182</code> degrees.
+These failures exposed validator configuration errors; they were not accepted
+as production metadata failures. The validator now requires the producing
+run's explicit <code>dang</code> or <code>nrots</code>, and restart no longer trusts an integer index
+produced on a potentially different PFTC grid.</p>
+<p>Project-backed metadata validation then passed on Oracle Linux. The opt-in
+project contained 3,081 active particles, 1,224 continuous angles, and zero
+invalid indices, non-finite values, or integer/angle mismatches. The matched
+default-off project contained 3,081 active particles, zero continuous angles,
+and zero invalid indices, non-finite values, or mismatches. Both tests ended
+with <code>SIMPLE_TEST_CONT_INPL_REFINE3D_METADATA NORMAL STOP</code>. The remaining
+Phase 3D-5 acceptance step was an opt-in restart followed by the same metadata
+validation on its output.</p>
+<p>The restart workflow completed normally and produced
+<code>21_refine3D/betagal.simple</code>. Its metadata validation found 3,081 active
+particles, 1,652 continuous angles, and zero invalid indices, non-finite
+values, or integer/angle mismatches on the 440-angle grid. It ended with
+<code>SIMPLE_TEST_CONT_INPL_REFINE3D_METADATA NORMAL STOP</code>. This verifies that a
+project containing continuous angles can restart through the opt-in route and
+write a consistent continuous representation again.</p>
+<p>The opt-in restart workflow completed in 472.3 seconds. A matched default-off
+control started from the same <code>18_refine3D/betagal.simple</code> input and completed
+normally in 460.3 seconds. The 12.0-second difference is approximately 2.6%.
+Together with the earlier matched observation in which opt-in was about 1.4%
+faster, one pair in each direction does not establish either a speedup or a
+regression. It does rule out the initially suspected approximately 60-second
+feature penalty. Longer-run timing should be interpreted from per-iteration
+measurements and repeated matched inputs.</p>
+<p>A longer opt-in restart was requested with <code>maxits=6</code> from
+<code>18_refine3D/betagal.simple</code>. It converged after iteration 2 and therefore ran
+iteration 3 as the final combined iteration rather than consuming all six
+allowed iterations. The workflow ended with <code>SIMPLE_REFINE3D NORMAL STOP</code> in
+1,255.3 seconds. Orientation overlap increased from 0.987 to 0.997 and then
+1.000. Mean in-plane update distance decreased from 0.085 to 0.020 and then
+0.006 degrees, while mean shift increment decreased from 0.062 to 0.018 and
+then 0.006. The FSC-area score increased from the starting 0.6330 to 0.6468,
+then 0.6521, and remained stable at 0.6520 in the final iteration. Reported
+resolution stabilized at 3.739 A.</p>
+<p>The resulting <code>23_refine3D/betagal.simple</code> metadata also passed: 3,081 active
+particles, 2,070 continuous angles, and zero invalid indices, non-finite
+values, or integer/angle mismatches on the 440-angle grid. The only numerical
+runtime warning was the previously observed array temporary in
+<code>fit_straight_line</code>; rotational-storage particle I/O notices also appeared and
+may affect wall time but are not continuous-refinement failures.</p>
+<p>The independent fresh-source run requested with <code>maxits=6</code> also completed.
+It converged after iteration 3 rather than consuming all six allowed
+iterations and ended with <code>SIMPLE_REFINE3D NORMAL STOP</code> in 1,211.6 seconds.
+Output <code>24_refine3D/betagal.simple</code> passed the metadata contract with 3,081
+active particles, 2,399 continuous angles, and zero invalid indices,
+non-finite values, or integer/angle mismatches on the 440-angle grid.</p>
+<p>The workflow now has opt-in aggregate route diagnostics for production smoke
+tests. Each distributed matcher partition reports the number of selected
+particles that attempted continuous refinement and the mutually exclusive
+terminal outcomes: improved, finite no-improvement, or legacy fallback. The
+matcher verifies that the three outcome counts sum to the attempted count.
+These counters are collected per OpenMP thread and reduced after matching, so
+they do not add per-particle output or synchronization. Collection and output
+are disabled by default and are enabled only with
+<code>SIMPLE_INPL_DIAGNOSTIC=yes</code>; <code>inpl_cont=yes</code> must also be active. Ordinary
+runs do not allocate or update the diagnostic counters.</p>
+<h2 id="validation-gates">Validation gates<a class="headerlink" href="#validation-gates" title="Permanent link">&para;</a></h2>
+<h3 id="gate-a-numerical-unit-tests">Gate A: numerical unit tests<a class="headerlink" href="#gate-a-numerical-unit-tests" title="Permanent link">&para;</a></h3>
+<p>Status: implemented through the shared continuous-angle numerical tests and
+the refine3D policy, state, joint-store, direct-route, metadata-state, recovery,
+and score/shift consistency contracts. All seven mother-suite groups passed on
+Oracle Linux before the final <code>eval</code>/<code>sigma</code> policy additions. The updated
+policy suite and current mother executable require one final Oracle run.</p>
+<p>Add focused tests for:</p>
+<ul>
+<li>route identity and objective consistency;</li>
+<li>finite-difference gradient agreement;</li>
+<li>periodic angle behavior near $0^\circ$ and $360^\circ$;</li>
+<li>bounds and fallback behavior;</li>
+<li>no-op behavior when <code>inpl_cont=no</code>.</li>
+</ul>
+<h3 id="gate-b-3d-synthetic-recovery">Gate B: 3D synthetic recovery<a class="headerlink" href="#gate-b-3d-synthetic-recovery" title="Permanent link">&para;</a></h3>
+<p>Status: complete and verified on Oracle Linux as
+<code>simple_continuous_inplane_refine3D_recovery.f90</code>. The corrected focused case
+and the seven-group mother suite passed. The mother test exposes it as
+<code>case=synthetic_recovery</code> and requires <code>vol1</code>.</p>
+<p>Use a controlled 3D fixture with known projection direction, in-plane angle,
+and shifts. Compare:</p>
+<pre><code class="language-text">grid-only refine3D
+continuous refine3D
+</code></pre>
+<p>The fixture first reproduces production's legacy preselection search to obtain
+the native-frame <code>xy_first</code> shift seed. It then scores the grid with that seed
+and starts joint refinement from the same pose. The continuous route must not
+worsen the accepted objective and must reduce the angular error for a truth
+between grid points. The recovered image-plane shift RMS error must remain below
+0.25 pixels.</p>
+<p>Run the focused fixture on Oracle Linux with:</p>
+<pre><code class="language-text">simple_test_continuous_inplane_refine3D \
+  case=synthetic_recovery \
+  vol1=/absolute/path/reference_volume.mrc
+</code></pre>
+<h3 id="gate-c-real-data-refine3d-default-off-regression">Gate C: real-data refine3D default-off regression<a class="headerlink" href="#gate-c-real-data-refine3d-default-off-regression" title="Permanent link">&para;</a></h3>
+<p>Status: complete. Matched-source default-off workflows completed normally and
+their project metadata remained grid-aligned with zero invalid, non-finite, or
+integer/angle mismatch counts.</p>
+<p>Run the existing biological <code>refine3D</code> workflow without <code>inpl_cont</code>. Confirm:</p>
+<ul>
+<li>normal completion;</li>
+<li>unchanged metadata contract;</li>
+<li>no continuous angle values are written;</li>
+<li>no CC or SGD path is entered.</li>
+</ul>
+<h3 id="gate-d-real-data-opt-in-regression">Gate D: real-data opt-in regression<a class="headerlink" href="#gate-d-real-data-opt-in-regression" title="Permanent link">&para;</a></h3>
+<p>Status: complete. The no-improvement score/shift inconsistency described in the
+final audit is corrected and covered by both the focused direct-route contract
+and a production diagnostic smoke. The final run accounted for all 3,081 active
+particles with 2,830 improvements, 251 finite no-improvement outcomes, zero
+fallbacks, and balanced totals. Its output metadata had 1,930 continuous angles
+and zero invalid, non-finite, or mismatch counts.</p>
+<p>Run the same <code>refine3D</code> workflow with <code>objfun=euclid inpl_cont=yes</code>.
+Compare resolution, runtime, objective values, orientation stability, and
+restart behavior with the default-off run.</p>
+<h3 id="gate-e-rejection-tests">Gate E: rejection tests<a class="headerlink" href="#gate-e-rejection-tests" title="Permanent link">&para;</a></h3>
+<p>Status: complete. Unsupported value, CC, hybrid, denoised, projection-
+reconstruction, evaluation-only, sigma-only, and probabilistic combinations
+were rejected by the focused policy suite without changing omitted/default-off
+or eligible opt-in behavior.</p>
+<p>Verify that unsupported combinations fail clearly, especially:</p>
+<pre><code class="language-text">objfun=cc inpl_cont=yes
+refine=eval inpl_cont=yes
+refine=sigma inpl_cont=yes
+</code></pre>
+<p>This gate must not alter the normal CC path when <code>inpl_cont</code> is omitted or set
+to <code>no</code>.</p>
+<h2 id="implemented-file-ownership">Implemented file ownership<a class="headerlink" href="#implemented-file-ownership" title="Permanent link">&para;</a></h2>
+<p>The implementation follows these ownership boundaries:</p>
+<ul>
+<li><code>simple_ui_refine3D</code> for the opt-in user key;</li>
+<li><code>simple_parameters</code> and <code>simple_parameters_phases</code> for defaults and gates;</li>
+<li><code>simple_commanders_refine3D</code> for policy propagation;</li>
+<li><code>simple_refine3D_strategy</code> for lifecycle propagation and stripping
+  matcher-only arguments from child workflows;</li>
+<li><code>simple_strategy3D_srch</code> for candidate state and joint refinement;</li>
+<li><code>simple_pftc_shsrch_grad</code> for the bounded joint API and result validation;</li>
+<li>the existing <code>simple_polarft_calc</code> and <code>simple_polarft_corr</code> Euclidean
+  objective and derivative implementation, without a duplicate 3D evaluator;</li>
+<li>focused <code>production/tests</code> helper modules and one registered mother test for
+  the 3D acceptance gates.</li>
+</ul>
+<h2 id="definition-of-done">Definition of done<a class="headerlink" href="#definition-of-done" title="Permanent link">&para;</a></h2>
+<p>The original eight feature-completion items are implemented and verified. The
+seven-group mother suite, expanded policy suite, synthetic recovery fixture,
+default-off and opt-in workflows, restart and multi-iteration checks, final
+production smoke, and metadata validation passed on Oracle Linux. The P2/P3
+hardening changes documented above also passed their targeted Oracle rerun.</p>
+<p>The transfer is complete only when:</p>
+<ol>
+<li><code>inpl_cont=no</code> is the default and preserves the historical <code>refine3D</code>
+   path.</li>
+<li><code>inpl_cont=yes</code> is explicitly accepted only for supported Euclidean paths.</li>
+<li>Standalone <code>refine3D</code> does not invent an <code>abinitio2D</code>-style stage split;
+   every default-off matcher iteration remains on the historical grid route.</li>
+<li>Every eligible opt-in <code>refine3D</code> matcher iteration performs bounded joint
+   $(s_x,s_y,\theta)$ refinement after discrete winner selection. This phase
+   does not add $s_z$.</li>
+<li>Integer and continuous orientation metadata remain consistent.</li>
+<li>Restarted runs preserve the selected representation.</li>
+<li>CC behavior is unchanged and unsupported opt-in combinations are rejected.</li>
+<li>Focused unit, synthetic, default-off, opt-in, and real-data tests pass.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
