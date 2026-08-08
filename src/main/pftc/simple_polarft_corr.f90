@@ -297,7 +297,7 @@ contains
         i            =  self%pinds(iptcl)
         k0           =  self%kfromto(1)
         ieo          =  merge(REF_EVEN, REF_ODD, self%iseven(i))
-        ptcl_sqsum   =  self%wsqsums_ptcls(i)
+        ptcl_sqsum   =  self%wsqsum_ptcl_now(iptcl)
         shmat        => self%heap_vars(ithr)%shmat
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
         if ( shift_mag_sq > SHERRSQ ) then
@@ -468,7 +468,7 @@ contains
         i            = self%pinds(iptcl)
         k0           = self%kfromto(1)
         ieo          = merge(REF_EVEN, REF_ODD, self%iseven(i))
-        norm         = self%wsqsums_ptcls(i) * real(2*self%nrots, dp)
+        norm         = self%wsqsum_ptcl_now(iptcl) * real(2*self%nrots, dp)
         shmat        => self%heap_vars(ithr)%shmat
         shift_mag_sq = shift(1)*shift(1) + shift(2)*shift(2)
         if( shift_mag_sq > SHERRSQ )then
@@ -1542,14 +1542,8 @@ contains
         enddo
         ! normalize with the CURRENT sigma2: the +1 particle self-term below
         ! encodes sum(wk*|ptcl|^2)/normalization == 1, which only holds when
-        ! both use the same sigma2.  wsqsums_ptcls may be stale relative to
-        ! per-iteration sigma2 updates, and a stale normalization makes this
-        ! loss unbounded below, so recompute from the sigma2-independent
-        ! shell sums at every evaluation
-        wsq_now = 0.d0
-        do k = self%kfromto(1), self%kfromto(2)
-            wsq_now = wsq_now + self%kshell_sqsums_ptcls(k,i) / real(self%sigma2_noise(k,iptcl),dp)
-        enddo
+        ! both use the same sigma2 (see wsqsum_ptcl_now)
+        wsq_now = self%wsqsum_ptcl_now(iptcl)
         A_sp = real(wsq_now * real(2*self%nrots,dp),sp)
         coeffs = coeffs / A_sp
         coeffs(1,1) = coeffs(1,1) + cmplx(1._sp,0._sp,kind=sp)
@@ -1757,120 +1751,6 @@ contains
         endif
     end subroutine gen_sigma_contrib
 
-    ! Returns ref vs. ptcl objective function values
-    ! and mirrored ref vs. ptcl objective function values
-    module subroutine gen_objfun_vals_mirr_vals( self, iref, iptcl, vals, mvals )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real(sp),            intent(out)   :: vals(self%nrots), mvals(self%nrots)
-         select case(self%p_ptr%cc_objfun)
-            case(OBJFUN_CC)
-                call self%gen_corrs_mirr_corrs(iref, iptcl, vals, mvals)
-            case(OBJFUN_EUCLID)
-                call self%gen_euclids_mirr_euclids(iref, iptcl, vals, mvals)
-        end select
-    end subroutine gen_objfun_vals_mirr_vals
-
-    module subroutine gen_euclids_mirr_euclids( self, iref, iptcl, euclids, meuclids )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(out)   :: euclids(self%nrots), meuclids(self%nrots)
-        real(dp), pointer :: w_weights(:), sumsq_cache(:)
-        real(dp) :: ptcl_sumsq
-        integer  :: i, ithr, k, kk, k0, ieo
-        ithr        =  omp_get_thread_num() + 1
-        i           =  self%pinds(iptcl)
-        k0          =  self%kfromto(1)
-        ieo         =  merge(REF_EVEN, REF_ODD, self%iseven(i))
-        w_weights   => self%heap_vars(ithr)%w_weights
-        sumsq_cache => self%heap_vars(ithr)%sumsq_cache
-        ! Memoized reference
-        self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = &
-            self%ft_ref(:,self%kfromto(1):self%kfromto(2),iref,ieo)
-        ! Pre-compute weights and particle sums
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            ! shell & sigma2 weight
-            w_weights(kk)   = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
-            ! shell & sigma2 weighted particle variance
-            sumsq_cache(kk) = sum(real(self%pfts_ptcls(:,k,i) * conjg(self%pfts_ptcls(:,k,i)), dp)) * w_weights(kk)
-        end do
-        ptcl_sumsq = sum(sumsq_cache)
-        ! Single IFFT: IFFT( sum_k w_k * (FT(CTF2) x FT(REF2) - 2*FT(X.CTF) x FT(S.REF)*) )
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
-                self%ft_ctf2(:,k,i) * self%ft_ref2(:,k,iref,ieo) - &
-                2.0 * self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1,kk)) )
-        enddo
-        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp) / real(2*self%nrots, dp)
-        euclids = real(dexp(-(self%heap_vars(ithr)%kcorrs + ptcl_sumsq) / self%wsqsums_ptcls(i)))
-        ! Mirrored reference:
-        ! 1. Mirror of memoized reference: self%cmat2_many(ithr)%c <- conjg(self%cmat2_many(ithr)%c)
-        ! 2. Mirror of memoized reference variance: self%ft_ref2 <- conjg(self%ft_ctf2)
-        ! Single IFFT: IFFT( sum_k w_k * (FT(CTF2) x FT(M(REF2)) - 2*FT(X.CTF) x FT(S.M(REF))* ) )
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + real(w_weights(kk),c_float) * ( &
-                self%ft_ctf2(:,k,i) * conjg(self%ft_ref2(:,k,iref,ieo)) - &
-                2.0 * self%ft_ptcl_ctf(:,k,i) * self%cmat2_many(ithr)%c(1:self%pftsz+1,kk) )
-        enddo
-        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp) / real(2*self%nrots, dp)
-        meuclids = real(dexp(-self%heap_vars(ithr)%kcorrs / self%wsqsums_ptcls(i)))
-    end subroutine gen_euclids_mirr_euclids
-
-    module subroutine gen_corrs_mirr_corrs( self, iref, iptcl, ccs, mccs )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(out)   :: ccs(self%nrots), mccs(self%nrots)
-        integer  :: i, ithr, k, kk, k0, ieo
-        ithr    =  omp_get_thread_num() + 1
-        i       =  self%pinds(iptcl)
-        k0      =  self%kfromto(1)
-        ieo     =  merge(REF_EVEN, REF_ODD, self%iseven(i))
-        ! Memoized reference
-        self%cmat2_many(ithr)%c(1:self%pftsz+1,1:self%nk) = &
-            self%ft_ref(:,self%kfromto(1):self%kfromto(2),iref,ieo)
-        ! Single IFFT #1: IFFT( sum_k FT(CTF2) x FT(REF2) )
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + self%ft_ctf2(:,k,i) * self%ft_ref2(:,k,iref,ieo)
-        enddo
-        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        ! Denominator is mirror invariant and re-used below
-        self%drvec(ithr)%r = real(self%crvec1(ithr)%r(1:self%nrots), dp)
-        ! Single IFFT #2: IFFT( sum_k FT(X.CTF) x FT(S.REF)* )
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + &
-                self%ft_ptcl_ctf(:,k,i) * conjg(self%cmat2_many(ithr)%c(1:self%pftsz+1, kk))
-        end do
-        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp)
-        ! Final correlation computation
-        self%drvec(ithr)%r = sqrt(self%drvec(ithr)%r * real(self%sqsums_ptcls(i) * real(2*self%nrots), dp))
-        ccs = real(self%heap_vars(ithr)%kcorrs / self%drvec(ithr)%r)
-        ! Mirrored reference
-        ! 1. Mirror of memoized reference: self%cmat2_many(ithr)%c <- conjg(self%cmat2_many(ithr)%c)
-        ! 2. Mirror of memoized reference variance: self%ft_ref2 <- conjg(self%ft_ctf2)
-        ! Single IFFT #2: IFFT( sum_k FT(X.CTF) x FT(S.M(REF))* )
-        self%crvec1(ithr)%c = cmplx(0.,0.,kind=c_float_complex)
-        do k = self%kfromto(1), self%kfromto(2)
-            kk = k - k0 + 1
-            self%crvec1(ithr)%c = self%crvec1(ithr)%c + &
-                self%ft_ptcl_ctf(:,k,i) * self%cmat2_many(ithr)%c(1:self%pftsz+1, kk)
-        end do
-        call fftwf_execute_dft_c2r(self%plan_bwd1_single, self%crvec1(ithr)%c, self%crvec1(ithr)%r)
-        self%heap_vars(ithr)%kcorrs = real(self%crvec1(ithr)%r(1:self%nrots), dp)
-        ! Final correlation computation
-        mccs = real(self%heap_vars(ithr)%kcorrs / self%drvec(ithr)%r)
-    end subroutine gen_corrs_mirr_corrs
-
     ! the values are stored in self%crmat_many(ithr)%r( 1:nrots, ind )
     ! ind is not the natural reference index (iref) and is left to the user
     ! to access correctly with get_precalc_objfun_vals( ind, ithr, vals),
@@ -1956,7 +1836,7 @@ contains
         call fftwf_execute_dft_c2r(self%plan_bwd_many_refs, &
                                     &self%crmat_many(ithr)%c, self%crmat_many(ithr)%r)
         ! normalization & exponentiation
-        A = self%wsqsums_ptcls(i) * real(2*self%nrots, dp)
+        A = self%wsqsum_ptcl_now(iptcl) * real(2*self%nrots, dp)
         do j = 1, nr
             do p = 1, self%nrots
                 v = 1.d0 + real(self%crmat_many(ithr)%r(p,j), dp) / A
@@ -2051,6 +1931,7 @@ contains
         complex(sp), allocatable, target :: buffer_c(:,:)
         real(sp),                pointer :: buffer_r(:,:)
         real(sp),    allocatable         :: ftvals(:,:),wks(:,:)
+        real(dp),    allocatable         :: wsq_now(:)
         real(dp)       :: df, max_abs, max_rel, rms, sumsq, f_gpu, f_cpu
         integer(dp)    :: t
         integer        :: i, k, iref, p,j, iptcl, nptcls
@@ -2075,10 +1956,15 @@ contains
         if (ierr /= 0) stop 6
         ! Some allocations
         allocate(wks(self%kfromto(1):self%kfromto(2),nptcls), source=0.)
+        ! particle self-terms under the CURRENT sigma2 (wsqsums_ptcls may be
+        ! stale; a stale normalization makes the losses unbounded below)
+        allocate(wsq_now(nptcls), source=0.d0)
         do iptcl = 1,nptcls
             i = self%pinds(pfromto(1) + iptcl - 1)
             do k = self%kfromto(1),self%kfromto(2)
                 wks(k,iptcl) = real(k) / real(self%sigma2_noise(k,pfromto(1) + iptcl - 1))
+                wsq_now(iptcl) = wsq_now(iptcl) + &
+                    &self%kshell_sqsums_ptcls(k,i) / real(self%sigma2_noise(k,pfromto(1) + iptcl - 1),dp)
             enddo
         enddo
         ! associate arays to avoid memory allocation, device attachment issues
@@ -2090,7 +1976,7 @@ contains
         print *,'GPU - persistent data transfer time: ',toc(t)
         t = tic()
         call gen_many2many_euclids_cufft_kernel( self%kfromto, self%pftsz, self%nrefs,&
-            &nptcls, self%nrots, plan_cufft, wks, howmany, self%wsqsums_ptcls(pfromto(1):pfromto(2)),&
+            &nptcls, self%nrots, plan_cufft, wks, howmany, wsq_now,&
             &ft_ref, ft_ref2,&
             &self%ft_ctf2(:,:,pfromto(1):pfromto(2)), self%ft_ptcl_ctf(:,:,pfromto(1):pfromto(2)),&
             &buffer_c, ierr)

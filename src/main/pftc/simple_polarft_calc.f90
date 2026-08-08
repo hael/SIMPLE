@@ -174,6 +174,7 @@ type :: polarft_calc
     ! ===== MEMO: simple_polarft_memo.f90
     procedure          :: memoize_sqsum_ptcl
     procedure          :: memoize_sqsum_ptcl_den
+    procedure          :: wsqsum_ptcl_now
     procedure          :: memoize_ptcls, memoize_refs
     procedure          :: memoize_ptcls_den
     procedure, private :: kill_memo_ptcls, kill_memo_refs
@@ -215,8 +216,6 @@ type :: polarft_calc
     procedure, private :: gen_denoised_corr_grad_for_rot_8
     procedure          :: gen_corr_grad_only_for_rot_8
     procedure          :: gen_sigma_contrib
-    procedure          :: gen_objfun_vals_mirr_vals
-    procedure, private :: gen_corrs_mirr_corrs, gen_euclids_mirr_euclids
     procedure          :: gen_many_objfun_vals
     procedure          :: gen_many_euclids
     procedure          :: gen_many_euclids_gpu
@@ -581,6 +580,12 @@ interface
         integer,             intent(in) :: iptcl
     end subroutine memoize_sqsum_ptcl_den
 
+    module function wsqsum_ptcl_now(self, iptcl) result(wsq)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iptcl
+        real(dp) :: wsq
+    end function wsqsum_ptcl_now
+
     module subroutine memoize_ptcls(self)
         class(polarft_calc), intent(inout) :: self
     end subroutine memoize_ptcls
@@ -934,24 +939,6 @@ interface
         real(sp),                    intent(in)    :: shvec(2)
         real(sp), optional,          intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
     end subroutine gen_sigma_contrib
-
-    module subroutine gen_objfun_vals_mirr_vals( self, iref, iptcl, vals, mvals )
-        class(polarft_calc), intent(inout) :: self
-        integer,             intent(in)    :: iref, iptcl
-        real(sp),            intent(out)   :: vals(self%nrots), mvals(self%nrots)
-    end subroutine gen_objfun_vals_mirr_vals
-
-    module subroutine gen_corrs_mirr_corrs( self, iref, iptcl, ccs, mccs )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(out)   :: ccs(self%nrots), mccs(self%nrots)
-    end subroutine gen_corrs_mirr_corrs
-
-    module subroutine gen_euclids_mirr_euclids( self, iref, iptcl, euclids, meuclids )
-        class(polarft_calc), target, intent(inout) :: self
-        integer,                     intent(in)    :: iref, iptcl
-        real(sp),                    intent(out)   :: euclids(self%nrots), meuclids(self%nrots)
-    end subroutine gen_euclids_mirr_euclids
 
     module subroutine gen_many_objfun_vals( self, nr, irefs, iptcl, shift )
         class(polarft_calc), intent(inout) :: self

@@ -26,6 +26,26 @@ contains
         enddo
     end subroutine memoize_sqsum_ptcl
 
+    !> particle self-term under the CURRENT sigma2.  wsqsums_ptcls may be
+    !! stale relative to per-iteration sigma2 updates; any normalization that
+    !! restores the residual via the "+1" identity must use this value or the
+    !! loss becomes unbounded below (and exp(-loss) scores exceed 1)
+    module function wsqsum_ptcl_now(self, iptcl) result(wsq)
+        class(polarft_calc), intent(in) :: self
+        integer,             intent(in) :: iptcl
+        real(dp) :: wsq
+        integer  :: i, ik
+        i = self%pinds(iptcl)
+        if( .not. associated(self%sigma2_noise) )then
+            wsq = self%wsqsums_ptcls(i)
+            return
+        endif
+        wsq = 0.d0
+        do ik = self%kfromto(1), self%kfromto(2)
+            wsq = wsq + self%kshell_sqsums_ptcls(ik,i) / real(self%sigma2_noise(ik,iptcl),dp)
+        enddo
+    end function wsqsum_ptcl_now
+
     module subroutine memoize_sqsum_ptcl_den(self, iptcl)
         class(polarft_calc), intent(inout) :: self
         integer,             intent(in)    :: iptcl

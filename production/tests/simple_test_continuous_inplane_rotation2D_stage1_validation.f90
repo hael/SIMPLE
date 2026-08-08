@@ -317,10 +317,12 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     enddo
     call b%pftc%assign_sigma2_noise(sigma2_noise)
     ! deliberately do NOT re-memoize the weighted square sums yet: production
-    ! updates sigma2 per iteration without re-memoizing, and the joint
-    ! evaluator must normalize with the CURRENT sigma2 and stay physical
-    ! under stale wsqsums_ptcls
+    ! updates sigma2 per iteration without re-memoizing, and both the joint
+    ! evaluator and the vector scoring path must normalize with the CURRENT
+    ! sigma2 and stay physical under stale wsqsums_ptcls
     call series_floor_scan(b, igrid, result%stress_series_min, stale_parity)
+    call b%pftc%gen_raw_euclid_vals(1, 1, [1.7_sp, -2.3_sp], raw_losses)
+    result%stress_series_min = min(result%stress_series_min, real(minval(raw_losses),dp))
     ! re-memoize for the cross-route parity check (the discrete reference
     ! normalizes with the memoized wsqsums)
     call b%pftc%memoize_sqsum_ptcl(1)
