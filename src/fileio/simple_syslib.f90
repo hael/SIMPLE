@@ -152,6 +152,14 @@ interface
         integer(c_int), intent(in) :: len                                    !> path string length
     end function fs_is_rotational_c
 
+    function fs_avail_bytes_c(path, len) bind(c,name="simple_fs_avail_bytes")
+        use, intrinsic :: iso_c_binding
+        implicit none
+        integer(c_long_long) :: fs_avail_bytes_c                             !> available bytes, -1 unknown
+        character(kind=c_char,len=1),dimension(*),intent(in) :: path         !> path on the filesystem of interest
+        integer(c_int), intent(in) :: len                                    !> path string length
+    end function fs_avail_bytes_c
+
     function get_peak_rss_bytes() bind(c,name="simple_peak_rss_bytes")
         use, intrinsic :: iso_c_binding, only: c_int64_t
         implicit none
@@ -364,6 +372,22 @@ contains
                 rotational = -1
         end select
     end function fs_is_rotational
+
+    !> \brief Bytes available to an unprivileged writer on the filesystem holding fname.
+    !!  Returns -1 when unknown (e.g. statvfs failure); callers must treat that as
+    !!  unknown rather than as zero.
+    function fs_avail_bytes( fname ) result( avail )
+        class(*), intent(in) :: fname
+        integer(kind=8) :: avail
+        select type(fname)
+            type is (string)
+                avail = int(fs_avail_bytes_c(fname%to_char(), fname%strlen_trim()), kind=8)
+            type is (character(*))
+                avail = int(fs_avail_bytes_c(fname, len_trim(fname)), kind=8)
+            class default
+                avail = -1_8
+        end select
+    end function fs_avail_bytes
 
     !> \brief How many files to read from concurrently, given nreq are available.
     !!

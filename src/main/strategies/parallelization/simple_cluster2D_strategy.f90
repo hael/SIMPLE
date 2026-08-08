@@ -132,8 +132,9 @@ contains
         if( startit == 1 )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
-        ! once per cluster2D invocation, before any iteration reads particles
-        call ptcl_cache_ensure(params, build)
+        ! once per cluster2D invocation, before any iteration reads particles; may
+        ! fall back to cache=no on cline, which child commands inherit via their copy
+        call ptcl_cache_ensure(params, build, cline)
     end subroutine inmem_initialize
 
     subroutine inmem_execute_iteration( self, params, build, cline, converged)
@@ -238,8 +239,10 @@ contains
         if( params%startit == 1 )then
             call build%spproj_field%clean_entry('updatecnt', 'sampled')
         endif
-        ! master-side, before any job is scheduled, so the workers find it ready
-        call ptcl_cache_ensure(params, build)
+        ! master-side, before any job is scheduled, so the workers find it ready;
+        ! must precede gen_job_descr below so a fallback to cache=no reaches the
+        ! worker command lines
+        call ptcl_cache_ensure(params, build, cline)
         call set_master_num_threads(self%nthr_master, string('CLUSTER2D'))
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)

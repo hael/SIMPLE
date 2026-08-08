@@ -23,6 +23,7 @@ struct FTW { int dummy; };
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>       /* free-space query */
 #include <fcntl.h> // for open, O_RDWR, O_CREAT
 #include <fts.h>               /* file traversal */
 #include <sys/wait.h>
@@ -914,6 +915,34 @@ int simple_fs_is_rotational(char *path, int *len)
     (void)path;
     (void)len;
     return -1;
+#endif
+}
+
+/* Bytes available to an unprivileged writer on the filesystem holding PATH
+ * (f_bavail, not f_bfree, so the root reserve is excluded).  Returns -1 when
+ * the question cannot be answered; callers must treat that as unknown rather
+ * than as zero. */
+long long simple_fs_avail_bytes(char *path, int *len)
+{
+#ifndef _WIN32
+    struct statvfs vbuf;
+    char *cpath;
+    long long avail;
+
+    cpath = F90to_cstring(path, *len);
+    if(cpath == NULL) return -1LL;
+    if(statvfs(cpath, &vbuf) != 0) {
+        free(cpath);
+        return -1LL;
+    }
+    free(cpath);
+    avail = (long long)vbuf.f_bavail * (long long)vbuf.f_frsize;
+    if(avail < 0) return -1LL;
+    return avail;
+#else
+    (void)path;
+    (void)len;
+    return -1LL;
 #endif
 }
 

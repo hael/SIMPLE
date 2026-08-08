@@ -29,6 +29,8 @@ If fractional update or probabilistic sampling is involved, also read
 - `cluster2D`: 2D classification stage implementation.
 - `simple_strategy2D_matcher`: online particle alignment, orientation/class updates, and worker partial sums.
 - `simple_matcher_ptcl_batch`: batch image loading and preprocessing.
+- `simple_ptcl_cache`: downscaled particle disk cache (`cache=yes`) shared by
+  `prob_tab2D` and `cluster2D_exec`; owns its on-disk lifecycle.
 - `class/` and `simple_commanders_mkcavgs.f90`: class-average products and explicit assembly stages.
 - `project/` and `ori/`: particle/class metadata persistence.
 - `stream/`: online and mini-stream 2D variants.
@@ -56,6 +58,27 @@ If fractional update or probabilistic sampling is involved, also read
 - Treat previous 2D `eo` values as input project state. Do not regenerate them
   with `partition_eo` in a workflow whose purpose is to consume prior 2D class
   assignments; validate `eo` with `get_eo()` equal to `0` or `1`.
+
+## Particle Disk Cache Lifecycle
+
+- `ptcl_cache_ensure` runs master-side only, before workers are scheduled, and
+  must stay ahead of `gen_job_descr`/cline copies: fallback decisions propagate
+  to worker command lines by flipping `cache=no` on the cline. Cache
+  availability must be uniform across ranks; never make it best-effort per rank.
+- The building (or adopting) process owns the cache files and removes them on
+  exit — normal or hard exception — via the `cache_cleanup_glob` hook in
+  `simple_defs` (armed by `ptcl_cache_own`, fired from `simple_exception` and
+  the tails of `simple_exec`/`single_exec`). Workers never take ownership.
+- The cache basename hashes the execution directory so concurrent runs sharing
+  a `cache_dir` cannot collide; all ranks recompute the name locally because
+  qsys workers cd into the master's directory. The key file records the
+  directory verbatim, geometry, and per-stack fingerprints; leftovers with the
+  same name are validated and adopted or rebuilt, never trusted by name alone.
+- The build refuses to claim more than 25% of the free space at `cache_dir`
+  and falls back to uncached execution with a log message.
+- Delete-on-exit means no cross-run cache reuse; within-run reuse across
+  abinitio2D stages is the point (box_crop is stage-invariant), so do not add
+  per-stage invalidation or per-stage names.
 
 ## Nearby Skills
 

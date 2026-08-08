@@ -21,7 +21,12 @@
 ! ~379 KB at box=308.
 !
 ! abinitio2D holds box_crop fixed across all its stages, so one cache serves a
-! whole run and there is nothing to invalidate between stages.
+! whole run and there is nothing to invalidate between stages. The cache lives
+! exactly as long as the run that owns it: the process that builds (or adopts)
+! it removes the files on normal exit and on hard exception, via the
+! cache_cleanup_glob hook in simple_defs. Only SIGKILL-class deaths can leave
+! files behind, and a rerun in the same execution directory finds and reclaims
+! those (see cache_run_token).
 !
 ! Both consumers read from it: prob_tab2D, which needs only the alignment product,
 ! and cluster2D_exec, which additionally restores class averages from the raw
@@ -36,25 +41,36 @@
 module simple_ptcl_cache
 use simple_pftc_srch_api
 use simple_builder,           only: builder
+use simple_cmdline,           only: cmdline
 use simple_discrete_stack_io, only: dstack_io
 use simple_stack_io,          only: stack_io
 use simple_imgarr_utils,      only: alloc_imgarr, dealloc_imgarr
 use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, killimgbatch
-use simple_syslib,            only: simple_mkdir, dir_exists, simple_file_stat, simple_rename
+use simple_syslib,            only: simple_mkdir, dir_exists, simple_file_stat, simple_rename, fs_avail_bytes
 implicit none
 #include "simple_local_flags.inc"
 
 public :: ptcl_cache_in_use, ptcl_cache_assert_ready, ptcl_cache_ensure
-public :: ptcl_cache_read_batch, ptcl_cache_reset
+public :: ptcl_cache_read_batch, ptcl_cache_reset, ptcl_cache_cleanup
 private
 
 character(len=*), parameter :: CACHE_FBODY   = 'ptcl_cache_'
 character(len=*), parameter :: CACHE_DIR_ENV = 'SIMPLE_PTCL_CACHE_DIR'
 character(len=*), parameter :: TMP_TAG       = '_part'
+! the cache may not claim more than this fraction of the free space at cache_dir
+integer(kind=8),  parameter :: FREE_SPACE_DENOM = 4_8
 
 ! resolved once per process by ptcl_cache_in_use
 logical :: l_probed    = .false.
 logical :: l_available = .false.
+! Exit-time cleanup: the process that builds -- or adopts, see ptcl_cache_ensure --
+! the cache owns its files and removes them on normal exit or hard exception, via
+! the cache_cleanup_glob hook that simple_exception and the exec programs call.
+! Workers never take ownership, so a dying worker cannot delete the cache out from
+! under the other ranks or a resubmitted part. Paths are resolved at ownership
+! time so that cleanup does not depend on params still being alive.
+logical      :: l_owner = .false.
+type(string) :: owned_files(5)
 ! cache record index per global particle index, 0 for particles that were not cached.
 ! Deselected particles are never sampled, so caching them would waste both a full-size
 ! read at build time and box_crop^2*4 bytes on disk; the map buys that back while
@@ -85,10 +101,32 @@ contains
         endif
     end function cache_dir
 
-    !>  Cache files for this run. The project name is part of the basename because
-    !!  cache_dir is explicitly meant to be shared -- pointing several runs at the same
-    !!  fast disk must not have them delete or overwrite each other. box_crop is in
-    !!  there too so a run with a different crop cannot pick up a stale cache.
+    !>  Per-run discriminator folded into the cache basename: a hash of the absolute
+    !!  execution directory. cache_dir is explicitly meant to be shared, so several
+    !!  concurrent runs pointing at the same fast disk must not delete or overwrite
+    !!  each other, and projname alone cannot guarantee that. The execution directory
+    !!  can: no two live runs share one, every rank can recompute it locally (the
+    !!  distributed workers cd into the master's directory before they start, see
+    !!  simple_qsys_ctrl), and unlike a PID it survives a restart, so a rerun in the
+    !!  same directory finds -- and can adopt or rebuild -- what a killed predecessor
+    !!  left behind instead of orphaning it.
+    function cache_run_token( ) result( tok )
+        type(string) :: tok
+        integer(kind=8) :: h1, h2
+        h1 = 1_8
+        h2 = 1_8
+        if( allocated(CWD_GLOB) ) call fold_str(h1, h2, CWD_GLOB)
+        tok = string(int2str(int(h1))//'-'//int2str(int(h2)))
+    end function cache_run_token
+
+    !>  Cache files for this run. The run token keeps concurrent runs writing to a
+    !!  shared cache_dir apart; the project name is kept in the basename for the
+    !!  human reading a directory listing, and box_crop so a run with a different
+    !!  crop cannot pick up a stale cache. A leftover with the same name -- same
+    !!  directory recreated after deletion, or a killed run -- is not an error:
+    !!  ptcl_cache_ensure validates it against the key (which records the execution
+    !!  directory verbatim, so even a token collision cannot validate) and either
+    !!  adopts or rebuilds in place.
     !!
     !!  tmp=.true. returns the name used while the cache is being written. The tag goes
     !!  before the extension, never after: image format is inferred from the extension
@@ -98,19 +136,22 @@ contains
         class(parameters), intent(in) :: params
         character(len=*),  intent(in) :: ext
         logical, optional, intent(in) :: tmp
-        type(string) :: fname, dirname, basename_here
+        type(string) :: fname, dirname, basename_here, token
         character(len=:), allocatable :: tag
         allocate(tag, source='')
         if( present(tmp) )then
             if( tmp ) deallocate(tag)
             if( tmp ) allocate(tag, source=TMP_TAG)
         endif
+        token = cache_run_token()
         if( params%projname%is_blank() )then
-            basename_here = string(CACHE_FBODY//int2str(params%box_crop)//tag//ext)
+            basename_here = string(CACHE_FBODY//int2str(params%box_crop)//&
+                &'_'//token%to_char()//tag//ext)
         else
             basename_here = string(CACHE_FBODY//params%projname%to_char()//&
-                &'_'//int2str(params%box_crop)//tag//ext)
+                &'_'//int2str(params%box_crop)//'_'//token%to_char()//tag//ext)
         endif
+        call token%kill
         dirname = cache_dir(params)
         if( dirname%is_blank() )then
             fname = basename_here
@@ -226,12 +267,22 @@ contains
     end subroutine fold_str
 
     !>  Geometry the cached pixels depend on, all of it already in memory. Cheap enough
-    !!  for every rank to recompute on every probe.
+    !!  for every rank to recompute on every probe. The execution directory is recorded
+    !!  verbatim so that a cache left by a different run whose directory happens to hash
+    !!  to the same token can never validate; all ranks share the directory (workers cd
+    !!  into it), so the line compares equal within a run.
     function cache_key_geom( params, build ) result( key )
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         type(string) :: key
-        key = string('box='//int2str(params%box)//&
+        character(len=:), allocatable :: dir_here
+        if( allocated(CWD_GLOB) )then
+            allocate(dir_here, source=CWD_GLOB)
+        else
+            allocate(dir_here, source='')
+        endif
+        key = string('dir='//dir_here//&
+            &' box='//int2str(params%box)//&
             &' box_crop='//int2str(params%box_crop)//&
             &' smpd='//trim(real2str(params%smpd))//&
             &' smpd_crop='//trim(real2str(params%smpd_crop))//&
@@ -397,15 +448,68 @@ contains
         if( allocated(cache_ind) ) deallocate(cache_ind)
     end subroutine ptcl_cache_reset
 
+    !>  Take ownership of the on-disk cache files: resolve their names now and arm the
+    !!  exit-time cleanup hook. Called by ptcl_cache_ensure only, i.e. by the process
+    !!  that builds or adopts the cache, before the first byte is written, so that an
+    !!  exception mid-build also sweeps the temporaries.
+    subroutine ptcl_cache_own( params )
+        class(parameters), intent(in) :: params
+        owned_files(1) = cache_keyname(params)
+        owned_files(2) = cache_idxname(params)
+        owned_files(3) = cache_stkname(params)
+        owned_files(4) = cache_fname(params, '_idx'//BIN_EXT, tmp=.true.)
+        owned_files(5) = cache_fname(params, STK_EXT,         tmp=.true.)
+        l_owner = .true.
+        cache_cleanup_glob => ptcl_cache_cleanup
+    end subroutine ptcl_cache_own
+
+    !>  Delete the owned cache files; a no-op in every process that never took
+    !!  ownership. Runs on normal exit (called from the exec programs) and on hard
+    !!  exception (via cache_cleanup_glob in simple_exception). The hook is disarmed
+    !!  first so a throw during deletion cannot re-enter, and the key file goes first
+    !!  so a partially-completed cleanup can never leave a cache that still validates.
+    subroutine ptcl_cache_cleanup
+        integer :: i
+        nullify(cache_cleanup_glob)
+        if( .not. l_owner ) return
+        l_owner = .false.
+        do i = 1, size(owned_files)
+            call del_file(owned_files(i))
+            call owned_files(i)%kill
+        end do
+    end subroutine ptcl_cache_cleanup
+
+    !>  Uniform fallback to uncached execution, decided master-side before any worker
+    !!  is scheduled. Flipping cache=no on the command line matters as much as on
+    !!  params: worker command lines are generated from the cline, and cache
+    !!  availability must be uniform across ranks -- ptcl_cache_assert_ready explains
+    !!  why mixed modes are forbidden.
+    subroutine disable_cache( params, cline )
+        class(parameters), intent(inout) :: params
+        class(cmdline),    intent(inout) :: cline
+        params%l_cache = .false.
+        params%cache   = 'no'
+        call cline%set('cache', 'no')
+    end subroutine disable_cache
+
     !>  Build the cache if it is missing or stale. Single sequential pass over the
     !!  particles in index order, which is also the only wholly sequential read of
-    !!  the originals the pipeline ever performs. Master-side, call before workers.
-    subroutine ptcl_cache_ensure( params, build )
+    !!  the originals the pipeline ever performs. Master-side, call before workers;
+    !!  cline is the command line the worker jobs will be generated from, so that a
+    !!  fallback decision here reaches every rank.
+    !!
+    !!  This is also where cache ownership is taken: whichever process builds the
+    !!  cache -- or adopts a valid one left in place, e.g. by a killed predecessor in
+    !!  the same execution directory -- arms the exit-time cleanup that removes the
+    !!  files on normal termination or hard exception.
+    subroutine ptcl_cache_ensure( params, build, cline )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
+        class(cmdline),    intent(inout) :: cline
         type(image), allocatable :: cache_imgs(:)
-        type(stack_io) :: stkio_w
-        type(string)   :: stkname, dirname, keyfile, tmpstk, tmpidx
+        type(stack_io)  :: stkio_w
+        type(string)    :: stkname, dirname, keyfile, idxname, tmpstk, tmpidx
+        integer(kind=8) :: want_bytes, avail_bytes
         integer, allocatable :: pinds(:)
         integer :: batchsz, nbatches, ibatch, batch_start, batch_end, nbatch, i, iptcl, nptcls, nsel
         integer :: ldim_check(3), nptcls_check
@@ -424,6 +528,8 @@ contains
             if( cache_key_matches(params, build, full=.true.) )then
                 if( read_cache_index(params, build) )then
                     write(logfhandle,'(A)') '>>> PARTICLE CACHE: up to date'
+                    ! adopt it: this run is now responsible for removing it on exit
+                    call ptcl_cache_own(params)
                     call ptcl_cache_reset
                     call stkname%kill
                     return
@@ -439,11 +545,18 @@ contains
         call dirname%kill
         stkname = cache_stkname(params)
         keyfile = cache_keyname(params)
+        idxname = cache_idxname(params)
         tmpstk  = cache_fname(params, STK_EXT,          tmp=.true.)
         tmpidx  = cache_fname(params, '_idx'//BIN_EXT,  tmp=.true.)
         ! Invalidate first: the key is the commit record, so from here until it is
-        ! rewritten no reader can accept whatever state the cache files are in.
+        ! rewritten no reader can accept whatever state the cache files are in. A
+        ! stale stack and index go now rather than being overwritten by the publish
+        ! renames: without the key they are unreachable anyway, and freeing them
+        ! first lets the free-space budget below measure what the rebuild can
+        ! actually use.
         call del_file(keyfile)
+        call del_file(idxname)
+        call del_file(stkname)
         call del_file(tmpstk)
         call del_file(tmpidx)
         nptcls = cache_nptcls(build)
@@ -460,14 +573,46 @@ contains
             endif
         end do
         if( nsel < 1 )then
-            write(logfhandle,'(A)') '>>> PARTICLE CACHE: no active particles, cache disabled'
+            write(logfhandle,'(A)') '>>> PARTICLE CACHE: no active particles, running without cache'
+            call disable_cache(params, cline)
             deallocate(cache_ind)
             call stkname%kill
             call keyfile%kill
+            call idxname%kill
             call tmpstk%kill
             call tmpidx%kill
             return
         endif
+        ! The cache may claim at most a quarter of the free space at its destination,
+        ! so a large dataset cannot starve whatever else lives there. The predicted
+        ! size is exact: nsel records of box_crop^2 reals, the stack header, and the
+        ! index file. Over budget, the whole run falls back to uncached execution --
+        ! uniformly, via disable_cache, before any worker command line is generated.
+        ! An unknown free space (fs_avail_bytes < 0, unsupported filesystem) is
+        ! treated as no verdict rather than as zero.
+        want_bytes = int(nsel,8) * int(params%box_crop,8)**2 * 4_8 &
+            &+ 1024_8 + 4_8 * int(nptcls + 1, 8)
+        dirname = cache_dir(params)
+        if( dirname%is_blank() ) dirname = string('.')
+        avail_bytes = fs_avail_bytes(dirname)
+        call dirname%kill
+        if( avail_bytes >= 0_8 .and. want_bytes > avail_bytes / FREE_SPACE_DENOM )then
+            write(logfhandle,'(A,F12.2,A,F12.2,A)') '>>> PARTICLE CACHE: needs ', &
+                &real(want_bytes)/real(1024**3), ' GB, more than 25% of the ', &
+                &real(avail_bytes)/real(1024**3), ' GB free at its destination'
+            write(logfhandle,'(A)') '>>> PARTICLE CACHE: running without cache; point cache_dir at more storage to enable it'
+            call disable_cache(params, cline)
+            deallocate(cache_ind)
+            call stkname%kill
+            call keyfile%kill
+            call idxname%kill
+            call tmpstk%kill
+            call tmpidx%kill
+            return
+        endif
+        ! own the files from here on: an exception at any point during the build must
+        ! sweep the temporaries as well as the published names
+        call ptcl_cache_own(params)
         write(logfhandle,'(A,I8,A,I8,A,I4,A,I4)') '>>> BUILDING PARTICLE CACHE: cached=', nsel, &
             &'/', nptcls, ' box=', params%box, ' -> box_crop=', params%box_crop
         batchsz = min(nsel, max(1, params%nthr) * BATCHTHRSZ)
@@ -516,12 +661,13 @@ contains
         ! Publish: data first, key last, so a reader either sees no key or sees a key
         ! backed by a complete stack and index.
         call simple_rename(tmpstk, stkname)
-        call simple_rename(tmpidx, cache_idxname(params))
+        call simple_rename(tmpidx, idxname)
         call write_cache_key(params, build)
         call ptcl_cache_reset
         write(logfhandle,'(A,A)') '>>> PARTICLE CACHE WRITTEN: ', stkname%to_char()
         call stkname%kill
         call keyfile%kill
+        call idxname%kill
         call tmpstk%kill
         call tmpidx%kill
     end subroutine ptcl_cache_ensure

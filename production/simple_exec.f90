@@ -73,6 +73,8 @@ call update_job_descriptions_in_project(string('simple_exec'), string(trim(prg))
 if( associated(persistent_worker%server) )then
     call persistent_worker%server%kill()
 endif
+! remove any on-disk particle cache this process owns (see simple_ptcl_cache)
+if( associated(cache_cleanup_glob) ) call cache_cleanup_glob()
 call mem_monitor_finish
 ! close log file
 if( logfhandle .ne. OUTPUT_UNIT )then

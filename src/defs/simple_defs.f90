@@ -53,6 +53,16 @@ integer                       :: nthr_glob = 1                    !< number of t
 logical                       :: l_distr_worker_glob              !< global distributed worker mode execution flag
 integer                       :: part_glob                        !< global part index
 character(len=:), allocatable :: cmdline_glob                     !< global command line string
+! Exit-time cache cleanup hook. The process that owns an on-disk cache (see
+! simple_ptcl_cache) points this at its cleanup routine; simple_exception calls
+! it before a hard stop and the exec programs call it on normal termination.
+! It lives here, not in the cache module, because simple_error can only see
+! simple_defs: the cache module itself throws through simple_exception.
+abstract interface
+    subroutine exit_cleanup_iface()
+    end subroutine exit_cleanup_iface
+end interface
+procedure(exit_cleanup_iface), pointer :: cache_cleanup_glob => null()
 integer,          parameter   :: NTHR_SHMEM_MAX       = 20        !< maximum number of shared-memory threads used by master process
 logical,          parameter   :: L_BENCH_GLOB         = .true.    !< global benchmarking flag
 logical,          parameter   :: L_USE_SLURM_ARR      = .false.   !< use SLURM arrays for jobs where we know nparts

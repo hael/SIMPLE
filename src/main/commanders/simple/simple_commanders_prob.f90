@@ -435,7 +435,9 @@ contains
         ! find it ready. A no-op once it exists, so the per-iteration cost is a file
         ! and key check; this is also the first point in the workflow where the same
         ! particles get read twice per iteration, once here and once in cluster2D.
-        call ptcl_cache_ensure(params, build)
+        ! Must precede the cline copy below so a fallback to cache=no reaches the
+        ! prob_tab2D worker command lines.
+        call ptcl_cache_ensure(params, build, cline)
         ! generate partition-wise dist tables
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab2D')

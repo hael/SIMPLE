@@ -24,6 +24,9 @@ contains
             write(logfhandle,'(A,I5)') '; '//trim(file)//'; line: ', line
         endif
         if( ll_stop )then
+            ! best-effort removal of any on-disk cache this process owns; the hook
+            ! nullifies itself on entry, so a throw during cleanup cannot recurse here
+            if( associated(cache_cleanup_glob) ) call cache_cleanup_glob()
             call backtrace()
             error stop 1
         endif
