@@ -270,9 +270,18 @@ contains
         real(sp),                    intent(in)    :: shift(2)
         real(sp),                    intent(out)   :: euclids(self%nrots)
         real(sp) :: raw_losses(self%nrots)
+        real(dp) :: direct_loss, direct_grad(2)
+        integer  :: irot
         ! Preserve the historical matcher score: the shared implementation
         ! returns the normalized loss L, while this legacy API returns exp(-L).
         call gen_raw_euclid_vals_impl(self, iref, iptcl, shift, raw_losses)
+        do irot = 1, self%nrots
+            if( raw_losses(irot) < 0._sp )then
+                call self%gen_raw_euclid_grad_for_rot_8(iref, iptcl, real(shift,dp), irot, &
+                    &direct_loss, direct_grad)
+                raw_losses(irot) = real(max(0.d0, direct_loss),sp)
+            endif
+        enddo
         euclids = exp(-raw_losses)
     end subroutine gen_euclids
 
@@ -1457,7 +1466,7 @@ contains
         ieo       = merge(REF_EVEN, REF_ODD, self%iseven(self%pinds(iptcl)))
         pft_ref_8 = self%pfts_refs(:,self%kfromto(1):self%kfromto(2),iref,ieo)
         call gen_euclid_residual_grad(self, pft_ref_8, iptcl, shvec, irot, f, grad)
-        denom = self%wsqsums_ptcls(self%pinds(iptcl))
+        denom = self%wsqsum_ptcl_now(iptcl)
         f    = f / denom
         grad = 2.d0 * grad / denom
     end subroutine gen_raw_euclid_grad_for_rot_8

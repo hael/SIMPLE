@@ -39,6 +39,7 @@ type :: recovery_result
     logical :: parity_ok = .false.
     real(dp) :: stress_series_min = 0.d0
     real(dp) :: stress_parity_max_error = 0.d0
+    real(dp) :: stress_score_max = 0.d0
     logical :: stress_ok = .false.
     logical :: finite = .false.
 end type recovery_result
@@ -109,8 +110,9 @@ do icase = 1, ncases
     write(logfhandle,'(a,2es16.8,1x,l1)') 'PHASE3_PARITY_MAX_ERROR/TOL/OK: ', &
         &recovery(icase)%parity_max_error, recovery(icase)%parity_tol, &
         &recovery(icase)%parity_ok
-    write(logfhandle,'(a,2es16.8,1x,l1)') 'PHASE3_STRESS_SERIES_MIN/PARITY/OK: ', &
+    write(logfhandle,'(a,3es16.8,1x,l1)') 'PHASE3_STRESS_SERIES_MIN/PARITY/SCORE_MAX/OK: ', &
         &recovery(icase)%stress_series_min, recovery(icase)%stress_parity_max_error, &
+        &recovery(icase)%stress_score_max, &
         &recovery(icase)%stress_ok
     write(logfhandle,'(a,3l2)') 'SYNTHETIC_SHIFT_ACCEPTED_GRID/PARAB/INPL_CONT_YES: ', &
         &recovery(icase)%shift_grid_accepted, recovery(icase)%shift_parabola_accepted, &
@@ -190,7 +192,7 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     type(pftc_shsrch_grad) :: direct_search
     type(pftc_shsrch_grad) :: joint_search
     real(sp), allocatable, target :: sigma2_noise(:,:)
-    real(sp), allocatable :: raw_losses(:)
+    real(sp), allocatable :: raw_losses(:), scores(:)
     real :: limits(2,2), joint_limits(3,2), cxy(3), joint_cxy(3)
     real(dp) :: rotind_grid, rotind_parab
     real(dp) :: shift_grid(2), shift_parabola(2), shift_joint(2)
@@ -245,7 +247,7 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     call b%pftc%memoize_sqsum_ptcl(1)
 
     nrots = b%pftc%get_nrots()
-    allocate(raw_losses(nrots))
+    allocate(raw_losses(nrots), scores(nrots))
     call b%pftc%gen_raw_euclid_vals(1, 1, [0._sp,0._sp], raw_losses)
     igrid = minloc(raw_losses, dim=1)
     rotind_grid = real(igrid,dp)
@@ -322,7 +324,9 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     ! sigma2 and stay physical under stale wsqsums_ptcls
     call series_floor_scan(b, igrid, result%stress_series_min, stale_parity)
     call b%pftc%gen_raw_euclid_vals(1, 1, [1.7_sp, -2.3_sp], raw_losses)
+    call b%pftc%gen_objfun_vals(1, 1, [1.7_sp, -2.3_sp], scores)
     result%stress_series_min = min(result%stress_series_min, real(minval(raw_losses),dp))
+    result%stress_score_max = real(maxval(scores),dp)
     ! re-memoize for the cross-route parity check (the discrete reference
     ! normalizes with the memoized wsqsums)
     call b%pftc%memoize_sqsum_ptcl(1)
@@ -330,6 +334,8 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     result%stress_series_min = min(result%stress_series_min, fresh_min)
     result%stress_ok = ieee_is_finite(result%stress_series_min) .and. &
         &ieee_is_finite(result%stress_parity_max_error) .and. &
+        &all(ieee_is_finite(scores)) .and. minval(scores) >= 0._sp .and. &
+        &result%stress_score_max <= 1.d0 .and. &
         &result%stress_series_min > -GRAD_FD_RTOL .and. &
         &result%stress_parity_max_error <= GRAD_FD_RTOL
 
@@ -372,7 +378,7 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
 
     call b%kill_strategy3D_tbox
     call b%kill_general_tbox
-    deallocate(raw_losses, sigma2_noise)
+    deallocate(raw_losses, scores, sigma2_noise)
 end subroutine run_fixture
 
 ! Central-difference check of the joint analytic gradient at one pose.
