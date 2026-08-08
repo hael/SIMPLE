@@ -1483,6 +1483,7 @@ contains
         complex(sp), pointer :: cjoint(:,:)
         complex(sp) :: cross_term, ref2_term
         real(sp) :: A_sp, shift(2), shift_mag_sq, wk
+        real(dp) :: wsq_now
         integer :: i, ithr, k, k0, kk, p, ieo
         logical :: shifted
 
@@ -1539,7 +1540,17 @@ contains
                 coeffs(p,3) = coeffs(p,3) + wk * cmplx(0._sp,2._sp,kind=sp) * cross_term
             enddo
         enddo
-        A_sp = real(self%wsqsums_ptcls(i) * real(2*self%nrots,dp),sp)
+        ! normalize with the CURRENT sigma2: the +1 particle self-term below
+        ! encodes sum(wk*|ptcl|^2)/normalization == 1, which only holds when
+        ! both use the same sigma2.  wsqsums_ptcls may be stale relative to
+        ! per-iteration sigma2 updates, and a stale normalization makes this
+        ! loss unbounded below, so recompute from the sigma2-independent
+        ! shell sums at every evaluation
+        wsq_now = 0.d0
+        do k = self%kfromto(1), self%kfromto(2)
+            wsq_now = wsq_now + self%kshell_sqsums_ptcls(k,i) / real(self%sigma2_noise(k,iptcl),dp)
+        enddo
+        A_sp = real(wsq_now * real(2*self%nrots,dp),sp)
         coeffs = coeffs / A_sp
         coeffs(1,1) = coeffs(1,1) + cmplx(1._sp,0._sp,kind=sp)
         call eval_joint_coeffs_at_rotind(self, coeffs, rotind_frac, f, grad)

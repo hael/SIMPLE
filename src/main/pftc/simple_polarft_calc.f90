@@ -66,6 +66,10 @@ type :: polarft_calc
     real(dp),    allocatable :: sqsums_ptcls(:)          !< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),    allocatable :: ksqsums_ptcls(:)         !< memoized k-weighted square sums for the correlation calculations (taken from kfromto(1):kfromto(2))
     real(dp),    allocatable :: wsqsums_ptcls(:)         !< memoized square sums weighted by k and  sigmas^2 (taken from kfromto(1):kfromto(2))
+    ! sigma2-independent k-weighted per-shell square sums; lets the joint
+    ! continuous evaluator normalize with the CURRENT sigma2 at evaluation
+    ! time, immune to sigma2 updates after wsqsums memoization
+    real(dp),    allocatable :: kshell_sqsums_ptcls(:,:)
     real(dp),    allocatable :: sqsums_ptcls_den(:)      !< memoized denoised-particle square sums
     real(dp),    allocatable :: ksqsums_ptcls_den(:)     !< memoized denoised-particle k-weighted square sums
     real(sp),    allocatable :: angtab(:)                !< table of in-plane angles (in degrees)

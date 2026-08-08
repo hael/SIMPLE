@@ -21,6 +21,7 @@ contains
             self%sqsums_ptcls(i)  = self%sqsums_ptcls(i) + sumsqk
             sumsqk                = real(ik,dp) * sumsqk
             self%ksqsums_ptcls(i) = self%ksqsums_ptcls(i) + sumsqk
+            self%kshell_sqsums_ptcls(ik,i) = sumsqk
             if( l_sigma ) self%wsqsums_ptcls(i) = self%wsqsums_ptcls(i) + sumsqk / real(self%sigma2_noise(ik,iptcl),dp)
         enddo
     end subroutine memoize_sqsum_ptcl

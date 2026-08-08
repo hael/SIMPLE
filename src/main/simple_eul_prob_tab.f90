@@ -7,7 +7,7 @@ use simple_builder,          only: builder
 use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, calc_num2sample,&
     &eulprob_dist_switch, materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist,&
     &write_seed_shift_table, prob_candidate, prob_candidate_buffer
-use simple_pftc_shsrch_grad, only: pftc_shsrch_grad
+use simple_pftc_shsrch_grad, only: pftc_shsrch_grad, report_joint_fallbacks
 use simple_type_defs,        only: OBJFUN_EUCLID
 implicit none
 
@@ -277,6 +277,7 @@ contains
             enddo
             !$omp end parallel do
         endif
+        call report_joint_fallbacks(grad_shsrch_obj, 'PROB_TAB')
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
@@ -528,6 +529,7 @@ contains
             enddo
             !$omp end parallel do
         endif
+        call report_joint_fallbacks(grad_shsrch_obj, 'PROB_TAB')
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do

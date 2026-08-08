@@ -37,6 +37,9 @@ type :: recovery_result
     real(dp) :: parity_max_error = 0.d0
     real(dp) :: parity_tol = 0.d0
     logical :: parity_ok = .false.
+    real(dp) :: stress_series_min = 0.d0
+    real(dp) :: stress_parity_max_error = 0.d0
+    logical :: stress_ok = .false.
     logical :: finite = .false.
 end type recovery_result
 
@@ -106,6 +109,9 @@ do icase = 1, ncases
     write(logfhandle,'(a,2es16.8,1x,l1)') 'PHASE3_PARITY_MAX_ERROR/TOL/OK: ', &
         &recovery(icase)%parity_max_error, recovery(icase)%parity_tol, &
         &recovery(icase)%parity_ok
+    write(logfhandle,'(a,2es16.8,1x,l1)') 'PHASE3_STRESS_SERIES_MIN/PARITY/OK: ', &
+        &recovery(icase)%stress_series_min, recovery(icase)%stress_parity_max_error, &
+        &recovery(icase)%stress_ok
     write(logfhandle,'(a,3l2)') 'SYNTHETIC_SHIFT_ACCEPTED_GRID/PARAB/INPL_CONT_YES: ', &
         &recovery(icase)%shift_grid_accepted, recovery(icase)%shift_parabola_accepted, &
         &recovery(icase)%joint_accepted
@@ -131,6 +137,10 @@ endif
 if( any(.not. low_band%parity_ok) .or. any(.not. full_band%parity_ok) .or. &
     &any(.not. recovery%parity_ok) )then
     error stop 'Stage 1 validation: continuous evaluator disagrees with the discrete reference at integer angles'
+endif
+if( any(.not. low_band%stress_ok) .or. any(.not. full_band%stress_ok) .or. &
+    &any(.not. recovery%stress_ok) )then
+    error stop 'Stage 1 validation: joint objective series unphysical under near-noiseless sigma2 stress'
 endif
 write(logfhandle,'(a)') 'SIMPLE_TEST_CONT_INPL_ROT2D_STAGE1_VALIDATION NORMAL STOP'
 
@@ -190,7 +200,8 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     real(dp) :: rotind_joint, joint_loss
     real(dp) :: joint_grad(3)
     real(dp) :: fd_error, fd_scale, grad_scale, parity_scale
-    integer :: nrots, igrid, irot_direct, irot_joint
+    real(dp) :: stale_parity, fresh_min
+    integer :: nrots, igrid, irot_direct, irot_joint, k
     logical :: fd_ok, parity_finite
     logical :: shift_grid_accepted, shift_parabola_accepted, joint_accepted
 
@@ -296,6 +307,29 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     result%parity_tol = GRAD_FD_RTOL * max(1.d0, parity_scale)
     result%parity_ok  = parity_finite .and. &
         &result%parity_max_error <= result%parity_tol
+    ! stress: cavgs-like near-noiseless, shell-dependent sigma2 weighting.
+    ! The raw loss is nonnegative by construction; scan the coefficient
+    ! series densely over the joint (shift, fractional-angle) search domain
+    ! and assert it never goes materially negative and stays in parity with
+    ! the double-precision discrete evaluator at grid angles
+    do k = p%kfromto(1), p%kfromto(2)
+        sigma2_noise(k,1) = 1.e-4_sp / real(k,sp)
+    enddo
+    call b%pftc%assign_sigma2_noise(sigma2_noise)
+    ! deliberately do NOT re-memoize the weighted square sums yet: production
+    ! updates sigma2 per iteration without re-memoizing, and the joint
+    ! evaluator must normalize with the CURRENT sigma2 and stay physical
+    ! under stale wsqsums_ptcls
+    call series_floor_scan(b, igrid, result%stress_series_min, stale_parity)
+    ! re-memoize for the cross-route parity check (the discrete reference
+    ! normalizes with the memoized wsqsums)
+    call b%pftc%memoize_sqsum_ptcl(1)
+    call series_floor_scan(b, igrid, fresh_min, result%stress_parity_max_error)
+    result%stress_series_min = min(result%stress_series_min, fresh_min)
+    result%stress_ok = ieee_is_finite(result%stress_series_min) .and. &
+        &ieee_is_finite(result%stress_parity_max_error) .and. &
+        &result%stress_series_min > -GRAD_FD_RTOL .and. &
+        &result%stress_parity_max_error <= GRAD_FD_RTOL
 
     call joint_search%kill
 
@@ -408,6 +442,34 @@ subroutine parity_check(b, nrots, igrid, max_error, scale, ok)
     enddo
     ok = ok .and. ieee_is_finite(max_error)
 end subroutine parity_check
+
+! Dense scan of the continuous joint objective over the (shift, fractional
+! angle) domain the optimizer searches.  Reports the minimum series value
+! (a materially negative minimum means the truncated series is unphysical
+! and L-BFGS-B will descend into the artifact) and the worst integer-angle
+! disagreement with the double-precision discrete evaluator.
+subroutine series_floor_scan( b, igrid, series_min, parity_max )
+    type(builder), intent(inout) :: b
+    integer,  intent(in)  :: igrid
+    real(dp), intent(out) :: series_min, parity_max
+    real(dp) :: f, g(3), f_disc, g_disc(2), shift(2), rotind
+    integer :: ish, jsh, ith
+    series_min = huge(0.d0)
+    parity_max = 0.d0
+    do ish = -2, 2
+        do jsh = -2, 2
+            shift = [real(ish,dp)*1.25d0, real(jsh,dp)*1.25d0]
+            do ith = -40, 40
+                rotind = real(igrid,dp) + real(ith,dp)*0.05d0
+                call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, shift, rotind, f, g)
+                series_min = min(series_min, f)
+            enddo
+            call b%pftc%gen_raw_euclid_grad_at_angle(1, 1, shift, real(igrid,dp), f, g)
+            call b%pftc%gen_raw_euclid_grad_for_rot_8(1, 1, shift, igrid, f_disc, g_disc)
+            parity_max = max(parity_max, abs(f - f_disc))
+        enddo
+    enddo
+end subroutine series_floor_scan
 
 pure real function parabolic_peak_offset(vals, j) result(offset)
     real,    intent(in) :: vals(:)

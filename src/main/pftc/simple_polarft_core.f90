@@ -95,6 +95,7 @@ contains
                 &self%pfts_ptcls(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                 &self%ctfmats(self%pftsz,self%kfromto(1):self%interpklim,1:self%nptcls),&
                 &self%sqsums_ptcls(1:self%nptcls),self%ksqsums_ptcls(1:self%nptcls),self%wsqsums_ptcls(1:self%nptcls),&
+                &self%kshell_sqsums_ptcls(self%kfromto(1):self%kfromto(2),1:self%nptcls),&
                 &self%heap_vars(self%p_ptr%nthr))
         do ithr=1,self%p_ptr%nthr
             allocate(self%heap_vars(ithr)%argvec(self%pftsz),&
@@ -118,9 +119,10 @@ contains
             self%sqsums_ptcls_den  = 0.d0
             self%ksqsums_ptcls_den = 0.d0
         endif
-        self%sqsums_ptcls   = 0.d0
-        self%ksqsums_ptcls  = 0.d0
-        self%wsqsums_ptcls  = 0.d0
+        self%sqsums_ptcls        = 0.d0
+        self%ksqsums_ptcls       = 0.d0
+        self%wsqsums_ptcls       = 0.d0
+        self%kshell_sqsums_ptcls = 0.d0
         ! CTF
         self%ctfmats = 1.0
         self%with_ctf = .false.
@@ -148,7 +150,8 @@ contains
             if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
             if( allocated(self%pfts_ptcls_den) ) deallocate(self%pfts_ptcls_den)
             if( allocated(self%sqsums_ptcls_den) ) deallocate(self%sqsums_ptcls_den, self%ksqsums_ptcls_den)
-            deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, self%angtab,&
+            deallocate(self%sqsums_ptcls, self%ksqsums_ptcls, self%wsqsums_ptcls, &
+                &self%kshell_sqsums_ptcls, self%angtab,&
                 &self%argtransf, self%pfts_ptcls, self%polar, self%pfts_refs,&
                 &self%iseven, self%pinds, self%heap_vars, self%argtransf_shellone)
             call self%kill_memo_ptcls

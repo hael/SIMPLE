@@ -9,7 +9,7 @@ use simple_eul_prob_tab_utils, only: build_pind_lookup, calc_athres, eulprob_dis
     &materialize_seed_shift, read_seed_shift_table, sample_likelihood_dist,&
     &prob_candidate, prob_candidate_store
 use simple_decay_funs,        only: extremal_decay
-use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, report_joint_fallbacks
 use simple_ori,                only: ori
 implicit none
 
@@ -208,6 +208,7 @@ contains
         endif
         ! cleanup
         call eval_work%dealloc_eval_ws
+        call report_joint_fallbacks(grad_shsrch_obj, 'PROB_TAB_NEIGH')
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
@@ -408,6 +409,7 @@ contains
             enddo
             !$omp end parallel do
         endif
+        call report_joint_fallbacks(grad_shsrch_obj, 'PROB_TAB_NEIGH')
         do ithr = 1,nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do

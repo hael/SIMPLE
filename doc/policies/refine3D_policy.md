@@ -307,9 +307,12 @@ assignment index is used only to convert its shift back to the native particle
 frame and is then discarded before the one-time all-angle seed selection. An
 accepted result persists one coupled pose: fractional Euler `e3`, nearest integer
 `inpl`, shift, and score. A finite non-improving evaluation commits the newly
-selected grid seed and its score/shift; a numerically invalid evaluation
-retains the incoming candidate. It must never invoke the legacy callback as a
-fallback. State and projection identity remain fixed during the final joint
+selected grid seed and its score/shift. A numerically invalid joint evaluation
+falls back to the legacy callback-based optimizer (the `inpl_cont=no` route),
+implemented inside the joint search object so every consumer inherits it; the
+fallback result is committed as a discrete grid pose (never as fractional
+`e3`), and only if the fallback itself fails does the incoming candidate
+remain. State and projection identity remain fixed during the final joint
 solve. A persisted fractional `e3` is not reused as the next joint seed.
 
 Shared-memory and distributed probabilistic child commands must retain

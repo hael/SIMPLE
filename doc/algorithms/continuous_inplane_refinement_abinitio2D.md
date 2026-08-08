@@ -67,8 +67,10 @@ assignment persists
 the accepted continuous angle in `e3`; the nearest integer remains in `inpl`
 for compatibility, and the final shift and score are written from the same
 joint pose. A valid non-improving solve commits the newly selected discrete
-seed; an invalid solve retains the incoming assignment. Neither invokes the
-legacy callback.
+seed. A numerically invalid solve falls back to the legacy callback-based
+optimizer (the `inpl_cont=no` route) inside the joint search object, and its
+result is committed as a discrete grid pose; only if the fallback also fails
+is the incoming assignment retained.
 
 The final `store_solution` of the joint pose bypasses the score-improvement
 guard: the joint result restarts from the native shift, so its score is not
