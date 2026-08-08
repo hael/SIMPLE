@@ -1253,6 +1253,7 @@ contains
             case(JOBPROC_SEG)
                 call self%bos%write_segment(isegment, self%jobproc)
             case(COMPENV_SEG)
+                if( self%compenv%isthere('simple_path') ) call self%compenv%delete_entry('simple_path')
                 call self%bos%write_segment(isegment, self%compenv)
         end select
     end subroutine segwriter
@@ -1283,6 +1284,7 @@ contains
             case(JOBPROC_SEG)
                 call self%bos%write_segment_inside(isegment, self%jobproc)
             case(COMPENV_SEG)
+                if( self%compenv%isthere('simple_path') ) call self%compenv%delete_entry('simple_path')
                 call self%bos%write_segment_inside(isegment, self%compenv)
         end select
     end subroutine segwriter_inside

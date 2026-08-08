@@ -152,6 +152,9 @@ do i = 1,NPTCLS
     call project1%os_ptcl3D%set(i, 'proj', nint(1000.*ran3()))
 enddo
 call project1%update_projinfo(string('myproject.simple'))
+call project1%compenv%new(1, is_ptcl=.false.)
+call project1%compenv%set(1, 'qsys_name', 'local')
+call project1%compenv%set(1, 'simple_path', '/legacy/simple/installation')
 ! write/read
 call project1%write(string('myproject.simple'))
 call project2%read_segment('projinfo', string('myproject.simple'))
@@ -185,6 +188,11 @@ call project2%kill
 call simple_rmdir(probe_dir, status)
 write(*,*)'TEST SUCCES READ DOES NOT MUTATE projinfo'
 call project2%read(string('myproject.simple'))
+if( project2%compenv%isthere('simple_path') )then
+    write(*,*)'TEST FAILED: project persisted compenv simple_path'
+    stop
+endif
+write(*,*)'TEST SUCCESS PROJECT DOES NOT PERSIST SIMPLE_PATH'
 ! compare
 do i = 1,NMICS
     str1 = project1%os_mic%ori2str(i)

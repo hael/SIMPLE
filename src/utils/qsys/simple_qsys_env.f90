@@ -123,8 +123,8 @@ contains
         class(string), optional, intent(in)    :: qsys_partition     !< override scheduler partition from params/env
         type(ori)             :: compenv_o
         type(sp_project)      :: spproj
-        type(string)          :: qsnam, qsnam_requested, tpi, hrs_str, mins_str, secs_str
-        integer               :: nthr_workers, n_workers
+        type(string)          :: qsnam, qsnam_requested, tpi, hrs_str, mins_str, secs_str, runtime_simple_path
+        integer               :: nthr_workers, n_workers, iostat
         character(len=STDLEN) :: default_time_env
         integer               :: partsz, hrs, mins, secs, nptcls_here, envlen
         real                  :: rtpi, tot_time_sec
@@ -159,6 +159,9 @@ contains
             call spproj%read_segment('compenv', params%projfile)
             call spproj%compenv%get_ori(1, compenv_o)
             self%qdescr = compenv_o%ori2chash()
+            runtime_simple_path = simple_getenv('SIMPLE_PATH', iostat)
+            if( iostat /= 0 ) THROW_HARD('SIMPLE_PATH is not defined in your environment; qsys_env::new')
+            call self%qdescr%set('simple_path', runtime_simple_path)
         else
             call init_qdescr_from_runtime(self%qdescr, params, qsys_name, qsys_partition)
         end if
