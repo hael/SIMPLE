@@ -43,8 +43,12 @@ cleanup behavior.
 - Use direct, local Fortran APIs and structured project/parameter/orientation helpers
   instead of ad hoc parsing or parallel configuration paths.
 - Avoid broad refactors while fixing a narrow behavior.
-- Do not run expensive builds or broad test suites unless requested. Prefer targeted
-  checks and tell the user what was not run.
+- Do not compile, link, run CMake builds, or execute test binaries unless the user
+  explicitly requests it. The user performs compilation to avoid spending agent credits
+  on builds.
+- Validate edits with editor or language-server syntax diagnostics and other lightweight
+  checks that do not compile code. Tell the user that compilation and runtime tests were
+  left for them.
 
 ## Instruction And Skill Maintenance
 

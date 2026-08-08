@@ -57,6 +57,7 @@ real,             parameter :: CLS_REJECT_STD             = 2.5                 
 real,             parameter :: FRAC_SKIP_REJECTION        = 0.7                       !< 2D analysis: When the number of classes to reject is too high rejection is skipped
 real,             parameter :: LOWRES_REJECT_THRESHOLD    = 199.                      !< class rejection: Deactivates resolution-based rejection when lpthres > LOWRES_REJECT_THRESHOLD
 real,             parameter :: POOL_SMPD_HARD_LIMIT       = 1.5                       ! Pixel size hard limit -> max resolution=3Angs
+real,             parameter :: STREAM_DEFAULT_SMPD_DOWNSCALE = 1.3                    !< preprocessing: target sampling distance after movie downscaling (Angstroms)
 real,             parameter :: STREAM_ASTIG_THRESHOLD     = 10.0                      !< preprocessing: Stream astigmatism rejection threshold
 real,             parameter :: STREAM_CTFRES_THRESHOLD    = 10.0                      !< preprocessing: Stream ctfres rejection threshold (Angstroms)
 real,             parameter :: STREAM_ICEFRAC_THRESHOLD   = 1.0                       !< preprocessing: Stream icefrac rejection threshold

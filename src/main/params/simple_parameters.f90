@@ -609,7 +609,7 @@ type :: parameters
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: smpd=1.3            !< sampling distance; same as EMANs apix(in A)
-    real    :: smpd_downscale=SMPD4DOWNSCALE !< sampling distance for movie downscaling
+    real    :: smpd_downscale      !< sampling distance for movie downscaling; native smpd when omitted
     real    :: smpd_pickrefs       !< sampling distance of pickrefs
     real    :: smpd_target=0.5     !< target sampling distance; same as EMANs apix(in A) refers to paddep cavg/volume
     real    :: smpd_crop=2.        !< sampling distance; same as EMANs apix(in A) refers to cropped cavg/volume

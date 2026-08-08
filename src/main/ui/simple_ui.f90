@@ -358,7 +358,7 @@ contains
         call json%add(input, 'label', 'downscale pixel size (A)')
         call json%add(input, 'help',  'downscale pixel size (A)')
         call json%add(input, 'required',    .TRUE.)
-        call json%add(input, 'default',     real2str(SMPD4DOWNSCALE))
+        call json%add(input, 'default',     real2str(STREAM_DEFAULT_SMPD_DOWNSCALE))
         !! total_dose
         call json%create_object(input, 'input')
         call json%add(user_inputs, input)

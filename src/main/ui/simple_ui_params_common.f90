@@ -772,8 +772,9 @@ subroutine set_ui_params
                                    'pixel size in Angstroms', .true., 1.0)
 
     call smpd_downscale%set_param( 'smpd_downscale',  'num',    'Sampling distance after downscale', &
-                                   'Distance between neighbouring pixels in Angstroms after downscale', &
-                                   'pixel size in Angstroms{1.3}', .false., 1.3)
+                                   'Distance between neighbouring pixels in Angstroms after downscale; defaults to native sampling', &
+                                   'pixel size in Angstroms', .false., 1.3)
+    smpd_downscale%has_default = .false.
 
     call smpd_target%set_param(    'smpd_target',     'num',    'Target sampling distance', &
                                    'Distance between neighbouring pixels in Angstroms', &

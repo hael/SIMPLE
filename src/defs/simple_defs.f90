@@ -78,7 +78,6 @@ integer, parameter    :: DIFFMAP_NEIGS_AUTO_SCAN_MAX  = 50        !< Maximum sca
 ! power spectrum related stuff
 integer, parameter    :: GUI_PSPECSZ               = 512       !< hard-coded image size for gui
 real,    parameter    :: SMPD4VIZ                  = 1.25      !< default sampling distance for powerspectrum visualisation
-real,    parameter    :: SMPD4DOWNSCALE            = 1.3       !< default sampling distance for downscaling in motion correction 
 real,    parameter    :: LP_PSPEC_BACKGR_SUBTR     = 20.       !< default low-pass limit for power spectrum background subtraction
 ! constants for picker & extraction
 real,    parameter    :: PICKER_SHRINK             = 4.        !< picker shrink factor

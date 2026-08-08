@@ -29,6 +29,8 @@ Branch-context files are local development memory and may describe work that is 
 ## Git and Validation
 
 - Preserve unrelated user changes.
+- Do not compile, link, run CMake builds, or execute test binaries unless the user explicitly requests it. The user performs compilation to avoid spending agent credits on builds.
+- Validate edits with editor or language-server syntax diagnostics and other lightweight checks that do not compile code. Report that compilation and runtime tests were left to the user.
 - For this project, pushing a focused, validated commit to `origin/master` is the normal XP workflow unless the user gives a different direction. Never force-push.
 - Create commits only when the user asks, using focused messages.
 - Do not claim Linux/BOX tests passed unless their output was actually observed.

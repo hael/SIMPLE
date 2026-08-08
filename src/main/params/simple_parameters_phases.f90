@@ -50,7 +50,7 @@ contains
         select type(self)
             type is(parameters)
                 self = parameters(box_extract=0, hpind_fsc=0, kfromto=[0,0], lplims2D=[0.,0.,0.], &
-                    &smpd_pickrefs=0., smpd_targets2D=[0.,0.], total_dose=0.)
+                    &smpd_downscale=0., smpd_pickrefs=0., smpd_targets2D=[0.,0.], total_dose=0.)
             class default
                 THROW_HARD('Unsupported parameters dynamic type; simple_parameters_ctor')
         end select
@@ -331,6 +331,7 @@ contains
         call set_ldim_box_from_stk
         self%scale_movies = 1.0
         if( trim(self%downscale).eq.'yes' )then
+            if( .not. cline%defined('smpd_downscale') ) self%smpd_downscale = self%smpd
             self%scale_movies = self%smpd / self%smpd_downscale
             if( self%scale_movies > 1.0 )then
                 self%smpd_downscale = self%smpd
