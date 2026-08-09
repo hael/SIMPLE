@@ -205,9 +205,9 @@ contains
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
             if( ctrl%do_projrec )then
-                call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
+                call calc_projdir3Drec(params, build, cline, nptcls2update, pinds, cached=ctrl%l_cached)
             else
-                call calc_3Drec(params, build, cline, nptcls2update, pinds)
+                call calc_3Drec(params, build, cline, nptcls2update, pinds, cached=ctrl%l_cached)
             endif
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
@@ -277,13 +277,13 @@ contains
                 case default
                     ctrl%do_write_partial_recs = l_write_partial_recs
             end select
-            ! Alignment reads may come from the downscaled particle cache; the
-            ! reconstruction phase deliberately keeps reading the originals, since its
-            ! preprocessing tapers and pads at full box (see simple_matcher_3Drec).
+            ! Alignment and reconstruction reads may both come from the downscaled
+            ! particle cache; the rec side mirrors the 2D cropped class-average
+            ! restoration (see prep_imgs4rec in simple_matcher_3Drec).
             call ptcl_cache_assert_ready(p_ptr, b_ptr)
             ctrl%l_cached = ptcl_cache_in_use(p_ptr, b_ptr)
             if( ctrl%l_cached ) write(logfhandle,'(A)') &
-                &'>>> REFINE3D: reading particles for alignment from the downscaled cache'
+                &'>>> REFINE3D: reading particles from the downscaled cache'
         end subroutine init_ctrl
 
         subroutine ensure_even_odd_partition()

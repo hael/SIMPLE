@@ -41,13 +41,16 @@
 ! cropping discards most of the noise power, and re-normalizing would rescale the
 ! particle by the crop factor while leaving ctfsq_plane and sigma2 untouched.
 !
-! 3D consumers (refine3D search, prob_tab, prob_tab_neigh) take alignment reads
-! only: the cached entry is exactly the iteration-independent prefix of their
-! prepimg4align as well. The 3D reconstruction phase is deliberately excluded --
-! its preprocessing (norm_noise_taper_edge_pad_fft in simple_matcher_3Drec)
-! tapers and pads at full box, so it keeps re-reading the originals. A denoised
-! primary source (ptcl_src=den) disqualifies the cache outright; a denoised
-! objective (objfun_den=yes) does not, since those images are read separately.
+! 3D consumers: refine3D search, prob_tab, and prob_tab_neigh take alignment
+! reads -- the cached entry is exactly the iteration-independent prefix of their
+! prepimg4align as well -- and the matcher reconstruction phase (calc_3Drec /
+! calc_projdir3Drec) reads the cache too, with the same deliberate numerics
+! change as the 2D restoration: taper and gridding pad at box_crop, no second
+! noise normalization, shift and CTF pixel size scaled to the cropped grid (see
+! prep_imgs4rec). The one-off starting-volume reconstruct3D keeps reading the
+! originals. A denoised primary source (ptcl_src=den) disqualifies the cache
+! outright; a denoised objective (objfun_den=yes) does not, since those images
+! are read separately.
 module simple_ptcl_cache
 use simple_pftc_srch_api
 use simple_builder,           only: builder
@@ -88,8 +91,11 @@ type(string) :: owned_files(5)
 ! Deselected particles are never sampled, so caching them would waste both a full-size
 ! read at build time and box_crop^2*4 bytes on disk; the map buys that back while
 ! keeping lookups O(1). It is monotone over cached particles, so a sorted batch of
-! pinds still maps to a forward scan of the file.
+! pinds still maps to a forward scan of the file. cache_nrecs is the number of
+! records (= maxval(cache_ind)), memoized at index load so the per-batch reads --
+! of which reconstruction adds many across state/eo groups -- need not rescan it.
 integer, allocatable :: cache_ind(:)
+integer              :: cache_nrecs = 0
 
 contains
 
@@ -249,6 +255,7 @@ contains
                 return
             endif
         end do
+        cache_nrecs      = maxval(cache_ind)
         read_cache_index = .true.
     end function read_cache_index
 
@@ -505,6 +512,7 @@ contains
     subroutine ptcl_cache_reset
         l_probed    = .false.
         l_available = .false.
+        cache_nrecs = 0
         if( allocated(cache_ind) ) deallocate(cache_ind)
     end subroutine ptcl_cache_reset
 
@@ -821,6 +829,7 @@ contains
             THROW_HARD('invalid batchlims; ptcl_cache_read_batch')
         endif
         if( .not. allocated(cache_ind) ) THROW_HARD('cache index not loaded; ptcl_cache_read_batch')
+        if( cache_nrecs < 1 )            THROW_HARD('cache record count not set; ptcl_cache_read_batch')
         ! ptcl_cache_in_use has already established that every active particle has a
         ! record, so a zero here means the caller sampled a deselected particle
         do i = batchlims(1), batchlims(2)
@@ -843,7 +852,7 @@ contains
         ! smaller than the originals it replaces.
         call dstkio%new(params%smpd_crop, params%box_crop)
         call dstkio%cache_stack_info(stkname, &
-            &[params%box_crop, params%box_crop, 1], maxval(cache_ind))
+            &[params%box_crop, params%box_crop, 1], cache_nrecs)
         call dstkio%open(stkname)
         do i = batchlims(1), batchlims(2)
             ii   = i - batchlims(1) + 1

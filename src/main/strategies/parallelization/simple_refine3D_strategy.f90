@@ -147,8 +147,10 @@ contains
     subroutine strip_refine3D_search_only_args( cline )
         type(cmdline), intent(inout) :: cline
         call cline%delete('inpl_cont')
-        ! the particle cache serves alignment reads only; reconstruction, sigma,
-        ! postprocess, and assembly children never consume it
+        ! The children stripped here never consume the particle cache: sigma/pspec/
+        ! postprocess/assembly read no particles, and the one-off starting-volume
+        ! rec3D deliberately reads the originals (it may run before the cache is
+        ! built, and reads each particle only once).
         call cline%delete('cache')
         call cline%delete('cache_dir')
     end subroutine strip_refine3D_search_only_args

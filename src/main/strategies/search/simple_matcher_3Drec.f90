@@ -8,6 +8,7 @@ use simple_cmdline,         only: cmdline
 use simple_matcher_ptcl_io, only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch, killimgbatch
 use simple_memoize_ft_maps, only: memoize_ft_maps, forget_ft_maps
 use simple_parameters,      only: parameters
+use simple_ptcl_cache,      only: ptcl_cache_read_batch
 use simple_reconstructor,   only: reconstructor
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_state_vol_fname
 implicit none
@@ -19,17 +20,26 @@ private
 contains
 
     !> volumetric 3d reconstruction
-    subroutine calc_3Drec( params, build, cline, nptcls, pinds )
+    !!
+    !!  cached=.true. serves the particle reads from the downscaled cache; only the
+    !!  refine3D matcher passes it, with a value that went through
+    !!  ptcl_cache_assert_ready, so cache availability is enforced and uniform
+    !!  across ranks. Standalone reconstruct3D, distributed rec workers, and the
+    !!  offload fallback never pass it and always read the full-size originals --
+    !!  an opportunistic probe here could silently mix cached and uncached partials
+    !!  when a leftover cache is visible to some ranks only.
+    subroutine calc_3Drec( params, build, cline, nptcls, pinds, cached )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls
         integer,           intent(in)    :: pinds(nptcls)
+        logical, optional, intent(in)    :: cached
         type(fplane_type), allocatable   :: fpls(:)
         type(reconstructor) :: recvol
         integer, allocatable :: grouped_pinds(:), state_eo_offsets(:)
         integer :: batchlims(2), ibatch, batchsz, state, eo, group
-        logical :: l_den_src
+        logical :: l_den_src, l_cached
         logical :: DEBUG = .false.
         integer(timer_int_kind) :: t, t0
         real(timer_int_kind)    :: t_init, t_read, t_prep, t_grid, t_tot
@@ -39,8 +49,19 @@ contains
         ! Initialize state-independent reconstruction buffers only after
         ! registration and assignment are complete.
         if( DEBUG ) t = tic()
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls)
-        call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        ! Reconstruction from the downscaled cache mirrors the 2D cropped
+        ! class-average restoration (cavger_update_sums): taper and gridding pad live
+        ! at box_crop, shift and CTF pixel size scale to the cropped grid, and the
+        ! entries are not noise-normalized a second time. The cache refuses denoised
+        ! primary sources, so l_cached and l_den_src are exclusive.
+        l_cached = .false.
+        if( present(cached) ) l_cached = cached
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls, cached=l_cached)
+        if( l_cached )then
+            call prepimgbatch(params, build, MAXIMGBATCHSZ, box=params%box_crop, smpd=params%smpd_crop)
+        else
+            call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        endif
         l_den_src = params%l_ptcl_src_den
         if( DEBUG ) t_init = toc(t)
         if( DEBUG ) then
@@ -60,7 +81,9 @@ contains
                     batchlims = [ibatch, min(state_eo_offsets(group+1)-1, ibatch+MAXIMGBATCHSZ-1)]
                     batchsz   = batchlims(2) - batchlims(1) + 1
                     if( DEBUG ) t = tic()
-                    if( l_den_src )then
+                    if( l_cached )then
+                        call ptcl_cache_read_batch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
+                    elseif( l_den_src )then
                         call discrete_read_imgbatch_source(params, build, 'den', batchsz, &
                             grouped_pinds(batchlims(1):batchlims(2)), [1,batchsz], build%imgbatch(:batchsz))
                     else
@@ -69,7 +92,7 @@ contains
                     if( DEBUG ) t_read = t_read + toc(t)
                     if( DEBUG ) t = tic()
                     call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
-                        grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+                        grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), cached=l_cached)
                     if( DEBUG ) t_prep = t_prep + toc(t)
                     if( DEBUG ) t = tic()
                     call update_state_half_rec(state, eo, build, batchsz, &
@@ -100,12 +123,13 @@ contains
     !! exact KB numerator/CTF^2 machinery used for class averages.  Those raw
     !! sums are then inserted directly into the 3D reconstruction; they are
     !! never CTF-density corrected and never transformed through real space.
-    subroutine calc_projdir3Drec( params, build, cline, nptcls, pinds )
+    subroutine calc_projdir3Drec( params, build, cline, nptcls, pinds, cached )
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls
         integer,           intent(in)    :: pinds(nptcls)
+        logical, optional, intent(in)    :: cached
         type(fourier_2d_accumulator) :: projdir_sums
         type(fplane_type), allocatable :: fpls(:)
         type(fplane_type) :: compact_fpl
@@ -113,7 +137,7 @@ contains
         type(ori) :: orientation
         integer, allocatable :: eopops(:), grouped_pinds(:), state_eo_offsets(:), proj2slice(:)
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, iproj, eo, state, nproj, group
-        logical :: l_den_src
+        logical :: l_den_src, l_cached
         if( nptcls < 1 ) return
         if( params%nspace /= build%eulspace%get_noris() )then
             THROW_HARD('nspace/eulspace mismatch; calc_projdir3Drec')
@@ -122,8 +146,18 @@ contains
         ! finalizes these labels before writing orientation metadata.
         call build%spproj_field%set_projs(build%eulspace)
         call group_pinds_by_state_eo(params, build, nptcls, pinds, grouped_pinds, state_eo_offsets)
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls)
-        call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        ! Cached reconstruction as in calc_3Drec (same explicit-argument contract);
+        ! the projection-direction sums live on the native box_crop grid, whose
+        ! extent the cropped padded fplane covers exactly (see the grid note in
+        ! cavger_init_online).
+        l_cached = .false.
+        if( present(cached) ) l_cached = cached
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls, cached=l_cached)
+        if( l_cached )then
+            call prepimgbatch(params, build, MAXIMGBATCHSZ, box=params%box_crop, smpd=params%smpd_crop)
+        else
+            call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        endif
         allocate(eopops(params%nspace), proj2slice(params%nspace), source=0)
         l_den_src = params%l_ptcl_src_den
         do state = 1,params%nstates
@@ -157,14 +191,16 @@ contains
                 do ibatch = state_eo_offsets(group),state_eo_offsets(group+1)-1,MAXIMGBATCHSZ
                     batchlims = [ibatch, min(state_eo_offsets(group+1)-1,ibatch+MAXIMGBATCHSZ-1)]
                     batchsz   = batchlims(2) - batchlims(1) + 1
-                    if( l_den_src )then
+                    if( l_cached )then
+                        call ptcl_cache_read_batch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
+                    elseif( l_den_src )then
                         call discrete_read_imgbatch_source(params, build, 'den', batchsz, &
                             &grouped_pinds(batchlims(1):batchlims(2)), [1,batchsz], build%imgbatch(:batchsz))
                     else
                         call discrete_read_imgbatch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
                     endif
                     call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
-                        &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz))
+                        &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), cached=l_cached)
                     ! Each OpenMP iteration owns one projection-direction
                     ! accumulator, matching the race-free class-average policy.
                     !$omp parallel do default(shared) private(iproj,i,iptcl) &
@@ -388,12 +424,20 @@ contains
 
     !>  Initiates objects required for online volumetric 3d reconstruction
     !>  Does not read images
-    subroutine init_rec( params, build, maxbatchsz, fplanes )
+    !>  cached=.true. sizes the pad heap for downscaled-cache entries; it must match
+    !!  the cached argument later given to prep_imgs4rec. Explicit rather than probed
+    !!  here, so external init_rec callers (flex, offload) that never pass it keep
+    !!  full-size buffers no matter what cache state the process carries.
+    subroutine init_rec( params, build, maxbatchsz, fplanes, cached )
         use simple_imgarr_utils, only: alloc_imgarr
         class(parameters),              intent(in)    :: params
         class(builder),                 intent(inout) :: build
         integer,                        intent(in)    :: maxbatchsz
         type(fplane_type), allocatable, intent(inout) :: fplanes(:)
+        logical, optional,              intent(in)    :: cached
+        logical :: l_cached
+        l_cached = .false.
+        if( present(cached) ) l_cached = cached
         ! sanity check for ml_reg
         if( params%l_ml_reg )then
             if( .not. allocated(build%esig%sigma2_noise) )then
@@ -403,12 +447,30 @@ contains
         ! allocate convenience CTF & memory aligned objects
         if( allocated(fplanes) )  deallocate(fplanes)
         allocate(fplanes(maxbatchsz))
-        ! heap of padded images
-        call alloc_imgarr(nthr_glob, [params%boxpd, params%boxpd, 1], params%smpd, build%img_pad_heap)
+        ! Heap of padded images. boxpd and box_croppd cover the same physical
+        ! extent (box*smpd == box_crop*smpd_crop), so a given Fourier index means
+        ! the same spatial frequency on either grid; the cropped one simply stops
+        ! at the crop Nyquist, which is all the box_crop reconstructor can hold.
+        if( l_cached )then
+            call alloc_imgarr(nthr_glob, [params%box_croppd, params%box_croppd, 1], params%smpd_crop, build%img_pad_heap)
+        else
+            call alloc_imgarr(nthr_glob, [params%boxpd, params%boxpd, 1], params%smpd, build%img_pad_heap)
+        endif
     end subroutine init_rec
 
-    !> Preprocess particle images for online volumetric 3d reconstruction
-    subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes )
+    !> Preprocess particle images for online volumetric 3d reconstruction.
+    !!
+    !!  cached=.true. means ptcl_imgs holds downscaled-cache entries (box_crop,
+    !!  already noise-normalized at the full box) rather than the originals. The
+    !!  treatment then mirrors the 2D cropped class-average restoration in
+    !!  cavger_update_sums exactly: no second normalization (renorm=.false. against
+    !!  lmsk_crop), taper and gridding pad at box_crop, ft maps memoized on the
+    !!  cropped padded grid, shift converted to cropped pixels, and the CTF told the
+    !!  cropped pixel size. Both padded grids cover the same physical extent, so
+    !!  gen_fplane4rec produces the same physical frequencies either way; the sigma2
+    !!  range is capped at the crop Nyquist because gen_fplane4rec derives its
+    !!  sigma2 source range from the box it is handed.
+    subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes, cached )
         use simple_image, only: image
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
@@ -416,20 +478,41 @@ contains
         class(image),      intent(inout) :: ptcl_imgs(nptcls)
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), intent(inout) :: fplanes(nptcls)
+        logical, optional, intent(in)    :: cached
         type(ctfparams) :: ctfparms(nthr_glob)
-        real      :: shift(2)
+        real      :: shift(2), crop_factor
         integer   :: iptcl, i, ithr, kfromto(2)
+        logical   :: l_cached
+        l_cached = .false.
+        if( present(cached) ) l_cached = cached
         ! logical/physical address mapping for padded Fourier planes
-        call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
+        if( l_cached )then
+            call memoize_ft_maps([params%box_croppd, params%box_croppd, 1], params%smpd_crop)
+        else
+            call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
+        endif
         ! gridding batch loop
         kfromto = build%esig%get_kfromto()
+        if( l_cached ) kfromto(2) = min(kfromto(2), params%box_crop/2)
+        crop_factor = real(params%box_crop) / real(params%box)
         !$omp parallel do default(shared) private(i,ithr,iptcl,shift) schedule(static) proc_bind(close)
         do i = 1,nptcls
             ithr   = omp_get_thread_num() + 1
             iptcl  = pinds(i)
-            call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+            if( l_cached )then
+                call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk_crop, &
+                    &build%img_pad_heap(ithr), renorm=.false.)
+            else
+                call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
+            endif
             ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
             shift = build%spproj_field%get_2Dshift(iptcl)
+            if( l_cached )then
+                ! shconst is in pixel units of the padded box the image actually has,
+                ! and the CTF kernel reads cycles/pixel of the current grid
+                ctfparms(ithr)%smpd = ctfparms(ithr)%smpd / crop_factor ! = smpd_crop
+                shift               = shift * crop_factor
+            endif
             if( params%l_ml_reg )then
                 call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
                 &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))

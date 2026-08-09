@@ -324,13 +324,18 @@ disabled. The matcher and probability-table paths may still refine shifts after
 candidate/state selection, but they must not use a shift seed estimated from a
 particle's previous state to score candidates in other states.
 
-The matcher must preserve a single particle-stack read per batch. When
-Cartesian partial reconstruction is active, batch construction retains the
-already-read raw particle images and reconstruction consumes those in-memory
-images after assignment within the same batch.
+The matcher must preserve a single particle-stack read per batch *within each
+phase*: batch construction reads each particle once for search, and the
+reconstruction phase reads each selected particle once after the search-phase
+teardown (the PFTC memory phase boundary makes retaining the raw images across
+phases prohibitive). Do not add further reads to either phase unless the
+performance contract is explicitly changed.
 
-Do not move partial reconstruction into a second full particle pass that
-re-reads image stacks unless the performance contract is explicitly changed.
+When the downscaled particle cache is active (`cache=yes`), both phases read
+the cache instead of the original full-size stacks; the single-read-per-phase
+rule then applies to cache records. See
+`doc/policies/particle_cache_policy.md` for the cache contract, including why
+cached reconstruction is a deliberate, uniform-across-ranks numerics change.
 
 ## 9. Volume Assembly
 
