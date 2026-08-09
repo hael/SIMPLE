@@ -181,7 +181,7 @@ contains
             call prep_strategy2D_batch( p_ptr, b_ptr%spproj, which_iter, batchsz, pinds(batch_start:batch_end) )
             if( ctrl%do_bench ) t_align = tic()
             !$omp parallel do private(iptcl,iptcl_batch,iptcl_map,orientation,strategy2Dspec,&
-            !$omp attempted,improved,no_improvement,invalid,ithr_stat)&
+            !$omp attempted,improved,no_improvement,invalid)&
             !$omp default(shared) schedule(static) proc_bind(close)
             do iptcl_batch = 1, batchsz
                 iptcl_map  = batch_start + iptcl_batch - 1
