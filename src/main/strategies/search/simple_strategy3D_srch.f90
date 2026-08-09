@@ -383,7 +383,11 @@ contains
             &sh_rot=.true., rotind_frac=rotind_frac, &
             &evaluation_valid=evaluation_valid, improved=improved)
         if( self%joint_evaluation_invalid(evaluation_valid) )then
+            ! policy: the exhaustive discrete scan at the entry shift is a
+            ! guaranteed floor, so even an invalid solve commits its seed;
+            ! the outcome stays INVALID as a diagnostic signal
             self%continuous_route_outcome = CONT_ROUTE_INVALID
+            call self%store_discrete_seed_solution(ref, irot, cxy(1), cxy(2:3))
             return
         endif
         if( .not. improved )then
@@ -403,8 +407,9 @@ contains
     !! selected its state, projection, integer in-plane cell, and shift.  The
     !! probability table deliberately carries no fractional angle. The incoming
     !! in-plane index is used only to recover the shift frame and is then
-    !! discarded. Failure leaves the incoming assignment intact; a valid
-    !! non-improving solve commits the newly selected discrete seed.
+    !! discarded. Both invalid and valid non-improving solves commit the
+    !! exhaustive discrete-scan seed (the guaranteed floor); only pre-solve
+    !! sanity failures leave the incoming assignment intact.
     subroutine refine_assignment_continuously( self, ref, inpl, corr, sh, inpl_coord, inpl_valid )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
@@ -451,6 +456,13 @@ contains
             &sh_rot=.true., rotind_frac=rotind_frac, evaluation_valid=evaluation_valid, &
             &improved=improved)
         if( .not. evaluation_valid )then
+            ! policy: the exhaustive discrete scan at the entry shift is a
+            ! guaranteed floor, so even an invalid solve commits its seed as a
+            ! discrete grid assignment; the outcome stays INVALID for diagnostics
+            inpl       = refined_inpl
+            corr       = cxy(1)
+            sh         = cxy(2:3)
+            inpl_coord = real(refined_inpl)
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
         endif

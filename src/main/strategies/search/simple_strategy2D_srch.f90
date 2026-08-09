@@ -392,11 +392,6 @@ contains
         cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, &
             &evaluation_valid=evaluation_valid, improved=improved)
-        if( .not. evaluation_valid )then
-            ! numerically invalid solve: retain the incoming assignment
-            self%continuous_route_outcome = CONT_ROUTE_INVALID
-            return
-        endif
         if( irot < 1 .or. irot > self%nrots )then
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
@@ -404,7 +399,12 @@ contains
         self%best_rot   = irot
         self%best_corr  = cxy(1)
         self%best_shvec = cxy(2:3)
-        if( improved )then
+        if( .not. evaluation_valid )then
+            ! policy: the exhaustive discrete scan at the entry shift is a
+            ! guaranteed floor, so an invalid solve commits its seed as a grid
+            ! pose (has_continuous_e3 stays false); INVALID kept for diagnostics
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+        else if( improved )then
             call store_continuous_e3(self, rotind_frac)
             self%continuous_route_outcome = CONT_ROUTE_IMPROVED
         else

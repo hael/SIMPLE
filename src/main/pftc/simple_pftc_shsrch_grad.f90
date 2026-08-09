@@ -431,8 +431,13 @@ contains
     !! the best grid cell at xy_in, and the continuous solve starts from that
     !! cell with bounds of plus or minus two rotation indices.  The PFTC
     !! objective is periodic, so those bounds may safely straddle the first or
-    !! last grid index.  A valid non-improving solve returns the selected grid
-    !! seed; only a numerically invalid evaluation returns irot=0.
+    !! last grid index.
+    !!
+    !! Policy: the discrete all-angle scan at the supplied shift is exhaustive,
+    !! so it is a guaranteed floor -- a non-improving OR numerically invalid
+    !! continuous solve still returns that optimal grid index and its score.
+    !! evaluation_valid=.false. is a diagnostic signal only; irot is never 0
+    !! and callers always receive a committable discrete pose.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
             &evaluation_valid, improved, initial_cost_out ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
@@ -447,8 +452,21 @@ contains
         ! a final cost below this tolerance is an unphysical evaluator
         ! artifact and the pose found by descending into it cannot be trusted
         real(dp), parameter :: JOINT_NEG_COST_TOL = 1.d-2
+        ! An improvement must be material to displace the exhaustive discrete
+        ! floor: the roundoff-scale guard alone lets any solver twitch count as
+        ! "improved" (L-BFGS-B's own convergence tolerance is orders looser),
+        ! which commits fractional poses on noise and, under symmetric point
+        ! groups with near-degenerate in-plane branches, flips assignments en
+        ! masse between iterations
+        real(dp), parameter :: JOINT_IMPROVE_REL_TOL = 1.d-4
+        ! A solution pinned to a search bound is an uncontrolled excursion --
+        ! for the rotation window it contradicts the exhaustive seed scan, and
+        ! for shifts it is the corner-landing signature of a descent into
+        ! series artifacts -- so it never displaces the floor either
+        real(dp), parameter :: JOINT_BOUND_TOL = 1.d-3
         real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(3,2)
-        real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(3)
+        real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(3), brange
+        integer  :: idim
         logical :: valid_result, improved_result, valid_coordinates
 
         if( self%search_mode /= SHSRCH_JOINT )then
@@ -472,7 +490,8 @@ contains
         initial_cost = self%joint_initial_cost
         final_cost = real(lowest_cost,dp)
         if( present(initial_cost_out) ) initial_cost_out = initial_cost
-        improve_tol = 64.d0 * epsilon(1.d0) * max(1.d0, abs(initial_cost), abs(final_cost))
+        improve_tol = max(64.d0 * epsilon(1.d0) * max(1.d0, abs(initial_cost), abs(final_cost)), &
+            &JOINT_IMPROVE_REL_TOL * abs(initial_cost))
         coordinate_tol = 64.d0 * real(epsilon(1.0),dp) * &
             &max(1.d0, max(abs(real(self%ospec%limits(:,1),dp)), &
             &abs(real(self%ospec%limits(:,2),dp))))
@@ -491,12 +510,31 @@ contains
         ! artifact, not signal
         if( valid_result .and. final_cost < -JOINT_NEG_COST_TOL ) valid_result = .false.
         improved_result = valid_result .and. final_cost < initial_cost - improve_tol
+        ! demote bound-pinned solutions to the discrete floor: collapsed
+        ! dimensions (doshift=no) have zero range and are skipped
+        if( improved_result )then
+            do idim = 1, 3
+                brange = real(self%ospec%limits(idim,2), dp) - real(self%ospec%limits(idim,1), dp)
+                if( brange <= 0.d0 ) cycle
+                if( real(self%ospec%x(idim),dp) - real(self%ospec%limits(idim,1),dp) < JOINT_BOUND_TOL * brange .or. &
+                    &real(self%ospec%limits(idim,2),dp) - real(self%ospec%x(idim),dp) < JOINT_BOUND_TOL * brange )then
+                    improved_result = .false.
+                    exit
+                endif
+            end do
+        endif
         if( .not. valid_result )then
+            ! the exhaustive discrete scan is the floor: return the seed cell and
+            ! its score; irot still holds the seed index from the scan above
             if( present(evaluation_valid) ) evaluation_valid = .false.
             if( present(improved) ) improved = .false.
-            irot = 0
-            cxy = 0.
-            rotind_frac = 0.
+            rotind_frac = real(irot,dp)
+            cxy(1)  = seed_corr
+            cxy(2:) = xy_in
+            if( sh_rot )then
+                call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
+                cxy(2:) = matmul(cxy(2:), rotmat)
+            endif
             return
         endif
         if( present(evaluation_valid) ) evaluation_valid = valid_result
