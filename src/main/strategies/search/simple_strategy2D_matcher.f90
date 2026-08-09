@@ -295,7 +295,8 @@ contains
             ! preprocessing path than its peers.
             call ptcl_cache_assert_ready(p_ptr, b_ptr)
             ctrl%l_cached = ptcl_cache_in_use(p_ptr, b_ptr)
-            if( ctrl%l_cached ) write(logfhandle,'(A)') '>>> CLUSTER2D: reading particles from the downscaled cache'
+            if( ctrl%l_cached .and. p_ptr%part == 1 ) &
+                write(logfhandle,'(A)') '>>> CLUSTER2D: reading particles from the downscaled cache'
         end subroutine init_ctrl
 
         subroutine sample_particles_for_update()

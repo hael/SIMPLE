@@ -275,7 +275,7 @@ contains
             ! restoration (see prep_imgs4rec in simple_matcher_3Drec).
             call ptcl_cache_assert_ready(p_ptr, b_ptr)
             ctrl%l_cached = ptcl_cache_in_use(p_ptr, b_ptr)
-            if( ctrl%l_cached ) write(logfhandle,'(A)') &
+            if( ctrl%l_cached .and. p_ptr%part == 1 ) write(logfhandle,'(A)') &
                 &'>>> REFINE3D: reading particles from the downscaled cache'
         end subroutine init_ctrl
 
