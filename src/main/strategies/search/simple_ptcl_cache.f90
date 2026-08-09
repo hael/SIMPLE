@@ -1,4 +1,4 @@
-!@descr: downscaled particle cache shared by the 2D matcher workflows
+!@descr: downscaled particle cache shared by the 2D and 3D matcher workflows
 !
 ! Every iteration the samplers draw a fresh ~nsample subset of the particles and
 ! each selected particle is read at full box and Fourier-cropped to box_crop in
@@ -21,15 +21,17 @@
 ! ~379 KB at box=308.
 !
 ! abinitio2D holds box_crop fixed across all its stages, so one cache serves a
-! whole run and there is nothing to invalidate between stages. The cache lives
-! exactly as long as the run that owns it: the process that builds (or adopts)
-! it removes the files on normal exit and on hard exception, via the
-! cache_cleanup_glob hook in simple_defs. Only SIGKILL-class deaths can leave
-! files behind, and a rerun in the same execution directory finds and reclaims
-! those (see cache_run_token).
+! whole 2D run and there is nothing to invalidate between stages. abinitio3D
+! changes box_crop per stage, so its refine3D children rebuild once per stage
+! boundary and the ownership handoff in ptcl_cache_own deletes the previous
+! stage's files. The cache lives exactly as long as the run that owns it: the
+! process that builds (or adopts) it removes the files on normal exit and on
+! hard exception, via the cache_cleanup_glob hook in simple_defs. Only
+! SIGKILL-class deaths can leave files behind, and a rerun in the same execution
+! directory finds and reclaims those (see cache_run_token).
 !
-! Both consumers read from it: prob_tab2D, which needs only the alignment product,
-! and cluster2D_exec, which additionally restores class averages from the raw
+! 2D consumers: prob_tab2D, which needs only the alignment product, and
+! cluster2D_exec, which additionally restores class averages from the raw
 ! images. The latter is not a pure I/O substitution -- the edge taper and the
 ! gridding source grid then live at box_crop rather than at box -- and it requires
 ! cavger_init_online(cropped_ptcls=.true.), which switches the class-averager work
@@ -38,6 +40,14 @@
 ! already noise-normalized, so restoration must not normalize it a second time:
 ! cropping discards most of the noise power, and re-normalizing would rescale the
 ! particle by the crop factor while leaving ctfsq_plane and sigma2 untouched.
+!
+! 3D consumers (refine3D search, prob_tab, prob_tab_neigh) take alignment reads
+! only: the cached entry is exactly the iteration-independent prefix of their
+! prepimg4align as well. The 3D reconstruction phase is deliberately excluded --
+! its preprocessing (norm_noise_taper_edge_pad_fft in simple_matcher_3Drec)
+! tapers and pads at full box, so it keeps re-reading the originals. A denoised
+! primary source (ptcl_src=den) disqualifies the cache outright; a denoised
+! objective (objfun_den=yes) does not, since those images are read separately.
 module simple_ptcl_cache
 use simple_pftc_srch_api
 use simple_builder,           only: builder
@@ -397,6 +407,27 @@ contains
         call key_fp%kill
     end subroutine write_cache_key
 
+    !>  Entries are derived from the raw particle stacks, so a workflow whose primary
+    !!  particle source is the denoised stack (ptcl_src=den) must not be served from
+    !!  the cache: the pixels would simply be the wrong ones. A denoised *objective*
+    !!  (objfun_den=yes) is different: its images are read separately after the raw
+    !!  primary batch (see build_batch_particles3D), so the raw alignment read may
+    !!  still come from the cache. Checked wherever cache state is decided, so even
+    !!  a mis-plumbed worker command line cannot read wrong data.
+    logical function primary_src_is_den( params )
+        class(parameters), intent(in) :: params
+        primary_src_is_den = params%l_ptcl_src_den
+    end function primary_src_is_den
+
+    !>  The stack fingerprint walks os_stk, so only workflows whose images come from
+    !!  the imported particle stacks can be cached. cls3D "particles" are class
+    !!  averages living in os_out; a replaced cavg stack would evade staleness
+    !!  detection, so those workflows are refused rather than served wrong pixels.
+    logical function oritype_cacheable( params )
+        class(parameters), intent(in) :: params
+        oritype_cacheable = trim(params%oritype) == 'ptcl2D' .or. trim(params%oritype) == 'ptcl3D'
+    end function oritype_cacheable
+
     !>  Is a usable cache present for this run? Probed once per process. A missing or
     !!  stale cache is not an error here; ptcl_cache_assert_ready is what makes it one
     !!  when the user asked for the cache.
@@ -404,7 +435,8 @@ contains
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         type(string) :: stkname
-        if( .not. params%l_cache )then
+        if( .not. params%l_cache .or. params%box_crop >= params%box .or. &
+            &primary_src_is_den(params) .or. .not. oritype_cacheable(params) )then
             ptcl_cache_in_use = .false.
             return
         endif
@@ -431,7 +463,9 @@ contains
         class(builder),    intent(inout) :: build
         type(string) :: stkname
         if( .not. params%l_cache ) return
-        if( params%box_crop >= params%box ) return  ! nothing to cache, see ptcl_cache_ensure
+        if( params%box_crop >= params%box )     return  ! nothing to cache, see ptcl_cache_ensure
+        if( primary_src_is_den(params) )        return  ! refused uniformly, see ptcl_cache_ensure
+        if( .not. oritype_cacheable(params) )   return  ! refused uniformly, see ptcl_cache_ensure
         if( ptcl_cache_in_use(params, build) ) return
         stkname = cache_stkname(params)
         write(logfhandle,'(A)') '>>> PARTICLE CACHE: expected but not usable: '//stkname%to_char()
@@ -452,8 +486,22 @@ contains
     !!  exit-time cleanup hook. Called by ptcl_cache_ensure only, i.e. by the process
     !!  that builds or adopts the cache, before the first byte is written, so that an
     !!  exception mid-build also sweeps the temporaries.
+    !!
+    !!  A staged workflow (abinitio3D) re-owns once per stage with a stage-specific
+    !!  box_crop, so the names change under one process. The previous stage's cache
+    !!  is dead weight the moment a new one is owned -- no later stage can use a
+    !!  different crop -- so it is deleted at the handoff rather than left to
+    !!  accumulate until exit.
     subroutine ptcl_cache_own( params )
         class(parameters), intent(in) :: params
+        type(string) :: newkey
+        newkey = cache_keyname(params)
+        if( l_owner )then
+            ! files only: ensure has live probe/index state at this point, so the
+            ! full cleanup (which resets it) must not run here
+            if( .not. (owned_files(1) .eq. newkey) ) call delete_owned_files
+        endif
+        call newkey%kill
         owned_files(1) = cache_keyname(params)
         owned_files(2) = cache_idxname(params)
         owned_files(3) = cache_stkname(params)
@@ -463,20 +511,32 @@ contains
         cache_cleanup_glob => ptcl_cache_cleanup
     end subroutine ptcl_cache_own
 
-    !>  Delete the owned cache files; a no-op in every process that never took
-    !!  ownership. Runs on normal exit (called from the exec programs) and on hard
-    !!  exception (via cache_cleanup_glob in simple_exception). The hook is disarmed
-    !!  first so a throw during deletion cannot re-enter, and the key file goes first
-    !!  so a partially-completed cleanup can never leave a cache that still validates.
-    subroutine ptcl_cache_cleanup
+    !>  Delete the owned files and drop ownership, leaving probe/index state alone.
+    !!  Key file first, so a partially-completed deletion can never leave a cache
+    !!  that still validates.
+    subroutine delete_owned_files
         integer :: i
-        nullify(cache_cleanup_glob)
         if( .not. l_owner ) return
         l_owner = .false.
         do i = 1, size(owned_files)
             call del_file(owned_files(i))
             call owned_files(i)%kill
         end do
+    end subroutine delete_owned_files
+
+    !>  Delete the owned cache files; a no-op in every process that never took
+    !!  ownership. Runs on normal exit (called from the exec programs) and on hard
+    !!  exception (via cache_cleanup_glob in simple_exception). The hook is disarmed
+    !!  first so a throw during deletion cannot re-enter, and the key file goes first
+    !!  so a partially-completed cleanup can never leave a cache that still validates.
+    !!
+    !!  The memoized probe/index state goes with the files: in a staged in-memory run
+    !!  the same process consumes the next stage's cache, and a stale l_available or
+    !!  cache_ind from this one would have it read a deleted file.
+    subroutine ptcl_cache_cleanup
+        nullify(cache_cleanup_glob)
+        call ptcl_cache_reset
+        call delete_owned_files
     end subroutine ptcl_cache_cleanup
 
     !>  Uniform fallback to uncached execution, decided master-side before any worker
@@ -515,7 +575,26 @@ contains
         integer :: ldim_check(3), nptcls_check
         if( .not. params%l_cache ) return
         if( params%box_crop >= params%box )then
-            write(logfhandle,'(A)') '>>> PARTICLE CACHE: box_crop == box, nothing to gain, cache disabled'
+            write(logfhandle,'(A)') '>>> PARTICLE CACHE: box_crop == box, nothing to gain, running without cache'
+            call disable_cache(params, cline)
+            ! in a staged workflow a previous stage's cache may still be owned; it is
+            ! unusable from here on (crops only grow), so release it now
+            call ptcl_cache_cleanup
+            return
+        endif
+        if( primary_src_is_den(params) )then
+            ! ptcl_src is staged, so a denoised stage may follow a cached one;
+            ! release the previous stage's cache -- crops only grow, it is dead
+            write(logfhandle,'(A)') '>>> PARTICLE CACHE: denoised particle source in use, running without cache'
+            call disable_cache(params, cline)
+            call ptcl_cache_cleanup
+            return
+        endif
+        if( .not. oritype_cacheable(params) )then
+            write(logfhandle,'(A)') '>>> PARTICLE CACHE: only particle stacks can be cached (oritype='//&
+                &trim(params%oritype)//'), running without cache'
+            call disable_cache(params, cline)
+            call ptcl_cache_cleanup
             return
         endif
         call ptcl_cache_reset
@@ -575,7 +654,8 @@ contains
         if( nsel < 1 )then
             write(logfhandle,'(A)') '>>> PARTICLE CACHE: no active particles, running without cache'
             call disable_cache(params, cline)
-            deallocate(cache_ind)
+            ! releases any previous stage's cache and deallocates cache_ind via reset
+            call ptcl_cache_cleanup
             call stkname%kill
             call keyfile%kill
             call idxname%kill
@@ -602,7 +682,8 @@ contains
                 &real(avail_bytes)/real(1024**3), ' GB free at its destination'
             write(logfhandle,'(A)') '>>> PARTICLE CACHE: running without cache; point cache_dir at more storage to enable it'
             call disable_cache(params, cline)
-            deallocate(cache_ind)
+            ! releases any previous stage's cache and deallocates cache_ind via reset
+            call ptcl_cache_cleanup
             call stkname%kill
             call keyfile%kill
             call idxname%kill

@@ -279,6 +279,15 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, sigma_est, group="search", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_SRCH, 'cache', 'binary', 'Cache downscaled particles', &
+         &'Write Fourier-cropped particles once and read those for alignment instead of the originals on every iteration, &
+         &trading disk space for I/O(yes|no){no}', '', &
+         &.false., 'no', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+         &visibility=UI_VIS_DEVELOPER)
+        call refine3D%add_input(UI_SRCH, 'cache_dir', 'dir', 'Particle cache directory', &
+         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
+         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
+         &.false., '', group="search", visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call refine3D%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -357,6 +366,15 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, sigma_est, group="search", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_SRCH, 'cache', 'binary', 'Cache downscaled particles', &
+         &'Write Fourier-cropped particles once and read those for alignment instead of the originals on every iteration, &
+         &trading disk space for I/O(yes|no){no}', '', &
+         &.false., 'no', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+         &visibility=UI_VIS_DEVELOPER)
+        call refine3D_auto%add_input(UI_SRCH, 'cache_dir', 'dir', 'Particle cache directory', &
+         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
+         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
+         &.false., '', group="search", visibility=UI_VIS_DEVELOPER)
         call refine3D_auto%add_input(UI_SRCH, 'inpl_cont', 'binary', &
         &'Continuous in-plane refinement', &
         &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
@@ -427,6 +445,15 @@ subroutine new_automask( prgtab )
         &'particles (0=automatic)', .false., 0., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call refine3D_multi%add_input(UI_SRCH, sigma_est, group="search", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_multi%add_input(UI_SRCH, 'cache', 'binary', 'Cache downscaled particles', &
+         &'Write Fourier-cropped particles once and read those for alignment instead of the originals on every iteration, &
+         &trading disk space for I/O(yes|no){no}', '', &
+         &.false., 'no', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+         &visibility=UI_VIS_DEVELOPER)
+        call refine3D_multi%add_input(UI_SRCH, 'cache_dir', 'dir', 'Particle cache directory', &
+         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
+         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
+         &.false., '', group="search", visibility=UI_VIS_DEVELOPER)
         call refine3D_multi%add_input(UI_SRCH, 'multivol_mode', 'multi', 'Multi-volume refinement mode', &
         &'Multi-volume refinement mode(input_oris_refine|input_oris_fixed){input_oris_refine}','', .false., 'input_oris_refine', &
         &group="search", &

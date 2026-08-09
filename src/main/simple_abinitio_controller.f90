@@ -483,6 +483,11 @@ contains
         else
             call cline_refine3D%delete('sticky_class_sampling')
         endif
+        ! Particle-cache use is a per-stage decision: a stage that cannot use it
+        ! (denoised-source stages, over the space budget, crop at full box) flips
+        ! cache=no on this persistent cline, so the user's request is re-stamped
+        ! here and every stage evaluates it afresh against its own box_crop.
+        call cline_refine3D%set('cache',                  trim(params%cache))
         call cline_refine3D%set('box_crop',               lpinfo(istage)%box_crop)
         call cline_refine3D%set('startit',                cfg%iter)
         call cline_refine3D%set('which_iter',             cfg%iter)

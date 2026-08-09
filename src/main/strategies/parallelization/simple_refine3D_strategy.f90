@@ -11,6 +11,7 @@ use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap
+use simple_ptcl_cache,    only: ptcl_cache_ensure
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -146,6 +147,10 @@ contains
     subroutine strip_refine3D_search_only_args( cline )
         type(cmdline), intent(inout) :: cline
         call cline%delete('inpl_cont')
+        ! the particle cache serves alignment reads only; reconstruction, sigma,
+        ! postprocess, and assembly children never consume it
+        call cline%delete('cache')
+        call cline%delete('cache_dir')
     end subroutine strip_refine3D_search_only_args
 
     !> Strategy selection based on command-line shape.
@@ -549,6 +554,10 @@ contains
         params%which_iter = params%startit
         if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
         params%outfile    = 'algndoc'//METADATA_EXT
+        ! Downscaled particle cache for the alignment reads, once per refine3D
+        ! invocation, before any iteration reads particles; may fall back to
+        ! cache=no on cline, which child commands inherit via their copy
+        call ptcl_cache_ensure(params, build, cline)
         if( L_BENCH_GLOB )then
             stage_bench%rt_total = toc(t_stage_init)
             call write_stage_bench_report(params, stage_bench, 'shared-memory')
@@ -963,6 +972,10 @@ contains
                 call self%cline_calc_group_sigmas%set('nthr', self%nthr_master)
             endif
         endif
+        ! Downscaled particle cache for the alignment reads, master-side before any
+        ! job is scheduled so the workers find it ready; must precede gen_job_descr
+        ! below so a fallback to cache=no reaches the worker command lines
+        call ptcl_cache_ensure(params, build, cline)
         ! prepare job description
         call cline%gen_job_descr(self%job_descr)
         call self%job_descr%set('prg', 'refine3D')

@@ -11,6 +11,7 @@ use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align
 use simple_matcher_3Drec,           only: calc_3Drec, calc_projdir3Drec
 use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
+use simple_ptcl_cache,              only: ptcl_cache_in_use, ptcl_cache_assert_ready
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_refine3D_fnames,         only: refine3D_bench_fname
 use simple_syslib,                  only: get_peak_rss_bytes, get_current_rss_bytes
@@ -40,6 +41,7 @@ type :: refine3D_ctrl
     logical :: do_sigma_mode
     logical :: do_write_oris
     logical :: do_bench
+    logical :: l_cached
   contains
     procedure :: print_flags
 end type refine3D_ctrl
@@ -282,6 +284,13 @@ contains
                 case default
                     ctrl%do_write_partial_recs = l_write_partial_recs
             end select
+            ! Alignment reads may come from the downscaled particle cache; the
+            ! reconstruction phase deliberately keeps reading the originals, since its
+            ! preprocessing tapers and pads at full box (see simple_matcher_3Drec).
+            call ptcl_cache_assert_ready(p_ptr, b_ptr)
+            ctrl%l_cached = ptcl_cache_in_use(p_ptr, b_ptr)
+            if( ctrl%l_cached ) write(logfhandle,'(A)') &
+                &'>>> REFINE3D: reading particles for alignment from the downscaled cache'
         end subroutine init_ctrl
 
         subroutine ensure_even_odd_partition()
@@ -326,7 +335,13 @@ contains
             call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
             if( ctrl%do_bench ) rt_prep_refs = toc(t_prep_refs)
             if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
-            call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+            if( ctrl%l_cached )then
+                ! the read buffer holds cache entries, which live at box_crop
+                call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max, &
+                    &imgbatch_box=p_ptr%box_crop, imgbatch_smpd=p_ptr%smpd_crop)
+            else
+                call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
+            endif
             if( ctrl%do_bench ) rt_alloc_ptcl_imgs = toc(t_alloc_ptcl_imgs)
             call build%vol%kill
             call build%vol_odd%kill
@@ -462,6 +477,7 @@ contains
         write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench
+        write(logfhandle,*) 'l_cached              : ', ctrl%l_cached
     end subroutine print_flags
 
 end module simple_strategy3D_matcher

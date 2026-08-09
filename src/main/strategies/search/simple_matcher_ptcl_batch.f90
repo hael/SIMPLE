@@ -70,17 +70,29 @@ contains
     end subroutine alloc_ptcl_imgs
 
     subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, imgs4rec )
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters),      intent(in)    :: params
         class(builder),         intent(inout) :: build
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
         class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
-        logical :: l_backup_imgs, l_den_src
+        type(image), allocatable :: den_imgs(:)
+        logical :: l_backup_imgs, l_den_src, l_cached
         l_backup_imgs = present(imgs4rec)
         l_den_src     = params%l_ptcl_src_den
+        ! The 3D cache serves the raw alignment reads only: reconstruction
+        ! preprocessing tapers and pads at full box, so callers that keep raws for
+        ! gridding cannot be fed cropped entries, and ptcl_cache_in_use itself
+        ! refuses a denoised primary source (ptcl_src=den).
+        l_cached      = ptcl_cache_in_use(params, build)
+        if( l_cached .and. l_backup_imgs )then
+            THROW_HARD('cached particle reads cannot back up full-size raws for reconstruction; build_batch_particles3D')
+        endif
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
-        if( .not. l_den_src )then
+        if( l_cached )then
+            call ptcl_cache_read_batch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
+        elseif( .not. l_den_src )then
             call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
         else
             call discrete_read_imgbatch_source(params, build, 'den', &
@@ -91,17 +103,28 @@ contains
                 tmp_imgs, tmp_imgs_pad, imgs4rec=imgs4rec(:nptcls_here))
         else
             call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
-                tmp_imgs, tmp_imgs_pad)
+                tmp_imgs, tmp_imgs_pad, cached=l_cached)
         endif
         if( params%l_objfun_den )then
-            call discrete_read_imgbatch_source(params, build, 'den', &
-                nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
-            call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
-                tmp_imgs, tmp_imgs_pad)
+            if( l_cached )then
+                ! the denoised objective images are full-size but imgbatch holds
+                ! box_crop cache entries, so read them into a batch-local buffer
+                call alloc_imgarr(nptcls_here, [params%box, params%box, 1], params%smpd, den_imgs)
+                call discrete_read_imgbatch_source(params, build, 'den', &
+                    nptcls_here, pinds_here, [1,nptcls_here], den_imgs)
+                call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, den_imgs, &
+                    tmp_imgs, tmp_imgs_pad)
+                call dealloc_imgarr(den_imgs)
+            else
+                call discrete_read_imgbatch_source(params, build, 'den', &
+                    nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
+                call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
+                    tmp_imgs, tmp_imgs_pad)
+            endif
         endif
     end subroutine build_batch_particles3D
 
-    subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad, imgs4rec )
+    subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad, imgs4rec, cached )
         class(parameters),      intent(in)    :: params
         class(builder),         intent(inout) :: build
         integer,                intent(in)    :: nptcls_here
@@ -109,9 +132,12 @@ contains
         class(image),           intent(inout) :: src_imgs(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
         class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
+        logical,      optional, intent(in)    :: cached
         integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
-        logical :: l_backup_imgs
+        logical :: l_backup_imgs, l_cached
         l_backup_imgs = present(imgs4rec)
+        l_cached      = .false.
+        if( present(cached) ) l_cached = cached
         call tmp_imgs(1)%memoize_mask_coords
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
         pdim_interp = build%pftc%get_pdim_interp()
@@ -121,7 +147,13 @@ contains
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
             if( l_backup_imgs ) call imgs4rec(iptcl_batch)%copy_fast(src_imgs(iptcl_batch))
-            call prepimg4align(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
+            if( l_cached )then
+                ! src_imgs holds cache entries: already noise-normalized and
+                ! Fourier-cropped, so only the iteration-dependent suffix runs here
+                call prepimg4align_cached(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
+            else
+                call prepimg4align(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
+            endif
             call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
             call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
         end do
