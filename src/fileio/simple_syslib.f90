@@ -401,16 +401,21 @@ contains
     !!  on a fast one is exactly the case cache_dir exists to serve. Caching one global
     !!  answer would apply whichever device happened to be touched first to both.
     !!  SIMPLE_IO_NSTREAMS overrides every device.
-    function io_read_nstreams( fname, nreq ) result( nstreams )
+    function io_read_nstreams( fname, nreq, report ) result( nstreams )
         class(*), intent(in) :: fname
         integer,  intent(in) :: nreq
+        logical, optional, intent(in) :: report
         integer :: nstreams
-        nstreams = max(1, min(nreq, io_nstreams_for_device(fname)))
+        logical :: l_report
+        l_report = .true.
+        if( present(report) ) l_report = report
+        nstreams = max(1, min(nreq, io_nstreams_for_device(fname, l_report)))
     end function io_read_nstreams
 
     !> \brief Concurrency cap for the device backing fname, probed once per device.
-    function io_nstreams_for_device( fname ) result( cap )
+    function io_nstreams_for_device( fname, report ) result( cap )
         class(*), intent(in) :: fname
+        logical,  intent(in) :: report
         integer, allocatable :: statbuf(:)
         character(len=32)    :: envval
         integer :: cap, idev, ival, envlen, envstat, devid, stat_status
@@ -422,7 +427,8 @@ contains
                 read(envval(:envlen), *, iostat=envstat) ival
                 if( envstat == 0 .and. ival > 0 )then
                     io_nstreams_env = ival
-                    write(logfhandle,'(A,I4)') '>>> PARTICLE I/O STREAMS (SIMPLE_IO_NSTREAMS): ', io_nstreams_env
+                    if( report ) write(logfhandle,'(A,I4)') &
+                        &'>>> PARTICLE I/O STREAMS (SIMPLE_IO_NSTREAMS): ', io_nstreams_env
                 endif
             endif
         endif
@@ -445,7 +451,7 @@ contains
                 ! spinning disk: keep the head on one run at a time, with just
                 ! enough depth for the drive to overlap seek and transfer
                 cap = 2
-                if( .not. l_io_rot_notice_emitted )then
+                if( report .and. (.not. l_io_rot_notice_emitted) )then
                     l_io_rot_notice_emitted = .true.
                     write(logfhandle,'(A)') '>>> PARTICLE I/O: rotational storage detected for '//&
                         &trim(io_name_of(fname))//', limiting concurrent reads'

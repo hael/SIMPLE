@@ -249,7 +249,7 @@ contains
                 THROW_HARD('particle indstk out of source stack range; discrete_read_imgbatch_source')
             endif
         enddo
-        nthr_read = io_read_nstreams(uniq_stknames(1), nstks)
+        nthr_read = io_read_nstreams(uniq_stknames(1), nstks, params%part == 1)
         allocate(dstkios(nthr_read))
         ! A batch can touch hundreds of stacks; keep simultaneous file handles bounded.
         do stk_from = 1,nstks,nthr_read
@@ -339,7 +339,7 @@ contains
             call stk_dims(params, build, uniq_stkinds(istk), uniq_stknames(istk), &
                 &uniq_ldims(:,istk), uniq_nptcls(istk))
         enddo
-        nthr_read = io_read_nstreams(uniq_stknames(1), nstks)
+        nthr_read = io_read_nstreams(uniq_stknames(1), nstks, params%part == 1)
         allocate(dstkios(nthr_read))
         ! A batch can touch hundreds of stacks; keep simultaneous file handles bounded.
         do stk_from = 1,nstks,nthr_read
@@ -412,7 +412,7 @@ contains
                 call stk_dims(params, build, run_stkinds(irun), run_stknames(irun), &
                     &run_ldims(:,irun), run_nptcls(irun))
             end do
-            nthr_run = io_read_nstreams(run_stknames(1), nstks)
+            nthr_run = io_read_nstreams(run_stknames(1), nstks, params%part == 1)
             allocate(dstkios_run(nthr_run))
             do run_from_i = 1,nstks,nthr_run
                 run_to_i = min(run_from_i + nthr_run - 1, nstks)
