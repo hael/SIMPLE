@@ -1,7 +1,7 @@
 !@descr: high-level search routines for the cluster2D and abinitio2D applications
 module simple_strategy2D_matcher
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-use simple_core_module_api,          only: dp, int64
+use simple_core_module_api,          only: dp
 use simple_pftc_srch_api
 use simple_classaverager
 use simple_binoris_io,               only: binwrite_oritab
@@ -102,10 +102,7 @@ contains
         type(ori)             :: orientation
         type(convergence)     :: conv
         type(strategy2D_spec) :: strategy2Dspec
-        integer(int64), allocatable :: cont_attempted(:), cont_improved(:)
-        integer(int64), allocatable :: cont_no_improvement(:), cont_invalid(:)
         logical :: attempted, improved, no_improvement, invalid
-        integer :: ithr_stat
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update
         integer :: batchsz_max, batchsz, nbatches, batch_start, batch_end
@@ -113,8 +110,6 @@ contains
         b_ptr => build
         call init_ctrl()
         if( trim(p_ptr%inpl_cont) == 'yes' )then
-            allocate(cont_attempted(p_ptr%nthr), cont_improved(p_ptr%nthr), source=0_int64)
-            allocate(cont_no_improvement(p_ptr%nthr), cont_invalid(p_ptr%nthr), source=0_int64)
             call b_ptr%spproj_field%set_all2single('cont_inpl_attempted', 0.)
             call b_ptr%spproj_field%set_all2single('cont_inpl_improved',  0.)
         endif
@@ -205,14 +200,9 @@ contains
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
                     call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'class')
                 end if
-                if( allocated(cont_attempted) )then
+                if( trim(p_ptr%inpl_cont) == 'yes' )then
                     call strategy2Dsrch(iptcl_batch)%ptr%s%get_continuous_route_status( &
                         &attempted, improved, no_improvement, invalid)
-                    ithr_stat = strategy2Dsrch(iptcl_batch)%ptr%s%ithr
-                    if( attempted )      cont_attempted(ithr_stat)      = cont_attempted(ithr_stat) + 1_int64
-                    if( improved )       cont_improved(ithr_stat)       = cont_improved(ithr_stat) + 1_int64
-                    if( no_improvement ) cont_no_improvement(ithr_stat) = cont_no_improvement(ithr_stat) + 1_int64
-                    if( invalid )        cont_invalid(ithr_stat)        = cont_invalid(ithr_stat) + 1_int64
                     call b_ptr%spproj_field%set(iptcl, 'cont_inpl_attempted', merge(1., 0., attempted))
                     call b_ptr%spproj_field%set(iptcl, 'cont_inpl_improved',  merge(1., 0., improved))
                 endif
@@ -228,10 +218,6 @@ contains
             call restore_class_averages_for_batch()
             if( ctrl%do_bench ) rt_cavg = rt_cavg + toc(t_cavg)
         enddo
-        call report_continuous_route_counts2D()
-        if( allocated(cont_attempted) )then
-            deallocate(cont_attempted, cont_improved, cont_no_improvement, cont_invalid)
-        endif
         call cleanup_search_state(strategy2Dsrch, pinds, batches, eulprob_obj_part, batchsz_max, orientation)
         if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
         call write_orientations()
@@ -379,23 +365,6 @@ contains
                 ptcl_imgs, ptcl_match_imgs, ptcl_match_imgs_pad)
             if( ctrl%do_bench ) rt_build_batch_particles2D = rt_build_batch_particles2D + toc(t_build_batch_particles2D)
         end subroutine build_batch_particles_local
-
-        subroutine report_continuous_route_counts2D()
-            integer(int64) :: attempted_n, improved_n, no_improvement_n, invalid_n
-
-            if( .not. allocated(cont_attempted) ) return
-            attempted_n      = sum(cont_attempted)
-            improved_n       = sum(cont_improved)
-            no_improvement_n = sum(cont_no_improvement)
-            invalid_n        = sum(cont_invalid)
-            if( attempted_n /= improved_n + no_improvement_n + invalid_n )then
-                THROW_HARD('continuous cluster2D route counts do not balance')
-            endif
-            if( attempted_n == 0_int64 ) return
-            write(logfhandle,'(A,I0,A,4(I0,1X))') '>>> CLUSTER2D CONTINUOUS PART=', p_ptr%part, &
-                &' ATTEMPTED/IMPROVED/NO_IMPROVEMENT/INVALID: ', attempted_n, &
-                &improved_n, no_improvement_n, invalid_n
-        end subroutine report_continuous_route_counts2D
 
         subroutine allocate_strategy_for_particle(iptcl, iptcl_batch)
             integer, intent(in) :: iptcl, iptcl_batch
