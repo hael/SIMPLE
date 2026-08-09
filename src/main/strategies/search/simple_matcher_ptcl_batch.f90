@@ -14,6 +14,13 @@ public :: clean_batch_particles2D, clean_batch_particles3D
 private
 #include "simple_local_flags.inc"
 
+! Reusable full-size batch for the denoised objective when the primary batch is
+! served from the downscaled cache and build%imgbatch therefore holds box_crop
+! entries. Matcher lifetime: allocated by alloc_ptcl_imgs, freed by
+! clean_batch_particles3D, so large-box runs do not churn a full batchsz worth
+! of full-size images on every batch.
+type(image), allocatable :: den_imgbatch(:)
+
 contains
 
     subroutine prep_sigmas_objfun( params, build, l_stream )
@@ -43,6 +50,7 @@ contains
     !!  box: prepimg4align_cached derives img_out's smpd from the input image, so a
     !!  buffer left at params%smpd would stamp the wrong sampling onto ptcl_match_imgs.
     subroutine alloc_ptcl_imgs( params, build, ptcl_imgs, ptcl_imgs_pad, batchsz, imgbatch_box, imgbatch_smpd )
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters),        intent(inout) :: params
         class(builder),           intent(inout) :: build
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
@@ -51,6 +59,12 @@ contains
         integer, optional,        intent(in)    :: imgbatch_box
         real,    optional,        intent(in)    :: imgbatch_smpd
         integer           :: ithr
+        if( present(imgbatch_box) .and. params%l_objfun_den )then
+            ! cached primary + denoised objective: the den images are read at full
+            ! box, which the box_crop-sized imgbatch cannot hold
+            if( allocated(den_imgbatch) ) call dealloc_imgarr(den_imgbatch)
+            call alloc_imgarr(batchsz, [params%box, params%box, 1], params%smpd, den_imgbatch)
+        endif
         if( present(imgbatch_box) )then
             if( present(imgbatch_smpd) )then
                 call prepimgbatch(params, build, batchsz, box=imgbatch_box, smpd=imgbatch_smpd)
@@ -70,14 +84,12 @@ contains
     end subroutine alloc_ptcl_imgs
 
     subroutine build_batch_particles3D( params, build, nptcls_here, pinds_here, tmp_imgs, tmp_imgs_pad, imgs4rec )
-        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters),      intent(in)    :: params
         class(builder),         intent(inout) :: build
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
         class(image), optional, intent(inout) :: imgs4rec(nptcls_here)
-        type(image), allocatable :: den_imgs(:)
         logical :: l_backup_imgs, l_den_src, l_cached
         l_backup_imgs = present(imgs4rec)
         l_den_src     = params%l_ptcl_src_den
@@ -108,13 +120,17 @@ contains
         if( params%l_objfun_den )then
             if( l_cached )then
                 ! the denoised objective images are full-size but imgbatch holds
-                ! box_crop cache entries, so read them into a batch-local buffer
-                call alloc_imgarr(nptcls_here, [params%box, params%box, 1], params%smpd, den_imgs)
+                ! box_crop cache entries; use the matcher-lifetime den workspace
+                if( .not. allocated(den_imgbatch) )then
+                    THROW_HARD('denoised objective workspace not allocated; build_batch_particles3D')
+                endif
+                if( size(den_imgbatch) < nptcls_here )then
+                    THROW_HARD('denoised objective workspace smaller than batch; build_batch_particles3D')
+                endif
                 call discrete_read_imgbatch_source(params, build, 'den', &
-                    nptcls_here, pinds_here, [1,nptcls_here], den_imgs)
-                call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, den_imgs, &
+                    nptcls_here, pinds_here, [1,nptcls_here], den_imgbatch(:nptcls_here))
+                call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, den_imgbatch(:nptcls_here), &
                     tmp_imgs, tmp_imgs_pad)
-                call dealloc_imgarr(den_imgs)
             else
                 call discrete_read_imgbatch_source(params, build, 'den', &
                     nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
@@ -253,6 +269,7 @@ contains
         type(image), allocatable, optional, intent(inout) :: imgs4rec(:)
         call killimgbatch(build)
         if( present(imgs4rec) ) call dealloc_imgarr(imgs4rec)
+        if( allocated(den_imgbatch) ) call dealloc_imgarr(den_imgbatch)
         call dealloc_imgarr(ptcl_imgs)
         call dealloc_imgarr(ptcl_imgs_pad)
     end subroutine clean_batch_particles3D

@@ -69,6 +69,9 @@ character(len=*), parameter :: CACHE_DIR_ENV = 'SIMPLE_PTCL_CACHE_DIR'
 character(len=*), parameter :: TMP_TAG       = '_part'
 ! the cache may not claim more than this fraction of the free space at cache_dir
 integer(kind=8),  parameter :: FREE_SPACE_DENOM = 4_8
+! rolling-hash constants shared by fold_str/fold_int
+integer(kind=8),  parameter :: HASH_M1 = 2147483647_8, HASH_A1 = 16807_8  ! 2^31-1
+integer(kind=8),  parameter :: HASH_M2 = 2147483629_8, HASH_A2 = 48271_8  ! largest prime < 2^31-1
 
 ! resolved once per process by ptcl_cache_in_use
 logical :: l_probed    = .false.
@@ -264,17 +267,24 @@ contains
     pure subroutine fold_str( h1, h2, str )
         integer(kind=8),  intent(inout) :: h1, h2
         character(len=*), intent(in)    :: str
-        integer(kind=8), parameter :: M1 = 2147483647_8, A1 = 16807_8  ! 2^31-1
-        integer(kind=8), parameter :: M2 = 2147483629_8, A2 = 48271_8  ! largest prime < 2^31-1
         integer :: i
         do i = 1, len_trim(str)
-            h1 = mod(h1 * A1 + int(iachar(str(i:i)), 8), M1)
-            h2 = mod(h2 * A2 + int(iachar(str(i:i)), 8), M2)
+            h1 = mod(h1 * HASH_A1 + int(iachar(str(i:i)), 8), HASH_M1)
+            h2 = mod(h2 * HASH_A2 + int(iachar(str(i:i)), 8), HASH_M2)
         end do
         ! separator, so that concatenating fields cannot alias a different split
-        h1 = mod(h1 * A1 + 255_8, M1)
-        h2 = mod(h2 * A2 + 255_8, M2)
+        h1 = mod(h1 * HASH_A1 + 255_8, HASH_M1)
+        h2 = mod(h2 * HASH_A2 + 255_8, HASH_M2)
     end subroutine fold_str
+
+    !>  Integer variant of fold_str, without the cost of an intermediate string; used
+    !!  where millions of values are folded (the particle -> stack mapping).
+    pure subroutine fold_int( h1, h2, val )
+        integer(kind=8), intent(inout) :: h1, h2
+        integer,         intent(in)    :: val
+        h1 = mod(h1 * HASH_A1 + int(val, 8), HASH_M1)
+        h2 = mod(h2 * HASH_A2 + int(val, 8), HASH_M2)
+    end subroutine fold_int
 
     !>  Geometry the cached pixels depend on, all of it already in memory. Cheap enough
     !!  for every rank to recompute on every probe. The execution directory is recorded
@@ -306,19 +316,26 @@ contains
     !!
     !!  Every stack is folded in project order together with its particle range and its
     !!  physical size and modification time: a name-only or endpoints-only key would miss
-    !!  a stack replaced in place, a changed stack in the middle, or an altered
-    !!  particle-to-stack mapping, any of which would serve stale pixels. Size and mtime
-    !!  make the check conservative -- a touched file forces a rebuild -- which is the
-    !!  right way to be wrong.
+    !!  a stack replaced in place or a changed stack in the middle, either of which would
+    !!  serve stale pixels. Size and mtime make the check conservative -- a touched file
+    !!  forces a rebuild -- which is the right way to be wrong.
     !!
-    !!  This costs one stat per stack, so only the rank that decides whether to rebuild
-    !!  pays it. See cache_key_matches.
+    !!  The particle -> image mapping is folded as well: the image a particle reads is
+    !!  determined by its stkind and its explicit indstk when present (see
+    !!  map_ptcl_ind2stk_ind), with the range-derived fallback covered by the per-stack
+    !!  fromp/top already in the hash. Without this, a project reordered or remapped
+    !!  over unchanged stacks -- e.g. adopting a SIGKILL orphan after such an edit --
+    !!  would silently associate particles with the wrong images.
+    !!
+    !!  This costs one stat per stack plus O(nptcls) integer folds, so only the rank
+    !!  that decides whether to rebuild pays it, once per build decision. See
+    !!  cache_key_matches and the ownership fast path in ptcl_cache_ensure.
     function cache_key_stkfp( build ) result( key )
         class(builder), intent(inout) :: build
         type(string) :: key, stkname
         integer, allocatable :: statbuf(:)
         integer(kind=8) :: h1, h2
-        integer :: nstks, istk, stat_status
+        integer :: nstks, istk, stat_status, nptcls, iptcl, stkind, indstk
         nstks = build%spproj%os_stk%get_noris()
         h1 = 1_8
         h2 = 1_8
@@ -338,6 +355,15 @@ contains
                 call fold_str(h1, h2, 'nostat')
             endif
             call stkname%kill
+        end do
+        nptcls = cache_nptcls(build)
+        do iptcl = 1, nptcls
+            stkind = 0
+            indstk = 0
+            if( build%spproj_field%isthere(iptcl, 'stkind') ) stkind = build%spproj_field%get_int(iptcl, 'stkind')
+            if( build%spproj_field%isthere(iptcl, 'indstk') ) indstk = build%spproj_field%get_int(iptcl, 'indstk')
+            call fold_int(h1, h2, stkind)
+            call fold_int(h1, h2, indstk)
         end do
         if( allocated(statbuf) ) deallocate(statbuf)
         key = string('stkfp='//int2str(int(h1))//'-'//int2str(int(h2)))
@@ -567,9 +593,11 @@ contains
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
         type(image), allocatable :: cache_imgs(:)
+        type(image)     :: mskimg
         type(stack_io)  :: stkio_w
         type(string)    :: stkname, dirname, keyfile, idxname, tmpstk, tmpidx
         integer(kind=8) :: want_bytes, avail_bytes
+        logical, allocatable :: lmsk(:,:,:)
         integer, allocatable :: pinds(:)
         integer :: batchsz, nbatches, ibatch, batch_start, batch_end, nbatch, i, iptcl, nptcls, nsel
         integer :: ldim_check(3), nptcls_check
@@ -596,6 +624,21 @@ contains
             call disable_cache(params, cline)
             call ptcl_cache_cleanup
             return
+        endif
+        ! Fast path for the per-iteration prob_align calls: this process already owns
+        ! exactly this cache -- it built or adopted it earlier in the run, and per-run
+        ! naming means no other process may touch it -- so the full revalidation
+        ! (source stat sweep, index reload, active-particle scan) is skipped and the
+        ! memoized probe state stays valid. A particle activated mid-run past this
+        ! point fails loudly at read time (ptcl_cache_read_batch) rather than being
+        ! served wrong data; one stat guards against out-of-band file deletion.
+        if( l_owner )then
+            keyfile = cache_keyname(params)
+            if( (owned_files(1) .eq. keyfile) .and. file_exists(keyfile) )then
+                call keyfile%kill
+                return
+            endif
+            call keyfile%kill
         endif
         call ptcl_cache_reset
         ! This is the rank that decides whether to rebuild, so it is the one that pays
@@ -702,6 +745,16 @@ contains
             if( cache_ind(iptcl) > 0 ) pinds(cache_ind(iptcl)) = iptcl
         end do
         nbatches = ceiling(real(nsel) / real(batchsz))
+        ! The full-box noise-normalization mask. The refine3D distributed master
+        ! builds only the project, not the general toolbox, so build%lmsk need not
+        ! exist in the process that builds the cache; construct the identical disc
+        ! mask locally in that case (same recipe as build_general_tbox).
+        if( allocated(build%lmsk) )then
+            lmsk = build%lmsk
+        else
+            call mskimg%disc([params%box, params%box, 1], params%smpd, params%msk, lmsk)
+            call mskimg%kill
+        endif
         call prepimgbatch(params, build, batchsz)
         call alloc_imgarr(batchsz, [params%box_crop, params%box_crop, 1], params%smpd_crop, cache_imgs)
         call stkio_w%open(tmpstk, params%smpd_crop, 'write', box=params%box_crop, is_ft=.false.)
@@ -714,7 +767,7 @@ contains
             do i = 1, nbatch
                 ! iteration-independent prefix of prepimg4align, with no shift, then
                 ! back to real space; the read path re-applies the forward transform
-                call build%imgbatch(i)%norm_noise_fft_clip_shift(build%lmsk, cache_imgs(i), [0.,0.])
+                call build%imgbatch(i)%norm_noise_fft_clip_shift(lmsk, cache_imgs(i), [0.,0.])
                 call cache_imgs(i)%ifft
             end do
             !$omp end parallel do
@@ -726,7 +779,7 @@ contains
         call stkio_w%close
         call dealloc_imgarr(cache_imgs)
         call killimgbatch(build)
-        deallocate(pinds)
+        deallocate(pinds, lmsk)
         call write_cache_index(tmpidx, nptcls)
         ! Validate what actually landed on disk before publishing it. A short write, a
         ! full filesystem or an interrupted run must not end up wearing a valid key.
