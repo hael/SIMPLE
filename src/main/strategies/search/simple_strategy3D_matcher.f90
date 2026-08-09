@@ -65,8 +65,6 @@ contains
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
         type(image),               allocatable :: ptcl_match_imgs(:), ptcl_match_imgs_pad(:)
         integer,                   allocatable :: batches(:,:), cnt_greedy(:), cnt_all(:), pinds(:)
-        integer(int64),            allocatable :: cont_attempted(:), cont_improved(:)
-        integer(int64),            allocatable :: cont_no_improvement(:), cont_invalid(:)
         real,                      allocatable :: incr_shifts(:,:)
         type(ori)           :: orientation
         type(refine3D_ctrl) :: ctrl
@@ -141,8 +139,6 @@ contains
         endif
         allocate(cnt_greedy(p_ptr%nthr), cnt_all(p_ptr%nthr), source=0)
         if( trim(p_ptr%inpl_cont) == 'yes' )then
-            allocate(cont_attempted(p_ptr%nthr), cont_improved(p_ptr%nthr), source=0_int64)
-            allocate(cont_no_improvement(p_ptr%nthr), cont_invalid(p_ptr%nthr), source=0_int64)
             call b_ptr%spproj_field%set_all2single('cont_inpl_attempted', 0.)
             call b_ptr%spproj_field%set_all2single('cont_inpl_improved',  0.)
         endif
@@ -179,7 +175,6 @@ contains
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
         call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
-        call report_continuous_route_counts()
         if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
         if( ctrl%do_projrec ) call b_ptr%spproj_field%set_projs(b_ptr%eulspace)
         call maybe_write_orientations()
@@ -188,8 +183,6 @@ contains
         enddo
         deallocate(strategy3Dsrch, strategy3Dspecs, batches)
         deallocate(cnt_greedy, cnt_all, incr_shifts)
-        if( allocated(cont_attempted) ) deallocate(cont_attempted, cont_improved)
-        if( allocated(cont_no_improvement) ) deallocate(cont_no_improvement, cont_invalid)
         call eulprob_obj_part%kill
         call clean_strategy3D
         call b_ptr%kill_strategy3D_tbox
@@ -398,13 +391,9 @@ contains
             if( associated(strategy3Dsrch(iptcl_batch)%ptr) )then
                 call strategy3Dsrch(iptcl_batch)%ptr%new(p_ptr, strategy3Dspecs(iptcl_batch), b_ptr)
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(b_ptr%spproj_field, ithr)
-                if( allocated(cont_attempted) )then
+                if( trim(p_ptr%inpl_cont) == 'yes' )then
                     call strategy3Dsrch(iptcl_batch)%ptr%s%get_continuous_route_status( &
                         &attempted, improved, no_improvement, invalid)
-                    if( attempted )      cont_attempted(ithr)      = cont_attempted(ithr) + 1_int64
-                    if( improved )       cont_improved(ithr)       = cont_improved(ithr) + 1_int64
-                    if( no_improvement ) cont_no_improvement(ithr) = cont_no_improvement(ithr) + 1_int64
-                    if( invalid )        cont_invalid(ithr)        = cont_invalid(ithr) + 1_int64
                     call b_ptr%spproj_field%set(iptcl, 'cont_inpl_attempted', merge(1., 0., attempted))
                     call b_ptr%spproj_field%set(iptcl, 'cont_inpl_improved',  merge(1., 0., improved))
                 endif
@@ -415,22 +404,6 @@ contains
                 nullify(strategy3Dsrch(iptcl_batch)%ptr)
             endif
         end subroutine choose_and_run_strategy
-
-        subroutine report_continuous_route_counts()
-            integer(int64) :: attempted, improved, no_improvement, invalid
-
-            if( .not. allocated(cont_attempted) ) return
-            attempted      = sum(cont_attempted)
-            improved       = sum(cont_improved)
-            no_improvement = sum(cont_no_improvement)
-            invalid        = sum(cont_invalid)
-            if( attempted /= improved + no_improvement + invalid )then
-                THROW_HARD('continuous refine3D route counts do not balance')
-            endif
-            write(logfhandle,'(A,I0,A,4(I0,1X))') '>>> REFINE3D CONTINUOUS PART=', p_ptr%part, &
-                &' ATTEMPTED/IMPROVED/NO_IMPROVEMENT/INVALID: ', attempted, improved, &
-                &no_improvement, invalid
-        end subroutine report_continuous_route_counts
 
         subroutine maybe_write_orientations()
             if( .not. ctrl%do_write_oris ) return
