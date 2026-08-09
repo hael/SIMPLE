@@ -358,9 +358,14 @@ contains
     end subroutine inpl_srch
 
     !> Jointly refine the shift and in-plane angle of one selected candidate.
-    !! Probabilistic selection is complete before this routine is entered. The
-    !! incoming integer angle is used only to recover the native shift frame;
-    !! the joint optimizer reselects the best grid angle at that shift.
+    !! Probabilistic selection is complete before this routine is entered and is
+    !! authoritative: the solve refines LOCALLY around the incoming integer angle
+    !! and shift, with no global all-angle reselection -- rotationally
+    !! self-similar class averages have near-degenerate in-plane branches that a
+    !! global reselection at a slightly different shift hops on floating-point
+    !! noise (see the identical 3D treatment in refine_assignment_continuously).
+    !! An invalid solve retains the incoming assignment untouched; a valid
+    !! non-improving solve retains the pose with its re-scored objective value.
     subroutine refine_selected_continuously( self )
         class(strategy2D_srch), intent(inout) :: self
         real :: rotmat(2,2), xy_native(2)
@@ -391,7 +396,12 @@ contains
         call self%joint_inpl_optimizer%set_limits(joint_lims)
         cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, &
-            &evaluation_valid=evaluation_valid, improved=improved)
+            &evaluation_valid=evaluation_valid, improved=improved, irot_in=self%best_rot)
+        if( .not. evaluation_valid )then
+            ! retain the incoming assignment untouched
+            self%continuous_route_outcome = CONT_ROUTE_INVALID
+            return
+        endif
         if( irot < 1 .or. irot > self%nrots )then
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
@@ -399,17 +409,13 @@ contains
         self%best_rot   = irot
         self%best_corr  = cxy(1)
         self%best_shvec = cxy(2:3)
-        if( .not. evaluation_valid )then
-            ! policy: the exhaustive discrete scan at the entry shift is a
-            ! guaranteed floor, so an invalid solve commits its seed as a grid
-            ! pose (has_continuous_e3 stays false); INVALID kept for diagnostics
-            self%continuous_route_outcome = CONT_ROUTE_INVALID
-        else if( improved )then
+        if( improved )then
             call store_continuous_e3(self, rotind_frac)
             self%continuous_route_outcome = CONT_ROUTE_IMPROVED
         else
-            ! A valid non-improving solve commits the selected grid pose;
-            ! has_continuous_e3 stays false so assign_ori writes the grid angle.
+            ! the seed is the incoming cell re-scored at its own shift, so this
+            ! commit retains the incoming pose with a consistent objective value;
+            ! has_continuous_e3 stays false so assign_ori writes the grid angle
             self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
         endif
         end block

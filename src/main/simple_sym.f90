@@ -382,10 +382,10 @@ contains
     subroutine sym_dists_1( self, oref, oasym, osym, euldist, inplrotdist )
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: oref        !< is the untouched reference
-        class(ori), intent(in)    :: oasym       !< is the orientation determined within assymetric unit
-        class(ori), intent(inout) :: osym        !< is the orientatiom that minimises the distance to oref
-        real,       intent(out)   :: euldist     !< Euler distance
-        real,       intent(out)   :: inplrotdist !< in-plane rotational distance
+        class(ori), intent(in)    :: oasym       !< is the orientation determined within asymmetric unit
+        class(ori), intent(inout) :: osym        !< symmetry-equivalent representative minimizing in-plane tie distance
+        real,       intent(out)   :: euldist     !< minimum Euler distance across symmetry operations
+        real,       intent(out)   :: inplrotdist !< in-plane distance for osym
         type(ori) :: o
         real      :: dist, inpldist
         integer   :: isym
@@ -428,9 +428,9 @@ contains
     subroutine sym_dists_2( self, euls_ref, euls_asym, euls_sym, euldist, inplrotdist )
         class(sym), intent(in)    :: self
         real,       intent(in)    :: euls_ref(3), euls_asym(3)
-        real,       intent(inout) :: euls_sym(3)
-        real,       intent(out)   :: euldist     !< Euler distance
-        real,       intent(out)   :: inplrotdist !< in-plane rotational distance
+        real,       intent(inout) :: euls_sym(3) !< symmetry-equivalent representative minimizing in-plane tie distance
+        real,       intent(out)   :: euldist     !< minimum Euler distance across symmetry operations
+        real,       intent(out)   :: inplrotdist !< in-plane distance for euls_sym
         real    :: euls(3), dist, inpldist
         integer :: isym
         ! same tie-folding as sym_dists_1, see the rationale there

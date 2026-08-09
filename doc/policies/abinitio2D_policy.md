@@ -172,13 +172,14 @@ and preserves the historical alternating shift/discrete-angle callback route.
 `yes` replaces every callback-based angle/shift optimization with the joint
 raw-Euclidean `(sx,sy,rotind_frac)` optimizer.
 
-Each joint invocation keeps the selected class fixed but discards every
-incoming in-plane index or fractional coordinate. At the caller-supplied native
-`(x,y)` shift seed, it performs exactly one all-angle discrete evaluation and
-selects the best grid index, matching one invocation of the legacy callback.
-The joint solve then starts from that index with a local plus-or-minus-two-cell
-angular bound. This initialization never scans alternative shifts: the legacy
-5-by-5 shift/all-angle coarse initializer is not part of `inpl_cont=yes`.
+During candidate profiling, each joint invocation keeps the selected class
+fixed but discards every incoming in-plane index or fractional coordinate. At
+the caller-supplied native `(x,y)` shift seed, it performs exactly one
+all-angle discrete evaluation and selects the best grid index, matching one
+invocation of the legacy callback. The joint solve then starts from that index
+with a local plus-or-minus-two-cell angular bound. This initialization never
+scans alternative shifts: the legacy 5-by-5 shift/all-angle coarse initializer
+is not part of `inpl_cont=yes`.
 
 The active joint route is supported only by non-streaming, non-time-series raw
 Euclidean search. CC and hybrid/denoised objectives are not continuous-angle
@@ -190,13 +191,20 @@ Probabilistic particle and class/reference sampling remain discrete. During
 candidate profiling, the joint optimizer may evaluate a fractional angle, but
 the probability artifact carries the rounded `inpl`, score, and shift only.
 The shift is stored in the rounded-index frame. Once the final class/in-plane
-assignment has been selected, the matcher reruns the full joint optimizer and
-persists the accepted fractional `e3`, nearest integer `inpl`, shift, and score
-as one pose. That final invocation again reselects the best discrete index at
-the selected native shift; it does not use the probability-table `inpl` as the
-continuous seed. A valid non-improving joint run retains the newly selected
-grid seed, while a numerically invalid run retains the incoming assignment.
-Neither outcome falls back to the callback.
+assignment has been selected, the matcher reruns the joint optimizer LOCALLY
+for the selected pose: the assignment is authoritative, so the solve seeds at
+the table `inpl` and its recovered native-frame shift, bounded to plus or
+minus two in-plane cells, with no further global all-angle reselection --
+under near-degenerate in-plane branches (rotationally self-similar class
+averages) a second global selection at a slightly different shift hops
+branches on floating-point noise. An accepted result persists the fractional
+`e3`, nearest integer `inpl`, shift, and score as one pose. A valid
+non-improving run retains the incoming pose with its re-scored objective
+value; a numerically invalid run retains the incoming assignment untouched.
+Neither outcome falls back to the callback. Joint acceptance guards
+(material-improvement tolerance, bound-pinning demotion) are shared with
+refine3D; see the continuous in-plane section of
+[refine3D_policy.md](refine3D_policy.md).
 
 ## 5. Iteration Semantics
 
@@ -247,9 +255,10 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Does the change preserve Cartesian-only `abinitio2D`?
 - Does `inpl_cont=no` retain the callback route and `inpl_cont=yes` avoid it
   throughout deterministic and probabilistic search?
-- Does each joint invocation reselect its discrete seed at the supplied shift,
-  without using a previous `inpl`, fractional restart coordinate, or 5-by-5
-  shift scan?
+- Does candidate profiling reselect its discrete seed at the supplied shift
+  (no previous `inpl`, fractional restart coordinate, or 5-by-5 shift scan),
+  while the post-assignment durable pass refines locally around the
+  authoritative table `inpl` without another global reselection?
 - Do probability artifacts remain rounded while final assignment alone owns
   durable fractional `e3`?
 

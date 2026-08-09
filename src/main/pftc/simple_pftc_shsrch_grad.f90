@@ -426,18 +426,16 @@ contains
     end function grad_shsrch_minimize
 
     !> Classical Euclidean joint refinement over (sx,sy,rotind_frac).
-    !! The selected reference/class is fixed, but any incoming in-plane state
-    !! is discarded.  A discrete all-angle scan chooses
-    !! the best grid cell at xy_in, and the continuous solve starts from that
-    !! cell with bounds of plus or minus two rotation indices.  The PFTC
-    !! objective is periodic, so those bounds may safely straddle the first or
-    !! last grid index.
+    !! The selected reference/class is fixed. Without irot_in, a discrete
+    !! all-angle scan chooses the best grid cell at xy_in. With irot_in, the
+    !! caller's selected grid cell is authoritative and no scan is performed.
+    !! The continuous solve starts from the selected cell with bounds of plus
+    !! or minus two rotation indices. The PFTC objective is periodic, so those
+    !! bounds may safely straddle the first or last grid index.
     !!
-    !! Policy: the discrete all-angle scan at the supplied shift is exhaustive,
-    !! so it is a guaranteed floor -- a non-improving OR numerically invalid
-    !! continuous solve still returns that optimal grid index and its score.
-    !! evaluation_valid=.false. is a diagnostic signal only; irot is never 0
-    !! and callers always receive a committable discrete pose.
+    !! A non-improving or numerically invalid solve returns its selected seed
+    !! cell and score. evaluation_valid=.false. is a diagnostic signal only;
+    !! irot is never 0 and callers always receive a committable discrete pose.
     !!
     !! irot_in switches to LOCAL mode for durable passes: the caller's selected
     !! assignment (already the product of exhaustive candidate construction) is
@@ -546,8 +544,8 @@ contains
             end do
         endif
         if( .not. valid_result )then
-            ! the exhaustive discrete scan is the floor: return the seed cell and
-            ! its score; irot still holds the seed index from the scan above
+            ! Return the selected seed cell and its score; irot still holds the
+            ! global scan result or the caller's authoritative local seed.
             if( present(evaluation_valid) ) evaluation_valid = .false.
             if( present(improved) ) improved = .false.
             rotind_frac = real(irot,dp)

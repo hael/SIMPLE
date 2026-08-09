@@ -332,12 +332,11 @@ contains
     end subroutine store_solution
 
     !> Jointly refine shifts and in-plane rotation for the selected 3D
-    !! reference. The state and projection direction encoded by ref remain
-    !! fixed. The incoming in-plane state is used only to recover the native
-    !! shift frame; a one-time all-angle scan at that shift selects the grid
-    !! seed for joint refinement. A valid non-improving result commits that
-    !! newly selected discrete seed. A numerically invalid result retains the
-    !! incoming selected candidate.
+    !! reference. The state, projection direction, and incoming discrete
+    !! in-plane cell remain authoritative. The solve locally refines that cell
+    !! and its native-frame shift. A valid non-improving result retains the
+    !! discrete pose with a consistent re-scored objective; a numerically
+    !! invalid result leaves the selected candidate untouched.
     subroutine refine_selected_continuously( self, ref )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
@@ -504,8 +503,8 @@ contains
         s3D%proj_space_corrs(ref,self%ithr)      = corr
     end subroutine store_continuous_solution
 
-    !> Commit the callback-equivalent grid seed selected at the supplied shift
-    !! when the continuous joint solve is valid but cannot improve that seed.
+    !> Commit the discrete seed returned when a valid joint solve does not
+    !! materially improve its starting pose.
     subroutine store_discrete_seed_solution( self, ref, inpl_ind, corr, sh )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref, inpl_ind

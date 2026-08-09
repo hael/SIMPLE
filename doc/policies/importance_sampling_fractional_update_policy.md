@@ -102,18 +102,20 @@ When a sampled class or state/projection candidate is chosen for joint
 profiling, its sampled `inpl` is not the continuous seed. The selected
 class/state/projection remains fixed, the shift is converted to the native
 particle frame, and one all-angle discrete evaluation at that exact shift
-selects the joint seed. The continuous route does not search a 5-by-5 grid of
-alternative shifts.
+selects the profiling seed. The continuous route does not search a 5-by-5 grid
+of alternative shifts.
 
-The hard-assignment matcher owns the durable continuous result. After the
-class or state/projection winner is selected, it uses the rounded assignment
-only to recover the native shift, reselects the best discrete angle at that
-shift, and reruns the joint optimizer. It persists fractional `e3`, integer
-`inpl`, shift, and score for the same final pose. Valid non-improving work
-commits the newly selected grid seed; invalid work retains the incoming
-assignment. Neither path may enter the legacy callback route.
-This policy is identical in 2D and 3D and does not alter `sampled`, `updatecnt`,
-top-K support, assignment probabilities, or fractional-update weighting.
+The hard-assignment matcher owns the durable continuous result. In 3D, the
+rounded probability-table assignment is authoritative: the matcher recovers
+its native shift and reruns the joint optimizer locally within plus or minus two
+cells of that in-plane index, without another global all-angle selection. It
+persists fractional `e3`, integer `inpl`, shift, and score for the same final
+pose. Valid non-improving work retains the incoming discrete pose with a
+consistent re-scored objective; invalid work leaves the assignment untouched.
+The 2D durable path retains its global all-angle seed selection. Neither path
+may enter the legacy callback route. These policies do not alter `sampled`,
+`updatecnt`, top-K support, assignment probabilities, or fractional-update
+weighting.
 
 ## 4. Abinitio2D and Cluster2D
 
@@ -383,9 +385,10 @@ assembly changes, check:
   subset selection?
 - With `inpl_cont=yes`, does candidate profiling retain only rounded in-plane
   metadata and defer durable fractional `e3` to the final hard assignment?
-- Does every joint profile discard the sampled or previous in-plane seed and
-  perform one all-angle selection at the supplied shift without a coarse shift
-  scan?
+- Does candidate profiling perform one all-angle selection at the supplied
+  shift without a coarse shift scan?
+- Does final 3D refinement retain the authoritative rounded assignment and
+  avoid a second global angle selection?
 - Can any joint no-improvement or invalid-result path accidentally enter the
   legacy callback?
 - Are `sampled` and `updatecnt` updated consistently before downstream

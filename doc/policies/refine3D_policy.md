@@ -14,6 +14,7 @@ Related workflow policies:
 - [automasking_policy.md](automasking_policy.md)
 - [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
 - [sigma_calculation_policy.md](sigma_calculation_policy.md)
+- [particle_cache_policy.md](particle_cache_policy.md)
 - [separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md](separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md)
 
 ## 1. Scope
@@ -285,14 +286,13 @@ such as sigma-only setup, naturally invokes neither optimizer. Unsupported
 capability combinations fail validation rather than silently reverting to the
 callback.
 
-Every joint invocation fixes the already selected state and projection but
-discards all prior in-plane rotation information. It evaluates every discrete
-in-plane cell once at the caller-supplied native `(x,y)` shift and chooses the
-best index, exactly matching one legacy callback selection. The continuous
-three-parameter solve starts from that index and is bounded to plus or minus
-two cells around it. The `inpl_cont=yes` initializer never searches other
-shifts; in particular, it does not use the legacy 5-by-5 shift/all-angle coarse
-initializer.
+Joint candidate profiling fixes the already selected state and projection. It
+evaluates every discrete in-plane cell once at the caller-supplied native
+`(x,y)` shift and chooses the best index, exactly matching one legacy callback
+selection. The continuous three-parameter solve starts from that index and is
+bounded to plus or minus two cells around it. The `inpl_cont=yes` initializer
+never searches other shifts; in particular, it does not use the legacy 5-by-5
+shift/all-angle coarse initializer.
 
 For probabilistic refinement, the probability-table schema remains discrete.
 Joint optimization may evaluate a fractional in-plane coordinate while
@@ -302,18 +302,34 @@ rounded-index frame so the matcher can recover the exact native shift seed
 without storing a fractional coordinate in the table.
 
 After hard state/projection/in-plane assignment, the matcher reruns the joint
-three-parameter optimizer for the selected state and projection. The stored
-assignment index is used only to convert its shift back to the native particle
-frame and is then discarded before the one-time all-angle seed selection. An
-accepted result persists one coupled pose: fractional Euler `e3`, nearest integer
-`inpl`, shift, and score. A finite non-improving evaluation commits the newly
-selected grid seed and its score/shift. A numerically invalid joint evaluation
-falls back to the legacy callback-based optimizer (the `inpl_cont=no` route),
-implemented inside the joint search object so every consumer inherits it; the
-fallback result is committed as a discrete grid pose (never as fractional
-`e3`), and only if the fallback itself fails does the incoming candidate
-remain. State and projection identity remain fixed during the final joint
-solve. A persisted fractional `e3` is not reused as the next joint seed.
+three-parameter optimizer locally for the selected pose. The rounded assignment
+index is authoritative: it converts the stored shift back to the native
+particle frame and seeds a solve bounded to plus or minus two in-plane cells,
+without another global all-angle selection. An accepted result persists one
+coupled pose: fractional Euler `e3`, nearest integer `inpl`, shift, and score. A
+finite non-improving evaluation retains the incoming discrete pose with its
+re-scored objective value. A numerically invalid evaluation leaves the incoming
+assignment untouched. No `inpl_cont=yes` path falls back to the legacy callback.
+State and projection identity remain fixed during the final solve. A persisted
+fractional `e3` is rounded to the canonical integer cell before the next search.
+
+Joint acceptance is guarded twice, in the shared optimizer. An improvement
+must be material -- it must beat the seed cost by a relative tolerance far
+above solver roundoff -- otherwise the solve counts as non-improving and the
+seed pose stands; this keeps the improved fraction an honest diagnostic and
+prevents noise-level "improvements" from committing fractional poses. A
+solution pinned to any joint search bound (the shift box or the plus-or-minus
+two-cell angular window) is likewise demoted to non-improving: an
+angular-bound-pinned solution contradicts the exhaustive seed selection, and a
+shift-corner solution is the signature of descent into truncated-series
+artifacts rather than signal.
+
+Convergence `dist_inpl` reporting is symmetry-aware. When multiple symmetry
+operations have the same Euler distance within numerical tolerance, including
+projection-preserving operations in dihedral groups, the reported in-plane
+distance uses the equivalent operation with the smallest in-plane change. A
+symmetry-equivalent branch switch must not appear as a spurious 180-degree
+in-plane move.
 
 Shared-memory and distributed probabilistic child commands must retain
 `inpl_cont`; reconstruction, sigma, assembly, and postprocessing children must
@@ -434,9 +450,11 @@ handoff artifacts for a later `refine3D` execution.
   contracts.
 - Preserve the two-mode in-plane boundary: only `new_legacy` may attach the
   callback, and no `inpl_cont=yes` path may invoke it.
-- Initialize every joint solve with one callback-equivalent all-angle selection
-  at the supplied shift; do not seed it from previous in-plane metadata or run
-  the 5-by-5 coarse shift initializer.
+- Initialize candidate-profiling joint solves with one callback-equivalent
+  all-angle selection at the supplied shift; do not run the 5-by-5 coarse shift
+  initializer.
+- Treat the final 3D hard assignment as authoritative: refine locally around
+  its rounded in-plane cell and never perform a second global angle selection.
 - Keep probabilistic in-plane artifacts rounded and run durable fractional
   refinement only after final hard assignment.
 - Keep `inpl_cont` on shared-memory and distributed matcher/probability child

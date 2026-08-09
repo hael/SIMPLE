@@ -90,6 +90,16 @@ Stage policy includes:
 - staged NU filtering from `NU_FILTER_STAGE`
 - staged automasking only from `AUTOMSK_STAGE`
 
+When the downscaled particle cache is requested (`cache=yes`), the stage
+controller re-stamps the user's request onto every emitted `refine3D` command
+line, so each stage evaluates cache eligibility independently against its own
+`box_crop` (an earlier stage's uniform fallback to `cache=no` must not
+permanently disable later stages). Each stage boundary with a new crop rebuilds
+the cache; the previous stage's files are deleted at the ownership handoff,
+and stages that decline the cache release the prior stage's files immediately.
+See [particle_cache_policy.md](particle_cache_policy.md) for the full cache
+contract.
+
 ### Full-Sampling Switch
 
 `abinitio3D` now applies a global sampling override when:
