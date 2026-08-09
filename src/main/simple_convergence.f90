@@ -10,20 +10,22 @@ private
 
 type convergence
     private
-    type(stats_struct) :: score      !< objective function stats
-    type(stats_struct) :: dist       !< angular distance stats
-    type(stats_struct) :: dist_inpl  !< in-plane angular distance stats
-    type(stats_struct) :: frac_srch  !< fraction of search space scanned stats
-    type(stats_struct) :: shincarg   !< shift increment
-    type(stats_struct) :: lp         !< low-pass limit
-    type(stats_struct) :: lp_est     !< low-pass limit, estimated
-    type(stats_struct) :: res        !< resolution @ FSC=0.143
-    integer :: iteration   = 0       !< current interation
-    real    :: mi_class    = 0.      !< class parameter distribution overlap
-    real    :: mi_proj     = 0.      !< projection parameter distribution overlap
-    real    :: mi_state    = 0.      !< state parameter distribution overlap
-    real    :: frac_greedy = 0.      !< fraction of greedy searches
-    real    :: progress    = 0.      !< progress estimation
+    type(stats_struct) :: score            !< objective function stats
+    type(stats_struct) :: dist             !< angular distance stats
+    type(stats_struct) :: dist_inpl        !< in-plane angular distance stats
+    type(stats_struct) :: frac_srch        !< fraction of search space scanned stats
+    type(stats_struct) :: shincarg         !< shift increment
+    type(stats_struct) :: lp               !< low-pass limit
+    type(stats_struct) :: lp_est           !< low-pass limit, estimated
+    type(stats_struct) :: res              !< resolution @ FSC=0.143
+    integer :: iteration              = 0  !< current interation
+    real    :: mi_class               = 0. !< class parameter distribution overlap
+    real    :: mi_proj                = 0. !< projection parameter distribution overlap
+    real    :: mi_state               = 0. !< state parameter distribution overlap
+    real    :: frac_greedy            = 0. !< fraction of greedy searches
+    real    :: cont_inpl_improved_pct = 0. !< continuous in-plane runs that improved (%)
+    integer :: cont_inpl_attempts     = 0  !< continuous in-plane runs attempted
+    real    :: progress               = 0. !< progress estimation
   contains
     procedure :: read
     procedure :: check_conv2D
@@ -52,6 +54,10 @@ contains
             self%dist%avg      = ostats%get(1,'DIST_BTW_BEST_ORIS')
             self%dist_inpl%avg = ostats%get(1,'IN-PLANE_DIST')
             self%shincarg%avg  = ostats%get(1,'SHIFT_INCR_ARG')
+            if( ostats%isthere('CONT_INPL_IMPROVED_PCT') )then
+                self%cont_inpl_improved_pct = ostats%get(1,'CONT_INPL_IMPROVED_PCT')
+                self%cont_inpl_attempts      = nint(ostats%get(1,'CONT_INPL_ATTEMPTS'))
+            endif
         else
             l_err = .true.
         endif
@@ -76,13 +82,13 @@ contains
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
         type(oris)           :: ostats
-        type(string) :: s_ratio, numstr
+        type(string) :: s_ratio, cont_ratio, numstr
         real,    allocatable :: updatecnts(:), states(:), scores(:), sampled(:)
         logical, allocatable :: mask(:)
         integer :: n, nptcls, nsampled, nactive
         real    :: overlap_lim, fracsrch_lim, realized_update_frac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
-        logical :: converged, chk4conv
+        logical :: converged, chk4conv, cont_stats_available
         601 format(A,1X,F12.3)
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
@@ -112,12 +118,18 @@ contains
         call os%stats('lp_est',    self%lp_est,    mask=mask)
         call os%stats('res',       self%res,       mask=mask)
         self%mi_class = os%get_avg('mi_class',     mask=mask)
+        call calc_continuous_inplane_stats(self, os, mask, cont_stats_available)
         ! overlaps and particle updates
         s_ratio = '('//int2str(nsampled)//'/'//int2str(nactive)//')'
         write(logfhandle,601) '>>> CLASS OVERLAP:                            ', self%mi_class
         write(logfhandle,602) '>>> % PARTICLES SAMPLED THIS ITERATION        ', percen_sampled, s_ratio%to_char()
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         write(logfhandle,601) '>>> % PARTICLES USED FOR AVERAGING            ', percen_avg
+        if( cont_stats_available )then
+            cont_ratio = '('//int2str(self%cont_inpl_attempts)//' attempts)'
+            write(logfhandle,602) '>>> % CONTINUOUS IN-PLANE RUNS IMPROVED       ', &
+                &self%cont_inpl_improved_pct, cont_ratio%to_char()
+        endif
         ! dists and % search space
         write(logfhandle,604) '>>> IN-PLANE DIST    (DEG)   AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG           AVG/SDEV/MIN/MAX:', self%shincarg%avg,  self%shincarg%sdev,  self%shincarg%minv,  self%shincarg%maxv
@@ -234,6 +246,10 @@ contains
         call ostats%set(1,'SEARCH_SPACE_SCANNED',     self%frac_srch%avg)
         call ostats%set(1,'RESOLUTION',               self%res%avg)
         call ostats%set(1,'SCORE',                    self%score%avg)
+        if( cont_stats_available )then
+            call ostats%set(1,'CONT_INPL_IMPROVED_PCT', self%cont_inpl_improved_pct)
+            call ostats%set(1,'CONT_INPL_ATTEMPTS',     self%cont_inpl_attempts)
+        endif
         call ostats%write(string(STATS_FILE))
         ! destruct
         deallocate(mask, updatecnts, states, scores, sampled)
@@ -248,7 +264,7 @@ contains
         class(oris),        intent(inout) :: os
         real,               intent(in)    :: msk
         type(oris)           :: ostats
-        type(string)         :: s_ratio
+        type(string)         :: s_ratio, cont_ratio
         type(stats_struct)   :: res_state
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
         real,    allocatable :: res_state_avg(:), state_update_fracs(:)
@@ -258,7 +274,7 @@ contains
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
-        logical :: converged
+        logical :: converged, cont_stats_available
         integer :: iptcl, istate, n, nptcls, nsampled, nactive, ucnt
         integer :: nupdated_state, nsampled_state
         601 format(A,1X,F12.3)
@@ -308,6 +324,7 @@ contains
         self%mi_proj     = os%get_avg('mi_proj',     mask=mask)
         self%mi_state    = os%get_avg('mi_state',    mask=mask)
         self%frac_greedy = os%get_avg('frac_greedy', mask=mask)
+        call calc_continuous_inplane_stats(self, os, mask, cont_stats_available)
         ! overlaps and particle updates
         s_ratio = '('//int2str(nsampled)//'/'//int2str(nactive)//')'
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                      ', self%mi_proj
@@ -318,6 +335,11 @@ contains
         write(logfhandle,601) '>>> % PARTICLES UPDATED SO FAR                ', percen_updated
         write(logfhandle,601) '>>> % PARTICLES USED FOR UPDATING THE MODEL   ', percen_avg
         write(logfhandle,601) '>>> % GREEDY SEARCHES                         ', self%frac_greedy * 100.
+        if( cont_stats_available )then
+            cont_ratio = '('//int2str(self%cont_inpl_attempts)//' attempts)'
+            write(logfhandle,602) '>>> % CONTINUOUS IN-PLANE RUNS IMPROVED       ', &
+                &self%cont_inpl_improved_pct, cont_ratio%to_char()
+        endif
         ! dists and % search space
         write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG) AVG/SDEV/MIN/MAX:', self%dist%avg,      self%dist%sdev,      self%dist%minv,      self%dist%maxv
         write(logfhandle,604) '>>> IN-PLANE DIST      (DEG) AVG/SDEV/MIN/MAX:', self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
@@ -498,6 +520,10 @@ contains
             end do
         endif
         call ostats%set(1,'SCORE',                       self%score%avg)
+        if( cont_stats_available )then
+            call ostats%set(1,'CONT_INPL_IMPROVED_PCT', self%cont_inpl_improved_pct)
+            call ostats%set(1,'CONT_INPL_ATTEMPTS',      self%cont_inpl_attempts)
+        endif
         if( params%l_ml_reg )then
             call ostats%set(1,'ML_REGULARIZATION',                    1.0)
             call ostats%set(1,'ML_REGULARIZATION_TAU',         params%tau)
@@ -522,6 +548,29 @@ contains
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
     end function check_conv3D
+
+    subroutine calc_continuous_inplane_stats( self, os, mask, available )
+        class(convergence), intent(inout) :: self
+        class(oris),        intent(inout) :: os
+        logical,            intent(in)    :: mask(:)
+        logical,            intent(out)   :: available
+        real, allocatable :: attempted(:), improved(:)
+        integer :: nimproved
+
+        self%cont_inpl_improved_pct = 0.
+        self%cont_inpl_attempts     = 0
+        available = os%isthere('cont_inpl_attempted') .and. &
+            &os%isthere('cont_inpl_improved')
+        if( .not. available ) return
+        attempted = os%get_all('cont_inpl_attempted')
+        improved  = os%get_all('cont_inpl_improved')
+        self%cont_inpl_attempts  = count(mask .and. attempted > 0.5)
+        nimproved                = count(mask .and. attempted > 0.5 .and. improved > 0.5)
+        if( self%cont_inpl_attempts > 0 )then
+            self%cont_inpl_improved_pct = 100. * real(nimproved) / real(self%cont_inpl_attempts)
+        endif
+        deallocate(attempted, improved)
+    end subroutine calc_continuous_inplane_stats
 
     subroutine append_stats( self, params, ostats )
         use CPlot2D_wrapper_module, only: plot2D
@@ -708,6 +757,10 @@ contains
                 get = self%mi_proj
             case('mi_state')
                 get = self%mi_state
+            case('cont_inpl_improved_pct')
+                get = self%cont_inpl_improved_pct
+            case('cont_inpl_attempts')
+                get = real(self%cont_inpl_attempts)
             case('progress')
                 get = self%progress
         end select

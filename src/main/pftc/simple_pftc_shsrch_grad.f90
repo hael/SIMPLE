@@ -8,7 +8,7 @@ use simple_optimizer, only: optimizer
 use simple_builder,   only: builder
 implicit none
 
-public :: pftc_shsrch_grad, bounded_shift_trial, report_joint_fallbacks
+public :: pftc_shsrch_grad, bounded_shift_trial
 private
 #include "simple_local_flags.inc"
 
@@ -39,12 +39,6 @@ type :: pftc_shsrch_grad
     real(dp)                  :: raw_roundtrip_offset = 0.d0 !< diagnostic-only legacy score baseline offset
     integer(int64)            :: profile_objective_evals = 0_int64
     integer(int64)            :: profile_gradient_evals  = 0_int64
-    integer(int64)            :: profile_joint_solves    = 0_int64 !< minimize_joint invocations
-    integer(int64)            :: profile_joint_fallbacks = 0_int64 !< invalid joint evals replayed via the legacy route
-    ! real-world fallback: when a joint continuous evaluation is numerically
-    ! invalid, replay the inpl_cont=no route (legacy callback-based
-    ! optimizer) so the particle still receives a genuine discrete search
-    type(pftc_shsrch_grad), allocatable :: legacy_fallback
 contains
     procedure          :: new_legacy      => grad_shsrch_new_legacy
     procedure          :: new_fixed       => grad_shsrch_new_fixed
@@ -67,7 +61,6 @@ contains
     procedure          :: diagnostic_failed => grad_shsrch_diagnostic_failed
     procedure          :: reset_profile     => grad_shsrch_reset_profile
     procedure          :: get_profile       => grad_shsrch_get_profile
-    procedure          :: get_joint_fallback_counts
 end type pftc_shsrch_grad
 
 contains
@@ -176,9 +169,6 @@ contains
         self%ospec%costfun_8    => grad_shsrch_costfun
         self%ospec%gcostfun_8   => grad_shsrch_gcostfun
         self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
-        ! construct the inpl_cont=no fallback over the shift limits
-        allocate(self%legacy_fallback)
-        call self%legacy_fallback%new_legacy(build, lims(1:2,:))
     end subroutine grad_shsrch_new_joint
 
     pure logical function does_opt_angle( self )
@@ -294,9 +284,8 @@ contains
         self%cur_inpl_rotind = real(self%cur_inpl_idx)
     end subroutine grad_shsrch_update_discrete_angle
 
-    !> Apply the legacy callback's discrete all-angle selection once at a
-    !! caller-supplied native-frame shift. This does not attach an optimizer
-    !! callback and does not search alternative shifts.
+    !> Apply discrete all-angle selection once at a caller-supplied
+    !! native-frame shift without searching alternative shifts.
     subroutine select_best_discrete_angle( self, xy, irot, corr )
         class(pftc_shsrch_grad), intent(inout) :: self
         real,                    intent(in)    :: xy(2)
@@ -438,14 +427,14 @@ contains
 
     !> Classical Euclidean joint refinement over (sx,sy,rotind_frac).
     !! The selected reference/class is fixed, but any incoming in-plane state
-    !! is discarded.  The callback-equivalent discrete all-angle scan chooses
+    !! is discarded.  A discrete all-angle scan chooses
     !! the best grid cell at xy_in, and the continuous solve starts from that
     !! cell with bounds of plus or minus two rotation indices.  The PFTC
     !! objective is periodic, so those bounds may safely straddle the first or
     !! last grid index.  A valid non-improving solve returns the selected grid
     !! seed; only a numerically invalid evaluation returns irot=0.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
-            &evaluation_valid, improved, initial_cost_out, used_fallback ) result(cxy)
+            &evaluation_valid, improved, initial_cost_out ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(out)   :: irot
         real,                    intent(in)    :: xy_in(2)
@@ -453,7 +442,6 @@ contains
         real(dp),                intent(out)   :: rotind_frac
         logical,       optional, intent(out)   :: evaluation_valid, improved
         real(dp),      optional, intent(out)   :: initial_cost_out
-        logical,       optional, intent(out)   :: used_fallback
         ! The raw Euclidean loss is nonnegative by construction; the truncated
         ! coefficient series can undershoot slightly at fractional angles, but
         ! a final cost below this tolerance is an unphysical evaluator
@@ -461,7 +449,6 @@ contains
         real(dp), parameter :: JOINT_NEG_COST_TOL = 1.d-2
         real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(3,2)
         real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(3)
-        integer :: seed_irot, fb_irot
         logical :: valid_result, improved_result, valid_coordinates
 
         if( self%search_mode /= SHSRCH_JOINT )then
@@ -470,15 +457,10 @@ contains
         if( .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
             THROW_HARD('joint minimization requires raw Euclidean objective; hybrid derivative is unavailable')
         endif
-        ! Reuse the exact discrete selection performed by the legacy callback,
-        ! but invoke it once at the supplied shift rather than attaching it to
-        ! every L-BFGS-B iterate.
+        ! Select the grid seed once at the supplied shift before refinement.
         call self%select_best_discrete_angle(xy_in, irot, seed_corr)
-        seed_irot            = irot
         self%cur_inpl_idx    = irot
         self%cur_inpl_rotind = real(irot)
-        self%profile_joint_solves = self%profile_joint_solves + 1_int64
-        if( present(used_fallback) ) used_fallback = .false.
         joint_lims = self%ospec%limits
         joint_lims(3,:) = [real(irot)-2., real(irot)+2.]
         call self%set_limits(joint_lims)
@@ -510,35 +492,6 @@ contains
         if( valid_result .and. final_cost < -JOINT_NEG_COST_TOL ) valid_result = .false.
         improved_result = valid_result .and. final_cost < initial_cost - improve_tol
         if( .not. valid_result )then
-            ! real-world fallback: replay the inpl_cont=no route (legacy
-            ! callback-based optimizer) so an invalid joint evaluation still
-            ! yields a genuine discrete search instead of a starved particle
-            if( allocated(self%legacy_fallback) )then
-                self%profile_joint_fallbacks = self%profile_joint_fallbacks + 1_int64
-                call self%legacy_fallback%set_indices(self%reference, self%particle)
-                fb_irot = seed_irot
-                cxy = self%legacy_fallback%minimize(irot=fb_irot, sh_rot=sh_rot, xy_in=xy_in)
-                if( fb_irot > 0 )then
-                    irot        = fb_irot
-                    rotind_frac = real(fb_irot,dp)
-                else
-                    ! legacy found nothing better: commit the discrete seed
-                    irot        = seed_irot
-                    rotind_frac = real(seed_irot,dp)
-                    cxy(1)  = seed_corr
-                    cxy(2:) = xy_in
-                    if( sh_rot )then
-                        call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
-                        cxy(2:) = matmul(cxy(2:), rotmat)
-                    endif
-                endif
-                ! report a valid non-improving outcome: callers commit the
-                ! pose as a discrete grid assignment, never as fractional e3
-                if( present(evaluation_valid) ) evaluation_valid = .true.
-                if( present(improved) )        improved = .false.
-                if( present(used_fallback) )   used_fallback = .true.
-                return
-            endif
             if( present(evaluation_valid) ) evaluation_valid = .false.
             if( present(improved) ) improved = .false.
             irot = 0
@@ -577,17 +530,16 @@ contains
     !! this form so their existing assignment artifacts remain integer based;
     !! the selected assignment is refined once more when durable e3 metadata
     !! is written.
-    function grad_shsrch_minimize_joint_rounded( self, irot, sh_rot, xy_in, evaluation_valid, used_fallback ) result(cxy)
+    function grad_shsrch_minimize_joint_rounded( self, irot, sh_rot, xy_in, evaluation_valid ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
         integer,                 intent(inout) :: irot
         logical,                 intent(in)    :: sh_rot
         real,          optional, intent(in)    :: xy_in(2)
         logical,       optional, intent(out)   :: evaluation_valid
-        logical,       optional, intent(out)   :: used_fallback
         real :: cxy(3), xy_seed(2), rotmat(2,2)
         real(dp) :: rotind_frac
         integer :: selected_irot
-        logical :: valid_result, fb_result
+        logical :: valid_result
 
         if( self%search_mode /= SHSRCH_JOINT )then
             THROW_HARD('rounded joint minimization requested from a non-joint search object')
@@ -598,10 +550,9 @@ contains
         ! the frame of the rounded integer cell.  This makes the later inverse
         ! transform recover the exact native shift used by the joint score.
         cxy = self%minimize_joint(selected_irot, xy_seed, .false., rotind_frac, &
-            &evaluation_valid=valid_result, used_fallback=fb_result)
+            &evaluation_valid=valid_result)
         irot = selected_irot
         if( present(evaluation_valid) ) evaluation_valid = valid_result
-        if( present(used_fallback) )    used_fallback = fb_result
         if( irot > 0 .and. sh_rot )then
             call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
             cxy(2:) = matmul(cxy(2:), rotmat)
@@ -856,41 +807,7 @@ contains
         class(pftc_shsrch_grad), intent(inout) :: self
         self%profile_objective_evals = 0_int64
         self%profile_gradient_evals  = 0_int64
-        self%profile_joint_solves    = 0_int64
-        self%profile_joint_fallbacks = 0_int64
     end subroutine grad_shsrch_reset_profile
-
-    !> counts for detecting silent wholesale fallback to the legacy route
-    subroutine get_joint_fallback_counts( self, solves, fallbacks )
-        class(pftc_shsrch_grad), intent(in)  :: self
-        integer(int64),          intent(out) :: solves, fallbacks
-        solves    = self%profile_joint_solves
-        fallbacks = self%profile_joint_fallbacks
-    end subroutine get_joint_fallback_counts
-
-    !> Aggregate and report legacy-fallback usage across an array of joint
-    !! search objects (one per thread).  Wholesale fallback to the callback
-    !! route must never be silent; prints only when fallbacks occurred.
-    subroutine report_joint_fallbacks( objs, label )
-        type(pftc_shsrch_grad), intent(in) :: objs(:)
-        character(len=*),       intent(in) :: label
-        integer(int64) :: solves, fallbacks, s, f
-        integer :: i
-        solves    = 0_int64
-        fallbacks = 0_int64
-        do i = 1,size(objs)
-            call objs(i)%get_joint_fallback_counts(s, f)
-            solves    = solves + s
-            fallbacks = fallbacks + f
-        enddo
-        if( solves == 0_int64 .or. fallbacks == 0_int64 ) return
-        write(logfhandle,'(A,A,A,I0,A,I0)') '>>> ', trim(label), &
-            &' JOINT LEGACY_FALLBACKS/SOLVES: ', fallbacks, '/', solves
-        if( fallbacks * 5_int64 > solves )then
-            write(logfhandle,'(A)') '>>> WARNING: >20% of joint continuous solves fell back to the '//&
-                &'legacy callback optimizer; investigate joint evaluator health'
-        endif
-    end subroutine report_joint_fallbacks
 
     subroutine grad_shsrch_get_profile( self, objective_evals, gradient_evals )
         class(pftc_shsrch_grad), intent(in) :: self
@@ -899,7 +816,7 @@ contains
         gradient_evals  = self%profile_gradient_evals
     end subroutine grad_shsrch_get_profile
 
-    recursive subroutine grad_shsrch_kill( self )
+    subroutine grad_shsrch_kill( self )
         class(pftc_shsrch_grad), intent(inout) :: self
         if( associated(self%opt_obj) )then
             call self%opt_obj%kill
@@ -910,10 +827,6 @@ contains
         self%search_mode = SHSRCH_LEGACY
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
-        if( allocated(self%legacy_fallback) )then
-            call self%legacy_fallback%kill
-            deallocate(self%legacy_fallback)
-        endif
         call self%reset_profile
     end subroutine grad_shsrch_kill
 

@@ -17,7 +17,6 @@ integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED  = 0
 integer, parameter :: CONT_ROUTE_IMPROVED       = 1
 integer, parameter :: CONT_ROUTE_NO_IMPROVEMENT = 2
 integer, parameter :: CONT_ROUTE_INVALID        = 3
-integer, parameter :: CONT_ROUTE_FALLBACK       = 4 !< invalid joint eval replayed via the legacy callback route
 
 type strategy2D_spec
     type(eul_prob_tab2D), pointer :: eulprob_obj_part2D => null()
@@ -380,7 +379,7 @@ contains
         real     :: cxy(3), joint_lims(3,2)
         real(dp) :: rotind_frac
         integer  :: irot
-        logical  :: evaluation_valid, improved, used_fallback
+        logical  :: evaluation_valid, improved
         joint_lims(1,:) = [-self%trs, self%trs]
         joint_lims(2,:) = [-self%trs, self%trs]
         if( .not. self%p_ptr%l_doshift )then
@@ -392,8 +391,7 @@ contains
         call self%joint_inpl_optimizer%set_limits(joint_lims)
         cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, &
-            &evaluation_valid=evaluation_valid, improved=improved, &
-            &used_fallback=used_fallback)
+            &evaluation_valid=evaluation_valid, improved=improved)
         if( .not. evaluation_valid )then
             ! numerically invalid solve: retain the incoming assignment
             self%continuous_route_outcome = CONT_ROUTE_INVALID
@@ -410,11 +408,9 @@ contains
             call store_continuous_e3(self, rotind_frac)
             self%continuous_route_outcome = CONT_ROUTE_IMPROVED
         else
-            ! valid non-improving solve (or legacy fallback): commit the
-            ! selected grid pose; has_continuous_e3 stays false so assign_ori
-            ! writes the grid angle
-            self%continuous_route_outcome = &
-                &merge(CONT_ROUTE_FALLBACK, CONT_ROUTE_NO_IMPROVEMENT, used_fallback)
+            ! A valid non-improving solve commits the selected grid pose;
+            ! has_continuous_e3 stays false so assign_ori writes the grid angle.
+            self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
         endif
         end block
     end subroutine refine_selected_continuously
@@ -433,25 +429,22 @@ contains
         uses_continuous_refinement = self%continuous_active
     end function uses_continuous_refinement
 
-    !> whether the joint route ran to a committed pose (improved, grid-seed
-    !! commit, or legacy fallback) for the currently selected candidate
+    !> whether the joint route ran to a committed pose (improved or grid-seed
+    !! commit) for the currently selected candidate
     pure logical function continuous_pose_committed( self )
         class(strategy2D_srch), intent(in) :: self
         continuous_pose_committed = &
             &self%continuous_route_outcome == CONT_ROUTE_IMPROVED .or. &
-            &self%continuous_route_outcome == CONT_ROUTE_NO_IMPROVEMENT .or. &
-            &self%continuous_route_outcome == CONT_ROUTE_FALLBACK
+            &self%continuous_route_outcome == CONT_ROUTE_NO_IMPROVEMENT
     end function continuous_pose_committed
 
-    pure subroutine get_continuous_route_status( self, attempted, improved, no_improvement, invalid, fallback )
+    pure subroutine get_continuous_route_status( self, attempted, improved, no_improvement, invalid )
         class(strategy2D_srch), intent(in)  :: self
         logical,                intent(out) :: attempted, improved, no_improvement, invalid
-        logical,                intent(out) :: fallback
         attempted      = self%continuous_route_outcome /= CONT_ROUTE_NOT_ATTEMPTED
         improved       = self%continuous_route_outcome == CONT_ROUTE_IMPROVED
         no_improvement = self%continuous_route_outcome == CONT_ROUTE_NO_IMPROVEMENT
         invalid        = self%continuous_route_outcome == CONT_ROUTE_INVALID
-        fallback       = self%continuous_route_outcome == CONT_ROUTE_FALLBACK
     end subroutine get_continuous_route_status
 
     subroutine inpl_srch_peaks( self, npeaks_inpl )

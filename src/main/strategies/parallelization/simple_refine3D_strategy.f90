@@ -546,7 +546,7 @@ contains
                 call xcalc_pspec%execute( cline_calc_pspec )
                 if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
             else
-                write(logfhandle,'(A)') 'SIGMA2 INIT: reusing existing particle sigma files'
+                write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
             endif
         endif
         ! Keep run-time counters consistent with the new high-level loop
@@ -919,7 +919,7 @@ contains
                     call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
                     if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
                 else
-                    write(logfhandle,'(A)') 'SIGMA2 INIT: reusing existing particle sigma files'
+                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
                 endif
             endif
             ! check if we have input volume(s) and/or 3D orientations

@@ -3,7 +3,7 @@ module simple_eul_prob_tab2D
 use, intrinsic :: iso_fortran_env, only: int64
 use simple_pftc_srch_api
 use simple_builder,            only: builder
-use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad, report_joint_fallbacks
+use simple_pftc_shsrch_grad,   only: pftc_shsrch_grad
 use simple_decay_funs,         only: extremal_decay2D
 use simple_eul_prob_tab_utils, only: build_pind_lookup, eulprob_dist_switch, materialize_seed_shift,&
     &read_seed_shift_table, write_seed_shift_table, sample_likelihood_index, prob_candidate,&
@@ -331,7 +331,6 @@ contains
             end do
             !$omp end parallel do
         endif
-        call report_joint_fallbacks(grad_shsrch_obj, 'PROB_TAB2D')
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do
@@ -406,7 +405,6 @@ contains
             enddo
             !$omp end parallel do
         endif
-        call report_joint_fallbacks(grad_shsrch_obj, 'PROB_TAB2D')
         do ithr = 1, nthr_glob
             call grad_shsrch_obj(ithr)%kill
         end do

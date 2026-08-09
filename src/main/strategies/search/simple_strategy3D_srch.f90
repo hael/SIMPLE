@@ -14,7 +14,6 @@ integer, parameter :: CONT_ROUTE_NOT_ATTEMPTED = 0
 integer, parameter :: CONT_ROUTE_IMPROVED       = 1
 integer, parameter :: CONT_ROUTE_NO_IMPROVEMENT = 2
 integer, parameter :: CONT_ROUTE_INVALID        = 3
-integer, parameter :: CONT_ROUTE_FALLBACK       = 4 !< invalid joint eval replayed via the legacy callback route
 
 public :: strategy3D_srch, strategy3D_spec
 private
@@ -345,7 +344,7 @@ contains
         real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2)
         real(dp) :: rotind_frac
         integer  :: irot, incoming_irot
-        logical  :: evaluation_valid, improved, used_fallback
+        logical  :: evaluation_valid, improved
 
         if( .not. self%continuous_active ) return
         if( ref < 1 .or. ref > self%nrefs ) return
@@ -382,15 +381,13 @@ contains
         call self%joint_inpl_optimizer%set_limits(joint_lims)
         cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, &
-            &evaluation_valid=evaluation_valid, improved=improved, &
-            &used_fallback=used_fallback)
+            &evaluation_valid=evaluation_valid, improved=improved)
         if( self%joint_evaluation_invalid(evaluation_valid) )then
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
         endif
         if( .not. improved )then
-            self%continuous_route_outcome = &
-                &merge(CONT_ROUTE_FALLBACK, CONT_ROUTE_NO_IMPROVEMENT, used_fallback)
+            self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
             call self%store_discrete_seed_solution(ref, irot, cxy(1), cxy(2:3))
             return
         endif
@@ -418,7 +415,7 @@ contains
         real     :: cxy(3), joint_lims(3,2), rotmat(2,2), xy_native(2)
         real(dp) :: rotind_frac
         integer  :: refined_inpl
-        logical  :: evaluation_valid, improved, used_fallback
+        logical  :: evaluation_valid, improved
 
         inpl_coord = real(inpl)
         inpl_valid = .false.
@@ -452,7 +449,7 @@ contains
         call self%joint_inpl_optimizer%set_limits(joint_lims)
         cxy = self%joint_inpl_optimizer%minimize_joint(refined_inpl, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, evaluation_valid=evaluation_valid, &
-            &improved=improved, used_fallback=used_fallback)
+            &improved=improved)
         if( .not. evaluation_valid )then
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
@@ -462,8 +459,7 @@ contains
             corr       = cxy(1)
             sh         = cxy(2:3)
             inpl_coord = real(refined_inpl)
-            self%continuous_route_outcome = &
-                &merge(CONT_ROUTE_FALLBACK, CONT_ROUTE_NO_IMPROVEMENT, used_fallback)
+            self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
             return
         endif
         if( refined_inpl < 1 .or. refined_inpl > self%nrots )then
@@ -524,16 +520,14 @@ contains
         joint_evaluation_invalid = self%continuous_active .and. .not. evaluation_valid
     end function joint_evaluation_invalid
 
-    pure subroutine get_continuous_route_status( self, attempted, improved, no_improvement, invalid, fallback )
+    pure subroutine get_continuous_route_status( self, attempted, improved, no_improvement, invalid )
         class(strategy3D_srch), intent(in)  :: self
         logical,                intent(out) :: attempted, improved, no_improvement, invalid
-        logical,                intent(out) :: fallback
 
         attempted      = self%continuous_route_outcome /= CONT_ROUTE_NOT_ATTEMPTED
         improved       = self%continuous_route_outcome == CONT_ROUTE_IMPROVED
         no_improvement = self%continuous_route_outcome == CONT_ROUTE_NO_IMPROVEMENT
         invalid        = self%continuous_route_outcome == CONT_ROUTE_INVALID
-        fallback       = self%continuous_route_outcome == CONT_ROUTE_FALLBACK
     end subroutine get_continuous_route_status
 
     subroutine kill( self )

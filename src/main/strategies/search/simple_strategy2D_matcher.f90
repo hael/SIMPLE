@@ -104,8 +104,7 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         integer(int64), allocatable :: cont_attempted(:), cont_improved(:)
         integer(int64), allocatable :: cont_no_improvement(:), cont_invalid(:)
-        integer(int64), allocatable :: cont_fallback(:)
-        logical :: attempted, improved, no_improvement, invalid, fallback
+        logical :: attempted, improved, no_improvement, invalid
         integer :: ithr_stat
         real    :: frac_srch_space, neigh_frac
         integer :: iptcl, fnr, iptcl_map, iptcl_batch, ibatch, nptcls2update
@@ -116,7 +115,8 @@ contains
         if( trim(p_ptr%inpl_cont) == 'yes' )then
             allocate(cont_attempted(p_ptr%nthr), cont_improved(p_ptr%nthr), source=0_int64)
             allocate(cont_no_improvement(p_ptr%nthr), cont_invalid(p_ptr%nthr), source=0_int64)
-            allocate(cont_fallback(p_ptr%nthr), source=0_int64)
+            call b_ptr%spproj_field%set_all2single('cont_inpl_attempted', 0.)
+            call b_ptr%spproj_field%set_all2single('cont_inpl_improved',  0.)
         endif
         if( p_ptr%sgd_diagnostic )then
             write(logfhandle,'(A,1X,A,I0,1X,A,L1,1X,A,L1,1X,A,1X,A)') &
@@ -186,7 +186,7 @@ contains
             call prep_strategy2D_batch( p_ptr, b_ptr%spproj, which_iter, batchsz, pinds(batch_start:batch_end) )
             if( ctrl%do_bench ) t_align = tic()
             !$omp parallel do private(iptcl,iptcl_batch,iptcl_map,orientation,strategy2Dspec,&
-            !$omp attempted,improved,no_improvement,invalid,fallback,ithr_stat)&
+            !$omp attempted,improved,no_improvement,invalid,ithr_stat)&
             !$omp default(shared) schedule(static) proc_bind(close)
             do iptcl_batch = 1, batchsz
                 iptcl_map  = batch_start + iptcl_batch - 1
@@ -207,13 +207,14 @@ contains
                 end if
                 if( allocated(cont_attempted) )then
                     call strategy2Dsrch(iptcl_batch)%ptr%s%get_continuous_route_status( &
-                        &attempted, improved, no_improvement, invalid, fallback)
+                        &attempted, improved, no_improvement, invalid)
                     ithr_stat = strategy2Dsrch(iptcl_batch)%ptr%s%ithr
                     if( attempted )      cont_attempted(ithr_stat)      = cont_attempted(ithr_stat) + 1_int64
                     if( improved )       cont_improved(ithr_stat)       = cont_improved(ithr_stat) + 1_int64
                     if( no_improvement ) cont_no_improvement(ithr_stat) = cont_no_improvement(ithr_stat) + 1_int64
                     if( invalid )        cont_invalid(ithr_stat)        = cont_invalid(ithr_stat) + 1_int64
-                    if( fallback )       cont_fallback(ithr_stat)       = cont_fallback(ithr_stat) + 1_int64
+                    call b_ptr%spproj_field%set(iptcl, 'cont_inpl_attempted', merge(1., 0., attempted))
+                    call b_ptr%spproj_field%set(iptcl, 'cont_inpl_improved',  merge(1., 0., improved))
                 endif
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
             enddo
@@ -229,7 +230,7 @@ contains
         enddo
         call report_continuous_route_counts2D()
         if( allocated(cont_attempted) )then
-            deallocate(cont_attempted, cont_improved, cont_no_improvement, cont_invalid, cont_fallback)
+            deallocate(cont_attempted, cont_improved, cont_no_improvement, cont_invalid)
         endif
         call cleanup_search_state(strategy2Dsrch, pinds, batches, eulprob_obj_part, batchsz_max, orientation)
         if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
@@ -380,26 +381,20 @@ contains
         end subroutine build_batch_particles_local
 
         subroutine report_continuous_route_counts2D()
-            integer(int64) :: attempted_n, improved_n, no_improvement_n, invalid_n, fallback_n
+            integer(int64) :: attempted_n, improved_n, no_improvement_n, invalid_n
 
             if( .not. allocated(cont_attempted) ) return
             attempted_n      = sum(cont_attempted)
             improved_n       = sum(cont_improved)
             no_improvement_n = sum(cont_no_improvement)
             invalid_n        = sum(cont_invalid)
-            fallback_n       = sum(cont_fallback)
-            if( attempted_n /= improved_n + no_improvement_n + invalid_n + fallback_n )then
+            if( attempted_n /= improved_n + no_improvement_n + invalid_n )then
                 THROW_HARD('continuous cluster2D route counts do not balance')
             endif
             if( attempted_n == 0_int64 ) return
-            write(logfhandle,'(A,I0,A,5(I0,1X))') '>>> CLUSTER2D CONTINUOUS PART=', p_ptr%part, &
-                &' ATTEMPTED/IMPROVED/NO_IMPROVEMENT/INVALID/LEGACY_FALLBACK: ', attempted_n, &
-                &improved_n, no_improvement_n, invalid_n, fallback_n
-            if( fallback_n * 5_int64 > attempted_n )then
-                write(logfhandle,'(A,I0,A,I0,A)') '>>> WARNING: joint continuous route fell back to the legacy '//&
-                    &'callback optimizer for ', fallback_n, ' of ', attempted_n, &
-                    &' solves (>20%); investigate joint evaluator health'
-            endif
+            write(logfhandle,'(A,I0,A,4(I0,1X))') '>>> CLUSTER2D CONTINUOUS PART=', p_ptr%part, &
+                &' ATTEMPTED/IMPROVED/NO_IMPROVEMENT/INVALID: ', attempted_n, &
+                &improved_n, no_improvement_n, invalid_n
         end subroutine report_continuous_route_counts2D
 
         subroutine allocate_strategy_for_particle(iptcl, iptcl_batch)

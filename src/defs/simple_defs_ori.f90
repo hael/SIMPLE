@@ -50,10 +50,9 @@ enum, bind(c)
     enumerator :: I_SAMPLED     = 45
     enumerator :: I_CLUSTER     = 46
     enumerator :: I_CLASS_MATCH = 47
-    ! empties
-    enumerator :: I_EMPTY8      = 48
-    enumerator :: I_EMPTY9      = 49
-    enumerator :: I_EMPTY10     = 50
+    enumerator :: I_CONT_INPL_ATTEMPTED = 48
+    enumerator :: I_CONT_INPL_IMPROVED  = 49
+    enumerator :: I_EMPTY10             = 50
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 50
@@ -156,6 +155,10 @@ contains
                 get_oriparam_ind = I_CLUSTER
             case('class_match')
                 get_oriparam_ind = I_CLASS_MATCH
+            case('cont_inpl_attempted')
+                get_oriparam_ind = I_CONT_INPL_ATTEMPTED
+            case('cont_inpl_improved')
+                get_oriparam_ind = I_CONT_INPL_IMPROVED
         end select
     end function get_oriparam_ind
 
@@ -254,9 +257,13 @@ contains
             case(I_CLUSTER)
                 flag ='cluster'
             case(I_CLASS_MATCH)
-                flag ='class_match'   
+                flag = 'class_match'
+            case(I_CONT_INPL_ATTEMPTED)
+                flag = 'cont_inpl_attempted'
+            case(I_CONT_INPL_IMPROVED)
+                flag = 'cont_inpl_improved'
             case DEFAULT
-                flag = 'empty'
+                flag = 'unknown'
         end select
     end function get_oriparam_flag
 
@@ -314,7 +321,7 @@ contains
                 oriparam_isthere = abs(val) > TINY    
             case(I_RETIRED_W)
                 oriparam_isthere = .false.
-            case(I_EMPTY8, I_EMPTY9, I_EMPTY10)
+            case(I_EMPTY10)
                 oriparam_isthere = .false.
             case DEFAULT
                 ! default case is defined
