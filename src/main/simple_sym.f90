@@ -387,8 +387,14 @@ contains
         real,       intent(out)   :: euldist     !< Euler distance
         real,       intent(out)   :: inplrotdist !< in-plane rotational distance
         type(ori) :: o
-        real      :: dist
+        real      :: dist, inpldist
         integer   :: isym
+        ! Ops that preserve the projection direction (e.g. the C2 about the
+        ! symmetry axis in dihedral groups) tie on euldist; a strict comparison
+        ! would never select them, leaving a pure in-plane symmetry hop reported
+        ! as a 180-degree in-plane move. The in-plane angle is only defined
+        ! modulo such ops, so ties fold the in-plane distance as well.
+        real, parameter :: TIETOL = 1.e-4 ! radians
         euldist     = oasym.euldist.oref
         inplrotdist = oasym.inplrotdist.oref
         osym        = oasym
@@ -398,12 +404,19 @@ contains
             do isym=2,self%n
                 call self%apply(oasym, isym, o)
                 dist = o.euldist.oref
-                if( dist < euldist )then
-                    euldist = dist
-                    osym    = o
+                if( dist < euldist - TIETOL )then
+                    euldist     = dist
+                    osym        = o
+                    inplrotdist = o.inplrotdist.oref
+                elseif( dist <= euldist + TIETOL )then
+                    inpldist = o.inplrotdist.oref
+                    if( inpldist < inplrotdist )then
+                        euldist     = min(euldist, dist)
+                        osym        = o
+                        inplrotdist = inpldist
+                    endif
                 endif
             enddo
-            inplrotdist = osym.inplrotdist.oref
         endif
         euldist     = rad2deg( euldist )
         inplrotdist = rad2deg( inplrotdist )
@@ -418,8 +431,10 @@ contains
         real,       intent(inout) :: euls_sym(3)
         real,       intent(out)   :: euldist     !< Euler distance
         real,       intent(out)   :: inplrotdist !< in-plane rotational distance
-        real    :: euls(3), dist
+        real    :: euls(3), dist, inpldist
         integer :: isym
+        ! same tie-folding as sym_dists_1, see the rationale there
+        real, parameter :: TIETOL = 1.e-4 ! radians
         euldist     = euler_dist(euls_asym, euls_ref)
         inplrotdist = euler_inplrotdist(euls_asym, euls_ref)
         euls_sym    = euls_asym
@@ -429,12 +444,19 @@ contains
             do isym=2,self%n
                 call self%apply(euls_asym, isym, euls)
                 dist = euler_dist(euls, euls_ref)
-                if( dist < euldist )then
-                    euldist  = dist
-                    euls_sym = euls
+                if( dist < euldist - TIETOL )then
+                    euldist     = dist
+                    euls_sym    = euls
+                    inplrotdist = euler_inplrotdist(euls, euls_ref)
+                elseif( dist <= euldist + TIETOL )then
+                    inpldist = euler_inplrotdist(euls, euls_ref)
+                    if( inpldist < inplrotdist )then
+                        euldist     = min(euldist, dist)
+                        euls_sym    = euls
+                        inplrotdist = inpldist
+                    endif
                 endif
             enddo
-            inplrotdist = euler_inplrotdist(euls_sym, euls_ref)
         endif
         euldist     = rad2deg( euldist )
         inplrotdist = rad2deg( inplrotdist )

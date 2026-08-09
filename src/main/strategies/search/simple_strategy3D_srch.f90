@@ -379,18 +379,19 @@ contains
 
         call self%joint_inpl_optimizer%set_indices(ref, self%iptcl)
         call self%joint_inpl_optimizer%set_limits(joint_lims)
+        ! LOCAL refinement around the discrete search's selection (irot_in): the
+        ! durable pass never performs another global all-angle reselection
         cxy = self%joint_inpl_optimizer%minimize_joint(irot, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, &
-            &evaluation_valid=evaluation_valid, improved=improved)
+            &evaluation_valid=evaluation_valid, improved=improved, irot_in=incoming_irot)
         if( self%joint_evaluation_invalid(evaluation_valid) )then
-            ! policy: the exhaustive discrete scan at the entry shift is a
-            ! guaranteed floor, so even an invalid solve commits its seed;
-            ! the outcome stays INVALID as a diagnostic signal
+            ! retain the incoming assignment untouched
             self%continuous_route_outcome = CONT_ROUTE_INVALID
-            call self%store_discrete_seed_solution(ref, irot, cxy(1), cxy(2:3))
             return
         endif
         if( .not. improved )then
+            ! the seed is the incoming cell re-scored, so this commit retains the
+            ! incoming pose with a consistent objective value
             self%continuous_route_outcome = CONT_ROUTE_NO_IMPROVEMENT
             call self%store_discrete_seed_solution(ref, irot, cxy(1), cxy(2:3))
             return
@@ -406,10 +407,11 @@ contains
     !> Run the durable joint refinement after a probabilistic assignment has
     !! selected its state, projection, integer in-plane cell, and shift.  The
     !! probability table deliberately carries no fractional angle. The incoming
-    !! in-plane index is used only to recover the shift frame and is then
-    !! discarded. Both invalid and valid non-improving solves commit the
-    !! exhaustive discrete-scan seed (the guaranteed floor); only pre-solve
-    !! sanity failures leave the incoming assignment intact.
+    !! assignment is authoritative: the solve refines LOCALLY around its in-plane
+    !! cell and shift (no global all-angle reselection -- that would hop between
+    !! degenerate in-plane branches under dihedral symmetry). An invalid solve
+    !! retains the incoming assignment untouched; a valid non-improving solve
+    !! retains the pose with its re-scored objective value.
     subroutine refine_assignment_continuously( self, ref, inpl, corr, sh, inpl_coord, inpl_valid )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref
@@ -452,21 +454,21 @@ contains
 
         call self%joint_inpl_optimizer%set_indices(ref, self%iptcl)
         call self%joint_inpl_optimizer%set_limits(joint_lims)
+        ! LOCAL refinement: the probabilistic assignment is authoritative -- it came
+        ! from exhaustive candidate construction -- so no global all-angle
+        ! reselection happens here (irot_in), which would hop between degenerate
+        ! in-plane branches on floating-point noise under dihedral symmetry
         cxy = self%joint_inpl_optimizer%minimize_joint(refined_inpl, xy_native, &
             &sh_rot=.true., rotind_frac=rotind_frac, evaluation_valid=evaluation_valid, &
-            &improved=improved)
+            &improved=improved, irot_in=inpl)
         if( .not. evaluation_valid )then
-            ! policy: the exhaustive discrete scan at the entry shift is a
-            ! guaranteed floor, so even an invalid solve commits its seed as a
-            ! discrete grid assignment; the outcome stays INVALID for diagnostics
-            inpl       = refined_inpl
-            corr       = cxy(1)
-            sh         = cxy(2:3)
-            inpl_coord = real(refined_inpl)
+            ! retain the incoming assignment untouched
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
         endif
         if( .not. improved )then
+            ! the seed is the incoming cell re-scored at its own shift, so this
+            ! commit retains the incoming pose with a consistent objective value
             inpl       = refined_inpl
             corr       = cxy(1)
             sh         = cxy(2:3)
