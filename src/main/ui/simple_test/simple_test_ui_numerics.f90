@@ -8,6 +8,7 @@ type(ui_program), target :: eigh_test
 type(ui_program), target :: kbinterpol_fast
 type(ui_program), target :: maxnloc_test
 type(ui_program), target :: neigh
+type(ui_program), target :: trail_rec_blend
 
 contains
 
@@ -17,6 +18,7 @@ contains
         call new_kbinterpol_fast(tsttab)
         call new_maxnloc_test(tsttab)
         call new_neigh(tsttab)
+        call new_trail_rec_blend(tsttab)
     end subroutine construct_test_numerics_programs
 
 subroutine new_eigh_test( tsttab )
@@ -130,5 +132,20 @@ subroutine new_eigh_test( tsttab )
         ! add to ui_hash
         call add_ui_program('neigh', neigh, tsttab, UI_CATEGORY)
     end subroutine new_neigh
+
+    subroutine new_trail_rec_blend( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        ! PROGRAM SPECIFICATION
+        call trail_rec_blend%new(&
+        &'trail_rec_blend',&                   ! name
+        &'trail_rec_blend ',&                  ! summary
+        &'is a deterministic test of the accumulator-domain trailing-reconstruction recurrence ',&
+        &'simple_test_exec',&                  ! executable
+        &.false.)                              ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! <no additional inputs>
+        ! add to ui_hash
+        call add_ui_program('trail_rec_blend', trail_rec_blend, tsttab, UI_CATEGORY)
+    end subroutine new_trail_rec_blend
 
 end module simple_test_ui_numerics

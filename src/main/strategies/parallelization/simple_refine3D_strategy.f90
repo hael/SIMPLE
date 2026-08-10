@@ -294,30 +294,46 @@ contains
         call lp_project%kill
     end subroutine refresh_matching_lp_from_project
 
-    !> Copy a previous run's trailing accumulator chains (blended e/o Fourier
-    !! sums + rho files) into the current directory. Missing files are not an
-    !! error: volassemble bootstraps a fresh chain from the previous halfmaps.
+    !> Copy a previous run's trailing accumulator chains into the current
+    !! directory as complete artifact sets only: any pre-existing destination
+    !! components are removed first, all four accumulator files are copied, and
+    !! the manifest is copied last so an interrupted or partial carry-over never
+    !! validates. A source without a complete set is skipped; volassemble then
+    !! bootstraps a fresh chain from the previous halfmaps.
     subroutine carry_over_trail_rec_chains( params, prev_refine_path )
         type(parameters), intent(in) :: params
         class(string),    intent(in) :: prev_refine_path
-        type(string) :: chain_file
-        integer      :: state, ihalf, ifile
-        character(len=4), parameter :: halves(2) = ['even', 'odd ']
+        type(string) :: chain_files(4), manifest
+        integer      :: state, ifile
+        logical      :: l_complete
         do state = 1,params%nstates
-            do ihalf = 1,2
-                do ifile = 1,2
-                    if( ifile == 1 )then
-                        chain_file = refine3D_trail_rec_fname(state, trim(halves(ihalf)))
-                    else
-                        chain_file = refine3D_trail_rho_fname(state, trim(halves(ihalf)))
-                    endif
-                    if( file_exists(prev_refine_path//chain_file) )then
-                        call simple_copy_file(prev_refine_path//chain_file, chain_file)
-                    endif
-                enddo
+            chain_files(1) = refine3D_trail_rec_fname(state, 'even')
+            chain_files(2) = refine3D_trail_rho_fname(state, 'even')
+            chain_files(3) = refine3D_trail_rec_fname(state, 'odd')
+            chain_files(4) = refine3D_trail_rho_fname(state, 'odd')
+            manifest       = refine3D_trail_manifest_fname(state)
+            ! never leave stale destination components that could combine with
+            ! a later partial write into an apparently complete chain
+            do ifile = 1,4
+                if( file_exists(chain_files(ifile)) ) call del_file(chain_files(ifile))
             enddo
+            if( file_exists(manifest) ) call del_file(manifest)
+            ! copy only complete source sets, manifest last
+            l_complete = file_exists(prev_refine_path//manifest)
+            do ifile = 1,4
+                if( .not. file_exists(prev_refine_path//chain_files(ifile)) ) l_complete = .false.
+            enddo
+            if( l_complete )then
+                do ifile = 1,4
+                    call simple_copy_file(prev_refine_path//chain_files(ifile), chain_files(ifile))
+                enddo
+                call simple_copy_file(prev_refine_path//manifest, manifest)
+            endif
+            do ifile = 1,4
+                call chain_files(ifile)%kill
+            enddo
+            call manifest%kill
         enddo
-        call chain_file%kill
     end subroutine carry_over_trail_rec_chains
 
     subroutine remove_partial_rec_files( params )

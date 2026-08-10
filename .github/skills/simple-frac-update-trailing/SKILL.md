@@ -49,25 +49,37 @@ Then inspect the current code in this order:
 - The selected subset is represented by `sampled`; persistent coverage is
   represented by `updatecnt`.
 - For `trail_rec=yes`, the previous artifact is the per-state accumulator chain
-  (`trailrec_stateNN_{even,odd}` + rho files): blended, unregularized e/o
-  Fourier sums and sampling densities. The chain is decayed by one minus the
-  realized update fraction (or `ufrac_trec` when explicitly provided), the
-  current partial sums are added at full weight, and a single restoration after
-  the blend produces the trailed halves; the FSC is estimated post-blend.
+  (`trailrec_stateNN_{even,odd}` + rho files + `trailrec_stateNN.txt`
+  manifest): blended, unregularized e/o Fourier sums and sampling densities at
+  full-dataset mass. Two fractions govern the blend: the realized fraction `f`
+  that produced the current partials, and the applied map-update weight `u`
+  (`ufrac_trec` override when provided, else `f`). Current partials are scaled
+  by `u/f`, the chain by `1-u`, and a single restoration after the blend
+  produces the trailed halves with current-map coefficient exactly `u`; the
+  FSC is estimated post-blend. The chain stays at full mass by construction.
 - The chain is written before restoration, because regularization mutates rho
   in place. Its filenames deliberately avoid the `recvol_state` stem so
   partial-reconstruction globs and cleanup never match it.
 - When the chain does not exist yet, volassemble bootstraps: the previous
   even/odd halfmaps are mandatory, that iteration's outputs use the legacy
-  volume-domain blend, and the chain is seeded with the current sums.
-  Stage-boundary full reconstructions seed the chain at full-dataset weight via
-  the internal `trail_seed` cline handshake, gated on the consuming stage's
-  `trail_rec` so early boundaries cannot park stale alignments in the chain.
+  volume-domain blend, and the chain is seeded with the current partials scaled
+  by `1/f` so it carries full-dataset mass (a fractional-mass seed would make
+  the next update far more aggressive than requested). Stage-boundary full
+  reconstructions seed the chain at full-dataset weight via the internal
+  `trail_seed` cline handshake, gated on the consuming stage's `trail_rec` so
+  early boundaries cannot park stale alignments in the chain.
+- The five chain files are one validated artifact set: the manifest is deleted
+  first and rewritten last with per-component byte sizes, generation, and
+  provenance (box, sampling, particle population, state layout). Readers
+  discard the complete set on any mismatch and re-seed; carry-over between
+  directories copies complete sets only, manifest last.
 - Downsampling compatibility is handled by the previous-artifact reader/producer
   contract. `reconstructor_eo%read_eos_parallel_io` pads previous smaller
   halfmaps/rhos when `l_update_frac` is active and rejects previous larger
-  dimensions. For the trailing chain, a larger previous grid is discarded and
-  re-seeded instead of failing the run.
+  dimensions. For the trailing chain, a larger previous grid or a physical
+  extent mismatch discards the set and re-seeds instead of failing the run.
+- The recurrence and `ufrac_trec` weighting contracts are covered by the
+  deterministic `simple_test_exec prg=trail_rec_blend` test.
 - When a stage boundary changes the next consumer's representation size, the
   prior stage must write the previous artifact in the next consumer's
   representation, not merely in its own search representation.

@@ -2,7 +2,8 @@
 module simple_test_exec_numerics
 use simple_cmdline,                  only: cmdline
 use simple_commanders_test_numerics, only: commander_test_eigh_test, commander_test_kbinterpol_fast, &
-                                           commander_test_maxnloc_test, commander_test_neigh
+                                           commander_test_maxnloc_test, commander_test_neigh, &
+                                           commander_test_trail_rec_blend
 implicit none
 
 public :: exec_test_numerics_commander
@@ -12,6 +13,7 @@ type(commander_test_eigh_test)       :: xeigh_test
 type(commander_test_kbinterpol_fast) :: xkbinterpol_fast
 type(commander_test_maxnloc_test)    :: xmaxnloc_test
 type(commander_test_neigh)           :: xneigh
+type(commander_test_trail_rec_blend) :: xtrail_rec_blend
 
 contains
 
@@ -32,6 +34,8 @@ contains
                 call xmaxnloc_test%execute(cline)
             case( 'neigh' )
                 call xneigh%execute(cline)
+            case( 'trail_rec_blend' )
+                call xtrail_rec_blend%execute(cline)
             case default
                 l_did_execute = .false.
         end select

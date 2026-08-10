@@ -54,18 +54,24 @@ the stack to lower peak memory unless the performance policy explicitly changes.
 `simple_commanders_rec_distr.f90::exec_volassemble` owns the current volume assembly path:
 
 - It reduces partial reconstructions.
-- It computes `update_frac_trail_rec` from `ufrac_trec` if provided (single-state);
-  otherwise from realized per-state fractions (`get_state_update_fracs`).
+- It always computes realized per-state fractions `f` (`get_state_update_fracs`);
+  the applied map-update weight `u` equals `f` unless a single-state
+  `ufrac_trec` override is provided.
 - If `trail_rec=yes`, trailing happens in the accumulator domain, mirroring 2D
   class-average restoration. The previous artifact is the per-state chain
-  `trailrec_stateNN_{even,odd}.mrc` + `rho_*` files: blended, unregularized e/o
-  Fourier sums and sampling densities:
+  `trailrec_stateNN_{even,odd}.mrc` + `rho_*` files + `trailrec_stateNN.txt`
+  manifest: blended, unregularized e/o Fourier sums and sampling densities at
+  full-dataset sampling mass `D`:
 
 ```text
-trailed_sums_eo = current_partial_sums_eo + (1 - update_frac_trail_rec) * chain_sums_eo
-trailed_rho_eo  = current_partial_rho_eo  + (1 - update_frac_trail_rec) * chain_rho_eo
+trailed_sums_eo = (u/f) * current_partial_sums_eo + (1 - u) * chain_sums_eo
+trailed_rho_eo  = (u/f) * current_partial_rho_eo  + (1 - u) * chain_rho_eo
 ```
 
+  The `u/f` scaling of the current partials makes the restored current-map
+  coefficient exactly `u` (the historical `ufrac_trec` meaning) and keeps the
+  chain at full mass: `(u/f)*(f*D) + (1-u)*D = D`. With no override, `u = f`
+  and the current partials enter at full accumulator weight.
 - The blended accumulators are written back as the new chain BEFORE restoration,
   because ML regularization adds 1/tau^2 to rho in place.
 - A single sampling-density correction after the blend restores the trailed
@@ -76,15 +82,30 @@ trailed_rho_eo  = current_partial_rho_eo  + (1 - update_frac_trail_rec) * chain_
 - Bootstrap (chain absent): previous even/odd halfmaps from the command line are
   mandatory. That iteration keeps the legacy behavior — FSC prior from the
   previous halfmaps and a volume-domain blend of the restored halves — while the
-  chain is seeded with the current sums. From the next iteration the chain path
-  is authoritative and the halfmap inputs are ignored.
+  chain is seeded with the current partials scaled by `1/f`, so the stored chain
+  carries full-dataset mass. Without that normalization a chain seeded at
+  fractional mass `f` would give the next iteration an effective update weight
+  of `f / (f + (1-f)*f)` — for `f=0.1`, a requested 10 percent update would act
+  like ~53 percent. From the next iteration the chain path is authoritative and
+  the halfmap inputs are ignored.
 - Full-weight seeding: a stage-boundary full reconstruction writes the chain at
   full-dataset weight when the internal `trail_seed=yes` cline handshake is set
   (`simple_abinitio_utils.f90::calc_rec`, gated on the consuming stage's
   `trail_rec`), so the consuming trailing stage starts from complete statistics
   instead of warming up.
-- Continued runs from another directory carry the chain files over alongside the
-  FSCs (`simple_refine3D_strategy.f90::carry_over_trail_rec_chains`).
+- Artifact-set integrity: the manifest is deleted before and rewritten after
+  the four data files, recording per-component byte sizes, a generation
+  counter, and provenance (box, sampling, particle population, state layout).
+  `validate_trail_chain` accepts a chain only when the manifest parses, the
+  provenance matches the current project, every component size matches, and
+  the grid is compatible; any failure discards the complete set and re-seeds.
+  This rejects mixed-generation remnants from interrupted writes and stale
+  chains from other runs sharing a directory.
+- Continued runs from another directory carry chains over as complete sets
+  only, destination cleaned first and manifest copied last
+  (`simple_refine3D_strategy.f90::carry_over_trail_rec_chains`).
+- The recurrence, override weighting, and bootstrap-normalization contracts are
+  covered by the deterministic `simple_test_exec prg=trail_rec_blend` test.
 
 The chain files become the previous artifact for the next iteration or stage.
 Their names deliberately avoid the `recvol_state` stem so partial-reconstruction

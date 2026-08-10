@@ -27,6 +27,7 @@ public :: refine3D_partial_rho_fname
 public :: refine3D_trail_rec_fbody
 public :: refine3D_trail_rec_fname
 public :: refine3D_trail_rho_fname
+public :: refine3D_trail_manifest_fname
 public :: refine3D_reproj_model_fname
 public :: refine3D_bench_fname
 public :: refine3D_strategy_bench_fname
@@ -196,6 +197,15 @@ contains
         character(len=*), intent(in) :: half
         fname = string('rho_')//refine3D_trail_rec_fname(state, half)
     end function refine3D_trail_rho_fname
+
+    !> Manifest tying the four chain files together as one validated artifact
+    !! set: provenance (box/sampling/population/state layout), a generation
+    !! counter, and the byte size of each component. Written last; readers must
+    !! treat a missing or mismatching manifest as an invalid chain.
+    type(string) function refine3D_trail_manifest_fname( state ) result(fname)
+        integer, intent(in) :: state
+        fname = refine3D_trail_rec_fbody(state)//TXT_EXT
+    end function refine3D_trail_manifest_fname
 
     type(string) function refine3D_reproj_model_fname( half ) result(fname)
         character(len=*), intent(in) :: half

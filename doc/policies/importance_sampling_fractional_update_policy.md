@@ -317,14 +317,23 @@ particle set is already fixed before they run.
 Classes with no active updated particles keep a zero realized fraction. Classes
 with full sampled participation replace previous sums.
 
-3D volume assembly consumes realized state-local update fractions for trailing
-in the accumulator domain, mirroring the 2D scheme. The persistent per-state
-chain (`trailrec_stateNN_{even,odd}` plus rho files) holds blended,
-unregularized e/o Fourier sums and sampling densities:
+3D volume assembly performs trailing in the accumulator domain, mirroring the
+2D scheme. The persistent per-state chain (`trailrec_stateNN_{even,odd}` plus
+rho files and a `trailrec_stateNN.txt` manifest) holds blended, unregularized
+e/o Fourier sums and sampling densities at full-dataset sampling mass. Two
+fractions govern the blend:
 
-- previous chain contribution: sums and rho scaled by
-  `1 - update_frac_trail_rec(state)`
-- current contribution: this iteration's partial sums and rho at full weight
+- `f` — the realized state-local fraction that produced the current partials
+  (`get_state_update_fracs`); always computed
+- `u` — the applied map-update weight; equals `f` unless a single-state
+  `ufrac_trec` override is provided
+
+The recurrence keeps the chain at full mass `D` and makes `u` the restored
+current-map coefficient, preserving the historical `ufrac_trec` meaning:
+
+- current contribution: partial sums and rho scaled by `u / f`
+  (mass `(u/f) * f * D = u * D`)
+- previous chain contribution: sums and rho scaled by `1 - u`
 - a single sampling-density correction after the blend restores the trailed
   halves, so each Fourier component is weighted by its accumulated sampling
   density; the FSC is estimated post-blend and describes the on-disk artifact
@@ -332,11 +341,23 @@ unregularized e/o Fourier sums and sampling densities:
 The chain is written before restoration (regularization mutates rho in place).
 When the chain does not exist yet, volassemble bootstraps: it uses the legacy
 previous-halfmap volume-domain blend for that iteration's outputs and seeds the
-chain with the current sums. Stage-boundary full reconstructions seed the chain
-at full-dataset weight through the internal `trail_seed` handshake, but only
-when the consuming stage actually trails. Smaller previous chain grids are
-zero-padded on read (downsampling ramp); a larger previous grid discards the
-chain and re-seeds.
+chain with the current partials scaled by `1/f`, so the stored chain carries
+full-dataset mass and the next iteration's effective update weight is the
+requested fraction (an unnormalized fractional seed would make a 10 percent
+request act like a ~53 percent update). Stage-boundary full reconstructions
+seed the chain at full-dataset weight through the internal `trail_seed`
+handshake, but only when the consuming stage actually trails.
+
+The four accumulator files plus manifest form one artifact set. The manifest is
+deleted before and rewritten after the data files with per-component byte
+sizes, generation counter, and provenance (box, sampling, particle population,
+state layout), so interrupted writes never validate. Readers accept a chain
+only when the manifest parses, provenance matches the current project, every
+component size matches, and the grid is not larger than the current one with
+the same physical extent; smaller grids are zero-padded on read (downsampling
+ramp). Any validation failure discards the complete set and re-seeds.
+Cross-directory continuation carries chains over as complete sets only,
+manifest last.
 
 Neither class-average restoration nor volume assembly should make new particle
 sampling decisions. If a restoration or assembly change requires a different
