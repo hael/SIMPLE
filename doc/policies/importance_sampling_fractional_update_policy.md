@@ -317,10 +317,26 @@ particle set is already fixed before they run.
 Classes with no active updated particles keep a zero realized fraction. Classes
 with full sampled participation replace previous sums.
 
-3D volume assembly consumes realized state-local update fractions for trailing:
+3D volume assembly consumes realized state-local update fractions for trailing
+in the accumulator domain, mirroring the 2D scheme. The persistent per-state
+chain (`trailrec_stateNN_{even,odd}` plus rho files) holds blended,
+unregularized e/o Fourier sums and sampling densities:
 
-- previous state-volume contribution: `1 - update_frac_trail_rec(state)`
-- current state-volume contribution: `update_frac_trail_rec(state)`
+- previous chain contribution: sums and rho scaled by
+  `1 - update_frac_trail_rec(state)`
+- current contribution: this iteration's partial sums and rho at full weight
+- a single sampling-density correction after the blend restores the trailed
+  halves, so each Fourier component is weighted by its accumulated sampling
+  density; the FSC is estimated post-blend and describes the on-disk artifact
+
+The chain is written before restoration (regularization mutates rho in place).
+When the chain does not exist yet, volassemble bootstraps: it uses the legacy
+previous-halfmap volume-domain blend for that iteration's outputs and seeds the
+chain with the current sums. Stage-boundary full reconstructions seed the chain
+at full-dataset weight through the internal `trail_seed` handshake, but only
+when the consuming stage actually trails. Smaller previous chain grids are
+zero-padded on read (downsampling ramp); a larger previous grid discards the
+chain and re-seeds.
 
 Neither class-average restoration nor volume assembly should make new particle
 sampling decisions. If a restoration or assembly change requires a different

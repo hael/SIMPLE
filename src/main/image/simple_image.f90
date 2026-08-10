@@ -91,6 +91,7 @@ contains
     procedure, private :: add_workshare_1, add_workshare_2
     generic            :: add_workshare => add_workshare_1, add_workshare_2
     procedure          :: sum_reduce_mats
+    procedure          :: scale_mats
     procedure, private :: subtr_1, subtr_2, subtr_3, subtr_4
     generic            :: subtr => subtr_1, subtr_2, subtr_3, subtr_4
     procedure, private :: div_1, div_2, div_3, div_4
@@ -651,6 +652,12 @@ interface
         real(kind=c_float), intent(inout) :: rho(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         real(kind=c_float), intent(in)    :: rho1(self%array_shape(1),self%array_shape(2),self%array_shape(3))
     end subroutine sum_reduce_mats
+
+    module subroutine scale_mats( self, rho, w )
+        class(image),       intent(inout) :: self
+        real(kind=c_float), intent(inout) :: rho(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        real,               intent(in)    :: w
+    end subroutine scale_mats
 
     !--- subtr_* ---!
     module subroutine subtr_1( self, self_to_subtr, w )

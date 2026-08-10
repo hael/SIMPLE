@@ -557,9 +557,16 @@ contains
         type(cmdline)     :: cline_rec
         integer           :: state
         real              :: lp_snapshot
-        logical           :: have_even_stage, have_odd_stage, l_current_sample_only
+        logical           :: have_even_stage, have_odd_stage, l_current_sample_only, l_seed_trail_chain
         l_current_sample_only = .false.
         if( present(current_sample_only) ) l_current_sample_only = current_sample_only
+        ! Seed the trailing accumulator chain only when the stage this boundary
+        ! feeds actually trails (its refine3D cline is already configured);
+        ! seeding earlier would park stale full-weight alignments in the chain.
+        l_seed_trail_chain = .false.
+        if( cline_refine3D%defined('trail_rec') )then
+            l_seed_trail_chain = cline_refine3D%get_carg('trail_rec') .eq. 'yes'
+        endif
         ! Reconstruction
         pgrp = trim(params%pgrp)
         if( istage <= abinitio_symsrch_stage() ) pgrp = trim(params%pgrp_start)
@@ -583,6 +590,10 @@ contains
             endif
         else
             call cline_rec%delete('update_frac')
+            ! A full stage-boundary reconstruction is the producer of the
+            ! trailing accumulator chain: seed it at full-dataset weight so the
+            ! consuming trail_rec stage starts from complete blended statistics.
+            if( l_seed_trail_chain ) call cline_rec%set('trail_seed', 'yes')
         endif
         call strip_refine3D_planning_keys(cline_rec)
         call xrec3D%execute(cline_rec)

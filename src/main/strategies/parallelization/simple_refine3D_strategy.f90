@@ -294,6 +294,32 @@ contains
         call lp_project%kill
     end subroutine refresh_matching_lp_from_project
 
+    !> Copy a previous run's trailing accumulator chains (blended e/o Fourier
+    !! sums + rho files) into the current directory. Missing files are not an
+    !! error: volassemble bootstraps a fresh chain from the previous halfmaps.
+    subroutine carry_over_trail_rec_chains( params, prev_refine_path )
+        type(parameters), intent(in) :: params
+        class(string),    intent(in) :: prev_refine_path
+        type(string) :: chain_file
+        integer      :: state, ihalf, ifile
+        character(len=4), parameter :: halves(2) = ['even', 'odd ']
+        do state = 1,params%nstates
+            do ihalf = 1,2
+                do ifile = 1,2
+                    if( ifile == 1 )then
+                        chain_file = refine3D_trail_rec_fname(state, trim(halves(ihalf)))
+                    else
+                        chain_file = refine3D_trail_rho_fname(state, trim(halves(ihalf)))
+                    endif
+                    if( file_exists(prev_refine_path//chain_file) )then
+                        call simple_copy_file(prev_refine_path//chain_file, chain_file)
+                    endif
+                enddo
+            enddo
+        enddo
+        call chain_file%kill
+    end subroutine carry_over_trail_rec_chains
+
     subroutine remove_partial_rec_files( params )
         type(parameters), intent(in) :: params
         type(string) :: fname
@@ -896,6 +922,10 @@ contains
                     fsc_file  = refine3D_fsc_fname(state)
                     call simple_copy_file(prev_refine_path//fsc_file, fsc_file)
                 end do
+                ! carry over the trailing accumulator chains when present, so a
+                ! continued run keeps its trailed statistics instead of
+                ! re-seeding from the previous halfmaps
+                if( params%l_trail_rec ) call carry_over_trail_rec_chains(params, prev_refine_path)
                 if( params%cc_objfun==OBJFUN_EUCLID )then
                     call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
                     nfiles = size(list)

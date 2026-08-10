@@ -306,6 +306,16 @@ contains
         !$omp end parallel workshare
     end subroutine sum_reduce_mats
 
+    module subroutine scale_mats( self, rho, w )
+        class(image),       intent(inout) :: self
+        real(kind=c_float), intent(inout) :: rho(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        real,               intent(in)    :: w
+        !$omp parallel workshare proc_bind(close)
+        self%cmat = w * self%cmat
+        rho       = w * rho
+        !$omp end parallel workshare
+    end subroutine scale_mats
+
     !===============================
     ! subtr_* family
     !===============================

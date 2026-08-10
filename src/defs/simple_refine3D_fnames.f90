@@ -24,6 +24,9 @@ public :: refine3D_partial_rec_fbody
 public :: refine3D_partial_rec_glob
 public :: refine3D_partial_rec_fname
 public :: refine3D_partial_rho_fname
+public :: refine3D_trail_rec_fbody
+public :: refine3D_trail_rec_fname
+public :: refine3D_trail_rho_fname
 public :: refine3D_reproj_model_fname
 public :: refine3D_bench_fname
 public :: refine3D_strategy_bench_fname
@@ -172,6 +175,27 @@ contains
         character(len=*), intent(in) :: half
         fname = string('rho_')//refine3D_partial_rec_fname(state, part, numlen, half)
     end function refine3D_partial_rho_fname
+
+    ! Persistent trailing-reconstruction accumulator chain (blended, unregularized
+    ! e/o Fourier sums + sampling densities). Deliberately does not contain the
+    ! VOL_FBODY stem so partial-reconstruction globs and cleanup never match it.
+    type(string) function refine3D_trail_rec_fbody( state ) result(fname)
+        integer, intent(in) :: state
+        fname = string('trailrec_state')//state_tag(state)
+    end function refine3D_trail_rec_fbody
+
+    type(string) function refine3D_trail_rec_fname( state, half ) result(fname)
+        integer,          intent(in) :: state
+        character(len=*), intent(in) :: half
+        fname = refine3D_trail_rec_fbody(state)//half_suffix(half)
+        fname = fname//MRC_EXT
+    end function refine3D_trail_rec_fname
+
+    type(string) function refine3D_trail_rho_fname( state, half ) result(fname)
+        integer,          intent(in) :: state
+        character(len=*), intent(in) :: half
+        fname = string('rho_')//refine3D_trail_rec_fname(state, half)
+    end function refine3D_trail_rho_fname
 
     type(string) function refine3D_reproj_model_fname( half ) result(fname)
         character(len=*), intent(in) :: half

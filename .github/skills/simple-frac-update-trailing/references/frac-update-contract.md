@@ -51,29 +51,57 @@ the stack to lower peak memory unless the performance policy explicitly changes.
 
 ## Assembly and Trailing Reconstruction
 
-`simple_commanders_rec_distr.f90::exec_cartesian_assembly` owns the current volume assembly path:
+`simple_commanders_rec_distr.f90::exec_volassemble` owns the current volume assembly path:
 
 - It reduces partial reconstructions.
-- It computes FSC and sampling-density correction.
-- If `trail_rec=yes`, it requires previous even/odd volumes from the command line.
-- It computes `update_frac_trail_rec` from `ufrac_trec` if provided; otherwise from `get_update_frac`.
-- It blends current and previous even/odd volumes:
+- It computes `update_frac_trail_rec` from `ufrac_trec` if provided (single-state);
+  otherwise from realized per-state fractions (`get_state_update_fracs`).
+- If `trail_rec=yes`, trailing happens in the accumulator domain, mirroring 2D
+  class-average restoration. The previous artifact is the per-state chain
+  `trailrec_stateNN_{even,odd}.mrc` + `rho_*` files: blended, unregularized e/o
+  Fourier sums and sampling densities:
 
 ```text
-trailed_even = update_frac_trail_rec * current_even + (1 - update_frac_trail_rec) * previous_even
-trailed_odd  = update_frac_trail_rec * current_odd  + (1 - update_frac_trail_rec) * previous_odd
+trailed_sums_eo = current_partial_sums_eo + (1 - update_frac_trail_rec) * chain_sums_eo
+trailed_rho_eo  = current_partial_rho_eo  + (1 - update_frac_trail_rec) * chain_rho_eo
 ```
 
-The output halfmaps become the previous artifact for the next iteration or stage.
+- The blended accumulators are written back as the new chain BEFORE restoration,
+  because ML regularization adds 1/tau^2 to rho in place.
+- A single sampling-density correction after the blend restores the trailed
+  halves, so each Fourier component is weighted by its accumulated sampling
+  density. The FSC is estimated post-blend from the restored trailed halves and
+  describes the artifact written to disk; the merged volume and nonuniform-filter
+  inputs are derived from the same blended statistics.
+- Bootstrap (chain absent): previous even/odd halfmaps from the command line are
+  mandatory. That iteration keeps the legacy behavior — FSC prior from the
+  previous halfmaps and a volume-domain blend of the restored halves — while the
+  chain is seeded with the current sums. From the next iteration the chain path
+  is authoritative and the halfmap inputs are ignored.
+- Full-weight seeding: a stage-boundary full reconstruction writes the chain at
+  full-dataset weight when the internal `trail_seed=yes` cline handshake is set
+  (`simple_abinitio_utils.f90::calc_rec`, gated on the consuming stage's
+  `trail_rec`), so the consuming trailing stage starts from complete statistics
+  instead of warming up.
+- Continued runs from another directory carry the chain files over alongside the
+  FSCs (`simple_refine3D_strategy.f90::carry_over_trail_rec_chains`).
+
+The chain files become the previous artifact for the next iteration or stage.
+Their names deliberately avoid the `recvol_state` stem so partial-reconstruction
+globs and cleanup never match them.
 
 ## Downsampling Compatibility
 
-`simple_reconstructor_eo%read_eos_parallel_io` is the current previous-halfmap compatibility mechanism:
+`simple_reconstructor_eo%read_eos_parallel_io` is the previous-artifact
+compatibility mechanism, used for both partial reconstructions and the trailing
+accumulator chain:
 
 - It requires previous MRC and rho files for both even and odd halves.
 - When `l_update_frac` is active and previous dimensions are smaller than current
-  dimensions, it pads with zeros.
-- It rejects previous dimensions larger than the current dimensions.
+  dimensions, it pads with zeros (the abinitio autoscale ramp).
+- It rejects previous dimensions larger than the current dimensions. For the
+  trailing chain, `trail_chain_available` checks dimensions before the read and
+  discards + re-seeds a larger chain instead of failing the run.
 
 This is a producer/reader contract for previous artifacts, not a license to
 invent a new fallback representation.

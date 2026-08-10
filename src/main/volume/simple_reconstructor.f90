@@ -36,6 +36,7 @@ type, extends(image) :: reconstructor
     procedure          :: reset
     procedure          :: reset_exp
     procedure          :: apply_weight
+    procedure          :: apply_weight_sums
     procedure          :: set_sh_lim
     procedure          :: pad_with_zeros
     ! GETTERS
@@ -142,6 +143,14 @@ contains
             !$omp end parallel workshare
         endif
     end subroutine apply_weight
+
+    ! Multiply the non-expanded accumulator (Fourier sums & sampling density) by
+    ! a scalar; used to decay the persistent trailing-reconstruction chain
+    subroutine apply_weight_sums( self, w )
+        class(reconstructor), intent(inout) :: self
+        real,                 intent(in)    :: w
+        call self%scale_mats(self%rho, w)
+    end subroutine apply_weight_sums
 
     subroutine set_sh_lim(self, sh_lim)
         class(reconstructor), intent(inout) :: self !< this instance

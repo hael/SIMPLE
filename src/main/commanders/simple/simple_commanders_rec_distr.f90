@@ -2,7 +2,8 @@ module simple_commanders_rec_distr
 use simple_commanders_api
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolution_txt_fbody, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fname, refine3D_fsc_fname, &
-    &refine3D_volassemble_bench_fname
+    &refine3D_volassemble_bench_fname, refine3D_trail_rec_fbody, refine3D_trail_rec_fname, &
+    &refine3D_trail_rho_fname
 implicit none
 private
 public :: commander_volassemble
@@ -18,6 +19,7 @@ type :: restore_timings_t
     real(timer_int_kind) :: sum_eos                        = 0.
     real(timer_int_kind) :: restore_eos_and_write_fsc      = 0.
     real(timer_int_kind) :: restore_merged_volume          = 0.
+    real(timer_int_kind) :: trail_blend_accums             = 0.
     real(timer_int_kind) :: trail_restored_halves          = 0.
 end type restore_timings_t
 
@@ -47,13 +49,24 @@ contains
         real,                   intent(out)   :: res05, res0143
         type(restore_timings_t), intent(inout) :: timings
         type(string) :: volname_prev, volname_prev_even, volname_prev_odd
-        type(string) :: fsc_txt_file
+        type(string) :: fsc_txt_file, trail_fbody
         real, allocatable :: fsc(:)
         real    :: weight_prev
         integer :: find4eoavg, ldim(3)
+        logical :: l_trail_chain
         integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos, t_trail
+        integer(timer_int_kind) :: t_trail_blend
         call reduce_partials()
         call set_state_filenames()
+        ! Trailing happens in the accumulator domain: the persistent chain of
+        ! e/o Fourier sums + sampling densities is decayed by (1 - update
+        ! fraction) and the current partial sums are added, so every Fourier
+        ! component is weighted by its accumulated sampling density. All
+        ! downstream restoration (FSC, halfmaps, merged volume, nonuniform
+        ! filter inputs) then consumes the blended statistics. Only when the
+        ! chain does not exist yet (bootstrap) do we fall back to the legacy
+        ! previous-halfmap volume blend below, while seeding the chain.
+        call blend_trailing_accumulators()
         call sum_eos_before_density_correction_if_needed()
         call restore_eos_and_write_fsc()
         call sum_eos_after_density_correction_if_needed()
@@ -87,6 +100,78 @@ contains
             eonames(2) = refine3D_state_halfvol_fname(state, 'odd')
         end subroutine set_state_filenames
 
+        subroutine blend_trailing_accumulators()
+            l_trail_chain = .false.
+            if( .not. params%l_trail_rec )then
+                ! Full-reconstruction producer contract: a stage-boundary
+                ! reconstruct3D can seed the chain with full-dataset weight via
+                ! the internal trail_seed handshake, so the consuming trailing
+                ! stage starts from complete statistics instead of warming up.
+                if( cline%defined('trail_seed') )then
+                    if( cline%get_carg('trail_seed') .eq. 'yes' )then
+                        trail_fbody = refine3D_trail_rec_fbody(state)
+                        call build%eorecvol%write_eos(trail_fbody)
+                        write(logfhandle,'(A,I0)') &
+                            &'>>> VOLASSEMBLE: WROTE FULL-WEIGHT TRAILING CHAIN SEED, STATE ', state
+                    endif
+                endif
+                return
+            endif
+            trail_fbody   = refine3D_trail_rec_fbody(state)
+            l_trail_chain = trail_chain_available()
+            weight_prev   = 1.0 - update_frac_trail_rec
+            if( l_trail_chain .and. weight_prev > 0.01 )then
+                if( L_BENCH_GLOB ) t_trail_blend = tic()
+                call eorecvol_read%read_eos(trail_fbody)
+                call eorecvol_read%apply_weight_sums(weight_prev)
+                call build%eorecvol%sum_reduce(eorecvol_read)
+                write(logfhandle,'(A,I0,A,F8.4)') &
+                    &'>>> VOLASSEMBLE: TRAILING ACCUMULATOR BLEND, STATE ', state, &
+                    &', PREVIOUS-CHAIN WEIGHT ', weight_prev
+                if( L_BENCH_GLOB ) timings%trail_blend_accums = &
+                    timings%trail_blend_accums + toc(t_trail_blend)
+            else if( .not. l_trail_chain )then
+                write(logfhandle,'(A,I0,A)') &
+                    &'>>> VOLASSEMBLE: SEEDING TRAILING ACCUMULATOR CHAIN, STATE ', state, &
+                    &'; USING LEGACY PREVIOUS-HALFMAP BLEND THIS ITERATION'
+            endif
+            ! Persist the blended, unregularized accumulators as the previous
+            ! artifact for the next update. Must happen before restoration,
+            ! which adds regularization terms to rho in place.
+            call build%eorecvol%write_eos(trail_fbody)
+        end subroutine blend_trailing_accumulators
+
+        !> The chain is usable when all four accumulator files exist and their
+        !! grid is not larger than the current one; smaller previous grids are
+        !! zero-padded by the reader (downsampling ramp). A larger previous grid
+        !! means the representation shrank: discard the chain and re-seed
+        !! instead of failing the run.
+        logical function trail_chain_available() result( l_avail )
+            type(string) :: chain_files(4)
+            integer      :: prev_ldim(3), ifile, dummy
+            chain_files(1) = refine3D_trail_rec_fname(state, 'even')
+            chain_files(2) = refine3D_trail_rho_fname(state, 'even')
+            chain_files(3) = refine3D_trail_rec_fname(state, 'odd')
+            chain_files(4) = refine3D_trail_rho_fname(state, 'odd')
+            l_avail = .true.
+            do ifile = 1, 4
+                if( .not. file_exists(chain_files(ifile)) ) l_avail = .false.
+            enddo
+            if( l_avail )then
+                call find_ldim_nptcls(chain_files(1), prev_ldim, dummy)
+                if( prev_ldim(1) > params%box_crop )then
+                    THROW_WARN('trailing accumulator chain has larger dimensions than current reconstruction; discarding chain')
+                    do ifile = 1, 4
+                        call del_file(chain_files(ifile))
+                    enddo
+                    l_avail = .false.
+                endif
+            endif
+            do ifile = 1, 4
+                call chain_files(ifile)%kill
+            enddo
+        end function trail_chain_available
+
         subroutine sum_eos_before_density_correction_if_needed()
             if( params%l_ml_reg ) return
             if( L_BENCH_GLOB ) t_sum_eos = tic()
@@ -98,7 +183,10 @@ contains
             use simple_fsc, only: fsc_area_score_result
             type(fsc_area_score_result) :: cones_fsc
             if( L_BENCH_GLOB ) t_restore_eos = tic()
-            if( params%l_trail_rec )then
+            if( params%l_trail_rec .and. .not. l_trail_chain )then
+                ! Bootstrap iteration: the chain has no information yet, so the
+                ! previous halfmaps provide the FSC prior for regularization,
+                ! exactly as the legacy volume-domain trailing did.
                 call read_previous_halfmaps()
                 if( allocated(fsc) ) deallocate(fsc)
                 if( params%conical_fsc == 'yes' )then
@@ -111,6 +199,9 @@ contains
                     call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc_in=fsc)
                 endif
             else
+                ! With an accumulator chain the blended sums already contain the
+                ! trailed statistics, so the FSC is estimated post-blend from
+                ! the restored halves and describes the artifact written to disk.
                 call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
             endif
             fsc_txt_file = resolve_fsc_txt_fname()
@@ -203,8 +294,13 @@ contains
                 timings%restore_merged_volume + toc(t_restore_merged)
         end subroutine restore_merged_volume
 
+        !> Legacy volume-domain blend, retained ONLY for the bootstrap iteration
+        !! that seeds the accumulator chain: it keeps the output halves anchored
+        !! to the previous model exactly as before. Chain iterations never enter
+        !! here — their halves, merged volume and NU inputs are already trailed.
         subroutine trail_restored_halves_if_needed()
             if( .not. params%l_trail_rec ) return
+            if( l_trail_chain ) return
             if( update_frac_trail_rec >= 0.99 ) return
             if( L_BENCH_GLOB ) t_trail = tic()
             weight_prev = 1. - update_frac_trail_rec
@@ -246,6 +342,7 @@ contains
             call vol_prev_even%kill
             call vol_prev_odd%kill
             call fsc_txt_file%kill
+            call trail_fbody%kill
             call volname_prev%kill
             call volname_prev_even%kill
             call volname_prev_odd%kill
@@ -293,7 +390,7 @@ contains
         integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_gridcorr, t_upd_proj, t_cleanup
         real(timer_int_kind)          :: rt_reduce_partials, rt_sum_eos
         real(timer_int_kind)          :: rt_restore_eos_and_write_fsc, rt_restore_merged_volume
-        real(timer_int_kind)          :: rt_trail_restored_halves
+        real(timer_int_kind)          :: rt_trail_blend_accums, rt_trail_restored_halves
         real(timer_int_kind)          :: rt_nu_envmask, rt_nonuniform_filter, rt_tot
         real(timer_int_kind)          :: rt_init_context, rt_trail_frac, rt_gridcorr, rt_upd_proj, rt_cleanup
         call initialize_bench_timers()
@@ -330,6 +427,7 @@ contains
             rt_sum_eos                   = 0.
             rt_restore_eos_and_write_fsc = 0.
             rt_restore_merged_volume     = 0.
+            rt_trail_blend_accums        = 0.
             rt_trail_restored_halves     = 0.
             rt_nu_envmask                = 0.
             rt_nonuniform_filter         = 0.
@@ -724,6 +822,7 @@ contains
             rt_sum_eos                   = restore_timings%sum_eos
             rt_restore_eos_and_write_fsc = restore_timings%restore_eos_and_write_fsc
             rt_restore_merged_volume     = restore_timings%restore_merged_volume
+            rt_trail_blend_accums        = restore_timings%trail_blend_accums
             rt_trail_restored_halves     = restore_timings%trail_restored_halves
         end subroutine collect_restore_timings
 
@@ -840,6 +939,7 @@ contains
             write(fnr,'(a,1x,f0.2)') 'volassemble restore_eos_and_write_fsc :', &
                 rt_restore_eos_and_write_fsc
             write(fnr,'(a,1x,f0.2)') 'volassemble restore_merged_volume     :', rt_restore_merged_volume
+            write(fnr,'(a,1x,f0.2)') 'volassemble trail_blend_accums        :', rt_trail_blend_accums
             write(fnr,'(a,1x,f0.2)') 'volassemble trail_restored_halves     :', rt_trail_restored_halves
             write(fnr,'(a,1x,f0.2)') 'volassemble nu_evidence_envelope      :', rt_nu_envmask
             write(fnr,'(a,1x,f0.2)') 'volassemble nonuniform_filter         :', rt_nonuniform_filter
@@ -851,7 +951,8 @@ contains
             write(fnr,'(a,1x,f0.2)') 'volassemble total time                :', rt_tot
             write(fnr,'(a,1x,f0.2)') 'volassemble % accounted for           :', &
                 &((rt_reduce_partials + rt_sum_eos + rt_restore_eos_and_write_fsc +               &
-                &  rt_restore_merged_volume + rt_trail_restored_halves + rt_nonuniform_filter +   &
+                &  rt_restore_merged_volume + rt_trail_blend_accums + rt_trail_restored_halves +  &
+                &  rt_nonuniform_filter +                                                         &
                 &  rt_init_context + rt_trail_frac + rt_gridcorr + rt_upd_proj + rt_cleanup)      &
                 & / rt_tot) * 100.
             call fclose(fnr)

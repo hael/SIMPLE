@@ -48,13 +48,26 @@ Then inspect the current code in this order:
   that re-reads stacks to reduce peak memory; that is a workflow-policy change.
 - The selected subset is represented by `sampled`; persistent coverage is
   represented by `updatecnt`.
-- For `trail_rec=yes`, the previous even/odd artifact is mandatory. The current
-  update is blended with that previous artifact using the realized update
-  fraction, or `ufrac_trec` when explicitly provided.
+- For `trail_rec=yes`, the previous artifact is the per-state accumulator chain
+  (`trailrec_stateNN_{even,odd}` + rho files): blended, unregularized e/o
+  Fourier sums and sampling densities. The chain is decayed by one minus the
+  realized update fraction (or `ufrac_trec` when explicitly provided), the
+  current partial sums are added at full weight, and a single restoration after
+  the blend produces the trailed halves; the FSC is estimated post-blend.
+- The chain is written before restoration, because regularization mutates rho
+  in place. Its filenames deliberately avoid the `recvol_state` stem so
+  partial-reconstruction globs and cleanup never match it.
+- When the chain does not exist yet, volassemble bootstraps: the previous
+  even/odd halfmaps are mandatory, that iteration's outputs use the legacy
+  volume-domain blend, and the chain is seeded with the current sums.
+  Stage-boundary full reconstructions seed the chain at full-dataset weight via
+  the internal `trail_seed` cline handshake, gated on the consuming stage's
+  `trail_rec` so early boundaries cannot park stale alignments in the chain.
 - Downsampling compatibility is handled by the previous-artifact reader/producer
   contract. `reconstructor_eo%read_eos_parallel_io` pads previous smaller
   halfmaps/rhos when `l_update_frac` is active and rejects previous larger
-  dimensions.
+  dimensions. For the trailing chain, a larger previous grid is discarded and
+  re-seeded instead of failing the run.
 - When a stage boundary changes the next consumer's representation size, the
   prior stage must write the previous artifact in the next consumer's
   representation, not merely in its own search representation.

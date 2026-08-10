@@ -40,6 +40,7 @@ type :: reconstructor_eo
     procedure, private :: reset_odd
     procedure          :: reset_sum
     procedure          :: apply_weight
+    procedure          :: apply_weight_sums
     procedure          :: set_sh_lim
     procedure          :: set_fsc
     ! GETTERS
@@ -183,6 +184,15 @@ contains
         call self%even%apply_weight(w)
         call self%odd%apply_weight(w)
     end subroutine apply_weight
+
+    !>  \brief  scales the non-expanded even/odd Fourier sums and sampling
+    !!          densities; used to decay the trailing-reconstruction chain
+    subroutine apply_weight_sums( self, w )
+        class(reconstructor_eo), intent(inout) :: self
+        real,                    intent(in)    :: w
+        call self%even%apply_weight_sums(w)
+        call self%odd%apply_weight_sums(w)
+    end subroutine apply_weight_sums
 
     subroutine set_sh_lim(self, sh_lim)
         class(reconstructor_eo), intent(inout) :: self
