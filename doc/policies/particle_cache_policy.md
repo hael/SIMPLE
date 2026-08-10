@@ -93,12 +93,14 @@ so a dying worker cannot delete the cache under the other ranks or a
 resubmitted part. Deletion is key-file-first, so a partially completed
 cleanup can never leave a cache that still validates.
 
-`abinitio3D` changes `box_crop` per stage: each stage's refine3D child
-rebuilds once at its stage boundary, the ownership handoff deletes the
-previous stage's files, and stages that decline the cache (crop at full box,
-over budget) release the prior stage's files immediately. The user's
-`cache=yes` request is re-stamped onto the stage command line by the stage
-controller, so each stage evaluates eligibility independently.
+Cache-enabled `abinitio3D` uses the final active downscaling-ladder
+`box_crop` for every refine3D stage. The stable key lets the owner fast path
+reuse one cache throughout all eligible stages. Stage low-pass limits still
+follow the ladder, while `cache=no` retains the stage-specific crop schedule.
+The user's `cache=yes` request is re-stamped onto every stage command line, so
+a stage-local fallback does not permanently disable later stages. A stage that
+declines the cache releases its files; a later eligible stage may rebuild the
+same final-crop cache.
 
 Per-iteration `prob_align` calls hit an ownership fast path in
 `ptcl_cache_ensure` (same owned key name, key file exists) and skip the full
@@ -141,10 +143,10 @@ The cache is refused, uniformly and at every decision level (`in_use`,
   Correctness is preserved (a rerun validates or rebuilds), and a rerun in
   the same execution directory reclaims the orphan, but a run in a fresh
   directory strands the old files in `cache_dir` until manually removed.
-- **Per-stage rebuild cost in `abinitio3D`.** Every stage boundary with a new
-  `box_crop` pays one sequential full-size pass over the active particles.
-  Long middle stages amortize this easily; short late stages with crop
-  ratios near 1 may not.
+- **Fixed-crop cost in cache-enabled `abinitio3D`.** Early stages use the
+  final ladder crop instead of their smaller stage-local crops. This increases
+  early-stage cache size and matching work, but avoids a sequential full-size
+  cache rewrite at every crop transition. Uncached runs keep stage-local crops.
 - **Node-local `cache_dir` on multi-node jobs.** The master builds on its own
   node; workers on other nodes then hard-stop with the uniformity error.
   Intentional, but there is no replicate-to-node-local mechanism.
@@ -161,14 +163,14 @@ The cache is refused, uniformly and at every decision level (`in_use`,
 - **Orphan scavenger**: sweep stale `ptcl_cache_*` file sets in `cache_dir`
   at `ptcl_cache_ensure` time (age- or dead-key-based) to reclaim
   signal-killed leftovers automatically.
-- **Benefit predicate**: `ensure` knows `nsel`; with `maxits`, `nsample`, and
-  the crop ratio it can compute predicted bytes saved versus build cost per
-  stage and decline uneconomical builds through the existing uniform
-  fallback.
-- **Nested-crop single cache**: Fourier cropping is nested (crop of a crop is
-  exact, since normalization precedes any crop), so one cache built at the
-  largest planned `box_crop` could serve every stage by truncating records
-  on read, eliminating per-stage rebuilds at the cost of a larger cache.
+- **Benefit predicate**: `ensure` knows `nsel`; with the planned iterations,
+  sampling schedule, and fixed crop ratio it can compute predicted bytes saved
+  versus the one-time build and larger early-stage matching cost, then decline
+  uneconomical caching through the existing uniform fallback.
+- **Stage-local reads from the final-crop cache**: Fourier cropping is nested
+  (normalization precedes any crop), so readers could truncate final-crop
+  records to each stage's planned crop. This would preserve one cache build
+  while recovering the smaller early-stage matching grids.
 - **UI promotion**: `cache`/`cache_dir` are `UI_VIS_DEVELOPER`; promote after
   validation, and consider defaulting `cache=yes` for `abinitio3D`.
 - **Denoised-source entries**: per-source cache entries would lift the

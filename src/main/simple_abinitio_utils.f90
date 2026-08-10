@@ -140,6 +140,22 @@ end interface
 
 contains
 
+    integer function abinitio_stage_box_crop( params, istage ) result(box_crop)
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        if( params%l_cache )then
+            box_crop = lpinfo(size(lpinfo))%box_crop
+        else
+            box_crop = lpinfo(istage)%box_crop
+        endif
+    end function abinitio_stage_box_crop
+
+    real function abinitio_stage_smpd_crop( params, istage ) result(smpd_crop)
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: istage
+        smpd_crop = real(params%box) / real(abinitio_stage_box_crop(params, istage)) * params%smpd
+    end function abinitio_stage_smpd_crop
+
     subroutine prep_class_command_lines( params, cline, projfile )
         class(parameters), intent(in) :: params
         class(cmdline),    intent(in) :: cline
@@ -235,7 +251,7 @@ contains
         real    :: smpd
         if( .not. file_exists(vol_name) ) return
         call find_ldim_nptcls(vol_name, ldim, nptcls)
-        smpd = params%smpd_crop
+        smpd = find_img_smpd(vol_name)
         if( present(projfile) )then
             call spproj%read_segment('out', projfile)
         else
@@ -437,9 +453,10 @@ contains
             vol_stage = add2fbody(vol_name, string(MRC_EXT),stage)
             vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
             if( file_exists(vol_name) )then
-                lp_snapshot = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
-                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp, istage)
-                call write_abinitio_lowpass_snapshot(vol_name, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
+                lp_snapshot = abinitio_state_fsc_lowpass(state, abinitio_stage_box_crop(params, istage), &
+                    &abinitio_stage_smpd_crop(params, istage), lpinfo(istage)%lp, istage)
+                call write_abinitio_lowpass_snapshot(vol_name, lp_snapshot, vol_lp_stage, &
+                    &abinitio_stage_smpd_crop(params, istage))
             endif
         enddo
         call vol_stage%kill
@@ -472,8 +489,8 @@ contains
                 write(logfhandle,'(A)') '>>> MAP SYMMETRIZATION'
             endif
             write(logfhandle,'(A)') '>>>'
-            call cline_symmap%set('smpd', lpinfo(istage)%smpd_crop)
-            call cline_symmap%set('box',  lpinfo(istage)%box_crop)
+            call cline_symmap%set('smpd', abinitio_stage_smpd_crop(params, istage))
+            call cline_symmap%set('box',  abinitio_stage_box_crop(params, istage))
             call cline_symmap%set('lp', lpsym)
             do state = 1,params%nstates
                 vol_iter = refine3D_state_vol_fname(state)
@@ -518,9 +535,10 @@ contains
                 vol_sym      = refine3D_state_vol_fname(state)
                 vol_stage    = add2fbody(vol_sym, string(MRC_EXT), stage)
                 vol_lp_stage = add2fbody(vol_stage, MRC_EXT, LP_SUFFIX)
-                lp_snapshot  = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
-                    &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp, istage)
-                call write_abinitio_lowpass_snapshot(vol_sym, lp_snapshot, vol_lp_stage, lpinfo(istage)%smpd_crop)
+                lp_snapshot  = abinitio_state_fsc_lowpass(state, abinitio_stage_box_crop(params, istage), &
+                    &abinitio_stage_smpd_crop(params, istage), lpinfo(istage)%lp, istage)
+                call write_abinitio_lowpass_snapshot(vol_sym, lp_snapshot, vol_lp_stage, &
+                    &abinitio_stage_smpd_crop(params, istage))
                 call inject_refine3D_volume(params, state, vol_sym)
                 call vol_stage%kill
                 call vol_lp_stage%kill
@@ -550,7 +568,7 @@ contains
         call cline_rec%set('mkdir',     'no')
         call cline_rec%set('projfile',  projfile)
         call cline_rec%set('pgrp',      pgrp)
-        call cline_rec%set('box_crop',  lpinfo(istage)%box_crop)
+        call cline_rec%set('box_crop',  abinitio_stage_box_crop(params, istage))
         call cline_rec%set('trail_rec', 'no')
         call cline_rec%delete('sticky_class_sampling')
         if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
@@ -584,9 +602,10 @@ contains
             dest_main = tmpl//MRC_EXT
             call simple_rename(src, dest_main)
             vol_diag = add2fbody(dest_main, MRC_EXT, LP_SUFFIX)
-            lp_snapshot = abinitio_state_fsc_lowpass(state, lpinfo(istage)%box_crop, &
-                &lpinfo(istage)%smpd_crop, lpinfo(istage)%lp, istage)
-            call write_abinitio_lowpass_snapshot(dest_main, lp_snapshot, vol_diag, lpinfo(istage)%smpd_crop)
+            lp_snapshot = abinitio_state_fsc_lowpass(state, abinitio_stage_box_crop(params, istage), &
+                &abinitio_stage_smpd_crop(params, istage), lpinfo(istage)%lp, istage)
+            call write_abinitio_lowpass_snapshot(dest_main, lp_snapshot, vol_diag, &
+                &abinitio_stage_smpd_crop(params, istage))
             vol_even = refine3D_state_halfvol_fname(state, 'even')
             if( file_exists(vol_even) )then
                 dest = tmpl//'_even_unfil'//MRC_EXT

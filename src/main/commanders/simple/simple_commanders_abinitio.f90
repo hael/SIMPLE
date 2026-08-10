@@ -233,8 +233,9 @@ contains
             if( trim(params%multivol_mode).eq.'docked' .and. istage == split_stage )then
                 call randomize_states(params, work_proj, work_projfile, xrec3D, split_stage)
             endif
-            if( lpinfo(istage)%l_autoscale )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
+            if( cline_refine3D%get_iarg('box_crop') < params%box )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',&
+                    &cline_refine3D%get_iarg('box_crop')
             endif
             ! Probabilistic search
             call exec_refine3D(params, istage, xrefine3D)
@@ -790,7 +791,8 @@ contains
                 call normalize_input_volumes(params, cline_refine3D)
             else
                 ! create noise starting volume(s)
-                call generate_random_volumes(params, lpinfo(1)%box_crop, lpinfo(1)%smpd_crop, cline_refine3D)
+                call generate_random_volumes(params, abinitio_stage_box_crop(params, 1), &
+                    &abinitio_stage_smpd_crop(params, 1), cline_refine3D)
             endif
         else
             ! check that ptcl3D field is not virgin
@@ -892,8 +894,9 @@ contains
                     call calc_rec(params, params%projfile, xrec3D, split_stage, current_sample_only=.true.)
                 endif
             endif
-            if( lpinfo(istage)%l_autoscale )then
-                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',lpinfo(istage)%box_crop
+            if( cline_refine3D%get_iarg('box_crop') < params%box )then
+                write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',&
+                    &cline_refine3D%get_iarg('box_crop')
             endif
             ! Executing the refinement with the above settings
             write(logfhandle,'(A,I0)')'>>> ABINITIO3D ENTERING REFINE3D STAGE ', istage

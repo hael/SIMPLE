@@ -21,10 +21,10 @@
 ! ~379 KB at box=308.
 !
 ! abinitio2D holds box_crop fixed across all its stages, so one cache serves a
-! whole 2D run and there is nothing to invalidate between stages. abinitio3D
-! changes box_crop per stage, so its refine3D children rebuild once per stage
-! boundary and the ownership handoff in ptcl_cache_own deletes the previous
-! stage's files. The cache lives exactly as long as the run that owns it: the
+! whole 2D run and there is nothing to invalidate between stages. Cache-enabled
+! abinitio3D likewise uses the final (largest) crop in its downscaling ladder for
+! every stage, avoiding a cache rewrite at each stage boundary. The cache lives
+! exactly as long as the run that owns it: the
 ! process that builds (or adopts) it removes the files on normal exit and on
 ! hard exception, via the cache_cleanup_glob hook in simple_defs. Only
 ! SIGKILL-class deaths can leave files behind, and a rerun in the same execution
@@ -521,11 +521,9 @@ contains
     !!  that builds or adopts the cache, before the first byte is written, so that an
     !!  exception mid-build also sweeps the temporaries.
     !!
-    !!  A staged workflow (abinitio3D) re-owns once per stage with a stage-specific
-    !!  box_crop, so the names change under one process. The previous stage's cache
-    !!  is dead weight the moment a new one is owned -- no later stage can use a
-    !!  different crop -- so it is deleted at the handoff rather than left to
-    !!  accumulate until exit.
+    !!  If a staged workflow changes box_crop, the names change under one process.
+    !!  The previous stage's cache is dead weight the moment a new one is owned, so
+    !!  it is deleted at the handoff rather than left to accumulate until exit.
     subroutine ptcl_cache_own( params )
         class(parameters), intent(in) :: params
         type(string) :: newkey

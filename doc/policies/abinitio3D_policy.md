@@ -91,13 +91,24 @@ Stage policy includes:
 - staged automasking only from `AUTOMSK_STAGE`
 
 When the downscaled particle cache is requested (`cache=yes`), the stage
-controller re-stamps the user's request onto every emitted `refine3D` command
-line, so each stage evaluates cache eligibility independently against its own
-`box_crop` (an earlier stage's uniform fallback to `cache=no` must not
-permanently disable later stages). Each stage boundary with a new crop rebuilds
-the cache; the previous stage's files are deleted at the ownership handoff,
-and stages that decline the cache release the prior stage's files immediately.
-See [particle_cache_policy.md](particle_cache_policy.md) for the full cache
+controller uses the final active entry in the low-pass/downscaling ladder as
+`box_crop` for every emitted `refine3D` command. The stable crop keeps the cache
+key unchanged, so all eligible stages reuse one cache instead of rebuilding it
+at stage boundaries. Stage low-pass limits remain stage-specific. With
+`cache=no`, each stage retains its own cheaper crop from the ladder.
+
+The effective crop and its physically equivalent pixel size are shared by
+starting-volume generation, matcher reconstruction, split-stage reconstruction,
+symmetry-map commands, FSC diagnostics, low-pass snapshots, and project volume
+registration. This preserves `box * smpd == box_crop * smpd_crop` across every
+particle-to-volume handoff.
+
+The controller still re-stamps the user's cache request onto every child, so a
+stage-local uniform fallback does not permanently disable later stages. A stage
+that cannot use the cache releases it; a later eligible stage may rebuild it at
+the same final crop. If the final crop is the native box, the existing
+`box_crop >= box` eligibility rule disables the cache. See
+[particle_cache_policy.md](particle_cache_policy.md) for the full cache
 contract.
 
 ### Full-Sampling Switch
