@@ -271,32 +271,68 @@ contains
             if( cfg%refine.eq.'prob_neigh' )then
                 cfg%prob_neigh_mode = trim(params%prob_neigh_mode)
             endif
-        else if( istage == 1 )then
-            cfg%refine           = 'prob_neigh'
-            if( l_cavgs )then
-                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
-            else
-                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_STAGE1
-            endif
-        else if( istage <  PROB_REFINE_STAGE )then
-            cfg%refine           = 'prob_neigh'
-            cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
-        else if( istage < PROB_NEIGH_REFINE_STAGE )then
-            cfg%refine = 'prob'
         else
-            cfg%refine           = 'prob_neigh'
-            if( params%nstates > 1 )then
-                if( trim(params%multivol_mode).eq.'docked' )then
-                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_DOCKED
+            if( trim(params%multivol_mode).eq.'single' )then
+                if( istage == 1 )then
+                    cfg%refine = 'prob_neigh'
+                    if( l_cavgs )then
+                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
+                    else
+                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_STAGE1
+                    endif
+                else if( istage <  PROB_REFINE_STAGE )then
+                    cfg%refine = 'prob_neigh'
+                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
+                else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                    cfg%refine = 'prob'
                 else
+                    cfg%refine = 'prob_neigh'
+                    cfg%prob_neigh_mode = PROB_NEIGH_MODE_LATE
+                endif
+            else if( trim(params%multivol_mode).eq.'docked' )then
+                if( istage == 1 )then
+                    cfg%refine = 'prob_neigh'
+                    if( l_cavgs )then
+                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
+                    else
+                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_STAGE1
+                    endif
+                else if( istage <  PROB_REFINE_STAGE )then
+                    cfg%refine          = 'prob_neigh'
+                    cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
+                else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                    cfg%refine = 'prob'
+                else
+                    cfg%refine = 'prob_neigh'
+                    if( params%nstates > 1 )then
+                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_DOCKED
+                    else
+                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_LATE
+                    endif
+                endif
+            else if( trim(params%multivol_mode).eq.'independent' )then
+                if( istage < PROB_REFINE_STAGE )then
+                    if( l_cavgs )then
+                        cfg%refine = 'prob_neigh'
+                        if( istage == 1 )then
+                            cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
+                        else if( istage <  PROB_REFINE_STAGE )then
+                            cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
+                        endif
+                    else
+                        cfg%refine = 'shc'
+                        cfg%prob_neigh_mode = ''
+                    endif
+                else if( istage < PROB_NEIGH_REFINE_STAGE )then
+                    cfg%refine = 'prob'
+                else
+                    cfg%refine = 'prob_neigh'
                     cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
                 endif
-            else
-                cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
             endif
         endif
         if( docked_split_stage(params, istage) )then
-            cfg%refine           = 'prob_state'
+            cfg%refine = 'prob_state'
             cfg%prob_neigh_mode  = ''
         endif
     end subroutine set_refine3D_mode_policy
