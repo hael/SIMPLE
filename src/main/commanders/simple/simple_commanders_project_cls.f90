@@ -106,6 +106,7 @@ contains
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
         if( .not. cline%defined('greedy_sampling') ) call cline%set('greedy_sampling', 'yes')
         if( .not. cline%defined('ranked_parts')    ) call cline%set('ranked_parts',    'yes')
+        if( .not. cline%defined('prune')           ) call cline%set('prune',           'no')
         call params%new(cline, silent=.true.)
          ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)
@@ -171,6 +172,7 @@ contains
                 call spproj_part%os_ptcl3D%set_all('state', real(states_map))
                 ! map ptcl states to classes
                 call spproj_part%map_ptcls_state_to_cls
+                if( trim(params%prune).eq.'yes' ) call spproj_part%prune_particles
                 ! write project
                 call spproj_part%write(projfname)
                 ! destruct
@@ -188,6 +190,7 @@ contains
             call spproj%os_ptcl2D%set_all('state', real(states))
             call spproj%os_ptcl3D%set_all('state', real(states))
             call spproj%map_ptcls_state_to_cls
+            if( trim(params%prune).eq.'yes' ) call spproj%prune_particles
         endif
         ! final full write
         call spproj%write(params%projfile)

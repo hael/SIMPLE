@@ -402,6 +402,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call sample_classes%add_input(UI_PARM, 'frac_worst',      'num',    'Fraction of worst particles to sample from', 'Fraction of worst particles to sample from(0-1)', '{0.5}', .false., 0.5, &
         &visibility=UI_VIS_ADVANCED)
+        call sample_classes%add_input(UI_PARM, prune, &
+        &visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
