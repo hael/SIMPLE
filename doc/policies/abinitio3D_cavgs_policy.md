@@ -117,6 +117,10 @@ Each stage is configured through the shared ab initio stage controller with
 - `snr_noise_reg` is set from the stage controls
 - early Gaussian reference filtering remains available through stage policy
 
+For `multivol_mode=independent`, class-average stages 1 and 2 retain
+`refine=prob_neigh` with `prob_neigh_mode=shc`. They do not adopt the direct
+`refine=shc` startup used by particle-based independent `abinitio3D`.
+
 The docked split shares the particle `abinitio3D` search-mode policy: the split
 stage is emitted as `refine=prob_state`, and later docked multi-state
 neighborhood stages use `prob_neigh_mode=geom`. The class-average route does

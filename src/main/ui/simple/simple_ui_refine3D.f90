@@ -37,9 +37,7 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)                                        ! requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call automask%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '', &
-        &visibility=UI_VIS_STANDARD)
-        call automask%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '', &
+        call automask%add_input(UI_IMG, 'vol1', 'file', 'Volume',  'Volume',  'vol1.mrc file', .true., '', &
         &visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call automask%add_input(UI_PARM, smpd, &

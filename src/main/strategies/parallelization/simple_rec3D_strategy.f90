@@ -343,7 +343,7 @@ contains
             endif
             call find_ldim_nptcls(fname_vol, ldim, nptcls)
             smpd = params%smpd_crop
-            call postprocess_volume_from_files(fname_vol, fname_fsc, ldim(1), smpd, params_pp, cline)
+            call postprocess_volume_from_files(fname_vol, fname_fsc, ldim(1), smpd, params_pp, cline, state)
             call fname_vol%kill
             call fname_fsc%kill
         enddo

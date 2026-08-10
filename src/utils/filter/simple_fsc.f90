@@ -39,12 +39,12 @@ end type fsc_area_score_result
 contains
 
     ! calculate phase-randomized FSC according to Chen et al,JSB,2013
-    subroutine phase_rand_fsc(even, odd, envmask, state, n, fsc, fsc_t, fsc_n, fsc_u)
-        class(image),            intent(in)    :: even, odd
-        class(image),            intent(inout) :: envmask
-        integer,                 intent(in)    :: state, n
-        real, allocatable,       intent(out)   :: fsc(:), fsc_t(:), fsc_n(:)
-        real, allocatable, optional, intent(out) :: fsc_u(:)
+    subroutine phase_rand_fsc(even, odd, envmask, state, n, fsc, fsc_t, fsc_n, fsc_u )
+        class(image),                intent(in)    :: even, odd
+        class(image),                intent(inout) :: envmask
+        integer,                     intent(in)    :: state, n
+        real, allocatable,           intent(out)   :: fsc(:), fsc_t(:), fsc_n(:)
+        real, allocatable, optional, intent(out)   :: fsc_u(:)
         type(image) :: work_even, work_odd
         real, allocatable :: fsc_unmasked(:)
         real    :: lp_rand, smpd, denom
@@ -58,8 +58,6 @@ contains
         allocate(fsc(n), fsc_t(n), fsc_n(n), fsc_unmasked(n), source=0.)
         call work_even%copy(even)
         call work_odd%copy(odd)
-        call work_even%ifft()
-        call work_odd%ifft()
         ! The unmasked curve determines the randomization onset, as in the
         ! RELION solvent-correction policy.
         call work_even%fft()

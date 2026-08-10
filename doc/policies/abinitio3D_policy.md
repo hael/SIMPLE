@@ -75,9 +75,12 @@ Stage policy includes:
 - cropped box and sampling from the low-pass plan
 - stages 1 and 2 use the same `nspace=1000`
 - stage 1 keeps its low-pass limit but reuses stage 2 `box_crop` and `smpd_crop`
-- staged search mode: stage 1 `prob_neigh` with `prob_neigh_mode=snhc`,
-  stage 2 `prob_neigh` with `prob_neigh_mode=shc`, middle `prob`,
-  late `prob_neigh`
+- mode-specific staged search:
+  - `single` and `docked` particle runs use stage 1 `prob_neigh` with
+    `prob_neigh_mode=snhc`, stage 2 `prob_neigh` with
+    `prob_neigh_mode=shc`, middle `prob`, and late `prob_neigh`
+  - `independent` particle runs use direct `shc` in stages 1-2, `prob` in
+    stages 3-5, and `prob_neigh` in later user-enabled stages
 - `nspace_sub` for `prob_neigh`
 - staged point-group policy between `pgrp_start` and `pgrp`
 - staged translation limits
@@ -201,9 +204,12 @@ fresh particle starts only; `cavg_ini=yes`, `cavg_ini_ext=yes`, and user-supplie
 input volumes are already in the target symmetry frame before the parent
 particle workflow resumes. This mode is intended for severe heterogeneity where
 early inspection is more valuable than committing to a longer refinement
-immediately. Unless the user overrides them, the commander sets `nstages=5` and
-`lpstop=6.0 A`. Stage 5 is still in the `prob` phase; it does not enter
-`prob_neigh`, static NU filtering,
+immediately. Its particle stages 1 and 2 use direct `refine=shc` rather than
+the probabilistic-neighborhood startup used by `single` and `docked`; stages
+3-5 use `refine=prob`. Direct `abinitio3D_cavgs` initialization retains its
+own class-average search schedule. Unless the user overrides them, the
+commander sets `nstages=5` and `lpstop=6.0 A`. Stage 5 remains in `prob`; it
+does not enter `prob_neigh`, static NU filtering,
 independent-mode trailing reconstruction, or staged automasking. After stage 5,
 the workflow still runs the final original-sampling reconstruction so the run
 produces inspectable `rec_final_stateNN` volumes. To improve particle coverage

@@ -571,7 +571,8 @@ contains
 
     ! substracts median of background defined by an envelope mask (eg 0< <1)
     module subroutine zero_env_background( self, volmsk )
-        class(image), intent(inout) :: self, volmsk
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: volmsk
         real, allocatable :: vals(:)
         real              :: med
         integer           :: cnt, npix, npix_env, i,j,k

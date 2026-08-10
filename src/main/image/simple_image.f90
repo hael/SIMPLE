@@ -2299,7 +2299,8 @@ interface
     end subroutine zero_edgeavg
 
     module subroutine zero_env_background( self, volmsk )
-        class(image), intent(inout) :: self, volmsk
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: volmsk
     end subroutine zero_env_background
 
     module subroutine zero_neg( self )

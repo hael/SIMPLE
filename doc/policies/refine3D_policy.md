@@ -365,6 +365,9 @@ the strategy dispatches `volassemble`.
 - calculates FSC curves and state resolutions
 - applies conical FSC curves for directional ML regularization when
   `ml_reg=yes` and `conical_fsc=yes`; this is opt-in
+- calculates conical FSC and cFAR from copies using the active FSC mask: the
+  on-the-fly density envelope when `envfsc=yes`, otherwise the broad spherical
+  mask; phase-randomized radial FSC retains the original unmasked half-volumes
 - restores merged state volumes
 - derives the NU-evidence envelope from the completed accepted NU bank before
   unary storage is released

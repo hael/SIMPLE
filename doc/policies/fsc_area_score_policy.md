@@ -48,6 +48,17 @@ Masking follows the same broad policy as ordinary half-map FSC estimation:
 The maps are Fourier transformed after masking. No explicit FFT normalization
 is applied because the scale cancels in the FSC ratio.
 
+When cFAR is calculated during refinement volume assembly, masking follows the
+active radial FSC policy rather than the standalone `automsk` switch:
+
+- `envfsc=yes`: the on-the-fly density envelope generated from the merged
+  half-map is applied to both half-maps before conical FSC and cFAR calculation
+- `envfsc=no`: both half-maps receive the ordinary broad spherical FSC mask
+
+The density envelope used for cFAR is the same mask used by the masked and
+randomized-masked radial FSC calculations. The raw radial FSC that determines
+the phase-randomization onset remains genuinely unmasked.
+
 ## Direction sampling
 
 SIMPLE samples cone axes deterministically with a Fibonacci-sphere sequence.

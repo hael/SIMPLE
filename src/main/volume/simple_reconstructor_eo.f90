@@ -119,13 +119,13 @@ contains
         self%mag_correction = real(self%p_ptr %box) ! consistent with the current scheme
         self%ldim           = [self%box,self%box,self%box]
         ! create composites
-        call self%even%new(self%ldim, self%p_ptr %smpd)
+        call self%even%new(self%ldim, self%smpd)
         call self%even%alloc_rho(self%p_ptr, spproj, expand=l_expand)
         call self%even%set_ft(.true.)
-        call self%odd%new(self%ldim, self%p_ptr %smpd)
+        call self%odd%new(self%ldim, self%smpd)
         call self%odd%alloc_rho(self%p_ptr, spproj, expand=l_expand)
         call self%odd%set_ft(.true.)
-        call self%eosum%new(self%ldim, self%p_ptr %smpd)
+        call self%eosum%new(self%ldim, self%smpd)
         call self%eosum%alloc_rho(self%p_ptr, spproj, expand=.false.)
         ! set existence
         self%exists = .true.
@@ -489,7 +489,7 @@ contains
         integer,                                intent(out)   :: find4eoavg             !< Fourier index for eo averaging
         real, optional,                         intent(in)    :: fsc_in(self%filtsz)    !< inputted fsc
         class(fsc_area_score_result), optional, intent(inout) :: cones_in
-        type(image)                 :: even, odd
+        type(image)                 :: even, odd, volmsk
         type(fsc_area_score_result) :: cones_fsc
         complex,  allocatable :: cmat(:,:,:)
         real,     allocatable :: res(:)
@@ -509,7 +509,7 @@ contains
             l_have_fsc = .false.
         endif
         ! ML-regularization
-        if( self%p_ptr %l_ml_reg )then
+        if( self%p_ptr%l_ml_reg )then
             ! preprocessing for FSC calculation
             ! even
             cmat = self%even%get_cmat()
@@ -541,18 +541,18 @@ contains
                     call self%odd%add_invtausq2rho(self%fsc)
                 endif
             else
-                ! masking: try to load state-specific mask if automsk enabled
-                call apply_spherical_fsc_mask(self, even, odd)
-                ! calculate FSC
-                call even%fft()
-                call odd%fft()
-                call even%fsc(odd, self%fsc)
-                ! Calculate cFAR
-                call cones_fsc%new(even, 256, 20., 0.143, 1)
-                call even%conical_fsc(odd, cones_fsc%dirs, cones_fsc%cone_half_angle_deg, &
-                    &cones_fsc%min_count, cones_fsc%cfsc, cones_fsc%counts)
-                call cones_fsc%calc_fsc_area_score(even, odd, state=state)
-                self%cfar = cones_fsc%cfar
+                if( self%p_ptr%l_envfsc )then
+                    ! Density-envelope FSC and cFAR calculations use the same mask.
+                    call calc_env_fsc_optlp(self%p_ptr, even, odd, state, self%fsc, envmsk=volmsk)
+                    call calc_masked_cfar(self, even, odd, state, cones_fsc, envmsk=volmsk)
+                else
+                    ! Broad-spherical FSC and cFAR calculations use the same mask.
+                    call calc_masked_cfar(self, even, odd, state, cones_fsc)
+                    call apply_spherical_fsc_mask(self, even, odd)
+                    call even%fft
+                    call odd%fft
+                    call even%fsc(odd, self%fsc)
+                endif
                 ! Regularization
                 if( self%p_ptr%conical_fsc == 'yes' )then
                     call self%even%add_conical_invtausq2rho(cones_fsc)
@@ -604,17 +604,16 @@ contains
             call even%write(fname_even, del_if_exists=.true.)
             call odd%write(fname_odd,   del_if_exists=.true.)
             if( .not. l_have_fsc )then
-                ! masking: try to load state-specific mask if automask/envfsc enabled
-                call apply_spherical_fsc_mask(self, even, odd)
-                ! calculate FSC
-                call even%fft()
-                call odd%fft()
-                call even%fsc(odd, self%fsc)
-                call cones_fsc%new(even, 256, 20., 0.143, 1)
-                call even%conical_fsc(odd, cones_fsc%dirs, cones_fsc%cone_half_angle_deg, &
-                    &cones_fsc%min_count, cones_fsc%cfsc, cones_fsc%counts)
-                call cones_fsc%calc_fsc_area_score(even, odd, state=state)
-                self%cfar = cones_fsc%cfar
+                if( self%p_ptr%l_envfsc )then
+                    call calc_env_fsc_optlp(self%p_ptr, even, odd, state, self%fsc, envmsk=volmsk)
+                    call calc_masked_cfar(self, even, odd, state, cones_fsc, envmsk=volmsk)
+                else
+                    call calc_masked_cfar(self, even, odd, state, cones_fsc)
+                    call apply_spherical_fsc_mask(self, even, odd)
+                    call even%fft
+                    call odd%fft
+                    call even%fsc(odd, self%fsc)
+                endif
             endif
         endif
         ! save, get & print resolution
@@ -629,10 +628,72 @@ contains
         call even%kill
         call odd%kill
         call cones_fsc%kill
+        call volmsk%kill
     end subroutine sampl_dens_correct_eos
 
-    !> Apply the spherical FSC mask. Envelope-masked FSC is rejected in
-    !!  validate_parameter_consistency until its on-the-fly density masker exists.
+    subroutine calc_env_fsc_optlp( params, even, odd, state, fsc_corrected, envmsk )
+        class(parameters),     intent(in)    :: params
+        class(image),          intent(inout) :: even, odd
+        integer,               intent(in)    :: state
+        real,     allocatable, intent(inout) :: fsc_corrected(:)
+        class(image), optional,intent(inout) :: envmsk
+        real, allocatable :: fsc_t(:), fsc_n(:)
+        type(image)       :: mskvol
+        if( allocated(fsc_corrected) ) deallocate(fsc_corrected)
+        if( .not. params%l_envfsc ) return
+        call calc_density_envmask(params, even, odd, mskvol)
+        call mskvol%write(string('dens_envmask_state'//trim(adjustl(int2str_pad(state,2)))//MRC_EXT))
+        ! FSCs: phase-randomized & corrected
+        call phase_rand_fsc(even, odd, mskvol, state, even%get_filtsz(), fsc_corrected, fsc_t, fsc_n)
+        if( present(envmsk) ) call envmsk%copy(mskvol)
+        ! cleanup
+        deallocate(fsc_t, fsc_n)
+        call mskvol%kill
+    end subroutine calc_env_fsc_optlp
+
+    subroutine calc_density_envmask( params, even, odd, envmsk )
+        use simple_image_msk, only: image_msk
+        class(parameters), intent(in)    :: params
+        class(image),      intent(in)    :: even, odd
+        class(image),      intent(inout) :: envmsk
+        type(image)     :: merged
+        type(image_msk) :: mskvol
+        call merged%copy(even)
+        call merged%add(odd)
+        call merged%mul(0.5)
+        call mskvol%automask3D(params, merged, params%automsk.eq.'tight')
+        call envmsk%copy(mskvol)
+        call merged%kill
+        call mskvol%kill_bimg
+    end subroutine calc_density_envmask
+
+    subroutine calc_masked_cfar( self, even, odd, state, cones, envmsk )
+        class(reconstructor_eo),       intent(inout) :: self
+        class(image),                  intent(in)    :: even, odd
+        integer,                       intent(in)    :: state
+        class(fsc_area_score_result),  intent(inout) :: cones
+        class(image), optional,        intent(in)    :: envmsk
+        type(image) :: even_tmp, odd_tmp
+        call even_tmp%copy(even)
+        call odd_tmp%copy(odd)
+        call even_tmp%ifft
+        call odd_tmp%ifft
+        if( present(envmsk) )then
+            call even_tmp%zero_env_background(envmsk)
+            call odd_tmp%zero_env_background(envmsk)
+            call even_tmp%mul(envmsk)
+            call odd_tmp%mul(envmsk)
+        else
+            call apply_spherical_fsc_mask(self, even_tmp, odd_tmp)
+        endif
+        call cones%new(even_tmp, 256, 20., 0.143, 1)
+        call cones%calc_fsc_area_score(even_tmp, odd_tmp, state=state)
+        self%cfar = cones%cfar
+        call even_tmp%kill
+        call odd_tmp%kill
+    end subroutine calc_masked_cfar
+
+    !> Apply the broad spherical mask used when density-envelope FSC is disabled.
     subroutine apply_spherical_fsc_mask( self, even, odd )
         class(reconstructor_eo), intent(inout) :: self
         class(image),            intent(inout) :: even, odd
@@ -646,25 +707,36 @@ contains
         real, allocatable,                      intent(inout) :: fsc(:)
         integer,                                intent(in)    :: state
         class(fsc_area_score_result), optional, intent(inout) :: cones
-        type(image) :: even_tmp, odd_tmp
+        type(image) :: even_tmp, odd_tmp, envmsk
+        type(fsc_area_score_result) :: cones_local
         if( allocated(fsc)      ) deallocate(fsc)
         if( allocated(self%fsc) ) deallocate(self%fsc)
-        allocate(fsc(self%filtsz), source=0.)
-        ! create temporary e/o:s
         call even_tmp%copy(even)
         call odd_tmp%copy(odd)
-        ! mask temporary half maps for the ordinary FSC calculation
-        call apply_spherical_fsc_mask(self, even_tmp, odd_tmp)
-        ! calculate FSC
-        call even_tmp%fft()
-        call odd_tmp%fft()
-        call even_tmp%fsc(odd_tmp, fsc)
-        allocate(self%fsc(self%filtsz), source=fsc)
-        ! Conical FSCs
-        if( present(cones) )then
-            call cones%calc_fsc_area_score(even_tmp, odd_tmp, state=state)
-            self%cfar = cones%cfar
+        if( self%p_ptr%l_envfsc )then
+            call calc_env_fsc_optlp(self%p_ptr, even, odd, state, fsc, envmsk=envmsk)
+            if( present(cones) )then
+                call calc_masked_cfar(self, even, odd, state, cones, envmsk=envmsk)
+            else
+                call calc_masked_cfar(self, even, odd, state, cones_local, envmsk=envmsk)
+            endif
+            call envmsk%kill
+        else
+            allocate(fsc(self%filtsz), source=0.)
+            if( present(cones) )then
+                call calc_masked_cfar(self, even, odd, state, cones)
+            else
+                call calc_masked_cfar(self, even, odd, state, cones_local)
+                call cones_local%kill
+            endif
+            call even_tmp%ifft
+            call odd_tmp%ifft
+            call apply_spherical_fsc_mask(self, even_tmp, odd_tmp)
+            call even_tmp%fft
+            call odd_tmp%fft
+            call even_tmp%fsc(odd_tmp, fsc)
         endif
+        allocate(self%fsc(self%filtsz), source=fsc)
         ! cleanup
         call even_tmp%kill
         call odd_tmp%kill

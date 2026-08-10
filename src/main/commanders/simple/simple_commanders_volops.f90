@@ -291,18 +291,19 @@ contains
         call simple_end('**** SIMPLE_SHARPVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_sharpvol
 
-    subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline )
+    subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline, state )
         class(string),   intent(in)    :: fname_vol, fname_fsc
         integer,         intent(in)    :: box
         real,            intent(in)    :: smpd
         type(parameters),intent(inout) :: params
         class(cmdline),  intent(inout) :: cline
+        integer,         intent(in)    :: state
         real, allocatable :: fsc(:), optlp(:), res(:)
-        type(string)     :: fname_mirr, fname_pproc, fname_lp
-        type(image)      :: vol_bfac, vol_no_bfac
-        real    :: fsc0143, fsc05, lplim
-        integer :: ldim(3)
-        logical :: has_fsc
+        type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
+        type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk
+        real    :: fsc0143, fsc05, lplim, smpd_tmp
+        integer :: ldim(3), ldim_tmp(3), n
+        logical :: has_fsc, do_envfsc
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
@@ -315,7 +316,8 @@ contains
         call vol_bfac%new(ldim, smpd)
         call vol_bfac%read(fname_vol)
         ! check fsc filter & determine resolution
-        has_fsc = .false.        
+        has_fsc   = .false.
+        do_envfsc = .false.
         params%fsc = fname_fsc
         if( trim(params%fsc%to_char()) /= '' .and. file_exists(params%fsc) )then
             has_fsc = .true.
@@ -334,10 +336,12 @@ contains
             call get_resolution(fsc, res, fsc05, fsc0143)
             where( fsc < 0.05 ) optlp = 0.
             where( res < TINY ) optlp = 0.
-            lplim = fsc0143
+            lplim     = fsc0143
+            do_envfsc = params%l_envfsc
         else
             lplim = params%lp
         endif
+        ! B-factor
         if( cline%defined('bfac') )then
             ! already in params%bfac
         else
@@ -348,7 +352,6 @@ contains
                 params%bfac = 0.
             endif
         endif
-        ! B-factor
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)
@@ -357,9 +360,6 @@ contains
             ! optimal low-pass filter of unfiltered volumes from FSC
             call vol_bfac%apply_filter(optlp)
             call vol_no_bfac%apply_filter(optlp)
-            ! final low-pass filtering for smoothness
-            ! call vol_bfac%bp(0., fsc0143)
-            ! call vol_no_bfac%bp(0., fsc0143)
         else
             call vol_bfac%bp(0., lplim)
             call vol_no_bfac%bp(0., lplim)
@@ -367,9 +367,31 @@ contains
         ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_no_bfac%ifft
         call vol_no_bfac%write(fname_lp)
-        ! mask
+        ! masking
         call vol_bfac%ifft()
-        call vol_bfac%mask3D_soft(params%msk_crop)
+        if( do_envfsc )then
+            ! enveloppe mask from FSC
+            fname_envmsk = 'dens_envmask_state'//trim(adjustl(int2str_pad(state,2)))//MRC_EXT
+            if( file_exists(fname_envmsk) )then
+                call find_ldim_nptcls(fname_envmsk, ldim_tmp, n)
+                smpd_tmp = find_img_smpd(fname_envmsk)
+                if( all(ldim_tmp==box) .and. abs(smpd_tmp - smpd) <= 1.e-6 ) then
+                    call vol_envmsk%new(ldim_tmp, smpd_tmp)
+                    call vol_envmsk%read(fname_envmsk)
+                    call vol_bfac%zero_env_background(vol_envmsk)
+                    call vol_bfac%mul(vol_envmsk)
+                else
+                    THROW_WARN('enveloppe mask: '//fname_envmsk%to_char()//' has different dimensions&
+                    & or sampling than volume; using spherical mask instead')
+                    call vol_bfac%mask3D_soft(params%msk_crop)
+                endif
+            else
+                call vol_bfac%mask3D_soft(params%msk_crop)
+            endif
+        else
+            ! spherical mask
+            call vol_bfac%mask3D_soft(params%msk_crop)
+        endif
         ! output in cwd
         call vol_bfac%write(fname_pproc)
         ! also output mirrored by default (unless otherwise stated on command line)
@@ -380,6 +402,11 @@ contains
         ! destruct
         call vol_bfac%kill
         call vol_no_bfac%kill
+        call vol_envmsk%kill
+        call fname_mirr%kill
+        call fname_pproc%kill
+        call fname_lp%kill
+        call fname_envmsk%kill
     end subroutine postprocess_volume_from_files
 
     subroutine exec_postprocess( self, cline )
@@ -421,7 +448,7 @@ contains
         else
             call spproj%get_fsc(state, fname_fsc, fsc_box)
         endif
-        call postprocess_volume_from_files(fname_vol, fname_fsc, box, smpd, params, cline)
+        call postprocess_volume_from_files(fname_vol, fname_fsc, box, smpd, params, cline, state)
         ! destruct
         call spproj%kill
         call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
@@ -552,8 +579,7 @@ contains
             endif
             if( cline%defined('lp_backgr') )then
                 if( params%automsk .ne. 'no' )then
-                    call mskvol%new(build%vol%get_ldim(), build%vol%get_smpd())
-                    call mskvol%automask3D(params, build%vol, build%vol, l_tight=params%automsk.eq.'tight')
+                    call mskvol%automask3D(params, build%vol, params%automsk.eq.'tight')
                     call build%vol%lp_background(mskvol, params%lp_backgr)
                     call mskvol%kill_bimg
                 else

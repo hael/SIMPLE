@@ -812,6 +812,7 @@ contains
             rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 0.
         endwhere
         if( allocated(lmsk) ) deallocate(lmsk)
+        nullify(rmat)
     end subroutine otsu_img
 
     ! Source : An Equivalent 3D Otsu’s Thresholding Method,

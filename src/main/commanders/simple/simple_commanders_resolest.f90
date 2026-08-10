@@ -56,7 +56,7 @@ contains
         class(cmdline),       intent(inout) :: cline
         real, allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
         type(parameters)  :: params
-        type(image)       :: even, odd
+        type(image)       :: even, odd, merged
         type(image_msk)   :: mskvol
         type(string)      :: fsc_templ
         integer           :: j, k_hp, k_lp, nyq
@@ -71,9 +71,12 @@ contains
         res = even%get_res()
         nyq = even%get_filtsz()
         if( params%automsk .ne. 'no' )then
-            call mskvol%new([params%box,params%box,params%box], params%smpd)
-            call mskvol%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
+            call merged%copy(even)
+            call merged%add(odd)
+            call merged%mul(0.5)
+            call mskvol%automask3D(params, merged, params%automsk.eq.'tight')
             call phase_rand_fsc(even, odd, mskvol, 1, nyq, fsc, fsc_t, fsc_n)
+            call merged%kill
         else
             ! spherical masking
             call even%mask3D_soft(params%msk)
@@ -109,7 +112,7 @@ contains
         class(commander_fsc_area_score), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)             :: params
-        type(image)                  :: even, odd
+        type(image)                  :: even, odd, merged
         type(image_msk)              :: mskvol
         type(fsc_area_score_result)  :: result
         type(string)                 :: fbody
@@ -123,12 +126,12 @@ contains
         call odd%read(params%vols(1))
         call even%read(params%vols(2))
         if( params%automsk .ne. 'no' )then
-            call mskvol%new([params%box,params%box,params%box], params%smpd)
-            call mskvol%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
-            call even%zero_env_background(mskvol)
-            call odd%zero_env_background(mskvol)
-            call even%mul(mskvol)
-            call odd%mul(mskvol)
+            call merged%copy(even)
+            call merged%add(odd)
+            call merged%mul(0.5)
+            call mskvol%automask3D(params, merged, params%automsk.eq.'tight')
+            call mskvol%apply_3Dmask(even)
+            call mskvol%apply_3Dmask(odd)
         else
             call even%mask3D_soft(params%msk)
             call odd%mask3D_soft(params%msk)
@@ -148,6 +151,7 @@ contains
         call odd%kill
         call mskvol%kill_bimg
         call result%kill
+        call merged%kill
         call simple_end('**** SIMPLE_FSC_AREA_SCORE NORMAL STOP ****')
     end subroutine exec_fsc_area_score
 
@@ -156,7 +160,7 @@ contains
         class(commander_uniform_filter3D), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd, odd_filt
+        type(image)       :: merged, even, odd, odd_filt
         type(image_msk)   :: mskvol
         real              :: lpopt
         type(string)      :: file_tag
@@ -169,9 +173,12 @@ contains
         call even%read(params%vols(2))
         file_tag = 'uniform_3D_filter'
         if( params%automsk .ne. 'no' )then
-            call mskvol%new([params%box,params%box,params%box], params%smpd)
-            call mskvol%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
+            call merged%copy(even)
+            call merged%add(odd)
+            call merged%mul(0.5)
+            call mskvol%automask3D(params, merged, l_tight=params%automsk.eq.'tight')
             call mskvol%one_at_edge ! to expand before masking of reference internally
+            call merged%kill
         else
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
                     &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
@@ -289,8 +296,8 @@ contains
         class(commander_icm3D), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters)     :: params
-        type(image)          :: even, odd, even_icm, odd_icm, avg, avg_icm
-        type(image_msk)         :: envmsk
+        type(image)          :: merged, even, odd, even_icm, odd_icm, avg, avg_icm
+        type(image_msk)      :: envmsk
         logical, allocatable :: l_msk(:,:,:)
         type(string) :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -305,12 +312,14 @@ contains
         call even_icm%copy(even)
         call odd_icm%copy(odd)
         if( params%automsk.ne.'no' )then
-            call envmsk%automask3D(params, even, odd, l_tight=params%automsk.eq.'tight')
+            call merged%copy(even)
+            call merged%add(odd)
+            call merged%mul(0.5)
+            call envmsk%automask3D(params, merged, params%automsk.eq.'tight')
+            call merged%kill
             ! apply mask to volumes
-            call even_icm%zero_env_background(envmsk)
-            call odd_icm%zero_env_background(envmsk)
-            call even_icm%mul(envmsk)
-            call odd_icm%mul(envmsk)
+            call envmsk%apply_3Dmask(even_icm)
+            call envmsk%apply_3Dmask(odd_icm)
             call envmsk%one_at_edge ! to expand before masking of reference internally
             l_msk = envmsk%bin2logical()
             call even_icm%ICM3D_eo(odd_icm, params%lambda, l_msk)
