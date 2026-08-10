@@ -272,46 +272,56 @@ This is intended current behavior, not a full soft-assignment EM update.
 
 `inpl_cont` has exactly two values. `no` is the default and preserves the
 historical alternating search: continuous shift optimization with the
-discrete in-plane angle callback. `yes` replaces every use of that callback
-with the joint raw-Euclidean `(sx,sy,rotind_frac)` optimizer. The numerical
-route is selected before shift-search objects are constructed; objective type
-is a capability check and must never activate continuous-angle behavior by
-itself.
+discrete in-plane angle callback. `yes` follows the **polish-only
+principle**: continuous refinement changes pose *precision*, never search
+*behavior*. Selection sees exactly what the legacy route sees -- candidate
+scoring, probability-table profiling, shift-seed estimation, and multi-peak
+shift refinement all use the legacy discrete machinery unchanged -- and the
+joint raw-Euclidean `(sx,sy,rotind_frac)` optimizer runs exactly once per
+particle per iteration, after selection, to polish the committed assignment.
+This makes the search trajectory identical to the validated legacy trajectory
+by construction; the continuous route is a strict refinement of it and cannot
+alter exploration dynamics on any sample. Objective type is a capability
+check and must never activate continuous-angle behavior by itself.
 
 The refine3D opt-in requires `objfun=euclid`, `objfun_den=no`,
 `ptcl_src=raw`, and `projrec=no`. It is not restricted to `refine=shc`:
 deterministic, neighborhood, evaluation, and probabilistic matcher routes use
-the same policy wherever they perform pose search. A mode with no pose search,
+the same policy wherever they commit a pose. A mode with no pose search,
 such as sigma-only setup, naturally invokes neither optimizer. Unsupported
 capability combinations fail validation rather than silently reverting to the
 callback.
 
-Joint candidate profiling fixes the already selected state and projection. It
-evaluates every discrete in-plane cell once at the caller-supplied native
-`(x,y)` shift and chooses the best index, exactly matching one legacy callback
-selection. The continuous three-parameter solve starts from that index and is
-bounded to plus or minus two cells around it. The `inpl_cont=yes` initializer
-never searches other shifts; in particular, it does not use the legacy 5-by-5
-shift/all-angle coarse initializer.
+Probability tables are pure legacy under both `inpl_cont` values: candidate
+scoring, shift-seed estimation, and per-candidate shift refinement use the
+legacy discrete optimizer, and the table schema remains discrete (rounded
+`inpl`, score, shift in the rounded-index frame). The joint optimizer never
+touches table construction; polishing candidates would sharpen the score
+contrast the stochastic sampler sees and collapse exploration on difficult
+samples (statistics parity below addresses the same failure through the
+convergence side).
 
-For probabilistic refinement, the probability-table schema remains discrete.
-Joint optimization may evaluate a fractional in-plane coordinate while
-profiling a candidate, but the assignment artifact carries only the canonical
-rounded `inpl`, its score, and its shift. That shift is expressed in the
-rounded-index frame so the matcher can recover the exact native shift seed
-without storing a fractional coordinate in the table.
+After hard state/projection/in-plane assignment, the matcher runs the joint
+three-parameter optimizer locally for the selected pose -- the single joint
+solve of the iteration. The assignment index is authoritative: it converts
+the stored shift back to the native particle frame and seeds a solve bounded
+to plus or minus two in-plane cells, without another global all-angle
+selection. An accepted result persists one coupled pose: fractional Euler
+`e3`, nearest integer `inpl`, shift, and score. A finite non-improving
+evaluation retains the incoming discrete pose with its re-scored objective
+value. A numerically invalid evaluation leaves the incoming assignment
+untouched. No `inpl_cont=yes` path falls back to the legacy callback. State
+and projection identity remain fixed during the final solve. A persisted
+fractional `e3` is rounded to the canonical integer cell before the next
+search.
 
-After hard state/projection/in-plane assignment, the matcher reruns the joint
-three-parameter optimizer locally for the selected pose. The rounded assignment
-index is authoritative: it converts the stored shift back to the native
-particle frame and seeds a solve bounded to plus or minus two in-plane cells,
-without another global all-angle selection. An accepted result persists one
-coupled pose: fractional Euler `e3`, nearest integer `inpl`, shift, and score. A
-finite non-improving evaluation retains the incoming discrete pose with its
-re-scored objective value. A numerically invalid evaluation leaves the incoming
-assignment untouched. No `inpl_cont=yes` path falls back to the legacy callback.
-State and projection identity remain fixed during the final solve. A persisted
-fractional `e3` is rounded to the canonical integer cell before the next search.
+**Statistics parity.** Every statistic that steers search control --
+`dist_inpl`, angular distances, class/projection overlap, and anything the
+convergence checker reads -- is computed from the DISCRETE cells on both
+sides of the comparison, never from fractional poses. Sub-grid pose precision
+would otherwise read as premature convergence and truncate the annealing
+schedule that difficult samples require. The fractional `e3` and polished
+shift are carried for reconstruction and persistence only.
 
 Joint acceptance is guarded twice, in the shared optimizer. An improvement
 must be material -- it must beat the seed cost by a relative tolerance far

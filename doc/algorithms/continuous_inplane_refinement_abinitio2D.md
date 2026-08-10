@@ -7,9 +7,13 @@ inpl_cont=yes|no
 ```
 
 `no` is the default and preserves the legacy discrete shift/angle search.
-`yes` replaces every alternating callback-based angle/shift optimization with
-joint continuous refinement of `(sx,sy,theta)`. There is no continuous
-callback route and no callback fallback from the joint route.
+`yes` follows the polish-only principle: continuous refinement changes pose
+precision, never search behavior. All selection machinery -- candidate
+scoring, probabilistic table construction, shift-seed estimation -- runs the
+legacy discrete route unchanged, and the joint continuous `(sx,sy,theta)`
+optimizer runs exactly once per particle per iteration to polish the
+committed assignment. The search trajectory is therefore identical to the
+validated legacy trajectory by construction, on every sample.
 
 Continuous refinement is active only for the raw Euclidean objective. It is
 unsupported for hybrid/denoised objectives; those opt-in requests fail rather
@@ -33,44 +37,43 @@ index. No joint optimizer or continuous pose state is constructed.
 
 ## Continuous mode
 
-With eligible `inpl_cont=yes`, class/reference support and probabilistic
-sampling remain discrete, but every local angle/shift profile that formerly
-used the callback runs the three-variable optimizer:
+With eligible `inpl_cont=yes`, the search runs exactly as `inpl_cont=no`
+until a class and integer in-plane cell have been committed. One joint solve
+then polishes the pose:
 
-1. retain the selected class but discard the incoming integer or fractional
-   in-plane rotation;
-2. evaluate all discrete rotations once at the caller-supplied
-   `(sx_seed,sy_seed)` and select the best index, exactly as one legacy
-   callback invocation would;
-3. start from `(sx_seed,sy_seed,theta_best)` and limit `theta` to plus or minus
-   two grid units around `theta_best`;
-4. run one three-variable L-BFGS-B solve;
-5. evaluate the raw Euclidean objective and all three analytic derivatives at
-   the same continuous pose; and
-6. accept a finite, round-off-significant improvement, otherwise retain the
-   newly selected discrete seed.
+1. the selected cell is authoritative: the solve seeds at
+   `(sx_seed,sy_seed,theta_selected)` with `theta` limited to plus or minus
+   two grid units, and never rescans other cells;
+2. one three-variable L-BFGS-B solve refines the pose against the raw
+   Euclidean objective, with all three analytic derivatives evaluated at the
+   same continuous pose;
+3. a finite, materially improving result commits the fractional pose;
+   otherwise the selected discrete pose stands, re-scored at its own shift.
 
-The starting shift is authoritative. Continuous initialization never performs
-the legacy 5-by-5 shift/all-rotation coarse scan and never seeds the solve from
-previous `inpl` or fractional `e3` metadata. Only the selected class and the
-supplied native shift survive into initialization.
+Continuous initialization never performs the legacy 5-by-5
+shift/all-rotation coarse scan and never seeds from fractional `e3`
+metadata.
 
-During probabilistic table construction the fractional coordinate is
-transient. The table stores only the nearest integer `inpl`, score, and shift;
-the shift is rotated into the rounded-index frame. This preserves the existing
-assignment format and lets the matcher recover the exact native shift seed.
+Probability tables are pure legacy under both `inpl_cont` values: candidate
+scoring, shift-seed estimation, and per-candidate shift refinement use the
+legacy discrete optimizer, and the table stores only the integer `inpl`,
+score, and shift in the rounded-index frame. Polishing candidates would
+sharpen the score contrast the stochastic sampler sees and collapse
+exploration on difficult samples.
 
-After the final probabilistic class/in-plane decision, the matcher uses the
-rounded index only to recover the native shift, then discards it and repeats
-the all-angle seed selection before rerunning the joint optimizer. Only this final
-assignment persists
-the accepted continuous angle in `e3`; the nearest integer remains in `inpl`
-for compatibility, and the final shift and score are written from the same
-joint pose. A valid non-improving solve commits the newly selected discrete
-seed. A numerically invalid solve falls back to the legacy callback-based
-optimizer (the `inpl_cont=no` route) inside the joint search object, and its
-result is committed as a discrete grid pose; only if the fallback also fails
-is the incoming assignment retained.
+After the final probabilistic class/in-plane decision, the matcher seeds the
+joint solve at the assigned integer cell and its recovered native shift.
+Only this final assignment persists the accepted continuous angle in `e3`;
+the nearest integer remains in `inpl` for compatibility, and the final shift
+and score are written from the same joint pose. A valid non-improving solve
+retains the assigned discrete pose with its re-scored objective value; a
+numerically invalid solve leaves the incoming assignment untouched.
+
+Statistics parity: `dist_inpl` and every other statistic that steers search
+control or convergence is computed from the discrete cells on both sides of
+the comparison; the fractional `e3` is carried for reconstruction and
+persistence only. Sub-grid precision would otherwise read as premature
+convergence and truncate the annealing schedule difficult samples require.
 
 The final `store_solution` of the joint pose bypasses the score-improvement
 guard: the joint result restarts from the native shift, so its score is not

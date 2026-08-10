@@ -48,7 +48,6 @@ contains
     procedure          :: minimize        => grad_shsrch_minimize
     procedure          :: minimize_direct => grad_shsrch_minimize_direct
     procedure          :: minimize_joint  => grad_shsrch_minimize_joint
-    procedure          :: minimize_joint_rounded => grad_shsrch_minimize_joint_rounded
     procedure          :: select_best_discrete_angle
     procedure          :: kill            => grad_shsrch_kill
     procedure          :: does_opt_angle
@@ -437,14 +436,15 @@ contains
     !! cell and score. evaluation_valid=.false. is a diagnostic signal only;
     !! irot is never 0 and callers always receive a committable discrete pose.
     !!
-    !! irot_in switches to LOCAL mode for durable passes: the caller's selected
-    !! assignment (already the product of exhaustive candidate construction) is
-    !! authoritative, so no global all-angle reselection is performed -- under
-    !! exactly degenerate in-plane branches (e.g. dihedral C2 about the symmetry
-    !! axis) a second global selection at a slightly different shift hops
-    !! branches on floating-point noise. The solve refines within +/-2 cells of
-    !! irot_in; a non-improving solve returns the incoming cell re-scored at
-    !! xy_in, so committing it retains the incoming pose.
+    !! irot_in is the ONLY route into the joint optimizer: the caller's
+    !! selected assignment (the product of legacy selection everywhere,
+    !! polish-only principle) is authoritative, so no global all-angle
+    !! reselection is ever performed -- under exactly degenerate in-plane
+    !! branches (e.g. dihedral C2 about the symmetry axis) a second global
+    !! selection at a slightly different shift hops branches on
+    !! floating-point noise. The solve refines within +/-2 cells of irot_in;
+    !! a non-improving solve returns the incoming cell re-scored at xy_in,
+    !! so committing it retains the incoming pose.
     function grad_shsrch_minimize_joint( self, irot, xy_in, sh_rot, rotind_frac, &
             &evaluation_valid, improved, initial_cost_out, irot_in ) result(cxy)
         class(pftc_shsrch_grad), intent(inout) :: self
@@ -454,7 +454,7 @@ contains
         real(dp),                intent(out)   :: rotind_frac
         logical,       optional, intent(out)   :: evaluation_valid, improved
         real(dp),      optional, intent(out)   :: initial_cost_out
-        integer,       optional, intent(in)    :: irot_in
+        integer,                 intent(in)    :: irot_in
         ! The raw Euclidean loss is nonnegative by construction; the truncated
         ! coefficient series can undershoot slightly at fractional angles, but
         ! a final cost below this tolerance is an unphysical evaluator
@@ -475,7 +475,7 @@ contains
         real :: cxy(3), rotmat(2,2), lowest_cost, seed_corr, joint_lims(3,2)
         real(dp) :: initial_cost, final_cost, improve_tol, coordinate_tol(3), brange
         integer  :: idim
-        logical :: valid_result, improved_result, valid_coordinates, l_local
+        logical :: valid_result, improved_result, valid_coordinates
 
         if( self%search_mode /= SHSRCH_JOINT )then
             THROW_HARD('joint minimization requested from a non-joint search object')
@@ -483,16 +483,13 @@ contains
         if( .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
             THROW_HARD('joint minimization requires raw Euclidean objective; hybrid derivative is unavailable')
         endif
-        l_local = present(irot_in)
-        if( l_local )then
-            ! local mode: seed at the caller's authoritative assignment, no rescan;
-            ! its score at xy_in is recovered from the solver's initial cost below
-            irot      = irot_in
-            seed_corr = 0.0
-        else
-            ! Select the grid seed once at the supplied shift before refinement.
-            call self%select_best_discrete_angle(xy_in, irot, seed_corr)
+        if( irot_in < 1 .or. irot_in > self%nrots )then
+            THROW_HARD('minimize_joint requires the selected in-plane cell as irot_in seed')
         endif
+        ! seed at the caller's authoritative assignment, never rescan; its
+        ! score at xy_in is recovered from the solver's initial cost below
+        irot      = irot_in
+        seed_corr = 0.0
         self%cur_inpl_idx    = irot
         self%cur_inpl_rotind = real(irot)
         joint_lims = self%ospec%limits
@@ -506,7 +503,7 @@ contains
         initial_cost = self%joint_initial_cost
         final_cost = real(lowest_cost,dp)
         if( present(initial_cost_out) ) initial_cost_out = initial_cost
-        if( l_local .and. self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) )then
+        if( self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) )then
             ! the incoming cell re-scored at xy_in, same mapping as the improved path
             seed_corr = real(exp(-max(0.d0, initial_cost)))
         endif
@@ -582,40 +579,6 @@ contains
             cxy(2:) = matmul(cxy(2:), rotmat)
         endif
     end function grad_shsrch_minimize_joint
-
-    !> Jointly profile shift and continuous in-plane rotation while returning
-    !! only the canonical integer rotation cell. Probabilistic searches use
-    !! this form so their existing assignment artifacts remain integer based;
-    !! the selected assignment is refined once more when durable e3 metadata
-    !! is written.
-    function grad_shsrch_minimize_joint_rounded( self, irot, sh_rot, xy_in, evaluation_valid ) result(cxy)
-        class(pftc_shsrch_grad), intent(inout) :: self
-        integer,                 intent(inout) :: irot
-        logical,                 intent(in)    :: sh_rot
-        real,          optional, intent(in)    :: xy_in(2)
-        logical,       optional, intent(out)   :: evaluation_valid
-        real :: cxy(3), xy_seed(2), rotmat(2,2)
-        real(dp) :: rotind_frac
-        integer :: selected_irot
-        logical :: valid_result
-
-        if( self%search_mode /= SHSRCH_JOINT )then
-            THROW_HARD('rounded joint minimization requested from a non-joint search object')
-        endif
-        xy_seed   = 0.
-        if( present(xy_in) ) xy_seed = xy_in
-        ! The probability artifact drops rotind_frac, so retain its shift in
-        ! the frame of the rounded integer cell.  This makes the later inverse
-        ! transform recover the exact native shift used by the joint score.
-        cxy = self%minimize_joint(selected_irot, xy_seed, .false., rotind_frac, &
-            &evaluation_valid=valid_result)
-        irot = selected_irot
-        if( present(evaluation_valid) ) evaluation_valid = valid_result
-        if( irot > 0 .and. sh_rot )then
-            call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
-            cxy(2:) = matmul(cxy(2:), rotmat)
-        endif
-    end function grad_shsrch_minimize_joint_rounded
 
     !> Bounded direct-gradient minimization for the streaming SGD path.
     !! The PFTC routine supplies grad(C) for the correlation objective.  We

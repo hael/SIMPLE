@@ -94,7 +94,7 @@ call joint_search%set_indices(1, 1)
 joint_index = grid_index
 joint_result = joint_search%minimize_joint(joint_index, real(seed_shift), &
     &sh_rot=.false., rotind_frac=joint_coord, evaluation_valid=evaluation_valid, &
-    &improved=improved, initial_cost_out=initial_loss)
+    &improved=improved, initial_cost_out=initial_loss, irot_in=grid_index)
 if( .not. evaluation_valid ) error stop 'synthetic refine3D joint evaluation was invalid'
 if( .not. improved .or. joint_index < 1 ) &
     &error stop 'synthetic refine3D joint refinement did not improve the grid seed'

@@ -88,8 +88,11 @@ endif
 if( .not. probabilistic_refine_search%joint_inpl_optimizer%uses_joint_inplane() )then
     error stop 'inpl_cont=yes did not construct the joint optimizer'
 endif
-if( probabilistic_refine_search%grad_shsrch_first_obj%does_opt_angle() )then
-    error stop 'inpl_cont=yes unexpectedly attached the legacy callback during shift seeding'
+! selection parity: shift seeding and candidate scoring stay on the legacy
+! callback route regardless of inpl_cont; the joint optimizer only polishes
+! the committed assignment
+if( .not. probabilistic_refine_search%grad_shsrch_first_obj%does_opt_angle() )then
+    error stop 'inpl_cont=yes must retain the legacy seed-search angle update (selection parity)'
 endif
 call probabilistic_refine_search%kill
 p%l_prob_align_mode = .true.

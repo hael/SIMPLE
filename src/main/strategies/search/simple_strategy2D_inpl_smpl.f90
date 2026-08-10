@@ -103,6 +103,11 @@ contains
                 self%s%best_shvec = 0.
             endif
             self%s%nrefs_eval = self%s%nrefs
+            ! polish-only: one local joint solve of the sampled winner; the
+            ! stochastic in-plane selection above is authoritative, and this
+            ! route's legacy behavior never refines shifts, so angle only
+            if( self%s%continuous_active ) &
+                &call self%s%refine_selected_continuously(l_polish_shifts=.false.)
             ! Updates solution
             call self%s%store_solution(self%s%best_class, self%s%best_rot, self%s%best_corr)
             call self%s%assign_ori(os)

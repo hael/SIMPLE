@@ -91,8 +91,14 @@ contains
         endif
         ! correlation
         call s%b_ptr%spproj_field%set(s%iptcl, 'corr', corr)
-        ! angular distances
+        ! angular distances -- statistics parity: distances that steer search
+        ! control are computed from the DISCRETE cells (both sides), not the
+        ! fractional poses, so convergence thresholds keep their legacy
+        ! calibration
         call s%b_ptr%spproj_field%get_ori(s%iptcl, o_new)
+        call o_new%e3set(360. - s%b_ptr%pftc%get_rot(inpl))
+        call o_prev%e3set(360. - s%b_ptr%pftc%get_rot( &
+            &s%b_ptr%pftc%get_roind(360. - o_prev%e3get())))
         call s%b_ptr%pgrpsyms%sym_dists(o_prev, o_new, osym, euldist, dist_inpl)
         if( s%b_ptr%spproj_field%isthere(s%iptcl,'dist') )then
             call s%b_ptr%spproj_field%set(s%iptcl, 'dist', 0.5*euldist + 0.5*s%b_ptr%spproj_field%get(s%iptcl,'dist'))

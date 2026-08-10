@@ -140,8 +140,9 @@ contains
         type(builder)               :: build
         real,         allocatable   :: ccmat(:,:)
         complex,      allocatable   :: pft(:,:)
-        integer :: ldim(3), box, kfromto(2), ithr, i, j, loc, nrots, irot, nimgs
+        integer :: ldim(3), box, kfromto(2), ithr, i, j, loc, nrots, irot, irot_seed, nimgs
         real    :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), cxy(3)
+        real(dp) :: rotind_frac
         nimgs      = size(imgs)
         ldim       = imgs(1)%get_ldim()
         box        = ldim(1)
@@ -183,7 +184,7 @@ contains
         ! register imgs
         allocate(inpl_corrs(nrots), ccmat(nimgs,nimgs))
         ccmat = 1. ! takes care of diagonal elements
-        !$omp parallel do private(i,j,ithr,inpl_corrs,loc,irot,cxy)&
+        !$omp parallel do private(i,j,ithr,inpl_corrs,loc,irot,irot_seed,cxy,rotind_frac)&
         !$omp default(shared) schedule(dynamic) proc_bind(close)
         do i = 1, nimgs - 1
             do j = i + 1, nimgs
@@ -193,7 +194,10 @@ contains
                 irot = loc
                 call grad_shsrch_obj(ithr)%set_indices(j, i)
                 if( trim(params%inpl_cont) == 'yes' )then
-                    cxy = grad_shsrch_obj(ithr)%minimize_joint_rounded(irot, sh_rot=.true.)
+                    ! seeded local polish of the pre-selected cell
+                    irot_seed = irot
+                    cxy = grad_shsrch_obj(ithr)%minimize_joint(irot, [0.,0.], &
+                        &sh_rot=.true., rotind_frac=rotind_frac, irot_in=irot_seed)
                 else
                     cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
                 endif

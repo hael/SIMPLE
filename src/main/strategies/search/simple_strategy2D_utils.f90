@@ -735,7 +735,7 @@ contains
         type(pftc_shsrch_grad)           :: grad_shsrch_obj(nthr_glob)
         type(builder)                    :: build
         type(inpl_struct), allocatable   :: algninfo(:), algninfo_mirr(:)
-        integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, n, pdim_srch(3)
+        integer :: ldim(3), ldim_ref(3), box, kfromto(2), ithr, i, loc(1), nrots, irot, irot_seed, n, pdim_srch(3)
         real    :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), joint_lims_loc(3,2), cxy(3), inpl_angle
         real(dp):: rotind_frac
         logical :: didft
@@ -804,7 +804,7 @@ contains
         call build%pftc%memoize_ptcls
         ! register imgs to img_ref
         allocate(inpl_corrs(nrots), algninfo(n), algninfo_mirr(n))
-        !$omp parallel do default(shared) private(i,ithr,inpl_corrs,loc,irot,cxy,rotind_frac,inpl_angle,joint_lims_loc)&
+        !$omp parallel do default(shared) private(i,ithr,inpl_corrs,loc,irot,irot_seed,cxy,rotind_frac,inpl_angle,joint_lims_loc)&
         !$omp schedule(static) proc_bind(close)
         do i = 1, 2 * n
             ithr = omp_get_thread_num() + 1
@@ -817,8 +817,9 @@ contains
                 joint_lims_loc = joint_lims
                 joint_lims_loc(3,:) = [real(irot)-2., real(irot)+2.]
                 call grad_shsrch_obj(ithr)%set_limits(joint_lims_loc)
+                irot_seed = irot
                 cxy = grad_shsrch_obj(ithr)%minimize_joint(irot, [0.,0.], &
-                    &sh_rot=.true., rotind_frac=rotind_frac)
+                    &sh_rot=.true., rotind_frac=rotind_frac, irot_in=irot_seed)
                 if( irot > 0 ) inpl_angle = real(modulo((rotind_frac-1.d0) * &
                     &real(build%pftc%get_dang(),dp), 360.d0))
             else
@@ -867,7 +868,7 @@ contains
         type(pftc_shsrch_grad)          :: grad_shsrch_obj(nthr_glob)
         type(builder)                   :: build
         type(inpl_struct), allocatable  :: algninfo(:,:), algninfo_mirr(:,:)
-        integer :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, nrefs, ntargets, pdim_srch(3)
+        integer :: ldim(3), box, kfromto(2), ithr, i, j, k, m, loc, nrots, irot, irot_seed, nrefs, ntargets, pdim_srch(3)
         real    :: smpd, lims(2,2), lims_init(2,2), joint_lims(3,2), joint_lims_loc(3,2)
         real    :: cxy(3), rotmat(2,2), inpl_angle
         real(dp):: rotind_frac
@@ -945,8 +946,9 @@ contains
                     joint_lims_loc = joint_lims
                     joint_lims_loc(3,:) = [real(irot)-2., real(irot)+2.]
                     call grad_shsrch_obj(ithr)%set_limits(joint_lims_loc)
+                    irot_seed = irot
                     cxy = grad_shsrch_obj(ithr)%minimize_joint(irot, [0.,0.], &
-                        &sh_rot=.false., rotind_frac=rotind_frac)
+                        &sh_rot=.false., rotind_frac=rotind_frac, irot_in=irot_seed)
                     if( irot > 0 ) inpl_angle = real(modulo((rotind_frac-1.d0) * &
                         &real(build%pftc%get_dang(),dp), 360.d0))
                 else

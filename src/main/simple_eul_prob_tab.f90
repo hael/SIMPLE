@@ -224,7 +224,7 @@ contains
         type(pftc_shsrch_grad) :: grad_shsrch_obj(nthr_glob) !< origin shift search object, L-BFGS with gradient
         integer :: i, si, iptcl, n, projs_ns, ithr, inds_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), istate
         integer :: inpl_refs(self%nrefs,nthr_glob)
-        real    :: lims(2,2), lims_init(2,2), joint_lims(3,2), inpl_athres(self%p_ptr%nstates)
+        real    :: lims(2,2), lims_init(2,2), inpl_athres(self%p_ptr%nstates)
         real    :: dists_inpl_sorted(self%b_ptr%pftc%get_nrots(),nthr_glob), dists_refs(self%nrefs,nthr_glob)
         logical :: l_sh_first
         if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
@@ -248,16 +248,9 @@ contains
             lims(:,2)      =  self%p_ptr%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
-            joint_lims(1:2,:) = lims
-            joint_lims(3,:) = [1.-2., real(self%seed_nrots)+2.]
             do ithr = 1,nthr_glob
-                if( trim(self%p_ptr%inpl_cont) == 'yes' )then
-                    call grad_shsrch_obj(ithr)%new_joint(self%b_ptr, joint_lims, &
-                        &self%p_ptr%maxits_sh)
-                else
-                    call grad_shsrch_obj(ithr)%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
-                        &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
-                endif
+                call grad_shsrch_obj(ithr)%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                    &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             end do
             ! fill the table
             !$omp parallel do default(shared) private(i,iptcl,ithr) proc_bind(close) schedule(static)
@@ -335,11 +328,7 @@ contains
             iref = (prev_state-1)*self%p_ptr%nspace + prev_proj
             irot = self%b_ptr%pftc%get_roind(360.-o_prev_loc%e3get())
             call grad_shsrch_obj(ithr_loc)%set_indices(iref, iptcl_loc)
-            if( trim(self%p_ptr%inpl_cont) == 'yes' )then
-                shift_seed = grad_shsrch_obj(ithr_loc)%minimize_joint_rounded(irot, sh_rot=.false.)
-            else
-                shift_seed = grad_shsrch_obj(ithr_loc)%minimize(irot=irot, sh_rot=.false.)
-            endif
+            shift_seed = grad_shsrch_obj(ithr_loc)%minimize(irot=irot, sh_rot=.false.)
             if( irot == 0 ) shift_seed(2:3) = 0.
         end subroutine estimate_shift_seed
 
@@ -378,19 +367,10 @@ contains
                 call grad_shsrch_obj(ithr_loc)%set_indices(self%ref_full(ri_loc), iptcl_loc)
                 irot_loc = inpl_refs(ri_loc,ithr_loc)
                 if( l_sh_first )then
-                    if( trim(self%p_ptr%inpl_cont) == 'yes' )then
-                        refined_shift = grad_shsrch_obj(ithr_loc)%minimize_joint_rounded(irot_loc, &
-                            &sh_rot=.true., xy_in=shift_seed(2:3))
-                    else
-                        refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, &
-                            &sh_rot=.true., xy_in=shift_seed(2:3))
-                    endif
+                    refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, &
+                        &sh_rot=.true., xy_in=shift_seed(2:3))
                 else
-                    if( trim(self%p_ptr%inpl_cont) == 'yes' )then
-                        refined_shift = grad_shsrch_obj(ithr_loc)%minimize_joint_rounded(irot_loc, sh_rot=.true.)
-                    else
-                        refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true.)
-                    endif
+                    refined_shift = grad_shsrch_obj(ithr_loc)%minimize(irot=irot_loc, sh_rot=.true.)
                 endif
                 if( irot_loc > 0 )then
                     call replace_ref_eval(i_loc,ithr_loc,ri_loc,&
@@ -445,7 +425,7 @@ contains
         type(ori)               :: o_prev
         type(prob_candidate)    :: candidate
         integer :: i, iproj, iptcl, ithr, irot, istate, iref, is
-        real    :: lims(2,2), lims_init(2,2), joint_lims(3,2), cxy(3)
+        real    :: lims(2,2), lims_init(2,2), cxy(3)
         if( i_first < 1 .or. i_last > self%nptcls .or. i_last < i_first )then
             THROW_HARD('invalid particle range in eul_prob_tab%fill_tab_state_only_range')
         endif
@@ -456,16 +436,9 @@ contains
             lims(:,2)      =  self%p_ptr%trs
             lims_init(:,1) = -SHC_INPL_TRSHWDTH
             lims_init(:,2) =  SHC_INPL_TRSHWDTH
-            joint_lims(1:2,:) = lims
-            joint_lims(3,:) = [1.-2., real(self%b_ptr%pftc%get_nrots())+2.]
             do ithr = 1,nthr_glob
-                if( trim(self%p_ptr%inpl_cont) == 'yes' )then
-                    call grad_shsrch_obj(ithr)%new_joint(self%b_ptr, joint_lims, &
-                        &self%p_ptr%maxits_sh)
-                else
-                    call grad_shsrch_obj(ithr)%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
-                        &maxits=self%p_ptr%maxits_sh)
-                endif
+                call grad_shsrch_obj(ithr)%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                    &maxits=self%p_ptr%maxits_sh)
             end do
             ! fill the table
             !$omp parallel do default(shared) private(i,iptcl,ithr,o_prev,iproj,is,istate,irot,iref,cxy,candidate)&
@@ -482,11 +455,7 @@ contains
                     iref   = (istate-1)*self%p_ptr%nspace + iproj
                     ! BFGS over shifts
                     call grad_shsrch_obj(ithr)%set_indices(iref, iptcl)
-                    if( trim(self%p_ptr%inpl_cont) == 'yes' )then
-                        cxy = grad_shsrch_obj(ithr)%minimize_joint_rounded(irot, sh_rot=.true.)
-                    else
-                        cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
-                    endif
+                    cxy = grad_shsrch_obj(ithr)%minimize(irot=irot, sh_rot=.true.)
                     if( irot == 0 )then
                         irot     = self%b_ptr%pftc%get_roind(360.-o_prev%e3get())
                         cxy(1)   = real(self%b_ptr%pftc%gen_corr_for_rot_8(iref, iptcl, irot))

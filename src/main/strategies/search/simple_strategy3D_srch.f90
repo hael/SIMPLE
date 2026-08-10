@@ -60,7 +60,6 @@ type strategy3D_srch
     real                       :: prev_shvec(2)   = 0.        !< previous origin shift vector
     real                       :: xy_first(2)     = 0.        !< initial shifts identified by searching the previous best reference
     real                       :: xy_first_rot(2) = 0.        !< initial shifts identified by searching the previous best reference, rotated
-    logical                    :: xy_first_valid  = .false.   !< pre-selection shift seed was evaluated for this particle
     logical                    :: l_neigh         = .false.   !< neighbourhood refinement flag
     logical                    :: l_greedy        = .false.   !< greedy        refinement flag
     logical                    :: l_sh_first      = .false.   !< use previous-ref shift seed before orientation/state scoring
@@ -81,7 +80,6 @@ type strategy3D_srch
     procedure :: store_continuous_solution
     procedure :: store_discrete_seed_solution
     procedure :: uses_continuous_refinement
-    procedure :: bypasses_legacy_post_refinement
     procedure :: joint_evaluation_invalid
     procedure :: get_continuous_route_status
     procedure :: kill
@@ -135,17 +133,17 @@ contains
         ! create in-plane search objects
         self%nrots = self%b_ptr%pftc%get_nrots()
         if( .not. str_has_substr(self%refine, 'prob') )then
+            ! selection parity: candidate scoring, shift-seed estimation and
+            ! peak refinement always use the legacy objects; the joint
+            ! optimizer only polishes the committed assignment
+            call self%grad_shsrch_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                &maxits=self%p_ptr%maxits_sh)
+            call self%grad_shsrch_first_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
+                &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             if( self%continuous_active )then
                 joint_lims(1:2,:) = lims
                 joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
-                call self%grad_shsrch_first_obj%new_joint(self%b_ptr, joint_lims, &
-                    &self%p_ptr%maxits_sh)
                 call self%joint_inpl_optimizer%new_joint(self%b_ptr, joint_lims, self%p_ptr%maxits_sh)
-            else
-                call self%grad_shsrch_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
-                    &maxits=self%p_ptr%maxits_sh)
-                call self%grad_shsrch_first_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init, &
-                    &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
             endif
             call self%grad_shsrch_obj2%new_fixed(self%b_ptr, lims, lims_init=lims_init, &
                 &maxits=self%p_ptr%maxits_sh)
@@ -170,7 +168,6 @@ contains
         endif
         call prep_strategy3D_thread(self%ithr)
         self%nsolns     = 0
-        self%xy_first_valid = .false.
         self%nrefs_eval = 0
         self%ntrs_eval  = 0
         self%prev_corr  = 0.
@@ -200,7 +197,6 @@ contains
         ! init threaded search arrays
         call prep_strategy3D_thread(self%ithr)
         self%nsolns = 0
-        self%xy_first_valid = .false.
         ! search order
         ! -- > full space
         call s3D%rts(     self%ithr)%ne_ran_iarr(s3D%srch_order(:,self%ithr))
@@ -241,11 +237,9 @@ contains
         if( .not. self%l_sh_first ) return
         irot = self%prev_roind
         call self%grad_shsrch_first_obj%set_indices(self%prev_ref, self%iptcl)
-        if( self%continuous_active )then
-            cxy = self%grad_shsrch_first_obj%minimize_joint_rounded(irot, sh_rot=.false.)
-        else
-            cxy = self%grad_shsrch_first_obj%minimize(irot=irot, sh_rot=.false.)
-        endif
+        ! selection parity: the pre-selection shift seed is estimated with the
+        ! legacy optimizer regardless of inpl_cont
+        cxy = self%grad_shsrch_first_obj%minimize(irot=irot, sh_rot=.false.)
         if( irot == 0 ) cxy(2:3) = 0.
         self%xy_first = cxy(2:3)
         self%xy_first_rot = 0.
@@ -254,7 +248,6 @@ contains
             call rotmat2d(self%b_ptr%pftc%get_rot(irot), rotmat)
             self%xy_first_rot = matmul(cxy(2:3), rotmat)
         endif
-        self%xy_first_valid = .true.
     end subroutine inpl_srch_first
 
     subroutine inpl_srch( self, ref, irot_in )
@@ -264,7 +257,9 @@ contains
         real    :: cxy(3)
         integer :: iref, irot, loc(1)
         if( .not. self%doshift ) return
-        if( self%bypasses_legacy_post_refinement() ) return
+        ! selection parity: legacy post-selection refinement runs unchanged
+        ! under both inpl_cont values; the joint solve polishes afterwards
+        ! (extract_peak_ori), never instead
         if( present(ref) )then
             iref = ref
         else
@@ -290,7 +285,8 @@ contains
         real    :: cxy(3)
         integer :: refs(npeaks_inpl), irot, ipeak
         if( .not. self%doshift ) return
-        if( self%bypasses_legacy_post_refinement() ) return
+        ! selection parity: multi-peak shift refinement shapes the final
+        ! selection, so it runs as legacy under the continuous route too
         ! BFGS over shifts with in-plane rot exhaustive callback
         refs = maxnloc(s3D%proj_space_corrs(:,self%ithr), npeaks_inpl)
         do ipeak = 1, npeaks_inpl
@@ -353,17 +349,14 @@ contains
             return
         endif
 
-        if( self%xy_first_valid )then
-            ! The global discrete search was evaluated with this native-frame
-            ! pre-selection shift seed. Start joint refinement at the same
-            ! point rather than at the zero-valued storage placeholder.
-            xy_native = self%xy_first
-        else
-            ! Stored 3D-search shifts are in the selected reference frame.
-            ! The PFTC joint objective consumes the native particle frame.
-            call rotmat2d(self%b_ptr%pftc%get_rot(incoming_irot), rotmat)
-            xy_native = matmul(s3D%proj_space_shift(:,ref,self%ithr), transpose(rotmat))
-        endif
+        ! The committed candidate storage is authoritative: legacy
+        ! post-selection refinement has already replaced any pre-selection
+        ! seed (xy_first), so the polish always starts from the stored
+        ! selected-candidate shift.  Stored 3D-search shifts are in the
+        ! selected reference frame; the PFTC joint objective consumes the
+        ! native particle frame.
+        call rotmat2d(self%b_ptr%pftc%get_rot(incoming_irot), rotmat)
+        xy_native = matmul(s3D%proj_space_shift(:,ref,self%ithr), transpose(rotmat))
         if( .not. all(ieee_is_finite(xy_native)) )then
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
@@ -522,11 +515,6 @@ contains
         uses_continuous_refinement = self%continuous_active
     end function uses_continuous_refinement
 
-    pure logical function bypasses_legacy_post_refinement( self )
-        class(strategy3D_srch), intent(in) :: self
-        bypasses_legacy_post_refinement = self%continuous_active
-    end function bypasses_legacy_post_refinement
-
     pure logical function joint_evaluation_invalid( self, evaluation_valid )
         class(strategy3D_srch), intent(in) :: self
         logical,                intent(in) :: evaluation_valid
@@ -554,7 +542,6 @@ contains
         if( allocated(self%refine) ) deallocate(self%refine)
         self%continuous_active = .false.
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
-        self%xy_first_valid = .false.
         nullify(self%b_ptr)
     end subroutine kill
 

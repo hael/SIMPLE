@@ -278,7 +278,7 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
     call joint_search%set_indices(1,1)
     irot_joint = igrid
     joint_cxy = joint_search%minimize_joint(irot_joint, [0.,0.], &
-        &sh_rot=.false., rotind_frac=rotind_joint)
+        &sh_rot=.false., rotind_frac=rotind_joint, irot_in=igrid)
     joint_accepted = irot_joint > 0
     if( joint_accepted )then
         shift_joint = real(joint_cxy(2:),dp)

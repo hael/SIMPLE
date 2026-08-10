@@ -13,13 +13,11 @@ implicit none
 type(strategy3D_srch) :: search
 real, parameter :: expected_shift(2) = [1.25, -0.75]
 
-search%continuous_active = .false.
-if( search%bypasses_legacy_post_refinement() ) &
-    &error stop 'default-off search bypassed legacy post-selection refinement'
-
+! polish-only policy: legacy post-selection refinement is NEVER bypassed;
+! the bypass predicate no longer exists (removing it from the type is the
+! compile-time guarantee), and the joint solve only polishes the committed
+! pose afterwards
 search%continuous_active = .true.
-if( .not. search%bypasses_legacy_post_refinement() ) &
-    &error stop 'opt-in search did not bypass legacy post-selection refinement'
 if( search%joint_evaluation_invalid(.true.) ) &
     &error stop 'valid joint no-improvement result was marked invalid'
 if( .not. search%joint_evaluation_invalid(.false.) ) &

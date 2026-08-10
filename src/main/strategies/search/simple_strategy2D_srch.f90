@@ -139,17 +139,13 @@ contains
             call self%grad_shsrch_first_obj%new_fixed(self%b_ptr, lims, lims_init=lims_init,&
             maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
         else
-            if( self%continuous_active )then
-                joint_lims(1:2,:) = lims
-                joint_lims(3,:) = [1.-2., real(self%nrots)+2.]
-                call self%grad_shsrch_first_obj%new_joint(self%b_ptr, joint_lims, &
-                    &self%p_ptr%maxits_sh)
-            else
-                call self%grad_shsrch_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init,&
-                    &maxits=self%p_ptr%maxits_sh)
-                call self%grad_shsrch_first_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init,&
-                    &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
-            endif
+            ! selection parity: candidate scoring and shift-seed estimation
+            ! always use the legacy objects; the joint optimizer only
+            ! polishes the committed assignment
+            call self%grad_shsrch_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init,&
+                &maxits=self%p_ptr%maxits_sh)
+            call self%grad_shsrch_first_obj%new_legacy(self%b_ptr, lims, lims_init=lims_init,&
+                &maxits=self%p_ptr%maxits_sh, coarse_init=.true.)
         endif
         call self%grad_shsrch_obj2%new_fixed(self%b_ptr, lims, lims_init=lims_init,&
         &maxits=self%p_ptr%maxits_sh)
@@ -258,9 +254,6 @@ contains
             cxy = self%grad_shsrch_first_obj%minimize_direct(irot=irot, xy_in=[0.,0.],&
                 &step_size=self%p_ptr%sgd_eta_shift, max_steps=self%p_ptr%sgd_shift_its,&
                 &sh_rot=.false., raw_euclid=.true.)
-        else if( self%continuous_active )then
-            irot = self%prev_rot
-            cxy = self%grad_shsrch_first_obj%minimize_joint_rounded(irot, sh_rot=.false.)
         else
             if( .not.self%grad_shsrch_first_obj%does_opt_angle() )then
                 ! shift-only optimization
@@ -290,22 +283,13 @@ contains
 
     subroutine inpl_srch( self )
         class(strategy2D_srch), intent(inout) :: self
-        real    :: cxy(3), rotmat(2,2)
+        real    :: cxy(3)
         integer :: irot
         irot = 0
         if( s2D%do_inplsrch(self%iptcl_batch) )then
-            if( self%continuous_active )then
-                ! Joint refinement starts from the selected discrete polar
-                ! candidate and its native shift seed.
-                if( self%l_sh_first )then
-                    call rotmat2d(self%b_ptr%pftc%get_rot(self%best_rot), rotmat)
-                    self%best_shvec = matmul(self%xy_first, rotmat)
-                else
-                    self%best_shvec = 0.
-                endif
-                call self%refine_selected_continuously
-                return
-            endif
+            ! selection parity: legacy post-selection refinement runs
+            ! unchanged under both inpl_cont values, so the committed
+            ! discrete pose is identical to the inpl_cont=no route
             self%best_shvec = [0.,0.]
             ! Stream mode replaces particle-shift L-BFGS-B after the discrete
             ! class/angle winner.  The direct minimizer retains the input state
@@ -355,6 +339,9 @@ contains
                 self%best_shvec = cxy(2:3)
             endif
         endif
+        ! polish-only: exactly one local joint solve of the committed pose,
+        ! after legacy refinement, independent of the shift-search schedule
+        if( self%continuous_active ) call self%refine_selected_continuously
     end subroutine inpl_srch
 
     !> Jointly refine the shift and in-plane angle of one selected candidate.
@@ -366,10 +353,17 @@ contains
     !! noise (see the identical 3D treatment in refine_assignment_continuously).
     !! An invalid solve retains the incoming assignment untouched; a valid
     !! non-improving solve retains the pose with its re-scored objective value.
-    subroutine refine_selected_continuously( self )
+    subroutine refine_selected_continuously( self, l_polish_shifts )
         class(strategy2D_srch), intent(inout) :: self
-        real :: rotmat(2,2), xy_native(2)
+        logical, optional,      intent(in)    :: l_polish_shifts
+        real    :: rotmat(2,2), xy_native(2)
+        logical :: l_sh
         if( .not. self%continuous_active ) return
+        ! shifts are polished only when the legacy schedule searched them this
+        ! iteration; routes whose legacy behavior never refines shifts (e.g.
+        ! refine=inpl_smpl) pass l_polish_shifts=.false. for strict parity
+        l_sh = self%p_ptr%l_doshift .and. s2D%do_inplsrch(self%iptcl_batch)
+        if( present(l_polish_shifts) ) l_sh = l_sh .and. l_polish_shifts
         if( self%best_class < 1 .or. self%best_class > self%nrefs )then
             self%continuous_route_outcome = CONT_ROUTE_INVALID
             return
@@ -387,7 +381,8 @@ contains
         logical  :: evaluation_valid, improved
         joint_lims(1,:) = [-self%trs, self%trs]
         joint_lims(2,:) = [-self%trs, self%trs]
-        if( .not. self%p_ptr%l_doshift )then
+        if( .not. l_sh )then
+            ! pin the shifts and refine the angle only
             joint_lims(1,:) = xy_native(1)
             joint_lims(2,:) = xy_native(2)
         endif
@@ -582,15 +577,18 @@ contains
         else
             e3 = 360. - self%b_ptr%pftc%get_rot(best_rot_local)
         endif
-        ! calculate in-plane rot dist (radians)
+        ! calculate in-plane rot dist (radians) from the DISCRETE cells:
+        ! statistics parity -- search-control statistics keep legacy grid
+        ! semantics regardless of fractional pose precision, so convergence
+        ! thresholds calibrated against the legacy route stay meaningful
         if( self%l_fresh_start )then
             dist = 0.
         else
             u(1) = 0.
             u(2) = 1.
-            call rotmat2d(e3, mat)
+            call rotmat2d(360. - self%b_ptr%pftc%get_rot(best_rot_local), mat)
             x1   = matmul(u,mat)
-            call rotmat2d(os%e3get(self%iptcl), mat)
+            call rotmat2d(360. - self%b_ptr%pftc%get_rot(self%prev_rot), mat)
             x2   = matmul(u,mat)
             dist = myacos(dot_product(x1,x2))
         endif
