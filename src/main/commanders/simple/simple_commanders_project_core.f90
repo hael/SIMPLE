@@ -1043,19 +1043,9 @@ contains
             !$omp end parallel do
             ! remove state-associated 3D artifacts
             if( spproj%os_out%get_noris() > 0 )then
-                if( n2select == 1 )then
-                    ! preserve this state only
-                    do s = mins,maxs
-                        if( s == unique_states(1) ) cycle
-                        call spproj%remove_state_artifacts_from_osout(s)
-                    enddo
-                    call spproj%reattribute_state_artifacts_in_osout(unique_states(1), 1)
-                else
-                    ! wipe all states
-                    do s = mins,maxs
-                        call spproj%remove_state_artifacts_from_osout(s)
-                    enddo
-                endif
+                do s = mins,maxs
+                    call spproj%remove_state_artifacts_from_osout(s)
+                enddo
             endif
             deallocate(states_to_select, unique_states)
         end subroutine perform_states_selection

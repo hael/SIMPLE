@@ -248,18 +248,6 @@ contains
         call self%remove_entry_from_osout('fsc',      state)
     end subroutine remove_state_artifacts_from_osout
 
-    module subroutine reattribute_state_artifacts_in_osout( self, prev_state, new_state )
-        class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: prev_state, new_state
-        integer :: i
-        i = self%get_os_out_entry_index('vol', prev_state)
-        if( i > 0 ) call self%os_out%set(i, 'state', new_state)
-        i = self%get_os_out_entry_index('vol_cavg', prev_state)
-        if( i > 0 ) call self%os_out%set(i, 'state', new_state)
-        i = self%get_os_out_entry_index('fsc', prev_state)
-        if( i > 0 ) call self%os_out%set(i, 'state', new_state)
-    end subroutine reattribute_state_artifacts_in_osout
-
     ! Getters
 
     module logical function isthere_in_osout( self, which_imgkind, state )

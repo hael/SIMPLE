@@ -144,7 +144,6 @@ contains
     procedure, private :: get_os_out_entry_index
     procedure          :: remove_entry_from_osout
     procedure          :: remove_state_artifacts_from_osout
-    procedure          :: reattribute_state_artifacts_in_osout
     ! OUT - Getters
     procedure          :: isthere_in_osout
     procedure          :: get_all_vols
@@ -676,11 +675,6 @@ interface
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: state
     end subroutine remove_state_artifacts_from_osout
-
-    module subroutine reattribute_state_artifacts_in_osout( self, prev_state, new_state )
-        class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: prev_state, new_state
-    end subroutine reattribute_state_artifacts_in_osout
 
     ! OUT - Getters
 
