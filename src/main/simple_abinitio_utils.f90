@@ -133,9 +133,6 @@ interface
         real,              intent(out) :: ufrac_cap
     end subroutine calc_docked_multistate_max_sampling
 
-    module subroutine force_stage1_lowpass_limit( lpinfo_local )
-        type(lp_crop_inf), intent(inout) :: lpinfo_local(:)
-    end subroutine force_stage1_lowpass_limit
 end interface
 
 contains
@@ -384,17 +381,6 @@ contains
             call lpstages(params%box, nstages, frcs_avg, params%smpd,&
             &lpstart_bounds(1), lpstart_bounds(2), lpfinal, lpinfo, l_cavgs, verbose=.true.)
         endif
-        ! Preserve an explicit stage-1 limit; use the shell-5 default only when lpstart is absent.
-        if( l_cavgs )then
-            ! as previously determined
-        else
-            if( present(lpstart) )then
-                ! as previously determined
-            else
-                ! safeguard
-                call force_stage1_lowpass_limit(lpinfo)
-            endif
-        endif
         ! cleanup
         call clsfrcs%kill
         contains
@@ -414,18 +400,16 @@ contains
 
     end subroutine set_lplims_from_frcs
 
-    subroutine set_lplims_from_input( params, spproj, lpstart, lpstop, guardrail )
+    subroutine set_lplims_from_input( params, spproj, lpstart, lpstop )
         class(parameters), intent(inout) :: params
         class(sp_project), intent(in)    :: spproj
         real,              intent(in)    :: lpstart, lpstop
-        logical,           intent(in)    :: guardrail
         integer :: nstages
         l_cavgs_mode = .false.
         nstages = active_lp_schedule_nstages()
         if( allocated(lpinfo) ) deallocate(lpinfo)
         allocate(lpinfo(nstages))
         call lpstages_setlims(params%box, nstages, params%smpd, lpstart, lpstop, lpinfo)
-        if( guardrail ) call force_stage1_lowpass_limit(lpinfo)
     end subroutine set_lplims_from_input
 
     integer function active_lp_schedule_nstages() result(nstages)

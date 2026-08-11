@@ -121,6 +121,7 @@ contains
             THROW_HARD('inpl_cont=yes requires the raw Euclidean joint objective')
         endif
         self%continuous_active = trim(self%p_ptr%inpl_cont) == 'yes' .and. &
+            &self%p_ptr%l_doshift .and. &
             &self%b_ptr%pftc%is_raw_euclid_objfun() .and. &
             &(.not. self%p_ptr%l_objfun_den)
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED

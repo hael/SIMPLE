@@ -1,5 +1,4 @@
 submodule(simple_abinitio_utils) simple_abinitio_controller
-use simple_math_ft, only: calc_lowpass_lim
 implicit none
 #include "simple_local_flags.inc"
 
@@ -11,7 +10,7 @@ integer,          parameter :: NSTAGES                 = 8
 integer,          parameter :: NSTAGES_INI3D           = 4    ! # of ini3D stages used for initialization
 integer,          parameter :: NSTAGES_INI3D_MAX       = 7
 integer,          parameter :: MAXITS(8)               = [20,20,17,15,12,12,12,25]
-integer,          parameter :: NSPACE(8)               = [1000,1000,1000,1000,2500,2500,5000,5000]
+integer,          parameter :: NSPACE(8)               = [500,1000,1000,1000,2500,2500,5000,5000]
 integer,          parameter :: NSPACE_CAVGS_EARLY      = 500  ! nspace for the first CAVGS_EARLY_NSTAGES stages of abinitio3D_cavgs
 integer,          parameter :: MAXITS_CAVGS_EARLY      = 15   ! maxits for the first CAVGS_EARLY_NSTAGES stages of abinitio3D_cavgs
 integer,          parameter :: CAVGS_EARLY_NSTAGES     = 3    ! # of early abinitio3D_cavgs stages using NSPACE_CAVGS_EARLY
@@ -35,7 +34,6 @@ integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
 integer,          parameter :: NSAMPLE_HET_SPLIT_CAP   = 100000
-character(len=*), parameter :: PROB_NEIGH_MODE_STAGE1  = 'snhc'
 character(len=*), parameter :: PROB_NEIGH_MODE_EARLY   = 'shc'
 character(len=*), parameter :: PROB_NEIGH_MODE_LATE    = 'state'
 character(len=*), parameter :: PROB_NEIGH_MODE_MULTI   = 'state'
@@ -46,7 +44,6 @@ real,             parameter :: LPSTOP_BOUNDS(2)        = [4.5,6.0]
 real,             parameter :: LPSTART_BOUNDS(2)       = [10.,20.]
 real,             parameter :: CENLP_DEFAULT           = 30.
 real,             parameter :: LPSYMSRCH_LB            = 12.
-integer,          parameter :: FIND_STAGE1             = 5    ! stage-1 Fourier shell index
 real,             parameter :: LPSTART_INI3D           = 20.  ! default lpstart for abinitio3D_cavgs/cavgs_ini
 real,             parameter :: LPSTOP_INI3D            = 8.   ! default lpstop for abinitio3D_cavgs/cavgs_ini
 real,             parameter :: LPSTOP_INDEPENDENT      = 6.   ! conservative default for independent multi-state abinitio3D
@@ -273,33 +270,19 @@ contains
             endif
         else
             if( trim(params%multivol_mode).eq.'single' )then
-                if( istage == 1 )then
-                    cfg%refine = 'prob_neigh'
-                    if( l_cavgs )then
-                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
-                    else
-                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_STAGE1
-                    endif
-                else if( istage <  PROB_REFINE_STAGE )then
-                    cfg%refine = 'prob_neigh'
+                if( istage < PROB_REFINE_STAGE )then
+                    cfg%refine           = 'prob_neigh'
                     cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
                 else if( istage < PROB_NEIGH_REFINE_STAGE )then
                     cfg%refine = 'prob'
                 else
-                    cfg%refine = 'prob_neigh'
-                    cfg%prob_neigh_mode = PROB_NEIGH_MODE_LATE
+                    cfg%refine           = 'prob_neigh'
+                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_LATE
                 endif
             else if( trim(params%multivol_mode).eq.'docked' )then
-                if( istage == 1 )then
-                    cfg%refine = 'prob_neigh'
-                    if( l_cavgs )then
-                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
-                    else
-                        cfg%prob_neigh_mode = PROB_NEIGH_MODE_STAGE1
-                    endif
-                else if( istage <  PROB_REFINE_STAGE )then
-                    cfg%refine          = 'prob_neigh'
-                    cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
+                if( istage < PROB_REFINE_STAGE )then
+                    cfg%refine           = 'prob_neigh'
+                    cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
                 else if( istage < PROB_NEIGH_REFINE_STAGE )then
                     cfg%refine = 'prob'
                 else
@@ -313,20 +296,16 @@ contains
             else if( trim(params%multivol_mode).eq.'independent' )then
                 if( istage < PROB_REFINE_STAGE )then
                     if( l_cavgs )then
-                        cfg%refine = 'prob_neigh'
-                        if( istage == 1 )then
-                            cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
-                        else if( istage <  PROB_REFINE_STAGE )then
-                            cfg%prob_neigh_mode = PROB_NEIGH_MODE_EARLY
-                        endif
+                        cfg%refine           = 'prob_neigh'
+                        cfg%prob_neigh_mode  = PROB_NEIGH_MODE_EARLY
                     else
-                        cfg%refine = 'shc'
-                        cfg%prob_neigh_mode = ''
+                        cfg%refine           = 'shc'
+                        cfg%prob_neigh_mode  = ''
                     endif
                 else if( istage < PROB_NEIGH_REFINE_STAGE )then
                     cfg%refine = 'prob'
                 else
-                    cfg%refine = 'prob_neigh'
+                    cfg%refine           = 'prob_neigh'
                     cfg%prob_neigh_mode  = PROB_NEIGH_MODE_MULTI
                 endif
             endif
@@ -615,13 +594,6 @@ contains
         sample_frac  = real(params%nsample) / real(nptcls_eff)
         l_force_full = sample_frac > abinitio_full_sample_switch_frac()
     end function force_full_sampling_mode
-
-    module subroutine force_stage1_lowpass_limit( lpinfo_local )
-        type(lp_crop_inf), intent(inout) :: lpinfo_local(:)
-        if( size(lpinfo_local) < 1 ) return
-        lpinfo_local(1)%lp = calc_lowpass_lim(FIND_STAGE1, lpinfo_local(1)%box_crop, lpinfo_local(1)%smpd_crop)
-        write(logfhandle,*) 'lp stage 1 reset to:', lpinfo_local(1)%lp
-    end subroutine force_stage1_lowpass_limit
 
     real function stage_matching_lp( cfg, params, istage, l_cmdline_lp_override ) result( lp )
         type(refine3D_stage_cfg), intent(in) :: cfg

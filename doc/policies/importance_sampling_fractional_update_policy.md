@@ -174,12 +174,12 @@ The resulting update fraction is capped by `UPDATE_FRAC_MAX`.
 
 Current high-level ab initio stage policy:
 
-- stage 1 uses `prob_neigh` with `prob_neigh_mode=snhc`
-- stage 2 uses `prob_neigh` with `prob_neigh_mode=shc`
+- stages 1 and 2 use `prob_neigh` with `prob_neigh_mode=shc`
 - stages 3-5 use `prob`
 - final neighborhood stages use `prob_neigh`
-- stages 1 and 2 use the same `nspace=1000`
-- stage 1 keeps its low-pass limit but reuses stage 2 `box_crop` and `smpd_crop`
+- stage 1 uses `nspace=500`; stages 2-4 use `nspace=1000`
+- every stage gets its low-pass and crop information independently from the
+  normal schedule
 - final active stages may switch to `fillin`, except where the multi-state
   policy disables it
 

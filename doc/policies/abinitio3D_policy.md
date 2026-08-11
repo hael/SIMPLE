@@ -73,12 +73,12 @@ Stage policy includes:
 
 - stage-specific `nspace` and `maxits`
 - cropped box and sampling from the low-pass plan
-- stages 1 and 2 use the same `nspace=1000`
-- stage 1 keeps its low-pass limit but reuses stage 2 `box_crop` and `smpd_crop`
+- stage 1 starts with `nspace=500`; stages 2 through 4 use `nspace=1000`
+- every stage gets its low-pass and crop information independently from the
+  normal FRC/input schedule
 - mode-specific staged search:
-  - `single` and `docked` particle runs use stage 1 `prob_neigh` with
-    `prob_neigh_mode=snhc`, stage 2 `prob_neigh` with
-    `prob_neigh_mode=shc`, middle `prob`, and late `prob_neigh`
+  - `single` and `docked` particle runs use `prob_neigh` with
+    `prob_neigh_mode=shc` in stages 1-2, middle `prob`, and late `prob_neigh`
   - `independent` particle runs use direct `shc` in stages 1-2, `prob` in
     stages 3-5, and `prob_neigh` in later user-enabled stages
 - `nspace_sub` for `prob_neigh`

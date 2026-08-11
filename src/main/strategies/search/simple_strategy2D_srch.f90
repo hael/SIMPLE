@@ -108,7 +108,8 @@ contains
             &trim(self%p_ptr%tseries) /= 'yes' .and. (.not. continuous_eligible) )then
             THROW_HARD('inpl_cont=yes requires the raw Euclidean joint objective')
         endif
-        self%continuous_active = continuous_eligible .and. trim(self%p_ptr%inpl_cont) == 'yes'
+        self%continuous_active = continuous_eligible .and. self%p_ptr%l_doshift .and. &
+            &trim(self%p_ptr%inpl_cont) == 'yes'
         self%has_continuous_e3 = .false.
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
         ! construct composites
