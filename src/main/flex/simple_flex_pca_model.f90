@@ -55,7 +55,9 @@ contains
         integer :: q, i, r, s, metric_valid_count, nfinch
         integer :: nstates_merged
         integer, allocatable :: merge_label(:)
-        real,    allocatable :: merged_weights(:,:)
+        real,    allocatable :: merged_weights(:,:), merged_targets(:,:), merged_bw(:)
+        real(dp), allocatable :: state_mass(:), merged_mass(:)
+        real(dp) :: sumw_s, sumw2_s
         real(dp), allocatable :: finch_targets(:,:)
         logical :: l_finch_states
         logical :: l_rot
@@ -304,13 +306,6 @@ contains
             call cv_select_bandwidths(params, build, pinds, nptcls, nstates, params%nbins, min_neff, &
                 &kdist, kfloor, state_weights, bandwidths, neff)
         endif
-        call write_covariance_tables(build, pinds, z, eigvals, prior_precision, state_weights, labels, &
-            &targets, bandwidths, neff, resid_energy, resid_mean_energy)
-        ! Hard state labels as a runnable project, so the embedding and its state assignment can be
-        ! judged by an INDEPENDENT reconstructor (plain reconstruct3D) rather than only through the
-        ! kernel-weighted backend below, which shares every upstream assumption with the embedding.
-        call write_discrete_state_project(build%spproj, pinds, labels, nstates, params%outfile)
-
         ! combined states and both halfsets in ONE pass through the gridding reconstructor
         ! (see reconstruct_flex_weighted_states: combined == even + odd exactly)
         params%outvol = 'flex_pca_state_001.mrc'
@@ -328,6 +323,10 @@ contains
             call two_gate_state_merge(params, pviews, state_weights, nptcls, nstates, &
                 &merge_label, nstates_merged)
             if( nstates_merged < nstates )then
+                allocate(state_mass(nstates))
+                do s = 1, nstates
+                    state_mass(s) = sum(real(state_weights(:,s), dp))
+                end do
                 allocate(merged_weights(nptcls,nstates_merged), source=0.)
                 do s = 1, nstates
                     merged_weights(:,merge_label(s)) = merged_weights(:,merge_label(s)) + state_weights(:,s)
@@ -336,6 +335,32 @@ contains
                 do i = 1, nptcls
                     if( labels(i) >= 1 .and. labels(i) <= nstates ) labels(i) = merge_label(labels(i))
                 end do
+                ! collapse the per-state tables by the same mass, else they describe nstates
+                ! while the weights, labels and maps describe nstates_merged
+                allocate(merged_targets(size(targets,1),nstates_merged), source=0.)
+                allocate(merged_bw(nstates_merged), source=0.)
+                allocate(merged_mass(nstates_merged), source=0.d0)
+                do s = 1, nstates
+                    r = merge_label(s)
+                    merged_targets(:,r) = merged_targets(:,r) + real(state_mass(s))*targets(:,s)
+                    merged_bw(r)        = merged_bw(r)        + real(state_mass(s))*bandwidths(s)
+                    merged_mass(r)      = merged_mass(r)      + state_mass(s)
+                end do
+                do r = 1, nstates_merged
+                    if( merged_mass(r) > DTINY )then
+                        merged_targets(:,r) = merged_targets(:,r) / real(merged_mass(r))
+                        merged_bw(r)        = merged_bw(r)        / real(merged_mass(r))
+                    endif
+                end do
+                call move_alloc(merged_targets, targets)
+                call move_alloc(merged_bw,      bandwidths)
+                deallocate(neff); allocate(neff(nstates_merged))
+                do r = 1, nstates_merged
+                    sumw_s  = sum(real(state_weights(:,r), dp))
+                    sumw2_s = sum(real(state_weights(:,r), dp)**2)
+                    neff(r) = real(sumw_s*sumw_s / max(sumw2_s, DTINY))
+                end do
+                deallocate(state_mass, merged_mass)
                 ! the re-reconstruction below writes 001..nstates_merged, so the maps above that
                 ! index are stale. Everything downstream addresses the state maps as the contiguous
                 ! run flex_pca_state_001..NNN, so leaving the tail behind delivers states the merge
@@ -349,11 +374,17 @@ contains
                 call reconstruct_flex_weighted_states(params, build, pinds, state_weights, nstates, &
                     &floor_rho=.true., outvol_even=string('flex_pca_even_state_001.mrc'), &
                     &outvol_odd=string('flex_pca_odd_state_001.mrc'))
-                call write_discrete_state_project(build%spproj, pinds, labels, nstates, params%outfile)
             endif
             deallocate(merge_label)
             write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE two_gate_merge seconds=', toc(t_blk)
         endif
+        ! after the merge, so the state indices match the delivered maps
+        call write_covariance_tables(build, pinds, z, eigvals, prior_precision, state_weights, labels, &
+            &targets, bandwidths, neff, resid_energy, resid_mean_energy)
+        ! Hard state labels as a runnable project, so the embedding and its state assignment can be
+        ! judged by an INDEPENDENT reconstructor (plain reconstruct3D) rather than only through the
+        ! kernel-weighted backend, which shares every upstream assumption with the embedding.
+        call write_discrete_state_project(build%spproj, pinds, labels, nstates, params%outfile)
         allocate(half_weights(nptcls,nstates), source=state_weights)
         ! nonuniform filtering LAST, so every delivered map is filtered the same way
         if( trim(params%nufilt) == 'yes' ) call apply_consensus_nu_filter(params, nstates)
@@ -383,12 +414,24 @@ contains
         class(cmdline),   intent(in)    :: cline
         integer, allocatable, intent(out) :: pinds(:)
         integer, intent(out) :: nptcls
-        integer :: q
+        integer :: q, i, cnt
+        integer, allocatable :: sel(:)
         if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('flex_pca requires oritype=ptcl3D')
         if( .not. cline%defined('vol1') ) THROW_HARD('flex_pca requires vol1=<consensus mean map>')
         if( trim(params%ptcl_src) /= 'raw' ) THROW_HARD('flex_pca currently requires ptcl_src=raw')
         if( params%nstates /= 1 ) THROW_HARD('flex_pca requires a one-state input project')
-        call build%spproj_field%sample4rec([params%fromp,params%top],nptcls,pinds)
+        ! not sample4rec: its updatecnt > 0 condition belongs to trailing reconstruction
+        allocate(sel(max(0, params%top - params%fromp + 1)))
+        cnt = 0
+        do i = params%fromp, params%top
+            if( build%spproj_field%get_state(i) > 0 )then
+                cnt = cnt + 1; sel(cnt) = i
+            endif
+        end do
+        nptcls = cnt
+        if( allocated(pinds) ) deallocate(pinds)
+        allocate(pinds(nptcls), source=sel(1:nptcls))
+        deallocate(sel)
         if( nptcls < 100 ) THROW_HARD('flex_pca requires at least 100 active particles')
         if( build%spproj%os_ptcl2D%get_noris() > 0 .and. &
             &build%spproj%os_ptcl2D%get_noris() /= build%spproj%os_ptcl3D%get_noris() ) &

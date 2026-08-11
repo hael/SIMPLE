@@ -34,7 +34,7 @@ used (`../pca/simple_diff_map_graphs.f90`, `../pca/simple_diff_map_denoise.f90`,
    Fourier projection and backprojection operations it builds on.
 
 Alongside the kernel state maps, the state stage writes `outfile` (default
-`flex_pca_states.simple`): a copy of the project carrying the hard state label of
+`flex_hard_states.simple`): a copy of the project carrying the hard state label of
 every embedded particle in `ptcl3D/state`, with unassigned particles left at
 state 0. This lets the embedding and its state assignment be judged with a plain
 `simple_exec prg=reconstruct3D projfile=<outfile> nstates=<n>`, independently of
