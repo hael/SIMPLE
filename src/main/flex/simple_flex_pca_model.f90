@@ -51,18 +51,15 @@ contains
         real(dp), allocatable :: latent_second(:,:,:)
         real(dp), allocatable :: resid_energy(:), resid_mean_energy(:)
         real, allocatable :: state_weights(:,:), half_weights(:,:), targets(:,:), bandwidths(:), neff(:)
-        real, allocatable :: traj_weights(:,:), traj_targets(:,:), traj_bandwidths(:), traj_neff(:)
-        real(dp), allocatable :: geo_targets(:,:)
-        integer, allocatable :: traj_labels(:), comp_rank(:)
         integer :: nptcls, ncomp, nstates, min_neff, state_axis, ncols_req, col_sep, neigs_req, nkern
-        integer :: q, i, r, s, metric_valid_count, axis_sel, nfinch
+        integer :: q, i, r, s, metric_valid_count, nfinch
         integer :: nstates_merged
         integer, allocatable :: merge_label(:)
         real,    allocatable :: merged_weights(:,:)
         real(dp), allocatable :: finch_targets(:,:)
         logical :: l_finch_states
-        logical :: l_geo, l_rot
-        real(dp), allocatable :: kdist(:,:), kfloor(:), tdist(:,:), tfloor(:)
+        logical :: l_rot
+        real(dp), allocatable :: kdist(:,:), kfloor(:)
         real(dp), allocatable :: comp_rho(:)     ! per-component reliability, drives state-target ordering
         real(dp), allocatable :: pviews(:,:)     ! per-particle viewing AXIS, for the GMM orientation term
         character(len=:), allocatable :: cachedir, cachestr
@@ -206,10 +203,9 @@ contains
             allocate(contrast(nptcls))
             allocate(comp_rho(ncomp), source=1.d0)
             ! ---- embedding: distributed when the master has parts ----
-            ! One qsys round, unlike the probe, because the basis is fixed here and the workers need
-            ! no per-iteration refresh. What they cannot do is finish, since the reliability prior
-            ! couples every particle, so they ship sufficient statistics and the master owns rho and
-            ! the re-solve. See write_embed_stats_part.
+            ! One qsys round: the basis is fixed, so workers need no per-iteration refresh. They
+            ! cannot finish, though -- the reliability prior couples every particle -- so they ship
+            ! sufficient statistics and the master owns rho and the re-solve. See write_embed_stats_part.
             if( flex_pca_is_master() .and. flex_pca_nparts() > 1 )then
                 call save_probe_state(ncomp, eigvals, sig2_eff)
                 call flex_pca_run_stage(PCA_STAGE_EMBED, 'embedding')
@@ -325,8 +321,7 @@ contains
         write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE states_combined_eo seconds=', toc(t_blk)
         ! ---- two-gate merge ----
         ! Collapse states the orientations or the maps say are not distinct, then reconstruct once
-        ! at the surviving count. Runs here because it needs the half maps the pass above just wrote,
-        ! and before the trajectory ordering, which should order the states actually delivered.
+        ! at the surviving count. Runs here because it needs the half maps the pass above just wrote.
         if( flex_pca_merge_enabled() .and. nstates > 1 )then
             t_blk = tic()
             allocate(merge_label(nstates))
@@ -360,77 +355,6 @@ contains
             write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE two_gate_merge seconds=', toc(t_blk)
         endif
         allocate(half_weights(nptcls,nstates), source=state_weights)
-        ! Order the reconstructed states along the dominant conformational motion in VOLUME space so the
-        ! trajectory endpoints span the actual change; the covariance state axis need not order the
-        ! states along the motion.
-        axis_sel = 0
-        allocate(comp_rank(ncomp))
-        do q = 1, ncomp
-            comp_rank(q) = q
-        end do
-        if( file_exists('flex_pca_pc001.mrc') )then
-            t_blk = tic()
-            call order_states_by_volume_trajectory(params, nstates, ncomp, axis_sel=axis_sel, comp_rank=comp_rank)
-            write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE traj_ordering seconds=', toc(t_blk)
-        else if( l_resume .and. file_exists(cachedir//'flex_pca_pc001.mrc') )then
-            ! resumed run: the eigenvolumes sit beside the cache we resumed from
-            call order_states_by_volume_trajectory(params, nstates, ncomp, eigdir=cachedir, axis_sel=axis_sel, &
-                &comp_rank=comp_rank)
-        else
-            write(logfhandle,'(A)') '>>> FLEX_PCA skipping volume-space trajectory ordering: no &
-                &flex_pca_pc###.mrc in the working directory or beside the embedding cache'
-        endif
-        ! ---- AUTOMATIC CONFORMATIONAL TRAJECTORY ---- Re-place the targets ALONG the component just
-        ! identified as carrying the reproducible motion, spanning its occupied range, and reconstruct.
-        if( axis_sel > min(ncomp, nkern) )then
-            write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA most reproducible component (',axis_sel, &
-                &') lies outside the ',min(ncomp,nkern),' components retained by nkern; keeping the &
-                &re-ordered trajectory. Raise nkern to place targets along it'
-            axis_sel = 0
-        endif
-        if( axis_sel > 0 )then
-            ! preferred placement is the FINCH manifold geodesic; fall back to the single axis
-            l_geo = .false.
-            if( params%ngeo /= 0 )then
-                allocate(geo_targets(ncomp,nstates))
-                call finch_geodesic_targets(z, nptcls, ncomp, nstates, comp_rank, &
-                    &merge(params%ngeo, min(ncomp,6), params%ngeo > 0), axis_sel, geo_targets, l_geo)
-                if( .not. l_geo ) deallocate(geo_targets)
-            endif
-            if( l_geo )then
-                write(logfhandle,'(A)') '>>> FLEX_PCA placing trajectory targets on the FINCH manifold &
-                    &geodesic -> flex_pca_traj_###.mrc'
-                call build_covariance_state_weights(z, nptcls, ncomp, nkern, nstates, axis_sel, min_neff, &
-                    &eigvals, latent_second, traj_weights, traj_targets, traj_bandwidths, traj_neff, traj_labels, &
-                    &dist_out=tdist, bfloor_out=tfloor, targets_in=geo_targets)
-                deallocate(geo_targets)
-            else
-                write(logfhandle,'(A,I0,A)') '>>> FLEX_PCA placing trajectory targets along component ', &
-                    &axis_sel,' (selected by half-set reproducibility) -> flex_pca_traj_###.mrc'
-                call build_covariance_state_weights(z, nptcls, ncomp, nkern, nstates, axis_sel, min_neff, &
-                    &eigvals, latent_second, traj_weights, traj_targets, traj_bandwidths, traj_neff, traj_labels, &
-                    &dist_out=tdist, bfloor_out=tfloor, comp_rho=comp_rho)
-            endif
-            ! The frames are a SEQUENCE -- flex_pca_traj_001..NNN is read as one -- but neither
-            ! placement guarantees the emitted order runs along the path. Sort before anything
-            ! downstream indexes them.
-            call order_trajectory_targets(traj_weights, traj_targets, traj_bandwidths, traj_neff, &
-                &traj_labels, min(ncomp,nkern), nstates)
-            ! Cross-validate the bandwidth PER TRAJECTORY FRAME. Placement fixes each frame's target but
-            ! not how much of the manifold it averages, and a density-blind floor gives dense middle frames
-            ! several times the effective particle count of the sparse ends -- the smeared-middle failure.
-            if( params%nbins > 1 )then
-                call cv_select_bandwidths(params, build, pinds, nptcls, nstates, params%nbins, min_neff, &
-                    &tdist, tfloor, traj_weights, traj_bandwidths, traj_neff)
-            endif
-            params%outvol = 'flex_pca_traj_001.mrc'
-            t_blk = tic()
-            call reconstruct_flex_weighted_states(params, build, pinds, traj_weights, nstates, floor_rho=.true.)
-            write(logfhandle,'(A,F9.1)') '>>> FLEX_PCA STAGE states_traj seconds=', toc(t_blk)
-            call write_trajectory_targets(axis_sel, nstates, ncomp, traj_targets, traj_bandwidths, traj_neff)
-            deallocate(traj_weights, traj_targets, traj_bandwidths, traj_neff, traj_labels)
-            if( allocated(tdist) ) deallocate(tdist, tfloor)
-        endif
         ! nonuniform filtering LAST, so every delivered map is filtered the same way
         if( trim(params%nufilt) == 'yes' ) call apply_consensus_nu_filter(params, nstates)
         call write_covariance_manifest(params, nptcls, ncomp, nstates, state_axis, min_neff, sigma_loaded)
@@ -494,17 +418,11 @@ contains
 
     !> Report what the requested state count will cost in resident reconstructors.
     !!
-    !! reconstruct_flex_weighted_states allocates all nstates reconstructors before the particle
-    !! loop, plus a second nstates when the halfsets are fused, each carrying an expanded complex
-    !! grid and its rho at the reconstruction box. The cost is therefore linear in nstates, cubic in
-    !! box_rec, and paid up front -- so it can be estimated here and named alongside the knobs that
-    !! control it.
+    !! All nstates reconstructors are allocated up front, plus a second nstates when the halfsets
+    !! are fused: linear in nstates, cubic in box_rec.
     !!
-    !! REPORT ONLY. This used to refuse to run above a fixed 64 GB budget, which is not a number this
-    !! code can know: the figure below is an estimate of ONE allocation on a machine whose memory,
-    !! other tenants and swap are all unknown here, and the nparts multiplier assumes every process is
-    !! resident at once. Refusing on it blocked runs that fit and never caught the cases that did not.
-    !! The operator sees the number and decides.
+    !! REPORT ONLY. A former hard 64 GB refusal blocked runs that fit and missed ones that did not --
+    !! this estimates ONE allocation on a machine whose memory and other tenants are unknown here.
     subroutine report_state_memory( params, nstates )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: nstates
@@ -784,8 +702,7 @@ contains
         else if( axis == 0 .and. present(comp_rho) .and. .not. cov_env_flag_on('SIMPLE_COV_KMEANS') )then
             ! ---- 1-D reliability-ordered equal-occupancy path (SIMPLE_COV_RELPATH=1) ----
             ! Correct coverage on a genuine reaction coordinate, but it MERGES states on a branched
-            ! manifold: on IgG-RL it collapsed 20 requested states onto 6 distinct ground-truth
-            ! conformations. Kept for 1-D data and as the diffusion fallback, not as the default.
+            ! manifold. Kept for 1-D data and as the diffusion fallback, not as the default.
             allocate(ppath(nptcls), tpath(nstates))
             call reliability_path_targets(z(:,1:nk), nptcls, nk, nstates, wcomp, comp_rho(1:nk), tcen, &
                 &proj_out=ppath, tproj_out=tpath)
@@ -878,15 +795,11 @@ contains
             call hpsort(sorted)
             ifloor = max(1, min(nptcls, min_neff))
             if( l_relpath )then
-                ! Tie the kernel to the TARGET SPACING rather than to the latent dimension. chi2(nk)
-                ! grows with nk, so the dimension alone forces kernels wide enough to swallow several
-                ! neighbouring targets -- which is why lowering nkern strands particles instead of
-                ! sharpening states. One slice's worth of particles is the width at which the nstates
-                ! kernels tile the path with modest overlap.
-                ! Support spans TWO slices: one slice each side of the target. Adjacent supports then
-                ! overlap, so every particle is inside at least one and none is stranded, while a state
-                ! still draws predominantly on its own slice. The kernel support is dist < h^2 = 2*bmin,
-                ! hence the half.
+                ! Tie the kernel to TARGET SPACING, not the latent dimension: chi2(nk) grows with nk,
+                ! so the dimension alone forces kernels wide enough to swallow neighbouring targets --
+                ! which is why lowering nkern strands particles instead of sharpening states. Support
+                ! spans two slices, one each side, so adjacent supports overlap and nothing is
+                ! stranded. Support is dist < h^2 = 2*bmin, hence the half.
                 ispace = max(1, min(nptcls, (2*nptcls)/max(nstates,1)))
                 bmin   = 0.5d0*real(sorted(max(ifloor, ispace)),dp)
                 bwsrc  = merge('path-spacing', 'min_neff-nn ', ispace >= ifloor)
@@ -941,10 +854,9 @@ contains
             neff(state)       = real(sumw*sumw/max(sumw2,DTINY))
         end do
         ! ---- ASSIGNMENT RULE ----
-        ! The tied-covariance mixture is the default; SIMPLE_COV_KERNEL=0 is not a thing, opt out with
-        ! SIMPLE_COV_GMM=0 to recover the Epanechnikov kernel measured above. The kernel loop above
-        ! still runs because dist_out feeds cv_select_bandwidths and the EXCLUSIVE path, and its
-        ! distance quantiles remain the useful diagnostic of whether the chi2 scale is right.
+        ! Tied-covariance mixture by default; SIMPLE_COV_GMM=0 recovers the Epanechnikov kernel.
+        ! The kernel loop above still runs: dist_out feeds cv_select_bandwidths and the EXCLUSIVE
+        ! path, and its distance quantiles diagnose whether the chi2 scale is right.
         l_gmm = .not. cov_env_flag_off('SIMPLE_COV_GMM')
         if( l_gmm )then
             orient_lam = 0.d0
@@ -1053,123 +965,13 @@ contains
         deallocate(wcomp, tvec, tcen, occ, dist, dvec, sorted, pk)
     end subroutine build_covariance_state_weights
 
-    !>  Order a trajectory's targets ALONG the path they sit on, and permute everything that indexes
-    !!  them to match.
-    !!
-    !!  The geodesic and single-axis placements both return a SET of targets on the manifold; nothing
-    !!  guarantees the order they come out in is the order along the path, and the file names
-    !!  flex_pca_traj_001..NNN are read by everyone as a sequence. Measured on Ribosembly: the sixteen
-    !!  delivered frames matched ground-truth states 2, 8, 12, 12, 12, 10, 7, 9, 3, 11, 15, 14, 5, 4,
-    !!  13, 15 in file order -- the volumes spanned the assembly series correctly (mass tracked the
-    !!  matched state at r=0.999) but flipping through them showed no progression, which reads as a
-    !!  far worse result than it is.
-    !!
-    !!  Ordering is by projection onto the leading principal direction of the TARGET SET, which is the
-    !!  arclength direction for anything path-like. Sign is fixed by the projection of the first
-    !!  target so repeat runs do not silently reverse. A closed loop has no well-defined order and is
-    !!  left alone -- detected as a leading direction carrying less than half the target variance.
-    subroutine order_trajectory_targets( weights, targets, bandwidths, neff, labels, nk, nstates )
-        real,    allocatable, intent(inout) :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
-        integer, allocatable, intent(inout) :: labels(:)
-        integer,              intent(in)    :: nk, nstates
-        real(dp), allocatable :: T(:,:), C(:,:), ev(:), evec(:,:), proj(:)
-        real,     allocatable :: wtmp(:,:), ttmp(:,:), btmp(:), ntmp(:)
-        integer,  allocatable :: ord(:), inv(:)
-        real(dp) :: mu_q, frac
-        integer  :: q, r, s, nrot, i
-        if( nstates < 3 ) return
-        allocate(T(nk,nstates), C(nk,nk), ev(nk), evec(nk,nk), proj(nstates), ord(nstates))
-        do s = 1, nstates
-            do q = 1, nk
-                T(q,s) = real(targets(q,s),dp)
-            end do
-        end do
-        do q = 1, nk
-            mu_q = sum(T(q,:)) / real(nstates,dp)
-            T(q,:) = T(q,:) - mu_q
-        end do
-        C = matmul(T, transpose(T)) / real(nstates,dp)
-        call jacobi(C, nk, nk, ev, evec, nrot)
-        call eigsrt(ev, evec, nk, nk)
-        frac = ev(1) / max(sum(ev), DTINY)
-        if( frac < 0.5d0 )then
-            write(logfhandle,'(A,F6.3,A)') '>>> FLEX_PCA trajectory targets are not path-like (leading &
-                &direction carries ',frac,' of target variance); leaving the emitted order alone'
-            deallocate(T, C, ev, evec, proj, ord)
-            return
-        endif
-        do s = 1, nstates
-            proj(s) = sum(evec(:,1)*T(:,s))
-        end do
-        do s = 1, nstates
-            ord(s) = s
-        end do
-        ! insertion sort on nstates <= 20 entries; keeps the permutation explicit
-        do s = 2, nstates
-            i = ord(s)
-            r = s - 1
-            do while( r >= 1 )
-                if( proj(ord(r)) <= proj(i) ) exit
-                ord(r+1) = ord(r)
-                r = r - 1
-            end do
-            ord(r+1) = i
-        end do
-        if( proj(ord(1)) > proj(ord(nstates)) ) ord = ord(nstates:1:-1)   ! deterministic sign
-        allocate(wtmp(size(weights,1),nstates), ttmp(size(targets,1),nstates))
-        allocate(btmp(nstates), ntmp(nstates), inv(nstates))
-        do s = 1, nstates
-            wtmp(:,s) = weights(:,ord(s))
-            ttmp(:,s) = targets(:,ord(s))
-            btmp(s)   = bandwidths(ord(s))
-            ntmp(s)   = neff(ord(s))
-            inv(ord(s)) = s
-        end do
-        weights = wtmp; targets = ttmp; bandwidths = btmp; neff = ntmp
-        do i = 1, size(labels)
-            if( labels(i) >= 1 .and. labels(i) <= nstates ) labels(i) = inv(labels(i))
-        end do
-        write(logfhandle,'(A,F6.3,A)') '>>> FLEX_PCA trajectory frames ordered along the path &
-            &(leading direction carries ',frac,' of target variance)'
-        call flush(logfhandle)
-        deallocate(T, C, ev, evec, proj, ord, wtmp, ttmp, btmp, ntmp, inv)
-    end subroutine order_trajectory_targets
-
     !>  Tied-covariance Gaussian-mixture responsibilities over the placed state targets.
     !!
-    !!  Replaces the compact-support Epanechnikov kernel as the assignment rule. The kernel gives a
-    !!  particle zero weight in every state whose support it falls outside, so it contributes to no
-    !!  map at all -- 48 % of Ribosembly particles at the shipped settings. Widening the kernel to
-    !!  fix that pulls every state toward consensus, which is the coverage/distinctness trade the
-    !!  nkern experiment ran into. A mixture removes the trade: support is unbounded, so coverage is
-    !!  100 % by construction, while the fitted tied covariance and the free means keep the states
-    !!  apart.
-    !!
-    !!  Measured on Ribosembly against ground truth with the probe-refined embedding, holding target
-    !!  placement fixed so the comparison isolates the assignment rule
-    !!  (`scripts/state_assign_proto.py`):
-    !!
-    !!    rule                                    ARI    NMI   coverage  purity  distinct GT
-    !!    Epanechnikov kernel (previous default) 0.532  0.745    52.0 %   0.770       10/16
-    !!    hard nearest-target Voronoi            0.658  0.786   100.0 %   0.747       10/16
-    !!    tied GMM, means pinned at the targets  0.781  0.902   100.0 %   0.874       10/16
-    !!    tied GMM, means free (this routine)    0.900  0.939   100.0 %   0.945       13/16
-    !!
-    !!  The gain splits about evenly three ways: coverage, the fitted covariance shape, and letting
-    !!  the means move. Plain softmax over the kernel bandwidth is NOT a substitute -- it reaches
-    !!  100 % coverage but drops to ARI 0.310 / purity 0.688, because every particle then contributes
-    !!  to every state and the maps blur back toward consensus.
-    !!
-    !!  FREE MEANS ARE SAFE ON A CONTINUUM, which is not obvious: mode / mean-shift refinement is
-    !!  ruled out for exactly this reason (it collapsed IgG's 20 targets onto 1 conformation, because
-    !!  a continuum has no modes for targets to climb to). A mixture is different in kind -- its
-    !!  components repel through the shared responsibilities instead of each climbing the same
-    !!  density gradient independently. Measured on IgG-RL, latent proxy, targets scored by nearest
-    !!  ground-truth conformation: distinct 6/20 -> 20/20, reaction-coordinate span 27.3 % -> 85.9 %.
-    !!  It spreads, it does not collapse.
-    !!
-    !!  Tied covariance because the within-state spread here is shared measurement error; a covariance
-    !!  per component estimates K*nk*(nk+1)/2 parameters the data cannot support and fits noise.
+    !!  Replaces the Epanechnikov kernel, whose compact support left many particles contributing to
+    !!  no map at all. Softmax over the bandwidth is not a substitute -- it blurs every state back
+    !!  toward consensus. Free means spread on a continuum where mean-shift collapses; tied
+    !!  covariance because within-state spread is shared measurement error.
+    !!  Measurements: doc/implementation_notes/flex_pca_state_placement_measurements.md
     subroutine gmm_state_weights( z, nptcls, ncomp, nk, nstates, tcen, wcomp, weights, neff, &
         &bandwidths, labels, views, orient_lam )
         integer,  intent(in)    :: nptcls, ncomp, nk, nstates
@@ -1347,13 +1149,10 @@ contains
             endif
             if( abs(ll - prev_ll) < GMM_TOL*abs(ll) )then
                 ! ---- MERGE REDUNDANT COMPONENTS, RESPAWN WHERE COVERAGE IS WORST ----
-                ! Converged EM will happily park several components on one well-populated region and
-                ! leave other states with none: measured on Ribosembly, three of sixteen targets landed
-                ! on ground-truth state 15 while states 0 and 11 got none -- and the embedding ceiling
-                ! says all sixteen were reachable, so this is the mixture wasting targets, not a limit
-                ! of the latent. Two means closer than GMM_MERGE_D2 in the tied-covariance metric
-                ! describe the same state; keep one and restart the other at the worst-explained
-                ! particle, which is by construction in a region no component currently owns.
+                ! Converged EM parks several components on one populated region and starves others,
+                ! wasting targets the embedding could reach. Two means closer than GMM_MERGE_D2 in the
+                ! tied metric are the same state; keep one and restart the other at the worst-explained
+                ! particle, which no component currently owns.
                 if( nrespawn < GMM_MAX_RESPAWN )then
                     kmin = 0; kdrop = 0; dmin = huge(1.d0)
                     do state = 1, nstates - 1
@@ -1391,13 +1190,10 @@ contains
             &'>>> FLEX_PCA GMM tied-covariance responsibilities: iters=',min(it,GMM_MAXIT), &
             &'  loglik=',ll,'  pi range ',minval(pival),' - ',maxval(pival)
         ! ---- MODEL SELECTION DIAGNOSTICS ----
-        ! The kernel never had a likelihood, so the state count could only ever be supplied. A mixture
-        ! does, which makes BIC/ICL available for choosing it. ICL is BIC plus the mean-entropy penalty
-        ! -2*sum_ik r_ik log r_ik: BIC scores how well the density is fitted and will happily spend
-        ! several components on one well-populated state, whereas ICL charges for ambiguous
-        ! responsibilities and so prefers components that correspond to SEPARATED states -- which is
-        ! the question actually being asked here. Reported per run so a ladder over npreimages can be
-        ! read off directly; nothing is selected automatically yet.
+        ! The kernel had no likelihood, so the state count could only be supplied; a mixture makes
+        ! BIC/ICL available. ICL is BIC plus the entropy penalty -2*sum_ik r_ik log r_ik: BIC will
+        ! spend several components on one populated state, ICL charges for ambiguous responsibilities
+        ! and so prefers SEPARATED states. Reported per run; nothing is selected automatically yet.
         nfree  = nstates*nk + (nk*(nk+1))/2 + nstates - 1
         bicval = -2.d0*ll*real(nptcls,dp) + real(nfree,dp)*log(real(nptcls,dp))
         ent    = 0.d0
@@ -1419,16 +1215,11 @@ contains
         call flush(logfhandle)
         if( l_orient ) write(logfhandle,'(A,F7.3)') &
             &'>>> FLEX_PCA GMM orientation-coverage term active, lambda=',lam
-        ! SPARSIFY before handing the responsibilities over. This is not an optimisation, it is
-        ! required: insert_plane_oversamp_multi_scaled compacts the live states per particle and skips
-        ! the plane entirely when none are live, and its comment states the assumption outright --
-        ! "a particle typically sits inside only one or two of the nstates targets and the remaining
-        ! scale pairs are EXACT zeros". Epanechnikov weights satisfy that by having compact support;
-        ! mixture responsibilities are strictly positive everywhere and do not, so every particle
-        ! would insert into all nstates maps. Measured consequence of leaving them dense: the state
-        ! reconstruction had produced no output after 35 minutes where the kernel path takes ~1.
-        ! A responsibility below RESP_FLOOR moves a 335k-particle average by <0.1 % of one particle,
-        ! so this is numerically free; renormalise so each particle still carries unit total mass.
+        ! SPARSIFY before handing the responsibilities over -- REQUIRED, not an optimisation.
+        ! insert_plane_oversamp_multi_scaled assumes most of a particle's scale pairs are EXACT zeros,
+        ! which compact-support kernel weights satisfy and strictly-positive responsibilities do not.
+        ! Left dense the state reconstruction does not finish; below RESP_FLOOR the truncation is
+        ! numerically free. Renormalise so each particle still carries unit total mass.
         nact_tot = 0
         !$omp parallel do default(shared) private(i,state,lsum) schedule(static) reduction(+:nact_tot)
         do i = 1, nptcls
@@ -1654,7 +1445,7 @@ contains
         if( stat == 0 ) off = ival == 0
     end function cov_env_flag_off
 
-    !> Nonuniform local-resolution filtering of the delivered state and trajectory maps, using ONE filter
+    !> Nonuniform local-resolution filtering of the delivered state maps, using ONE filter
     !! derived from the CONSENSUS half maps.
     subroutine apply_consensus_nu_filter( params, nstates )
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vol, &
@@ -1664,7 +1455,7 @@ contains
         type(image)  :: vol_e, vol_o, vin, vout
         type(string) :: fn, fn_out, spe, spo
         character(len=:), allocatable :: pe, po, base
-        integer :: s, ldim(3), ipass
+        integer :: s, ldim(3)
         ! consensus half maps: explicit vol_even/vol_odd if given, else derived from the vol1 stem
         base = params%vols(1)%to_char()
         if( len_trim(params%vol_even%to_char()) > 0 .and. len_trim(params%vol_odd%to_char()) > 0 )then
@@ -1701,25 +1492,18 @@ contains
         call write_nu_local_resolution_map(fn)
         call fn%kill
         ! apply the SAME filter map to every delivered volume
-        do ipass = 1, 2
-            do s = 1, nstates
-                if( ipass == 1 )then
-                    fn     = 'flex_pca_state_'//int2str_pad(s,3)//MRC_EXT
-                    fn_out = 'flex_pca_state_'//int2str_pad(s,3)//'_nu'//MRC_EXT
-                else
-                    fn     = 'flex_pca_traj_'//int2str_pad(s,3)//MRC_EXT
-                    fn_out = 'flex_pca_traj_'//int2str_pad(s,3)//'_nu'//MRC_EXT
-                endif
-                if( .not. file_exists(fn%to_char()) )then
-                    call fn%kill; call fn_out%kill; cycle
-                endif
-                call vin%new(ldim, params%smpd_crop)
-                call vin%read(fn)
-                call nu_filter_vol(vin, vout)
-                call vout%write(fn_out, del_if_exists=.true.)
-                call vin%kill; call vout%kill
-                call fn%kill; call fn_out%kill
-            end do
+        do s = 1, nstates
+            fn     = 'flex_pca_state_'//int2str_pad(s,3)//MRC_EXT
+            fn_out = 'flex_pca_state_'//int2str_pad(s,3)//'_nu'//MRC_EXT
+            if( .not. file_exists(fn%to_char()) )then
+                call fn%kill; call fn_out%kill; cycle
+            endif
+            call vin%new(ldim, params%smpd_crop)
+            call vin%read(fn)
+            call nu_filter_vol(vin, vout)
+            call vout%write(fn_out, del_if_exists=.true.)
+            call vin%kill; call vout%kill
+            call fn%kill; call fn_out%kill
         end do
         call cleanup_nu_filter()
         call vol_e%kill; call vol_o%kill
@@ -1940,343 +1724,9 @@ contains
         deallocate(feats, sd, sub, labels, reps)
     end subroutine finch_state_targets
 
-    !> Parse a comma-separated component list from an environment variable (e.g. "4,3,9"), falling back
-    !! to a single default axis when unset or unparseable. Out-of-range entries are dropped.
-    subroutine cov_parse_axes( name, ncomp, axis_dflt, axes, naxes )
-        character(len=*),     intent(in)  :: name
-        integer,              intent(in)  :: ncomp, axis_dflt
-        integer, allocatable, intent(out) :: axes(:)
-        integer,              intent(out) :: naxes
-        character(len=128) :: envval
-        integer :: stat, ln, i, j, v, tmp(32)
-        naxes = 0
-        call get_environment_variable(name, envval, ln, stat)
-        if( stat == 0 .and. ln > 0 )then
-            i = 1
-            do while( i <= ln .and. naxes < 32 )
-                j = index(envval(i:ln), ',')
-                if( j == 0 )then
-                    j = ln + 1
-                else
-                    j = i + j - 1
-                endif
-                read(envval(i:j-1), *, iostat=stat) v
-                if( stat == 0 .and. v >= 1 .and. v <= ncomp )then
-                    naxes = naxes + 1; tmp(naxes) = v
-                endif
-                i = j + 1
-            end do
-        endif
-        if( naxes < 1 )then
-            naxes = 1; tmp(1) = max(1, min(ncomp, axis_dflt))
-        endif
-        allocate(axes(naxes), source=tmp(1:naxes))
-    end subroutine cov_parse_axes
-
-    !> Anchor direction for the trajectory: the leading standardized-correlation eigenvector over the
-    !! given axes, expressed back in raw latent units. A motion is typically spread over several
-    !! components, so a multi-axis span reaches further along it than any single axis can.
-    subroutine build_anchor_direction( z, nptcls, ncomp, axes, naxes, wdir )
-        integer,  intent(in)  :: nptcls, ncomp, naxes, axes(naxes)
-        real(dp), intent(in)  :: z(nptcls,ncomp)
-        real(dp), intent(out) :: wdir(ncomp)
-        real(dp), allocatable :: C(:,:), evec(:,:), eval(:), sdv(:)
-        real(dp) :: mu_a, mu_b, acc
-        integer  :: ia, ib, i, nrot
-        wdir = 0.d0
-        if( naxes < 1 ) return
-        if( naxes == 1 )then
-            wdir(axes(1)) = 1.d0
-            return
-        endif
-        allocate(C(naxes,naxes), evec(naxes,naxes), eval(naxes), sdv(naxes))
-        do ia = 1, naxes
-            mu_a = sum(z(:,axes(ia))) / real(nptcls,dp)
-            sdv(ia) = sqrt(max(sum((z(:,axes(ia))-mu_a)**2)/real(nptcls,dp), DTINY))
-        end do
-        do ia = 1, naxes
-            mu_a = sum(z(:,axes(ia))) / real(nptcls,dp)
-            do ib = ia, naxes
-                mu_b = sum(z(:,axes(ib))) / real(nptcls,dp)
-                acc  = 0.d0
-                do i = 1, nptcls
-                    acc = acc + ((z(i,axes(ia))-mu_a)/sdv(ia)) * ((z(i,axes(ib))-mu_b)/sdv(ib))
-                end do
-                C(ia,ib) = acc / real(nptcls,dp)
-                C(ib,ia) = C(ia,ib)
-            end do
-        end do
-        call jacobi(C, naxes, naxes, eval, evec, nrot)
-        call eigsrt(eval, evec, naxes, naxes)
-        ! leading direction, expressed back in the RAW latent units the kernel works in
-        do ia = 1, naxes
-            wdir(axes(ia)) = evec(ia,1) / sdv(ia)
-        end do
-        acc = sqrt(sum(wdir*wdir))
-        if( acc > DTINY ) wdir = wdir / acc
-        deallocate(C, evec, eval, sdv)
-    end subroutine build_anchor_direction
-
-    subroutine finch_geodesic_targets( z, nptcls, ncomp, nstates, comp_rank, ngeo, axis_sel, centroids, ok )
-        integer,  intent(in)  :: nptcls, ncomp, nstates, ngeo
-        real(dp), intent(in)  :: z(nptcls,ncomp)
-        integer,  intent(in)  :: comp_rank(ncomp)     ! components, most reproducible first
-        integer,  intent(in)  :: axis_sel             ! component defining the trajectory ENDPOINTS
-        real(dp), intent(out) :: centroids(ncomp,nstates)
-        logical,  intent(out) :: ok
-        integer, parameter :: NFINCH_MAX = 20000      ! kd-tree 1-NN cost; a subsample fixes the manifold
-        integer, parameter :: NFINCH_NODE_CAP = 1200  ! graph work is O(nrep^2); this bounds it
-        type(finch_hierarchy) :: hier
-        real,     allocatable :: feats(:,:)
-        integer,  allocatable :: labels(:), reps(:), sub(:), path(:), prev(:), keep(:)
-        real(dp), allocatable :: rz(:,:), dist(:), sd(:), arc(:)
-        real,     allocatable :: zax(:)
-        real(dp), allocatable :: wdir(:), anchor(:)
-        integer,  allocatable :: axes(:)
-        integer :: naxes
-        logical,  allocatable :: done(:)
-        integer :: nsub, nd, i, j, q, s, k, knn, nrep, lev, a, b, u, v, ncon, npath, best_i, nkeep
-        real(dp) :: d2, dmax, w, target_arc, t, mu, qlo, qhi
-        ok = .false.
-        nd = max(1, min(ncomp, ngeo))
-        if( nstates < 2 .or. nptcls < 50 ) return
-        ! ---- subsample + standardized feature table over the retained components ----
-        nsub = min(nptcls, NFINCH_MAX)
-        allocate(sub(nsub))
-        do i = 1, nsub
-            sub(i) = 1 + int(real(i-1,dp)*real(nptcls-1,dp)/real(max(1,nsub-1),dp))
-        end do
-        allocate(feats(nd,nsub), sd(nd))
-        do q = 1, nd
-            k  = comp_rank(q)
-            mu = sum(z(:,k)) / real(nptcls,dp)
-            sd(q) = sqrt(max(sum((z(:,k)-mu)**2)/real(nptcls,dp), DTINY))
-            do i = 1, nsub
-                feats(q,i) = real((z(sub(i),k) - mu) / sd(q))
-            end do
-        end do
-        ! ---- FINCH -> cluster medoids ----
-        call fit_finch(feats, hier)
-        if( hier%get_nlevels() < 1 )then
-            call hier%kill; deallocate(feats, sd, sub); return
-        endif
-        ! FINEST level that still fits the O(nrep^2) graph work.
-        lev = hier%get_nlevels()
-        do i = hier%get_nlevels(), 1, -1
-            if( hier%get_nclusters(i) <= NFINCH_NODE_CAP ) lev = i
-        end do
-        if( hier%get_nclusters(lev) < max(3*nstates, 20) )then
-            ! every level below the cap is too coarse; take the finest available
-            lev = 1
-        endif
-        call hier%get_labels(lev, labels)
-        call finch_representatives(feats, labels, reps)
-        nrep = size(reps)
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> FLEX_PCA FINCH levels=',hier%get_nlevels(), &
-            &' level=',lev,' nodes=',nrep,' over components=',nd
-        if( nrep < nstates )then
-            call hier%kill; deallocate(feats, sd, sub, labels, reps); return
-        endif
-        ! node coordinates in the standardized subspace
-        allocate(rz(nd,nrep))
-        do i = 1, nrep
-            rz(:,i) = real(feats(:,reps(i)), dp)
-        end do
-        ! ---- kNN graph, grown until connected ----
-        allocate(dist(nrep), prev(nrep), done(nrep), arc(nrep))
-        knn = max(3, min(nrep-1, 6))
-        do
-            call dijkstra_knn(rz, nd, nrep, knn, 1, dist, prev)
-            ncon = count(dist < huge(1.d0)*0.5d0)
-            if( ncon == nrep .or. knn >= nrep-1 ) exit
-            knn = min(nrep-1, knn*2)
-        end do
-        if( ncon < nrep )then
-            write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA FINCH graph stayed disconnected (',ncon, &
-                &' of ',nrep,' nodes); falling back to axis placement'
-            call hier%kill; deallocate(feats,sd,sub,labels,reps,rz,dist,prev,done,arc); return
-        endif
-        ! Endpoints come from an ANCHOR direction, not from the longest geodesic: in a multi-component
-        ! subspace the longest geodesic runs along whichever direction happens to be most extended, which
-        ! need not be the motion, and the path then doubles back on it.
-        call cov_parse_axes('SIMPLE_COV_TRAJAXES', ncomp, axis_sel, axes, naxes)
-        allocate(wdir(ncomp), anchor(nptcls))
-        call build_anchor_direction(z, nptcls, ncomp, axes, naxes, wdir)
-        do i = 1, nptcls
-            anchor(i) = sum(z(i,:)*wdir)
-        end do
-        if( naxes > 1 )then
-            write(logfhandle,'(A,20(I0,1X))') '>>> FLEX_PCA trajectory anchored on the leading direction of components: ', &
-                &(axes(i), i=1,naxes)
-        endif
-        allocate(zax(nptcls))
-        zax = real(anchor)
-        call hpsort(zax)
-        qlo = real(zax(max(1, min(nptcls, nint(0.05*real(nptcls))))), dp)
-        qhi = real(zax(max(1, min(nptcls, nint(0.95*real(nptcls))))), dp)
-        deallocate(zax)
-        a = 1; b = 1; dmax = huge(1.d0); w = huge(1.d0)
-        do i = 1, nrep
-            d2 = abs(anchor(sub(reps(i))) - qlo)
-            if( d2 < dmax )then
-                dmax = d2; a = i
-            endif
-            d2 = abs(anchor(sub(reps(i))) - qhi)
-            if( d2 < w )then
-                w = d2; b = i
-            endif
-        end do
-        if( a == b )then
-            call hier%kill; deallocate(feats,sd,sub,labels,reps,rz,dist,prev,done,arc); return
-        endif
-        call dijkstra_knn(rz, nd, nrep, knn, a, dist, prev)
-        if( dist(b) >= huge(1.d0)*0.5d0 )then
-            call hier%kill; deallocate(feats,sd,sub,labels,reps,rz,dist,prev,done,arc); return
-        endif
-        ! ---- extract the a->b path ----
-        npath = 0; v = b
-        do
-            npath = npath + 1
-            if( v == a .or. npath > nrep ) exit
-            v = prev(v)
-        end do
-        if( npath < 2 )then
-            call hier%kill; deallocate(feats,sd,sub,labels,reps,rz,dist,prev,done,arc); return
-        endif
-        allocate(path(npath))
-        v = b
-        do i = npath, 1, -1
-            path(i) = v
-            if( v == a ) exit
-            v = prev(v)
-        end do
-        ! ---- resample the path to nstates targets by arc length ----
-        arc(1) = 0.d0
-        do i = 2, npath
-            d2 = 0.d0
-            do q = 1, nd
-                d2 = d2 + (rz(q,path(i)) - rz(q,path(i-1)))**2
-            end do
-            arc(i) = arc(i-1) + sqrt(d2)
-        end do
-        if( arc(npath) <= DTINY )then
-            call hier%kill; deallocate(feats,sd,sub,labels,reps,rz,dist,prev,done,arc,path); return
-        endif
-        ! Keep only the path nodes that ADVANCE monotonically along the anchor, so a path that doubles
-        ! back does not place several states on the same stretch, then INTERPOLATE the targets between
-        ! consecutive kept nodes in FULL latent coordinates. Snapping each state to its nearest node
-        ! instead would assign several states to the SAME particle, which reconstruct to identical volumes.
-        allocate(keep(npath))
-        nkeep = 1; keep(1) = path(1)
-        w = anchor(sub(reps(path(1))))
-        do i = 2, npath
-            d2 = anchor(sub(reps(path(i))))
-            if( (qhi > qlo .and. d2 > w) .or. (qhi <= qlo .and. d2 < w) )then
-                nkeep = nkeep + 1; keep(nkeep) = path(i); w = d2
-            endif
-        end do
-        if( nkeep < 2 )then
-            call hier%kill; deallocate(feats,sd,sub,labels,reps,rz,dist,prev,done,arc,path,keep); return
-        endif
-        centroids = 0.d0
-        do s = 1, nstates
-            target_arc = qlo + (qhi - qlo) * real(s-1,dp) / real(max(1,nstates-1),dp)
-            best_i = 1
-            do i = 1, nkeep-1
-                if( (qhi > qlo .and. anchor(sub(reps(keep(i)))) <= target_arc) .or. &
-                    (qhi <= qlo .and. anchor(sub(reps(keep(i)))) >= target_arc) ) best_i = i
-            end do
-            j = sub(reps(keep(best_i)))
-            k = sub(reps(keep(min(nkeep, best_i+1))))
-            w = anchor(k) - anchor(j)
-            if( abs(w) > DTINY )then
-                t = (target_arc - anchor(j)) / w
-                t = max(0.d0, min(1.d0, t))
-            else
-                t = 0.d0
-            endif
-            do q = 1, ncomp
-                centroids(q,s) = (1.d0-t)*z(j,q) + t*z(k,q)
-            end do
-        end do
-        deallocate(keep)
-        write(logfhandle,'(A,I0,A,I0,A,I0,A,F8.3)') '>>> FLEX_PCA FINCH geodesic: knn=',knn, &
-            &' endpoints=',a,'/',b,'  path arc length=',arc(npath)
-        call flush(logfhandle)
-        ok = .true.
-        call hier%kill
-        deallocate(feats, sd, sub, labels, reps, rz, dist, prev, done, arc, path)
-    end subroutine finch_geodesic_targets
-
-    !> Dijkstra from src over the symmetric kNN graph of the nrep columns of rz.
-    subroutine dijkstra_knn( rz, nd, nrep, knn, src, dist, prev )
-        integer,  intent(in)  :: nd, nrep, knn, src
-        real(dp), intent(in)  :: rz(nd,nrep)
-        real(dp), intent(out) :: dist(nrep)
-        integer,  intent(out) :: prev(nrep)
-        real(dp), allocatable :: d2mat(:,:), w(:)
-        integer,  allocatable :: nbr(:,:), ord(:)
-        logical,  allocatable :: done(:)
-        real(dp) :: d2, alt, dbest
-        integer  :: i, j, q, k, u, ibest
-        allocate(d2mat(nrep,nrep), source=0.d0)
-        do i = 1, nrep
-            do j = i+1, nrep
-                d2 = 0.d0
-                do q = 1, nd
-                    d2 = d2 + (rz(q,i)-rz(q,j))**2
-                end do
-                d2mat(i,j) = sqrt(d2); d2mat(j,i) = d2mat(i,j)
-            end do
-            d2mat(i,i) = huge(1.d0)
-        end do
-        ! kNN adjacency (symmetrized implicitly by scanning both directions below)
-        allocate(nbr(knn,nrep), w(nrep), ord(nrep))
-        do i = 1, nrep
-            w = d2mat(:,i)
-            do k = 1, knn
-                ibest = minloc(w, dim=1)
-                nbr(k,i) = ibest
-                w(ibest) = huge(1.d0)
-            end do
-        end do
-        allocate(done(nrep), source=.false.)
-        dist = huge(1.d0); prev = 0; dist(src) = 0.d0
-        do
-            ibest = 0; dbest = huge(1.d0)
-            do i = 1, nrep
-                if( .not.done(i) .and. dist(i) < dbest )then
-                    dbest = dist(i); ibest = i
-                endif
-            end do
-            if( ibest == 0 ) exit
-            u = ibest; done(u) = .true.
-            ! edges out of u, plus edges INTO u from nodes listing u as a neighbour (symmetry)
-            do k = 1, knn
-                j = nbr(k,u)
-                alt = dist(u) + d2mat(u,j)
-                if( alt < dist(j) )then
-                    dist(j) = alt; prev(j) = u
-                endif
-            end do
-            do i = 1, nrep
-                if( done(i) ) cycle
-                if( any(nbr(:,i) == u) )then
-                    alt = dist(u) + d2mat(u,i)
-                    if( alt < dist(i) )then
-                        dist(i) = alt; prev(i) = u
-                    endif
-                endif
-            end do
-        end do
-        deallocate(d2mat, nbr, w, ord, done)
-    end subroutine dijkstra_knn
-
-    !> Reliability proxy computable from a cached embedding alone: observed spread over mean posterior
-    !! variance, mapped through r/(1+r) onto the same "higher is better measured" scale as the
-    !! split-half rho. A component whose spread merely matches its own posterior width scores ~0.5;
-    !! one whose spread greatly exceeds it approaches 1. The posterior variances need a matrix inverse
-    !! per particle, so they are averaged over a stride sample -- only the mean enters.
+    !> Reliability proxy from a cached embedding alone: observed spread over mean posterior variance,
+    !! mapped through r/(1+r) onto the same scale as the split-half rho (spread matching posterior
+    !! width scores ~0.5). Posterior variances need a per-particle inverse, so they are stride-sampled.
     subroutine component_reliability_proxy( z, precision, nptcls, ncomp, rho )
         integer,  intent(in)  :: nptcls, ncomp
         real(dp), intent(in)  :: z(nptcls,ncomp), precision(ncomp,ncomp,nptcls)
@@ -2308,24 +1758,11 @@ contains
 
     !> Manifold-covering state targets by diffusion-map k-center.
     !!
-    !! This is the placement the two validation datasets jointly select, and it is deliberately
-    !! agnostic: it never asks whether the heterogeneity is continuous or compositional.
-    !!
-    !! k-means allocates centroids in proportion to DENSITY, so it over-samples whatever is
-    !! abundant and misses sparse states. A 1-D ordered path fixes coverage on a genuine reaction
-    !! coordinate but merges states on a BRANCHED manifold -- measured on IgG-RL it collapsed 20
-    !! requested states onto 6 distinct ground-truth conformations. A diffusion embedding turns
-    !! geodesic structure on the manifold into ordinary Euclidean distance, after which greedy
-    !! farthest-point (k-center) covers whatever shape the manifold actually has: a chain gives
-    !! evenly spaced path targets, a branched graph spreads targets across the branches.
-    !!
-    !! Measured against the alternatives at equal settings:
-    !!   IgG-RL (20 states)   distinct GT conformations 20/20, dihedral span 83.0%
-    !!                        (k-means 20/20 and 68.2%; 1-D path 6/20 and 53.7%; RECOVAR 68.7%)
-    !!   Ribosembly (16)      6/16 distinct GT volumes matched (k-means 5, 1-D path 4)
-    !!
-    !! Reliability weighting is essential: on both datasets z1 carries the largest eigenvalue and
-    !! the WORST split-half reliability (0.24 and 0.00), so an unweighted metric follows noise.
+    !! k-means allocates by DENSITY and misses sparse states; a 1-D path merges states on a BRANCHED
+    !! manifold. A diffusion embedding makes geodesic structure Euclidean, so greedy farthest-point
+    !! covers whatever shape the manifold has. Reliability weighting is essential: the largest-
+    !! eigenvalue component is typically the worst measured.
+    !! Measurements: doc/implementation_notes/flex_pca_state_placement_measurements.md
     subroutine diffusion_kcenter_targets( z, nptcls, ncomp, nstates, wcomp, rho, centroids, ok )
         integer,  intent(in)  :: nptcls, ncomp, nstates
         real(dp), intent(in)  :: z(nptcls,ncomp), wcomp(ncomp), rho(ncomp)
@@ -2487,12 +1924,9 @@ contains
                 dmin(i) = min(dmin(i), sum((psi(i,:)-psi(ibest,:))**2))
             end do
         end do
-        ! Every node inherits the CELL of the nearest selected node in the diffusion embedding, and a
-        ! target is the mean RAW latent coordinate of its whole cell. k-center selects RIM nodes on
-        ! purpose -- that is exactly what buys coverage -- so the selected node, and any small
-        ! neighbourhood around it, is a rim sample rather than a state. Averaging the full cell
-        ! regresses the target onto the state that cell actually covers. Measured on Ribosembly:
-        ! rim-node target 7/16 distinct states, cell mean 11/16.
+        ! Each node inherits the CELL of the nearest selected node; a target is the mean RAW latent
+        ! coordinate of the whole cell. k-center picks RIM nodes by design -- that is what buys
+        ! coverage -- so averaging the cell regresses the target onto the state it covers.
         allocate(cell(nnode), ccnt(nstates), source=0)
         do i = 1, nnode
             best = huge(1.d0); ibest = 1
@@ -2565,16 +1999,11 @@ contains
 
     !> Equal-occupancy targets along a reliability-ordered principal direction.
     !!
-    !! Two departures from k-means, aimed at the same failure. (1) The ordering direction is the leading
-    !! eigenvector of the latent covariance weighted by per-component RELIABILITY, so a high-variance but
-    !! poorly measured nuisance component cannot set the direction. nkern cannot achieve this because it
-    !! slices components by INDEX and the nuisance mode is normally component 1, the largest eigenvalue.
-    !! (2) Slices carry equal PARTICLE COUNTS rather than equal width, so targets spread over the
-    !! populated manifold instead of concentrating wherever the density happens to be highest -- k-means
-    !! allocates centroids in proportion to density, which is why it splits abundant states and never
-    !! isolates sparse ones.
-    !! Each target is the slice MEAN over all retained components, so the polyline of targets follows the
-    !! curvature of the manifold rather than cutting a straight chord across it.
+    !! Two departures from k-means. (1) The direction is the leading eigenvector of the latent
+    !! covariance weighted by RELIABILITY, so a high-variance but poorly measured nuisance mode cannot
+    !! set it; nkern cannot do this because it slices by INDEX and the nuisance mode is usually
+    !! component 1. (2) Slices carry equal PARTICLE COUNTS, not equal width, so targets spread over the
+    !! populated manifold. Each target is the slice MEAN, so the polyline follows manifold curvature.
     subroutine reliability_path_targets( z, nptcls, ncomp, nstates, wcomp, rho, centroids, proj_out, tproj_out )
         integer,  intent(in)  :: nptcls, ncomp, nstates
         real(dp), intent(in)  :: z(nptcls,ncomp), wcomp(ncomp), rho(ncomp)
@@ -2895,242 +2324,6 @@ contains
         deallocate(mind, csum, zbar, cnt, memb)
     end subroutine kmeans_latent_targets
 
-    !> Order the reconstructed state volumes along the dominant conformational motion.
-    subroutine order_states_by_volume_trajectory( params, nstates, ncomp, eigdir, axis_sel, comp_rank )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: nstates, ncomp
-        ! directory holding flex_pca_pc###.mrc.
-        character(len=*), optional, intent(in) :: eigdir
-        ! latent component carrying the reproducible motion; 0 if none could be selected
-        integer,          optional, intent(out) :: axis_sel
-        ! components ordered by half-set reproducibility, most reproducible first.
-        integer,          optional, intent(out) :: comp_rank(ncomp)
-        character(len=:), allocatable :: pcdir
-        type(image),  allocatable :: vols(:), eigs(:), evols(:), ovols(:)
-        real(dp),     allocatable :: X(:,:), vbar(:), coord(:), coord_best(:), U(:), diff(:)
-        real(dp),     allocatable :: Xe(:,:), Xo(:,:), deven(:), dodd(:)
-        integer,      allocatable :: order(:), order_best(:), mskidx(:)
-        real,         allocatable :: rmat(:,:,:), vsort(:)
-        type(string) :: fn
-        integer  :: s, k, nvox, ldim(3), iu, kbest, ipair, jpair, nmsk, imsk, ldim_pc(3), ifoo
-        real(dp) :: sc, sc_best, sep, cons, sep_best, cons_best, sep_pair
-        real(dp) :: rep, rep_best, thresh, amp, amp_best, score, score_best, mean_msk_rms
-        real(dp), allocatable :: rep_all(:)
-        integer,  allocatable :: rep_ord(:)
-        logical  :: l_halves
-        if( nstates < 2 ) return
-        if( present(axis_sel) ) axis_sel = 0
-        pcdir = ''
-        if( present(eigdir) ) pcdir = eigdir
-        ! The eigenvolumes are written at the box_crop of the run that produced them.
-        fn = pcdir//'flex_pca_pc001'//MRC_EXT
-        call find_ldim_nptcls(fn, ldim_pc, ifoo)
-        call fn%kill
-        if( ldim_pc(1) /= params%box_crop )then
-            write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA skipping volume-space trajectory ordering: &
-                &cached eigenvolumes are box ',ldim_pc(1),' but this run reconstructs at box ',params%box_crop, &
-                &'. The state maps are unaffected; re-run without infile= to order the trajectory'
-            call flush(logfhandle)
-            return
-        endif
-        ! Read the combined state volumes AT box_crop.
-        allocate(vols(nstates))
-        do s = 1, nstates
-            fn = 'flex_pca_state_'//int2str_pad(s,3)//MRC_EXT
-            call vols(s)%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
-            call fn%kill
-        end do
-        rmat = vols(1)%get_rmat(); ldim = shape(rmat); nvox = ldim(1)*ldim(2)*ldim(3)
-        allocate(X(nvox,nstates), vbar(nvox), source=0.d0)
-        do s = 1, nstates
-            X(:,s) = reshape(real(vols(s)%get_rmat(),dp), [nvox])
-        end do
-        do k = 1, nvox
-            vbar(k) = sum(X(k,:)) / real(nstates,dp)
-        end do
-        do s = 1, nstates
-            X(:,s) = X(:,s) - vbar
-        end do
-        ! ---- MOLECULE MASK (top 8 % of the state mean) ---- The axis score below is a half-set
-        ! reproducibility and MUST be confined to the molecule: the solvent baseline and the global level
-        ! of a state map reproduce trivially between halves and would dominate an unmasked correlation.
-        allocate(vsort(nvox))
-        vsort = real(vbar)
-        call hpsort(vsort)
-        thresh = real(vsort(max(1, min(nvox, nint(0.92*real(nvox))))), dp)
-        nmsk = count(vbar > thresh)
-        if( nmsk < 64 )then   ! degenerate mean: fall back to the whole box
-            nmsk = nvox
-            allocate(mskidx(nmsk))
-            do k = 1, nvox
-                mskidx(k) = k
-            end do
-        else
-            allocate(mskidx(nmsk))
-            imsk = 0
-            do k = 1, nvox
-                if( vbar(k) > thresh )then
-                    imsk = imsk + 1; mskidx(imsk) = k
-                endif
-            end do
-        endif
-        deallocate(vsort)
-        ! ---- HALF MAPS ---- Reproducibility needs the disjoint-particle reconstructions.
-        l_halves = file_exists('flex_pca_even_state_'//int2str_pad(1,3)//MRC_EXT) .and. &
-            &      file_exists('flex_pca_odd_state_' //int2str_pad(1,3)//MRC_EXT)
-        if( l_halves )then
-            allocate(evols(nstates), ovols(nstates))
-            allocate(Xe(nvox,nstates), Xo(nvox,nstates), source=0.d0)
-            allocate(deven(nmsk), dodd(nmsk), source=0.d0)
-            do s = 1, nstates
-                fn = 'flex_pca_even_state_'//int2str_pad(s,3)//MRC_EXT
-                call evols(s)%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
-                call fn%kill
-                Xe(:,s) = reshape(real(evols(s)%get_rmat(),dp), [nvox])
-                call evols(s)%kill
-                fn = 'flex_pca_odd_state_'//int2str_pad(s,3)//MRC_EXT
-                call ovols(s)%read_and_crop(fn, flex_rec_smpd(params), params%box_crop, params%smpd_crop)
-                call fn%kill
-                Xo(:,s) = reshape(real(ovols(s)%get_rmat(),dp), [nvox])
-                call ovols(s)%kill
-            end do
-            deallocate(evols, ovols)
-        endif
-        ! read the covariance eigenvolumes (candidate conformational directions)
-        allocate(eigs(ncomp), U(nvox), diff(nvox), coord(nstates), coord_best(nstates), &
-            &order(nstates), order_best(nstates))
-        do s = 1, nstates
-            order_best(s) = s
-        end do
-        ! AXIS SCORE = half-set reproducibility x endpoint amplitude. Reproducibility alone is not enough:
-        ! an axis can order the states coherently and reproduce well while its two extreme states are
-        ! nearly the same map, i.e. a collapsed trajectory.
-        kbest = 0; sc_best = -1.d0; sep_best = 0.d0; cons_best = 0.d0; rep_best = -2.d0
-        amp_best = 0.d0; score_best = -2.d0
-        ! RMS of the state mean on the molecule, so the amplitude below is a relative change
-        mean_msk_rms = sqrt(sum(U(mskidx)**2)/real(nmsk,dp))
-        allocate(rep_all(ncomp), source=-2.d0)
-        do k = 1, ncomp
-            fn = pcdir//'flex_pca_pc'//int2str_pad(k,3)//MRC_EXT
-            call eigs(k)%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-            call eigs(k)%read(fn); call fn%kill
-            U = reshape(real(eigs(k)%get_rmat(),dp), [nvox]); U = U - sum(U)/real(nvox,dp)
-            do s = 1, nstates
-                coord(s) = sum(X(:,s)*U)                     ! project each state onto U_k
-            end do
-            call argsort_ascending(coord, order, nstates)
-            diff = X(:,order(nstates)) - X(:,order(1))       ! trajectory endpoint difference
-            cons = abs(pearson_dp(diff, U, nvox))            ! self-consistency
-            sep  = max(0.d0, 1.d0 - pearson_dp(X(:,order(nstates)), X(:,order(1)), nvox))
-            if( l_halves )then
-                ! HALF-SET REPRODUCIBILITY of the endpoint difference, on the molecule.
-                deven = Xe(mskidx,order(nstates)) - Xe(mskidx,order(1))
-                dodd  = Xo(mskidx,order(nstates)) - Xo(mskidx,order(1))
-                rep   = pearson_dp(deven, dodd, nmsk)
-            else
-                rep = sep * cons                             ! legacy fallback, no half maps
-            endif
-            sc = sep * cons
-            ! ENDPOINT AMPLITUDE on the molecule, relative to the state mean
-            amp = sqrt(sum(diff(mskidx)**2)/real(nmsk,dp)) / max(mean_msk_rms, DTINY)
-            score = rep*amp
-            rep_all(k) = rep
-            if( score > score_best )then
-                score_best = score; rep_best = rep; sc_best = sc; kbest = k
-                coord_best = coord; order_best = order
-                sep_best = sep; cons_best = cons; amp_best = amp
-            endif
-            write(logfhandle,'(A,I3,A,F7.4,A,F7.4,A,F8.4,A,F7.4)') '>>>   axis pc',k, &
-                &'  repro=',rep,'  amp=',amp,'  score=',score,'  self-consistency=',cons
-            call eigs(k)%kill
-        end do
-        if( present(axis_sel) .and. l_halves ) axis_sel = kbest
-        ! SIMPLE_COV_TRAJAXIS forces the trajectory axis. The automatic pick answers "which component is
-        ! most reproducible", which is not the same question as "which physical motion": a dominant
-        ! density mode can reproduce better than the motion of interest and be near-orthogonal to it.
-        if( present(axis_sel) )then
-            call cov_env_int_pub('SIMPLE_COV_TRAJAXIS', axis_sel)
-            if( axis_sel > ncomp ) axis_sel = ncomp
-        endif
-        if( present(comp_rank) )then
-            allocate(rep_ord(ncomp))
-            call argsort_ascending(-rep_all, rep_ord, ncomp)   ! descending reproducibility
-            comp_rank = rep_ord
-            deallocate(rep_ord)
-        endif
-        ! most separated state pair anywhere in the set, reported alongside the chosen endpoints
-        sep_pair = -1.d0; ipair = 1; jpair = 1
-        do s = 1, nstates - 1
-            do k = s + 1, nstates
-                sc = 1.d0 - pearson_dp(X(:,s), X(:,k), nvox)
-                if( sc > sep_pair )then
-                    sep_pair = sc; ipair = s; jpair = k
-                endif
-            end do
-        end do
-        ! write trajectory-ordered volumes and the mapping
-        do s = 1, nstates
-            fn = 'flex_pca_traj_'//int2str_pad(s,3)//MRC_EXT
-            call vols(order_best(s))%write(fn, del_if_exists=.true.); call fn%kill
-        end do
-        call del_file('flex_pca_trajectory_order.txt')
-        open(newunit=iu,file='flex_pca_trajectory_order.txt',status='replace',action='write')
-        write(iu,'(A,I0,A,F8.4,A,F8.4,A,F8.4,A,F8.4,A)') '# volume-space trajectory: ordering eigenvolume pc',kbest, &
-            &' (half-set reproducibility=',rep_best,'; separation ',sep_best,' x self-consistency ',cons_best, &
-            &' = ',sc_best,')'
-        write(iu,'(A,I0,A,I0,A,F8.4)') '# most separated pair anywhere in the set: states ',ipair,' and ',jpair, &
-            &'  separation=',sep_pair
-        write(iu,'(A)') '# traj_position  original_state  projection_coord'
-        do s = 1, nstates
-            write(iu,'(I5,1X,I5,1X,ES16.8)') s, order_best(s), coord_best(order_best(s))
-        end do
-        close(iu)
-        write(logfhandle,'(A,I0,A,I0,A,F7.4,A,F7.4,A,F7.4,A)') '>>> FLEX_PCA volume-space state trajectory: ',nstates, &
-            &' states ordered by eigenvolume pc',kbest,' (half-set reproducibility=',rep_best,' separation=',sep_best, &
-            &' self-consistency=',cons_best,') -> flex_pca_traj_###.mrc'
-        write(logfhandle,'(A,F7.4,A,I0,A,I0,A,F7.4,A)') '>>> FLEX_PCA trajectory endpoint separation=',sep_best, &
-            &'; best separated pair anywhere is states ',ipair,'/',jpair,' at ',sep_pair, &
-            &' (a large shortfall means the ordering axis is not spanning the motion)'
-        call flush(logfhandle)
-        do s = 1, nstates
-            call vols(s)%kill
-        end do
-        deallocate(vols, eigs, X, vbar, U, diff, coord, coord_best, order, order_best, mskidx, rep_all)
-        if( allocated(Xe) ) deallocate(Xe, Xo, deven, dodd)
-    end subroutine order_states_by_volume_trajectory
-
-    !>  Ascending argsort (selection sort; n is small) returning the index permutation.
-    subroutine argsort_ascending( vals, order, n )
-        integer,  intent(in)  :: n
-        real(dp), intent(in)  :: vals(n)
-        integer,  intent(out) :: order(n)
-        integer :: i, j, best, tmp
-        do i = 1, n
-            order(i) = i
-        end do
-        do i = 1, n-1
-            best = i
-            do j = i+1, n
-                if( vals(order(j)) < vals(order(best)) ) best = j
-            end do
-            tmp = order(i); order(i) = order(best); order(best) = tmp
-        end do
-    end subroutine argsort_ascending
-
-    !>  Pearson correlation of two length-n double vectors.
-    real(dp) function pearson_dp( a, b, n )
-        integer,  intent(in) :: n
-        real(dp), intent(in) :: a(n), b(n)
-        real(dp) :: ma, mb, sa, sb, sab
-        ma = sum(a)/real(n,dp); mb = sum(b)/real(n,dp)
-        sa = sum((a-ma)**2); sb = sum((b-mb)**2); sab = sum((a-ma)*(b-mb))
-        if( sa > 0.d0 .and. sb > 0.d0 )then
-            pearson_dp = sab / sqrt(sa*sb)
-        else
-            pearson_dp = 0.d0
-        endif
-    end function pearson_dp
-
     !> Held-out (cross-halfset) embedding.
     subroutine heldout_embedding( params, build, mean_rec, pinds, nptcls, ncols_req, col_sep, neigs_req, &
         &basis_recs, eigvals, ncomp, sig2_eff, z, contrast, latent_second, resid_energy, resid_mean_energy )
@@ -3379,11 +2572,9 @@ contains
 
     !>  Write the hard state assignment as a runnable project: a copy of the input project in which
     !!  ptcl3D/state carries the state label of every embedded particle and 0 everywhere else.
-    !!  This decouples the embedding and its state assignment from the kernel-weighted reconstruction
-    !!  backend, so the clusters can be judged with a plain
+    !!  Lets the clusters be judged independently of the kernel-weighted backend, with a plain
     !!      simple_exec prg=reconstruct3D projfile=<outfile> nstates=<nstates>
-    !!  Particles the state stage left unassigned (label 0, see build_covariance_state_weights) stay at
-    !!  state 0 and are excluded by reconstruct3D, exactly as they are excluded from the kernel states.
+    !!  Unassigned particles stay at state 0 and are excluded, as they are from the kernel states.
     subroutine write_discrete_state_project( spproj, pinds, labels, nstates, outfile )
         type(sp_project), intent(inout) :: spproj
         integer,          intent(in)    :: pinds(:), labels(:), nstates
@@ -3429,27 +2620,6 @@ contains
         call outproj%kill
         deallocate(assigned)
     end subroutine write_discrete_state_project
-
-    !>  Latent targets of the automatically-placed conformational trajectory, so the sweep the
-    !!  flex_pca_traj_###.mrc volumes represent can be read off without re-running.
-    subroutine write_trajectory_targets( axis, nstates, ncomp, targets, bandwidths, neff )
-        integer, intent(in) :: axis, nstates, ncomp
-        real,    intent(in) :: targets(ncomp,nstates), bandwidths(nstates), neff(nstates)
-        integer :: s, q, iu
-        call del_file('flex_pca_trajectory_targets.txt')
-        open(newunit=iu, file='flex_pca_trajectory_targets.txt', status='replace', action='write')
-        write(iu,'(A,I0,A)') '# conformational trajectory placed along latent component ',axis, &
-            &', selected by half-set reproducibility of the endpoint difference'
-        write(iu,'(A)') '# state  bandwidth  effective_particles  axis_coord  t1..tncomp'
-        do s = 1, nstates
-            write(iu,'(I5,1X,ES16.8,1X,ES16.8,1X,ES16.8)',advance='no') s, bandwidths(s), neff(s), targets(axis,s)
-            do q = 1, ncomp
-                write(iu,'(1X,ES16.8)',advance='no') targets(q,s)
-            end do
-            write(iu,*)
-        end do
-        close(iu)
-    end subroutine write_trajectory_targets
 
     subroutine write_covariance_manifest( params, nptcls, ncomp, nstates, axis, min_neff, sigma_loaded )
         type(parameters), intent(in) :: params

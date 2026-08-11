@@ -20,8 +20,8 @@ used (`../pca/simple_diff_map_graphs.f90`, `../pca/simple_diff_map_denoise.f90`,
    accumulation, regularized halfset merge, reduced projected-covariance solve) and
    derives the low-rank real eigenbasis, then the contrast-aware MAP embedding.
 2. `simple_flex_pca_model.f90` is the driver: it owns the embedding cache and its
-   resume path, kernel state weights and bandwidth selection, weighted state
-   reconstruction, and the volume-space trajectory ordering.
+   resume path, kernel state weights and bandwidth selection, and weighted state
+   reconstruction.
 3. `simple_flex_pca_rec3D.f90` reconstructs the kernel-weighted states, combined
    and per halfset, in one pass through the gridding reconstructor. Its
    `floor_rho` argument applies a RELION-style shellwise density floor before the

@@ -447,17 +447,6 @@ subroutine new_icm2D( prgtab )
             &components by observed spread over posterior variance and keep those above ~1.5', &
             'leading components, 0=all', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
-        call flex_pca%add_input(UI_FILT, 'ngeo', 'num', &
-            'Components spanning the trajectory geodesic (default -1 = auto)', &
-            'The trajectory volumes are placed along a discrete geodesic over FINCH cluster &
-            &medoids, so the path follows the populated latent manifold instead of cutting a &
-            &straight chord across it, which a fast-marching PDE achieves on a &
-            &density grid. This sets how many latent components span the graph, taken in order &
-            &of half-set reproducibility; -1 uses min(neigs,6). Too many components buries the &
-            &manifold in noise dimensions where nearest neighbours carry no information. Set 0 &
-            &to disable the geodesic and place the trajectory along a single component instead', &
-            'geodesic components, -1=auto, 0=off', .false., -1.0, &
-        &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_PARM, 'infile', 'file', &
             'Cached embedding to resume from', &
             'Path to a flex_pca_embedding.bin written by an earlier run. Skips the covariance &

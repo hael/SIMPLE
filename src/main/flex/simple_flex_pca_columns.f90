@@ -48,8 +48,8 @@ integer,  parameter :: COV_MAX_DTILDE    = 320
 ! the data rather than free RAM. Override with SIMPLE_COV_DTILDE.
 integer,  parameter :: COV_DEFAULT_DTILDE = 128
 ! Total particles the probe / SNR / column-accumulation initialiser fit on, summed across processes.
-! 0 = OFF: capping cost a recovered state on Ribosembly (14/16 -> 13/16) for 2.35x, while IgG held at
-! 20/20 either way. Enable per-run with SIMPLE_COV_PROBE_MAX / SIMPLE_COV_BASIS_MAX.
+! 0 = OFF: capping traded a recovered conformation for speed, which is not a trade worth taking.
+! See doc/policies/flex_pca_policy.md. Enable per-run with SIMPLE_COV_PROBE_MAX / SIMPLE_COV_BASIS_MAX.
 integer,  parameter :: COV_PROBE_MAX_PTCLS = 0
 integer,  parameter :: COV_BASIS_MAX_PTCLS = 0
 ! How far above the spectrum's noise bulk a direction must stand to count as signal. Loose by design:
@@ -57,9 +57,9 @@ integer,  parameter :: COV_BASIS_MAX_PTCLS = 0
 real(dp), parameter :: COV_SIGNAL_FACTOR = 4.0d0
 ! Samples per free parameter for the rank bound d ~ sqrt(2N/R). REPORT ONLY.
 real(dp), parameter :: COV_SAMPLES_PER_PARAM = 10.0d0
-!> probe stops when successive bases agree to this mean principal-angle cosine. 0.999 is tight
-!! enough that the remaining rotation cannot move a state target, and on Ribosembly it fires at the
-!! measured knee (iteration 2) rather than running the tuned count out.
+!> probe stops when successive bases agree to this mean principal-angle cosine: tight enough that the
+!! remaining rotation cannot move a state target, and it fires at the measured knee rather than
+!! running the tuned count out.
 real(dp), parameter :: COV_PROBE_CONV    = 0.97d0
 ! Memory budget for the shared A accumulator, in bytes.
 real(dp), parameter :: COV_ATHR_BUDGET   = 8.0d9
@@ -2987,10 +2987,11 @@ contains
             if( params%msk_crop > TINY ) call eigimg%mask3D_soft(params%msk_crop, backgr=0.)
             ! CANONICAL SIGN. Eigenvectors are defined up to sign and the solver's choice depends on the
             ! last bits of the matrix, so the same data reduced in a different order (nparts, threads,
-            ! BLAS) gives the same subspace with arbitrary signs. Not cosmetic: the state ordering uses
-            ! the ordering eigenvolume's sign as the trajectory DIRECTION, so a flip plays the motion
-            ! backwards and swaps flex_pca_traj_001 with _00N. Making the dominant voxel positive is
-            ! stable -- the leading lobe sits far above the 1e-6 perturbations that flip the solver.
+            ! BLAS) gives the same subspace with arbitrary signs. Not cosmetic: any comparison of one
+            ! run's eigenvolumes against another's -- across halfsets, across resumes, against a probe
+            ! basis -- is sign-sensitive, and an arbitrary flip inverts the correlation. Making the
+            ! dominant voxel positive is stable: the leading lobe sits far above the 1e-6 perturbations
+            ! that flip the solver.
             call eigimg%get_rmat_ptr(esgn)
             eloc = maxloc(abs(esgn))
             if( esgn(eloc(1),eloc(2),eloc(3)) < 0. ) call eigimg%mul(-1.)
@@ -3337,7 +3338,7 @@ contains
                 rho(q) = 2.d0*rho(q) / (1.d0 + rho(q))            ! Spearman-Brown to full length
             end do
             ! Scale rho RELATIVE to the most reliable component, not absolutely: an absolute rho^2 shrinks
-            ! the informative components as well and compresses the latent spread the trajectory needs.
+            ! the informative components as well and compresses the latent spread state placement needs.
             rho_max = maxval(rho)
             if( rho_max <= DTINY ) rho_max = 1.d0
             do q = 1, ncomp

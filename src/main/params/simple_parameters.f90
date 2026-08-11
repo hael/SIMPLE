@@ -437,7 +437,6 @@ type :: parameters
     integer :: min_neff=2000       !< minimum effective particle count for covariance state kernels
     integer :: state_axis=0        !< covariance latent coordinate for state targets; 0=k-means over all components
     integer :: nkern=0             !< # leading latent components used for state placement/kernel; 0=all (neigs)
-    integer :: ngeo=-1             !< # components spanning the FINCH trajectory geodesic; -1=auto, 0=off
     real    :: pcrot=0.            !< Gaussian low-pass (A) for the smoothness basis rotation; 0=off
     integer :: nbins=1             !< # kernel bandwidth bins for cross-validated state selection (1=off)
     integer :: ncols=64            !< # selected 3D Fourier frequencies used as covariance columns

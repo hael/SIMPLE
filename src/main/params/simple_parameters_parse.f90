@@ -367,7 +367,6 @@ contains
         call reg%add_int('min_neff', self%min_neff)
         call reg%add_int('state_axis', self%state_axis)
         call reg%add_int('nkern', self%nkern)
-        call reg%add_int('ngeo', self%ngeo)
         call reg%add_int('nbins', self%nbins)
         call reg%add_int('ncols', self%ncols)
         call reg%add_int('column_separation', self%column_separation)

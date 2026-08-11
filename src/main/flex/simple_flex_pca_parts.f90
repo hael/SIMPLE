@@ -175,14 +175,14 @@ contains
 
     !> Per-round state weights. Written with the GLOBAL pinds so a worker can match its own particle
     !! rows by index rather than assuming its part is a contiguous slice of the master's selection.
-    !! Rewritten before every state round, because the combined/even/odd/trajectory passes each use a
+    !! Rewritten before every state round, because the combined/even/odd and CV passes each use a
     !! different weight table.
     subroutine write_state_weights_round( pinds, weights, nptcls, nstates, split_eo )
         integer, intent(in) :: pinds(:), nptcls, nstates
         real,    intent(in) :: weights(:,:)
         !! .true. when this round accumulates the even and odd halfsets into SEPARATE reconstructors.
-        !! A worker cannot infer this from params%stage -- combined/even-odd, trajectory and CV rounds
-        !! all arrive as PCA_STAGE_STATES -- and without it the master's odd halfset reduces to zero.
+        !! A worker cannot infer this from params%stage -- combined/even-odd and CV rounds all arrive
+        !! as PCA_STAGE_STATES -- and without it the master's odd halfset reduces to zero.
         logical, intent(in) :: split_eo
         type(string) :: fname, tmp_fname
         integer :: funit, io_stat, eo_flag
