@@ -152,7 +152,7 @@ Current stage policy:
   assignment; `refine=prob_snhc` uses sparse probabilistic SNHC until the
   final staged invocation, which uses dense `refine=prob`
 - when staged updates were sampled, `abinitio2D` then runs a separate terminal
-  dense probabilistic all-particle pass with `update_frac` and `fillin`
+  dense greedy all-particle pass with `update_frac` and `fillin`
   disabled, refreshing class, in-plane, and shift parameters before final
   class-average generation
 
@@ -402,8 +402,8 @@ are separate workflow stages and may perform their own reads.
 - 2D fractional class-average restoration remains class-local.
 - Staged `abinitio2D` `fillin=yes` remains a full-assignment coverage guard
   unless the implementation is deliberately changed to missing-only assignment.
-- Sampled `abinitio2D` runs a terminal dense probabilistic all-particle refresh before final
-  class-average generation.
+- Sampled `abinitio2D` runs a terminal dense greedy all-particle refresh before
+  final class-average generation.
 - `volassemble` and the classaverager remain consumers of sampled-update state,
   not producers of particle-selection policy.
 - Online matcher restoration/reconstruction reuses the particle images already

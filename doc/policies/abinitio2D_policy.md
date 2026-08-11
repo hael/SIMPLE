@@ -27,7 +27,7 @@ selector has been removed for `abinitio2D` and `cluster2D`.
 6. update particle class, in-plane, shift, sampled, and update-count state
 7. restore class averages through shared-memory or distributed class-average pathways
 8. run a final fill-in assignment pass for active particles that were never updated
-9. when sampled updates were active, run a terminal dense probabilistic all-particle pass
+9. when sampled updates were active, run a terminal dense greedy all-particle pass
 10. generate final class averages, FRC metadata, and ranked outputs
 
 The main policy boundary is:
@@ -49,7 +49,7 @@ sparse probabilistic SNHC and the final staged invocation uses dense
 `refine=prob` so the previous class remains a valid assignment candidate and
 class-overlap convergence reporting can recover. The separate terminal
 all-particle coverage pass after sampled staged updates also uses dense
-`refine=prob`. `abinitio2D_chunks` must preserve this policy when constructing
+`refine=greedy`. `abinitio2D_chunks` must preserve this policy when constructing
 child `abinitio2D` command lines.
 
 ## 3. Ownership Policy
@@ -61,7 +61,7 @@ child `abinitio2D` command lines.
 - run orchestration across stages
 - initial reference handling
 - final fill-in dispatch
-- terminal dense probabilistic all-particle dispatch after sampled staged updates
+- terminal dense greedy all-particle dispatch after sampled staged updates
 - final class-average generation/ranking
 
 This layer should stay thin enough that stage rules are readable elsewhere.
@@ -157,7 +157,7 @@ Stage policy:
   keeps iterating until active particles have assignments, while particle
   selection still follows the normal sampled-update path
 - if any staged update used `update_frac`, `abinitio2D` runs a terminal
-  dense `refine=prob` all-particle `cluster2D` pass with `update_frac` and
+  dense `refine=greedy` all-particle `cluster2D` pass with `update_frac` and
   `fillin` disabled, refreshing class, in-plane, and shift parameters before
   final class-average generation
 
@@ -250,7 +250,7 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Are `startit`, `which_iter`, `extr_iter`, and `endit` semantics preserved?
 - Is `fillin=yes` treated as a full-assignment coverage guard unless the
   implementation is deliberately changed to missing-only assignment?
-- When staged updates are sampled, does terminal dense probabilistic assignment refresh all active
+- When staged updates are sampled, does terminal dense greedy assignment refresh all active
   particles before final class-average generation?
 - Does the change preserve Cartesian-only `abinitio2D`?
 - Does `inpl_cont=no` retain the callback route and `inpl_cont=yes` avoid it
@@ -270,7 +270,7 @@ For any `abinitio2D` or `cluster2D` change, check:
 - Do not make distributed-only class-average assembly semantics diverge from shared-memory scientific behavior.
 - Do not describe `fillin=yes` as missing-only assignment while it still uses
   the normal sampled-update path.
-- Do not use final fill-in as a substitute for the terminal dense probabilistic all-particle
+- Do not use final fill-in as a substitute for the terminal dense all-particle
   refresh when sampled abinitio2D updates were active.
 - Do not reuse stale assignment files as valid current-iteration inputs.
 - Do not re-read particle stacks in the online matcher/restoration path when the

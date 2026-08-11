@@ -42,7 +42,7 @@ lowercase by local convention.
    The standard entry has no SGD-specific UI or environment handling. The
    wrapper passes its checkpoint request and a terminal command-line policy;
    that policy removes development stream fields before the conventional
-   terminal probability pass.
+   terminal greedy pass.
 5. Focused UI visibility and dispatch tests verify that standard `abinitio2D`
    omits all five developer inputs, while `abinitio2D_sgd` registers the
    developer controls and rejects invalid objective, in-plane, and stage-mode
@@ -54,7 +54,7 @@ lowercase by local convention.
 - Do not alter `simple_stream` or `abinitio2D_stream`.
 - Keep generic parameter parsing available internally for delegated execution.
 - Preserve stages 1--3 of the shared staged workflow.
-- The wrapper terminal pass must restore conventional probability behavior by
+- The wrapper terminal pass must restore conventional greedy behavior by
   removing its stream-only command-line fields before terminal execution.
 - `sgd=yes` and `sgd_path=stream` are internal compatibility transport fields;
   users activate the development workflow only through `prg=abinitio2D_sgd`
@@ -78,7 +78,7 @@ lowercase by local convention.
 1. Rebuild after the public-command capitalization change and rerun the UI and
    dispatch tests; verify `simple_exec prg=list` contains `abinitio2D_sgd`.
 2. Run one full `prg=abinitio2D_sgd` workflow after that rebuild, including the
-   terminal probability pass.
+   terminal greedy pass.
 3. For a scientific comparison, fork baseline and stream jobs from the same
    stage-3 checkpoint and compare runtime, resolution, support/occupancy, and
    zero-support classes.

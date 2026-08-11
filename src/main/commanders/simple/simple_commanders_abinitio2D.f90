@@ -159,6 +159,8 @@ contains
             last_iter = cline_cluster2D%get_iarg('endit')
             write(logfhandle,'(A,I0,A,I0)') '>>> ABINITIO2D CHECKPOINT READY: stage=', stop_stage,&
                 &' last_iter=', last_iter
+            call cline_cluster2D%kill
+            call cline_calc_pspec%kill
             deallocate(stage_parms)
             call spproj%kill
             nullify(spproj_field)
@@ -195,6 +197,8 @@ contains
         call del_files(ASSIGNMENT_FBODY,params%nparts,ext='.dat')
         call del_file(DIST_FBODY//'.dat')
         call del_file(ASSIGNMENT_FBODY//'.dat')
+        call cline_cluster2D%kill
+        call cline_calc_pspec%kill
         deallocate(stage_parms)
         call spproj%kill
         nullify(spproj_field)
@@ -284,6 +288,9 @@ contains
                 endif
                 call cline_scalerefs%kill
             endif
+            call refs%kill
+            call refs_even%kill
+            call refs_odd%kill
         end subroutine inirefs
 
         ! Set resolution limits
@@ -395,19 +402,19 @@ contains
             terminal_start = last_iter + 1
             terminal_refs  = CAVGS_ITER_FBODY//int2str_pad(last_iter,3)//params%ext%to_char()
             write(logfhandle,'(A)')'>>>'
-            write(logfhandle,'(A,I8)')'>>> TERMINAL PROB-MODE ALL-PARTICLE PASS FROM ITERATION ', last_iter
-            call cline_cluster2D%set('refs',        terminal_refs)
-            call cline_cluster2D%set('startit',     terminal_start)
-            call cline_cluster2D%set('minits',      1)
-            call cline_cluster2D%set('maxits',      1)
-            call cline_cluster2D%set('extr_iter',   params%extr_lim + 1)
-            call cline_cluster2D%set('refine',      'prob')
+            write(logfhandle,'(A,I8)')'>>> TERMINAL GREEDY ALL-PARTICLE PASS FROM ITERATION ', last_iter
+            call cline_cluster2D%set('refs',          terminal_refs)
+            call cline_cluster2D%set('startit',       terminal_start)
+            call cline_cluster2D%set('minits',        1)
+            call cline_cluster2D%set('maxits',        1)
+            call cline_cluster2D%set('extr_iter',     params%extr_lim + 1)
+            call cline_cluster2D%set('refine',        'greedy')
             call cline_cluster2D%set('restore_cavgs', 'yes')
             if( present(terminal_policy) ) call terminal_policy(cline_cluster2D)
             call cline_cluster2D%delete('update_frac')
             call cline_cluster2D%delete('fillin')
             call cline_cluster2D%delete('endit')
-            call execute_cluster2D('terminal_prob', nstages + 1)
+            call execute_cluster2D('terminal_greedy', nstages + 1)
             call terminal_refs%kill
         end subroutine execute_terminal_pass
 
@@ -418,6 +425,7 @@ contains
             M(:,1) = spproj_field%get_all('class', nonzero=.true.)
             M(:,2) = spproj_field%get_all('corr',  nonzero=.true.)
             call rmat2file(M, string(trim(prefix)//'_class_scores.mat'))
+            deallocate(M)
         end subroutine output_stats
 
         subroutine gen_final_cavgs( iter )
@@ -463,6 +471,10 @@ contains
             call cline_rank_cavgs%set('stk',      finalcavgs)
             call cline_rank_cavgs%set('outstk',   finalcavgs_ranked)
             call xrank_cavgs%execute( cline_rank_cavgs )
+            call cline_make_cavgs%kill
+            call cline_rank_cavgs%kill
+            call finalcavgs%kill
+            call finalcavgs_ranked%kill
         end subroutine gen_final_cavgs
 
         subroutine write_abinitio_benchmark( iter, phase, stage )

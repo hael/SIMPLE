@@ -27,7 +27,7 @@ contains
         call prepare_abinitio2d_sgd(cline)
         call get_checkpoint_request(start_stage, stop_stage, checkpoint_last_iter, l_checkpoint)
         call execute_abinitio2D_staged(cline, start_stage, stop_stage, checkpoint_last_iter, &
-            &l_checkpoint, prepare_terminal_probability_command)
+            &l_checkpoint, prepare_terminal_command)
     end subroutine exec_abinitio2d_sgd
 
     subroutine prepare_abinitio2d_sgd( cline )
@@ -92,13 +92,13 @@ contains
         endif
     end subroutine get_checkpoint_request
 
-    subroutine prepare_terminal_probability_command( cline )
+    subroutine prepare_terminal_command( cline )
         class(cmdline), intent(inout) :: cline
-        ! The terminal pass is conventional probability refinement.  Remove
-        ! development-only stage settings so parameter defaults select it.
+        ! The terminal pass is greedy refinement. Remove development-only
+        ! stage settings so parameter defaults select it.
         call cline%delete('sgd')
         call cline%delete('sgd_path')
         call cline%delete('sgd_stage4_mode')
-    end subroutine prepare_terminal_probability_command
+    end subroutine prepare_terminal_command
 
 end module simple_commanders_abinitio2d_sgd
