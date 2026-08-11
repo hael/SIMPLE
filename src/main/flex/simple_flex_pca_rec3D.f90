@@ -11,8 +11,7 @@ use simple_parameters,             only: parameters
 use simple_flex_pca_distr, only: flex_pca_is_master, flex_pca_is_worker, flex_pca_nparts, &
     &flex_pca_run_stage, PCA_STAGE_STATES
 use simple_flex_pca_parts, only: write_state_weights_round
-use simple_flex_reconstructor_latent_ops, only: insert_plane_oversamp_multi_scaled, &
-    &insert_planes_oversamp_multi_scaled_batch
+use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_multi_scaled_batch
 use simple_reconstructor,          only: reconstructor
 implicit none
 private
