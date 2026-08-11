@@ -30,6 +30,7 @@ contains
         real :: smpd, mskdiam, noise_snr
         integer :: nptcls, nthr
         type(cmdline) :: user_args
+        character(len=256) :: first_arg
         type(commander_simulate_particles) :: xsimulate_particles
         type(commander_new_project) :: xnew_project
         type(commander_import_particles) :: ximport_particles
@@ -42,7 +43,7 @@ contains
         type(string) :: volume_path, clean_path, noisy_path
         type(string) :: original_cwd
         type(cmdline) :: cline_pft
-        integer :: ldim(3), status
+        integer :: ldim(3), status, first_arg_len, first_arg_status
         integer :: vol_dim(3)
         integer :: pdim_srch(3), direct_irot, direct_accepted
         real :: shift_limits(2, 2), direct_cxy(3)
@@ -76,12 +77,15 @@ contains
         truth%shift = [2.0, 0.0]
 
         if (command_argument_count() > 0) then
-            call user_args%parse_oldschool
-            if (user_args%defined('smpd')) smpd = user_args%get_rarg('smpd')
-            if (user_args%defined('mskdiam')) mskdiam = user_args%get_rarg('mskdiam')
-            if (user_args%defined('snr')) noise_snr = user_args%get_rarg('snr')
-            if (user_args%defined('nptcls')) nptcls = user_args%get_iarg('nptcls')
-            if (user_args%defined('nthr')) nthr = user_args%get_iarg('nthr')
+            call get_command_argument(1, first_arg, first_arg_len, first_arg_status)
+            if (first_arg_status /= 0 .or. first_arg_len < 5 .or. first_arg(:5) /= 'case=') then
+                call user_args%parse_oldschool
+                if (user_args%defined('smpd')) smpd = user_args%get_rarg('smpd')
+                if (user_args%defined('mskdiam')) mskdiam = user_args%get_rarg('mskdiam')
+                if (user_args%defined('snr')) noise_snr = user_args%get_rarg('snr')
+                if (user_args%defined('nptcls')) nptcls = user_args%get_iarg('nptcls')
+                if (user_args%defined('nthr')) nthr = user_args%get_iarg('nthr')
+            endif
         end if
         if (smpd <= 0.0) THROW_HARD('smpd must be positive')
         if (mskdiam <= 0.0) THROW_HARD('mskdiam must be positive')

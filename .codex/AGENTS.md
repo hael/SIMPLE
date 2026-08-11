@@ -7,6 +7,10 @@ default-off and opt-in paths before release.
 
 # Codex Repository References
 
+- `local-history.md` - mandatory local-only history workflow for every `.codex`
+  edit. Agents must verify and snapshot before and after changes, must use the
+  guarded helper, and must never reinitialize or rewrite the history database.
+
 - `doc/code_overview/code_base_map.md` — generated source tree and module overview.
 - `origin-push-workflow.md` — canonical-repository commit and push workflow.
 - `windows-msys-install-workflow.md` — Windows/MSYS build and install workflow.
