@@ -11,17 +11,28 @@
 !  independent of particle count; the matrix-free operator remains the exact
 !  reference.
 module simple_reconstructor_pcg
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_image, only: image
 use simple_ctf,   only: ctf
 implicit none
 
-public :: reconstructor_pcg, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
+public :: reconstructor_pcg, pcg_solver_outcome, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
 private
 #include "simple_local_flags.inc"
 
 integer, parameter :: PCG_OP_MATRIXFREE = 0 !< reference operator: exact, cost ~ nptcls per iteration
 integer, parameter :: PCG_OP_KERNEL     = 1 !< kernelized Toeplitz operator: cost independent of nptcls
+
+type :: pcg_solver_outcome
+    character(len=24) :: stop_reason         = 'not_started'
+    integer           :: iteration_count     = 0
+    integer           :: requested_maxits    = 0
+    real              :: initial_rel_residual = 0.0
+    real              :: final_rel_residual   = 0.0
+    real              :: final_rel_update     = 0.0
+    logical           :: converged            = .false.
+end type pcg_solver_outcome
 
 type :: reconstructor_pcg
     private
@@ -111,6 +122,7 @@ type :: reconstructor_pcg
     procedure :: begin_accum
     procedure :: accumulate_batch
     procedure :: end_accum
+    procedure, private :: accumulate_rhs_density
     procedure, private :: accumulate_absT2
     procedure, private :: accumulate_rhs
     procedure, private :: precond_from_accum
@@ -155,6 +167,7 @@ type :: reconstructor_pcg
     procedure :: report_profile
     ! PRIVATE HELPERS
     procedure, private :: absT2_plane
+    procedure, private :: prepare_fused_planes
     procedure, private :: transfer_plane_cmplx
     procedure, private :: fold_and_ifft
     procedure, private :: apply_precond
@@ -1109,7 +1122,7 @@ contains
     ! Peak memory during accumulation is the two full-range accumulators
     ! (2 x 1.08 GB at box 256) plus the work image; that floor is constant in
     ! nptcls, which is the whole point. See
-    ! doc/implementation_notes/pcg_reconstruction_as_gridding_replacement.md 5.1.
+    ! doc/policies/reconstruct3D_pcg_policy.md section 1.
 
     subroutine begin_accum( self )
         class(reconstructor_pcg), intent(inout) :: self
@@ -1136,7 +1149,7 @@ contains
         integer,                    intent(in)    :: nb, ifrom
         complex,                    intent(in)    :: y_batch(self%lims2(1,1):self%lims2(1,2),&
                                                               &self%lims2(2,1):self%lims2(2,2), nb)
-        complex, allocatable :: work(:,:,:)
+        complex, allocatable :: bacc(:,:,:), dacc(:,:,:)
         if( .not. self%l_accum ) THROW_HARD('begin_accum has not been called; accumulate_batch')
         if( nb < 1 ) return
         if( ifrom < 1 .or. ifrom + nb - 1 > self%nptcls )then
@@ -1148,13 +1161,80 @@ contains
         ! standard permits a compiler to assume cannot happen -- it may then
         ! cache or reorder the writes. move_alloc is an O(1) descriptor swap, so
         ! removing the hazard costs nothing and beats betting on the optimizer.
-        call move_alloc(self%b_work, work)
-        call self%accumulate_rhs(y_batch, nb, ifrom, work)
-        call move_alloc(work, self%b_work)
-        call move_alloc(self%acc_work, work)
-        call self%accumulate_absT2(work, ifrom, ifrom + nb - 1)
-        call move_alloc(work, self%acc_work)
+        call move_alloc(self%b_work, bacc)
+        call move_alloc(self%acc_work, dacc)
+        call self%accumulate_rhs_density(y_batch, nb, ifrom, bacc, dacc)
+        call move_alloc(bacc, self%b_work)
+        call move_alloc(dacc, self%acc_work)
     end subroutine accumulate_batch
+
+    !> Accumulate the weighted RHS B and Gram/sampling-density precursor D in
+    !! one particle traversal. Both scatters use the same orientation, rotated
+    !! coordinate and KB window, so evaluating that geometry twice is pure
+    !! overhead. Keeping both updates in the same coloured OpenMP region also
+    !! removes the per-particle parallel-region startup from accumulate_rhs.
+    !! The update order within each accumulator is unchanged from the two
+    !! standalone routines, which remain available to the low-level tests.
+    subroutine accumulate_rhs_density( self, y_batch, nb, ifrom, bacc, dacc )
+        class(reconstructor_pcg), intent(inout) :: self
+        integer,                    intent(in)    :: nb, ifrom
+        complex,                    intent(in)    :: y_batch(self%lims2(1,1):self%lims2(1,2),&
+                                                              &self%lims2(2,1):self%lims2(2,2), nb)
+        complex,                    intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
+                                                           &self%lims3(2,1):self%lims3(2,2),&
+                                                           &self%lims3(3,1):self%lims3(3,2))
+        complex,                    intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
+                                                           &self%lims3(2,1):self%lims3(2,2),&
+                                                           &self%lims3(3,1):self%lims3(3,2))
+        complex, allocatable :: weighted(:,:)
+        real,    allocatable :: absT2(:,:)
+        real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
+        integer :: ib, i, g, h, k, l, i0(3)
+        if( nb < 1 ) return
+        allocate(weighted(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
+        allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
+        !$omp parallel default(shared) private(ib,i,g,h,k,l,loc,i0,w,rot) proc_bind(close)
+        do ib = 1, nb
+            i = ifrom + ib - 1
+            call self%prepare_fused_planes(i, y_batch(:,:,ib), weighted, absT2)
+            do g = 1, self%nsym
+                rot = matmul(self%rotmats(:,:,i), self%symmats(:,:,g))
+                do l = 0, self%stride-1
+                    !$omp do schedule(static,1)
+                    do h = self%lims2(1,1)+l, self%lims2(1,2), self%stride
+                        do k = self%lims2(2,1), self%lims2(2,2)
+                            if( h*h + k*k > self%sqlp ) cycle
+                            if( absT2(h,k) == 0. .and. weighted(h,k) == cmplx(0.,0.) ) cycle
+                            loc = real(self%padf) * matmul(real([h,k,0]), rot)
+                            i0  = nint(loc) - self%iwinsz
+                            if( win_wraps(self, i0) ) cycle
+                            call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                            call scatter_window_pair_nowrap(self, i0, w, self%padsc * weighted(h,k), &
+                                &absT2(h,k), bacc, dacc)
+                        end do
+                    end do
+                    !$omp end do
+                end do
+                !$omp single
+                do h = self%lims2(1,1), self%lims2(1,2)
+                    do k = self%lims2(2,1), self%lims2(2,2)
+                        if( h*h + k*k > self%sqlp   ) cycle
+                        if( h*h + k*k <= self%sq_rim ) cycle
+                        if( absT2(h,k) == 0. .and. weighted(h,k) == cmplx(0.,0.) ) cycle
+                        loc = real(self%padf) * matmul(real([h,k,0]), rot)
+                        i0  = nint(loc) - self%iwinsz
+                        if( .not. win_wraps(self, i0) ) cycle
+                        call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
+                        call scatter_window_pair(self, i0, w, self%padsc * weighted(h,k), &
+                            &absT2(h,k), bacc, dacc)
+                    end do
+                end do
+                !$omp end single
+            end do
+        end do
+        !$omp end parallel
+        deallocate(weighted, absT2)
+    end subroutine accumulate_rhs_density
 
     !>  \brief  Closes accumulation: folds the RHS once, derives preconditioner
     !!          and (optionally) the Gram kernel, and releases the accumulators.
@@ -1541,8 +1621,7 @@ contains
     !!          fractional-update scheme derives Khat from a stored accumulator
     !!          with no particles resident, so it CANNOT fit anything; an
     !!          analytic factor is the only form that survives that path. See
-    !!          doc/implementation_notes/pcg_reconstruction_as_gridding_replacement.md
-    !!          section 1.1.
+    !!          doc/policies/reconstruct3D_pcg_policy.md section 5.
     !!
     !!          measure_kernel_scale below still performs the fit, so the test
     !!          suite can assert the constant has not drifted.
@@ -1678,6 +1757,77 @@ contains
                                                       &self%lims2(2,1):self%lims2(2,2))
         T = self%build_transfer(self%ctfparms(iptcl), self%shifts(:,iptcl), self%sig2(:,iptcl))
     end subroutine transfer_plane_cmplx
+
+    !> Build the two plane values consumed by fused streaming accumulation.
+    !! Every thread in the persistent region calls this routine; the orphaned
+    !! omp-do partitions the plane between them. The expressions match
+    !! build_transfer and absT2_plane, but the CTF is evaluated only once.
+    subroutine prepare_fused_planes( self, iptcl, y_plane, weighted, absT2 )
+        class(reconstructor_pcg), intent(in)  :: self
+        integer,                    intent(in)  :: iptcl
+        complex,                    intent(in)  :: y_plane(self%lims2(1,1):self%lims2(1,2),&
+                                                            &self%lims2(2,1):self%lims2(2,2))
+        complex,                    intent(out) :: weighted(self%lims2(1,1):self%lims2(1,2),&
+                                                             &self%lims2(2,1):self%lims2(2,2))
+        real,                       intent(out) :: absT2(self%lims2(1,1):self%lims2(1,2),&
+                                                         &self%lims2(2,1):self%lims2(2,2))
+        type(ctf)     :: tfun
+        type(ctfvars) :: ctfvals
+        complex :: tval
+        real    :: cval, arg, sw, sum_df, diff_df, angast, wl, half_wl2_cs
+        real    :: accc, phc, cterm, df, phsh, s2
+        integer :: h, k, shell
+        logical :: l_ctf, l_flip
+        l_ctf  = self%ctfparms(iptcl)%ctfflag /= CTFFLAG_NO
+        l_flip = self%ctfparms(iptcl)%ctfflag == CTFFLAG_FLIP
+        if( l_ctf )then
+            tfun = ctf(self%ctfparms(iptcl)%smpd, self%ctfparms(iptcl)%kv, &
+                &self%ctfparms(iptcl)%cs, self%ctfparms(iptcl)%fraca)
+            call tfun%init(self%ctfparms(iptcl)%dfx, self%ctfparms(iptcl)%dfy, &
+                &self%ctfparms(iptcl)%angast)
+            ctfvals     = tfun%get_ctfvars(self%ctfparms(iptcl)%phshift)
+            wl          = ctfvals%wl
+            half_wl2_cs = 0.5 * wl * wl * ctfvals%cs
+            sum_df      = ctfvals%dfx + ctfvals%dfy
+            diff_df     = ctfvals%dfx - ctfvals%dfy
+            angast      = ctfvals%angast
+            accc        = ctfvals%amp_contr_const
+            phc         = ctfvals%phshift
+        endif
+        !$omp do collapse(2) schedule(static) &
+        !$omp private(h,k,cval,arg,shell,sw,cterm,df,phsh,s2,tval)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k > self%sqlp )then
+                    weighted(h,k) = cmplx(0.,0.)
+                    absT2(h,k)    = 0.
+                    cycle
+                endif
+                if( .not. self%l_use_ctf )then
+                    weighted(h,k) = y_plane(h,k)
+                    absT2(h,k)    = 1.0
+                    cycle
+                endif
+                cval = 1.0
+                if( l_ctf )then
+                    s2    = self%spafreqsq_lut(h,k)
+                    cterm = cos(2.0 * (self%ang_lut(h,k) - angast))
+                    df    = 0.5 * (sum_df + cterm * diff_df)
+                    phsh  = PI * wl * s2 * (df - half_wl2_cs * s2)
+                    cval  = sin(phsh + phc + accc)
+                    if( l_flip ) cval = abs(cval)
+                endif
+                shell = self%shell_lut(h,k)
+                arg   = 2.0 * PI * (real(h) * self%shifts(1,iptcl) + &
+                    &real(k) * self%shifts(2,iptcl)) / real(self%box)
+                sw    = 1.0 / sqrt(self%sig2(shell,iptcl))
+                tval  = cval * cmplx(cos(arg), sin(arg)) * sw
+                weighted(h,k) = conjg(tval) * y_plane(h,k) * sw
+                absT2(h,k)    = cval * cval / self%sig2(shell,iptcl)
+            end do
+        end do
+        !$omp end do
+    end subroutine prepare_fused_planes
 
     !>  \brief  folds a full-range (both-sign h) complex volume accumulator into
     !!          the image's packed storage (h>=0 half) and inverse-FFTs it.
@@ -1866,6 +2016,32 @@ contains
         end do
     end subroutine scatter_window
 
+    !> Update B and D through one wrapped KB-window traversal.
+    pure subroutine scatter_window_pair( self, i0, w, bval, dval, bacc, dacc )
+        class(reconstructor_pcg), intent(in)    :: self
+        integer,                    intent(in)    :: i0(3)
+        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim), dval
+        complex,                    intent(in)    :: bval
+        complex,                    intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
+                                                           &self%lims3(2,1):self%lims3(2,2),&
+                                                           &self%lims3(3,1):self%lims3(3,2))
+        complex,                    intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
+                                                           &self%lims3(2,1):self%lims3(2,2),&
+                                                           &self%lims3(3,1):self%lims3(3,2))
+        integer :: di, dj, dk, hh, kk, mm
+        do dk = 1, self%wdim
+            mm = self%wrap(i0(3)+dk-1)
+            do dj = 1, self%wdim
+                kk = self%wrap(i0(2)+dj-1)
+                do di = 1, self%wdim
+                    hh = self%wrap(i0(1)+di-1)
+                    bacc(hh,kk,mm) = bacc(hh,kk,mm) + w(di,dj,dk) * bval
+                    dacc(hh,kk,mm) = dacc(hh,kk,mm) + w(di,dj,dk) * dval
+                end do
+            end do
+        end do
+    end subroutine scatter_window_pair
+
     !>  \brief  Interior-only scatter for windows the caller has already proven
     !!          cannot wrap (win_wraps == .false.). There the period-box lookup
     !!          self%wrap is the identity over the whole window span, so indexing
@@ -1893,6 +2069,32 @@ contains
             end do
         end do
     end subroutine scatter_window_nowrap
+
+    !> Update B and D through one non-wrapping, contiguous KB-window traversal.
+    pure subroutine scatter_window_pair_nowrap( self, i0, w, bval, dval, bacc, dacc )
+        class(reconstructor_pcg), intent(in)    :: self
+        integer,                    intent(in)    :: i0(3)
+        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim), dval
+        complex,                    intent(in)    :: bval
+        complex,                    intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
+                                                           &self%lims3(2,1):self%lims3(2,2),&
+                                                           &self%lims3(3,1):self%lims3(3,2))
+        complex,                    intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
+                                                           &self%lims3(2,1):self%lims3(2,2),&
+                                                           &self%lims3(3,1):self%lims3(3,2))
+        integer :: di, dj, dk, h0, kk, mm
+        h0 = i0(1)
+        do dk = 1, self%wdim
+            mm = i0(3) + dk - 1
+            do dj = 1, self%wdim
+                kk = i0(2) + dj - 1
+                do di = 1, self%wdim
+                    bacc(h0+di-1,kk,mm) = bacc(h0+di-1,kk,mm) + w(di,dj,dk) * bval
+                    dacc(h0+di-1,kk,mm) = dacc(h0+di-1,kk,mm) + w(di,dj,dk) * dval
+                end do
+            end do
+        end do
+    end subroutine scatter_window_pair_nowrap
 
     !>  \brief  Complex-valued counterpart of scatter_window_nowrap, for the RHS
     !!          scatter where the transfer sample is complex. Same interior-only
@@ -2008,7 +2210,7 @@ contains
     !!          callers stream batches through begin_accum/accumulate_batch/
     !!          end_accum and then call solve_accum, which never materializes
     !!          y_planes at all.
-    subroutine solve( self, y_planes, x, maxits, rtol, rel_res_hist, niters )
+    subroutine solve( self, y_planes, x, maxits, rtol, rel_res_hist, niters, outcome )
         class(reconstructor_pcg), intent(inout) :: self
         complex,                    intent(in)    :: y_planes(self%lims2(1,1):self%lims2(1,2),&
                                                                &self%lims2(2,1):self%lims2(2,2), *)
@@ -2017,25 +2219,27 @@ contains
         real,             optional,  intent(in)    :: rtol
         real, allocatable, optional, intent(out)   :: rel_res_hist(:)
         integer,          optional,  intent(out)   :: niters
+        type(pcg_solver_outcome), optional, intent(out) :: outcome
         if( allocated(self%b_rhs) ) deallocate(self%b_rhs)
         self%b_rhs = self%apply_adjoint_all(y_planes)
         ! b' = P b, completing the (P H P) u = P b normal equations
         call self%mask_mul(self%b_rhs)
         self%l_rhs = .true.
-        call self%solve_core(x, maxits, rtol, rel_res_hist, niters)
+        call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome)
     end subroutine solve
 
     !>  \brief  Solve against the RHS built by end_accum. Same solver, no
     !!          observed planes resident.
-    subroutine solve_accum( self, x, maxits, rtol, rel_res_hist, niters )
+    subroutine solve_accum( self, x, maxits, rtol, rel_res_hist, niters, outcome )
         class(reconstructor_pcg), intent(inout) :: self
         real,                        intent(inout) :: x(self%box,self%box,self%box)
         integer,          optional,  intent(in)    :: maxits
         real,             optional,  intent(in)    :: rtol
         real, allocatable, optional, intent(out)   :: rel_res_hist(:)
         integer,          optional,  intent(out)   :: niters
+        type(pcg_solver_outcome), optional, intent(out) :: outcome
         if( .not. self%l_rhs ) THROW_HARD('end_accum has not been called; solve_accum')
-        call self%solve_core(x, maxits, rtol, rel_res_hist, niters)
+        call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome)
     end subroutine solve_accum
 
     !>  \brief  The solver proper. Reads the RHS from self%b_rhs rather than
@@ -2043,13 +2247,14 @@ contains
     !!          separate dummy while `self` is intent(inout) is an aliasing
     !!          hazard the standard lets a compiler exploit, and the alternative
     !!          (copying it) would cost 67 MB per solve at box 256 for nothing.
-    subroutine solve_core( self, x, maxits, rtol, rel_res_hist, niters )
+    subroutine solve_core( self, x, maxits, rtol, rel_res_hist, niters, outcome )
         class(reconstructor_pcg), intent(inout) :: self
         real,                        intent(inout) :: x(self%box,self%box,self%box)
         integer,          optional,  intent(in)    :: maxits
         real,             optional,  intent(in)    :: rtol
         real, allocatable, optional, intent(out)   :: rel_res_hist(:)
         integer,          optional,  intent(out)   :: niters
+        type(pcg_solver_outcome), optional, intent(out) :: outcome
         ! WHICH RESIDUAL IS REPORTED MATTERS. This used to report
         ! ||r||_Minv / ||r0||_Minv, the PRECONDITIONED norm, which in PCG is not
         ! monotone -- only ||e||_H is -- and with a singular preconditioner it
@@ -2083,12 +2288,18 @@ contains
         real(dp) :: bnorm, rnorm, xnorm, dxnorm, mnorm, dxx
         integer  :: mmaxits, iter, n_done
         real     :: rrtol
+        type(pcg_solver_outcome) :: result
         integer(timer_int_kind) :: t_it
         real(timer_int_kind)    :: rt_it
         mmaxits = 50
         if( present(maxits) ) mmaxits = maxits
+        if( mmaxits < 1 ) THROW_HARD('maxits must be at least 1; solve')
         rrtol = 1.0e-4
         if( present(rtol) ) rrtol = rtol
+        if( .not. ieee_is_finite(rrtol) ) THROW_HARD('rtol must be finite; solve')
+        result%requested_maxits = mmaxits
+        if( rrtol <= 0.0 ) result%stop_reason = 'fixed_iterations'
+        if( rrtol > 0.0 )  result%stop_reason = 'maxits'
         allocate(hist(mmaxits))
         ! profile the ITERATIONS only: forming the RHS is a one-off setup cost
         ! and folding it in would flatter whichever phase it happens to share.
@@ -2108,7 +2319,10 @@ contains
         if( rho0 <= 0.0_dp ) THROW_HARD('non-positive initial dot(r,z); preconditioner is not positive definite; solve')
         bnorm = sqrt(self%dot_real_volume(self%b_rhs,self%b_rhs))
         if( bnorm <= 0.0_dp ) THROW_HARD('zero right-hand side; nothing to reconstruct; solve')
+        rnorm = sqrt(self%dot_real_volume(r,r))
+        result%initial_rel_residual = real(rnorm / bnorm)
         n_done = 0
+        dxx = 0.0_dp
         write(logfhandle,'(a,i0,a,es12.5)') '>>> PCG: starting, maxits = ', mmaxits, ', rtol = ', rrtol
         call flush(logfhandle)
         do iter = 1, mmaxits
@@ -2149,7 +2363,11 @@ contains
                 &'  |r|/|b| = ', hist(iter), '  dx/x = ', real(dxx), &
                 &'  (M-norm ', real(mnorm), ')  (', rt_it, ' s)'
             call flush(logfhandle)
-            if( rnorm / bnorm <= real(rrtol,dp) ) exit
+            if( rrtol > 0.0 .and. rnorm / bnorm <= real(rrtol,dp) )then
+                result%stop_reason = 'rtol'
+                result%converged   = .true.
+                exit
+            endif
             ! diminishing-returns stop: once the map moves by less than PCG_XTOL
             ! per iteration the residual has plateaued (semi-convergence on noisy
             ! normal equations) and further iters mostly fit noise. dx/x is
@@ -2158,6 +2376,8 @@ contains
                 write(logfhandle,'(a,i0,a,es10.3,a,es10.3)') '>>> PCG: early stop at iter ', iter, &
                     &', dx/x = ', real(dxx), ' <= xtol = ', PCG_XTOL
                 call flush(logfhandle)
+                result%stop_reason = 'xtol'
+                result%converged   = .true.
                 exit
             endif
             beta = rho_new / rho
@@ -2169,8 +2389,12 @@ contains
         ! accumulate arbitrary values via the preconditioner. This is the step
         ! that makes the returned volume the constrained solution.
         call self%mask_mul(x)
+        result%iteration_count  = n_done
+        result%final_rel_update = real(dxx)
+        if( n_done > 0 ) result%final_rel_residual = hist(n_done)
         if( present(niters) ) niters = n_done
         if( present(rel_res_hist) ) allocate(rel_res_hist(n_done), source=hist(1:n_done))
+        if( present(outcome) ) outcome = result
         self%l_profile = .false.
         if( n_done > 0 ) call self%report_profile(n_done)
     end subroutine solve_core

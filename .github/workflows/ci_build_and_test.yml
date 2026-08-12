@@ -189,6 +189,10 @@ jobs:
              simple_test_otsu
              echo "-------------------- TEST PHASE CORR -------------------------"
              simple_test_phasecorr
+             echo "-------------------- TEST PCG RECONSTRUCTION -------------------------"
+             simple_test_exec test=pcg_recon
+             echo "-------------------- TEST REC3D BACKEND SELECTOR -------------------------"
+             simple_test_rec3D_backend
              echo "-------------------- TEST RANK WEIGHTS -------------------------"
              simple_test_rank_weights
              echo "-------------------- TEST SERIALIZE -------------------------"

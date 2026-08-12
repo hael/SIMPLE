@@ -303,6 +303,7 @@ type :: parameters
     character(len=STDLEN)     :: kpca_backend='nystrom' !< kPCA backend(exact|nystrom){nystrom}
     character(len=STDLEN)     :: kpca_ker='rbf'       !< kPCA kernel(rbf|cosine){rbf}
     character(len=STDLEN)     :: pcgop='kernel'       !< PCG normal-operator implementation, reconstruct3D_pcg(matrixfree|kernel){kernel}
+    character(len=STDLEN)     :: rec_backend='gridding' !< 3D reconstruction backend(gridding|pcg){gridding}
     character(len=STDLEN)     :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN)     :: pickkind='gau'       !< Picking quasi-template(gau|ring|disc){gau}
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)

@@ -665,9 +665,9 @@ either way.
   290-296 (2017).
 - Scheres. *RELION.* J. Struct. Biol. 180(3), 519-530 (2012).
 - `doc/policies/reconstruct3D_pcg_policy.md` -- contract of the code that runs
-  today; especially section 5 (preconditioner and kernelized operator) and
-  section 10 (deferred and future work). Supersedes the deleted
-  `ctf_sigma_weighted_pcg_reconstruction.md`.
-- `doc/implementation_notes/pcg_reconstruction_as_gridding_replacement.md` --
-  workflow integration; its section 5.3 establishes that the PCG *solve* is
-  data-free, which does NOT hold for the pose objective specified here.
+  today; especially section 5 (preconditioner and kernelized operator). It
+  supersedes the deleted `ctf_sigma_weighted_pcg_reconstruction.md`.
+- `doc/implementation_notes/pcg_reconstruction_production_readiness.md` --
+  production workflow integration; section 6 records that the kernel PCG
+  *solve* is data-free, which does NOT hold for the pose objective specified
+  here.

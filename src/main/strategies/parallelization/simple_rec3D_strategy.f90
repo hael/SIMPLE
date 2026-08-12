@@ -7,11 +7,19 @@ use simple_qsys_env,             only: qsys_env
 use simple_matcher_3Drec,        only: calc_3Drec, calc_projdir3Drec
 use simple_commanders_rec_distr, only: commander_volassemble
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname
+use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_shared
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
+public :: rec3D_pcg_inmem_strategy
+public :: rec3D_backend_id, rec3D_backend_is_wired
+public :: REC3D_BACKEND_INVALID, REC3D_BACKEND_GRIDDING, REC3D_BACKEND_PCG
 private
 #include "simple_local_flags.inc"
+
+integer, parameter :: REC3D_BACKEND_INVALID  = 0
+integer, parameter :: REC3D_BACKEND_GRIDDING = 1
+integer, parameter :: REC3D_BACKEND_PCG      = 2
 
 ! --------------------------------------------------------------------
 ! Strategy interface
@@ -33,6 +41,14 @@ contains
     procedure :: finalize_run => inmem_finalize_run
     procedure :: cleanup      => inmem_cleanup
 end type rec3D_inmem_strategy
+
+! Shared-memory kernel PCG. Initialization, final postprocessing and cleanup
+! reuse the established in-memory reconstruct3D lifecycle; only execution is
+! replaced because PCG produces dense halfmaps rather than gridding partials.
+type, extends(rec3D_inmem_strategy) :: rec3D_pcg_inmem_strategy
+contains
+    procedure :: execute => pcg_inmem_execute
+end type rec3D_pcg_inmem_strategy
 
 ! Distributed-memory
 type, extends(rec3D_strategy) :: rec3D_distr_strategy
@@ -82,6 +98,23 @@ end interface
 
 contains
 
+    pure integer function rec3D_backend_id(name) result(backend_id)
+        character(len=*), intent(in) :: name
+        select case(trim(name))
+            case('gridding')
+                backend_id = REC3D_BACKEND_GRIDDING
+            case('pcg')
+                backend_id = REC3D_BACKEND_PCG
+            case DEFAULT
+                backend_id = REC3D_BACKEND_INVALID
+        end select
+    end function rec3D_backend_id
+
+    pure logical function rec3D_backend_is_wired(backend_id) result(l_wired)
+        integer, intent(in) :: backend_id
+        l_wired = backend_id == REC3D_BACKEND_GRIDDING .or. backend_id == REC3D_BACKEND_PCG
+    end function rec3D_backend_is_wired
+
     ! --------------------------------------------------------------------
     ! Strategy selection
     ! --------------------------------------------------------------------
@@ -89,14 +122,33 @@ contains
     function create_rec3D_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
         class(rec3D_strategy), allocatable :: strategy
-        ! Distributed master iff: nparts defined AND part not defined
-        if( cline%defined('nparts') .and. (.not.cline%defined('part')) )then
-            allocate(rec3D_distr_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DISTRIBUTED-MEMORY REC3D EXECUTION'
-        else
-            allocate(rec3D_inmem_strategy :: strategy)
-            if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SHARED-MEMORY REC3D EXECUTION'
-        endif
+        type(string) :: backend
+        backend = string('gridding')
+        if( cline%defined('rec_backend') ) backend = cline%get_carg('rec_backend')
+        select case(rec3D_backend_id(backend%to_char()))
+            case(REC3D_BACKEND_GRIDDING)
+                ! Distributed master iff: nparts defined AND part not defined.
+                ! Keep this branch identical to the pre-selector strategy choice.
+                if( cline%defined('nparts') .and. (.not.cline%defined('part')) )then
+                    allocate(rec3D_distr_strategy :: strategy)
+                    if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') &
+                        &'>>> DISTRIBUTED-MEMORY REC3D EXECUTION (gridding)'
+                else
+                    allocate(rec3D_inmem_strategy :: strategy)
+                    if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') &
+                        &'>>> SHARED-MEMORY REC3D EXECUTION (gridding)'
+                endif
+            case(REC3D_BACKEND_PCG)
+                if( cline%defined('part') ) THROW_HARD('rec_backend=pcg does not support distributed part execution')
+                if( cline%defined('nparts') )then
+                    if( cline%get_iarg('nparts') > 1 ) THROW_HARD('rec_backend=pcg is shared-memory only')
+                endif
+                allocate(rec3D_pcg_inmem_strategy :: strategy)
+                if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SHARED-MEMORY REC3D EXECUTION (kernel PCG)'
+            case DEFAULT
+                THROW_HARD('rec_backend must be gridding or pcg')
+        end select
+        call backend%kill
     end function create_rec3D_strategy
 
     ! =====================================================================
@@ -174,6 +226,14 @@ contains
         if( allocated(pinds) ) deallocate(pinds)
         if( params%l_ml_reg ) call fname%kill
     end subroutine inmem_execute
+
+    subroutine pcg_inmem_execute(self, params, build, cline)
+        class(rec3D_pcg_inmem_strategy), intent(inout) :: self
+        type(parameters),                 intent(inout) :: params
+        type(builder),                    intent(inout) :: build
+        class(cmdline),                   intent(inout) :: cline
+        call execute_rec3D_pcg_shared(params, build, cline)
+    end subroutine pcg_inmem_execute
 
     subroutine inmem_finalize_run(self, params, build, cline)
         class(rec3D_inmem_strategy), intent(inout) :: self

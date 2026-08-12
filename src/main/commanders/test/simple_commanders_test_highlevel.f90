@@ -1048,7 +1048,8 @@ end subroutine exec_test_ptcls_ppca_subproject_distr
 !
 !  Does not touch reconstructor, reconstructor_eo, or volassemble.
 subroutine exec_test_pcg_recon( self, cline )
-    use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
+    use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, &
+        &PCG_OP_MATRIXFREE, PCG_OP_KERNEL
     use simple_sym,               only: sym
     class(commander_test_pcg_recon), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
@@ -1067,10 +1068,16 @@ subroutine exec_test_pcg_recon( self, cline )
     ! test can assert the constant has not drifted: it returns 1.0 exactly when
     ! the analytic value is right. Observed fits were within 0.5% of it.
     real,             parameter :: KSCALE_TOL = 2.0e-2
-    ! the two accumulation paths differ only in summation grouping, so at a
-    ! FIXED iteration count they should agree far inside single precision
-    real,             parameter :: STREAM_RELTOL = 1.0e-5
+    ! Fused and monolithic accumulation differ at single-precision roundoff
+    ! (~1e-7 observed for both B and Khat). Gate those statistics directly and
+    ! strictly. The preconditioner is a guarded reciprocal of D, and 20 Krylov
+    ! recurrences amplify that harmless perturbation; give the final volume a
+    ! separate 5e-4 bound so solver conditioning cannot hide an accumulator
+    ! defect or manufacture a false failure.
+    real,             parameter :: STREAM_ACCUM_RELTOL = 1.0e-6
+    real,             parameter :: STREAM_SOLVE_RELTOL = 5.0e-4
     integer,          parameter :: STREAM_ITS    = 20
+    integer,          parameter :: KERNEL_COMPARE_ITS = 8
     real,             parameter :: CTRS(3,NBLOBS) = reshape([&
         &-5.0,-3.0, 2.0,&
         &4.0, 5.0,-3.0,&
@@ -1087,9 +1094,11 @@ subroutine exec_test_pcg_recon( self, cline )
     type(ori)               :: e, e_exp
     type(ctfparams)         :: ctfparms
     type(sym)               :: c1sym, c2sym
+    type(pcg_solver_outcome) :: solver_outcome
     real,    allocatable    :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
     real,    allocatable    :: hp(:,:,:), hq(:,:,:), hm(:,:,:), hk(:,:,:)
     real,    allocatable    :: recon(:,:,:), recon_str(:,:,:), rel_res_hist(:)
+    real,    allocatable    :: recon_mf(:,:,:), recon_kernel(:,:,:)
     real,    allocatable    :: xdiv(:,:,:), recon_on(:,:,:), recon_off(:,:,:)
     real,    allocatable    :: env(:,:,:), invenv(:,:,:)
     real,    allocatable    :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
@@ -1100,7 +1109,8 @@ subroutine exec_test_pcg_recon( self, cline )
     integer :: R, margin, lo, hi, ifrom, nb, nsym
     integer, allocatable :: iseed(:)
     real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
-    real    :: err_all, err_int, den_all, den_int, kdiff, stream_err, rhs_err, kscale
+    real    :: err_all, err_int, err_max, den_all, den_int, kdiff, stream_err, rhs_err, kscale
+    real    :: solution_err, solution_norm_ratio, energy_ratio
     real    :: corr_on, corr_off, env_ctr, env_edge, recip_err
     real(dp):: lhs, rhs, dp_p_hq, dp_hp_q, dp_p_hp
     logical :: all_ok
@@ -1289,7 +1299,7 @@ subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a)') '>>> STAGE 4 SKIPPED: an earlier stage failed'
     endif
 
-    ! ============ STAGE 5: kernel vs matrix-free equivalence ============
+    ! ===== STAGE 5: kernel vs matrix-free operator and solve baseline =====
     if( all_ok )then
         write(logfhandle,'(a)') '>>> STAGE 5: kernelized vs matrix-free normal operator'
         call pcgop%build_kernel
@@ -1304,8 +1314,10 @@ subroutine exec_test_pcg_recon( self, cline )
         hi      = BOX - margin
         den_int = max(1.0, sqrt(sum(hm(lo:hi,lo:hi,lo:hi)**2)))
         err_int = sqrt(sum((hk(lo:hi,lo:hi,lo:hi)-hm(lo:hi,lo:hi,lo:hi))**2)) / den_int
+        err_max = maxval(abs(hk-hm)) / max(1.0, maxval(abs(hm)))
         write(logfhandle,'(a,es14.6)') '    relative error, all voxels = ', err_all
         write(logfhandle,'(a,es14.6)') '    relative error, interior   = ', err_int
+        write(logfhandle,'(a,es14.6)') '    relative maximum error     = ', err_max
         if( err_int > EPS_INTERIOR )then
             write(logfhandle,'(a)') '    FAIL: kernelized operator disagrees with the matrix-free reference'
             all_ok = .false.
@@ -1323,6 +1335,28 @@ subroutine exec_test_pcg_recon( self, cline )
         else
             write(logfhandle,'(a)') '    PASS: analytic kernel scale is correct'
         endif
+        dp_p_hq = pcgop%dot_real_volume(p_probe, hm)
+        dp_hp_q = pcgop%dot_real_volume(p_probe, hk)
+        energy_ratio = real(dp_hp_q / max(abs(dp_p_hq), epsilon(1.0_dp)))
+        write(logfhandle,'(a,es14.6)') '    kernel/matrix-free probe energy ratio = ', energy_ratio
+
+        ! Establish the fixed-iteration reconstruction baseline without tuning
+        ! an acceptance threshold before current Linux/macOS CI evidence exists.
+        ! Same RHS, initial state and iteration count prevent convergence-stop
+        ! jitter from masquerading as an operator difference.
+        allocate(recon_mf(BOX,BOX,BOX), recon_kernel(BOX,BOX,BOX), source=0.0)
+        call pcgop%set_op_mode(PCG_OP_MATRIXFREE)
+        call pcgop%solve(y_planes, recon_mf, maxits=KERNEL_COMPARE_ITS, rtol=0.0)
+        call pcgop%set_op_mode(PCG_OP_KERNEL)
+        call pcgop%solve(y_planes, recon_kernel, maxits=KERNEL_COMPARE_ITS, rtol=0.0)
+        solution_err = sqrt(sum((recon_kernel-recon_mf)**2)) / &
+            &max(1.0, sqrt(sum(recon_mf*recon_mf)))
+        solution_norm_ratio = sqrt(sum(recon_kernel*recon_kernel)) / &
+            &max(1.0, sqrt(sum(recon_mf*recon_mf)))
+        write(logfhandle,'(a,i0,a,es14.6)') '    fixed-', KERNEL_COMPARE_ITS, &
+            &'-iteration solution rel_err = ', solution_err
+        write(logfhandle,'(a,es14.6)') '    fixed-iteration solution norm ratio = ', solution_norm_ratio
+        deallocate(recon_mf, recon_kernel)
     else
         write(logfhandle,'(a)') '>>> STAGE 5 SKIPPED: an earlier stage failed'
     endif
@@ -1384,9 +1418,10 @@ subroutine exec_test_pcg_recon( self, cline )
 
     ! ================== STAGE 7: streaming accumulation ==================
     ! begin_accum/accumulate_batch/end_accum/solve_accum must reproduce what
-    ! solve() produces from all planes at once. The two differ only in how the
-    ! accumulators are grouped, so they should agree far inside single
-    ! precision; a real discrepancy means a batch-indexing or folding error.
+    ! solve() produces from all planes at once. The accumulated B and D-derived
+    ! kernel must agree near single-precision roundoff; the fixed-step solution
+    ! has its own bound because the reciprocal preconditioner and CG recurrence
+    ! amplify that input perturbation.
     ! BATCHSZ is deliberately not a divisor of NPROJS so the short final batch
     ! is exercised.
     if( all_ok )then
@@ -1410,9 +1445,17 @@ subroutine exec_test_pcg_recon( self, cline )
         ! reference path: one shot
         call pcgop%build_operators(.false.)
         recon = 0.0
-        call pcgop%solve(y_planes, recon, maxits=STREAM_ITS, rtol=0.0, niters=niters)
+        call pcgop%solve(y_planes, recon, maxits=STREAM_ITS, rtol=0.0, &
+            &niters=niters, outcome=solver_outcome)
         call pcgop%get_rhs(b_mono)
         write(logfhandle,'(a,i0,a)') '    monolithic: ', niters, ' iterations'
+        if( trim(solver_outcome%stop_reason) /= 'fixed_iterations' .or. &
+            &solver_outcome%iteration_count /= STREAM_ITS .or. solver_outcome%converged )then
+            write(logfhandle,'(a)') '    FAIL: fixed-iteration solver outcome is inconsistent'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: fixed-iteration solver outcome is explicit'
+        endif
         ! Two streaming runs, so a failure localizes itself rather than just
         ! reporting a number: ONE batch covering everything isolates the
         ! begin/end_accum machinery, and many batches adds the per-batch
@@ -1433,8 +1476,8 @@ subroutine exec_test_pcg_recon( self, cline )
             end do
             call pcgop%end_accum(.false.)
             ! compare the RHS before the solve: if b already differs the fault is
-            ! in accumulate_rhs or the fold; if b agrees but the solutions do
-            ! not, it is in the |T|^2 accumulator feeding the preconditioner
+            ! in fused B accumulation or the fold; if b agrees but the solutions
+            ! do not, it is in the fused D accumulator feeding the preconditioner
             call pcgop%get_rhs(b_str)
             rhs_err = sqrt(sum((b_str-b_mono)**2)) / max(1.0, sqrt(sum(b_mono*b_mono)))
             recon_str = 0.0
@@ -1442,8 +1485,11 @@ subroutine exec_test_pcg_recon( self, cline )
             stream_err = sqrt(sum((recon_str-recon)**2)) / max(1.0, sqrt(sum(recon*recon)))
             write(logfhandle,'(a,i3,a,es14.6,a,es14.6)') '    batch size ', nb, &
                 &': rel_err(b) = ', rhs_err, '   rel_err(x) = ', stream_err
-            if( stream_err > STREAM_RELTOL )then
-                write(logfhandle,'(a)') '    FAIL: streaming accumulation does not reproduce the monolithic solve'
+            if( rhs_err > STREAM_ACCUM_RELTOL )then
+                write(logfhandle,'(a)') '    FAIL: fused RHS does not reproduce monolithic accumulation'
+                all_ok = .false.
+            else if( stream_err > STREAM_SOLVE_RELTOL )then
+                write(logfhandle,'(a)') '    FAIL: fused accumulation changes the fixed-step solve beyond tolerance'
                 all_ok = .false.
             else
                 write(logfhandle,'(a)') '    PASS: streaming accumulation reproduces the monolithic solve'
@@ -1456,21 +1502,29 @@ subroutine exec_test_pcg_recon( self, cline )
         call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
         call pcgop%build_kernel
         khat_a = pcgop%apply_normal_kernel(p_probe)
-        call pcgop%begin_accum
-        do ifrom = 1, NPROJS, BATCHSZ
-            k = min(BATCHSZ, NPROJS - ifrom + 1)
-            call pcgop%accumulate_batch(y_planes(:,:,ifrom:ifrom+k-1), k, ifrom)
+        do j = 1, 2
+            if( j == 1 )then
+                nb = NPROJS
+            else
+                nb = BATCHSZ
+            endif
+            call pcgop%begin_accum
+            do ifrom = 1, NPROJS, nb
+                k = min(nb, NPROJS - ifrom + 1)
+                call pcgop%accumulate_batch(y_planes(:,:,ifrom:ifrom+k-1), k, ifrom)
+            end do
+            call pcgop%end_accum(.true.)
+            khat_b = pcgop%apply_normal_kernel(p_probe)
+            kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
+            write(logfhandle,'(a,i3,a,es14.6)') '    kernel batch size ', nb, &
+                &': streamed vs monolithic rel_err = ', kdiff
+            if( kdiff > STREAM_ACCUM_RELTOL )then
+                write(logfhandle,'(a)') '    FAIL: kernel built from a streamed accumulator differs'
+                all_ok = .false.
+            else
+                write(logfhandle,'(a)') '    PASS: kernel is identical either way'
+            endif
         end do
-        call pcgop%end_accum(.true.)
-        khat_b = pcgop%apply_normal_kernel(p_probe)
-        kdiff  = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
-        write(logfhandle,'(a,es14.6)') '    streamed vs monolithic kernel: rel_err = ', kdiff
-        if( kdiff > STREAM_RELTOL )then
-            write(logfhandle,'(a)') '    FAIL: kernel built from a streamed accumulator differs'
-            all_ok = .false.
-        else
-            write(logfhandle,'(a)') '    PASS: kernel is identical either way'
-        endif
     else
         write(logfhandle,'(a)') '>>> STAGE 7 SKIPPED: an earlier stage failed'
     endif

@@ -159,14 +159,14 @@ contains
         &'pcg_recon',&                               ! name
         &'PCG reconstruction operator and solver validation',&
         &'Single in-memory gate for the PCG reconstruction path, against a deterministic '//&
-        &'asymmetric phantom and no project. Eight fail-fast stages in increasing cost: adjoint '//&
+        &'asymmetric phantom and no project. Nine fail-fast stages in increasing cost: adjoint '//&
         &'dot-product identity with a trivial transfer and then with a real astigmatic CTF, shift '//&
         &'and sigma2; normal-operator symmetry and positive-definiteness; synthetic recovery; '//&
         &'kernelized-vs-matrix-free equivalence reported for all voxels and for an interior '//&
         &'region; kernel invariants (shift-invariant, CTF-dependent) and the sampling-density '//&
         &'preconditioner; streaming batch accumulation reproducing the monolithic solve; and '//&
-        &'finally deapodization against ENVELOPE-FREE observations, the one stage that does not '//&
-        &'commit an inverse crime.',&
+        &'deapodization against ENVELOPE-FREE observations, the one stage that does not commit '//&
+        &'an inverse crime; and C2 coordinate replication equivalence.',&
         &'simple_test_exec',&                        ! executable
         &.false.)                                    ! requires sp_project
         ! add to ui_hash

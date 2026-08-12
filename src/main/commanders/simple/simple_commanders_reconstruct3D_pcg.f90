@@ -11,8 +11,9 @@
 !  does not enter through commander_volassemble or reuse its output filenames.
 !  Kept in its own file, deliberately separate from production reconstruction.
 module simple_commanders_reconstruct3D_pcg
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_commanders_api
-use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL
+use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL
 use simple_matcher_ptcl_io,    only: prepimgbatch, discrete_read_imgbatch, killimgbatch
 use simple_sigma2_files,       only: load_sigma2_groups
 use simple_math_ft,            only: upsample_sigma2
@@ -34,10 +35,10 @@ contains
         class(cmdline),                     intent(inout) :: cline
         real,    parameter :: LAMBDA         = 1.0e-3
         integer, parameter :: MAXITS_DEFAULT = 30
-        real,    parameter :: RTOL_DEFAULT   = 1.0e-3
         type(parameters)         :: params
         type(builder)            :: build
         type(reconstructor_pcg) :: pcgop
+        type(pcg_solver_outcome) :: solver_outcome
         type(oris)               :: selection
         type(ori)                :: e
         type(ctfparams)          :: ctfparms
@@ -69,6 +70,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('state')   ) call cline%set('state',   1.)
         if( .not. cline%defined('objfun')  ) call cline%set('objfun',  'euclid')
+        if( .not. cline%defined('maxits')  ) call cline%set('maxits',  MAXITS_DEFAULT)
         ! nspace is only consulted by build_general_tbox's eulspace grid, which
         ! this operator never uses (it works from each particle's own continuous
         ! orientation, not a discretized reference grid). Keep a harmless even
@@ -90,15 +92,15 @@ contains
         !      user asked for ----
         if( params%nparts > 1 ) THROW_HARD('reconstruct3D_pcg is single-part; nparts>1 is not supported')
 
-        maxits = MAXITS_DEFAULT
-        if( cline%defined('maxits') ) maxits = nint(cline%get_rarg('maxits'))
         ! pcgop and rtol are real parameters/type members, not cline-only flags:
         ! simple_args.f90 (the CLI allowlist) is GENERATED from the declarations
         ! in simple_parameters.f90, so a UI record alone is not enough -- an
         ! undeclared key is rejected as "argument is not allowed" before the
         ! commander ever runs.
+        maxits = params%maxits
         rtol   = params%rtol
-        if( rtol <= 0. ) rtol = RTOL_DEFAULT
+        if( maxits < 1 ) THROW_HARD('maxits must be at least 1; reconstruct3D_pcg')
+        if( .not. ieee_is_finite(rtol) ) THROW_HARD('rtol must be finite; reconstruct3D_pcg')
         opmode = string(trim(params%pcgop))
         select case( opmode%to_char() )
             case( 'kernel', 'matrixfree' )
@@ -207,8 +209,8 @@ contains
         !      accumulators, discard it. The observed planes are needed for one
         !      thing only (forming the RHS) and for one pass only, so nothing
         !      proportional to nptcls is ever resident -- see
-        !      doc/implementation_notes/pcg_reconstruction_as_gridding_replacement.md
-        !      section 5.1. Batch shape follows calc_3Drec. ----
+        !      doc/policies/reconstruct3D_pcg_policy.md section 1. Batch shape
+        !      follows calc_3Drec. ----
         if( l_kernel ) write(logfhandle,'(a)') &
             &'>>> RECONSTRUCT3D_PCG: building kernelized (Toeplitz) normal operator'
         allocate(y_batch(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), MAXIMGBATCHSZ))
@@ -293,7 +295,7 @@ contains
         t1 = tic()
         allocate(x(params%box,params%box,params%box), source=0.0)
         call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, &
-            &rel_res_hist=rel_res_hist, niters=niters)
+            &rel_res_hist=rel_res_hist, niters=niters, outcome=solver_outcome)
         rt_solve = toc(t1)
         rt_tot   = toc(t0)
 
@@ -311,6 +313,12 @@ contains
         write(funit,'(a,a)')     'operator=',         opmode%to_char()
         write(funit,'(a,i0)')    'nthr=',             params%nthr
         write(funit,'(a,i0)')    'niters=',           niters
+        write(funit,'(a,i0)')    'requested_maxits=', solver_outcome%requested_maxits
+        write(funit,'(a,a)')     'stop_reason=',      trim(solver_outcome%stop_reason)
+        write(funit,'(a,l1)')    'converged=',        solver_outcome%converged
+        write(funit,'(a,es14.6)') 'initial_rel_resid_l2=', solver_outcome%initial_rel_residual
+        write(funit,'(a,es14.6)') 'final_rel_resid_l2=',   solver_outcome%final_rel_residual
+        write(funit,'(a,es14.6)') 'final_rel_update=',     solver_outcome%final_rel_update
         write(funit,'(a,f12.3)') 'setup_time_sec=',   rt_setup
         write(funit,'(a,f12.3)') 'solve_time_sec=',   rt_solve
         write(funit,'(a,f12.3)') 'total_time_sec=',   rt_tot

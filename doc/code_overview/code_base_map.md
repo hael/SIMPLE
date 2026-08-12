@@ -12,6 +12,21 @@
     - `simple_test_exec.f90` — executes SIMPLE tests workflows
     - `single_exec.f90` — executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows
     - **tests/** — home of executable unit tests
+      - `simple_continuous_inplane_refine3D_baseline.f90`
+      - `simple_continuous_inplane_refine3D_direct.f90`
+      - `simple_continuous_inplane_refine3D_joint.f90`
+      - `simple_continuous_inplane_refine3D_metadata.f90`
+      - `simple_continuous_inplane_refine3D_policy.f90`
+      - `simple_continuous_inplane_refine3D_recovery.f90`
+      - `simple_continuous_inplane_refine3D_state.f90`
+      - `simple_sgd_base_suite_baseline_test.f90`
+      - `simple_sgd_base_suite_direct_test.f90`
+      - `simple_sgd_base_suite_helpers.f90`
+      - `simple_sgd_base_suite_sampling_restore_test.f90`
+      - `simple_sgd_base_suite_v2_test.f90`
+      - `simple_sgd_base_suite_v3_test.f90`
+      - `simple_sgd_base_suite_v4_test.f90`
+      - `simple_test_abinitio2d_sgd_dispatch.f90` — focused dispatch and command-line contract test for the development abinitio2D_sgd commander
       - `simple_test_angres.f90` — angular resolution as a function of number of projection directions
       - `simple_test_ansi_colors.f90`
       - `simple_test_atomfit.f90`
@@ -22,20 +37,27 @@
       - `simple_test_block_tree_io.f90`
       - `simple_test_bounds_from_mask3D.f90`
       - `simple_test_cavg_quality_relations.f90`
+      - `simple_test_cc_connectivity.f90`
       - `simple_test_class_sample.f90`
       - `simple_test_clustering.f90`
       - `simple_test_cmdline.f90`
       - `simple_test_coarrays.f90`
+      - `simple_test_continuous_inplane_refine3D.f90`
+      - `simple_test_continuous_inplane_rotation2D.f90`
+      - `simple_test_continuous_inplane_rotation2D_metadata.f90`
+      - `simple_test_continuous_inplane_rotation2D_route_identity.f90`
+      - `simple_test_continuous_inplane_rotation2D_stage1_validation.f90`
       - `simple_test_corrs2weights.f90`
       - `simple_test_create_gain.f90`
       - `simple_test_ctf.f90`
+      - `simple_test_diff_map_graphs.f90` — validates the shared angularly gated kNN diffusion-map graph engine
       - `simple_test_discrete_stack_io.f90`
       - `simple_test_eigh.f90`
       - `simple_test_eo_diff.f90` — tests randomization of phases below noise power
       - `simple_test_eul_prob_tab2D_io.f90` — validates streamed dense/sparse 2D probability-table merge and assignment
       - `simple_test_eval_polarftcc.f90`
       - `simple_test_extr_frac.f90`
-      - `simple_test_flex_diffmap_graph.f90` — validates angularly gated registered-residual kNN construction
+      - `simple_test_flex_pca.f90` — validates the flex_pca embedding cache, kernel/state-weight contracts and packed covariance solve
       - `simple_test_flex_projected_latent_model.f90` — validates flex projection-aware latent-model I/O, Fourier operations, and canonicalization
       - `simple_test_ft_expanded.f90`
       - `simple_test_gencorrs_fft.f90`
@@ -63,6 +85,7 @@
       - `simple_test_nano_mask.f90`
       - `simple_test_neigh.f90` — test for refine=neigh modes
       - `simple_test_nice.f90`
+      - `simple_test_nu_envmask.f90`
       - `simple_test_nu_filter.f90`
       - `simple_test_openacc.f90`
       - `simple_test_openmp.f90`
@@ -75,6 +98,7 @@
       - `simple_test_pca_all.f90`
       - `simple_test_pca_imgvar.f90`
       - `simple_test_pdb2mrc.f90`
+      - `simple_test_phase_rand_fsc.f90`
       - `simple_test_phasecorr.f90`
       - `simple_test_phshift_policy.f90`
       - `simple_test_phshift_star.f90`
@@ -82,7 +106,9 @@
       - `simple_test_project_merge.f90`
       - `simple_test_ptcl_center.f90`
       - `simple_test_qsys_ctrl.f90`
+      - `simple_test_qsys_env.f90`
       - `simple_test_rank_weights.f90`
+      - `simple_test_rec3D_backend.f90`
       - `simple_test_rnd_shuffle.f90`
       - `simple_test_rotate_ref.f90`
       - `simple_test_search_gain_flips.f90`
@@ -107,7 +133,6 @@
       - `test_socket_comm_distr.f90`
   - **scripts/** — home of scripts and code generators
     - **memory/**
-    - **ui/**
   - **src/** — main source code folder
     - **defs/** — home of singleton modules with parameter and type definitions
       - `simple_ansi_ctrls.f90` — ANSI C control parameters for text formatting
@@ -198,6 +223,7 @@
           - `simple_commander_base.f90` — abstract base commander
           - `simple_commanders_abinitio.f90` — abinitio 3D reconstruction in single- and multi-particle mode
           - `simple_commanders_abinitio2D.f90` — ab initio 2D analysis
+          - `simple_commanders_abinitio2d_sgd.f90` — developer wrapper for table-free streaming-SGD ab initio 2D classification
           - `simple_commanders_atoms.f90` — operations on atoms, mostly used in SINGLE
           - `simple_commanders_cavgs.f90` — analysis of class averages
           - `simple_commanders_checks.f90` — checking info about images, project, or checking update calculations
@@ -206,7 +232,7 @@
           - `simple_commanders_distr.f90` — for managing distributed SIMPLE execution
           - `simple_commanders_euclid.f90` — for sigma2 calculations in objfun=euclid 2D and 3D refinement
           - `simple_commanders_euclid_distr.f90` — for distributed sigma2 calculations in objfun=euclid 2D and 3D refinement
-          - `simple_commanders_flex_analysis.f90` — diffusion-map 3D variability commanders
+          - `simple_commanders_flex_pca.f90` — projection-aware covariance heterogeneity commander
           - `simple_commanders_imgops.f90` — standard image operations: binarize, filter, denoise, normalize, scale etc.
           - `simple_commanders_imgproc.f90` — standard EM image processing
           - `simple_commanders_mask.f90` — masking and auto-masking
@@ -301,10 +327,12 @@
         - `single_exec_tseries.f90`
         - `single_exec_validate.f90`
       - **flex/**
-        - `simple_flex_analysis_strategy.f90` — shmem/worker/master sparse diffusion-map 3D variability analysis
-        - `simple_flex_diffmap_features.f90` — registered residual feature preparation for flex_analysis diffusion maps
-        - `simple_flex_diffmap_preimage.f90` — flex-analysis diffusion-manifold targets selected with SIMPLE k-medoids
-        - `simple_flex_diffmap_rec3D.f90` — projection-aware residual NystrÃ¶m pre-images for flex_analysis
+        - `simple_flex_pca_columns.f90` — covariance-column estimation, reduced covariance solve and latent embedding for flex_pca
+        - `simple_flex_pca_distr.f90` — distributed-execution context for flex_pca stage fan-out
+        - `simple_flex_pca_merge.f90` — Two-gate agglomerative merge of over-provisioned flex_pca states.
+        - `simple_flex_pca_model.f90` — Standalone projection-aware low-rank covariance workflow for heterogeneous SPA data
+        - `simple_flex_pca_parts.f90` — versioned part-file contracts for distributed flex_pca stage reductions
+        - `simple_flex_pca_rec3D.f90` — kernel-weighted state reconstruction for flex_pca
         - `simple_flex_projected_latent_model.f90` — Projection-aware latent volume model kernels for flex_analysis
         - `simple_flex_reconstructor_latent_ops.f90` — Latent-volume projection/backprojection helpers for flex_analysis
       - **image/** — home of the submodules of the image class, its extensions, and its variants
@@ -355,7 +383,6 @@
         - `simple_molecule_data.f90` — example of molecule data used for simple testing
         - `simple_nanoparticle.f90` — the nanoparticle abstract data type, used for automated atomic model building in SINGLE
         - `simple_nanoparticle_utils.f90` — nanoparticle utilities, mostly operations on atomic coordinates
-        - `simple_trajectory_chunker.f90` — time-constrained flex-latent segmentation for nanoparticle trajectories
         - `simple_tseries_graphene_subtr.f90` — graphene background subtraction in SINGLE
         - `single_tseries_extractor.f90` — Extractions routine for nanoparticles time series intended for frames and given per frame coordinates
         - `single_tseries_tracker.f90` — time series tracker intended for movies of nanoparticles spinning in solution
@@ -363,6 +390,7 @@
         - `simple_nu_filter.f90` — volume-domain nonuniform filtering of even/odd volumes
         - `simple_nu_filter_apply.f90` — simple nu filter apply implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_bank.f90` — simple nu filter bank implementation for volume-domain nonuniform filtering
+        - `simple_nu_filter_envmask.f90` — NU-evidence-driven envelope masking for volume-domain nonuniform filtering
         - `simple_nu_filter_extend.f90` — simple nu filter extend implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_potts.f90` — simple nu filter potts implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_state.f90` — simple nu filter state implementation for volume-domain nonuniform filtering
@@ -469,6 +497,7 @@
           - `simple_motion_correct_strategy.f90`
           - `simple_pick_strategy.f90`
           - `simple_preprocess_strategy.f90`
+          - `simple_rec3D_pcg_strategy.f90` — shared-memory production strategy body for kernel PCG reconstruct3D
           - `simple_rec3D_strategy.f90`
           - `simple_reextract_strategy.f90`
           - `simple_refine3D_strategy.f90`
@@ -480,6 +509,7 @@
           - `simple_matcher_ptcl_io.f90` — particle image batch I/O routines shared by matcher workflows
           - `simple_matcher_refvol_utils.f90` — shared helpers for reading, masking, filtering and reprojecting reference volumes
           - `simple_matcher_smpl_and_lplims.f90` — search-space and particle-selection policy routines for matcher workflows
+          - `simple_ptcl_cache.f90` — downscaled particle cache shared by the 2D and 3D matcher workflows
           - `simple_strategy2D.f90` — abstract base class defining the common strategy2D interface
           - `simple_strategy2D_alloc.f90` — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
           - `simple_strategy2D_eval.f90` — 2D strategy for objective function evaluation
@@ -590,7 +620,7 @@
         - `simple_reconstructor_eo.f90` — 3D reconstruction of even-odd pairs for FSC estimation
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
         - `simple_reconstructor_pcg.f90` — experimental CTF/sigma-weighted, matrix-free Fourier-projection
-        - `simple_vol_pproc_policy.f90` — per-state automask and nonuniform-filter policy decisions consumed by volume assembly
+        - `simple_vol_pproc_policy.f90` — per-state automask policy decisions consumed by volume assembly
         - `simple_volanalyzer.f90` — for analyzing sets of ab initio volumes, current implementation just outputting the medoid
         - `simple_volcluster.f90` — clustering of pre-docked volumes from Fourier-shell correlations
         - `simple_volinterp.f90` — projection of 3D volumes in the Fourier domain by convolution interpolation to generate band-pass limited Cartesian and polar 2D Fourier transforms, high-level routines

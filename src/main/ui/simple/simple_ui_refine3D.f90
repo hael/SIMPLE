@@ -130,7 +130,11 @@ subroutine new_automask( prgtab )
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call reconstruct3D%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
+        &'Reconstruction backend; PCG runs independent shared-memory kernel solves for the two halfsets(gridding|pcg){gridding}', &
+        &'', .false., 'gridding', &
+        &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
+        &visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -153,6 +157,12 @@ subroutine new_automask( prgtab )
         &'Postprocess reconstructed volumes using the generated FSC curves','', .false., 'yes', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        call reconstruct3D%add_input(UI_FILT, 'maxits', 'num', 'PCG maximum iterations', &
+        &'Maximum kernel PCG iterations; used only when rec_backend=pcg', 'iterations{30}', .false., 30., &
+        &visibility=UI_VIS_DEVELOPER)
+        call reconstruct3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
+        &'Stop at this true L2 relative residual; use <=0 for exactly maxits iterations', 'tolerance{0.001}', &
+        &.false., 0.001, visibility=UI_VIS_DEVELOPER)
         ! mask controls
         call reconstruct3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)

@@ -218,7 +218,7 @@ subroutine new_center( prgtab )
         call reconstruct3D_pcg%add_input(UI_FILT, maxits, required_override=.false., &
         &visibility=UI_VIS_DEVELOPER)
         call reconstruct3D_pcg%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
-            &'Stop when the relative preconditioned residual falls below this', 'tolerance{0.001}', &
+            &'Stop when the true L2 relative residual falls below this; use <=0 for fixed iterations', 'tolerance{0.001}', &
             &.false., 0.001, &
         &visibility=UI_VIS_DEVELOPER)
         ! mask controls

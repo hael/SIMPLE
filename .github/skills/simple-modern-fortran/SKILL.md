@@ -49,6 +49,28 @@ SIMPLE already uses modern Fortran heavily. Follow the local style instead of in
   it; make the dependency explicit and update all callers together.
 - Preserve `new`/`kill` lifecycle symmetry for stateful types.
 - Watch for generated sources from `scripts/simple_args_generator.pl` and git-hash insertion during builds.
+- Keep new function-like preprocessor macro invocations on one physical line.
+  `THROW_HARD(...)` and `THROW_WARN(...)` are expanded before Fortran parses the
+  source, so a Fortran continuation inside their argument is flattened. The
+  common `//&` form then becomes an invalid expression:
+
+  ```fortran
+  ! Wrong: fails after preprocessing.
+  THROW_HARD('first part '//&
+      &'second part')
+
+  ! Right: shorten the message.
+  THROW_HARD('concise error message')
+  ```
+
+  If the full text is important, build it with ordinary Fortran continuation in
+  a named character variable or parameter, then pass only that identifier to
+  the macro: `THROW_HARD(error_message)`. Do not copy legacy multiline macro
+  calls: some compile only because preprocessing flattens them, which can leave
+  continuation markers in the emitted diagnostic text.
+- Before handing off Fortran edits, scan fatal forms with
+  `rg -n "THROW_(HARD|WARN)\\(.*//&" src` and inspect newly added macro lines
+  with `git diff -U0 -- '*.f90' | rg '^\\+.*THROW_(HARD|WARN)\\(.*&[[:space:]]*$'`.
 
 ## Debugging And Build Notes
 

@@ -768,6 +768,15 @@ contains
                 write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
                 THROW_HARD('unsupported objective function')
         end select
+        select case(trim(self%rec_backend))
+            case('gridding')
+            case('pcg')
+                if( trim(self%prg%to_char()) /= 'reconstruct3D' )then
+                    THROW_HARD('rec_backend=pcg is currently accepted only by reconstruct3D')
+                endif
+            case DEFAULT
+                THROW_HARD('rec_backend must be gridding or pcg')
+        end select
         select case(trim(self%inpl_cont))
             case('yes','no')
             case DEFAULT

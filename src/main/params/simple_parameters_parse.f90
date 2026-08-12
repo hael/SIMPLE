@@ -148,6 +148,7 @@ contains
         call reg%add_char('kpca_backend', self%kpca_backend)
         call reg%add_char('kpca_ker', self%kpca_ker)
         call reg%add_char('pcgop', self%pcgop)
+        call reg%add_char('rec_backend', self%rec_backend)
         call reg%add_char('pcontrast', self%pcontrast)
         call reg%add_char('pickkind', self%pickkind)
         call reg%add_char('pgrp', self%pgrp)

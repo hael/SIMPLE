@@ -1,14 +1,31 @@
 # `reconstruct3D_pcg` policy
 
 Contract of the code that runs today: the experimental CTF- and sigma-weighted
-preconditioned-conjugate-gradient (PCG) reconstruction path. Deferred design
-work is in section 11.
+preconditioned-conjugate-gradient (PCG) reconstruction path. Work not yet
+implemented is specified in
+`doc/implementation_notes/pcg_reconstruction_production_readiness.md`.
 
-`reconstruct3D_pcg` is an isolated prototype: it shares no code with the
-production gridding path (`reconstructor`, `reconstructor_eo`, `volassemble`,
-the online matcher), never writes to the project, and adds no mode switch to any
-production program. That boundary is hard — it keeps the comparison against
-production honest and keeps a bug here out of production output.
+`reconstruct3D_pcg` remains an isolated one-volume prototype. The production
+`reconstruct3D` command now accepts the opt-in selector
+`rec_backend=gridding|pcg`, with `gridding` unchanged as the default. Its `pcg`
+branch runs independent shared-memory kernel accumulation and solves for the
+even and odd halfsets, writes the standard halfmaps and FSC, and forms the
+merged map by averaging those two dense halfmaps. It does not route through the
+incompatible experimental commander.
+
+The shared production backend currently supports full-box fixed-pose
+reconstruction from raw or denoised particle sources, multiple populated
+states, CTF-aware `cc` or sigma-weighted `euclid`, point-group replication,
+standard halfmap/FSC/merged-map names, project output registration, and the
+usual final postprocessing handoff. FSC summaries include both the 0.5 and
+0.143 resolutions and the cFAR diagnostic, using the same spherical or
+density-envelope mask as the corresponding FSC. Each selected particle is read
+once into its state/half accumulation and is never reread during PCG iterations.
+
+It deliberately rejects distributed parts, `projrec=yes`, box cropping,
+fractional/trailing reconstruction, and `conical_fsc=yes` regularization. Those
+cases require additional equivalence tests or an accumulator/reduction contract
+and must not silently fall back to gridding or matrix-free PCG.
 
 ## 1. Scope and fixed inputs
 
@@ -33,8 +50,29 @@ execution (§10).
 
 Nothing is written back to the project. Output goes to a new numbered execution
 directory: `reconstruct3D_pcg_state<NN>.mrc` and a diagnostics table
-`reconstruct3D_pcg_diagnostics.txt` (iteration count, per-iteration relative
-residual, timing).
+`reconstruct3D_pcg_diagnostics.txt` (stop reason, requested/completed iteration
+count, convergence flag, initial/final true relative residual, final relative
+update, per-iteration residuals, and timing).
+
+Particle images are streamed through a bounded batch. The command calls
+`begin_accum`, repeats `accumulate_batch`, closes with `end_accum`, and solves
+with `solve_accum`; it never materializes all observed particle planes at once.
+The two particle-dependent accumulated quantities are the weighted RHS and the
+`|T_i|^2` Gram/sampling-density precursor. The RHS, preconditioner, and kernel
+are derived from those quantities, so the PCG iteration itself performs no
+particle-image I/O. Peak image/plane memory is therefore constant in particle
+count.
+
+Production streaming fuses those two updates. For each particle it evaluates
+the CTF, rotated coordinate, and KB interpolation window once, then updates
+both accumulators in the same coloured OpenMP traversal. The standalone RHS
+and density routines remain the monolithic test oracle; the streaming-versus-
+monolithic gate covers both single-batch and multi-batch fused accumulation.
+It gates `B` and the `D`-derived kernel directly at `1e-6` relative error. The
+20-step volume comparison has a separate `5e-4` bound because the guarded
+reciprocal preconditioner and Krylov recurrence amplify single-precision
+accumulation roundoff; passing the volume gate cannot excuse failure of either
+direct accumulator gate.
 
 ## 2. Where the code lives
 
@@ -153,9 +191,20 @@ answer.) Overall scale is the analytic constant `padsc^2`;
 `measure_kernel_scale` is a test-only check that it is right.
 
 The kernelized operator is shift-invariant and the true operator is not, so it
-stays an approximation (~3.4% interior error). `pcgop=matrixfree` is the exact
-reference and the fallback. The kernel is not equivalent until it gives
-equivalent *reconstructions* on real data — a similar operator is not enough.
+stays an approximation (~3.4% interior error). The standalone prototype exposes
+`pcgop=matrixfree`, but that path is the exact numerical reference for unit
+tests and small diagnostic fixtures, **not a feasible real-workflow backend and
+not a production fallback**. Its per-iteration particle loop becomes
+prohibitive at experimental particle counts and under symmetry replication.
+
+`pcgop=kernel` is therefore the only candidate for production workflows. It
+must be validated against matrix-free on deterministic, small enough fixtures
+where both can run. Agreement of a residual trace alone is insufficient: a
+uniform operator-scale error cancels from the CG recurrence while changing map
+amplitude. Kernel validation must compare the operator action and scale
+directly, then compare fixed-iteration solutions built from the same RHS. Real
+workflow acceptance additionally requires independently reconstructed halfmaps
+and FSC; a similar operator is not enough.
 
 ## 6. Symmetry
 
@@ -184,7 +233,7 @@ Two consequences to keep in view:
   the whole accumulation, including the serial rim pass, by 60. The
   lattice-exact permutation path — available only for groups whose operators are
   signed permutations (`c2`, `c4`, `d2`, `d4`, `t`, `o`) — is the way out and is
-  not implemented (§11).
+  not implemented.
 
 Symmetry-as-constraint and data replication are the same estimator, so there is
 no SNR difference between them; symmetry's gain is fewer effective unknowns.
@@ -212,6 +261,13 @@ real data `||r||/||b||` plateaus above `rtol` while the map keeps settling, so
 `rtol <= 0`**, the caller's way of demanding exactly `maxits` iterations —
 stage 7 depends on that, since comparing two solves stopped by a data-dependent
 criterion asserts nothing.
+
+Successful completion returns a typed `pcg_solver_outcome` identifying `rtol`,
+`xtol`, intentional `fixed_iterations`, or exhausted `maxits`, with the
+requested/completed iteration count and initial/final residual/update values.
+Broken curvature, a non-finite state, a non-positive preconditioner, and a zero
+RHS still hard-error in the isolated command; conversion of those failures into
+recoverable workflow outcomes belongs to the production strategy.
 
 ## 8. Sigma2 handling
 
@@ -241,7 +297,7 @@ correct.
 | 2 | same with nonzero shift, astigmatic CTF and sigma2 — isolates `build_transfer` |
 | 3 | normal-operator symmetry and positive-definiteness |
 | 4 | heterogeneous phantom recovery |
-| 5 | kernelized-vs-matrix-free equivalence, all-voxel and interior |
+| 5 | kernelized-vs-matrix-free operator, scale/energy, and fixed-iteration solution baseline |
 | 6 | kernel shift-invariance, CTF-dependence, and the preconditioner |
 | 7 | streaming batch accumulation reproduces the monolithic solve |
 | 8 | deapodization against envelope-free data — the one stage without an inverse crime |
@@ -251,15 +307,22 @@ Stages 1-7 generate observations with `forward_plane`, so the gather envelope
 cancels; they gate operator *algebra* only. Envelope correctness for real
 particles is gated solely by stage 8.
 
+Matrix-free is the oracle for kernel development. Any change to kernel
+construction, scale, masks, symmetry, resolution limiting, weights,
+preconditioning, or box conversion must add or extend a deterministic
+kernel-versus-matrix-free gate. Production-sized runs exercise kernel only;
+they do not establish correctness by comparing kernel output with another
+kernel output.
+
 Not covered, and worth remembering before trusting a change: the command's own
 particle I/O loop, and replicated symmetry through the matrix-free operator
 (stage 9 compares kernel to kernel).
 
-## 10. Deliberate non-goals
+## 10. Deliberate non-goals of the isolated command
 
 Not implemented, and hard-errored or absent rather than silently approximated:
 
-- no even/odd half-set split (§11);
+- no even/odd half-set split;
 - no `nparts>1` / distributed execution;
 - no orientation, shift, state, sigma, FSC or resolution write-back;
 - no orientation search, probabilistic assignment, online partial
@@ -271,26 +334,7 @@ Not implemented, and hard-errored or absent rather than silently approximated:
   central-section and the architectures do not transfer. There is no licensing
   barrier: SIMPLE is GPL-3.0 and SPIDER GPL-2.0-or-later.
 
-## 11. Deferred work
-
-**Next: even/odd cross-validation and state assignment.** Independent half-set
-solves, so an FSC can be measured and compared against the frozen gridding
-reference (map, FSC, local anisotropy, objective trajectory, wall time, peak
-memory). The command can already be run twice with explicit even/odd selections;
-missing are half-set ownership in the selection/solve path, the FSC comparison,
-and multi-state assignment. Half-set independence is a hard requirement: no
-cross-half fitted volume may influence a particle's parameters.
-
-**Symmetry, remaining.** The lattice-exact permutation path gated against
-replication (§6), and a per-solve asymmetry diagnostic `||x - Pi x|| / ||x||`.
-
-**Longer term.** The operator gives one consistent weighted likelihood for both
-reconstruction and continuous parameter refinement (poses, shifts, restricted
-CTF/phase). That is a separate command with its own design review — see
-`doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md` — and
-none of it is in scope for the fixed-pose command.
-
-## 12. Reused vs. reimplemented
+## 11. Reused vs. reimplemented
 
 Established data preparation and conventions are reused; the adjoint pair is
 implemented and tested here rather than repurposed from production gridding.

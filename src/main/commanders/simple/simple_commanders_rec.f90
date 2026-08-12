@@ -38,9 +38,15 @@ contains
         class(rec3D_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
+        type(string)     :: rec_backend
         ! Commander-level defaults (apply to both modes)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)     ! to assure that shifts are being used
+        if( .not. cline%defined('rec_backend') ) call cline%set('rec_backend', 'gridding')
+        rec_backend = cline%get_carg('rec_backend')
+        if( rec_backend .eq. 'pcg' )then
+            if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
+        endif
         call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         ! Select and run strategy
@@ -49,6 +55,7 @@ contains
         call strategy%execute(params, build, cline)
         call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params, build, cline)
+        call rec_backend%kill
         ! End gracefully (single unified termination)
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
         if( allocated(strategy) ) deallocate(strategy)
