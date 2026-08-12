@@ -36,6 +36,7 @@ character(len=8), parameter :: COV_CACHE_MAGIC   = 'SIMPLFXC'
 integer,          parameter :: COV_CACHE_VERSION = 3
 ! Safety cap on the bandwidth widening loop.
 integer,          parameter :: COV_MAX_BW_GROW   = 4
+integer,          parameter :: MIN_NSTATES       = 3
 
 contains
 
@@ -93,7 +94,7 @@ contains
         ! states than any constant would allow, and an over-provisioned run is the only regime in
         ! which the two-gate merge can recover K. What actually bounds it is memory, which is
         ! REPORTED below rather than enforced.
-        nstates    = max(3, params%npreimages)
+        nstates    = max(MIN_NSTATES, params%npreimages)
         call report_state_memory(params, nstates)
         ! env-only: inert on the default path (the GMM replaces the kernel weights and bandwidth),
         ! live on the nbins>1 and SIMPLE_COV_GMM=0 opt-outs
@@ -419,7 +420,7 @@ contains
         if( trim(params%oritype) /= 'ptcl3D' ) THROW_HARD('flex_pca requires oritype=ptcl3D')
         if( .not. cline%defined('vol1') ) THROW_HARD('flex_pca requires vol1=<consensus mean map>')
         if( trim(params%ptcl_src) /= 'raw' ) THROW_HARD('flex_pca currently requires ptcl_src=raw')
-        if( params%nstates /= 1 ) THROW_HARD('flex_pca requires a one-state input project')
+        if( build%spproj_field%get_n('state') /= 1 ) THROW_HARD('flex_pca requires a project with an eo split')
         ! not sample4rec: its updatecnt > 0 condition belongs to trailing reconstruction
         allocate(sel(max(0, params%top - params%fromp + 1)))
         cnt = 0
