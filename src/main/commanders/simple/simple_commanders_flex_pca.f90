@@ -40,7 +40,6 @@ contains
         if( .not.cline%defined('ptcl_src') )    call cline%set('ptcl_src','raw')
         if( .not.cline%defined('objfun') )      call cline%set('objfun','euclid')
         if( .not.cline%defined('outvol') )      call cline%set('outvol','flex_pca_state_001.mrc')
-        if( .not.cline%defined('outfile') )     call cline%set('outfile','flex_hard_states.simple')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         call flex_pca_distr_init(params,cline)
         call run_flex_pca(params,build,cline)

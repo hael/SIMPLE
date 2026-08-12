@@ -33,11 +33,14 @@ used (`../pca/simple_diff_map_graphs.f90`, `../pca/simple_diff_map_denoise.f90`,
    latent model, and `simple_flex_reconstructor_latent_ops.f90` the flex-specific
    Fourier projection and backprojection operations it builds on.
 
-Alongside the kernel state maps, the state stage writes `outfile` (default
-`flex_hard_states.simple`): a copy of the project carrying the hard state label of
-every embedded particle in `ptcl3D/state`, with unassigned particles left at
-state 0. This lets the embedding and its state assignment be judged with a plain
-`simple_exec prg=reconstruct3D projfile=<outfile> nstates=<n>`, independently of
+Alongside the kernel state maps, the state stage writes the hard state label of
+every embedded particle into `ptcl3D/state` of the run's own project, leaving
+unassigned particles at state 0. `mkdir=yes` already gave the master a private
+copy of the project, so this rewrites that copy inside the job directory and
+never the project the user pointed at. Only `ptcl3D` is written, as refine3D does
+for `nstates>1`: a state index carries no `ptcl2D` meaning. This lets the
+embedding and its state assignment be judged with a plain
+`simple_exec prg=reconstruct3D projfile=<projfile> nstates=<n>`, independently of
 the kernel-weighted backend that shares every upstream assumption with it.
 
 Self-contained tests live in `../../../production/tests/`

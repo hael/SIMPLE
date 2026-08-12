@@ -504,13 +504,6 @@ contains
             &limited to the covariance Nyquist. Set to the native box for full-resolution states', &
             'pixels', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
-        call flex_pca%add_input(UI_FILE, 'outfile', 'file', &
-            'Discrete-state project', &
-            'Project written with the hard state label of every embedded particle in ptcl3D/state &
-            &(unassigned particles stay at state 0). Lets the embedding and its state assignment be &
-            &judged with a plain reconstruct3D, independently of the kernel-weighted state maps', &
-            'e.g. flex_hard_states.simple', .false., 'flex_hard_states.simple', &
-        &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_PARM, 'oritype', 'str', &
             'Particle orientation segment', 'Fixed to ptcl3D', 'ptcl3D', .false., 'ptcl3D', &
         &visibility=UI_VIS_ADVANCED)
