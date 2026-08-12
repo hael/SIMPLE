@@ -1089,11 +1089,12 @@ subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: DFX_VALS(NCTF)    = [1.0, 1.5, 2.0, 2.5, 3.0]
     real,             parameter :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
     real,             parameter :: ANGAST_VALS(NCTF) = [0., 20., 40., 60., 80.]
-    type(reconstructor_pcg) :: pcgop
+    type(reconstructor_pcg) :: pcgop, pcg_reduce
     type(oris)              :: projdirs, projdirs_exp
     type(ori)               :: e, e_exp
     type(ctfparams)         :: ctfparms
     type(sym)               :: c1sym, c2sym
+    type(string)            :: raw_part1, raw_part2
     type(pcg_solver_outcome) :: solver_outcome
     real,    allocatable    :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
     real,    allocatable    :: hp(:,:,:), hq(:,:,:), hm(:,:,:), hk(:,:,:)
@@ -1106,7 +1107,7 @@ subroutine exec_test_pcg_recon( self, cline )
     complex, allocatable    :: gx_plane(:,:), qplane(:,:), mplane(:,:), wplane(:,:), Ti(:,:)
     complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:), y_exp(:,:,:)
     integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, c, niters, iseed_n
-    integer :: R, margin, lo, hi, ifrom, nb, nsym
+    integer :: R, margin, lo, hi, ifrom, nb, nsym, nraw, nraw_total
     integer, allocatable :: iseed(:)
     real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
     real    :: err_all, err_int, err_max, den_all, den_int, kdiff, stream_err, rhs_err, kscale
@@ -1525,6 +1526,46 @@ subroutine exec_test_pcg_recon( self, cline )
                 write(logfhandle,'(a)') '    PASS: kernel is identical either way'
             endif
         end do
+        ! Distributed contract: workers publish raw, unfolded B and D. The
+        ! master adds artifacts in ascending part order and only then folds and
+        ! finalizes. Split the same particle sequence into two artifacts so the
+        ! gate covers serialization, fixed-order reduction and master-only
+        ! finalization without involving a scheduler.
+        raw_part1 = 'test_pcg_raw_part1.dat'
+        raw_part2 = 'test_pcg_raw_part2.dat'
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(y_planes(:,:,1:NPROJS/2), NPROJS/2, 1)
+        call pcgop%write_raw_accum(raw_part1, 1, 0, 1, 2, NPROJS/2, 'pcg_recon_test_v1')
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(y_planes(:,:,NPROJS/2+1:NPROJS), NPROJS/2, NPROJS/2+1)
+        call pcgop%write_raw_accum(raw_part2, 1, 0, 2, 2, NPROJS/2, 'pcg_recon_test_v1')
+        call pcgop%end_accum(.false.)
+        call pcg_reduce%new(BOX, SMPD, LAMBDA)
+        call pcg_reduce%set_deapod(.false.)
+        call pcg_reduce%begin_reduction
+        nraw_total = 0
+        call pcg_reduce%add_raw_accum(raw_part1, 1, 0, 1, 2, 'pcg_recon_test_v1', nraw)
+        nraw_total = nraw_total + nraw
+        call pcg_reduce%add_raw_accum(raw_part2, 1, 0, 2, 2, 'pcg_recon_test_v1', nraw)
+        nraw_total = nraw_total + nraw
+        call pcg_reduce%end_accum(.true.)
+        call pcg_reduce%get_rhs(b_str)
+        khat_b = pcg_reduce%apply_normal_kernel(p_probe)
+        rhs_err = sqrt(sum((b_str-b_mono)**2)) / max(1.0, sqrt(sum(b_mono*b_mono)))
+        kdiff   = sqrt(sum((khat_b-khat_a)**2)) / max(1.0, sqrt(sum(khat_a*khat_a)))
+        write(logfhandle,'(a,i0,a,es14.6,a,es14.6)') '    raw reduction particles ', nraw_total, &
+            &': rel_err(b) = ', rhs_err, '   rel_err(kernel) = ', kdiff
+        if( nraw_total /= NPROJS .or. rhs_err > STREAM_ACCUM_RELTOL .or. kdiff > STREAM_ACCUM_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: raw fixed-order reduction differs from monolithic accumulation'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: raw fixed-order reduction reproduces monolithic accumulation'
+        endif
+        call pcg_reduce%kill
+        call del_file(raw_part1)
+        call del_file(raw_part2)
+        call raw_part1%kill
+        call raw_part2%kill
     else
         write(logfhandle,'(a)') '>>> STAGE 7 SKIPPED: an earlier stage failed'
     endif

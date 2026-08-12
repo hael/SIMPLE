@@ -11,10 +11,12 @@
 !  independent of particle count; the matrix-free operator remains the exact
 !  reference.
 module simple_reconstructor_pcg
+use, intrinsic :: iso_fortran_env, only: int64
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_image, only: image
 use simple_ctf,   only: ctf
+!$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
 implicit none
 
 public :: reconstructor_pcg, pcg_solver_outcome, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
@@ -23,6 +25,9 @@ private
 
 integer, parameter :: PCG_OP_MATRIXFREE = 0 !< reference operator: exact, cost ~ nptcls per iteration
 integer, parameter :: PCG_OP_KERNEL     = 1 !< kernelized Toeplitz operator: cost independent of nptcls
+integer, parameter :: PCG_RAW_ACCUM_VERSION = 1
+integer, parameter :: PCG_RAW_PROV_LEN = 256
+character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW01'
 
 type :: pcg_solver_outcome
     character(len=24) :: stop_reason         = 'not_started'
@@ -82,11 +87,15 @@ type :: reconstructor_pcg
     ! solve needs; precond, Khat and the RHS are all derived from them. Keeping
     ! them here rather than handing them to callers is what lets a commander
     ! stream batches without ever seeing the padded lattice.
-    complex, allocatable :: acc_work(:,:,:)          !< sum_i G_i^dagger |T_i|^2, full-range
+    real,    allocatable :: acc_work(:,:,:)          !< sum_i G_i^dagger |T_i|^2, full-range
     complex, allocatable :: b_work(:,:,:)            !< RHS accumulator, full-range
     real,    allocatable :: b_rhs(:,:,:)             !< folded/deapodized/masked RHS, box^3
     logical              :: l_accum = .false.
     logical              :: l_rhs   = .false.
+    integer              :: reduction_next_part = 1  !< fixed raw-artifact association order
+    integer              :: reduction_nparts    = 0
+    integer              :: reduction_state     = 0
+    integer              :: reduction_eo        = -1
     ! ---- sampling-density preconditioner ----
     real,    allocatable :: precond(:,:,:)           !< 1/(rho+lambda) on wimg's cmat layout
     logical              :: l_precond = .false.
@@ -107,6 +116,11 @@ type :: reconstructor_pcg
     real(dp) :: t_fold    = 0.0_dp  !< fold + inverse FFT + crop
     real(dp) :: t_khat    = 0.0_dp  !< kernel pointwise multiply
     real(dp) :: t_prec    = 0.0_dp  !< apply_precond, whole call
+    real(dp) :: t_fin_rhs = 0.0_dp  !< RHS fold, deapodization and support
+    real(dp) :: t_fin_rho = 0.0_dp  !< deterministic rho shell statistics
+    real(dp) :: t_fin_fold = 0.0_dp !< fused reciprocal and packed-Khat pass
+    real(dp) :: t_fin_dep = 0.0_dp  !< deposition-envelope construction
+    real(dp) :: t_fin_kernel = 0.0_dp !< kernel correction, FFT and calibration
     logical              :: exists = .false.
   contains
     ! CONSTRUCTOR / DESTRUCTOR
@@ -120,17 +134,22 @@ type :: reconstructor_pcg
     procedure :: build_operators
     ! STREAMING SETUP (batch-at-a-time; see begin_accum)
     procedure :: begin_accum
+    procedure :: begin_reduction
     procedure :: accumulate_batch
     procedure :: end_accum
+    procedure :: write_raw_accum
+    procedure :: add_raw_accum
     procedure, private :: accumulate_rhs_density
     procedure, private :: accumulate_absT2
     procedure, private :: accumulate_rhs
     procedure, private :: precond_from_accum
     procedure, private :: fold_accum_to_khat
+    procedure, private :: finalize_density_accum
     procedure, private :: finalize_khat
     procedure :: set_deapod
     procedure :: set_mask
     procedure, private :: build_env
+    procedure, private :: build_kb_envelope_1d
     procedure, private :: build_hk_luts
     procedure, private :: deapod_mul
     procedure, private :: mask_mul
@@ -165,6 +184,8 @@ type :: reconstructor_pcg
     ! PROFILING
     procedure :: reset_profile
     procedure :: report_profile
+    procedure, private :: reset_finalize_profile
+    procedure, private :: report_finalize_profile
     ! PRIVATE HELPERS
     procedure, private :: absT2_plane
     procedure, private :: prepare_fused_planes
@@ -316,41 +337,33 @@ contains
     !!          box centre to roughly 0.19 at the edge per axis, so squared it
     !!          varies by a factor of ~30 across the volume.
     !!
-    !!          Normalized by instr(0) because apod_mat_3d normalizes the KB
-    !!          weights to sum 1, which makes the envelope unity at the centre.
-    !!          The envelope is MEASURED, not derived. `kbinterpol%instr` is the
-    !!          CONTINUOUS Fourier transform of the KB kernel, but this operator
-    !!          interpolates with three discrete, renormalized weight samples --
-    !!          the two disagree by about a factor of two at the box edge, which
-    !!          is far too much to guess at. Instead the impulse response is
-    !!          obtained by scattering a unit value through the operator's own
-    !!          KB stencil and running it back through fold_and_ifft, so every
-    !!          packing, Nyquist and normalization convention matches the real
-    !!          operator by construction rather than by derivation.
+    !!          The envelope is the exact discrete transform of the normalized
+    !!          three-tap weights returned by apod_mat_3d_fast at the origin.
+    !!          It is not kbinterpol%instr, which is the continuous transform and
+    !!          differs materially at the box edge. Separability makes the 3-D
+    !!          impulse IFFT exactly the outer product of one 1-D cosine sum, so
+    !!          no padded 3-D accumulator or FFT is needed.
     subroutine build_env( self )
         class(reconstructor_pcg), intent(inout) :: self
         real, parameter :: EPS_DIV = 1.0e-8
-        complex, allocatable :: vol_accum(:,:,:)
-        real    :: w(self%wdim,self%wdim,self%wdim), ctrval
-        integer :: i0(3), c, i, j, k
-        call self%ensure_wimg
+        real, allocatable :: env1d(:)
+        real    :: ctrval
+        integer :: c, i, j, k, o
         if( allocated(self%env)    ) deallocate(self%env)
         if( allocated(self%invenv) ) deallocate(self%invenv)
-        allocate(vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                          &self%lims3(2,1):self%lims3(2,2),&
-                          &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
-        ! deposit the KB stencil at the Fourier origin; its inverse transform
-        ! IS the real-space envelope the gather imposes
-        call self%kbwin%apod_mat_3d_fast([0.,0.,0.], self%iwinsz, self%wdim, w)
-        i0 = -self%iwinsz
-        call scatter_window(self, i0, w, cmplx(1.,0.), vol_accum)
-        ! fold_and_ifft already crops to the native box, so this measures the
-        ! envelope exactly where it is applied. With oversampling it now spans
-        ! only +/-(box/2)/boxpd of the padded Nyquist, so the roll-off is mild
-        ! (~1.5x per axis) instead of the ~5x per axis of the native-lattice
-        ! operator -- which is what made the old deapodization so violent.
-        self%env = self%fold_and_ifft(vol_accum)
-        deallocate(vol_accum)
+        call self%build_kb_envelope_1d(self%boxpd, env1d)
+        allocate(self%env(self%box,self%box,self%box))
+        o = self%pad_off
+        !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
+        do k = 1, self%box
+            do j = 1, self%box
+                do i = 1, self%box
+                    self%env(i,j,k) = env1d(o+i) * env1d(o+j) * env1d(o+k)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        deallocate(env1d)
         ! normalize so the envelope is unity at the box centre
         c      = self%box/2 + 1
         ctrval = self%env(c,c,c)
@@ -370,6 +383,39 @@ contains
             end do
         end do
     end subroutine build_env
+
+    !> Exact 1-D inverse transform of the discrete, normalized KB stencil at
+    !! the Fourier origin. The origin stencil is symmetric and real, so the
+    !! transform is the real cosine sum below. Spatial index n/2+1 is the
+    !! centered image origin used by image%get_rmat.
+    subroutine build_kb_envelope_1d( self, n, env1d )
+        class(reconstructor_pcg), intent(in) :: self
+        integer,                    intent(in) :: n
+        real, allocatable,          intent(out) :: env1d(:)
+        real :: w(self%wdim,self%wdim,self%wdim), w1(self%wdim)
+        real :: arg, ctrval
+        integer :: i, j, k, q, x, c
+        call self%kbwin%apod_mat_3d_fast([0.,0.,0.], self%iwinsz, self%wdim, w)
+        do i = 1, self%wdim
+            w1(i) = 0.0
+            do k = 1, self%wdim
+                do j = 1, self%wdim
+                    w1(i) = w1(i) + w(i,j,k)
+                end do
+            end do
+        end do
+        allocate(env1d(n), source=0.0)
+        c = n/2 + 1
+        do x = 1, n
+            do i = 1, self%wdim
+                q = i - self%iwinsz - 1
+                arg = 2.0 * PI * real(q * (x-c)) / real(n)
+                env1d(x) = env1d(x) + w1(i) * cos(arg)
+            end do
+        end do
+        ctrval = env1d(c)
+        if( abs(ctrval) > TINY ) env1d = env1d / ctrval
+    end subroutine build_kb_envelope_1d
 
     pure function get_env( self ) result( env )
         class(reconstructor_pcg), intent(in) :: self
@@ -552,6 +598,7 @@ contains
         self%wimg_exists = .false.
         self%op_mode     = PCG_OP_MATRIXFREE
         call self%reset_profile(.false.)
+        call self%reset_finalize_profile
         self%exists      = .false.
     end subroutine kill
 
@@ -1119,27 +1166,38 @@ contains
     ! needed for one thing only -- forming the RHS -- and for one pass only, so
     ! a caller reads a batch, hands it over, and discards it.
     !
-    ! Peak memory during accumulation is the two full-range accumulators
-    ! (2 x 1.08 GB at box 256) plus the work image; that floor is constant in
-    ! nptcls, which is the whole point. See
+    ! Peak memory during accumulation is one complex RHS and one real density
+    ! accumulator plus the work image; that floor is constant in nptcls. See
     ! doc/policies/reconstruct3D_pcg_policy.md section 1.
 
     subroutine begin_accum( self )
         class(reconstructor_pcg), intent(inout) :: self
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; begin_accum')
+        call self%begin_reduction
+    end subroutine begin_accum
+
+    !> Allocate zero raw accumulators without particle metadata. Distributed
+    !! masters use this entry point before adding worker artifacts; workers use
+    !! begin_accum after prep_particles as before.
+    subroutine begin_reduction( self )
+        class(reconstructor_pcg), intent(inout) :: self
         call self%ensure_wimg
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
         allocate(self%acc_work(self%lims3(1,1):self%lims3(1,2),&
                               &self%lims3(2,1):self%lims3(2,2),&
-                              &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
+                              &self%lims3(3,1):self%lims3(3,2)), source=0.0)
         allocate(self%b_work(self%lims3(1,1):self%lims3(1,2),&
                             &self%lims3(2,1):self%lims3(2,2),&
                             &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
         self%l_accum = .true.
         self%l_rhs   = .false.
-    end subroutine begin_accum
+        self%reduction_next_part = 1
+        self%reduction_nparts    = 0
+        self%reduction_state     = 0
+        self%reduction_eo        = -1
+    end subroutine begin_reduction
 
     !>  \brief  Accumulates one batch into BOTH accumulators. y_batch holds the
     !!          observed planes for particles ifrom .. ifrom+nb-1 of the
@@ -1149,7 +1207,8 @@ contains
         integer,                    intent(in)    :: nb, ifrom
         complex,                    intent(in)    :: y_batch(self%lims2(1,1):self%lims2(1,2),&
                                                               &self%lims2(2,1):self%lims2(2,2), nb)
-        complex, allocatable :: bacc(:,:,:), dacc(:,:,:)
+        complex, allocatable :: bacc(:,:,:)
+        real,    allocatable :: dacc(:,:,:)
         if( .not. self%l_accum ) THROW_HARD('begin_accum has not been called; accumulate_batch')
         if( nb < 1 ) return
         if( ifrom < 1 .or. ifrom + nb - 1 > self%nptcls )then
@@ -1168,6 +1227,144 @@ contains
         call move_alloc(dacc, self%acc_work)
     end subroutine accumulate_batch
 
+    !> Atomically publish one worker's raw full-range B and D accumulators.
+    !! No folding, deapodization, shell flooring, kernel finalization or solve
+    !! is permitted before this write. The embedded header is the manifest for
+    !! this single-file artifact; promotion from .tmp happens only after close.
+    subroutine write_raw_accum( self, fname, state, eo, part, nparts, nptcls, provenance )
+        class(reconstructor_pcg), intent(in) :: self
+        class(string),             intent(in) :: fname
+        integer,                   intent(in) :: state, eo, part, nparts, nptcls
+        character(len=*),          intent(in) :: provenance
+        type(string) :: tmpfname
+        character(len=PCG_RAW_PROV_LEN) :: prov_fixed
+        integer :: funit, ierr, m
+        integer(int64) :: file_size
+        if( state < 1 .or. eo < 0 .or. eo > 1 ) THROW_HARD('invalid raw PCG state or half')
+        if( part < 1 .or. nparts < part ) THROW_HARD('invalid raw PCG part index')
+        if( nptcls < 0 ) THROW_HARD('invalid raw PCG particle count')
+        if( nptcls > 0 .and. .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open')
+        prov_fixed = ' '
+        if( len_trim(provenance) > 0 )then
+            prov_fixed(1:min(len_trim(provenance),PCG_RAW_PROV_LEN)) = &
+                &provenance(1:min(len_trim(provenance),PCG_RAW_PROV_LEN))
+        endif
+        tmpfname = fname//'.tmp'
+        call del_file(tmpfname)
+        call fopen(funit, file=tmpfname, status='REPLACE', action='WRITE', &
+            &access='STREAM', iostat=ierr)
+        call fileiochk('write_raw_accum opening temporary artifact', ierr)
+        write(funit, iostat=ierr) PCG_RAW_ACCUM_MAGIC, PCG_RAW_ACCUM_VERSION
+        call fileiochk('write_raw_accum writing magic', ierr)
+        write(funit, iostat=ierr) state, eo, part, nparts, nptcls
+        call fileiochk('write_raw_accum writing identity', ierr)
+        write(funit, iostat=ierr) self%box, self%boxpd, self%padf, self%lims3, self%smpd
+        call fileiochk('write_raw_accum writing geometry', ierr)
+        write(funit, iostat=ierr) prov_fixed
+        call fileiochk('write_raw_accum writing provenance', ierr)
+        if( nptcls > 0 )then
+            do m = self%lims3(3,1), self%lims3(3,2)
+                write(funit, iostat=ierr) self%b_work(:,:,m)
+                if( ierr /= 0 ) exit
+            enddo
+            call fileiochk('write_raw_accum writing B', ierr)
+            do m = self%lims3(3,1), self%lims3(3,2)
+                write(funit, iostat=ierr) self%acc_work(:,:,m)
+                if( ierr /= 0 ) exit
+            enddo
+            call fileiochk('write_raw_accum writing D', ierr)
+        endif
+        call fclose(funit)
+        file_size = -1_int64
+        inquire(file=tmpfname%to_char(), size=file_size)
+        if( file_size <= 0_int64 ) THROW_HARD('raw PCG artifact write produced an empty file')
+        call simple_rename(tmpfname, fname, overwrite=.true.)
+        call tmpfname%kill
+    end subroutine write_raw_accum
+
+    !> Add one raw worker artifact to the master's open reduction. Calls must
+    !! arrive in ascending part order; this makes the floating-point association
+    !! order explicit and reproducible. Slices are streamed to keep temporary
+    !! memory negligible relative to the full-range master accumulators.
+    subroutine add_raw_accum( self, fname, state, eo, part, nparts, provenance, nptcls )
+        class(reconstructor_pcg), intent(inout) :: self
+        class(string),             intent(in)    :: fname
+        integer,                   intent(in)    :: state, eo, part, nparts
+        character(len=*),          intent(in)    :: provenance
+        integer,                   intent(out)   :: nptcls
+        character(len=16) :: magic
+        character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
+        complex, allocatable :: bslice(:,:)
+        real,    allocatable :: dslice(:,:)
+        integer :: funit, ierr, m, version, state_file, eo_file, part_file
+        integer :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
+        real    :: smpd_file
+        integer(int64) :: file_size, stream_pos
+        if( .not. self%l_accum ) THROW_HARD('master PCG reduction is not open')
+        if( part /= self%reduction_next_part ) THROW_HARD('raw PCG parts must be reduced in ascending order')
+        if( .not. file_exists(fname) ) THROW_HARD('raw PCG accumulator artifact is missing')
+        prov_expected = ' '
+        if( len_trim(provenance) > 0 )then
+            prov_expected(1:min(len_trim(provenance),PCG_RAW_PROV_LEN)) = &
+                &provenance(1:min(len_trim(provenance),PCG_RAW_PROV_LEN))
+        endif
+        call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=ierr)
+        call fileiochk('add_raw_accum opening artifact', ierr)
+        read(funit, iostat=ierr) magic, version
+        call fileiochk('add_raw_accum reading magic', ierr)
+        read(funit, iostat=ierr) state_file, eo_file, part_file, nparts_file, nptcls
+        call fileiochk('add_raw_accum reading identity', ierr)
+        read(funit, iostat=ierr) box_file, boxpd_file, padf_file, lims_file, smpd_file
+        call fileiochk('add_raw_accum reading geometry', ierr)
+        read(funit, iostat=ierr) prov_file
+        call fileiochk('add_raw_accum reading provenance', ierr)
+        if( magic /= PCG_RAW_ACCUM_MAGIC .or. version /= PCG_RAW_ACCUM_VERSION )then
+            THROW_HARD('raw PCG accumulator format mismatch')
+        endif
+        if( state_file /= state .or. eo_file /= eo .or. part_file /= part )then
+            THROW_HARD('raw PCG accumulator identity mismatch')
+        endif
+        if( nparts_file /= nparts .or. nptcls < 0 ) THROW_HARD('raw PCG accumulator partition mismatch')
+        if( box_file /= self%box .or. boxpd_file /= self%boxpd .or. padf_file /= self%padf )then
+            THROW_HARD('raw PCG accumulator box mismatch')
+        endif
+        if( any(lims_file /= self%lims3) ) THROW_HARD('raw PCG accumulator lattice mismatch')
+        if( abs(smpd_file-self%smpd) > max(1.0e-6,1.0e-6*abs(self%smpd)) )then
+            THROW_HARD('raw PCG accumulator sampling mismatch')
+        endif
+        if( prov_file /= prov_expected ) THROW_HARD('raw PCG accumulator provenance mismatch')
+        if( self%reduction_nparts > 0 )then
+            if( self%reduction_nparts /= nparts .or. self%reduction_state /= state .or. &
+                &self%reduction_eo /= eo ) THROW_HARD('raw PCG reduction set mismatch')
+        endif
+        if( nptcls > 0 )then
+            allocate(bslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
+            allocate(dslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
+            do m = self%lims3(3,1), self%lims3(3,2)
+                read(funit, iostat=ierr) bslice
+                if( ierr /= 0 ) exit
+                self%b_work(:,:,m) = self%b_work(:,:,m) + bslice
+            enddo
+            call fileiochk('add_raw_accum reading B', ierr)
+            do m = self%lims3(3,1), self%lims3(3,2)
+                read(funit, iostat=ierr) dslice
+                if( ierr /= 0 ) exit
+                self%acc_work(:,:,m) = self%acc_work(:,:,m) + dslice
+            enddo
+            call fileiochk('add_raw_accum reading D', ierr)
+            deallocate(bslice, dslice)
+        endif
+        file_size  = -1_int64
+        stream_pos = -1_int64
+        inquire(unit=funit, size=file_size, pos=stream_pos)
+        call fclose(funit)
+        if( stream_pos-1_int64 /= file_size ) THROW_HARD('raw PCG accumulator has trailing or missing bytes')
+        self%reduction_nparts    = nparts
+        self%reduction_state     = state
+        self%reduction_eo        = eo
+        self%reduction_next_part = part + 1
+    end subroutine add_raw_accum
+
     !> Accumulate the weighted RHS B and Gram/sampling-density precursor D in
     !! one particle traversal. Both scatters use the same orientation, rotated
     !! coordinate and KB window, so evaluating that geometry twice is pure
@@ -1183,9 +1380,9 @@ contains
         complex,                    intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
                                                            &self%lims3(2,1):self%lims3(2,2),&
                                                            &self%lims3(3,1):self%lims3(3,2))
-        complex,                    intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
-                                                           &self%lims3(2,1):self%lims3(2,2),&
-                                                           &self%lims3(3,1):self%lims3(3,2))
+        real,                       intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
+                                                        &self%lims3(2,1):self%lims3(2,2),&
+                                                        &self%lims3(3,1):self%lims3(3,2))
         complex, allocatable :: weighted(:,:)
         real,    allocatable :: absT2(:,:)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
@@ -1241,23 +1438,33 @@ contains
     subroutine end_accum( self, l_kernel )
         class(reconstructor_pcg), intent(inout) :: self
         logical,                    intent(in)    :: l_kernel
-        complex, allocatable :: work(:,:,:)
+        complex, allocatable :: bwork(:,:,:)
+        real,    allocatable :: dwork(:,:,:)
+        integer(timer_int_kind) :: tp
         if( .not. self%l_accum ) THROW_HARD('begin_accum has not been called; end_accum')
+        if( self%reduction_nparts > 0 )then
+            if( self%reduction_next_part /= self%reduction_nparts + 1 )then
+                THROW_HARD('raw PCG reduction is incomplete')
+            endif
+        endif
+        call self%reset_finalize_profile
         ! RHS first, and free its accumulator before the kernel work starts:
         ! finalize_khat is the allocation-heavy half and should not overlap it.
         ! move_alloc for the same aliasing reason as accumulate_batch.
-        call move_alloc(self%b_work, work)
-        self%b_rhs = self%fold_and_ifft(work)
-        deallocate(work)
+        tp = tic()
+        call move_alloc(self%b_work, bwork)
+        self%b_rhs = self%fold_and_ifft(bwork)
+        deallocate(bwork)
         call self%deapod_mul(self%b_rhs)
         call self%mask_mul(self%b_rhs)
         self%l_rhs = .true.
-        call move_alloc(self%acc_work, work)
-        call self%precond_from_accum(work)
-        if( l_kernel ) call self%fold_accum_to_khat(work)
-        deallocate(work)
+        self%t_fin_rhs = real(toc(tp),dp)
+        call move_alloc(self%acc_work, dwork)
+        call self%finalize_density_accum(dwork, .true., l_kernel)
+        deallocate(dwork)
         if( l_kernel ) call self%finalize_khat
         self%l_accum = .false.
+        call self%report_finalize_profile
     end subroutine end_accum
 
     ! SETUP: PRECONDITIONER AND KERNEL
@@ -1292,12 +1499,12 @@ contains
     !!          without the padsc factors that apply_normal carries.
     subroutine build_precond( self )
         class(reconstructor_pcg), intent(inout) :: self
-        complex, allocatable :: acc(:,:,:)
+        real, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_precond')
         call self%ensure_wimg
         allocate(acc(self%lims3(1,1):self%lims3(1,2),&
                     &self%lims3(2,1):self%lims3(2,2),&
-                    &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
+                    &self%lims3(3,1):self%lims3(3,2)), source=0.0)
         call self%accumulate_absT2(acc)
         call self%precond_from_accum(acc)
     end subroutine build_precond
@@ -1327,9 +1534,9 @@ contains
     !!          keep it in step with the RHS accumulation, which does.
     subroutine accumulate_absT2( self, acc, ifrom, ito )
         class(reconstructor_pcg), intent(inout) :: self
-        complex,                    intent(inout) :: acc(self%lims3(1,1):self%lims3(1,2),&
-                                                          &self%lims3(2,1):self%lims3(2,2),&
-                                                          &self%lims3(3,1):self%lims3(3,2))
+        real,                       intent(inout) :: acc(self%lims3(1,1):self%lims3(1,2),&
+                                                        &self%lims3(2,1):self%lims3(2,2),&
+                                                        &self%lims3(3,1):self%lims3(3,2))
         integer,          optional, intent(in)    :: ifrom, ito
         real,    allocatable :: absT2(:,:)
         real    :: loc(3), w(self%wdim,self%wdim,self%wdim), rot(3,3)
@@ -1375,7 +1582,7 @@ contains
                         i0  = nint(loc) - self%iwinsz
                         if( .not. win_wraps(self, i0) ) cycle
                         call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                        call scatter_window(self, i0, w, cmplx(absT2(h,k),0.), acc)
+                        call scatter_window_real(self, i0, w, absT2(h,k), acc)
                     end do
                 end do
                 !$omp end single
@@ -1386,64 +1593,132 @@ contains
 
     subroutine precond_from_accum( self, rho_accum )
         class(reconstructor_pcg), intent(inout) :: self
-        complex,                    intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                                &self%lims3(2,1):self%lims3(2,2),&
-                                                                &self%lims3(3,1):self%lims3(3,2))
+        real,                       intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                               &self%lims3(2,1):self%lims3(2,2),&
+                                                               &self%lims3(3,1):self%lims3(3,2))
+        call self%finalize_density_accum(rho_accum, .true., .false.)
+    end subroutine precond_from_accum
+
+    !> Fold the real density accumulator once into the packed Fourier layout.
+    !! The preconditioner and Khat are two views of the same D accumulator, so
+    !! producing them in one sphere-limited parallel pass avoids a second full
+    !! padded-lattice traversal. Shell sums use one private column per OpenMP
+    !! thread and are merged in thread-number order to keep the result stable.
+    subroutine finalize_density_accum( self, rho_accum, l_precond, l_kernel )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                       intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                               &self%lims3(2,1):self%lims3(2,2),&
+                                                               &self%lims3(3,1):self%lims3(3,2))
+        logical,                    intent(in)    :: l_precond, l_kernel
         real, parameter :: RHO_FLOOR_FRAC = 1.0e-2
-        real(dp), allocatable :: shsum(:)
-        integer,  allocatable :: shcnt(:)
+        real(dp), allocatable :: shsum(:), shsum_thr(:,:)
+        integer,  allocatable :: shcnt(:), shcnt_thr(:,:)
         real,     allocatable :: shfloor(:)
-        integer :: h, k, cdim(3), m, hh, phys(3), sh, sh_lim
+        integer :: h, k, cdim(3), m, hh, phys(3), sh, rho_lim
+        integer :: khat_lim, work_lim, nthr, ithr
         real    :: denom, rval
-        ! fold onto the packed cmat layout and invert with a guard
+        integer(timer_int_kind) :: tp
+        if( .not. l_precond .and. .not. l_kernel ) return
         cdim = self%wimg%get_array_shape()
-        if( allocated(self%precond) ) deallocate(self%precond)
-        allocate(self%precond(cdim(1),cdim(2),cdim(3)), source=0.0)
         ! Data only ever reaches |loc| <= padf*Rnat, so beyond that radius rho is
         ! identically zero: those modes are completely unconstrained. Zero them,
         ! exactly as reconstructor%sampl_dens_correct does for sh > sh_lim. A
         ! singular (PSD) preconditioner is the right tool here -- it keeps the
         ! Krylov space out of the null space entirely, so starting from x = 0
         ! those modes are never excited at all.
-        sh_lim = self%padf * self%Rnat
+        rho_lim = self%padf * self%Rnat
+        ! D can extend beyond the source sphere only by nearest-grid rounding
+        ! and the finite KB stencil. This conservative bound is exact: points
+        ! outside it cannot have received an accumulation update.
+        khat_lim = rho_lim + ceiling(sqrt(3.0) * (real(self%iwinsz) + 0.5))
+        work_lim = rho_lim
+        if( l_kernel ) work_lim = max(work_lim, khat_lim)
+        if( l_precond )then
+            if( allocated(self%precond) ) deallocate(self%precond)
+            allocate(self%precond(cdim(1),cdim(2),cdim(3)), source=0.0)
+        endif
+        if( l_kernel )then
+            if( allocated(self%Khat) ) deallocate(self%Khat)
+            allocate(self%Khat(cdim(1),cdim(2),cdim(3)), source=0.0)
+        endif
         ! PASS 1: mean rho per shell, over the sampled voxels only. Averaging in
         ! the zeros would drag the floor down exactly where sampling is sparse,
         ! which is the regime the floor exists to protect.
-        allocate(shsum(0:sh_lim), source=0.0_dp)
-        allocate(shcnt(0:sh_lim), source=0)
-        do m = self%lims3(3,1), self%lims3(3,2)
-            do k = self%lims3(2,1), self%lims3(2,2)
-                do h = 0, self%lims3(1,2)
-                    sh = nint(sqrt(real(h*h + k*k + m*m)))
-                    if( sh > sh_lim ) cycle
-                    rval = real(rho_accum(self%wrap(h),k,m))
-                    if( rval <= 0.0 ) cycle
-                    shsum(sh) = shsum(sh) + real(rval,dp)
-                    shcnt(sh) = shcnt(sh) + 1
+        if( l_precond )then
+            tp = tic()
+            nthr = 1
+            !$ nthr = omp_get_max_threads()
+            allocate(shsum(0:rho_lim), source=0.0_dp)
+            allocate(shcnt(0:rho_lim), source=0)
+            allocate(shsum_thr(0:rho_lim,nthr), source=0.0_dp)
+            allocate(shcnt_thr(0:rho_lim,nthr), source=0)
+            !$omp parallel default(shared) private(h,k,m,hh,sh,rval,ithr)
+            ithr = 1
+            !$ ithr = omp_get_thread_num() + 1
+            !$omp do collapse(2) schedule(static)
+            do m = self%lims3(3,1), self%lims3(3,2)
+                do k = self%lims3(2,1), self%lims3(2,2)
+                    do h = 0, self%lims3(1,2)
+                        sh = nint(sqrt(real(h*h + k*k + m*m)))
+                        if( sh > rho_lim ) cycle
+                        hh   = self%wrap(h)
+                        rval = rho_accum(hh,k,m)
+                        if( rval <= 0.0 ) cycle
+                        shsum_thr(sh,ithr) = shsum_thr(sh,ithr) + real(rval,dp)
+                        shcnt_thr(sh,ithr) = shcnt_thr(sh,ithr) + 1
+                    end do
                 end do
             end do
-        end do
-        allocate(shfloor(0:sh_lim), source=0.0)
-        do sh = 0, sh_lim
-            if( shcnt(sh) > 0 ) shfloor(sh) = RHO_FLOOR_FRAC * real(shsum(sh) / real(shcnt(sh),dp))
-        end do
-        ! PASS 2: guarded reciprocal. An empty shell (shfloor == 0) leaves its
-        ! voxels at the initialized 0.0, i.e. treated as unconstrained.
+            !$omp end do
+            !$omp end parallel
+            do ithr = 1, nthr
+                do sh = 0, rho_lim
+                    shsum(sh) = shsum(sh) + shsum_thr(sh,ithr)
+                    shcnt(sh) = shcnt(sh) + shcnt_thr(sh,ithr)
+                end do
+            end do
+            deallocate(shsum_thr, shcnt_thr)
+            allocate(shfloor(0:rho_lim), source=0.0)
+            do sh = 0, rho_lim
+                if( shcnt(sh) > 0 )then
+                    shfloor(sh) = RHO_FLOOR_FRAC * real(shsum(sh) / real(shcnt(sh),dp))
+                endif
+            end do
+            deallocate(shsum, shcnt)
+            self%t_fin_rho = real(toc(tp),dp)
+        endif
+        ! PASS 2: guarded reciprocal and packed Khat. An empty shell leaves the
+        ! reciprocal at zero, i.e. treats those modes as unconstrained.
+        tp = tic()
+        !$omp parallel do collapse(2) default(shared) private(h,k,m,hh,phys,sh,denom) schedule(static)
         do m = self%lims3(3,1), self%lims3(3,2)
             do k = self%lims3(2,1), self%lims3(2,2)
                 do h = 0, self%lims3(1,2)
                     sh = nint(sqrt(real(h*h + k*k + m*m)))
-                    if( sh > sh_lim ) cycle
-                    if( shfloor(sh) <= 0.0 ) cycle
+                    if( sh > work_lim ) cycle
                     hh    = self%wrap(h)
-                    denom = max(real(rho_accum(hh,k,m)), 0.0) + shfloor(sh)
                     phys  = self%wimg%comp_addr_phys(h,k,m)
-                    self%precond(phys(1),phys(2),phys(3)) = 1.0 / denom
+                    if( l_kernel .and. sh <= khat_lim )then
+                        self%Khat(phys(1),phys(2),phys(3)) = rho_accum(hh,k,m)
+                    endif
+                    if( l_precond )then
+                        if( sh <= rho_lim )then
+                            if( shfloor(sh) > 0.0 )then
+                                denom = max(rho_accum(hh,k,m), 0.0) + shfloor(sh)
+                                self%precond(phys(1),phys(2),phys(3)) = 1.0 / denom
+                            endif
+                        endif
+                    endif
                 end do
             end do
         end do
-        self%l_precond = .true.
-    end subroutine precond_from_accum
+        !$omp end parallel do
+        self%t_fin_fold = real(toc(tp),dp)
+        if( l_precond )then
+            self%l_precond = .true.
+            deallocate(shfloor)
+        endif
+    end subroutine finalize_density_accum
 
     !>  \brief  Builds the Gram kernel.
     !!
@@ -1476,7 +1751,7 @@ contains
     !!          box 256. That is the price of the kernelized operator.
     subroutine build_kernel( self )
         class(reconstructor_pcg), intent(inout) :: self
-        complex, allocatable :: acc(:,:,:)
+        real, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_kernel')
         call self%ensure_wimg
         ! With oversampling in place the operator ALREADY works on a padf*box
@@ -1485,7 +1760,7 @@ contains
         ! lattices coincide, so no separate padded image is required.
         allocate(acc(self%lims3(1,1):self%lims3(1,2),&
                     &self%lims3(2,1):self%lims3(2,2),&
-                    &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
+                    &self%lims3(3,1):self%lims3(3,2)), source=0.0)
         call self%accumulate_absT2(acc)
         call self%fold_accum_to_khat(acc)
         ! freed BEFORE finalize_khat, which is the memory-heavy half
@@ -1500,95 +1775,73 @@ contains
     subroutine build_operators( self, l_kernel )
         class(reconstructor_pcg), intent(inout) :: self
         logical,                    intent(in)    :: l_kernel
-        complex, allocatable :: acc(:,:,:)
+        real, allocatable :: acc(:,:,:)
         if( self%nptcls < 1 ) THROW_HARD('prep_particles has not been called; build_operators')
         call self%ensure_wimg
         allocate(acc(self%lims3(1,1):self%lims3(1,2),&
                     &self%lims3(2,1):self%lims3(2,2),&
-                    &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
+                    &self%lims3(3,1):self%lims3(3,2)), source=0.0)
         call self%accumulate_absT2(acc)
-        call self%precond_from_accum(acc)
-        if( l_kernel ) call self%fold_accum_to_khat(acc)
+        call self%finalize_density_accum(acc, .true., l_kernel)
         deallocate(acc)
         if( l_kernel ) call self%finalize_khat
     end subroutine build_operators
 
     subroutine fold_accum_to_khat( self, kacc )
         class(reconstructor_pcg), intent(inout) :: self
-        complex,                    intent(in)    :: kacc(self%lims3(1,1):self%lims3(1,2),&
-                                                           &self%lims3(2,1):self%lims3(2,2),&
-                                                           &self%lims3(3,1):self%lims3(3,2))
-        integer :: h, k, m, hh, phys(3), cdim(3)
-        cdim = self%wimg%get_array_shape()
-        if( allocated(self%Khat) ) deallocate(self%Khat)
-        allocate(self%Khat(cdim(1),cdim(2),cdim(3)), source=0.0)
-        do m = self%lims3(3,1), self%lims3(3,2)
-            do k = self%lims3(2,1), self%lims3(2,2)
-                do h = 0, self%lims3(1,2)
-                    hh   = self%wrap(h)
-                    phys = self%wimg%comp_addr_phys(h,k,m)
-                    self%Khat(phys(1),phys(2),phys(3)) = real(kacc(hh,k,m))
-                end do
-            end do
-        end do
+        real,                       intent(in)    :: kacc(self%lims3(1,1):self%lims3(1,2),&
+                                                          &self%lims3(2,1):self%lims3(2,2),&
+                                                          &self%lims3(3,1):self%lims3(3,2))
+        call self%finalize_density_accum(kacc, .false., .true.)
     end subroutine fold_accum_to_khat
 
     subroutine finalize_khat( self )
         class(reconstructor_pcg), intent(inout) :: self
         real,    parameter   :: EPS_D = 1.0e-8
-        complex, allocatable :: dacc(:,:,:), ctmp(:,:,:)
-        real,    allocatable :: tker(:,:,:), dep(:,:,:)
-        real    :: wz(self%wdim,self%wdim,self%wdim), depc
-        integer :: h, k, i0z(3), cdim(3), m, phys(3), hh, cc
+        complex, allocatable :: ctmp(:,:,:)
+        real,    allocatable :: tker(:,:,:), dep1d(:)
+        real :: depval
+        integer :: i, j, k, cdim(3)
+        integer(timer_int_kind) :: tp
         cdim = self%wimg%get_array_shape()
         ! ---- divide out the DEPOSITION envelope ----
         ! Laying |T|^2 down through the KB window convolves the kernel spectrum
         ! with that window, which multiplies the real-space kernel by the
         ! window's transform. That is a SECOND envelope, distinct from the
         ! gather's, and left in it shows up as a spurious spatial taper. It is
-        ! measured rather than derived, for the same reason build_env measures
-        ! its own: deposit a unit spike at the origin through the operator's own
-        ! stencil and transform back, so conventions match by construction.
-        allocate(dacc(self%lims3(1,1):self%lims3(1,2),&
-                     &self%lims3(2,1):self%lims3(2,2),&
-                     &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
-        call self%kbwin%apod_mat_3d_fast([0.,0.,0.], self%iwinsz, self%wdim, wz)
-        i0z = -self%iwinsz
-        call scatter_window(self, i0z, wz, cmplx(1.,0.), dacc)
-        allocate(ctmp(cdim(1),cdim(2),cdim(3)), source=cmplx(0.,0.))
-        do m = self%lims3(3,1), self%lims3(3,2)
-            do k = self%lims3(2,1), self%lims3(2,2)
-                do h = 0, self%lims3(1,2)
-                    hh   = self%wrap(h)
-                    phys = self%wimg%comp_addr_phys(h,k,m)
-                    ctmp(phys(1),phys(2),phys(3)) = dacc(hh,k,m)
-                end do
-            end do
-        end do
-        deallocate(dacc)
-        call self%wimg%set_cmat(ctmp)
-        call self%wimg%ifft()
-        dep  = self%wimg%get_rmat()
-        cc   = self%boxpd/2 + 1
-        depc = dep(cc,cc,cc)
-        if( abs(depc) < EPS_D ) depc = 1.0
-        dep = dep / depc
+        ! obtained from the exact discrete transform of the same normalized
+        ! origin stencil used for deposition. Its separability eliminates a
+        ! full complex accumulator and padded inverse FFT.
+        tp = tic()
+        call self%build_kb_envelope_1d(self%boxpd, dep1d)
+        self%t_fin_dep = real(toc(tp),dp)
+        tp = tic()
         ctmp = cmplx(self%Khat, 0.)
         call self%wimg%set_cmat(ctmp)
         call self%wimg%ifft()
         tker = self%wimg%get_rmat()
-        where( abs(dep) > EPS_D )
-            tker = tker / dep
-        elsewhere
-            tker = 0.
-        end where
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,depval) schedule(static)
+        do k = 1, self%boxpd
+            do j = 1, self%boxpd
+                do i = 1, self%boxpd
+                    depval = dep1d(i) * dep1d(j) * dep1d(k)
+                    if( abs(depval) > EPS_D )then
+                        tker(i,j,k) = tker(i,j,k) / depval
+                    else
+                        tker(i,j,k) = 0.0
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
         call self%wimg%set_rmat(tker, .false.)
         call self%wimg%fft()
         ctmp      = self%wimg%get_cmat()
         self%Khat = real(ctmp)
-        deallocate(ctmp, tker, dep)
+        deallocate(ctmp, tker, dep1d)
         self%l_kernel = .true.
         call self%calibrate_kernel
+        self%t_fin_kernel = real(toc(tp),dp)
     end subroutine finalize_khat
 
     !>  \brief  One-off least-squares calibration of the kernel's overall scale
@@ -2016,6 +2269,27 @@ contains
         end do
     end subroutine scatter_window
 
+    !> Real-valued counterpart used by the sampling-density accumulator.
+    pure subroutine scatter_window_real( self, i0, w, val, vol_accum )
+        class(reconstructor_pcg), intent(in)    :: self
+        integer,                    intent(in)    :: i0(3)
+        real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim), val
+        real,                       intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                               &self%lims3(2,1):self%lims3(2,2),&
+                                                               &self%lims3(3,1):self%lims3(3,2))
+        integer :: di, dj, dk, hh, kk, mm
+        do dk = 1, self%wdim
+            mm = self%wrap(i0(3)+dk-1)
+            do dj = 1, self%wdim
+                kk = self%wrap(i0(2)+dj-1)
+                do di = 1, self%wdim
+                    hh = self%wrap(i0(1)+di-1)
+                    vol_accum(hh,kk,mm) = vol_accum(hh,kk,mm) + w(di,dj,dk) * val
+                end do
+            end do
+        end do
+    end subroutine scatter_window_real
+
     !> Update B and D through one wrapped KB-window traversal.
     pure subroutine scatter_window_pair( self, i0, w, bval, dval, bacc, dacc )
         class(reconstructor_pcg), intent(in)    :: self
@@ -2025,9 +2299,9 @@ contains
         complex,                    intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
                                                            &self%lims3(2,1):self%lims3(2,2),&
                                                            &self%lims3(3,1):self%lims3(3,2))
-        complex,                    intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
-                                                           &self%lims3(2,1):self%lims3(2,2),&
-                                                           &self%lims3(3,1):self%lims3(3,2))
+        real,                       intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
+                                                          &self%lims3(2,1):self%lims3(2,2),&
+                                                          &self%lims3(3,1):self%lims3(3,2))
         integer :: di, dj, dk, hh, kk, mm
         do dk = 1, self%wdim
             mm = self%wrap(i0(3)+dk-1)
@@ -2047,16 +2321,15 @@ contains
     !!          self%wrap is the identity over the whole window span, so indexing
     !!          vol_accum directly is bit-identical -- and it makes the inner run
     !!          contiguous (stride-1) and vectorizable, unlike the gathered
-    !!          self%wrap form. val is real (|T|^2), applied to the complex
-    !!          accumulator's real part at half the FMAs of the complex path.
+    !!          self%wrap form.
     pure subroutine scatter_window_nowrap( self, i0, w, val, vol_accum )
         class(reconstructor_pcg), intent(in)    :: self
         integer,                    intent(in)    :: i0(3)
         real,                       intent(in)    :: w(self%wdim,self%wdim,self%wdim)
         real,                       intent(in)    :: val
-        complex,                    intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
-                                                                &self%lims3(2,1):self%lims3(2,2),&
-                                                                &self%lims3(3,1):self%lims3(3,2))
+        real,                       intent(inout) :: vol_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                               &self%lims3(2,1):self%lims3(2,2),&
+                                                               &self%lims3(3,1):self%lims3(3,2))
         integer :: di, dj, dk, h0, kk, mm
         h0 = i0(1)
         do dk = 1, self%wdim
@@ -2079,9 +2352,9 @@ contains
         complex,                    intent(inout) :: bacc(self%lims3(1,1):self%lims3(1,2),&
                                                            &self%lims3(2,1):self%lims3(2,2),&
                                                            &self%lims3(3,1):self%lims3(3,2))
-        complex,                    intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
-                                                           &self%lims3(2,1):self%lims3(2,2),&
-                                                           &self%lims3(3,1):self%lims3(3,2))
+        real,                       intent(inout) :: dacc(self%lims3(1,1):self%lims3(1,2),&
+                                                          &self%lims3(2,1):self%lims3(2,2),&
+                                                          &self%lims3(3,1):self%lims3(3,2))
         integer :: di, dj, dk, h0, kk, mm
         h0 = i0(1)
         do dk = 1, self%wdim
@@ -2288,6 +2561,7 @@ contains
         real(dp) :: bnorm, rnorm, xnorm, dxnorm, mnorm, dxx
         integer  :: mmaxits, iter, n_done
         real     :: rrtol
+        logical  :: stop_rtol, stop_xtol
         type(pcg_solver_outcome) :: result
         integer(timer_int_kind) :: t_it
         real(timer_int_kind)    :: rt_it
@@ -2343,8 +2617,6 @@ contains
                 call flush(logfhandle)
                 r = rtr
             endif
-            z  = self%apply_precond(r)
-            rho_new = self%dot_real_volume(r,z)
             n_done  = iter
             ! headline: true relative residual. dx/x says how much the map is
             ! still moving, which for a reconstruction is often the more
@@ -2352,10 +2624,34 @@ contains
             rnorm      = sqrt(self%dot_real_volume(r,r))
             xnorm      = sqrt(self%dot_real_volume(x,x))
             dxnorm     = abs(alpha) * sqrt(self%dot_real_volume(p,p))
-            mnorm      = sqrt(abs(rho_new)/rho0)
             dxx        = dxnorm / max(xnorm, epsilon(1.0_dp))
             hist(iter) = real(rnorm / bnorm)
-            rt_it      = toc(t_it)
+            stop_rtol  = rrtol > 0.0 .and. rnorm / bnorm <= real(rrtol,dp)
+            stop_xtol  = rrtol > 0.0 .and. dxx <= real(PCG_XTOL,dp)
+            if( stop_rtol .or. stop_xtol .or. iter == mmaxits )then
+                rt_it = toc(t_it)
+                write(logfhandle,'(a,i4,a,es11.4,a,es10.3,a,f7.2,a)') '>>> PCG iter ', iter, &
+                    &'  |r|/|b| = ', hist(iter), '  dx/x = ', real(dxx), '  (', rt_it, ' s)'
+                call flush(logfhandle)
+                if( stop_rtol )then
+                    result%stop_reason = 'rtol'
+                    result%converged   = .true.
+                    exit
+                endif
+                if( stop_xtol )then
+                    write(logfhandle,'(a,i0,a,es10.3,a,es10.3)') '>>> PCG: early stop at iter ', iter, &
+                        &', dx/x = ', real(dxx), ' <= xtol = ', PCG_XTOL
+                    call flush(logfhandle)
+                    result%stop_reason = 'xtol'
+                    result%converged   = .true.
+                    exit
+                endif
+                exit
+            endif
+            z       = self%apply_precond(r)
+            rho_new = self%dot_real_volume(r,z)
+            mnorm   = sqrt(abs(rho_new)/rho0)
+            rt_it   = toc(t_it)
             ! Per-iteration progress. Without this the solver is silent between
             ! setup and completion, which on a real data set is indistinguishable
             ! from a hang.
@@ -2363,23 +2659,6 @@ contains
                 &'  |r|/|b| = ', hist(iter), '  dx/x = ', real(dxx), &
                 &'  (M-norm ', real(mnorm), ')  (', rt_it, ' s)'
             call flush(logfhandle)
-            if( rrtol > 0.0 .and. rnorm / bnorm <= real(rrtol,dp) )then
-                result%stop_reason = 'rtol'
-                result%converged   = .true.
-                exit
-            endif
-            ! diminishing-returns stop: once the map moves by less than PCG_XTOL
-            ! per iteration the residual has plateaued (semi-convergence on noisy
-            ! normal equations) and further iters mostly fit noise. dx/x is
-            ! monotone-ish where |r|/|b| oscillates, so it is the reliable signal.
-            if( rrtol > 0.0 .and. dxx <= real(PCG_XTOL,dp) )then
-                write(logfhandle,'(a,i0,a,es10.3,a,es10.3)') '>>> PCG: early stop at iter ', iter, &
-                    &', dx/x = ', real(dxx), ' <= xtol = ', PCG_XTOL
-                call flush(logfhandle)
-                result%stop_reason = 'xtol'
-                result%converged   = .true.
-                exit
-            endif
             beta = rho_new / rho
             p    = z + real(beta) * p
             rho  = rho_new
@@ -2400,6 +2679,30 @@ contains
     end subroutine solve_core
 
     ! PROFILING
+
+    subroutine reset_finalize_profile( self )
+        class(reconstructor_pcg), intent(inout) :: self
+        self%t_fin_rhs    = 0.0_dp
+        self%t_fin_rho    = 0.0_dp
+        self%t_fin_fold   = 0.0_dp
+        self%t_fin_dep    = 0.0_dp
+        self%t_fin_kernel = 0.0_dp
+    end subroutine reset_finalize_profile
+
+    subroutine report_finalize_profile( self )
+        class(reconstructor_pcg), intent(in) :: self
+        real(dp) :: total
+        total = self%t_fin_rhs + self%t_fin_rho + self%t_fin_fold + &
+            &self%t_fin_dep + self%t_fin_kernel
+        write(logfhandle,'(a)') '>>> PCG ACCUMULATOR FINALIZATION (seconds)'
+        write(logfhandle,'(a,f9.3)') '    RHS fold + deapod + support : ', self%t_fin_rhs
+        write(logfhandle,'(a,f9.3)') '    rho shell statistics        : ', self%t_fin_rho
+        write(logfhandle,'(a,f9.3)') '    fused reciprocal + Khat pack: ', self%t_fin_fold
+        write(logfhandle,'(a,f9.3)') '    deposition envelope setup   : ', self%t_fin_dep
+        write(logfhandle,'(a,f9.3)') '    kernel correction + FFT     : ', self%t_fin_kernel
+        write(logfhandle,'(a,f9.3)') '    ---- accounted subtotal     : ', total
+        call flush(logfhandle)
+    end subroutine report_finalize_profile
 
     subroutine reset_profile( self, l_on )
         class(reconstructor_pcg), intent(inout) :: self

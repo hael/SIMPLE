@@ -1390,6 +1390,7 @@ digraph module_graph {
   "simple_commanders_rec" -> "simple_matcher_2dprep";
   "simple_commanders_rec" -> "simple_matcher_3drec";
   "simple_commanders_rec" -> "simple_parameters";
+  "simple_commanders_rec" -> "simple_rec3d_pcg_strategy";
   "simple_commanders_rec" -> "simple_rec3d_strategy";
   "simple_commanders_rec" -> "simple_refine3d_fnames";
   "simple_commanders_rec_distr" -> "simple_commanders_api";

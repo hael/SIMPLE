@@ -8,12 +8,13 @@ implemented is specified in
 `reconstruct3D_pcg` remains an isolated one-volume prototype. The production
 `reconstruct3D` command now accepts the opt-in selector
 `rec_backend=gridding|pcg`, with `gridding` unchanged as the default. Its `pcg`
-branch runs independent shared-memory kernel accumulation and solves for the
-even and odd halfsets, writes the standard halfmaps and FSC, and forms the
-merged map by averaging those two dense halfmaps. It does not route through the
-incompatible experimental commander.
+branch runs independent kernel accumulation and solves for the even and odd
+halfsets, writes the standard halfmaps and FSC, and forms the merged map by
+averaging those two dense halfmaps. It supports both shared-memory execution and
+distributed worker accumulation followed by a master solve. It does not route
+through the incompatible experimental commander.
 
-The shared production backend currently supports full-box fixed-pose
+The production backend currently supports full-box fixed-pose
 reconstruction from raw or denoised particle sources, multiple populated
 states, CTF-aware `cc` or sigma-weighted `euclid`, point-group replication,
 standard halfmap/FSC/merged-map names, project output registration, and the
@@ -22,12 +23,20 @@ usual final postprocessing handoff. FSC summaries include both the 0.5 and
 density-envelope mask as the corresponding FSC. Each selected particle is read
 once into its state/half accumulation and is never reread during PCG iterations.
 
-It deliberately rejects distributed parts, `projrec=yes`, box cropping,
-fractional/trailing reconstruction, and `conical_fsc=yes` regularization. Those
-cases require additional equivalence tests or an accumulator/reduction contract
-and must not silently fall back to gridding or matrix-free PCG.
+In distributed execution, each worker atomically publishes one versioned raw
+artifact per `(state,half,part)`. It contains the unfolded complex `B`, real
+`D`, particle count, geometry, and provenance. The master validates and adds
+these artifacts in ascending part-number order. Only after the complete
+state/half reduction does it fold the RHS, calculate rho floors, finalize
+`Khat`, or solve. Empty partitions publish a valid header-only artifact so the
+association order and completeness check do not depend on particle balance.
 
-## 1. Scope and fixed inputs
+It deliberately rejects `projrec=yes`, box cropping, fractional/trailing
+reconstruction, and `conical_fsc=yes` regularization. Those cases require
+additional equivalence tests and must not silently fall back to gridding or
+matrix-free PCG.
+
+## 1. Isolated-command scope and fixed inputs
 
 Reads a project and reconstructs one volume for one state by solving a CTF- and
 noise-weighted least-squares problem with PCG. For fixed orientations, states
@@ -74,11 +83,17 @@ reciprocal preconditioner and Krylov recurrence amplify single-precision
 accumulation roundoff; passing the volume gate cannot excuse failure of either
 direct accumulator gate.
 
+`B` is complex and `D` is real. Finalization computes deterministic per-thread
+rho shell statistics, then produces the reciprocal preconditioner and packed
+`Khat` together in one OpenMP pass limited to the reachable Fourier sphere.
+
 ## 2. Where the code lives
 
 | File | Contents |
 | --- | --- |
 | `src/main/volume/simple_reconstructor_pcg.f90` | `reconstructor_pcg` operator/solver type |
+| `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | shared worker/master PCG orchestration |
+| `src/defs/simple_refine3D_fnames.f90` | raw `(state,half,part)` artifact names |
 | `src/main/commanders/simple/simple_commanders_reconstruct3D_pcg.f90` | `reconstruct3D_pcg` command |
 | `src/main/ui/simple/simple_ui_volume.f90` | UI record |
 | `src/main/exec/simple_exec_volume.f90` | exec routing |
@@ -130,21 +145,23 @@ the operator. Since the padded lattice is already `2*box`, it *is* the grid the
 linear (non-wrapping) Gram convolution needs, so kernel and operator share one
 lattice.
 
-**Two KB envelopes, both measured.**
+**Two KB envelopes, both exact discrete transforms.**
 
 | Envelope | Origin | Handling |
 | --- | --- | --- |
 | Gather | reading the volume through the KB window | `build_env`, divided out by `deapod_mul` |
-| Deposition | laying `|T|^2` onto the kernel grid | measured and divided out in the kernel build |
+| Deposition | laying `|T|^2` onto the kernel grid | divided out in the kernel build |
 
-Both are measured by scattering a unit spike through the operator's own stencil
-and transforming back, not derived from `kbinterpol%instr` — the continuous
-transform disagrees with the three discrete renormalized weights by ~2x at the
-box edge. The matrix-free operator applies the gather envelope twice, so it is
-`A = A_env^{-1}(E T E)A_env^{-1}`; `deapod_mul` brackets it to recover the true
-`T`. Not optional for real particles: synthetic data from the operator carries
-the same envelope and cancels it (an inverse crime), real particles do not, so
-an uncorrected solve returns `E^{-1} x_true`.
+Both use the separable cosine transform of the operator's normalized discrete
+KB stencil. This is algebraically identical to scattering a unit spike and
+running the 3-D FFT, without allocating another padded volume. It is not
+`kbinterpol%instr`: that continuous transform disagrees with the three discrete
+renormalized weights by ~2x at the box edge. The matrix-free operator applies
+the gather envelope twice, so it is `A = A_env^{-1}(E T E)A_env^{-1}`;
+`deapod_mul` brackets it to recover the true `T`. Not optional for real
+particles: synthetic data from the operator carries the same envelope and
+cancels it (an inverse crime), real particles do not, so an uncorrected solve
+returns `E^{-1} x_true`.
 
 **Soft spherical support.** With `mskdiam` set, the solve is constrained by
 writing `x = P u` and minimising `||A P u - y||^2`, giving `(P H P) u = P b` —
@@ -196,6 +213,12 @@ stays an approximation (~3.4% interior error). The standalone prototype exposes
 tests and small diagnostic fixtures, **not a feasible real-workflow backend and
 not a production fallback**. Its per-iteration particle loop becomes
 prohibitive at experimental particle counts and under symmetry replication.
+
+The approximation is not reliably positive definite under late over-iteration:
+on the deterministic fixture the residual bottoms out and then curvature fails
+after the useful map has already saturated. Production therefore defaults to
+two iterations and rejects `maxits>8`; the isolated prototype may still use a
+larger value to diagnose the approximation boundary.
 
 `pcgop=kernel` is therefore the only candidate for production workflows. It
 must be validated against matrix-free on deterministic, small enough fixtures
@@ -269,6 +292,10 @@ Broken curvature, a non-finite state, a non-positive preconditioner, and a zero
 RHS still hard-error in the isolated command; conversion of those failures into
 recoverable workflow outcomes belongs to the production strategy.
 
+The final fixed iteration does not apply the preconditioner because no next
+search direction will consume it. The terminal residual and update diagnostics
+remain unchanged; only the unused M-norm is omitted.
+
 ## 8. Sigma2 handling
 
 Gated on `objfun`, matching `reconstruct3D`: `objfun=cc` runs unweighted
@@ -299,7 +326,7 @@ correct.
 | 4 | heterogeneous phantom recovery |
 | 5 | kernelized-vs-matrix-free operator, scale/energy, and fixed-iteration solution baseline |
 | 6 | kernel shift-invariance, CTF-dependence, and the preconditioner |
-| 7 | streaming batch accumulation reproduces the monolithic solve |
+| 7 | streaming batches and serialized fixed-order raw reduction reproduce monolithic accumulation |
 | 8 | deapodization against envelope-free data — the one stage without an inverse crime |
 | 9 | symmetry replication equals a c1 build of the symmetry-expanded particle set |
 

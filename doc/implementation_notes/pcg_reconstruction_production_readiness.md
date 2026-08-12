@@ -2,10 +2,28 @@
 
 ## Status
 
-Approved implementation plan. Phase 0 and the shared-memory `reconstruct3D`
-kernel backend are implemented; runtime validation is in progress. Implemented behavior is defined in
-`doc/policies/reconstruct3D_pcg_policy.md`; this note tracks the remaining
-production gap, validation plan, and later research.
+Approved implementation plan. Shared-memory and distributed `reconstruct3D`
+kernel backends are implemented; runtime validation is in progress. On the
+current 3000-particle fixture, the production two-iteration shared path takes
+36.5 s and `nparts=2` takes 44.1 s, versus 9.9 s for gridding. The distributed
+run reproduces shared cFAR, both FSC thresholds, and B-factor exactly; its raw
+master reduction costs about 0.74 s per half. The small fixture is dominated by
+scheduler/process/artifact overhead and is not a scaling benchmark.
+Implemented behavior is defined in `doc/policies/reconstruct3D_pcg_policy.md`;
+this note tracks the remaining production gap, validation plan, and research.
+
+Two iterations retain or improve the eight-iteration FSC thresholds and cFAR;
+one iteration changes FSC=0.5 and the B-factor enough to keep two as the
+production default. A kernel-derived preconditioner was tested and removed: it
+did not improve runtime at one iteration and degraded the reconstruction
+metrics. A 50-iteration unit run also confirmed the over-iteration risk: the
+kernel residual reached its minimum around iteration 10, then increased and
+lost positive curvature at iteration 13.
+
+The completed setup work keeps `D` real, fuses rho/Khat packing in one
+sphere-limited parallel pass, evaluates both KB envelopes as exact separable
+1-D transforms, and skips the unused terminal preconditioner application.
+Accumulator finalization is now about 2.8 s per half, down from 4.2–5.0 s.
 
 ## 1. Bottom line
 
@@ -38,7 +56,7 @@ Review decisions already settled:
 | command I/O | deterministic project/stack fixture, including a short final batch |
 | gold standard | independent even/odd kernel solves and normal FSC artifacts |
 | kernel validation | matrix-free unit oracles plus kernel-vs-gridding real halfmaps |
-| distribution | reduce additive statistics before kernel/preconditioner finalization |
+| distribution | fixed-order raw reduction implemented; add restart and scale/resource gates |
 | workflow parity | crop/resolution, states, weights, fractional updates, box growth |
 | assembly | standard `volassemble`, postprocessing, project, and restart artifacts |
 | operations | typed validation, structured outcomes, atomic publication, resource diagnostics |
@@ -63,12 +81,16 @@ Continuous pose/shift refinement remains separate in
    Reduce `(B,D)` before deapodization, support, flooring, kernel finalization,
    `lambda`, or solving. Never average finalized partition kernels.
 
-3. **Use restart-safe artifacts.** A versioned manifest written last records
-   state, half, part, geometry, particle count, symmetry, objective, and
-   operator version. Missing or mismatched components fail before solving.
-   Initial box-256 compact target: about 269 MB for `D_folded` plus 67 MB for
-   `B_raw` per artifact. Do not persist `Khat`, preconditioners, or particle
-   planes.
+3. **Use restart-safe artifacts.** The implemented artifact is one versioned
+   stream file containing its header plus raw full-range `B` and `D`. It is
+   written to `.tmp` and atomically promoted only after close. The header
+   records state, half, part, partition count, geometry, particle count and
+   operator provenance; the master rejects missing, truncated, extended, or
+   mismatched files before solving. Empty parts use header-only artifacts. At
+   box 256 a populated artifact is currently about 1.6 GB (about 1.1 GB complex
+   `B` plus 0.54 GB real `D`); reducing that footprint requires an exact raw
+   representation and must not move folding onto workers. Do not persist
+   `Khat`, preconditioners, or particle planes.
 
 4. **Preserve half independence.** Even and odd inputs, statistics, solves, and
    halfmaps remain separate through FSC. The merged volume is formed by
@@ -114,17 +136,17 @@ Continuous pose/shift refinement remains separate in
 | 0. Freeze baseline | register existing test in CI; establish kernel-oracle tolerances; remeasure box-256 time/RSS; fix help drift | nine stages pass reproducibly with retained logs |
 | 1. Harden command | typed inputs; structured stop reasons; on-disk kernel fixture; negative tests; atomic output | real command I/O is covered and failures leave no valid-looking output |
 | 2. Shared `reconstruct3D` | separate even/odd solves and FSC; combine halfmaps; standard outputs; C1/C2/D2 gates; add `rec_backend` dispatch | **Implemented; runtime fixture and C1/C2/D2 acceptance remain** |
-| 3. Distributed `reconstruct3D` | versioned `(B,D)` reduction; sequential state/half solves; restart/provenance tests; standard `volassemble` handoff | N-part and monolithic fixed-iteration results agree and the reconstruct3D milestone is complete |
+| 3. Distributed `reconstruct3D` | versioned raw `(B,D)` artifacts; fixed-order reduction; sequential state/half master solves; standard outputs | **Implemented for standalone reconstruct3D; restart/resume and scale/resource gates remain** |
 | 4. Refinement semantics | states, crop/resolution, weights on both `B` and `D`, fractional updates, box growth, accumulator trailing, lambda scaling, existing cache consumption | ordering, partitioning, updates, restarts, and cached/uncached runs preserve the objective |
 | 5. Integrate `refine3D` | route shared/distributed refinement reconstruction through the selector while retaining normal assembly/project handoff | supported opt-in refine3D workflows pass production-usable gates |
 | 6. Promotion | benchmark matched kernel PCG and gridding | promote only with a material reproducible advantage |
 
-The current shared implementation intentionally rejects box cropping,
-fractional/trailing reconstruction, `projrec=yes`, `conical_fsc=yes`
-regularization, and all distributed part execution. The standard cFAR
-diagnostic is supported and uses the same mask as the FSC. These guards keep
-the first runtime validation on the fixed-pose full-box kernel path; they are
-removed only with the phase-specific equivalence tests above.
+The current shared and distributed implementations intentionally reject box
+cropping, fractional/trailing reconstruction, `projrec=yes`, and
+`conical_fsc=yes` regularization. The standard cFAR diagnostic is supported and
+uses the same mask as the FSC. These guards keep runtime validation on the
+fixed-pose full-box kernel path; they are removed only with the phase-specific
+equivalence tests above.
 
 Trailing should first be tested in a standalone harness covering `uf=1`,
 convergence, round ordering, warm starts, box growth, artifact round trips, and
@@ -192,6 +214,8 @@ All must pass:
   cache for cache-enabled `refine3D`.
 - Particle-image residency bounded by `MAXIMGBATCHSZ`.
 - No particle-plane cache: kernel iterations are data-free after `(B,D)`.
+- The preconditioner uses the padded Toeplitz lattice. Do not trade the required
+  pad/crop geometry for a native-grid FFT optimization.
 - Process one state/half at a time; reuse FFT plans where safe.
 - Do not overlap the largest accumulation and solve scratch allocations.
 - Measure I/O, preprocessing, scatters, reduction, kernel setup, solves,
@@ -203,6 +227,12 @@ All must pass:
 - Production streaming updates `B` and `D` in one interpolation traversal and
   one persistent OpenMP region per batch. Preserve the monolithic two-path
   implementation as the numerical oracle.
+- Keep `D` real. Build deterministic per-thread rho statistics and pack the
+  reciprocal and `Khat` together over only the reachable Fourier sphere.
+- Keep the exact separable discrete KB-envelope construction; a padded 3-D
+  envelope FFT is unnecessary.
+- Do not compute a terminal preconditioner application when no next Krylov
+  direction will consume it.
 - Treat the historical box-256 peak of about 3 GB as a rebaseline target, not
   current evidence.
 - Optimize sigma2 storage only after measurement and without changing weights.
@@ -235,10 +265,11 @@ Evaluate it against an unregularized independent-half control.
 
 ## 9. First patch series status
 
-Completed: typed selector/UI, backend and execution-mode dispatch, CI gate,
-strengthened kernel-oracle checks, structured solver outcomes, and the shared
-independent-halfmap implementation. Still required: the deterministic on-disk
-kernel fixture and C1/C2/D2 runtime acceptance.
+Completed: typed backend selector/UI, shared and distributed execution-mode
+dispatch, CI gate, strengthened matrix-free oracle checks, structured solver
+outcomes, independent halfmaps, and versioned fixed-order raw `(B,D)` master
+reduction. Still required: restart/resume coverage, the deterministic on-disk
+workflow fixture, broader scaling/resource benchmarks, and C1/C2/D2 runtime
+acceptance.
 
-This series does not change `refine3D`, enable distributed PCG, or make PCG the
-default.
+This series does not change `refine3D` or make PCG the default.

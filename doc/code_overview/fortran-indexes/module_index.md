@@ -6007,6 +6007,7 @@ Uses:
 - `simple_matcher_2dprep`
 - `simple_matcher_3drec`
 - `simple_parameters`
+- `simple_rec3d_pcg_strategy`
 - `simple_rec3d_strategy`
 - `simple_refine3d_fnames`
 
@@ -13373,15 +13374,25 @@ Uses:
 - `simple_sigma2_files`
 
 Public symbols:
+- `execute_rec3D_pcg_distributed_master` — subroutine
 - `execute_rec3D_pcg_shared` — subroutine
+- `execute_rec3D_pcg_worker` — subroutine
 
 Private symbols:
+- `accumulate_worker_state_half` — subroutine
+- `calculate_distributed_fsc` — subroutine
 - `calculate_state_fsc` — subroutine
 - `collect_state_half` — subroutine
+- `collect_worker_state_half` — subroutine
+- `pcg_raw_provenance` — function
+- `reduce_solve_state_half` — subroutine
 - `register_project_outputs` — subroutine
 - `report_half_timings` — subroutine
 - `solve_state_half` — subroutine
+- `validate_pcg_common` — subroutine
 - `validate_supported_mode` — subroutine
+- `write_distributed_diagnostics` — subroutine
+- `write_distributed_fsc_summary` — subroutine
 - `write_fsc_summary` — subroutine
 - `write_half_diagnostics` — subroutine
 
@@ -13670,6 +13681,7 @@ Private symbols:
 - `accumulate_batch` — subroutine
 - `accumulate_rhs` — subroutine
 - `accumulate_rhs_density` — subroutine
+- `add_raw_accum` — subroutine
 - `adjoint_plane_add` — subroutine
 - `apply_adjoint_all` — function
 - `apply_normal` — function
@@ -13677,8 +13689,10 @@ Private symbols:
 - `apply_normal_matrixfree` — function
 - `apply_precond` — function
 - `begin_accum` — subroutine
+- `begin_reduction` — subroutine
 - `build_env` — subroutine
 - `build_hk_luts` — subroutine
+- `build_kb_envelope_1d` — subroutine
 - `build_kernel` — subroutine
 - `build_operators` — subroutine
 - `build_precond` — subroutine
@@ -13690,6 +13704,7 @@ Private symbols:
 - `end_accum` — subroutine
 - `ensure_wimg` — subroutine
 - `extract_native_plane` — function
+- `finalize_density_accum` — subroutine
 - `finalize_khat` — subroutine
 - `fold_accum_to_khat` — subroutine
 - `fold_and_ifft` — function
@@ -13708,7 +13723,9 @@ Private symbols:
 - `precond_from_accum` — subroutine
 - `prep_particles` — subroutine
 - `prepare_fused_planes` — subroutine
+- `report_finalize_profile` — subroutine
 - `report_profile` — subroutine
+- `reset_finalize_profile` — subroutine
 - `reset_profile` — subroutine
 - `scatter_plane` — subroutine
 - `scatter_window` — subroutine
@@ -13716,6 +13733,7 @@ Private symbols:
 - `scatter_window_nowrap` — subroutine
 - `scatter_window_pair` — subroutine
 - `scatter_window_pair_nowrap` — subroutine
+- `scatter_window_real` — subroutine
 - `set_deapod` — subroutine
 - `set_mask` — subroutine
 - `set_op_mode` — subroutine
@@ -13725,6 +13743,7 @@ Private symbols:
 - `solve_accum` — subroutine
 - `solve_core` — subroutine
 - `transfer_plane_cmplx` — subroutine
+- `write_raw_accum` — subroutine
 
 ---
 ## Module: simple_reextract_strategy

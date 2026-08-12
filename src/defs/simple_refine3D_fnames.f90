@@ -24,6 +24,7 @@ public :: refine3D_partial_rec_fbody
 public :: refine3D_partial_rec_glob
 public :: refine3D_partial_rec_fname
 public :: refine3D_partial_rho_fname
+public :: refine3D_pcg_raw_accum_fname
 public :: refine3D_trail_rec_fbody
 public :: refine3D_trail_rec_fname
 public :: refine3D_trail_rho_fname
@@ -176,6 +177,16 @@ contains
         character(len=*), intent(in) :: half
         fname = string('rho_')//refine3D_partial_rec_fname(state, part, numlen, half)
     end function refine3D_partial_rho_fname
+
+    ! One atomically published worker artifact containing raw full-range B and
+    ! real D for exactly one (state,half,part). The master is the only consumer
+    ! allowed to fold or finalize these sufficient statistics.
+    type(string) function refine3D_pcg_raw_accum_fname( state, part, numlen, half ) result(fname)
+        integer,          intent(in) :: state, part, numlen
+        character(len=*), intent(in) :: half
+        fname = string('pcg_raw_state')//state_tag(state)//half_suffix(half)// &
+            &'_part'//part_tag(part, numlen)//BIN_EXT
+    end function refine3D_pcg_raw_accum_fname
 
     ! Persistent trailing-reconstruction accumulator chain (blended, unregularized
     ! e/o Fourier sums + sampling densities). Deliberately does not contain the

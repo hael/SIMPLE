@@ -158,7 +158,7 @@ subroutine new_automask( prgtab )
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call reconstruct3D%add_input(UI_FILT, 'maxits', 'num', 'PCG maximum iterations', &
-        &'Maximum kernel PCG iterations; used only when rec_backend=pcg', 'iterations{30}', .false., 30., &
+        &'Maximum kernel PCG iterations; used only when rec_backend=pcg', 'iterations{2}', .false., 2., &
         &visibility=UI_VIS_DEVELOPER)
         call reconstruct3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits iterations', 'tolerance{0.001}', &

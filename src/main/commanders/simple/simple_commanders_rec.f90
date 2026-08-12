@@ -45,7 +45,7 @@ contains
         if( .not. cline%defined('rec_backend') ) call cline%set('rec_backend', 'gridding')
         rec_backend = cline%get_carg('rec_backend')
         if( rec_backend .eq. 'pcg' )then
-            if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
+            if( .not. cline%defined('maxits') ) call cline%set('maxits', 2.)
         endif
         call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
@@ -352,6 +352,7 @@ contains
     end subroutine exec_bootstrap_rec3D
 
     subroutine exec_rec3D_distr_worker( self, cline )
+        use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_worker
         class(commander_rec3D_worker), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)     :: params
@@ -367,15 +368,19 @@ contains
             ! we sample all state > 0 and updatecnt > 0
             call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds)
         endif
-        if( params%l_ml_reg )then
-            fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-            call build%esig%new(params, build%pftc, fname, params%box)
-            call build%esig%read_groups(build%spproj_field)
-        end if
-        if( trim(params%projrec) == 'yes' )then
-            call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
+        if( trim(params%rec_backend) == 'pcg' )then
+            call execute_rec3D_pcg_worker(params, build, cline, pinds)
         else
-            call calc_3Drec(params, build, cline, nptcls2update, pinds)
+            if( params%l_ml_reg )then
+                fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+                call build%esig%new(params, build%pftc, fname, params%box)
+                call build%esig%read_groups(build%spproj_field)
+            end if
+            if( trim(params%projrec) == 'yes' )then
+                call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
+            else
+                call calc_3Drec(params, build, cline, nptcls2update, pinds)
+            endif
         endif
         ! cleanup
         call build%esig%kill

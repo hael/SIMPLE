@@ -6,8 +6,9 @@ use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
 use simple_matcher_3Drec,        only: calc_3Drec, calc_projdir3Drec
 use simple_commanders_rec_distr, only: commander_volassemble
-use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname
-use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_shared
+use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname, &
+    &refine3D_pcg_raw_accum_fname
+use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_shared, execute_rec3D_pcg_distributed_master
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
@@ -139,12 +140,20 @@ contains
                         &'>>> SHARED-MEMORY REC3D EXECUTION (gridding)'
                 endif
             case(REC3D_BACKEND_PCG)
-                if( cline%defined('part') ) THROW_HARD('rec_backend=pcg does not support distributed part execution')
-                if( cline%defined('nparts') )then
-                    if( cline%get_iarg('nparts') > 1 ) THROW_HARD('rec_backend=pcg is shared-memory only')
+                if( cline%defined('nparts') .and. (.not.cline%defined('part')) )then
+                    if( cline%get_iarg('nparts') > 1 )then
+                        allocate(rec3D_distr_strategy :: strategy)
+                        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') &
+                            &'>>> DISTRIBUTED-MEMORY REC3D EXECUTION (kernel PCG)'
+                    else
+                        allocate(rec3D_pcg_inmem_strategy :: strategy)
+                    endif
+                else
+                    allocate(rec3D_pcg_inmem_strategy :: strategy)
                 endif
-                allocate(rec3D_pcg_inmem_strategy :: strategy)
-                if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SHARED-MEMORY REC3D EXECUTION (kernel PCG)'
+                if( L_VERBOSE_GLOB .and. .not. cline%defined('nparts') )then
+                    write(logfhandle,'(A)') '>>> SHARED-MEMORY REC3D EXECUTION (kernel PCG)'
+                endif
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
@@ -302,9 +311,28 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(commander_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
-        type(string)                :: volname, vol_in
-        integer                     :: state
+        type(string)                :: volname, vol_in, raw_fname
+        integer                     :: state, part, eo
+        if( trim(params%rec_backend) == 'pcg' )then
+            ! A stale final filename must never masquerade as a completed worker
+            ! from this launch. Workers publish through .tmp + atomic rename.
+            do state = 1, params%nstates
+                do eo = 0, 1
+                    do part = 1, params%nparts
+                        raw_fname = refine3D_pcg_raw_accum_fname(state, part, params%numlen, &
+                            &merge('odd ', 'even', eo == 1))
+                        call del_file(raw_fname)
+                        call del_file(raw_fname//'.tmp')
+                    enddo
+                enddo
+            enddo
+            call raw_fname%kill
+        endif
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, array=L_USE_SLURM_ARR, extra_params=params)
+        if( trim(params%rec_backend) == 'pcg' )then
+            call execute_rec3D_pcg_distributed_master(params, build, cline)
+            return
+        endif
         ! Assemble volumes on master
         cline_volassemble = cline
         call cline_volassemble%set('prg',  'volassemble')
