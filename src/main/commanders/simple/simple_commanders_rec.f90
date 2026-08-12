@@ -70,7 +70,7 @@ contains
         if( .not. cline%defined('which_iter')  ) call cline%set('which_iter',       1)
         if( .not. cline%defined('postprocess') ) call cline%set('postprocess',  'yes')
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',    'no')
-        call cline%delete('envfsc')
+        if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',        'no')
         call cline%delete('objfun')
         call cline%delete('ml_reg')
         call params%new(cline)

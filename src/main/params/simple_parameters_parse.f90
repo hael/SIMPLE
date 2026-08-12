@@ -484,6 +484,7 @@ contains
         call reg%add_real('e1', self%e1)
         call reg%add_real('e2', self%e2)
         call reg%add_real('e3', self%e3)
+        call reg%add_real('envmsklp', self%envmsklp)
         call reg%add_real('eps', self%eps)
         call reg%add_real('extr_init', self%extr_init)
         call reg%add_real('fraca', self%fraca)

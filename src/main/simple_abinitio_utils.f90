@@ -11,6 +11,7 @@ use simple_parameters,           only: parameters
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_startvol_fbody, &
     &refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_halfvol_fname, refine3D_state_vol_fbody, refine3D_state_vol_fname
+use simple_vol_pproc_policy,     only: state_mask_is_compatible
 implicit none
 #include "simple_local_flags.inc"
 
@@ -712,11 +713,11 @@ contains
         class(string),         intent(in)    :: projfile
         class(commander_base), intent(inout) :: xrec3D
         logical,               intent(in)    :: l_postprocess
-        type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, sigma_star
+        type(string) :: str_state, vol_name, stkname, vol_pproc, vol_mirr, sigma_star, vol_envmsk
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
-        integer      :: state, pop, stkind, ind_in_stk, nptcls, ldim(3), sigma_iter, bootstrap_sigma_iter
-        real         :: smpd
-        logical      :: l_bootstrap_sigmas
+        integer      :: ldim(3), state, pop, stkind, ind_in_stk, nptcls, sigma_iter, bootstrap_sigma_iter
+        real         :: smpd, smpd_tmp
+        logical      :: l_bootstrap_sigmas, l_mask_exists, l_mask_compatible
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
         write(logfhandle,'(A)') '>>>'
@@ -764,6 +765,17 @@ contains
             if( .not. file_exists(vol_name) )cycle
             call spproj%add_vol2os_out(vol_name, smpd, state, 'vol', pop=pop)
             call spproj%add_fsc2os_out(refine3D_fsc_fname(state), state, ldim(1))
+            if( params%l_envfsc )then
+                vol_envmsk = AUTOMASK_FBODY//trim(str_state%to_char())//MRC_EXT
+                call state_mask_is_compatible(vol_envmsk, ldim(1), smpd, l_mask_exists, l_mask_compatible)
+                if( l_mask_compatible )then
+                    call spproj%add_vol2os_out(vol_envmsk, smpd, state, 'vol_msk', ldim(1))
+                else if( l_mask_exists )then
+                    THROW_WARN('>>> FINAL RECONSTRUCTION: envfsc mask has incompatible dimensions or sampling for state '//str_state%to_char())
+                else
+                    THROW_WARN('>>> FINAL RECONSTRUCTION: expected envfsc mask file does not exist for state '//str_state%to_char())
+                endif
+            endif
         enddo
         call spproj%write_segment_inside('out', projfile)
         call stkname%kill
@@ -842,6 +854,9 @@ contains
                 call child_cline%set('outfile', 'RESOLUTION_FINAL.txt')
                 call child_cline%set('pgrp',    params%pgrp)
                 call child_cline%set('ptcl_src', params%ptcl_src)
+                call child_cline%set('envfsc',   params%envfsc)
+                call child_cline%set('envmsklp', params%envmsklp)
+                call child_cline%set('binwidth', params%binwidth)
                 if( params%nthr    > 1  ) call child_cline%set('nthr',    params%nthr)
                 if( params%mskdiam > 0. ) call child_cline%set('mskdiam', params%mskdiam)
                 if( params%nparts  > 1  ) call child_cline%set('nparts',  params%nparts)

@@ -292,6 +292,7 @@ contains
     end subroutine exec_sharpvol
 
     subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline, state )
+        use simple_vol_pproc_policy, only: state_mask_is_compatible
         class(string),   intent(in)    :: fname_vol, fname_fsc
         integer,         intent(in)    :: box
         real,            intent(in)    :: smpd
@@ -301,9 +302,9 @@ contains
         real, allocatable :: fsc(:), optlp(:), res(:)
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
         type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk
-        real    :: fsc0143, fsc05, lplim, smpd_tmp
-        integer :: ldim(3), ldim_tmp(3), n
-        logical :: has_fsc, do_envfsc
+        real    :: fsc0143, fsc05, lplim
+        integer :: ldim(3), ldim_tmp(3)
+        logical :: has_fsc, do_envfsc, msk_exists, msk_compatible
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
@@ -371,21 +372,16 @@ contains
         call vol_bfac%ifft()
         if( do_envfsc )then
             ! enveloppe mask from FSC
-            fname_envmsk = 'dens_envmask_state'//trim(adjustl(int2str_pad(state,2)))//MRC_EXT
-            if( file_exists(fname_envmsk) )then
-                call find_ldim_nptcls(fname_envmsk, ldim_tmp, n)
-                smpd_tmp = find_img_smpd(fname_envmsk)
-                if( all(ldim_tmp==box) .and. abs(smpd_tmp - smpd) <= 1.e-6 ) then
-                    call vol_envmsk%new(ldim_tmp, smpd_tmp)
-                    call vol_envmsk%read(fname_envmsk)
-                    call vol_bfac%zero_env_background(vol_envmsk)
-                    call vol_bfac%mul(vol_envmsk)
-                else
-                    THROW_WARN('enveloppe mask: '//fname_envmsk%to_char()//' has different dimensions&
-                    & or sampling than volume; using spherical mask instead')
-                    call vol_bfac%mask3D_soft(params%msk_crop)
-                endif
+            fname_envmsk = AUTOMASK_FBODY//trim(adjustl(int2str_pad(state,2)))//MRC_EXT
+            call state_mask_is_compatible(fname_envmsk, box, smpd, msk_exists, msk_compatible)
+            if( msk_exists .and. msk_compatible )then
+                call vol_envmsk%new(ldim, smpd)
+                call vol_envmsk%read(fname_envmsk)
+                call vol_bfac%zero_env_background(vol_envmsk)
+                call vol_bfac%mul(vol_envmsk)
             else
+                THROW_WARN('enveloppe mask: '//fname_envmsk%to_char()//' has different dimensions&
+                & or sampling than volume; using spherical mask instead')
                 call vol_bfac%mask3D_soft(params%msk_crop)
             endif
         else

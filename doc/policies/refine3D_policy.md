@@ -161,17 +161,18 @@ probabilistic pre-alignment or matcher work starts. Reference preparation:
 3. determines the active high-pass/low-pass shell range
 4. writes even/odd PFTC reference sections for the matcher
 
-When `automsk != no`, reference preparation replaces the ordinary spherical
+When `automsk=yes`, reference preparation replaces the ordinary spherical
 reference mask with the current compatible `nu_envmask3D_stateNN.mrc`. The
 selected regular or NU-derived reference is background-zeroed using the mask
-transition and multiplied by the mask before projection. A compatible legacy
-density mask is the transition fallback, followed by the sphere. This does not
+transition and multiplied by the mask before projection. A compatible
+density FSC mask is the transition fallback, followed by the sphere. This does not
 modify particles, reconstruction volumes on disk, FSC curves, NU filtering, or
 matching-bandwidth selection, and there is no separate `envref` control.
 
 This path is valid only with `filt_mode=nonuniform|nonuniform_lpset`.
-`automsk=yes|tight` with `none`, `uniform`, or `fsc` is rejected during
-parameter validation.
+`automsk=yes` with `none`, `uniform`, or `fsc` is rejected during parameter
+validation. `automsk=tight` is also rejected in NU refinement because the
+NU-evidence envelope has no Otsu tightness mode.
 
 The lifecycle is lag-by-one: volume assembly from iteration N writes the NU
 envelope used when iteration N+1 materializes its reprojection model. A missing
@@ -376,8 +377,14 @@ the strategy dispatches `volassemble`.
 - applies conical FSC curves for directional ML regularization when
   `ml_reg=yes` and `conical_fsc=yes`; this is opt-in
 - calculates conical FSC and cFAR from copies using the active FSC mask: the
-  on-the-fly density envelope when `envfsc=yes`, otherwise the broad spherical
-  mask; phase-randomized radial FSC retains the original unmasked half-volumes
+  on-the-fly density envelope low-pass filtered at `envmsklp` when
+  `envfsc=yes`, otherwise the broad spherical mask; phase-randomized radial FSC
+  retains the original unmasked half-volumes to determine its 0.8 randomization
+  onset. `envmsklp` defaults to `ENVMSKLP_DEFAULT` (20 A) and is separate from
+  the `amsklp` NU-evidence smoothing scale
+- writes `automask3D_stateNN.mrc` when `envfsc=yes`; the same density envelope
+  is available to compatible final postprocessing and as a lower-priority
+  matching-reference fallback
 - restores merged state volumes
 - derives the NU-evidence envelope from the completed accepted NU bank before
   unary storage is released

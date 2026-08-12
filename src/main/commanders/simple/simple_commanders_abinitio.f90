@@ -512,7 +512,6 @@ contains
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
         call cline%set('nu_refine',     'no') ! no nonuniform refinement
-        if( .not. cline%defined('envfsc') ) call cline%set('envfsc', 'no') ! broad spherical FSC by default
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',                    'yes')
         if( .not. cline%defined('overlap')     ) call cline%set('overlap',                   0.95)
         if( .not. cline%defined('prob_athres') ) call cline%set('prob_athres',                10.)
@@ -525,6 +524,9 @@ contains
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
         if( .not. cline%defined('partition')   ) call cline%set('partition',                 'no')
+        if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',                    'no')
+        if( .not. cline%defined('envmsklp')    ) call cline%set('envmsklp',      ENVMSKLP_DEFAULT)
+        if( .not. cline%defined('binwidth')    ) call cline%set('binwidth',   ENVMSKWIDTH_DEFAULT)
         if( cline%defined('nsample_start') .or. cline%defined('nsample_stop') )then
             THROW_HARD('nsample_start/nsample_stop are no longer supported for abinitio3D; set nsample instead')
         endif

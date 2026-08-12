@@ -365,7 +365,7 @@ contains
             if( l_nu_envmask_present )then
                 write(logfhandle,'(A,I0,A)') &
                     &'>>> WARNING: state ', s, &
-                    &' NU evidence envelope is incompatible; trying the legacy density envelope'
+                    &' NU evidence envelope is incompatible; trying the density envelope'
             endif
             envmask_fname = string(AUTOMASK_FBODY)//int2str_pad(s,2)//string(MRC_EXT)
             call state_mask_is_compatible(envmask_fname, params%box_crop, params%smpd_crop, &

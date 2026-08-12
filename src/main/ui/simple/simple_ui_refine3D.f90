@@ -147,6 +147,8 @@ subroutine new_automask( prgtab )
         ! filter controls
         call reconstruct3D%add_input(UI_FILT, envfsc, &
         &visibility=UI_VIS_ADVANCED)
+        call reconstruct3D%add_input(UI_FILT, envmsklp, &
+        &visibility=UI_VIS_ADVANCED)
         call reconstruct3D%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map',&
         &'Postprocess reconstructed volumes using the generated FSC curves','', .false., 'yes', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -308,8 +310,11 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, envfsc, group="filter", &
         &visibility=UI_VIS_ADVANCED)
-        call refine3D%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 8., group="filter", &
+        call refine3D%add_input(UI_FILT, envmsklp, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_FILT, 'amsklp', 'num', 'NU evidence envelope smoothing limit',&
+        & 'Low-pass limit for NU evidence envelope generation in Angstroms', &
+        &'low-pass limit in Angstroms', .false., 8., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, ml_reg, group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -392,8 +397,9 @@ subroutine new_automask( prgtab )
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls
-        call refine3D_auto%add_input(UI_FILT, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 8., group="filter", &
+        call refine3D_auto%add_input(UI_FILT, 'amsklp', 'num', 'NU evidence envelope smoothing limit',&
+        & 'Low-pass limit for NU evidence envelope generation in Angstroms', &
+        &'low-pass limit in Angstroms', .false., 8., group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
         &'Filtering mode(none|nonuniform|nonuniform_lpset){nonuniform}','', .false., 'nonuniform', group="filter", &
@@ -404,6 +410,8 @@ subroutine new_automask( prgtab )
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_FILT, envfsc, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_FILT, envmsklp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_FILT, combine_eo, group="filter", &
         &visibility=UI_VIS_ADVANCED)
@@ -499,6 +507,8 @@ subroutine new_automask( prgtab )
         call refine3D_multi%add_input(UI_FILT, ml_reg, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_multi%add_input(UI_FILT, envfsc, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_multi%add_input(UI_FILT, envmsklp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         ! mask controls
         call refine3D_multi%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)

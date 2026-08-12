@@ -48,11 +48,14 @@ It also supplies overridable defaults when the user has not provided them:
 - `envfsc=no`
 - `keepvol=no`
 
-The default `envfsc=no` keeps envelope masks out of FSC estimation. `envfsc=yes`
-is an unfinished branch and exits with a hard error. The NU-evidence envelope
-never enters FSC correction. Completing the branch requires a simple, fast
-density-based mask generated on the fly. The choice remains an advanced filter
-control in the `refine3D_auto` UI/CLI contract.
+The default `envfsc=no` uses the broad spherical FSC mask. With `envfsc=yes`,
+volume assembly generates a density/Otsu envelope from the current merged half
+maps, low-pass filtered at `envmsklp`, and uses it for phase-randomized FSC
+correction and cFAR. `envmsklp` defaults to `ENVMSKLP_DEFAULT` (20 A), while
+`amsklp` remains the separate NU-evidence smoothing scale. The NU-evidence
+envelope never enters FSC correction. `envfsc` and `envmsklp` remain advanced
+filter controls and are independent of the default `automsk=yes` NU-reference
+policy.
 
 With `automsk=yes`, matching references consume the lagged
 `nu_envmask3D_stateNN.mrc`. The first iteration uses the spherical

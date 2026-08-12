@@ -19,7 +19,7 @@ contains
         call new_noisevol(prgtab)
     end subroutine construct_abinitio3D_programs
 
-subroutine new_abinitio3D( prgtab )
+    subroutine new_abinitio3D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call abinitio3D%new(&
@@ -119,6 +119,8 @@ subroutine new_abinitio3D( prgtab )
             &group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
         call abinitio3D%add_input(UI_FILT, envfsc, group="filter", &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_FILT, envmsklp, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, 'lpstart_ini3D',  'num', 'Starting low-pass limit ini3D', 'Starting low-pass limit ini3D',&

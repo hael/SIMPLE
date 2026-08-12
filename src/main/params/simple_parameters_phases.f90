@@ -632,8 +632,6 @@ contains
         endif
         self%l_lpset  = cline%defined('lp')
         self%l_envfsc = self%envfsc .ne. 'no'
-        if( self%l_envfsc ) &
-            &THROW_HARD('envfsc=yes is unfinished; on-the-fly density-mask generation must be implemented first')
         if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
         if( cline%defined('heldout') ) self%l_heldout = (trim(self%heldout).eq.'yes')
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
@@ -866,6 +864,8 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported filt_mode flag')
         end select
+        if( self%l_envfsc .and. self%envmsklp <= 0. ) &
+            &THROW_HARD('envmsklp must be positive when envfsc=yes')
         ! automsk=tight only ever meant Otsu tightness in the density masker. The
         ! NU-evidence envelope has no tight variant; nu_msk_sig controls tightness.
         if( self%l_nonuniform .and. trim(self%automsk).eq.'tight' )then

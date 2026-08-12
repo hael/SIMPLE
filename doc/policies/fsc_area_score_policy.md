@@ -57,7 +57,21 @@ active radial FSC policy rather than the standalone `automsk` switch:
 
 The density envelope used for cFAR is the same mask used by the masked and
 randomized-masked radial FSC calculations. The raw radial FSC that determines
-the phase-randomization onset remains genuinely unmasked.
+the phase-randomization onset remains genuinely unmasked. Density-envelope
+construction averages the current half maps, low-pass filters at `envmsklp`
+(default `ENVMSKLP_DEFAULT`, 20 A), uses non-tight Otsu segmentation, retains
+the largest connected component, grows by `binwidth`, and adds a cosine edge of
+width `edge`. This refinement-only `envfsc` control is distinct from the
+standalone command's `amsklp` automasking scale.
+
+The first genuinely unmasked FSC shell below 0.8 sets the randomization onset.
+The half maps are independently phase-randomized beyond that shell, and the
+corrected curve begins two shells later. If there is no usable crossing, the
+radial FSC falls back to the genuinely unmasked curve; cFAR still reports the
+curve calculated from its selected mask. Refinement writes the density mask as
+`automask3D_stateNN.mrc` and writes `fscu_stateNN.bin`, `fsct_stateNN.bin`, and
+`fscn_stateNN.bin` for the unmasked, masked, and randomized-masked radial FSC
+diagnostics.
 
 ## Direction sampling
 

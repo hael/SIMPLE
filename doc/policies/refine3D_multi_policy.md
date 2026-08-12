@@ -93,7 +93,7 @@ compute controls:
 
 - search: `maxits`, `nstates`, `pgrp`, `autoscale`, `continue`
 - mode: `multivol_mode`
-- filter: `filt_mode`, `lpstop`, `ml_reg`, `envfsc`
+- filter: `filt_mode`, `lpstop`, `ml_reg`, `envfsc`, `envmsklp`
 - mask: `mskdiam`, `automsk`
 - compute: `nparts`, `nthr`
 
@@ -465,14 +465,16 @@ references:
 - `envfsc=no`
 - `lplim_crit=0.5`
 
-`envfsc` is an advanced filter control and an **unfinished branch**. Its default
-keeps each state envelope out of FSC estimation. Selecting `envfsc=yes` exits
-with a hard error. Completing this route requires a simple, fast density-based
-mask generated on the fly for each state; a future corrected curve may update
-FSC resolution metadata but must not cap the NU filter bank or directly set the
+`envfsc` is an advanced filter control. Its default uses the broad spherical FSC
+mask. With `envfsc=yes`, volume assembly generates a separate density/Otsu
+envelope from each state's current merged half maps after low-pass filtering at
+`envmsklp`, and uses it for phase-randomized FSC correction and cFAR.
+`envmsklp` defaults to `ENVMSKLP_DEFAULT` (20 A) and is independent of the
+`amsklp` NU-evidence smoothing scale. The corrected curve may update FSC
+resolution metadata but does not cap the NU filter bank or directly set the
 matching low-pass limit.
 
-When `automsk=yes|tight`, each populated state uses its own compatible NU
+When `automsk=yes`, each populated state uses its own compatible NU
 envelope to solvent-flatten the selected matching reference before projection;
 particle images and state-specific NU products are not modified. There is no
 separate `envref` control.
@@ -483,11 +485,12 @@ run ordinary NU filtering, write NU-derived reference products, and hand an
 LP-set matching bandwidth back through the project. It must not perform
 `nu_refine` shell expansion for `refine3D_multi`.
 
-`automsk=no` means the wrapper does not request automatic state-mask
-generation by default. If the user enables `automsk=yes` or `automsk=tight`,
-state-specific mask production and compatibility rules follow
+`automsk=no` means the wrapper does not request automatic NU state-envelope
+generation by default. If the user enables `automsk=yes`, state-specific mask
+production and compatibility rules follow
 [automasking_policy.md](automasking_policy.md), and `filt_mode` must remain
-`nonuniform_lpset`; `fsc` and `none` require `automsk=no`.
+`nonuniform_lpset`; `automsk=tight` is rejected in NU refinement, and `fsc` and
+`none` require `automsk=no`.
 
 When NU filtering is active, spherical support and matching-bandwidth handoff
 follow [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md).

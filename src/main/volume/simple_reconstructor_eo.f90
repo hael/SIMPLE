@@ -642,7 +642,7 @@ contains
         if( allocated(fsc_corrected) ) deallocate(fsc_corrected)
         if( .not. params%l_envfsc ) return
         call calc_density_envmask(params, even, odd, mskvol)
-        call mskvol%write(string('dens_envmask_state'//trim(adjustl(int2str_pad(state,2)))//MRC_EXT))
+        call mskvol%write(string(AUTOMASK_FBODY//trim(adjustl(int2str_pad(state,2)))//MRC_EXT))
         ! FSCs: phase-randomized & corrected
         call phase_rand_fsc(even, odd, mskvol, state, even%get_filtsz(), fsc_corrected, fsc_t, fsc_n)
         if( present(envmsk) ) call envmsk%copy(mskvol)
@@ -661,7 +661,7 @@ contains
         call merged%copy(even)
         call merged%add(odd)
         call merged%mul(0.5)
-        call mskvol%automask3D(params, merged, params%automsk.eq.'tight')
+        call mskvol%automask3D(params, merged, .false., lp_override=params%envmsklp)
         call envmsk%copy(mskvol)
         call merged%kill
         call mskvol%kill_bimg

@@ -323,19 +323,30 @@ shell extension is reserved for `refine3D_auto` and explicit base
 
 Because `abinitio3D` currently keeps gold-standard refinement disabled,
 `GOLD_STD_STAGE` is off and `envfsc` defaults to `no`. The advanced `envfsc`
-control is nevertheless exposed with the existing automasking option and its
-value is propagated to every emitted refine3D stage; selecting `yes` exits with
-a hard error until fast on-the-fly density-mask generation is implemented. The controller keeps a
-scheduled `lp` on the refine3D command line. From `NU_FILTER_STAGE`, staged
+control is nevertheless independent of `automsk` and NU filtering. The
+controller forces `envfsc=no` before `ENVFSC_STAGE`, forces it off for the cavgs
+route, and forwards the requested value at and after that boundary. With
+`envfsc=yes`, volume assembly generates a density envelope from the current
+merged half maps for phase-randomized FSC correction and cFAR, using
+`envmsklp` as its smoothing low-pass. The controller forwards `envmsklp` to
+staged and final reconstruction commands; its default is
+`ENVMSKLP_DEFAULT` (20 A). The density-mask growth width defaults to
+`ENVMSKWIDTH_DEFAULT` (7 voxels) through `binwidth` and is likewise preserved
+in staged and final reconstruction commands. The controller keeps a scheduled
+`lp` on the refine3D command line. From `NU_FILTER_STAGE`, staged
 `nonuniform` is promoted to `nonuniform_lpset`, so the NU frontier can feed an
 explicit merged-reference LP-set matching run.
+
+Phase randomization corrects mask-induced correlation; it does not make the
+non-independent ab initio half maps a gold-standard validation pair. FSC-derived
+resolution metadata in this workflow must be interpreted accordingly.
 
 Automasking is opt-in at the public interface and defaults to `no`. Even when
 enabled, staged NU-evidence envelope generation starts only once both
 `AUTOMSK_STAGE` and the NU filtering stage are active.
-Selecting `automsk=yes|tight` therefore requires an NU `filt_mode`; non-NU
-filtering modes are rejected rather than producing a refinement configuration
-that cannot generate the requested envelope.
+Selecting `automsk=yes` therefore requires an NU `filt_mode`; `automsk=tight`
+and non-NU filtering with automasking are rejected rather than producing a
+refinement configuration that cannot generate the requested NU envelope.
 Once staged automasking is active, matching references use the lagged state NU
 envelope; there is no separate reference-mask control (the former `envref`
 parameter has been removed), so early stages without automasking simply remain
@@ -362,9 +373,10 @@ reconstruction is allowed. This prevents final maps from being produced from
 state labels that were never refreshed after the split.
 
 The final reconstruction inherits only the scientific reconstruction policy it
-needs from the final stage. It must not inherit staged search or mask-generation
-controls such as `refine`, `lp`, `automsk`, `envfsc`, `gauref`, or NU
-`filt_mode`.
+needs. It preserves the parent `envfsc` request so the original-sampling half
+maps use the same radial FSC/cFAR masking policy, but it does not inherit staged
+search, matching-reference automasking, or NU controls such as `refine`, `lp`,
+`automsk`, `gauref`, or NU `filt_mode`.
 
 If the final stage used `objfun=euclid` and `ml_reg=yes`, final reconstruction
 uses compatible grouped sigma estimates when they are local to the workflow.

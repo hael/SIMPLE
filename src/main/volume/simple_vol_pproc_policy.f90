@@ -61,9 +61,8 @@ contains
         compatible  = .false.
         if( .not. exists ) return
         call find_ldim_nptcls(mskfile_state, ldim_mask, nptcls_mask)
-        smpd_mask = find_img_smpd(mskfile_state)
-        compatible = ldim_mask(1) == box .and. ldim_mask(2) == box .and. ldim_mask(3) == box .and. &
-                   &abs(smpd_mask - smpd) <= 1.e-6
+        smpd_mask  = find_img_smpd(mskfile_state)
+        compatible = all(ldim_mask == box) .and.  abs(smpd_mask - smpd) <= 1.e-6
     end subroutine state_mask_is_compatible
 
     logical function should_regenerate_nu_envmask( params, which_iter, l_state_mask_exists, l_state_mask_compatible )

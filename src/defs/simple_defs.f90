@@ -87,6 +87,8 @@ real,    parameter    :: RADFRAC_NORM_EXTRACT      = 0.75      !< radius fractio
 integer, parameter    :: PICKER_OFFSET             = 3         !< picker offset for grid search
 ! constants for masking/interpolation
 real,    parameter    :: COSMSKHALFWIDTH           = 6.0       !< spherical soft masking
+real,    parameter    :: ENVMSKLP_DEFAULT          = 20.0      !< envfsc density-mask smoothing low-pass
+real,    parameter    :: ENVMSKWIDTH_DEFAULT       = 7.0       !< automasking binary dilation layers
 real,    parameter    :: KBWINSZ                   = 1.5       !< interpolation window size
 integer, parameter    :: OSMPL_PAD_FAC             = 2         !< factor by which to pad for oversampled gridding
 real,    parameter    :: KBALPHA                   = real(OSMPL_PAD_FAC) !< interpolation alpha (oversampling constant)

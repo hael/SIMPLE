@@ -4,42 +4,51 @@
 
 This document describes 3D envelope-mask policy for `refine3D`, staged
 `abinitio3D`, and the shared `volassemble` step. Standalone density masking
-commands remain available, but density/Otsu masks are no longer generated in
-the refinement loop.
+commands remain available. Volume assembly can also generate a density/Otsu
+mask for FSC correction independently of refinement-reference automasking.
 
-The current architecture treats refinement automasking as:
+The current architecture has two independent controls and artifacts:
 
-- a workflow policy selected by `automsk`
-- a NU-evidence-derived per-state artifact named by convention
-- a post-reconstruction operation owned by `volassemble`
-- an input to matching-reference solvent flattening whenever `automsk != no`
+- `automsk` requests a NU-evidence-derived per-state envelope for lagged
+  matching-reference solvent flattening
+- `envfsc` requests an on-the-fly density-derived per-state envelope for
+  phase-randomized FSC correction, cFAR, and final-map masking
+
+Both operations are owned by volume assembly, but neither mask may replace the
+broad spherical support used by the NU objective.
 
 ## Public policy
 
 The user-facing control is:
 
-- `automsk=no`: no refinement-loop envelope generation
+- `automsk=no`: no refinement-loop NU-evidence envelope generation
 - `automsk=yes`: generate a per-state envelope from NU cross-half evidence
-- `automsk=tight`: retained as a compatibility spelling of `yes`; the NU
-  envelope has no density/Otsu tightness mode
+- `automsk=tight`: valid for standalone density-mask commands, but rejected in
+  NU refinement because the NU-evidence envelope has no Otsu tight variant
 
-In 3D refinement, `automsk=yes|tight` requires
-`filt_mode=nonuniform|nonuniform_lpset`. `filt_mode=none|uniform|fsc` requires
-`automsk=no`. Standalone density-mask utilities are outside this refinement
-invariant.
+In 3D refinement, `automsk=yes` requires
+`filt_mode=nonuniform|nonuniform_lpset`; `automsk=tight` and non-NU filtering
+with `automsk != no` are rejected. Standalone density-mask utilities are
+outside this refinement invariant.
 
-`envfsc=no` is the default. **`envfsc=yes` is an unfinished branch.** The density
-automask that used to feed it is no longer generated in the loop, and the
-NU-evidence envelope must never reach the FSC. It currently exits with a hard
-error. Re-enabling it requires a simple, fast density-based mask generated on
-the fly from the current map.
+`envfsc=no` is the default. With `envfsc=yes`, volume assembly averages the
+current even/odd half maps, low-pass filters the merged map at `envmsklp`,
+applies non-tight Otsu segmentation, retains the largest connected component,
+grows it by `binwidth`, and applies a cosine edge of width `edge`. `envmsklp`
+defaults to `ENVMSKLP_DEFAULT` (20 A) and must be positive when `envfsc=yes`.
+For `abinitio3D`, `binwidth` defaults to `ENVMSKWIDTH_DEFAULT` (7 voxels) and
+is preserved in staged and final reconstruction commands.
+The resulting density envelope is used for masked and randomized-masked FSC,
+cFAR, and compatible final-map postprocessing. This path is independent of
+`automsk` and NU filtering; `amsklp` remains the NU-evidence/standalone
+automasking scale and does not control this density FSC envelope.
 
 Matching references are solvent-flattened with the current, lagged NU-evidence
-envelope whenever `automsk != no`; there is no separate `envref` control (it has
-been removed from the CLI and the library). A compatible legacy density mask is a
-transition fallback; otherwise the first iteration uses the sphere. This changes
-only the references used to generate projections. Particle images, FSC
-estimation, NU filtering, and matching-bandwidth selection are unchanged.
+envelope whenever `automsk=yes`; there is no separate `envref` control. A
+compatible density FSC envelope is the second-choice fallback; otherwise the
+first iteration uses the sphere. This changes only the references used to
+generate projections. Particle images, FSC estimation, NU filtering, and
+matching-bandwidth selection are unchanged by `automsk`.
 
 NU filtering always uses the spherical support derived from `mskdiam`.
 Envelope masks do not define or restrict the NU objective domain. In
@@ -50,66 +59,74 @@ or replace spherical NU support.
 
 ## Ownership
 
-### `volassemble`
+### Volume assembly
 
-`volassemble` is the sole producer of refinement-loop envelope masks. It:
+Volume assembly owns both mask-production paths:
 
-- decides whether a state NU envelope should exist
-- derives it after static NU optimization and accepted `nu_refine` extensions
-- regenerates it freely each cycle, allowing the envelope to shrink or grow with
-  resolution; there is no monotonic recovery guard and no `pct_signal` failsafe
-- persists the result as `nu_envmask3D_stateNN.mrc`
+- half-map restoration generates `automask3D_stateNN.mrc` on every active
+  `envfsc=yes` calculation, directly from the current half maps
+- NU postprocessing decides whether `nu_envmask3D_stateNN.mrc` should exist,
+  derives it after static NU optimization and accepted `nu_refine` extensions,
+  and regenerates it according to the cadence below
 
-The envelope is generated before `nu_filter_vols` releases the mask-packed NU
+The NU envelope is generated before `nu_filter_vols` releases the mask-packed NU
 unary storage. Iteration N therefore writes the mask consumed while iteration
 N+1 materializes its reprojection model.
 
 ### FSC consumers
 
 The NU-evidence envelope is never used for FSC correction because it is selected
-from cross-half agreement. A nonuniform refinement first calculates the
-provisional gold-standard FSC with the broad spherical mask. **`envfsc=yes` is an
-unfinished branch:** parameter validation exits with a hard error before volume
-processing begins. Supporting it requires generating a simple, fast density
-mask on the fly and passing that transient mask directly to phase-randomized FSC
-correction.
+from cross-half agreement. With `envfsc=no`, the reported radial FSC and cFAR
+use the broad spherical FSC mask. With `envfsc=yes`, the density envelope is
+passed to phase-randomized FSC correction and the same envelope is applied to
+the cFAR copies.
+
+The randomization onset is the first shell where the genuinely unmasked FSC is
+below 0.8. The two half maps are independently phase-randomized beyond that
+shell and then masked. The corrected curve starts two shells after the onset;
+if no usable onset exists, the code retains the unmasked curve. The diagnostic
+files are `fscu_stateNN.bin`, `fsct_stateNN.bin`, and `fscn_stateNN.bin`.
 
 ### Matcher reference preparation
 
-Whenever `automsk != no`, reference preparation first loads the compatible
+Whenever `automsk=yes`, reference preparation first loads the compatible
 `nu_envmask3D_stateNN.mrc`, subtracts the median density in its soft transition,
 and multiplies the selected reference volume by the mask before reprojection.
 This is applied after choosing regular versus NU-derived and independent versus
 merged references. The fallback chain is:
 
 1. NU-evidence envelope
-2. compatible legacy density envelope
+2. compatible density FSC envelope
 3. spherical reference mask
 
 ## State-specific artifacts
 
-Current refinement envelopes are named:
+The two state-specific artifacts are:
 
-- `nu_envmask3D_state01.mrc`
-- `nu_envmask3D_state02.mrc`
-- ...
+- `automask3D_stateNN.mrc`: current density/Otsu envelope produced by
+  `envfsc=yes`; used by FSC/cFAR in memory, final postprocessing from disk, and
+  optionally as the matching-reference fallback
+- `nu_envmask3D_stateNN.mrc`: NU-evidence envelope produced by `automsk=yes`;
+  used only for matching-reference preprocessing
 
-`automask3D_stateNN.mrc` is a legacy density-envelope name. It is no longer
-produced in the refinement loop, but may be consumed as the second
-reference-mask fallback. The FSC path does not consume it.
+Both files are state-local. They have different statistical provenance and are
+not interchangeable in the FSC or NU-objective paths.
 
 ## Current workflow
 
 1. `refine3D` or staged `abinitio3D` produces partial reconstructions.
-2. `volassemble` builds even, odd, and merged state volumes.
-3. The NU filter constructs spherical support from `mskdiam`, optimizes the
+2. `volassemble` restores even and odd state volumes and calculates radial FSC
+   and cFAR. `envfsc=yes` generates the density envelope during this step;
+   `envfsc=no` uses the broad spherical FSC mask.
+3. `volassemble` restores the merged state volume.
+4. The NU filter constructs spherical support from `mskdiam`, optimizes the
    static bank, and accepts any supported `nu_refine` extensions.
-4. If `automsk != 'no'`, `volassemble` derives
+5. If `automsk=yes`, `volassemble` derives
    `nu_envmask3D_stateNN.mrc` before NU unary storage is released.
-5. The NU envelope is used only by the next matching-reference preprocessing
+6. The NU envelope is used only by the next matching-reference preprocessing
    pass and never by FSC correction or NU support.
-6. `envfsc=yes` exits with a hard error until a fast density mask can be
-   generated on the fly for phase-randomized correction.
+7. Final postprocessing reuses a compatible `automask3D_stateNN.mrc` when
+   `envfsc=yes`; a missing or incompatible file falls back to the sphere.
 
 ## Regeneration and recovery
 

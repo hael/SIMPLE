@@ -31,6 +31,7 @@ integer,          parameter :: PROB_NEIGH_REFINE_STAGE = 6           ! prob_neig
 integer,          parameter :: NSTAGES_INDEPENDENT     = PROB_NEIGH_REFINE_STAGE - 1
 integer,          parameter :: GOLD_STD_STAGE          = TURNED_OFF  ! gold-standard doesn't work for abinitio 3D 
 integer,          parameter :: AUTOMSK_STAGE           = NSTAGES     ! switch on automasking
+integer,          parameter :: ENVFSC_STAGE            = NSTAGES     ! when to activate enveloppe masking & FSC phase randomized resolution estimation
 integer,          parameter :: TRAILREC_STAGE_MULTI    = NSTAGES
 integer,          parameter :: HET_DOCKED_STAGE        = 6           ! split after stage 5; stage 6 stabilizes split states
 integer,          parameter :: NSAMPLE_HET_SPLIT_CAP   = 100000
@@ -54,7 +55,7 @@ real,             parameter :: FULL_SAMPLE_SWITCH_FRAC    = 0.9  ! force all-act
 integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
-    type(string) :: pgrp, refine, ml_reg, trail_rec, fillin, conical_fsc
+    type(string) :: pgrp, refine, ml_reg, trail_rec, fillin, conical_fsc, envfsc
     type(string) :: balance, partition, filt_mode, automsk, nu_refine, greedy_sampling, prob_neigh_mode
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
@@ -209,6 +210,7 @@ contains
         call set_refine3D_trailrec_policy( cfg, params, istage )
         call set_refine3D_filtering_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_automsk_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_envfsc_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
         call apply_refine3D_search_overrides( cfg, params, istage )
     end subroutine build_refine3D_stage_cfg
@@ -383,6 +385,16 @@ contains
         if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
     end subroutine set_refine3D_automsk_policy
 
+    subroutine set_refine3D_envfsc_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        cfg%envfsc = 'no'
+        if( l_cavgs ) return
+        if( istage >= ENVFSC_STAGE ) cfg%envfsc = trim(params%envfsc)
+    end subroutine set_refine3D_envfsc_policy
+
     subroutine set_refine3D_stage_controls( cfg, params, istage, l_cavgs )
         type(refine3D_stage_cfg), intent(inout) :: cfg
         class(parameters),        intent(in)    :: params
@@ -475,7 +487,6 @@ contains
         ptcl_src_eff        = stage_ptcl_src(cfg, params)
         lp_eff              = stage_matching_lp(cfg, params, istage, l_cmdline_lp_override)
         call cline_refine3D%set('prg',    'refine3D')
-        call cline_refine3D%set('envfsc', params%envfsc)
         if( l_full_update_stage )then
             call cline_refine3D%delete('update_frac')
             call cline_refine3D%delete('fillin')
@@ -528,6 +539,8 @@ contains
         call cline_refine3D%delete('lpstart')
         call cline_refine3D%delete('lpstop')
         call cline_refine3D%set('automsk',                cfg%automsk)
+        call cline_refine3D%set('envfsc',                 cfg%envfsc)
+        call cline_refine3D%set('envmsklp',               params%envmsklp)
         if( params%nstates == 1 .and. istage >= GOLD_STD_STAGE )then
             ! Past this point, NU filtering promotes the selected matching
             ! bandwidth; the controller no longer injects schedule LP.

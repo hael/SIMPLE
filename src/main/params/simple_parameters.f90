@@ -498,7 +498,7 @@ type :: parameters
     integer :: xdimpd=0
     integer :: ydim=0              !< y dimension(in pixles)
     ! real variables in ascending alphabetical order
-    real    :: amsklp=8.           !< low-pass limit for envelope mask generation(in A)
+    real    :: amsklp=8.           !< low-pass limit for NU/standalone envelope generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: angthres_mi_proj = ANGTHRES_MI_PROJ_DEFAULT !< 4 convergence checking
     real    :: astigerr=0.         !< astigmatism error(in microns)
@@ -526,6 +526,7 @@ type :: parameters
     real    :: e1=0.               !< 1st Euler(in degrees){0}
     real    :: e2=0.               !< 2nd Euler(in degrees){0}
     real    :: e3=0.               !< 3d Euler(in degrees){0}
+    real    :: envmsklp=ENVMSKLP_DEFAULT !< low-pass limit for envfsc density-envelope generation(in A)
     real    :: eps=0.5             !< learning rate
     real    :: eps_bounds(2) = [0.5,1.0]
     real    :: eullims(3,2)=0.

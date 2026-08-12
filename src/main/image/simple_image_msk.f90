@@ -33,19 +33,21 @@ end type image_msk
 
 contains
 
-    subroutine automask3D( self, params, vol, l_tight, pix_thres, vol_masked )
+    subroutine automask3D( self, params, vol, l_tight, pix_thres, vol_masked, lp_override )
         class(image_msk),       intent(inout) :: self
         class(parameters),      intent(in)    :: params
         class(image),           intent(in)    :: vol
         logical,                intent(in)    :: l_tight
         real,         optional, intent(in)    :: pix_thres
         class(image), optional, intent(inout) :: vol_masked
+        real,         optional, intent(in)    :: lp_override
         if( vol%is_2d() )THROW_HARD('automask3D is intended for volumes only')
-        write(logfhandle,'(A)') '>>> AUTOMASKING'
-        ! parameters
         self%amsklp   = params%amsklp
+        if( present(lp_override) ) self%amsklp = lp_override
         self%binwidth = params%binwidth
         self%edge     = params%edge
+        write(logfhandle,'(A,F7.2,A,I3,A,I3,A)') '>>> AUTOMASKING LOW-PASS/DILATION LAYERS/EDGE: ',&
+            &self%amsklp, ' A/',self%binwidth, ' voxels/', self%edge, ' voxels'
         ! low-pass smoothing
         call self%new_bimg(vol%get_ldim(), vol%get_smpd())
         call self%copy(vol)

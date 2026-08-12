@@ -575,7 +575,7 @@ contains
         call cline%set('nu_refine',       'no')
         call cline%set('combine_eo',      'no')
         ! overridable defaults
-        if( .not. cline%defined('envfsc')          ) call cline%set('envfsc',               'no')
+        if( .not. cline%defined('envfsc')          ) call cline%set('envfsc',            'no')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',            'yes')
         if( .not. cline%defined('center')          ) call cline%set('center',            'no')
         if( .not. cline%defined('sigma_est')       ) call cline%set('sigma_est',     'global')
