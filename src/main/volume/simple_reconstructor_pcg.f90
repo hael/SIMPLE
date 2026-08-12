@@ -17,7 +17,8 @@ use simple_ctf,   only: ctf
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
 implicit none
 
-public :: reconstructor_pcg, pcg_solver_outcome, PCG_OP_MATRIXFREE, PCG_OP_KERNEL
+public :: reconstructor_pcg, pcg_solver_outcome, pcg_fourier_workspace
+public :: PCG_OP_MATRIXFREE, PCG_OP_KERNEL
 private
 #include "simple_local_flags.inc"
 
@@ -40,6 +41,24 @@ type :: pcg_solver_outcome
     real, allocatable  :: preconditioned_residual_history(:)
     real, allocatable  :: iteration_seconds(:)
 end type pcg_solver_outcome
+
+!> Read-only snapshot of the padded Fourier volume for repeated local samples.
+!! One snapshot is shared across particles and derivative directions while the
+!! real-space volume is fixed. Rebuild it after every set_volume call.
+type :: pcg_fourier_workspace
+    private
+    integer          :: boxpd   = 0
+    integer          :: iwinsz  = 0
+    integer          :: wdim    = 0
+    real             :: padsc   = 1.0
+    type(kbinterpol) :: kbwin
+    integer, allocatable :: wrap(:)
+    complex, allocatable :: cmat(:,:,:)
+    logical :: exists = .false.
+  contains
+    procedure :: kill => kill_fourier_workspace
+    procedure :: sample_with_grad => sample_fourier_with_grad
+end type pcg_fourier_workspace
 
 type :: reconstructor_pcg
     private
@@ -178,6 +197,7 @@ type :: reconstructor_pcg
     ! LOW-LEVEL OPERATOR (public: the test commanders drive these directly to
     ! verify the adjoint identity before any solve() result may be trusted)
     procedure :: set_volume
+    procedure :: begin_fourier_workspace
     procedure :: forward_plane
     procedure :: fourier_dot
     procedure :: adjoint_plane_add
@@ -840,6 +860,59 @@ contains
         call self%wimg%set_rmat(self%pad_vol(v), .false.)
         call self%wimg%fft()
     end subroutine set_volume
+
+    !>  \brief  Snapshots the current padded Fourier volume once for repeated
+    !!          value-and-gradient samples while the real-space volume is fixed.
+    subroutine begin_fourier_workspace( self, workspace )
+        class(reconstructor_pcg), intent(inout) :: self
+        type(pcg_fourier_workspace), intent(inout) :: workspace
+        call workspace%kill
+        call self%ensure_wimg
+        workspace%boxpd  = self%boxpd
+        workspace%iwinsz = self%iwinsz
+        workspace%wdim   = self%wdim
+        workspace%padsc  = self%padsc
+        workspace%kbwin  = self%kbwin
+        ! Preserve the negative physical indices of the periodic wrap table.
+        allocate(workspace%wrap(lbound(self%wrap,1):ubound(self%wrap,1)), source=self%wrap)
+        ! Copy the padded Fourier lattice once per fixed-volume workspace.
+        workspace%cmat   = self%wimg%get_cmat()
+        workspace%exists = .true.
+    end subroutine begin_fourier_workspace
+
+    subroutine kill_fourier_workspace( self )
+        class(pcg_fourier_workspace), intent(inout) :: self
+        if( allocated(self%wrap) ) deallocate(self%wrap)
+        if( allocated(self%cmat) ) deallocate(self%cmat)
+        self%boxpd  = 0
+        self%iwinsz = 0
+        self%wdim   = 0
+        self%padsc  = 1.0
+        self%exists = .false.
+    end subroutine kill_fourier_workspace
+
+    !>  \brief  Samples the packed Fourier snapshot and its three fixed-cell
+    !!          spatial derivatives at one oversampled-lattice coordinate.
+    pure subroutine sample_fourier_with_grad( self, loc, value, dvalue_dloc, switch_margin )
+        class(pcg_fourier_workspace), intent(in)  :: self
+        real(sp),                     intent(in)  :: loc(3)
+        complex,                      intent(out) :: value, dvalue_dloc(3)
+        real(sp),                     intent(out) :: switch_margin(3)
+        real(sp) :: w(self%wdim,self%wdim,self%wdim)
+        real(sp) :: dw(self%wdim,self%wdim,self%wdim,3)
+        integer  :: i0(3)
+        if( .not. self%exists ) error stop 'sample_with_grad called on an empty Fourier workspace'
+        ! Build w and dw/dloc on the same fixed interpolation stencil.
+        call self%kbwin%apod_mat_3d_fast_grad(loc, self%iwinsz, self%wdim, i0, switch_margin, w, dw)
+        if( any(i0 < lbound(self%wrap,1)) .or. &
+            &any(i0 + self%wdim - 1 > ubound(self%wrap,1)) )then
+            error stop 'sample_with_grad location lies outside the periodic wrap table'
+        endif
+        call gather_window_grad(self, i0, w, dw, value, dvalue_dloc)
+        ! Apply native Fourier scaling to the value and all derivatives.
+        value       = self%padsc * value
+        dvalue_dloc = self%padsc * dvalue_dloc
+    end subroutine sample_fourier_with_grad
 
     !>  \brief  G_i F: gathers a full (unpacked) Fourier plane at orientation e
     !!          from the volume most recently passed to set_volume. Plane
@@ -2669,6 +2742,46 @@ contains
             end do
         end do
     end function gather_window
+
+    !>  \brief  One packed/Friedel traversal for a KB value and three spatial
+    !!          derivatives. Kept non-type-bound so the 27-tap loop can inline.
+    pure subroutine gather_window_grad( self, i0, w, dw, value, dvalue_dloc )
+        type(pcg_fourier_workspace), intent(in)  :: self
+        integer,                     intent(in)  :: i0(3)
+        real(sp),                    intent(in)  :: w(self%wdim,self%wdim,self%wdim)
+        real(sp),                    intent(in)  :: dw(self%wdim,self%wdim,self%wdim,3)
+        complex,                     intent(out) :: value, dvalue_dloc(3)
+        complex :: fcomp
+        integer :: di, dj, dk, hh, kk, mm, ph, pk, pm, ny, nz
+        ny           = self%boxpd
+        nz           = self%boxpd
+        value        = cmplx(0.,0.)
+        dvalue_dloc  = cmplx(0.,0.)
+        do dk = 1, self%wdim
+            mm = self%wrap(i0(3)+dk-1)
+            do dj = 1, self%wdim
+                kk = self%wrap(i0(2)+dj-1)
+                do di = 1, self%wdim
+                    hh = self%wrap(i0(1)+di-1)
+                    if( hh >= 0 )then
+                        ph = hh + 1
+                        pk = kk + 1; if( kk < 0 ) pk = pk + ny
+                        pm = mm + 1; if( mm < 0 ) pm = pm + nz
+                        fcomp = self%cmat(ph,pk,pm)
+                    else
+                        ph = -hh + 1
+                        pk = -kk + 1; if( -kk < 0 ) pk = pk + ny
+                        pm = -mm + 1; if( -mm < 0 ) pm = pm + nz
+                        fcomp = conjg(self%cmat(ph,pk,pm))
+                    endif
+                    ! V(loc) = sum_j w_j(loc) V_j.
+                    value = value + w(di,dj,dk) * fcomp
+                    ! dV/dloc_a = sum_j (dw_j/dloc_a) V_j.
+                    dvalue_dloc = dvalue_dloc + dw(di,dj,dk,:) * fcomp
+                end do
+            end do
+        end do
+    end subroutine gather_window_grad
 
     !>  \brief  Does this window straddle the periodic wrap boundary?
     !!

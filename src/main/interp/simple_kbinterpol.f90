@@ -38,10 +38,12 @@ type :: kbinterpol
     ! Calculators
     procedure          :: apod
     procedure          :: apod_fast
+    procedure          :: apod_fast_value_deriv
     procedure          :: apod_mat_2d
     procedure          :: apod_mat_2d_fast
     procedure          :: apod_mat_3d
     procedure          :: apod_mat_3d_fast
+    procedure          :: apod_mat_3d_fast_grad
     procedure          :: instr
 end type kbinterpol
 
@@ -168,6 +170,48 @@ contains
         r = self%oneoW * p
     end function apod_fast
 
+    !>  \brief  Joint value and derivative of the standard fast KB polynomial.
+    !!
+    !! The derivative is with respect to the signed kernel argument x. Value
+    !! and derivative share one Horner traversal, so they use the same support
+    !! decision, clamping, coefficients and single-precision arithmetic. This
+    !! routine intentionally supports only the KBWINSZ=1.5, KBALPHA=2 branch:
+    !! apod_fast falls back to the separately approximated Bessel path for any
+    !! other parameters, whose code-consistent derivative is not implemented.
+    pure elemental subroutine apod_fast_value_deriv( self, x, value, dvalue_dx )
+        class(kbinterpol), intent(in)  :: self
+        real(sp),          intent(in)  :: x
+        real(sp),          intent(out) :: value, dvalue_dx
+        real(sp), parameter :: coeffs(0:14) = [&
+            1.0000000_sp, 1.0517297e1_sp, 2.7653385e1_sp, 3.2315430e1_sp, 2.1241936e1_sp,&
+            8.9363103_sp, 2.6107175_sp, 5.6036106e-1_sp, 9.2085685e-2_sp, 1.1956698e-2_sp,&
+            1.2575214e-3_sp, 1.0930353e-4_sp, 7.9831782e-6_sp, 4.9681336e-7_sp, 2.6658846e-8_sp]
+        real(sp) :: dpdu, p, q, u
+        integer  :: i
+        if( abs(self%Whalf - 1.5_sp) > 1.e-6_sp .or. abs(self%alpha - 2.0_sp) > 1.e-6_sp )then
+            error stop 'apod_fast_value_deriv supports only KBWINSZ=1.5, KBALPHA=2'
+        endif
+        if( abs(x) > self%Whalf )then
+            value     = 0._sp
+            dvalue_dx = 0._sp
+            return
+        endif
+        q    = self%twooW * x
+        u    = max(0._sp, 1._sp - q*q)
+        p    = coeffs(14)
+        dpdu = 0._sp
+        do i = 13,0,-1
+            ! Accumulate dP/du by Horner's rule.
+            dpdu = dpdu * u + p
+            ! Accumulate P(u) by Horner's rule.
+            p    = p * u + coeffs(i)
+        enddo
+        ! Scale P(u) to the KB value.
+        value     = self%oneoW * p
+        ! Apply the chain rule dK/dx = (dK/du)(du/dx).
+        dvalue_dx = self%oneoW * dpdu * (-2._sp * self%twooW * q)
+    end subroutine apod_fast_value_deriv
+
     ! generate apodization fuction matrix in window
     pure subroutine apod_mat_2d(self, loc, iwinsz, wdim, kbw)
         class(kbinterpol), intent(in)  :: self
@@ -289,6 +333,65 @@ contains
             end do
         end do
     end subroutine apod_mat_3d_fast
+
+    !>  \brief  Standard fast normalized 3-D KB stencil and fixed-cell gradient.
+    !!
+    !! dw_dloc(:,:,:,a) differentiates the normalized stencil with respect to
+    !! loc(a), holding i0 fixed. switch_margin reports the distance to the next
+    !! half-integer nint switch on each axis; it is zero at a switch. No
+    !! derivative across a switch is implied.
+    pure subroutine apod_mat_3d_fast_grad(self, loc, iwinsz, wdim, i0, switch_margin, kbw, dw_dloc)
+        class(kbinterpol), intent(in)  :: self
+        real(sp),          intent(in)  :: loc(3)
+        integer,           intent(in)  :: iwinsz, wdim
+        integer,           intent(out) :: i0(3)
+        real(sp),          intent(out) :: switch_margin(3)
+        real(sp),          intent(out) :: kbw(wdim,wdim,wdim)
+        real(sp),          intent(out) :: dw_dloc(wdim,wdim,wdim,3)
+        real(sp) :: base(3), draw(3), raw(3)
+        real(sp) :: dx(wdim), dy(wdim), dz(wdim)
+        real(sp) :: wx(wdim), wy(wdim), wz(wdim)
+        real(sp) :: sx, sy, sz, dsx, dsy, dsz
+        integer  :: i, j
+        ! Select the fixed stencil lower corner.
+        i0            = nint(loc) - iwinsz
+        ! Measure the distance to the next stencil switch.
+        switch_margin = 0.5_sp - abs(loc - real(nint(loc), sp))
+        ! Form signed kernel arguments grid - loc.
+        base           = real(i0, sp) - loc
+        do i = 1, wdim
+            ! Evaluate raw axis weights and dK/dx.
+            call self%apod_fast_value_deriv(base + real(i-1, sp), raw, draw)
+            wx(i) = raw(1)
+            wy(i) = raw(2)
+            wz(i) = raw(3)
+            ! Convert dK/dx to dK/dloc.
+            dx(i) = -draw(1)
+            dy(i) = -draw(2)
+            dz(i) = -draw(3)
+        enddo
+        ! Sum raw weights and derivatives on each axis.
+        sx  = sum(wx); sy  = sum(wy); sz  = sum(wz)
+        dsx = sum(dx); dsy = sum(dy); dsz = sum(dz)
+        ! Normalize the three one-dimensional weight vectors.
+        wx  = wx / sx; wy = wy / sy; wz = wz / sz
+        ! Differentiate each normalized weight vector.
+        dx  = (dx - wx * dsx) / sx
+        dy  = (dy - wy * dsy) / sy
+        dz  = (dz - wz * dsz) / sz
+        do j = 1, wdim
+            do i = 1, wdim
+                ! Form the separable normalized 3-D stencil.
+                kbw(:,i,j)          = wx(:) * (wy(i) * wz(j))
+                ! Differentiate the x-axis factor.
+                dw_dloc(:,i,j,1)    = dx(:) * (wy(i) * wz(j))
+                ! Differentiate the y-axis factor.
+                dw_dloc(:,i,j,2)    = wx(:) * (dy(i) * wz(j))
+                ! Differentiate the z-axis factor.
+                dw_dloc(:,i,j,3)    = wx(:) * (wy(i) * dz(j))
+            enddo
+        enddo
+    end subroutine apod_mat_3d_fast_grad
 
     !>  \brief  is the Kaiser-Bessel instrument function
     elemental function instr( self, x ) result( r )
