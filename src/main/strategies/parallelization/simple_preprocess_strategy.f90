@@ -315,6 +315,7 @@ contains
         ! Cleanup
         call o_mov%kill
         call spproj%kill
+        call ctfiter%kill
     end subroutine inmem_execute
 
     subroutine inmem_finalize_run(self, params, cline)

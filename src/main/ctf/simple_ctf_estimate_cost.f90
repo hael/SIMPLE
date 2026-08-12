@@ -1,11 +1,12 @@
 !@descr: cost functions for CTF fitting
 module simple_ctf_estimate_cost
 use simple_core_module_api
-use simple_image,     only: image
-use simple_ctf,       only: ctf
-use simple_opt_spec,  only: opt_spec
-use simple_opt_de,    only: opt_de
-use simple_optimizer, only: optimizer
+use simple_image,           only: image
+use simple_ctf,             only: ctf
+use simple_opt_spec,        only: opt_spec
+use simple_opt_de,          only: opt_de
+use simple_optimizer,       only: optimizer
+use simple_memoize_ft_maps, only: ft_map_spafreqsq, ft_map_astigang
 implicit none
 
 public :: ctf_estimate_cost1D, ctf_estimate_cost2D, ctf_estimate_cost4Dcont
@@ -14,12 +15,10 @@ private
 
 type ctf_estimate_cost1D
     private
-    class(image),     pointer :: pspec              !< reference SQRT( power spectrum )
     class(ctfparams), pointer :: parms              !< For microscope characteristics
     real,             pointer :: spec1d(:)
     logical,          pointer :: resmsk(:)
     type(ctf)                 :: tfun               !< Transfer function
-    integer                   :: ldim(3)      = 0
     integer                   :: reslims1d(2) = 0
     contains
         procedure, private :: init1D
@@ -60,7 +59,7 @@ type ctf_estimate_cost4Dcont
     class(optimizer), pointer :: opt_obj => null()  !< optimizer object
     integer,          pointer :: inds(:,:)          !< Mask indices
     type(opt_spec)            :: ospec              !< optimizer specification object
-    real(dp)                  :: kv, cs, fraca, angast, df, phshift, smpd, amp_contr_const, wl, wlsq ! CTF
+    real(dp)                  :: kv, cs, angast, phshift, smpd, amp_contr_const, wl, wlsq ! CTF
     real(dp)                  :: conversionfactor = 0.d0    ! unit conversion
     real(dp)                  :: astigtol         = 0.05d0  !< Astigmatic tolerance (microns)
     integer                   :: ndim             = 0       !< # of dimensions to optimize
@@ -72,9 +71,9 @@ type ctf_estimate_cost4Dcont
         procedure, private :: minimize4Dcont
         procedure, private :: fdf
         procedure, private :: kill4Dcont
-        procedure          :: init     => init4Dcont
-        procedure          :: minimize => minimize4Dcont
-        procedure          :: kill     => kill4Dcont
+        procedure          :: init      => init4Dcont
+        procedure          :: minimize  => minimize4Dcont
+        procedure          :: kill      => kill4Dcont
 end type ctf_estimate_cost4Dcont
 
 contains
@@ -92,7 +91,6 @@ contains
         self%parms  => parms
         self%resmsk => resmsk
         self%reslims1d = reslims
-        self%ldim      = spec_img%get_ldim()
         self%tfun      = ctf(self%parms%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
     end subroutine init1D
 
@@ -169,29 +167,25 @@ contains
         class(ctf_estimate_cost1D), intent(inout) :: self
         real,                       intent(in)    :: df         !< average defocus
         real,                       intent(in)    :: phshift    !< canonical additive CTF phase shift
-        real          :: ang, spaFreqSq, hinv, inv_ldim
-        real(dp)      :: ctf_sqsum,dotproduct,tvalsq,tval,corr,ctf_sum
+        real          :: spaFreqSq
+        real(dp)      :: ctf_sqsum,dotproduct,tval,corr,ctf_sum
         integer       :: h, n
         ! assumes that the 1d spectrum has zero mean and
         ! unit variance over the resolution range
         call self%tfun%init(df, df, 0.)
         n          = self%reslims1d(2)-self%reslims1d(1)+1
-        inv_ldim   = 1./real(self%ldim(1))
         ctf_sqsum  = 0.d0
         dotproduct = 0.d0
         ctf_sum    = 0.d0
         do h = self%reslims1d(1),self%reslims1d(2)
             if( .not.self%resmsk(h) ) cycle
             ! |CTF|
-            hinv      = real(h) * inv_ldim
-            spaFreqSq = hinv * hinv
-            ang       = atan2(0.,real(h))
+            spaFreqSq = ft_map_spafreqsq(h, 0)
             tval      = real(self%tfun%eval_canonical(spaFreqSq, 0., phshift),dp)
-            tvalsq    = min(1.d0,max(tval*tval,DSMALL))
-            tval      = dsqrt(tvalsq)
+            tval      = min(1.d0,max(abs(tval),DSMALL))
             ! correlation sums
             ctf_sum    = ctf_sum    + tval
-            ctf_sqsum  = ctf_sqsum  + tvalsq
+            ctf_sqsum  = ctf_sqsum  + tval*tval
             dotproduct = dotproduct + tval*real(self%spec1d(h),dp)
         end do
         ! one pass correlation
@@ -289,8 +283,8 @@ contains
         real,                       intent(in)    :: angast      !< angle of astigmatism
         real,                       intent(in)    :: phshift !< additive phase shift (radians)
         real, pointer :: prmat(:,:,:)
-        real          :: ang, spaFreqSq, hinv, kinv, inv_ldim(3)
-        real(dp)      :: ctf_sqsum,dotproduct,tvalsq,tval,corr,fpen,rn
+        real          :: ang, spaFreqSq
+        real(dp)      :: ctf_sqsum,dotproduct,tval,corr,fpen,rn
         integer       :: h,mh,k,mk, i,j, l
         ! initialize, it assumes that the reference(img) ins zero mean and
         ! unit variance over the resolution range
@@ -299,10 +293,9 @@ contains
         rn = real(self%ninds,dp)
         mh = abs(self%flims(1,1))
         mk = abs(self%flims(2,1))
-        inv_ldim   = 1./real(self%ldim)
         ctf_sqsum  = 0.d0
         dotproduct = 0.d0
-        !$omp parallel do default(shared) private(h,hinv,k,kinv,i,j,spaFreqSq,ang,tval,tvalsq,l) &
+        !$omp parallel do default(shared) private(h,k,i,j,spaFreqSq,ang,tval,l) &
         !$omp schedule(static) proc_bind(close) reduction(+:ctf_sqsum,dotproduct)
         do l = 1,self%ninds
             h = self%inds(1,l)
@@ -310,15 +303,12 @@ contains
             i = min(max(1,h+mh+1),self%ldim(1))
             j = min(max(1,k+mk+1),self%ldim(2))
             ! |CTF|
-            hinv      = real(h) * inv_ldim(1)
-            kinv      = real(k) * inv_ldim(2)
-            spaFreqSq = hinv * hinv + kinv * kinv
-            ang       = atan2(real(k),real(h))
+            spaFreqSq = ft_map_spafreqsq(h, k)
+            ang       = ft_map_astigang(h, k)
             tval      = real(self%tfun%eval_canonical(spaFreqSq, ang, phshift),dp)
-            tvalsq    = min(1.d0,max(tval*tval,0.000001d0))
-            tval      = dsqrt(tvalsq)
+            tval      = min(1.d0,max(tval,DSMALL))
             ! correlation sums
-            ctf_sqsum  = ctf_sqsum  + tvalsq
+            ctf_sqsum  = ctf_sqsum  + tval*tval
             dotproduct = dotproduct + tval*real(prmat(i,j,1),dp)
         end do
         !$omp end parallel do
@@ -380,9 +370,9 @@ contains
         real(dp),                       intent(in)    :: vec(D)
         real(dp),                       intent(inout) :: f, grad(D)
         real, pointer :: prmat(:,:,:)
-        real(dp)      :: dcc_dangast(2),dcc_ddfx(2),dcc_ddfy(2),dcc_dphshift(2),gpen(2), inv_ldim(3)
-        real(dp)      :: dfx,dfy,angast,phshift, df_eff,ang,spaFreqSq,costerm,signctf,  denom,denomsq
-        real(dp)      :: ctfsq_sum,dotproduct,rn,abstval,tval,tvalsh,hinv,kinv,ddf_dangast,corr,fpen
+        real(dp)      :: dcc_dangast(2),dcc_ddfx(2),dcc_ddfy(2),dcc_dphshift(2),gpen(2)
+        real(dp)      :: dfx,dfy,angast,phshift, df_eff,ang,spaFreqSq,costerm,signctf,denom,denomsq
+        real(dp)      :: ctfsq_sum,dotproduct,rn,abstval,tval,tvalsh,ddf_dangast,corr,fpen
         real(dp)      :: dabsctf_ddf,ddf_ddfx,ddf_ddfy,phshift_eff,absctf_obs,A,dabsctf_dphshift
         integer       :: h,mh,k,mk, i,j, l
         ! variables
@@ -392,11 +382,11 @@ contains
         if( D >= 3 ) angast = vec(3)            ! radians
         phshift = self%phshift
         if( D == 4 ) phshift = vec(4)           ! radians
+        phshift = phshift + self%amp_contr_const
         ! init
         call self%pspec%get_rmat_ptr(prmat)
         mh           = abs(self%flims(1,1))
         mk           = abs(self%flims(2,1))
-        inv_ldim     = 1.d0/real(self%ldim,dp)
         rn           = real(self%ninds,dp)
         ctfsq_sum    = 0.d0
         dotproduct   = 0.d0
@@ -404,7 +394,7 @@ contains
         dcc_ddfy     = 0.d0
         dcc_dangast  = 0.d0
         dcc_dphshift = 0.d0
-        !$omp parallel do default(shared) private(h,hinv,k,kinv,i,j,l,spaFreqSq,ang,costerm,df_eff,phshift_eff) &
+        !$omp parallel do default(shared) private(h,k,i,j,l,spaFreqSq,ang,costerm,df_eff,phshift_eff) &
         !$omp private(tval,abstval,absctf_obs,signctf,tvalsh,dabsctf_ddf,ddf_ddfx,ddf_ddfy,ddf_dangast,dabsctf_dphshift)&
         !$omp schedule(static) proc_bind(close) reduction(+:ctfsq_sum,dotproduct,dcc_ddfx,dcc_ddfy,dcc_dangast,dcc_dphshift)
         do l = 1,self%ninds
@@ -413,14 +403,13 @@ contains
             i = min(max(1,h+mh+1),self%ldim(1))
             j = min(max(1,k+mk+1),self%ldim(2))
             ! |CTF|
-            hinv        = real(h,dp) * inv_ldim(1)
-            kinv        = real(k,dp) * inv_ldim(2)
-            spaFreqSq   = hinv * hinv + kinv * kinv
-            ang         = datan2(real(k,dp),real(h,dp))
+            spaFreqSq   = real(ft_map_spafreqsq(h, k),dp)
+            ang         = real(ft_map_astigang(h, k),dp)
             costerm     = dcos(2.d0*(ang-angast))
             df_eff      = 0.5d0*(dfx+dfy + costerm*(dfx-dfy))
-            phshift_eff = DPI*self%wl*spaFreqSq*(df_eff-0.5d0*self%wlsq*spaFreqSq*self%Cs) + phshift + self%amp_contr_const
+            phshift_eff = DPI*self%wl*spaFreqSq*(df_eff-0.5d0*self%wlsq*spaFreqSq*self%Cs) + phshift
             tval        = dsin(phshift_eff)
+            tvalsh      = dcos(phshift_eff)
             abstval     = dabs(tval)
             absctf_obs  = real(prmat(i,j,1),dp)
             ! sums
@@ -428,21 +417,24 @@ contains
             ctfsq_sum  = ctfsq_sum  + abstval*abstval
             ! gradients
             signctf     = dsign(1.d0, tval)
-            tvalsh      = dcos(phshift_eff)
             dabsctf_ddf = signctf * DPI*self%wl*spaFreqSq * tvalsh
             ! gradients defocus
             ddf_ddfx    = 0.5d0*(1.d0+costerm)
             ddf_ddfy    = 0.5d0*(1.d0-costerm) ! also = 1 - ddf_ddfx
-            dcc_ddfx    = dcc_ddfx + dabsctf_ddf*ddf_ddfx*[absctf_obs, abstval]
-            dcc_ddfy    = dcc_ddfy + dabsctf_ddf*ddf_ddfy*[absctf_obs, abstval]
+            dcc_ddfx(1) = dcc_ddfx(1) + dabsctf_ddf*ddf_ddfx*absctf_obs
+            dcc_ddfx(2) = dcc_ddfx(2) + dabsctf_ddf*ddf_ddfx*abstval
+            dcc_ddfy(1) = dcc_ddfy(1) + dabsctf_ddf*ddf_ddfy*absctf_obs
+            dcc_ddfy(2) = dcc_ddfy(2) + dabsctf_ddf*ddf_ddfy*abstval
             if( D >= 3 )then
                 ! gradients astigmatism
-                ddf_dangast = (dfx-dfy) * dsin(2.d0*(ang-angast))
-                dcc_dangast = dcc_dangast + dabsctf_ddf*ddf_dangast*[absctf_obs, abstval]
+                ddf_dangast    = (dfx-dfy) * dsin(2.d0*(ang-angast))
+                dcc_dangast(1) = dcc_dangast(1) + dabsctf_ddf*ddf_dangast*absctf_obs
+                dcc_dangast(2) = dcc_dangast(2) + dabsctf_ddf*ddf_dangast*abstval
                 if( D == 4 )then
                     ! gradients phase shift
                     dabsctf_dphshift = signctf * tvalsh
-                    dcc_dphshift     = dcc_dphshift + dabsctf_dphshift*[absctf_obs, abstval]
+                    dcc_dphshift(1)  = dcc_dphshift(1) + dabsctf_dphshift*absctf_obs
+                    dcc_dphshift(2)  = dcc_dphshift(2) + dabsctf_dphshift*abstval
                 endif
             endif
         end do
@@ -509,27 +501,21 @@ contains
 
     pure subroutine kill1D( self )
         class(ctf_estimate_cost1D), intent(inout) :: self
-        self%pspec  => null()
-        self%parms  => null()
-        self%resmsk => null()
+        nullify(self%spec1d,self%parms,self%resmsk)
     end subroutine kill1D
 
     subroutine kill2D( self )
         class(ctf_estimate_cost2D), intent(inout) :: self
-        self%pspec => null()
-        self%parms => null()
-        self%inds  => null()
+        nullify(self%pspec,self%parms,self%inds)
         call self%ospec%kill
         call self%diffevol%kill
     end subroutine kill2D
 
     subroutine kill4Dcont( self )
         class(ctf_estimate_cost4Dcont), intent(inout) :: self
-        self%pspec => null()
-        self%parms => null()
-        self%inds  => null()
+        call self%ospec%kill
         if(associated(self%opt_obj)) call self%opt_obj%kill
-        self%opt_obj => null()
+        nullify(self%pspec,self%parms,self%inds,self%opt_obj)
     end subroutine kill4Dcont
 
 end module simple_ctf_estimate_cost

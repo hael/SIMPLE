@@ -370,7 +370,7 @@ contains
                     endif
                     ! CTF (phase shift is stored in radians)
                     if (l_ctf) then
-                ker = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
+                        ker = ft_map_ctf_kernel(h, k, sum_df, diff_df, angast, ctfvals%phshift, &
                             &amp_contr_const, wl, half_wl2_cs)
                         if (l_flip) then
                             ! Input images are already phase-flipped, so the Fourier signal is

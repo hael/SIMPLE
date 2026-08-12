@@ -11,7 +11,7 @@ private
 #include "simple_local_flags.inc"
 
 type :: ctf_estimate_iter
-    type(image) :: micrograph, pspec, thumbnail, img_jpg, pspec4viz
+    type(image) :: micrograph, thumbnail, img_jpg, pspec4viz
   contains
       procedure          :: iterate
       procedure, private :: gen_thumbnail
@@ -160,7 +160,6 @@ contains
     subroutine kill( self )
         class(ctf_estimate_iter), intent(inout) :: self
         call self%micrograph%kill
-        call self%pspec%kill
         call self%thumbnail%kill
         call self%img_jpg%kill
         call self%pspec4viz%kill

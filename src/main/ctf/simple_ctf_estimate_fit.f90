@@ -4,6 +4,7 @@ use simple_core_module_api
 use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_ctf_estimate_cost, only: ctf_estimate_cost1D,ctf_estimate_cost2D,ctf_estimate_cost4Dcont
+use simple_memoize_ft_maps,   only: memoize_ft_maps, ft_map_spafreqsq, ft_map_astigang, forget_ft_maps
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
 use simple_timer
@@ -60,7 +61,6 @@ type ctf_estimate_fit
     integer                       :: ldim_box(3)  = 0        ! box logical dimensions
     integer                       :: ldim_mic(3)  = 0        ! logical dimensions
     integer                       :: npix_msk     = 0        ! # pixels in non-redudant resolution mask
-    logical                       :: l_nano       = .false.
     logical                       :: exists       = .false.
     integer(timer_int_kind)       :: t, t_tot
     real(timer_int_kind)          :: rt_gen_tiles, rt_mic2spec, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch, rt_icefrac
@@ -73,7 +73,7 @@ contains
     procedure          :: get_pspec
     procedure          :: get_ctfres
     procedure          :: get_icefrac
-    procedure          :: get_parms
+    procedure, private :: get_parms
     procedure          :: get_astig
     ! CTF fitting
     procedure, private :: gen_resmsk
@@ -90,7 +90,7 @@ contains
     ! scoring, display & output
     procedure          :: plot_ctf
     procedure          :: write_doc
-    procedure          :: write_star
+    procedure, private :: write_star
     procedure, private :: calc_ctfres
     procedure, private :: calc_icefrac
     procedure          :: write_diagnostic
@@ -165,6 +165,7 @@ contains
         do sh = self%freslims1d(1),self%freslims1d(2)
             self%resmsk1D(sh) = .true.
         enddo
+        call memoize_ft_maps(self%ldim_box, self%smpd)
         ! generate windows
         if( BENCH ) self%t = tic()
         call self%gen_tiles
@@ -723,16 +724,18 @@ contains
             call ctfcosts(i)%init(self%pspec, self%flims1d, self%freslims1d,&
                 &self%roavg_spec1d, self%parms, self%resmsk1D)
             dfs(i) = self%df_lims(1) + real(i-1)*self%df_step
-            do iph = 1,nphases
-                phase = self%parms%phshift
-                if( self%parms%l_fit_phshift ) phase = min(self%phshift_lims(2), &
-                    &self%phshift_lims(1)+real(iph-1)*self%phshift_step)
-                phase_cost = ctfcosts(i)%cost(dfs(i), phase)
-                if( phase_cost < costs(i) )then
-                    costs(i)       = phase_cost
-                    best_phases(i) = phase
-                endif
-            enddo
+            if( self%parms%l_fit_phshift )then
+                do iph = 1,nphases
+                    phase = min(self%phshift_lims(2), self%phshift_lims(1)+real(iph-1)*self%phshift_step)
+                    phase_cost = ctfcosts(i)%cost(dfs(i), phase)
+                    if( phase_cost < costs(i) )then
+                        costs(i)       = phase_cost
+                        best_phases(i) = phase
+                    endif
+                enddo
+            else
+                costs(i) = ctfcosts(i)%cost(dfs(i), self%parms%phshift)
+            endif
             call ctfcosts(i)%kill
         enddo
         !$omp end parallel do
@@ -802,9 +805,13 @@ contains
     subroutine subtr_backgr( self, img )
         class(ctf_estimate_fit), intent(inout) :: self
         class(image),            intent(inout) :: img
-        real, pointer :: prmat(:,:,:)
-        real          :: backgr(self%box,self%box), hp_rad, hp_radsq, radsq
-        integer       :: conv_box,hconv_box,cenbox, i,j,l,r,d,u,ni,nj,rjsq
+        real,     pointer     :: prmat(:,:,:)
+        real(dp), allocatable :: sat(:,:)
+        real(dp)              :: backgr, boxsum, rowsum
+        real                  :: hp_rad
+        integer               :: conv_box,hconv_box,cenbox,hp_radsq
+        integer               :: i,j,l,r,d,u,npix
+        integer               :: lo(self%box),hi(self%box),width(self%box),distsq(self%box)
         call img%get_rmat_ptr(prmat)
         hp_rad   = real(self%box)*self%smpd/self%hp
         hp_radsq = floor(hp_rad*hp_rad)
@@ -812,27 +819,44 @@ contains
         if(is_even(conv_box)) conv_box = conv_box + 1
         hconv_box = (conv_box-1)/2
         cenbox    = self%box/2+1 ! is the pixel address of central spot
-        !$omp parallel do default(shared) private(i,j,ni,nj,l,r,u,d,radsq,rjsq)&
-        !$omp schedule(static) proc_bind(close)
-        do j=1,self%box
-            d    = max(1,j-hconv_box)
-            u    = min(self%box,j+hconv_box)
-            nj   = u-d+1
-            rjsq = (j-cenbox)**2
-            do i=1,self%box
-                radsq = (i-cenbox)**2+rjsq
-                if( radsq <= hp_radsq )then
-                    backgr(i,j) = prmat(i,j,1)
+        do i=1,self%box
+            lo(i)     = max(1,i-hconv_box)
+            hi(i)     = min(self%box,i+hconv_box)
+            width(i)  = hi(i)-lo(i)+1
+            distsq(i) = (i-cenbox)**2
+        enddo
+        ! Build a summed-area table
+        allocate(sat(0:self%box,0:self%box),source=0._dp)
+        do j = 1,self%box
+            rowsum = 0._dp
+            do i = 1,self%box
+                rowsum   = rowsum + real(prmat(i,j,1),dp)
+                sat(i,j) = rowsum
+            enddo
+        enddo
+        do j = 1,self%box
+            do i = 1,self%box
+                sat(i,j) = sat(i,j) + sat(i,j-1)
+            enddo
+        enddo
+        ! subtract in place
+        do j = 1,self%box
+            d = lo(j)
+            u = hi(j)
+            do i = 1,self%box
+                if( distsq(i)+distsq(j) <= hp_radsq )then
+                    prmat(i,j,1) = 0.
                 else
-                    l  = max(1,i-hconv_box)
-                    r  = min(self%box,i+hconv_box)
-                    ni = r-l+1
-                    backgr(i,j) = sum(prmat(l:r,d:u,1)) / real(ni*nj)
+                    l      = lo(i)
+                    r      = hi(i)
+                    npix   = width(i)*width(j)
+                    boxsum = sat(r,u)-sat(l-1,u)-sat(r,d-1)+sat(l-1,d-1)
+                    backgr = boxsum/real(npix,dp)
+                    prmat(i,j,1) = prmat(i,j,1)-real(backgr)
                 endif
-            end do
-        end do
-        !$omp end parallel do
-        prmat(1:self%box,1:self%box,1) = prmat(1:self%box,1:self%box,1) - backgr(:,:)
+            enddo
+        enddo
+        deallocate(sat)
     end subroutine subtr_backgr
 
     !>  \brief  is for making a |CTF| spectrum image
@@ -886,7 +910,7 @@ contains
             j = min(max(1,k+mk+1),self%box)
             do h=lims(1,1),lims(1,2)
                 i = min(max(1,h+mh+1),self%box)
-                call img_out%set([i,j,1],sqrt(csq_fast(img%get_fcomp2D(h,k))))
+                call img_out%set([i,j,1], abs(img%get_fcomp2D(h,k)))
             end do
         end do
     end subroutine ft2img
@@ -1017,13 +1041,11 @@ contains
 
             integer function ctfres_shell()
                 real, parameter :: low_threshold          = 0.1
-                real, parameter :: high_threshold         = 0.66
                 real, parameter :: significance_threshold = 0.5
-                integer :: h, n_abovelow, n_abovehigh, n_abovesig, hstart
+                integer :: h, n_abovelow, n_abovesig, hstart
                 logical :: found
                 found        = .false.
                 n_abovelow   = 0
-                n_abovehigh  = 0
                 n_abovesig   = 0
                 ctfres_shell = -1
                 ! hstart = nint(sqrt(tfun%SpaFreqSqAtNthZero(1,phshift,deg2rad(self%parms%angast)))*real(self%box)/scale) ! ctffind 4.1.9
@@ -1038,7 +1060,6 @@ contains
                     endif
                     if( frc(h) > low_threshold )          n_abovelow  = n_abovelow+1
                     if( frc(h) > significance_threshold ) n_abovesig  = n_abovesig+1
-                    if( frc(h) > high_threshold )         n_abovehigh = n_abovehigh+1
                 enddo
                 ! signal all the way
                 if( n_abovesig == nshells-hstart+1 ) ctfres_shell = nshells
@@ -1198,8 +1219,8 @@ contains
 
             ! for making a CTF & calculate #of astigmatism extrema
             subroutine gen_profiles
-                real          :: sc_correction, ang, spaFreqSq, ctf, nextr, h,k
-                integer       :: i,j,sh
+                real          :: sc_correction, ang, spaFreqSq, ctf, nextr
+                integer       :: i,j,sh,h,k
                 nvals1d = 0
                 spec1d  = 0.
                 sc_correction = scale**2
@@ -1209,8 +1230,8 @@ contains
                     do i=1,self%box
                         h         = pix2logical(i)
                         k         = pix2logical(j)
-                        ang       = atan2(real(k),real(h))
-                        spaFreqSq = sc_correction *(h*h + k*k) / real(self%box*self%box)
+                        ang       = ft_map_astigang(h,k)
+                        spaFreqSq = sc_correction * ft_map_spafreqsq(h,k)
                         ! # of extrema
                         nextr = real(tfun%nextrema(spaFreqSq, ang, phshift))
                         ! CTF
@@ -1248,19 +1269,19 @@ contains
                 integer :: i,j,h,k,n
                 minshsq = minsh*minsh
                 maxshsq = maxsh*maxsh
-                cross_halfwidthsq = cross_halfwidth*cross_halfwidth
+                cross_halfwidthsq = cross_halfwidth**2
                 n     = 0
                 sum   = 0.
                 sumsq = 0.
                 do j = 1,self%box
                     k   = pix2logical(j)
                     ksq = real(k*k)
-                    if( ksq <= cross_halfwidth )cycle
-                    if( ksq >= maxshsq )        cycle
+                    if( ksq <= cross_halfwidthsq ) cycle
+                    if( ksq >= maxshsq )           cycle
                     do i = 1,self%box
                         h   = pix2logical(i)
                         hsq = real(h*h)
-                        if( hsq <= cross_halfwidth )cycle
+                        if( hsq <= cross_halfwidthsq ) cycle
                         shsq = hsq+ksq
                         if( shsq >= maxshsq ) cycle
                         if( shsq <= minshsq ) cycle
@@ -1570,6 +1591,7 @@ contains
         call self%pspec_ctf%kill
         call self%pspec4ctfres%kill
         call self%cost2D%kill
+        call self%costcont%kill
         if( allocated(self%roavg_spec1d) ) deallocate(self%roavg_spec1d)
         if( allocated(self%cc_msk) )       deallocate(self%cc_msk)
         if( allocated(self%resmsk1D) )     deallocate(self%resmsk1D)
@@ -1592,6 +1614,7 @@ contains
             self%ntotpatch = 0
             self%npatches  = 0
         endif
+        call forget_ft_maps
         self%exists = .false.
     end subroutine kill
 

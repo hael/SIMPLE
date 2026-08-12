@@ -218,6 +218,8 @@ contains
         end do
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        ! cleanup
+        call ctfiter%kill
         call o%kill
         call spproj%kill
         call intg_forctf%kill

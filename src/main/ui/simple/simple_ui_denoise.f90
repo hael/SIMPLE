@@ -29,7 +29,7 @@ contains
         call new_ppca_volvar(prgtab)
     end subroutine construct_denoise_programs
 
-subroutine new_icm2D( prgtab )
+    subroutine new_icm2D( prgtab )
         class(ui_hash), intent(inout) :: prgtab
         ! PROGRAM SPECIFICATION
         call icm2D%new(&
