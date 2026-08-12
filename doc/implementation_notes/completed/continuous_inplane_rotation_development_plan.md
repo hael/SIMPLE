@@ -1,20 +1,17 @@
 # Continuous In-Plane Rotation Refinement
 
-> Historical development record. The experimental continuous callback route
-> and its coefficient API have been removed. The production interface is now
-> `inpl_cont=yes|no`, where `yes` selects only the optimized joint formulation.
-> `no` explicitly constructs the legacy callback route; eligible `yes`
-> replaces every callback consumer, including probabilistic table profiling,
-> with joint `(sx,sy,rotind_frac)` optimization. Probability artifacts retain
-> only the rounded index/shift/score, and the final assignment reruns the joint
-> solve before durable fractional `e3` is written. Current joint initialization
-> discards incoming in-plane state, performs one callback-equivalent all-angle
-> selection at the supplied shift, and never runs the legacy 5-by-5 shift scan
-> or uses persisted fractional `e3` as its seed. Joint failure never falls back
-> to the callback. See
+> [!success] Project closed — 2026-08-12
+> The planned raw-Euclidean numerical work, joint `(sx,sy,rotind_frac)`
+> optimizer, `abinitio2D` integration, metadata/restart handling, and standalone
+> `refine3D` transfer are complete. The production interface is
+> `inpl_cont=yes|no`. `no` preserves the legacy discrete-angle callback path;
+> eligible `yes` follows the current polish-only policy by leaving legacy
+> selection and probability-table construction unchanged, then applying one
+> bounded local joint refinement to the committed pose. See
 > `doc/algorithms/continuous_inplane_refinement_abinitio2D.md` and the workflow
-> policy documents for the current design. All callback-mode and three-valued
-> interface statements below are retained only as development history.
+> policy documents for the authoritative design. The experimental continuous
+> callback, three-valued interface, superseded routing decisions, and
+> chronological pending entries below are retained only as development history.
 
 ## Summary
 
@@ -89,20 +86,25 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Focused route-identity, Stage 1, and SGD regression tests also passed on Oracle Linux; conventional CTest is not used as the SIMPLE acceptance gate because the project test workflow is direct `simple_test_*` execution.
   - Full six-stage, 30-iteration default-off Euclidean `abinitio2D` completed normally; corrected final metadata validation passed with 200 active particles, zero off-grid/invalid/non-finite values, 176 rotations, and 3 class-average records using `box_crop=88`.
   - The opt-in Euclidean workflow and final metadata validation also completed normally with valid 176-grid metadata. Real-data opt-in validation records off-grid count but does not require an off-grid winner; synthetic Stage 1/Phase 3 validation proves continuous-angle movement.
-- [ ] Phase 4B: classical Euclidean 3D metadata and workflow wiring.
-  - The 3D gateway implementation is present but intentionally not accepted or committed until the 2D pathway is fully reviewed.
-  - 3D workflow validation and any required 3D corrections remain pending.
-- [ ] 2D-only completion: production metadata and final regression.
+- [x] Phase 4B: classical Euclidean 3D metadata and workflow wiring.
+  - Completed for standalone `refine3D`; implementation, policy, metadata,
+    restart, synthetic, default-off, opt-in, and real-data evidence are recorded
+    in `continuous_inplane_refine3D_transfer_plan.md`.
+- [x] 2D-only completion: production metadata and final regression.
   - Added the continuous in-plane metadata test to verify persisted continuous `e3`, compatible integer `inpl`, and class-average metadata after a real `abinitio2D` run.
   - The check reads the final project metadata; it does not depend on temporary `algndoc_*.simple` files, which the normal workflow removes during cleanup.
   - When the workflow is run with `mkdir=yes`, launch from the repository `build/` directory and validate the copied project inside a build-local execution directory such as `build/1_abinitio2D`; do not place generated artifacts at the repository root.
   - The full six-stage, 30-iteration Oracle Linux default-off Euclidean workflow completed with `SIMPLE_ABINITIO2D NORMAL STOP`.
   - Corrected final-project metadata validation passed with `ACTIVE=200`, `OFFGRID=0`, `INVALID=0`, `NONFINITE=0`, `ROTATIONS=176`, and `CLASS_AVERAGES=3`, using the workflow's effective `box_crop=88`.
   - The validator must use the effective workflow crop; constructing a default 288-rotation grid produces a false failure against a 176-rotation production search.
-  - Pending Oracle gates: classical checkpoint stop/resume, public `abinitio2D` execution with the non-Euclidean `cc` objective (the internal cluster2D path is not a public `simple_exec prg`), and a fresh real-data Euclidean run with final-project metadata inspection.
+  - At this historical checkpoint, the remaining Oracle gates were classical
+    checkpoint stop/resume, a public non-Euclidean `cc` control, and a fresh
+    real-data Euclidean run with final-project metadata inspection. The
+    raw-Euclidean completion evidence is recorded in the subsequent bullets;
+    broader CC support is outside this plan's accepted scope.
   - Checkpoint creation and resume now pass in `build/1_abinitio2D`: stage 1 reached `last_iter=5`, persisted the required reference stacks, stage 2 resumed from iteration 5, completed through iteration 10, generated final class averages/rankings, and ended with `SIMPLE_ABINITIO2D NORMAL STOP`. The resume must run from the build-local execution directory because `mkdir=no` preserves relative reference paths.
   - Restart metadata validation also passed: `ACTIVE=200`, `OFFGRID=200`, `INVALID=0`, `NONFINITE=0`, `ROTATIONS=288`, and `CLASS_AVERAGES=3`.
-  - The public `abinitio2D` `objfun=cc` alternate path completed clustering and class-average generation but exposed an existing finalization bug: sigma2 metadata was registered unconditionally although `cc` correctly produces no `sigma2_it_*.star` file. Finalization now skips this optional project entry when the file is absent; Oracle rebuild and rerun remain pending.
+  - The public `abinitio2D` `objfun=cc` alternate path completed clustering and class-average generation but exposed an existing finalization bug: sigma2 metadata was registered unconditionally although `cc` correctly produces no `sigma2_it_*.star` file. This historical CC observation did not block acceptance of the raw-Euclidean continuous feature.
   - The metadata test enforces grid-aligned `e3` for `inpl_cont=no` and requires at least one final continuous `e3` for both active routes. The synthetic validation reports continuous callback and continuous joint recovery separately.
   - The post-push default-off Oracle metadata regression initially exposed stale/off-grid `e3` propagation; the orientation writer now reconstructs grid `e3` from `inpl` unless the explicit continuous gateway marks a valid angle. The full six-stage Oracle rerun passed with the corrected 176-rotation validator.
   - The opt-in gateway now continues through `prob`, `prob_snhc`, the final staged probabilistic invocation, and the terminal dense all-particle pass. Candidate sampling and selection stay discrete; only the selected candidate is polished before orientation assignment.
@@ -111,7 +113,8 @@ The existing integer `irot` interface remains compatible throughout the transiti
   - Both active routes bypass angle changes during previous-reference shift seeding, so callback and joint refinement start from the same selected discrete candidate and native shift seed.
   - The callback route uses only alternating continuous angle/shift refinement. The joint route uses only joint `(sx,sy,theta)` L-BFGS-B. A pure continuous angle improvement is accepted by the callback route even when the shift is unchanged.
   - The current joint gradient is a correctness-first prototype: one optimizer evaluation allocates four arrays and makes three coefficient-generator calls, including three unused inverse FFT loss vectors. A coefficient-only, thread-local implementation is the required performance follow-up.
-  - After these gates, restore and validate the deferred 3D extension.
+  - The subsequently completed standalone 3D transfer is documented in
+    `continuous_inplane_refine3D_transfer_plan.md`.
 
 ## Implementation Changes
 

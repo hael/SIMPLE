@@ -1,17 +1,14 @@
 # Continuous in-plane rotation transfer plan for `refine3D`
 
-> **Current policy (2026-08-07).** This file is a historical implementation
-> record. The earlier `refine=shc`-only gate, rejection of probabilistic modes,
-> and invalid-result callback fallback described in later phase notes are
-> superseded. The authoritative policy is
-> `doc/policies/refine3D_policy.md`: `inpl_cont=no` uses the legacy callback;
-> eligible `inpl_cont=yes` replaces every callback use with joint
-> `(sx,sy,rotind_frac)` optimization, including probabilistic candidate
-> profiling, and never falls back to the callback. Each joint solve discards
-> incoming in-plane state, selects the best discrete cell once at the supplied
-> native shift, and then optimizes within plus or minus two cells. The continuous
-> route does not use the legacy 5-by-5 shift/all-angle coarse initializer or a
-> persisted fractional restart seed.
+> [!success] Project closed — 2026-08-12
+> Phases 3D-0 through 3D-5 and their hardening follow-ups are complete. The
+> authoritative production policy is `doc/policies/refine3D_policy.md`:
+> `inpl_cont=no` preserves the legacy discrete-angle callback route, while
+> eligible `inpl_cont=yes` preserves the same legacy candidate selection and
+> applies one bounded local joint `(sx,sy,rotind_frac)` refinement to the
+> committed pose. The historical phase narrative below records intermediate
+> designs and validation evidence; superseded callback-replacement and fallback
+> descriptions are not current behavior or open work.
 
 ## Project summary and quick start
 
@@ -183,9 +180,9 @@ particles, 1,930 continuous angles, and zero invalid indices, non-finite values,
 or integer/angle mismatches on the 440-angle grid.
 
 Those outputs completed the original feature acceptance. The peer-review
-hardening added afterward must pass its targeted Oracle checks before the
-current worktree is committed. Another long multi-iteration run is not
-required unless the short smoke checks expose a regression.
+hardening added afterward also passed its targeted Oracle checks, as recorded
+below. No additional long multi-iteration run was required after the short
+smoke checks showed no regression.
 
 ## Peer-review follow-up: P2 and P3 findings
 
