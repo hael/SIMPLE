@@ -30,21 +30,26 @@ pose optimizer.
 2. Keep the existing fresh random particle mini-batch: 60 percent by default,
    capped by SIMPLE's existing `NSAMPLE_DEFAULT_2D=200000` limit. Do not add a
    second sample cap and do not reuse or modify legacy `update_frac`.
-3. Keep zero-support class-average preservation. It prevents model
-   destruction but does not by itself attract particles back to a class.
-4. Add a table-free class candidate frontier so one noisy iteration cannot
+3. Replace the zero-only safeguard with SIMPLE's actual minimum viable class
+   support: two particles. `prep_strategy2D_glob` converts populations below
+   two to zero before search, so a one-particle class is already dead to the
+   next matcher iteration.
+4. Protect a previously viable class with its two best incumbent particles.
+   This is a minimum support floor, not an empty-class rescue: it applies only
+   to a class that previously had at least two members and a valid model.
+5. Add a table-free class candidate frontier so one noisy iteration cannot
    make every particle abandon a previously meaningful class merely because
    all classes compete globally on every update.
-5. Keep one hard winner per sampled particle. Do not restore SoftMax, top-K
+6. Keep one final hard winner per sampled particle. Do not restore SoftMax, top-K
    likelihood tables, `eulprob_tab2D`, or the obsolete table SGD path.
-6. Keep continuous in-plane L-BFGS-B as the reference local polisher. The
+7. Keep continuous in-plane L-BFGS-B as the reference local polisher. The
    development command currently rejects `inpl_cont=yes`; integrating that
    independent feature is not part of the class-stability experiment.
-7. Do not introduce Adam, AdamW, or another stateful optimizer for the
+8. Do not introduce Adam, AdamW, or another stateful optimizer for the
    three-variable per-particle pose solve. That small bounded problem has exact
    gradients, and persistent moments or weight decay would add state and bias
    without addressing class collapse.
-8. Retain the proposed direct joint projected solver only as deferred research.
+9. Retain the proposed direct joint projected solver only as deferred research.
    It should be reconsidered only if a focused comparison shows it matches
    L-BFGS-B final loss and pose quality with meaningfully fewer evaluations or
    lower workflow runtime.
@@ -89,7 +94,8 @@ sampling API rather than add another sampler or cap.
 For every sampled particle, the current stream:
 
 1. enters `strategy2D_greedy`;
-2. skips classes whose current population is zero;
+2. reads class populations through `prep_strategy2D_glob`, which rewrites
+   populations below two to zero, and skips those classes;
 3. evaluates all rotation bins of every remaining class with
    `gen_raw_euclid_vals`;
 4. selects the single minimum raw Euclidean class/rotation state; and
@@ -99,7 +105,7 @@ For every sampled particle, the current stream:
 In mathematical form,
 
 \[
-(c_i,r_i)=\arg\min_{c\in C_{\mathrm{supported}},r}L_i(c,r,s_i),
+(c_i,r_i)=\arg\min_{c\in C_{\mathrm{viable}},r}L_i(c,r,s_i),
 \]
 
 followed by bounded refinement of `s_i` for the selected `(c_i,r_i)`.
@@ -107,24 +113,40 @@ followed by bounded refinement of `s_i` for the selected `(c_i,r_i)`.
 There is no candidate table, SoftMax, top-K posterior, or global
 class-frontier assignment in this path.
 
-### Existing class preservation
+### Existing class-preservation gap
 
 Before streamed restoration clears the accumulators, the class averager backs
-up the previous class images. If a class receives zero particles in the
-current update and a previous model exists, `cavger_restore_cavgs` copies the
-previous image instead of writing a zero image.
+up the previous class images. If a class receives exactly zero particles in
+the current update and a previous model exists, `cavger_restore_cavgs` copies
+the previous image instead of writing a zero image.
+
+That boundary does not match search eligibility. `prep_strategy2D_glob`
+contains the explicit rule
+
+```fortran
+where( s2D%cls_pops < 2 )
+    ! ignoring classes with one particle
+    s2D%cls_pops = 0
+end where
+```
+
+Therefore a one-particle class is reconstructed as a singleton but is treated
+as dead by the next search. The protection threshold must be `pop < 2`, not
+`pop == 0`.
 
 This safeguard is necessary but incomplete:
 
-- it preserves the model;
+- it preserves the model only at population zero;
+- it does not preserve a population-one model at the actual death boundary;
 - it does not preserve support;
-- current greedy search still skips a zero-population class; and
+- current greedy search skips both zero- and one-particle classes after the
+  population normalization; and
 - a preserved class can therefore remain unavailable to particles after its
-  support reaches zero.
+  support falls below two.
 
-The existing focused test proves the pure zero-support predicate and the
-60-percent sample count. It does not yet prove an end-to-end class can retain
-or regain support in a production matcher iteration.
+The existing focused test proves only the old `pop == 0` predicate and the
+60-percent sample count. It does not cover population one or prove that an
+end-to-end class retains the two members required by the production search.
 
 ## Problem statement
 
@@ -135,10 +157,11 @@ slightly lower support
         -> noisier current average
         -> higher raw losses for more particles
         -> still lower support
-        -> zero support
+        -> population below two
+        -> normalized to dead for search
 ```
 
-Preserving an empty average stops the final destructive step, but it does not
+Preserving only an empty average misses the actual death boundary and does not
 break the feedback loop. Independent and matched preprocessing experiments
 showed that the stream can improve best-class resolution and runtime while
 retaining fewer useful/ranked classes than the conventional path. A better
@@ -146,26 +169,30 @@ best class is not sufficient if biologically meaningful classes disappear.
 
 The objective of this plan is therefore:
 
-> Improve survival and recoverability of previously supported classes in the
+> Improve survival and recoverability of previously viable classes in the
 > stochastic hard-assignment stream without restoring the global probability
 > table or forcing particles into scientifically implausible classes.
 
 ## Terminology
 
-- **Supported class**: current population is greater than zero.
-- **Previously valid class**: a nonzero previous class model exists, even if
-  current support is zero.
+- **Minimum viable support**: two particles, matching the existing
+  `s2D%cls_pops < 2` search rule.
+- **Viable class**: current population is at least two.
+- **Under-supported class**: current population is zero or one.
+- **Previously viable class**: the preceding assignment had at least two
+  members and a valid previous class model exists.
 - **Incumbent class**: the particle's class before the current SGD update.
 - **Candidate frontier**: the bounded set of classes evaluated for one
   particle on a non-full-scan iteration.
 - **Sticky candidate**: the incumbent class is guaranteed to be in that
   particle's frontier. It remains a candidate; it is not automatically the
   winner.
-- **Sticky support anchor**: a later, stronger safeguard that retains a
-  bounded number of the best incumbent particles for a previously supported
-  class. It is not part of the first candidate-frontier experiment.
-- **Full exploration**: an iteration that evaluates all currently supported
-  classes. It does not offer every unrelated particle every unsupported class.
+- **Sticky support anchors**: the two best incumbent particles retained for a
+  previously viable class when its provisional new support would fall below
+  two. Anchors are part of v1.
+- **Full exploration**: an iteration that evaluates all currently viable
+  classes. It does not offer every unrelated particle every under-supported
+  class.
 
 ## Non-negotiable compatibility contract
 
@@ -183,14 +210,15 @@ The objective of this plan is therefore:
    assignment.
 9. No SoftMax, top-K table, likelihood table, global candidate table, or
    second baseline run is added to production.
-10. A never-supported or invalid class is not filled merely to satisfy a
+10. A never-viable or invalid class is not filled merely to satisfy a
     target class count.
-11. Zero-support preservation never changes a class's reported population;
-    unsupported remains unsupported until a particle selects it legitimately.
+11. The two-member floor may retain only particles whose incumbent class was
+    that same previously viable class. It never imports an unrelated particle
+    solely to revive a class.
 12. All detailed reporting remains behind `sgd_diagnostic`, which is default
     off.
 
-## Proposed v1: table-free incumbent-aware candidate frontier
+## Proposed v1: incumbent-aware frontier with a two-member support floor
 
 ### Public policy
 
@@ -219,11 +247,11 @@ C_i = \{c_i^{\mathrm{old}}\} \cup R_i,
 
 where:
 
-- `c_i_old` is included when its previous model is valid, even when its
-  current population is zero;
-- `R_i` is a bounded, duplicate-free sample of currently supported classes;
-- the incumbent is not counted twice when it is also supported; and
-- if no incumbent model is valid, the frontier consists only of supported
+- `c_i_old` is included when it was previously viable and its previous model
+  is valid, even when its provisional current population is below two;
+- `R_i` is a bounded, duplicate-free sample of currently viable classes;
+- the incumbent is not counted twice when it is also viable; and
+- if no incumbent model is valid, the frontier consists only of viable
   alternatives.
 
 Candidate generation must be deterministic for a fixed project state,
@@ -245,10 +273,43 @@ The winner remains
 
 The existing direct shift refinement then operates on that one winner.
 
+### Two-member support floor
+
+The frontier produces provisional hard winners. Before assignments are
+committed, calculate the resulting class populations. For every previously
+viable class whose provisional population is below two:
+
+1. consider only particles whose incumbent class was that class;
+2. rank the incumbents that proposed leaving by the finite raw-loss penalty
+
+   \[
+   \Delta_i = L_i(c_i^{\mathrm{old}})-L_i(c_i^{\mathrm{winner}});
+   \]
+
+3. retain the smallest-penalty incumbents needed to reach population two; and
+4. commit one final hard assignment per particle.
+
+This is a constrained hard assignment, not a probability or rescue bonus. It
+never recruits a particle from an unrelated incumbent class. A class that was
+never viable receives no anchors. If fewer than two active incumbent particles
+remain available, the floor is impossible; the class is reported as dead and
+no unrelated particle is fabricated to satisfy it.
+
+The implementation must not build a particle-by-class table. It needs only
+the provisional winner, incumbent loss, winner loss, and a bounded two-entry
+selection per class. The resulting memory is linear in sampled particles plus
+classes.
+
+Class-average restoration must use the same viability rule. If an SGD class
+has population below two and a previous viable model exists, retain the
+previous model rather than constructing a singleton or zero image. The stored
+population remains truthful; model preservation and support accounting are
+separate facts.
+
 ### Exploration safety
 
 Restricting every iteration forever can freeze a bad assignment. The policy
-therefore needs periodic full exploration over all supported classes. The
+therefore needs periodic full exploration over all viable classes. The
 cadence must:
 
 - use global/restart-stable iteration state;
@@ -256,10 +317,11 @@ cadence must:
 - be visible in diagnostics; and
 - be frozen before matched scientific runs.
 
-Unsupported classes are not globally advertised during full exploration.
-They remain available only to particles for which they are the valid
-incumbent. This is a conservative recovery rule: an empty model can retain its
-own plausible particles without receiving a global rescue bonus.
+Under-supported classes are not globally advertised during full exploration.
+They remain available only to particles for which they are a previously
+viable incumbent. This is a conservative protection rule: the class can retain
+its own best incumbents without receiving unrelated particles or a global
+rescue bonus.
 
 The first implementation must expose the cadence as an explicit constructor
 argument to the policy helper and tests. Whether it becomes a user parameter
@@ -288,11 +350,12 @@ Before production behavior changes:
 
 1. Record the exact source baseline and stage schedule.
 2. Verify the 60-percent/200,000 sampling contract in the production caller.
-3. Verify zero-support average preservation through the production
-   class-averager lifecycle, not only the pure predicate.
+3. Record and test the existing `< 2` search-viability rule, including the
+   mismatch with the current zero-only restoration predicate.
 4. Add diagnostic summaries for:
    - sampled particle count and fraction;
-   - active, supported, zero-support, and previously valid classes;
+   - active, viable, under-supported, zero-population, and previously viable
+     classes;
    - per-class population before and after the iteration;
    - particles that stayed in or left their incumbent class;
    - class reactivation count;
@@ -311,16 +374,17 @@ class averages.
 Pure/focused tests must prove:
 
 - incumbent inclusion;
-- zero-support incumbent inclusion only when a previous model is valid;
+- under-supported incumbent inclusion only when it was previously viable and
+  its previous model is valid;
 - bounded size and no duplicates;
-- alternatives are supported classes;
+- alternatives are viable classes;
 - deterministic results for fixed seed/iteration/particle;
 - different iterations change the alternatives;
 - thread-order independence;
 - full-exploration cadence and restart stability; and
 - exact exhaustive behavior when the policy is disabled.
 
-### Phase 2: matcher integration behind explicit opt-in
+### Phase 2: provisional matcher integration behind explicit opt-in
 
 Integrate the helper only into the active SGD branch of
 `strategy2D_greedy`/its owning search state.
@@ -336,14 +400,36 @@ Required behavior:
 6. Diagnostics identify frontier size, incumbent winner/stay/leave outcome,
    and full-scan iterations.
 
-### Phase 3: production-context stability fixture
+Do not commit assignments yet through a test-only shortcut. The next phase
+owns the global two-member support constraint before final orientation writes.
+
+### Phase 3: two-member floor and low-support restoration
+
+Add the bounded per-class anchor selection after provisional hard assignment
+and before final orientation/class-average updates.
+
+Focused tests must prove:
+
+- population zero and population one are both under-supported;
+- population two is viable;
+- only a previously viable class can receive anchors;
+- only that class's own incumbents are eligible;
+- the smallest finite raw-loss penalties are retained;
+- at most two anchors are needed per class;
+- final assignments remain unique and populations are recomputed exactly;
+- an impossible floor reports class death rather than recruiting an unrelated
+  particle; and
+- class-average restoration retains the previous model for both population
+  zero and population one while storing the truthful population.
+
+### Phase 4: production-context stability fixture
 
 Extend the SGD regression suite with a deterministic multi-class fixture that
 runs multiple stochastic updates. It must include:
 
 - at least one strong class;
 - at least one weaker but valid class;
-- a class that reaches zero support under exhaustive competition;
+- a class that falls below two members under exhaustive competition;
 - a preserved prior average for that class; and
 - particles whose incumbent loss remains scientifically competitive.
 
@@ -355,13 +441,17 @@ The fixture must prove:
 
 - each sampled particle has one hard winner;
 - non-sampled particles are not silently reassigned;
-- preserved class images are finite and unchanged at zero support;
-- an incumbent zero-support class can remain a legitimate candidate;
-- class support does not increase through a fabricated rescue assignment;
+- preserved class images are finite and unchanged at populations zero and
+  one;
+- an under-supported previously viable incumbent remains a legitimate
+  candidate;
+- the final protected class has exactly the two best incumbent anchors when
+  provisional support is below two;
+- class support never increases through an unrelated rescue assignment;
 - accepted shift steps remain finite, improving, and bounded; and
 - default exhaustive results remain unchanged.
 
-### Phase 4: matched workflow experiment
+### Phase 5: matched workflow experiment
 
 Fork every arm from the same preprocessing/project checkpoint and preserve the
 same stage schedule. Use at least beta-galactosidase and apoferritin and more
@@ -380,7 +470,9 @@ Record:
 
 - normal completion and runtime;
 - sampled particles per iteration;
-- active, ranked, and zero-support classes per iteration;
+- active, ranked, viable, under-supported, and zero-population classes per
+  iteration;
+- number of anchored classes and retained anchor particles;
 - class-survival curve and reactivations;
 - minimum, median, maximum, and entropy/effective class population;
 - best resolution;
@@ -396,26 +488,16 @@ frontier is acceptable only if it improves class survival consistently without
 a material loss in class quality or an unacceptable runtime increase. A
 single improved best class is not sufficient.
 
-### Phase 5: decide whether stronger support control is necessary
+### Phase 6: decide whether stronger support control is necessary
 
-If the passive frontier is sufficient, stop. Do not add more machinery.
+The two-member floor is already part of v1 because it matches SIMPLE's actual
+class-viability rule. If the frontier plus this floor is sufficient, stop. Do
+not add more machinery.
 
-If previously meaningful classes still collapse, evaluate one stronger
-mechanism at a time.
+If previously meaningful classes still collapse or remain permanently pinned
+at two without improving, evaluate one stronger mechanism at a time.
 
-#### Option A: sticky support anchors
-
-For a previously supported class below a predeclared minimum, retain only a
-small bounded set of its best incumbent particles. Rank incumbents by their
-loss margin against the best alternative, not by particle index. This can be
-implemented with bounded per-class heaps and does not require a particle-by-
-class table.
-
-Anchors must never apply to never-supported classes, and the minimum must be
-small enough not to manufacture equal populations. This is controlled
-retention, not a rescue bonus.
-
-#### Option B: capped support-aware score adjustment
+#### Option: capped support-aware score adjustment
 
 Only if anchors are insufficient, test a bounded class-support term such as
 
@@ -430,12 +512,13 @@ assignment loss. The unadjusted raw loss must still be retained for scientific
 reporting and shift optimization.
 
 This option changes the assignment objective and therefore requires stronger
-justification, scale calibration, and matched validation. It must not be
-combined with anchors in its first experiment.
+justification, scale calibration, and matched validation. Its first experiment
+must compare against the fixed two-member floor without silently changing the
+anchor rule.
 
 #### Rejected first-line mechanisms
 
-- An unconditional bonus for every empty class.
+- An unconditional bonus for every empty or singleton class.
 - Forced equal class populations.
 - A separate conventional baseline run during production.
 - Global top-K/SoftMax tables.
@@ -474,15 +557,20 @@ Expected owners, subject to a fresh call-trace before each phase:
 - `src/main/strategies/search/simple_matcher_smpl_and_lplims.f90`:
   preserve the existing SGD mini-batch contract; no new cap.
 - `src/main/strategies/search/simple_strategy2D_matcher.f90`:
-  active-stream orchestration and aggregate diagnostics.
+  active-stream orchestration, provisional/final assignment boundary, anchor
+  application, and aggregate diagnostics.
 - `src/main/strategies/search/simple_strategy2D_greedy.f90`:
   consume the class frontier while retaining the existing raw-loss and shift
   calls.
 - a small owner-aligned 2D search policy module or existing allocation/state
-  module: deterministic candidate generation.
+  module: deterministic candidate generation and bounded two-anchor selection.
+- `src/main/strategies/search/simple_strategy2D_alloc.f90`:
+  authority for the existing population-below-two viability rule; replace the
+  literal threshold with one shared 2D viability constant only if all current
+  callers and tests are audited together.
 - `src/main/class/simple_classaverager_restore.f90`:
-  preserve the existing empty-class model; change only if production-context
-  tests expose a lifecycle defect.
+  align restoration with minimum viable support by preserving the previous
+  valid model at populations zero and one.
 - `src/main/params` and `src/main/ui/simple/simple_ui_cluster2D.f90`:
   add only the final explicit development policy after the internal helper is
   validated.
@@ -514,13 +602,14 @@ activation boundary.
 
 Keep implementation commits independently reviewable:
 
-1. baseline diagnostics and production-context zero-support test;
+1. baseline diagnostics, shared minimum-support contract, and
+   production-context low-support restoration test;
 2. isolated deterministic class-frontier helper and pure tests;
-3. opt-in matcher/greedy integration and route-identity tests;
-4. deterministic multi-iteration class-stability fixture;
-5. workflow scripts/reporting, if changed;
-6. optional sticky anchors or support-aware scoring only after a separate
-   approved decision.
+3. opt-in provisional matcher/greedy integration and route-identity tests;
+4. bounded two-member anchor selection and final-assignment tests;
+5. deterministic multi-iteration class-stability fixture;
+6. workflow scripts/reporting, if changed;
+7. optional support-aware scoring only after a separate approved decision.
 
 Do not mix direct-joint optimizer work, standard `abinitio2D` changes,
 continuous-3D work, or unrelated test development into these commits.
@@ -533,11 +622,16 @@ This plan is complete only when:
 2. the explicit frontier mode is deterministic, table-free, and produces one
    hard winner per sampled particle;
 3. fresh mini-batch sampling and the existing 200,000 cap remain unchanged;
-4. zero-support model preservation is verified in production context;
-5. matched multi-seed workflows show improved class survival on at least two
+4. the population-below-two death rule is represented by one tested policy
+   contract;
+5. previously viable classes retain their previous model at populations zero
+   and one;
+6. the two-member floor retains only the best same-class incumbents and never
+   fabricates an unrelated rescue assignment;
+7. matched multi-seed workflows show improved class survival on at least two
    datasets without material class-quality or runtime regression;
-6. diagnostics are default-off and all focused tests pass; and
-7. the result is reviewed before any default is changed.
+8. diagnostics are default-off and all focused tests pass; and
+9. the result is reviewed before any default is changed.
 
 Until those gates pass, `sgd_class_policy=frontier` remains an explicitly
 development-only experiment and `exhaustive` remains the default stream

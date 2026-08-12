@@ -65,6 +65,15 @@ program simple_test_continuous_inplane_rotation2D
             &' mskdiam=120 lp=8 smpd=1.3', logdir, failures)
     endif
 
+    if( test_selected(only_tests, 'route_identity') .or. &
+        &test_selected(only_tests, 'hybrid_policy_rejection') )then
+        call run_expected_failure('hybrid_policy_rejection', &
+            &'SIMPLE_TEST_EXPECT_HYBRID_INPL_REJECTION=yes '// &
+            &'simple_test_continuous_inplane_rotation2D_route_identity vol1='//trim(quote(vol1))// &
+            &' mskdiam=120 lp=8 smpd=1.3', &
+            &'inpl_cont=yes requires the raw Euclidean joint objective', logdir, failures)
+    endif
+
     if( test_selected(only_tests, 'stage1_validation') )then
         call run_test('stage1_validation', &
             &'simple_test_continuous_inplane_rotation2D_stage1_validation vol1='//trim(quote(vol1))// &
@@ -228,6 +237,48 @@ contains
             write(*,'(a)') '=== TEST ['//trim(label)//'] PASS ==='
         endif
     end subroutine run_test
+
+    subroutine run_expected_failure(label, command, expected_text, logdir, failures)
+        character(len=*), intent(in) :: label, command, expected_text, logdir
+        integer, intent(inout) :: failures
+        character(len=8192) :: logfile, full_command
+        integer :: status, cmdstat, start_count, end_count, rate
+
+        call system_clock(start_count, rate)
+        logfile = trim(logdir)//'/continuous_'//trim(label)//'.log'
+        write(*,'(a)') '=== TEST ['//trim(label)//'] START ==='
+        write(*,'(a)') '+ '//trim(command)
+        full_command = trim(command)//' > '//trim(quote(logfile))//' 2>&1'
+        call execute_command_line(full_command, wait=.true., exitstat=status, cmdstat=cmdstat)
+        call system_clock(end_count)
+        write(*,'(a,i0)') '=== TEST ['//trim(label)//'] ELAPSED_SECONDS: ', &
+            (end_count-start_count)/max(1,rate)
+        if( cmdstat == 0 .and. status /= 0 .and. file_contains(logfile, expected_text) )then
+            write(*,'(a)') '=== TEST ['//trim(label)//'] PASS ==='
+        else
+            call record_failure(failures, trim(label)//' did not produce the expected rejection')
+            write(*,'(a)') '=== TEST ['//trim(label)//'] FAIL ==='
+        endif
+    end subroutine run_expected_failure
+
+    logical function file_contains(filename, expected_text) result(found)
+        character(len=*), intent(in) :: filename, expected_text
+        character(len=4096) :: line
+        integer :: file_unit, ios
+
+        found = .false.
+        open(newunit=file_unit, file=trim(filename), status='old', action='read', iostat=ios)
+        if( ios /= 0 ) return
+        do
+            read(file_unit,'(a)',iostat=ios) line
+            if( ios /= 0 ) exit
+            if( index(line, trim(expected_text)) > 0 )then
+                found = .true.
+                exit
+            endif
+        enddo
+        close(file_unit)
+    end function file_contains
 
     subroutine record_failure(failures, message)
         integer, intent(inout) :: failures

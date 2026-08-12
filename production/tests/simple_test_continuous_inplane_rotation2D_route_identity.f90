@@ -22,6 +22,9 @@ real(sp), allocatable :: sigma2_noise(:,:)
 real(dp) :: max_legacy_error, max_route_error, tol, scalar_loss, grad(2)
 real :: shift_limits(2,2), joint_limits(3,2), seed_shift(2), selected_corr
 integer :: irot, nrots, selected_irot, expected_irot
+integer :: env_status
+character(len=16) :: rejection_mode
+logical :: expect_hybrid_rejection
 
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') &
@@ -39,6 +42,11 @@ call cline%set('nptcls', 1.0)
 call cline%set('ctf', 'no')
 call cline%set('objfun', 'euclid')
 call cline%check
+expect_hybrid_rejection = .false.
+rejection_mode = ''
+call get_environment_variable('SIMPLE_TEST_EXPECT_HYBRID_INPL_REJECTION', &
+    &rejection_mode, status=env_status)
+if( env_status == 0 ) expect_hybrid_rejection = trim(rejection_mode) == 'yes'
 call b%init_params_and_build_strategy3D_tbox(cline, p)
 call set_bp_range3D(p, b, cline)
 
@@ -112,11 +120,14 @@ if( b%pftc%is_raw_euclid_objfun() )then
 endif
 call legacy_shift_search%new_legacy(b, shift_limits)
 call legacy_shift_search%kill
-call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
-if( probabilistic_refine_search%uses_continuous_refinement() )then
-    error stop 'Hybrid Euclidean objective unexpectedly enables raw continuous polish'
+
+! The strategy constructor deliberately rejects this policy with ERROR STOP.
+! A child-process invocation reaches the call below and lets the mother test
+! verify both the nonzero exit and the exact policy diagnostic.
+if( expect_hybrid_rejection )then
+    call probabilistic_refine_search%new(p, probabilistic_refine_spec, b)
+    error stop 'Hybrid Euclidean objective unexpectedly accepted inpl_cont=yes'
 endif
-call probabilistic_refine_search%kill
 p%l_prob_align_mode = .false.
 p%l_objfun_den      = .false.
 p%inpl_cont         = 'no'
