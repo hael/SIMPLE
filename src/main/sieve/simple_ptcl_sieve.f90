@@ -93,7 +93,7 @@ module simple_ptcl_sieve
   integer, parameter :: DEFAULT_FINE_BOX                      = 128
   integer, parameter :: DEFAULT_COARSE_NSAMPLE                = 2000
   integer, parameter :: DEFAULT_FINE_NSAMPLE                  = 2000
-  real,    parameter :: DEFAULT_LPSTART                       = 15.0
+  real,    parameter :: DEFAULT_LPSTART                       = 0.0
   real,    parameter :: DEFAULT_COARSE_LP                     = 15.0
   real,    parameter :: DEFAULT_FINE_LP                       = 10.0
   real,    parameter :: OVERFIT_CLUSTER_REJECT_FRAC           = 0.70
