@@ -110,7 +110,7 @@ contains
         if( .not. cline%defined('nptcls_coarse')  ) call cline%set('nptcls_coarse',  DEFAULT_COARSE_POP_THRESHOLD)
         if( .not. cline%defined('nptcls_fine')    ) call cline%set('nptcls_fine',      DEFAULT_FINE_POP_THRESHOLD)
         if( .not. cline%defined('maxnchunks')     ) call cline%set('maxnchunks',                                0)
-        if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',                     DEFAULT_LPSTART)
+       ! if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',                     DEFAULT_LPSTART)
         if( .not. cline%defined('lpstop_coarse')  ) call cline%set('lpstop_coarse',             DEFAULT_COARSE_LP)
         if( .not. cline%defined('lpstop_fine')    ) call cline%set('lpstop_fine',                 DEFAULT_FINE_LP)
         if( .not. cline%defined('box_coarse')     ) call cline%set('box_coarse',               DEFAULT_COARSE_BOX)
@@ -131,6 +131,12 @@ contains
         ! Create project file, folder structure, and initialise parameters
         call create_stream_project(spproj_glob, cline, string('sieve_cavgs'))
         call params%new(cline)
+        ! override default lpstart
+        if( cline%defined('lpstart')) then
+            params%lpstart = cline%get_rarg('lpstart')
+        else
+            params%lpstart = DEFAULT_LPSTART
+        endif
         call simple_mkdir(PATH_HERE // DIR_STREAM_COMPLETED)
         ! Initialise the queue environment and worker pool.
         params%workers     = params%nchunks

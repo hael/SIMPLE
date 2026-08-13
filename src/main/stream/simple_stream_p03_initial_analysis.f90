@@ -275,6 +275,8 @@ contains
                         ! ptcl_sieve particle-count accumulation (get_nptcls_tot) sees correct totals
                         do imic = 1, spproj_part%os_mic%get_noris()
                             if( spproj_part%os_mic%get_int(imic, 'state') <= 0 ) cycle
+                            if( .not. spproj_part%os_mic%isthere(imic, 'nptcls') ) cycle
+                            if( spproj_part%os_mic%get_int(imic, 'nptcls') <= 0 ) cycle
                             extracted_prec%id         = extracted_project_list%size() + 1
                             extracted_prec%projname   = proj_local
                             extracted_prec%micind     = imic
@@ -288,13 +290,15 @@ contains
                         n_extract_done = n_extract_done + 1
                         if( .not. l_sieve_init ) then
                             params_sieve = params
-                            params_sieve%mskdiam       = 9999.
-                            params_sieve%single_pass   = 'yes'
-                           ! params_sieve%nmics         = nint(real(NMICS_PLAN(2)) / 5.0)
-                            params_sieve%nchunks       = 2
-                            params_sieve%workers       = params_sieve%nchunks
-                            params_sieve%nthr          = 16
-                            params_sieve%worker_nthr   = params_sieve%nthr   
+                            params_sieve%mskdiam        = 0.
+                            params_sieve%lpstart        = 0.
+                            params_sieve%single_pass    = 'yes'
+                            params_sieve%nmics          = 100
+                            params_sieve%nchunks        = 4
+                            params_sieve%workers        = params_sieve%nchunks
+                            params_sieve%nthr           = 16
+                            params_sieve%worker_nthr    = params_sieve%nthr
+                            !params_sieve%nsample_coarse = 5000
                             call simple_mkdir(cwd_cycle//'/spprojs_sieved')
                             call sieve%new(params_sieve, cwd_cycle//'/spprojs_sieved')
                             call sieve%cycle(extracted_project_list)
@@ -302,6 +306,16 @@ contains
                             l_sieve_init = .true.
                         end if
                         call send_meta(string('complete'))
+                         ! send the NTHUMB_MAX most recent micrograph thumbnails to the GUI
+                        if( spproj_part%os_mic%isthere('thumb_den') .and. spproj_part%os_mic%isthere('xdim') .and. spproj_part%os_mic%isthere('ydim') &
+                        .and. spproj_part%os_mic%isthere('smpd') .and. spproj_part%os_mic%isthere('boxfile') ) then
+                            ithumb = spproj_part%os_mic%get_noris()   ! cache; repurposed as offset below
+                            i_max  = min(ithumb, NTHUMB_MAX)
+                            ithumb = ithumb - i_max              ! index just before the first thumbnail
+                            do iori = 1, i_max
+                                call send_micrograph_meta_part(iori, i_max, ithumb + iori)
+                            end do
+                        end if
                     end if
                 end do
                 if( l_sieve_init ) then
@@ -550,30 +564,28 @@ contains
                 call simple_chdir(outdir)
                 call spproj_inout%kill()
                 call spproj_inout%read(cluster_projfile)
-                ! prune micrographs that yielded no usable particles: drop any mic that is
-                ! deselected (state < 1), has no/zero nptcls, or lacks a valid boxfile on disk
+                ! mark unusable micrographs as rejected (state=0) while preserving
+                ! row indices, so mic/stk alignment remains stable for downstream micind use
                 do i = spproj_inout%os_mic%get_noris(), 1, -1
                     if( spproj_inout%os_mic%get(i, 'state') < 1.0 )then
-                        call spproj_inout%os_mic%delete(i)
+                        call spproj_inout%os_mic%set(i, 'state', 0.0)
                         cycle
                     endif
                     if( .not. spproj_inout%os_mic%isthere(i, 'nptcls') )then
-                        call spproj_inout%os_mic%delete(i)
+                        call spproj_inout%os_mic%set(i, 'state', 0.0)
                         cycle
                     endif
                     if( spproj_inout%os_mic%get(i, 'nptcls') <= 0.0 )then
-                        call spproj_inout%os_mic%delete(i)
+                        call spproj_inout%os_mic%set(i, 'state', 0.0)
                         cycle
                     endif
                     if( .not. spproj_inout%os_mic%isthere(i, 'boxfile') )then
-                        call spproj_inout%os_mic%delete(i)
+                        call spproj_inout%os_mic%set(i, 'state', 0.0)
                         cycle
                     endif
                     boxfile = spproj_inout%os_mic%get_str(i, 'boxfile')
                     if( boxfile%strlen() == 0 .or. .not. file_exists(boxfile) )then
-                        call boxfile%kill
-                        call spproj_inout%os_mic%delete(i)
-                        cycle
+                        call spproj_inout%os_mic%set(i, 'state', 0.0)
                     endif
                     call boxfile%kill
                 enddo
@@ -588,9 +600,10 @@ contains
                 integer,             intent(in) :: mskdiam_in
                 type(sp_project)                :: spproj_cluster
                 type(string)                    :: cwd, cwd_abinitio2D, server_address
-                integer :: nptcls, ncls_job, nthr2D
-                nptcls = spproj_inout%os_ptcl2D%get_noris()
-                ncls_job = min(NCLS_MAX, max(NCLS_MIN, nptcls/params%nptcls_per_cls))
+                integer :: nptcls, ncls_job, nthr2D, nsample_job
+                nptcls = spproj_inout%os_ptcl2D%count_state_gt_zero()
+                ncls_job    = min(NCLS_MAX, max(NCLS_MIN, nptcls/params%nptcls_per_cls))
+                nsample_job = ((nptcls/5 + 999) / 1000) * 1000 ! round up to nearest 1000
                 call simple_getcwd(cwd)
                 call simple_mkdir('abinitio2D')
                 call simple_mkdir(outdir)
@@ -605,9 +618,9 @@ contains
                 call cline_abinitio2D%set('sigma_est',             'global')
                 call cline_abinitio2D%set('center',                   'yes')
                 call cline_abinitio2D%set('autoscale',                'yes')
-                call cline_abinitio2D%set('nsample',              NSAMPLE2D)
+                call cline_abinitio2D%set('nsample',            max( NSAMPLE2D, nsample_job ))
                 call cline_abinitio2D%set('lpstop',                LPSTOP2D)
-                call cline_abinitio2D%set('mskdiam',             mskdiam_in)
+                call cline_abinitio2D%set('mskdiam',                   999.)
                 call cline_abinitio2D%set('nthr',                        16)
                 call cline_abinitio2D%set('nparts',                       1)
                 call cline_abinitio2D%set('projfile',      cluster_projfile)
@@ -630,6 +643,7 @@ contains
                 integer :: nptcls, ncls_job, nthr2D
                 call spproj_inout%kill()
                 call spproj_inout%read(cluster_projfile)
+                call spproj_inout%write(string("test.simple"))
             end subroutine finish_abinitio2D
 
             ! Run ab-initio 3D classification on the extracted particles.
@@ -882,16 +896,20 @@ contains
                 call relation_cline%set('mskdiam',            mskdiam_inout)
                 call relation_params%new(relation_cline)
                 call model_local%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-                call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, mskdiam_inout, quality_local, &
+                !call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, mskdiam_inout, quality_local, &
+                !    model_local, CAVG_QUALITY_CONTEXT_CHUNK, relation_params=relation_params)
+                call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, 0.0, quality_local, &
                     model_local, CAVG_QUALITY_CONTEXT_CHUNK, relation_params=relation_params)
                 call model_local%kill()
                 n_selected = count(quality_local%states > 0)
                 call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.true.)
                 call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.false.)
                 call spproj_inout%map_cavgs_selection(quality_local%states)
+                ! mark unusable micrographs as rejected (state=0) while preserving row indices,
+                ! so mic/stk alignment remains stable for downstream micind use (do not delete)
                 do i_mic_local = spproj_inout%os_mic%get_noris(), 1, -1
                     if( spproj_inout%os_mic%get(i_mic_local, 'state') == 0.0 .or. spproj_inout%os_mic%get(i_mic_local, 'nptcls') == 0.0 ) then
-                        call spproj_inout%os_mic%delete(i_mic_local)
+                        call spproj_inout%os_mic%set(i_mic_local, 'state', 0.0)
                     endif
                 end do
                 call spproj_inout%cavgs2jpg(cavg_inds_local, string('quality_cavgs')//JPG_EXT, xtiles_local, ytiles_local, ignore_states=.false.)
@@ -962,9 +980,11 @@ contains
                 call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.true.)
                 call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.false.)
                 call spproj_inout%map_cavgs_selection(quality_local%states)
+                ! mark unusable micrographs as rejected (state=0) while preserving row indices,
+                ! so mic/stk alignment remains stable for downstream micind use (do not delete)
                 do i_mic_local = spproj_inout%os_mic%get_noris(), 1, -1
                     if( spproj_inout%os_mic%get(i_mic_local, 'state') == 0.0 .or. spproj_inout%os_mic%get(i_mic_local, 'nptcls') == 0.0 ) then
-                        call spproj_inout%os_mic%delete(i_mic_local)
+                        call spproj_inout%os_mic%set(i_mic_local, 'state', 0.0)
                     endif
                 end do
                 call spproj_inout%cavgs2jpg(cavg_inds_local, string('quality_cavgs')//JPG_EXT, xtiles_local, ytiles_local, ignore_states=.false.)
@@ -1031,9 +1051,11 @@ contains
                 call write_quality_stack(string('size_selected_cavgs'//MRC_EXT), cavg_imgs_local, cls_states_local, ncls_local, selected=.true.)
                 call write_quality_stack(string('size_rejected_cavgs'//MRC_EXT), cavg_imgs_local, cls_states_local, ncls_local, selected=.false.)
                 call spproj_inout%map_cavgs_selection(cls_states_local)
+                ! mark unusable micrographs as rejected (state=0) while preserving row indices,
+                ! so mic/stk alignment remains stable for downstream micind use (do not delete)
                 do i_mic_local = spproj_inout%os_mic%get_noris(), 1, -1
                     if( spproj_inout%os_mic%get(i_mic_local, 'state') == 0.0 .or. spproj_inout%os_mic%get(i_mic_local, 'nptcls') == 0.0 ) then
-                        call spproj_inout%os_mic%delete(i_mic_local)
+                        call spproj_inout%os_mic%set(i_mic_local, 'state', 0.0)
                     endif
                 end do
                 call spproj_inout%cavgs2jpg(cavg_inds_local, string('size_cavgs')//JPG_EXT, xtiles_local, ytiles_local, ignore_states=.false.)
@@ -1251,15 +1273,22 @@ contains
             end subroutine write_quality_stack
 
             ! Broadcast initial-picking progress to the GUI.
+            ! Uses the total imported/extracted counts tracked across the whole
+            ! run (project_list/extracted_project_list), not just the counts
+            ! held by spproj, since spproj is only kept up to date during the
+            ! cycle-1 direct picking path; the per-project sieve path (spproj_part)
+            ! tracks its totals via project_list/extracted_project_list instead.
             subroutine send_meta( my_stage )
                 type(string), intent(in) :: my_stage
-                integer                  :: my_ntarget
-                my_ntarget = max(params%nmics, spproj%os_mic%count_state_gt_zero())
+                integer                  :: my_ntarget, my_nmics, my_nptcls
+                my_nmics   = max(project_list%size(), spproj%os_mic%count_state_gt_zero())
+                my_ntarget = max(params%nmics, my_nmics)
+                my_nptcls  = max(extracted_project_list%get_nptcls_tot(), spproj%os_ptcl2D%get_noris())
                 call meta_initial_picking%set(                                   &
                     stage                = my_stage,                             &
                     micrographs_imported = my_ntarget,                           &
-                    micrographs_accepted = spproj%os_mic%count_state_gt_zero(),  &
-                    particles_extracted  = spproj%os_ptcl2D%get_noris(),         &
+                    micrographs_accepted = my_nmics,                             &
+                    particles_extracted  = my_nptcls,                            &
                     box_size             = box_in_pix)
                 if( meta_initial_picking%assigned() ) then
                     call meta_initial_picking%serialise(meta_buffer)
@@ -1282,7 +1311,7 @@ contains
                     stage              = my_stage,                                   &
                     particles_imported = nptcls,                                     &
                     particles_accepted = spproj%os_ptcl2D%count_state_gt_zero(),     &
-                    mask_diam          = nint(mskdiam_estimate),                     &
+                    mask_diam          = nint(mskdiam),                              &
                     mask_scale         = box_size * smpd,                            &
                     box_size           = box_size,                                   &
                     cycle              = cycle)
@@ -1332,6 +1361,50 @@ contains
                     endif
                 endif
             end subroutine send_micrograph_meta
+
+            ! Send thumbnail, CTF values, and particle coordinates for one
+            ! micrograph (index my_ithumb) as message my_iori of my_i_max.
+            ! Identical to send_micrograph_meta but reads from spproj_part
+            ! instead of the module-level spproj, for use by callers that
+            ! build up thumbnails from a per-project partial project.
+            subroutine send_micrograph_meta_part( my_iori, my_i_max, my_ithumb )
+                integer, intent(in) :: my_iori, my_i_max, my_ithumb
+                type(nrtxtfile)     :: my_boxfile
+                type(string)        :: my_boxpath
+                real,  allocatable  :: boxdata(:)
+                integer             :: my_i, my_x, my_y, my_nrecs, my_nlines, my_xdim, my_ydim
+                call meta_micrograph%set(                                          &
+                    path   = spproj_part%os_mic%get_str(my_ithumb, "thumb"),       & !// TODO - update to use thumb_den. also change caller test
+                    dfx    = spproj_part%os_mic%get(my_ithumb,       "dfx"),       &
+                    dfy    = spproj_part%os_mic%get(my_ithumb,       "dfy"),       &
+                    ctfres = spproj_part%os_mic%get(my_ithumb,    "ctfres"),       &
+                    i      = my_iori,                                              &
+                    i_max  = my_i_max)
+                call meta_micrograph%clear_coordinates()
+                my_boxpath = spproj_part%os_mic%get_str(my_ithumb, "boxfile")
+                if( my_boxpath%strlen() > 0 .and. file_exists(my_boxpath) ) then
+                    call my_boxfile%new(my_boxpath, 1)
+                    my_nrecs  = my_boxfile%get_nrecs_per_line()
+                    my_nlines = my_boxfile%get_ndatalines()
+                    my_xdim   = spproj_part%os_mic%get_int(my_ithumb, "xdim")
+                    my_ydim   = spproj_part%os_mic%get_int(my_ithumb, "ydim")
+                    if( my_nrecs >= 4 ) then
+                        allocate(boxdata(my_nrecs))
+                        do my_i = 1, my_nlines
+                            call my_boxfile%readNextDataLine(boxdata)
+                            my_x = nint(boxdata(1) + boxdata(3)/2)
+                            my_y = nint(boxdata(2) + boxdata(4)/2)
+                            call meta_micrograph%set_coordinate(my_i, my_x, my_y, my_xdim, my_ydim)
+                        enddo
+                        deallocate(boxdata)
+                    endif
+                    call my_boxfile%kill()
+                    if( meta_micrograph%assigned() ) then
+                        call meta_micrograph%serialise(meta_buffer)
+                        call send_to_initial_analysis_in_pipe(meta_buffer)
+                    endif
+                endif
+            end subroutine send_micrograph_meta_part
 
             ! Send metadata for one 2D class average to the GUI.
             ! my_xtile/my_ytile are the 0-based grid position within the sprite sheet.
