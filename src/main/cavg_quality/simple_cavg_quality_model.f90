@@ -1321,10 +1321,19 @@ contains
         if( allocated(quality%states)  ) deallocate(quality%states)
         if( allocated(quality%labels)  ) deallocate(quality%labels)
         if( allocated(quality%medoids) ) deallocate(quality%medoids)
-        if( allocated(quality%reasons) ) deallocate(quality%reasons)
         if( allocated(quality%scores)  ) deallocate(quality%scores)
-        allocate(quality%states(ncls), quality%labels(ncls), quality%reasons(ncls), source=0)
+        allocate(quality%states(ncls), quality%labels(ncls), source=0)
         allocate(quality%scores(ncls), source=0.0)
+        ! quality%reasons is populated by the upstream hard-gate pass (extract_cavg_quality_features)
+        ! with the specific reason (e.g. population, bad pixels, mask geometry) for every hard-rejected
+        ! row. Do not wipe it here: hard-rejected rows are skipped below (they never reach the
+        ! model-reject branch), so resetting the array to CAVG_REJECT_REASON_NONE would silently
+        ! discard their real rejection reason.
+        if( .not. allocated(quality%reasons) ) then
+            allocate(quality%reasons(ncls), source=0)
+        else if( size(quality%reasons) /= ncls ) then
+            THROW_HARD('apply_pairwise_logistic: invalid reasons size')
+        end if
 
         ! Logistic models are direct probability classifiers:
         !
