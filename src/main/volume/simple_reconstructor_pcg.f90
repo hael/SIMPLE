@@ -104,6 +104,15 @@ type :: reconstructor_pcg
     integer              :: op_mode = PCG_OP_MATRIXFREE
     real,    allocatable :: Khat(:,:,:)              !< Gram kernel on wimg's cmat layout, real
     logical              :: l_kernel = .false.
+    ! ---- optional FSC/SSNR quadratic prior ----
+    ! Requested before raw D is finalized; its absolute scale is then derived
+    ! from D, keeping the prior in the same calibrated operator convention.
+    real, allocatable :: ml_fsc(:)                    !< independent-half FSC, shells 1:R
+    real, allocatable :: ml_prior(:,:,:)              !< calibrated padded Fourier diagonal
+    real              :: ml_tau = 1.0                 !< established ML regularization fudge factor
+    real              :: ml_hp  = 100.0               !< low-frequency no-prior limit in Angstrom
+    logical           :: l_ml_prior_requested = .false.
+    logical           :: l_ml_prior = .false.
     ! ---- per-phase profiling, accumulated over a solve. Exists to answer one
     !      question before any further optimization: of the seconds an iteration
     !      costs, how many are the particle loop (which the kernelized operator
@@ -150,6 +159,7 @@ type :: reconstructor_pcg
     procedure :: set_deapod
     procedure :: set_mask
     procedure :: set_lambda_relative
+    procedure :: set_ml_prior
     procedure, private :: build_env
     procedure, private :: build_kb_envelope_1d
     procedure, private :: build_hk_luts
@@ -179,6 +189,8 @@ type :: reconstructor_pcg
     procedure :: get_env
     procedure :: get_invenv
     procedure :: get_rhs
+    procedure :: get_raw_accum
+    procedure :: get_ml_prior
     procedure :: get_data_scale
     procedure :: get_effective_lambda
     ! SOLVER
@@ -200,6 +212,8 @@ type :: reconstructor_pcg
     procedure, private :: pad_vol
     procedure, private :: crop_vol
     procedure, private :: update_lambda_from_density
+    procedure, private :: build_ml_prior_from_density
+    procedure, private :: apply_fourier_diagonal
 end type reconstructor_pcg
 
 contains
@@ -440,6 +454,29 @@ contains
         allocate(b(self%box,self%box,self%box), source=self%b_rhs)
     end subroutine get_rhs
 
+    !> Copy the open, unfinalized accumulator-domain statistics. This is a
+    !! test/diagnostic boundary only: production distribution persists the
+    !! same arrays through write_raw_accum and never exposes them to policy.
+    subroutine get_raw_accum( self, b, d )
+        class(reconstructor_pcg), intent(in) :: self
+        complex, allocatable, intent(out) :: b(:,:,:)
+        real,    allocatable, intent(out) :: d(:,:,:)
+        if( .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open')
+        allocate(b(self%lims3(1,1):self%lims3(1,2), &
+                   &self%lims3(2,1):self%lims3(2,2), &
+                   &self%lims3(3,1):self%lims3(3,2)), source=self%b_work)
+        allocate(d(self%lims3(1,1):self%lims3(1,2), &
+                   &self%lims3(2,1):self%lims3(2,2), &
+                   &self%lims3(3,1):self%lims3(3,2)), source=self%acc_work)
+    end subroutine get_raw_accum
+
+    subroutine get_ml_prior( self, prior )
+        class(reconstructor_pcg), intent(in) :: self
+        real, allocatable, intent(out) :: prior(:,:,:)
+        if( .not. self%l_ml_prior ) THROW_HARD('PCG ML prior has not been built')
+        allocate(prior, source=self%ml_prior)
+    end subroutine get_ml_prior
+
     pure function get_invenv( self ) result( invenv )
         class(reconstructor_pcg), intent(in) :: self
         real :: invenv(self%box,self%box,self%box)
@@ -467,6 +504,24 @@ contains
         self%lambda     = 0.0
         self%l_lambda_relative = .true.
     end subroutine set_lambda_relative
+
+    !> Request the established isotropic FSC/SSNR prior. The FSC determines
+    !! only the shell-wise relative strength here; its absolute scale is built
+    !! later from the finalized raw data density D on the master.
+    subroutine set_ml_prior( self, fsc, tau, hp )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                       intent(in)    :: fsc(:), tau, hp
+        if( size(fsc) < 1 ) THROW_HARD('PCG ML prior requires a non-empty FSC')
+        if( .not. ieee_is_finite(tau) .or. tau <= 0.0 ) THROW_HARD('PCG ML tau must be finite and positive')
+        if( .not. ieee_is_finite(hp) .or. hp <= 0.0 ) THROW_HARD('PCG ML high-pass limit must be finite and positive')
+        if( allocated(self%ml_fsc) ) deallocate(self%ml_fsc)
+        if( allocated(self%ml_prior) ) deallocate(self%ml_prior)
+        allocate(self%ml_fsc(size(fsc)), source=fsc)
+        self%ml_tau = tau
+        self%ml_hp  = hp
+        self%l_ml_prior_requested = .true.
+        self%l_ml_prior = .false.
+    end subroutine set_ml_prior
 
     !>  \brief  Multiplies a real volume by E^-1, the inverse KB instrument
     !!          envelope -- the deapodization / roll-off correction.
@@ -599,6 +654,8 @@ contains
         if( allocated(self%mask)     ) deallocate(self%mask)
         if( allocated(self%precond)  ) deallocate(self%precond)
         if( allocated(self%Khat)     ) deallocate(self%Khat)
+        if( allocated(self%ml_fsc)   ) deallocate(self%ml_fsc)
+        if( allocated(self%ml_prior) ) deallocate(self%ml_prior)
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
@@ -619,6 +676,10 @@ contains
         self%l_mask      = .false.
         self%l_precond   = .false.
         self%l_kernel    = .false.
+        self%ml_tau      = 1.0
+        self%ml_hp       = 100.0
+        self%l_ml_prior_requested = .false.
+        self%l_ml_prior  = .false.
         self%wimg_exists = .false.
         self%op_mode     = PCG_OP_MATRIXFREE
         call self%reset_profile(.false.)
@@ -1041,6 +1102,7 @@ contains
         if( self%l_profile ) self%t_ploop = self%t_ploop + real(toc(tp),dp)
         hp = self%fold_and_ifft(vol_accum)
         call self%deapod_mul(hp)
+        if( self%l_ml_prior ) hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
         hp = hp + self%lambda * p
     end function apply_normal_matrixfree
 
@@ -1078,7 +1140,11 @@ contains
         do k = 1, cdim(3)
             do j = 1, cdim(2)
                 do i = 1, cdim(1)
-                    cmat(i,j,k) = cmat(i,j,k) * self%Khat(i,j,k)
+                    if( self%l_ml_prior .and. self%l_deapod )then
+                        cmat(i,j,k) = cmat(i,j,k) * (self%Khat(i,j,k) + self%ml_prior(i,j,k))
+                    else
+                        cmat(i,j,k) = cmat(i,j,k) * self%Khat(i,j,k)
+                    endif
                 end do
             end do
         end do
@@ -1090,8 +1156,41 @@ contains
         hp = self%crop_vol(self%wimg%get_rmat())
         if( self%l_profile ) self%t_fold = self%t_fold + real(toc(tp),dp)
         if( .not. self%l_deapod ) hp = hp * self%env
+        if( self%l_ml_prior .and. .not. self%l_deapod )then
+            hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
+        endif
         hp = hp + self%lambda * p
     end function apply_normal_kernel
+
+    !> Apply C^T F^-1 diag(d) F C on the same padded lattice as Khat. This is
+    !! used directly by the matrix-free oracle and by the deapodization-off
+    !! diagnostic path; production kernel solves fuse d with Khat above.
+    function apply_fourier_diagonal( self, p, diag ) result( q )
+        class(reconstructor_pcg), intent(inout) :: self
+        real, intent(in) :: p(self%box,self%box,self%box)
+        real, intent(in) :: diag(:,:,:)
+        real, allocatable :: q(:,:,:)
+        complex, allocatable :: cmat(:,:,:)
+        integer :: cdim(3), i, j, k
+        call self%ensure_wimg
+        cdim = self%wimg%get_array_shape()
+        if( any(shape(diag) /= cdim) ) THROW_HARD('PCG Fourier diagonal shape mismatch')
+        call self%wimg%set_rmat(self%pad_vol(p), .false.)
+        call self%wimg%fft()
+        cmat = self%wimg%get_cmat()
+        !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
+        do k = 1, cdim(3)
+            do j = 1, cdim(2)
+                do i = 1, cdim(1)
+                    cmat(i,j,k) = cmat(i,j,k) * diag(i,j,k)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        call self%wimg%set_cmat(cmat)
+        call self%wimg%ifft()
+        q = self%crop_vol(self%wimg%get_rmat())
+    end function apply_fourier_diagonal
 
     !>  \brief  b = sum_i G_i^dagger(conjg(T_i) * y_i / sqrt(sigma2_i)), the
     !!          data right-hand side (no prior term). Unlike H, the RHS DOES
@@ -1662,6 +1761,85 @@ contains
         if( self%l_lambda_relative ) self%lambda = self%lambda_rel * self%data_scale
     end subroutine update_lambda_from_density
 
+    !> Build P_tau from the independent-half FSC and raw data-only D.
+    !! The padded Toeplitz lattice samples Fourier space padf times more finely
+    !! than the native FSC, so each padded radius is assigned to its nearest
+    !! native shell. The shell-mean D supplies 1/sigma2; multiplying the final
+    !! diagonal by padsc**2 puts it in the calibrated Khat convention.
+    subroutine build_ml_prior_from_density( self, rho_accum )
+        class(reconstructor_pcg), intent(inout) :: self
+        real, intent(in) :: rho_accum(self%lims3(1,1):self%lims3(1,2), &
+                                      &self%lims3(2,1):self%lims3(2,2), &
+                                      &self%lims3(3,1):self%lims3(3,2))
+        real(dp), allocatable :: shsum(:), shsum_thr(:,:)
+        integer,  allocatable :: shcnt(:), shcnt_thr(:,:)
+        integer :: cdim(3), h, k, m, hh, phys(3), shpd, sh, sz
+        integer :: nthr, ithr, reslim_ind
+        real    :: rval, cc, ssnr, prior_raw
+        if( .not. self%l_ml_prior_requested ) return
+        if( .not. allocated(self%ml_fsc) ) THROW_HARD('PCG ML FSC is not allocated')
+        sz = min(size(self%ml_fsc), self%Rnat)
+        if( sz < 1 ) THROW_HARD('PCG ML FSC has no usable shells')
+        nthr = 1
+        !$ nthr = omp_get_max_threads()
+        allocate(shsum(0:sz), source=0.0_dp)
+        allocate(shcnt(0:sz), source=0)
+        allocate(shsum_thr(0:sz,nthr), source=0.0_dp)
+        allocate(shcnt_thr(0:sz,nthr), source=0)
+        !$omp parallel default(shared) private(h,k,m,hh,shpd,sh,rval,ithr)
+        ithr = 1
+        !$ ithr = omp_get_thread_num() + 1
+        !$omp do collapse(2) schedule(static)
+        do m = self%lims3(3,1), self%lims3(3,2)
+            do k = self%lims3(2,1), self%lims3(2,2)
+                do h = 0, self%lims3(1,2)
+                    shpd = nint(sqrt(real(h*h + k*k + m*m)))
+                    sh   = nint(real(shpd) / real(self%padf))
+                    if( sh < 0 .or. sh > sz ) cycle
+                    hh   = self%wrap(h)
+                    rval = rho_accum(hh,k,m)
+                    if( rval <= 0.0 ) cycle
+                    shsum_thr(sh,ithr) = shsum_thr(sh,ithr) + real(rval,dp)
+                    shcnt_thr(sh,ithr) = shcnt_thr(sh,ithr) + 1
+                enddo
+            enddo
+        enddo
+        !$omp end do
+        !$omp end parallel
+        do ithr = 1, nthr
+            do sh = 0, sz
+                shsum(sh) = shsum(sh) + shsum_thr(sh,ithr)
+                shcnt(sh) = shcnt(sh) + shcnt_thr(sh,ithr)
+            enddo
+        enddo
+        deallocate(shsum_thr, shcnt_thr)
+        cdim = self%wimg%get_array_shape()
+        if( allocated(self%ml_prior) ) deallocate(self%ml_prior)
+        allocate(self%ml_prior(cdim(1),cdim(2),cdim(3)), source=0.0)
+        reslim_ind = max(6, calc_fourier_index(self%ml_hp, self%box, self%smpd))
+        !$omp parallel do collapse(2) default(shared) &
+        !$omp private(h,k,m,phys,shpd,sh,cc,ssnr,prior_raw) schedule(static)
+        do m = self%lims3(3,1), self%lims3(3,2)
+            do k = self%lims3(2,1), self%lims3(2,2)
+                do h = 0, self%lims3(1,2)
+                    shpd = nint(sqrt(real(h*h + k*k + m*m)))
+                    sh   = nint(real(shpd) / real(self%padf))
+                    if( sh < reslim_ind .or. sh > sz ) cycle
+                    if( shcnt(sh) < 1 .or. shsum(sh) <= 1.0e-10_dp ) cycle
+                    cc        = min(0.999, max(0.001, self%ml_fsc(sh)))
+                    ssnr      = cc / (1.0 - cc)
+                    prior_raw = real(shsum(sh) / real(shcnt(sh),dp)) / (self%ml_tau * ssnr)
+                    phys = self%wimg%comp_addr_phys(h,k,m)
+                    self%ml_prior(phys(1),phys(2),phys(3)) = prior_raw * self%padsc**2
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate(shsum, shcnt)
+        self%l_ml_prior = maxval(self%ml_prior) > 0.0
+        if( .not. self%l_ml_prior ) THROW_HARD('PCG ML prior contains no positive bins')
+    end subroutine build_ml_prior_from_density
+
     !> Fold the real density accumulator once into the packed Fourier layout.
     !! The preconditioner and Khat are two views of the same D accumulator, so
     !! producing them in one sphere-limited parallel pass avoids a second full
@@ -1684,6 +1862,7 @@ contains
         if( .not. l_precond .and. .not. l_kernel ) return
         call self%update_lambda_from_density(rho_accum)
         cdim = self%wimg%get_array_shape()
+        call self%build_ml_prior_from_density(rho_accum)
         ! Data only ever reaches |loc| <= padf*Rnat, so beyond that radius rho is
         ! identically zero: those modes are completely unconstrained. Zero them,
         ! exactly as reconstructor%sampl_dens_correct does for sh > sh_lim. A
@@ -1767,8 +1946,11 @@ contains
                     endif
                     if( l_precond )then
                         if( sh <= rho_lim )then
-                            if( shfloor(sh) > 0.0 )then
-                                denom = max(rho_accum(hh,k,m), 0.0) + shfloor(sh)
+                            denom = max(rho_accum(hh,k,m), 0.0) + shfloor(sh)
+                            if( self%l_ml_prior )then
+                                denom = denom + self%ml_prior(phys(1),phys(2),phys(3)) / self%padsc**2
+                            endif
+                            if( denom > 0.0 )then
                                 self%precond(phys(1),phys(2),phys(3)) = 1.0 / denom
                             endif
                         endif
@@ -1958,9 +2140,12 @@ contains
         real(dp) :: num, den
         real     :: lam_save, ctr, sig, dx, dy, dz, scale
         integer  :: i, j, k
+        logical  :: l_ml_save
         if( .not. self%l_kernel ) THROW_HARD('build_kernel has not been called; measure_kernel_scale')
         lam_save    = self%lambda
+        l_ml_save   = self%l_ml_prior
         self%lambda = 0.0   ! compare the DATA term only
+        self%l_ml_prior = .false.
         allocate(probe(self%box,self%box,self%box))
         ctr = real(self%box)/2.0 + 0.5
         sig = 0.15 * real(self%box)
@@ -1979,6 +2164,7 @@ contains
         scale = 1.0
         if( den > 0.0_dp ) scale = real(num/den)
         self%lambda = lam_save
+        self%l_ml_prior = l_ml_save
     end function measure_kernel_scale
 
     ! PRIVATE HELPERS

@@ -29,8 +29,8 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        type(image) :: half_even, half_odd, merged
-        type(string) :: fname_even, fname_odd, fname_vol, fname_fsc
+        type(image) :: half_even, half_odd, ml_even, ml_odd, merged
+        type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         integer, allocatable :: selected_pinds(:), half_pinds(:)
         real, allocatable :: fsc(:), res0143s(:)
         logical, allocatable :: state_written(:)
@@ -66,29 +66,53 @@ contains
             if( n_even < 1 .or. n_odd < 1 ) THROW_HARD('PCG reconstruct3D requires particles in both halfsets')
 
             call collect_state_half(state, 0, n_even, half_pinds)
-            call solve_state_half(state, 'even', half_pinds, half_even)
+            call solve_state_half(state, 0, 'even', half_pinds, half_even)
             deallocate(half_pinds)
             call collect_state_half(state, 1, n_odd, half_pinds)
-            call solve_state_half(state, 'odd', half_pinds, half_odd)
+            call solve_state_half(state, 1, 'odd', half_pinds, half_odd)
             deallocate(half_pinds)
 
             fname_even = refine3D_state_halfvol_fname(state, 'even')
             fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
             fname_vol  = refine3D_state_vol_fname(state)
             fname_fsc  = refine3D_fsc_fname(state)
-            t_state_phase = tic()
-            call half_even%write(fname_even, del_if_exists=.true.)
-            call half_odd%write(fname_odd, del_if_exists=.true.)
             call merged%copy(half_even)
             call merged%add(half_odd)
             call merged%mul(0.5)
-            call merged%write(fname_vol, del_if_exists=.true.)
-            time_map_output = real(toc(t_state_phase),dp)
+            time_map_output = 0.0_dp
+            if( params%l_ml_reg )then
+                fname_even_unfil = refine3D_state_halfvol_fname(state, 'even', unfil=.true.)
+                fname_odd_unfil  = refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.)
+                t_state_phase = tic()
+                call half_even%write(fname_even_unfil, del_if_exists=.true.)
+                call half_odd%write(fname_odd_unfil, del_if_exists=.true.)
+                time_map_output = real(toc(t_state_phase),dp)
+            endif
+
             t_state_phase = tic()
             call calculate_state_fsc(state, half_even, half_odd, merged, fsc, res05, res0143s(state), cfar)
             call arr2file(fsc, fname_fsc)
             call write_fsc_summary(state, merged, fsc, res05, res0143s(state), cfar)
             time_fsc_output = real(toc(t_state_phase),dp)
+
+            if( params%l_ml_reg )then
+                call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
+                call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
+                call merged%kill
+                call merged%copy(ml_even)
+                call merged%add(ml_odd)
+                call merged%mul(0.5)
+            endif
+            t_state_phase = tic()
+            if( params%l_ml_reg )then
+                call ml_even%write(fname_even, del_if_exists=.true.)
+                call ml_odd%write(fname_odd, del_if_exists=.true.)
+            else
+                call half_even%write(fname_even, del_if_exists=.true.)
+                call half_odd%write(fname_odd, del_if_exists=.true.)
+            endif
+            call merged%write(fname_vol, del_if_exists=.true.)
+            time_map_output = time_map_output + real(toc(t_state_phase),dp)
             write(logfhandle,'(A,I0)') '>>> PCG SHARED OUTPUT PHASES: STATE ', state
             write(logfhandle,'(A,F9.3)') '    halfmap + merged-map output : ', time_map_output
             write(logfhandle,'(A,F9.3)') '    FSC + cFAR + summary        : ', time_fsc_output
@@ -101,6 +125,17 @@ contains
             state_written(state) = .true.
             call half_even%kill
             call half_odd%kill
+            if( params%l_ml_reg )then
+                call ml_even%kill
+                call ml_odd%kill
+                raw_fname = refine3D_pcg_raw_accum_fname(state, 1, params%numlen, 'even')
+                call del_file(raw_fname)
+                raw_fname = refine3D_pcg_raw_accum_fname(state, 1, params%numlen, 'odd')
+                call del_file(raw_fname)
+                call fname_even_unfil%kill
+                call fname_odd_unfil%kill
+                call raw_fname%kill
+            endif
             call merged%kill
             call fname_even%kill
             call fname_odd%kill
@@ -135,8 +170,9 @@ contains
             if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
             if( params%maxits > 8 ) THROW_HARD('production rec_backend=pcg requires maxits<=8')
             if( trim(params%projrec) /= 'no' ) THROW_HARD('rec_backend=pcg does not yet support projrec=yes')
-            if( params%box_crop /= params%box )then
-                THROW_HARD('rec_backend=pcg box cropping awaits a scale-equivalence acceptance test')
+            if( abs(real(params%box)*params%smpd - real(params%box_crop)*params%smpd_crop) > &
+                &1.0e-5*real(params%box)*params%smpd )then
+                THROW_HARD('PCG crop must preserve the native physical box extent')
             endif
             if( params%l_update_frac .or. params%l_trail_rec )then
                 THROW_HARD('PCG fractional and trailing reconstruction require accumulator-domain integration')
@@ -185,8 +221,8 @@ contains
             if( cnt /= n ) THROW_HARD('inconsistent PCG state-half particle count')
         end subroutine collect_state_half
 
-        subroutine solve_state_half( state_here, half, pinds, volume, outcome )
-            integer,          intent(in)    :: state_here
+        subroutine solve_state_half( state_here, eo_here, half, pinds, volume, outcome )
+            integer,          intent(in)    :: state_here, eo_here
             character(len=*), intent(in)    :: half
             integer,          intent(in)    :: pinds(:)
             type(image),      intent(inout) :: volume
@@ -196,6 +232,7 @@ contains
             type(oris)      :: selection
             type(ori)       :: orientation
             type(ctfparams) :: ctfparms
+            type(string)    :: raw_fname_here
             complex, allocatable :: y_batch(:,:,:)
             real,    allocatable :: sig2(:,:), x(:,:,:), rel_res_hist(:)
             integer :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
@@ -272,6 +309,12 @@ contains
                 call pcgop%accumulate_batch(y_batch, batchsz, batchlims(1))
                 time_accum = time_accum + real(toc(t_phase),dp)
             enddo
+            if( params%l_ml_reg )then
+                raw_fname_here = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
+                call pcgop%write_raw_accum(raw_fname_here, state_here, eo_here, 1, 1, &
+                    &size(pinds), pcg_raw_provenance(params))
+                call raw_fname_here%kill
+            endif
             t_phase = tic()
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
@@ -288,7 +331,7 @@ contains
             time_total = real(toc(t_half),dp)
             call report_half_timings(state_here, half, time_metadata, time_particles, time_accum_init, &
                 &time_accum, time_finalize, time_solve, time_total)
-            call write_half_diagnostics(state_here, half, size(pinds), result, rel_res_hist, &
+            call write_half_diagnostics(state_here, half, 'base', size(pinds), result, rel_res_hist, &
                 &time_metadata, time_particles, time_accum_init, time_accum, time_finalize, time_solve, time_total, &
                 &pcgop%get_data_scale(), pcgop%get_effective_lambda())
             write(logfhandle,'(A,I0,3A,I0,2A)') '>>> PCG RECONSTRUCT3D: STATE ', state_here, ' ', trim(half), &
@@ -300,6 +343,59 @@ contains
             call orientation%kill
             deallocate(y_batch, sig2, x, rel_res_hist)
         end subroutine solve_state_half
+
+        !> Reopen the exact raw statistics used for the base half-map, add the
+        !! FSC/SSNR prior only on the master/shared owner, and warm-start from
+        !! the corresponding unregularized solution. No particle data are read
+        !! a second time and the base solve remains the FSC oracle.
+        subroutine regularize_state_half( state_here, eo_here, half, fsc_here, base_volume, volume )
+            integer,          intent(in)    :: state_here, eo_here
+            character(len=*), intent(in)    :: half
+            real,             intent(in)    :: fsc_here(:)
+            type(image),      intent(in)    :: base_volume
+            type(image),      intent(inout) :: volume
+            type(reconstructor_pcg) :: pcgop
+            type(pcg_solver_outcome) :: result
+            type(string) :: fname
+            real, allocatable :: x(:,:,:), rel_res_hist(:)
+            integer :: nptcls, niters
+            integer(timer_int_kind) :: t_phase
+            real(dp) :: time_reduce, time_finalize, time_solve, time_total
+
+            t_phase = tic()
+            call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
+            if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
+            call pcgop%set_mask(params%msk_crop)
+            call pcgop%begin_reduction
+            fname = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
+            call pcgop%add_raw_accum(fname, state_here, eo_here, 1, 1, &
+                &pcg_raw_provenance(params), nptcls)
+            time_reduce = real(toc(t_phase),dp)
+            if( nptcls < 1 ) THROW_HARD('PCG ML replay requires a populated raw half accumulator')
+            t_phase = tic()
+            call pcgop%set_ml_prior(fsc_here, params%tau, params%hp)
+            call pcgop%end_accum(.true.)
+            call pcgop%set_op_mode(PCG_OP_KERNEL)
+            call report_regularization(state_here, half//' ML', params%pcg_lambda_rel, &
+                &pcgop%get_data_scale(), pcgop%get_effective_lambda())
+            time_finalize = real(toc(t_phase),dp)
+            x = base_volume%get_rmat()
+            t_phase = tic()
+            call pcgop%solve_accum(x, maxits=params%maxits, rtol=params%rtol, &
+                &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
+            time_solve = real(toc(t_phase),dp)
+            time_total = time_reduce + time_finalize + time_solve
+            call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+            call volume%set_rmat(x, .false.)
+            write(logfhandle,'(A,I0,3A,I0,2A)') '>>> PCG RECONSTRUCT3D ML: STATE ', state_here, &
+                &' ', trim(half), ' FINISHED AFTER ', niters, ' ITERATIONS, STOP=', trim(result%stop_reason)
+            call write_half_diagnostics(state_here, half, 'ml', nptcls, result, rel_res_hist, &
+                &0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, time_finalize, time_solve, time_total, &
+                &pcgop%get_data_scale(), pcgop%get_effective_lambda(), reduce_time=time_reduce)
+            call pcgop%kill
+            call fname%kill
+            deallocate(x, rel_res_hist)
+        end subroutine regularize_state_half
 
         subroutine calculate_state_fsc( state_here, even, odd, avg, fsc_out, res05, res0143, cfar )
             integer,     intent(in)    :: state_here
@@ -390,20 +486,24 @@ contains
             call flush(logfhandle)
         end subroutine report_half_timings
 
-        subroutine write_half_diagnostics( state_here, half, nptcls, result, history, &
-                &metadata, particles, accum_init, accum, finalize, solve_time, total, data_scale, lambda_eff )
+        subroutine write_half_diagnostics( state_here, half, solve_kind, nptcls, result, history, &
+                &metadata, particles, accum_init, accum, finalize, solve_time, total, data_scale, lambda_eff, &
+                &reduce_time )
             integer,                  intent(in) :: state_here, nptcls
-            character(len=*),         intent(in) :: half
+            character(len=*),         intent(in) :: half, solve_kind
             type(pcg_solver_outcome), intent(in) :: result
             real,                     intent(in) :: history(:)
             real(dp),                 intent(in) :: metadata, particles, accum_init, accum
             real(dp),                 intent(in) :: finalize, solve_time, total
             real,                     intent(in) :: data_scale, lambda_eff
+            real(dp), optional,       intent(in) :: reduce_time
             type(string) :: fname
             integer :: funit, i
-            fname = 'reconstruct3D_pcg_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_diagnostics.txt'
+            fname = 'reconstruct3D_pcg_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_'// &
+                &trim(solve_kind)//'_diagnostics.txt'
             call fopen(funit, file=fname, status='replace', action='write')
             write(funit,'(A,I0)')     'nptcls=',               nptcls
+            write(funit,'(A,A)')      'solve_kind=',            trim(solve_kind)
             write(funit,'(A,I0)')     'requested_maxits=',     result%requested_maxits
             write(funit,'(A,I0)')     'iteration_count=',      result%iteration_count
             write(funit,'(A,A)')      'stop_reason=',          trim(result%stop_reason)
@@ -421,6 +521,7 @@ contains
             write(funit,'(A,F12.6)')  'accum_finalize_seconds=', finalize
             write(funit,'(A,F12.6)')  'solve_seconds=',        solve_time
             write(funit,'(A,F12.6)')  'total_half_seconds=',   total
+            if( present(reduce_time) ) write(funit,'(A,F12.6)') 'raw_replay_seconds=', reduce_time
             do i = 1, size(history)
                 write(funit,'(A,I0,A,ES14.6)') 'iter', i, '_rel_resid_l2=', history(i)
             enddo
@@ -595,8 +696,8 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
-        type(image) :: half_even, half_odd, merged
-        type(string) :: fname_even, fname_odd, fname_vol, fname_fsc, raw_fname
+        type(image) :: half_even, half_odd, ml_even, ml_odd, merged
+        type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         real, allocatable :: fsc(:), res0143s(:)
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance
@@ -611,8 +712,8 @@ contains
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         do state = 1, params%nstates
-            call reduce_solve_state_half(state, 0, 'even', half_even, n_even)
-            call reduce_solve_state_half(state, 1, 'odd',  half_odd,  n_odd)
+            call reduce_solve_state_half(state, 0, 'even', half_even, n_even, 'base')
+            call reduce_solve_state_half(state, 1, 'odd',  half_odd,  n_odd,  'base')
             if( n_even == 0 .and. n_odd == 0 )then
                 write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: STATE ', state, &
                     &' HAS NO SELECTED PARTICLES; SKIPPING'
@@ -623,20 +724,43 @@ contains
             fname_odd  = refine3D_state_halfvol_fname(state, 'odd')
             fname_vol  = refine3D_state_vol_fname(state)
             fname_fsc  = refine3D_fsc_fname(state)
-            t_state_phase = tic()
-            call half_even%write(fname_even, del_if_exists=.true.)
-            call half_odd%write(fname_odd, del_if_exists=.true.)
             call merged%copy(half_even)
             call merged%add(half_odd)
             call merged%mul(0.5)
-            call merged%write(fname_vol, del_if_exists=.true.)
-            time_map_output = real(toc(t_state_phase),dp)
+            time_map_output = 0.0_dp
+            if( params%l_ml_reg )then
+                fname_even_unfil = refine3D_state_halfvol_fname(state, 'even', unfil=.true.)
+                fname_odd_unfil  = refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.)
+                t_state_phase = tic()
+                call half_even%write(fname_even_unfil, del_if_exists=.true.)
+                call half_odd%write(fname_odd_unfil, del_if_exists=.true.)
+                time_map_output = real(toc(t_state_phase),dp)
+            endif
             t_state_phase = tic()
             call calculate_distributed_fsc(state, half_even, half_odd, merged, &
                 &fsc, res05, res0143s(state), cfar)
             call arr2file(fsc, fname_fsc)
             call write_distributed_fsc_summary(state, merged, fsc, res05, res0143s(state), cfar)
             time_fsc_output = real(toc(t_state_phase),dp)
+
+            if( params%l_ml_reg )then
+                call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
+                call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
+                call merged%kill
+                call merged%copy(ml_even)
+                call merged%add(ml_odd)
+                call merged%mul(0.5)
+            endif
+            t_state_phase = tic()
+            if( params%l_ml_reg )then
+                call ml_even%write(fname_even, del_if_exists=.true.)
+                call ml_odd%write(fname_odd, del_if_exists=.true.)
+            else
+                call half_even%write(fname_even, del_if_exists=.true.)
+                call half_odd%write(fname_odd, del_if_exists=.true.)
+            endif
+            call merged%write(fname_vol, del_if_exists=.true.)
+            time_map_output = time_map_output + real(toc(t_state_phase),dp)
             write(logfhandle,'(A,I0)') '>>> PCG DISTRIBUTED OUTPUT PHASES: STATE ', state
             write(logfhandle,'(A,F9.3)') '    halfmap + merged-map output : ', time_map_output
             write(logfhandle,'(A,F9.3)') '    FSC + cFAR + summary        : ', time_fsc_output
@@ -647,6 +771,12 @@ contains
             state_written(state) = .true.
             call half_even%kill
             call half_odd%kill
+            if( params%l_ml_reg )then
+                call ml_even%kill
+                call ml_odd%kill
+                call fname_even_unfil%kill
+                call fname_odd_unfil%kill
+            endif
             call merged%kill
             call fname_even%kill
             call fname_odd%kill
@@ -682,11 +812,14 @@ contains
 
     contains
 
-        subroutine reduce_solve_state_half( state_here, eo_here, half, volume, nptcls )
+        subroutine reduce_solve_state_half( state_here, eo_here, half, volume, nptcls, solve_kind, &
+                &fsc_prior, warm_start )
             integer,          intent(in)    :: state_here, eo_here
-            character(len=*), intent(in)    :: half
+            character(len=*), intent(in)    :: half, solve_kind
             type(image),      intent(inout) :: volume
             integer,          intent(out)   :: nptcls
+            real, optional,   intent(in)    :: fsc_prior(:)
+            type(image), optional, intent(in) :: warm_start
             type(reconstructor_pcg) :: pcgop
             type(pcg_solver_outcome) :: result
             type(string) :: fname
@@ -694,6 +827,12 @@ contains
             integer :: part_here, n_part, niters
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve
+            logical :: l_ml_solve
+
+            l_ml_solve = present(fsc_prior)
+            if( l_ml_solve .neqv. present(warm_start) )then
+                THROW_HARD('distributed PCG ML replay requires both FSC and warm start')
+            endif
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
@@ -709,19 +848,24 @@ contains
                 call fname%kill
             enddo
             time_reduce = real(toc(t_phase),dp)
-            write(logfhandle,'(A,I0,3A,I0)') '>>> PCG DISTRIBUTED: STATE ', state_here, &
-                &' ', trim(half), ' PARTICLES = ', nptcls
+            write(logfhandle,'(A,I0,5A,I0)') '>>> PCG DISTRIBUTED: STATE ', state_here, &
+                &' ', trim(half), ' ', trim(solve_kind), ' PARTICLES = ', nptcls
             if( nptcls == 0 )then
                 call pcgop%kill
                 return
             endif
             t_phase = tic()
+            if( l_ml_solve ) call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
-            call report_regularization(state_here, half, params%pcg_lambda_rel, &
+            call report_regularization(state_here, half//' '//solve_kind, params%pcg_lambda_rel, &
                 &pcgop%get_data_scale(), pcgop%get_effective_lambda())
             time_finalize = real(toc(t_phase),dp)
-            allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
+            if( l_ml_solve )then
+                x = warm_start%get_rmat()
+            else
+                allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
+            endif
             t_phase = tic()
             call pcgop%solve_accum(x, maxits=params%maxits, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
@@ -731,9 +875,9 @@ contains
             write(logfhandle,'(A,F9.3)') '    fixed-order raw reduction    : ', time_reduce
             write(logfhandle,'(A,F9.3)') '    master finalization          : ', time_finalize
             write(logfhandle,'(A,F9.3)') '    master PCG solve             : ', time_solve
-            write(logfhandle,'(A,I0,3A,I0,2A)') '>>> PCG DISTRIBUTED: STATE ', state_here, ' ', trim(half), &
-                &' FINISHED AFTER ', niters, ' ITERATIONS, STOP=', trim(result%stop_reason)
-            call write_distributed_diagnostics(state_here, half, nptcls, result, rel_res_hist, &
+            write(logfhandle,'(A,I0,5A,I0,2A)') '>>> PCG DISTRIBUTED: STATE ', state_here, ' ', trim(half), &
+                &' ', trim(solve_kind), ' FINISHED AFTER ', niters, ' ITERATIONS, STOP=', trim(result%stop_reason)
+            call write_distributed_diagnostics(state_here, half, solve_kind, nptcls, result, rel_res_hist, &
                 &time_reduce, time_finalize, time_solve, pcgop%get_data_scale(), &
                 &pcgop%get_effective_lambda())
             call pcgop%kill
@@ -810,19 +954,21 @@ contains
             deallocate(res)
         end subroutine write_distributed_fsc_summary
 
-        subroutine write_distributed_diagnostics( state_here, half, nptcls, result, history, &
+        subroutine write_distributed_diagnostics( state_here, half, solve_kind, nptcls, result, history, &
                 &reduce_time, finalize_time, solve_time, data_scale, lambda_eff )
             integer,                  intent(in) :: state_here, nptcls
-            character(len=*),         intent(in) :: half
+            character(len=*),         intent(in) :: half, solve_kind
             type(pcg_solver_outcome), intent(in) :: result
             real,                     intent(in) :: history(:)
             real(dp),                 intent(in) :: reduce_time, finalize_time, solve_time
             real,                     intent(in) :: data_scale, lambda_eff
             type(string) :: fname
             integer :: funit, i
-            fname = 'reconstruct3D_pcg_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_diagnostics.txt'
+            fname = 'reconstruct3D_pcg_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_'// &
+                &trim(solve_kind)//'_diagnostics.txt'
             call fopen(funit, file=fname, status='replace', action='write')
             write(funit,'(A,A)')      'execution_mode=',        'distributed'
+            write(funit,'(A,A)')      'solve_kind=',             trim(solve_kind)
             write(funit,'(A,I0)')     'nparts=',                params%nparts
             write(funit,'(A,I0)')     'nptcls=',                nptcls
             write(funit,'(A,I0)')     'requested_maxits=',      result%requested_maxits
@@ -871,7 +1017,10 @@ contains
         if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
         if( params%maxits < 1 .or. params%maxits > 8 ) THROW_HARD('production PCG requires 1<=maxits<=8')
         if( trim(params%projrec) /= 'no' ) THROW_HARD('rec_backend=pcg does not yet support projrec=yes')
-        if( params%box_crop /= params%box ) THROW_HARD('rec_backend=pcg does not yet support box cropping')
+        if( abs(real(params%box)*params%smpd - real(params%box_crop)*params%smpd_crop) > &
+            &1.0e-5*real(params%box)*params%smpd )then
+            THROW_HARD('PCG crop must preserve the native physical box extent')
+        endif
         if( params%l_update_frac .or. params%l_trail_rec )then
             THROW_HARD('PCG fractional and trailing reconstruction are not implemented')
         endif
@@ -883,8 +1032,12 @@ contains
     function pcg_raw_provenance( params ) result(provenance)
         type(parameters), intent(in) :: params
         character(len=256) :: provenance
-        provenance = 'pcgraw-v1|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
-            &'|ptcl_src='//trim(params%ptcl_src)//'|iter='//trim(int2str(params%which_iter))
+        provenance = 'pcgraw-v2|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
+            &'|ptcl_src='//trim(params%ptcl_src)//'|iter='//trim(int2str(params%which_iter))// &
+            &'|box='//trim(int2str(params%box))//'|smpd='//trim(real2str(params%smpd))// &
+            &'|box_crop='//trim(int2str(params%box_crop))// &
+            &'|smpd_crop='//trim(real2str(params%smpd_crop))// &
+            &'|msk='//trim(real2str(params%msk))//'|ctf='//trim(params%ctf)
     end function pcg_raw_provenance
 
 end module simple_rec3D_pcg_strategy

@@ -1040,6 +1040,10 @@ end subroutine exec_test_ptcls_ppca_subproject_distr
 !                                               solve of the expanded set
 !   10. lambda/data-mass scaling              -- duplicating all weighted data
 !                                               must not change the solution
+!   11. crop invariants                       -- common-band raw B,D and the
+!                                               cropped kernel operator
+!   12. ML prior operator                     -- positive FSC/SSNR diagonal and
+!                                               kernel/matrix-free parity
 !
 !  INVERSE CRIME, deliberately. Stages 1-7 generate observations with
 !  forward_plane, so the operator's own KB envelope appears identically in the
@@ -1055,9 +1059,10 @@ subroutine exec_test_pcg_recon( self, cline )
     use simple_sym,               only: sym
     class(commander_test_pcg_recon), intent(inout) :: self
     class(cmdline),                  intent(inout) :: cline
-    integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4, NCTF = 5
+    integer,          parameter :: BOX = 24, CROP_BOX = 16, NPROJS = 40, NBLOBS = 4, NCTF = 5
     integer,          parameter :: BATCHSZ = 7          ! deliberately not a divisor of NPROJS
     real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
+    real,             parameter :: CROP_SMPD = SMPD * real(BOX) / real(CROP_BOX)
     real,             parameter :: MASS_LAMBDA_REL = 1.0e-3
     real,             parameter :: ADJOINT_RELTOL = 1.0e-5, NORMAL_OP_RELTOL = 1.0e-4
     real,             parameter :: RECON_CORR_THRES = 0.9, MONOTONIC_SLACK = 1.0e-3
@@ -1081,6 +1086,7 @@ subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: STREAM_SOLVE_RELTOL = 5.0e-4
     real,             parameter :: MASS_SCALE_RELTOL = 5.0e-6
     real,             parameter :: MASS_SOLVE_RELTOL = 5.0e-4
+    real,             parameter :: CROP_RAW_RELTOL = 2.0e-5
     integer,          parameter :: STREAM_ITS    = 20
     integer,          parameter :: KERNEL_COMPARE_ITS = 8
     real,             parameter :: CTRS(3,NBLOBS) = reshape([&
@@ -1094,26 +1100,31 @@ subroutine exec_test_pcg_recon( self, cline )
     real,             parameter :: DFX_VALS(NCTF)    = [1.0, 1.5, 2.0, 2.5, 3.0]
     real,             parameter :: ASTIG_VALS(NCTF)  = [0.10, 0.15, 0.20, 0.12, 0.18]
     real,             parameter :: ANGAST_VALS(NCTF) = [0., 20., 40., 60., 80.]
-    type(reconstructor_pcg) :: pcgop, pcg_reduce
-    type(oris)              :: projdirs, projdirs_exp
+    type(reconstructor_pcg) :: pcgop, pcg_reduce, pcg_crop, pcg_ml
+    type(oris)              :: projdirs, projdirs_exp, projdirs_crop
     type(ori)               :: e, e_exp
     type(ctfparams)         :: ctfparms
     type(sym)               :: c1sym, c2sym
-    type(string)            :: raw_part1, raw_part2
+    type(string)            :: raw_part1, raw_part2, raw_ml
     type(pcg_solver_outcome) :: solver_outcome
     real,    allocatable    :: phantom(:,:,:), p_probe(:,:,:), q_probe(:,:,:)
     real,    allocatable    :: hp(:,:,:), hq(:,:,:), hm(:,:,:), hk(:,:,:)
     real,    allocatable    :: recon(:,:,:), recon_str(:,:,:), rel_res_hist(:)
     real,    allocatable    :: recon_mf(:,:,:), recon_kernel(:,:,:)
     real,    allocatable    :: recon_mass(:,:,:), recon_mass_dup(:,:,:)
+    real,    allocatable    :: p_crop(:,:,:), hm_crop(:,:,:), hk_crop(:,:,:)
+    real,    allocatable    :: hm_ml(:,:,:), hk_ml(:,:,:), ml_prior_diag(:,:,:)
     real,    allocatable    :: xdiv(:,:,:), recon_on(:,:,:), recon_off(:,:,:)
     real,    allocatable    :: env(:,:,:), invenv(:,:,:)
     real,    allocatable    :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
     real,    allocatable    :: qplane_re(:,:), qplane_im(:,:), sig2arr(:), sig2_2d(:,:)
+    real,    allocatable    :: sig2_crop(:,:), draw_full(:,:,:), draw_crop(:,:,:), fsc_prior(:)
     complex, allocatable    :: gx_plane(:,:), qplane(:,:), mplane(:,:), wplane(:,:), Ti(:,:)
-    complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:), y_exp(:,:,:)
+    complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:), y_exp(:,:,:), y_crop(:,:,:)
+    complex, allocatable    :: braw_full(:,:,:), braw_crop(:,:,:)
     integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, c, niters, iseed_n
     integer :: R, margin, lo, hi, ifrom, nb, nsym, nraw, nraw_total
+    integer :: lims2_crop(2,2), lims3_crop(3,2), raw_lim, hraw, kraw, mraw
     integer, allocatable :: iseed(:)
     real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
     real    :: err_all, err_int, err_max, den_all, den_int, kdiff, stream_err, rhs_err, kscale
@@ -1121,7 +1132,10 @@ subroutine exec_test_pcg_recon( self, cline )
     real    :: corr_on, corr_off, env_ctr, env_edge, recip_err
     real    :: data_scale, data_scale_dup, lambda_eff, lambda_eff_dup
     real    :: mass_scale_err, mass_lambda_err, mass_solution_err
+    real    :: crop_b_err, crop_d_err, crop_kernel_err, crop_factor
+    real    :: ml_kernel_err, ml_prior_min, ml_prior_max
     real(dp):: lhs, rhs, dp_p_hq, dp_hp_q, dp_p_hp
+    real(dp):: crop_b_num, crop_b_den, crop_d_num, crop_d_den, ml_prior_energy
     logical :: all_ok
     all_ok = .true.
 
@@ -1807,10 +1821,181 @@ subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a)') '>>> STAGE 10 SKIPPED: an earlier stage failed'
     endif
 
+    ! ============ STAGE 11: cropped accumulator and kernel invariants ============
+    ! A cropped reconstruction covers the same physical extent with fewer
+    ! Fourier samples. Native and cropped operators must therefore deposit the
+    ! same raw sufficient statistics inside the common band, provided the crop
+    ! boundary and the KB stencil are excluded. The cropped Khat must also
+    ! retain the matrix-free equivalence already required at the native box.
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 11: full vs cropped raw accumulators and cropped kernel'
+        call pcgop%kill
+        call pcgop%new(BOX, SMPD, 0.0)
+        call pcgop%set_deapod(.false.)
+        call projdirs%kill
+        call projdirs%new(NPROJS, .false.)
+        call projdirs%spiral
+        call projdirs_crop%new(NPROJS, .false.)
+        crop_factor = real(CROP_BOX) / real(BOX)
+        do i = 1, NPROJS
+            call projdirs%get_ori(i, e)
+            g = mod(i-1, NCTF) + 1
+            ctfparms%smpd = SMPD; ctfparms%kv = KV; ctfparms%cs = CS; ctfparms%fraca = FRACA
+            ctfparms%dfx = DFX_VALS(g); ctfparms%dfy = DFX_VALS(g)+ASTIG_VALS(g)
+            ctfparms%angast = ANGAST_VALS(g); ctfparms%phshift = 0.
+            shift = [1.0+0.3*real(mod(i-1,5)), -1.0+0.2*real(mod(i-1,7))]
+            call e%set_ctfvars(ctfparms)
+            call e%set_shift(shift)
+            call projdirs%set_ori(i, e)
+            ctfparms%smpd = CROP_SMPD
+            call e%set_ctfvars(ctfparms)
+            call e%set_shift(shift*crop_factor)
+            call projdirs_crop%set_ori(i, e)
+        enddo
+        call pcgop%set_volume(phantom)
+        do i = 1, NPROJS
+            call projdirs%get_ori(i, e)
+            call pcgop%forward_plane(e, gx_plane)
+            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), sig2arr)
+            y_planes(:,:,i) = Ti * gx_plane
+        enddo
+        call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(y_planes, NPROJS, 1)
+        call pcgop%get_raw_accum(braw_full, draw_full)
+
+        call pcg_crop%new(CROP_BOX, CROP_SMPD, 0.0)
+        call pcg_crop%set_deapod(.true.)
+        lims2_crop = pcg_crop%get_lims2()
+        lims3_crop = pcg_crop%get_lims3()
+        allocate(sig2_crop(0:CROP_BOX/2,NPROJS))
+        do i = 1, NPROJS
+            sig2_crop(:,i) = sig2arr(0:CROP_BOX/2)
+        enddo
+        allocate(y_crop(lims2_crop(1,1):lims2_crop(1,2), &
+                       &lims2_crop(2,1):lims2_crop(2,2), NPROJS))
+        y_crop = y_planes(lims2_crop(1,1):lims2_crop(1,2), &
+            &lims2_crop(2,1):lims2_crop(2,2),:)
+        call pcg_crop%prep_particles(projdirs_crop, use_ctf=.true., sig2=sig2_crop)
+        call pcg_crop%begin_accum
+        call pcg_crop%accumulate_batch(y_crop, NPROJS, 1)
+        call pcg_crop%get_raw_accum(braw_crop, draw_crop)
+        raw_ml = 'test_pcg_ml_prior.dat'
+        call pcg_crop%write_raw_accum(raw_ml, 1, 0, 1, 1, NPROJS, 'pcg_ml_prior_v1')
+
+        raw_lim    = CROP_BOX - 5
+        crop_b_num = 0.0_dp
+        crop_b_den = 0.0_dp
+        crop_d_num = 0.0_dp
+        crop_d_den = 0.0_dp
+        do mraw = lims3_crop(3,1), lims3_crop(3,2)
+            do kraw = lims3_crop(2,1), lims3_crop(2,2)
+                do hraw = lims3_crop(1,1), lims3_crop(1,2)
+                    if( hraw*hraw + kraw*kraw + mraw*mraw > raw_lim*raw_lim ) cycle
+                    crop_b_num = crop_b_num + real(abs(braw_crop(hraw,kraw,mraw) - &
+                        &braw_full(hraw,kraw,mraw))**2,dp)
+                    crop_b_den = crop_b_den + real(abs(braw_full(hraw,kraw,mraw))**2,dp)
+                    crop_d_num = crop_d_num + real((draw_crop(hraw,kraw,mraw) - &
+                        &draw_full(hraw,kraw,mraw))**2,dp)
+                    crop_d_den = crop_d_den + real(draw_full(hraw,kraw,mraw)**2,dp)
+                enddo
+            enddo
+        enddo
+        crop_b_err = real(sqrt(crop_b_num / max(1.0_dp,crop_b_den)))
+        crop_d_err = real(sqrt(crop_d_num / max(1.0_dp,crop_d_den)))
+        write(logfhandle,'(a,es14.6,a,es14.6)') '    common-band rel_err(B) = ', crop_b_err, &
+            &' rel_err(D) = ', crop_d_err
+        if( crop_b_err > CROP_RAW_RELTOL .or. crop_d_err > CROP_RAW_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: cropped raw accumulators disagree with the full-box common band'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: cropped raw accumulators preserve the full-box common band'
+        endif
+
+        call pcg_crop%end_accum(.true.)
+        allocate(p_crop(CROP_BOX,CROP_BOX,CROP_BOX))
+        call random_number(p_crop)
+        p_crop = p_crop - 0.5
+        hm_crop = pcg_crop%apply_normal_matrixfree(p_crop)
+        hk_crop = pcg_crop%apply_normal_kernel(p_crop)
+        margin = 4
+        lo = margin + 1
+        hi = CROP_BOX - margin
+        crop_kernel_err = sqrt(sum((hk_crop(lo:hi,lo:hi,lo:hi) - &
+            &hm_crop(lo:hi,lo:hi,lo:hi))**2)) / &
+            &max(1.0,sqrt(sum(hm_crop(lo:hi,lo:hi,lo:hi)**2)))
+        write(logfhandle,'(a,es14.6)') '    cropped kernel interior rel_err = ', crop_kernel_err
+        if( crop_kernel_err > EPS_INTERIOR )then
+            write(logfhandle,'(a)') '    FAIL: cropped kernel disagrees with the matrix-free reference'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: cropped kernel agrees with the matrix-free reference'
+        endif
+    else
+        write(logfhandle,'(a)') '>>> STAGE 11 SKIPPED: an earlier stage failed'
+    endif
+
+    ! ============ STAGE 12: FSC/SSNR ML prior operator ============
+    ! Replay the cropped raw artifact so the prior is derived only after D is
+    ! available, exactly as the production two-map path will do after the base
+    ! independent-half FSC has been measured.
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 12: FSC/SSNR ML prior positivity and operator parity'
+        call pcg_ml%new(CROP_BOX, CROP_SMPD, 0.0)
+        call pcg_ml%set_deapod(.true.)
+        call pcg_ml%prep_particles(projdirs_crop, use_ctf=.true., sig2=sig2_crop)
+        call pcg_ml%begin_reduction
+        call pcg_ml%add_raw_accum(raw_ml, 1, 0, 1, 1, 'pcg_ml_prior_v1', nraw)
+        allocate(fsc_prior(CROP_BOX/2), source=0.5)
+        do i = 1, size(fsc_prior)
+            fsc_prior(i) = max(0.05, 0.9 - 0.1*real(i-1))
+        enddo
+        call pcg_ml%set_ml_prior(fsc_prior, 1.0, 100.0)
+        call pcg_ml%end_accum(.true.)
+        call pcg_ml%get_ml_prior(ml_prior_diag)
+        ml_prior_min = minval(ml_prior_diag)
+        ml_prior_max = maxval(ml_prior_diag)
+        write(logfhandle,'(a,es14.6,a,es14.6)') '    prior diagonal min = ', ml_prior_min, &
+            &' max = ', ml_prior_max
+        if( ml_prior_min < 0.0 .or. ml_prior_max <= 0.0 )then
+            write(logfhandle,'(a)') '    FAIL: ML prior is not a nonzero positive-semidefinite diagonal'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: ML prior is a nonzero positive-semidefinite diagonal'
+        endif
+        hm_ml = pcg_ml%apply_normal_matrixfree(p_crop)
+        hk_ml = pcg_ml%apply_normal_kernel(p_crop)
+        margin = 4
+        lo = margin + 1
+        hi = CROP_BOX - margin
+        ml_kernel_err = sqrt(sum((hk_ml(lo:hi,lo:hi,lo:hi) - &
+            &hm_ml(lo:hi,lo:hi,lo:hi))**2)) / &
+            &max(1.0,sqrt(sum(hm_ml(lo:hi,lo:hi,lo:hi)**2)))
+        ml_prior_energy = sum(real(p_crop,dp) * real(hk_ml-hk_crop,dp))
+        write(logfhandle,'(a,es14.6,a,es14.6)') '    ML kernel interior rel_err = ', ml_kernel_err, &
+            &' dot(p,P_tau*p) = ', real(ml_prior_energy)
+        if( ml_kernel_err > EPS_INTERIOR )then
+            write(logfhandle,'(a)') '    FAIL: ML kernel disagrees with the matrix-free reference'
+            all_ok = .false.
+        else if( ml_prior_energy <= 0.0_dp )then
+            write(logfhandle,'(a)') '    FAIL: ML prior does not add positive quadratic energy'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: ML prior preserves operator parity and adds positive energy'
+        endif
+        call del_file(raw_ml)
+        call raw_ml%kill
+    else
+        write(logfhandle,'(a)') '>>> STAGE 12 SKIPPED: an earlier stage failed'
+    endif
+
     call pcgop%kill
     call pcg_reduce%kill
+    call pcg_crop%kill
+    call pcg_ml%kill
     call projdirs%kill
     call projdirs_exp%kill
+    call projdirs_crop%kill
     call e%kill
     call e_exp%kill
     call c1sym%kill
