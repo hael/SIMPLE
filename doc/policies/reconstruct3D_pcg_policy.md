@@ -104,9 +104,13 @@ noise covariance from the particle's `sigma2`. With
 H x = b,    H = sum_i K_i^dagger K_i + Lambda,    b = sum_i K_i^dagger N_i^{-1/2} y_i
 ```
 
-`Lambda = lambda*I` is a fixed positive prior, constant for the whole solve. No
-current-volume-dependent mask, FSC, filter or nonlinear clipping appears inside
-the operator — that linearity is what PCG relies on.
+`Lambda = lambda_eff*I` is a fixed positive prior, constant for one solve. The
+legacy default is the absolute coefficient `1e-3`. The opt-in
+`pcg_lambda_rel>=0` path instead derives
+`lambda_eff=pcg_lambda_rel*s_data(D)` after raw `D` has been reduced, using a
+linear fixed-band scale. No current-volume-dependent mask, FSC, filter or
+nonlinear clipping appears inside the operator — that linearity is what PCG
+relies on.
 
 **The normal operator carries only the real weight `|T_i|^2 = |C_i|^2/sigma2_i`.**
 The shift phase is unit-modulus and cancels between the forward and adjoint

@@ -1038,6 +1038,8 @@ end subroutine exec_test_ptcls_ppca_subproject_distr
 !    9. symmetry by coordinate replication   -- in-operator point-group
 !                                               replication must equal a c1
 !                                               solve of the expanded set
+!   10. lambda/data-mass scaling              -- duplicating all weighted data
+!                                               must not change the solution
 !
 !  INVERSE CRIME, deliberately. Stages 1-7 generate observations with
 !  forward_plane, so the operator's own KB envelope appears identically in the
@@ -1056,6 +1058,7 @@ subroutine exec_test_pcg_recon( self, cline )
     integer,          parameter :: BOX = 24, NPROJS = 40, NBLOBS = 4, NCTF = 5
     integer,          parameter :: BATCHSZ = 7          ! deliberately not a divisor of NPROJS
     real,             parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
+    real,             parameter :: MASS_LAMBDA_REL = 1.0e-3
     real,             parameter :: ADJOINT_RELTOL = 1.0e-5, NORMAL_OP_RELTOL = 1.0e-4
     real,             parameter :: RECON_CORR_THRES = 0.9, MONOTONIC_SLACK = 1.0e-3
     ! kernel epsilon set from the single-precision roundoff the operator stages
@@ -1076,6 +1079,8 @@ subroutine exec_test_pcg_recon( self, cline )
     ! defect or manufacture a false failure.
     real,             parameter :: STREAM_ACCUM_RELTOL = 1.0e-6
     real,             parameter :: STREAM_SOLVE_RELTOL = 5.0e-4
+    real,             parameter :: MASS_SCALE_RELTOL = 5.0e-6
+    real,             parameter :: MASS_SOLVE_RELTOL = 5.0e-4
     integer,          parameter :: STREAM_ITS    = 20
     integer,          parameter :: KERNEL_COMPARE_ITS = 8
     real,             parameter :: CTRS(3,NBLOBS) = reshape([&
@@ -1100,6 +1105,7 @@ subroutine exec_test_pcg_recon( self, cline )
     real,    allocatable    :: hp(:,:,:), hq(:,:,:), hm(:,:,:), hk(:,:,:)
     real,    allocatable    :: recon(:,:,:), recon_str(:,:,:), rel_res_hist(:)
     real,    allocatable    :: recon_mf(:,:,:), recon_kernel(:,:,:)
+    real,    allocatable    :: recon_mass(:,:,:), recon_mass_dup(:,:,:)
     real,    allocatable    :: xdiv(:,:,:), recon_on(:,:,:), recon_off(:,:,:)
     real,    allocatable    :: env(:,:,:), invenv(:,:,:)
     real,    allocatable    :: khat_a(:,:,:), khat_b(:,:,:), b_mono(:,:,:), b_str(:,:,:)
@@ -1113,6 +1119,8 @@ subroutine exec_test_pcg_recon( self, cline )
     real    :: err_all, err_int, err_max, den_all, den_int, kdiff, stream_err, rhs_err, kscale
     real    :: solution_err, solution_norm_ratio, energy_ratio
     real    :: corr_on, corr_off, env_ctr, env_edge, recip_err
+    real    :: data_scale, data_scale_dup, lambda_eff, lambda_eff_dup
+    real    :: mass_scale_err, mass_lambda_err, mass_solution_err
     real(dp):: lhs, rhs, dp_p_hq, dp_hp_q, dp_p_hp
     logical :: all_ok
     all_ok = .true.
@@ -1704,7 +1712,103 @@ subroutine exec_test_pcg_recon( self, cline )
         write(logfhandle,'(a)') '>>> STAGE 9 SKIPPED: an earlier stage failed'
     endif
 
+    ! ============ STAGE 10: lambda scaling with effective data mass ============
+    ! If every weighted observation is duplicated, B and H_data both double.
+    ! A fixed absolute lambda would then become half as strong. Relative lambda
+    ! must double with D so the complete normal system is scaled uniformly and
+    ! a fixed-iteration PCG solve remains invariant.
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 10: lambda scaling with effective data mass'
+        call pcgop%kill
+        call pcgop%new(BOX, SMPD, 0.0)
+        call pcgop%set_deapod(.false.)
+        call pcgop%set_lambda_relative(MASS_LAMBDA_REL)
+        call projdirs%new(NPROJS, .false.)
+        call projdirs%spiral
+        call pcgop%set_volume(phantom)
+        do i = 1, NPROJS
+            call projdirs%get_ori(i, e)
+            call pcgop%forward_plane(e, y_planes(:,:,i))
+        end do
+        call pcgop%prep_particles(projdirs)
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(y_planes, NPROJS, 1)
+        call pcgop%end_accum(.true.)
+        call pcgop%set_op_mode(PCG_OP_KERNEL)
+        data_scale = pcgop%get_data_scale()
+        lambda_eff = pcgop%get_effective_lambda()
+        allocate(recon_mass(BOX,BOX,BOX), source=0.0)
+        call pcgop%solve_accum(recon_mass, maxits=2, rtol=0.0)
+
+        call projdirs_exp%kill
+        call projdirs_exp%new(2*NPROJS, .false.)
+        do i = 1, NPROJS
+            call projdirs%get_ori(i, e)
+            call projdirs_exp%set_ori(i, e)
+            call projdirs_exp%set_ori(NPROJS+i, e)
+        end do
+        if( allocated(y_exp) ) deallocate(y_exp)
+        allocate(y_exp(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), 2*NPROJS))
+        y_exp(:,:,1:NPROJS)          = y_planes
+        y_exp(:,:,NPROJS+1:2*NPROJS) = y_planes
+        ! Reach the doubled-data solve through the production distributed
+        ! boundary: two raw worker artifacts, fixed-order master reduction,
+        ! then relative-lambda derivation from the reduced D.
+        raw_part1 = 'test_pcg_mass_part1.dat'
+        raw_part2 = 'test_pcg_mass_part2.dat'
+        call pcgop%kill
+        call pcgop%new(BOX, SMPD, 0.0)
+        call pcgop%set_deapod(.false.)
+        call pcgop%prep_particles(projdirs_exp)
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(y_exp(:,:,1:NPROJS), NPROJS, 1)
+        call pcgop%write_raw_accum(raw_part1, 1, 0, 1, 2, NPROJS, 'pcg_lambda_mass_v1')
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(y_exp(:,:,NPROJS+1:2*NPROJS), NPROJS, NPROJS+1)
+        call pcgop%write_raw_accum(raw_part2, 1, 0, 2, 2, NPROJS, 'pcg_lambda_mass_v1')
+        call pcgop%kill
+        call pcg_reduce%new(BOX, SMPD, 0.0)
+        call pcg_reduce%set_deapod(.false.)
+        call pcg_reduce%set_lambda_relative(MASS_LAMBDA_REL)
+        call pcg_reduce%begin_reduction
+        call pcg_reduce%add_raw_accum(raw_part1, 1, 0, 1, 2, 'pcg_lambda_mass_v1', nraw)
+        call pcg_reduce%add_raw_accum(raw_part2, 1, 0, 2, 2, 'pcg_lambda_mass_v1', nraw)
+        call pcg_reduce%end_accum(.true.)
+        call pcg_reduce%set_op_mode(PCG_OP_KERNEL)
+        data_scale_dup = pcg_reduce%get_data_scale()
+        lambda_eff_dup = pcg_reduce%get_effective_lambda()
+        allocate(recon_mass_dup(BOX,BOX,BOX), source=0.0)
+        call pcg_reduce%solve_accum(recon_mass_dup, maxits=2, rtol=0.0)
+
+        mass_scale_err = abs(data_scale_dup - 2.0*data_scale) / max(TINY, 2.0*data_scale)
+        mass_lambda_err = abs(lambda_eff_dup - 2.0*lambda_eff) / max(TINY, 2.0*lambda_eff)
+        mass_solution_err = sqrt(sum((recon_mass_dup-recon_mass)**2)) / &
+            &max(1.0, sqrt(sum(recon_mass*recon_mass)))
+        write(logfhandle,'(a,es14.6,a,es14.6)') '    data scale: original = ', data_scale, &
+            &' duplicated = ', data_scale_dup
+        write(logfhandle,'(a,es14.6,a,es14.6)') '    lambda_eff: original = ', lambda_eff, &
+            &' duplicated = ', lambda_eff_dup
+        write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    rel_err(scale x2) = ', mass_scale_err, &
+            &' rel_err(lambda x2) = ', mass_lambda_err, ' rel_err(solution) = ', mass_solution_err
+        if( mass_scale_err > MASS_SCALE_RELTOL .or. mass_lambda_err > MASS_SCALE_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: effective lambda does not scale with duplicated data'
+            all_ok = .false.
+        else if( mass_solution_err > MASS_SOLVE_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: relative lambda changes the solution under data duplication'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: relative lambda preserves the solution across data mass'
+        endif
+        call del_file(raw_part1)
+        call del_file(raw_part2)
+        call raw_part1%kill
+        call raw_part2%kill
+    else
+        write(logfhandle,'(a)') '>>> STAGE 10 SKIPPED: an earlier stage failed'
+    endif
+
     call pcgop%kill
+    call pcg_reduce%kill
     call projdirs%kill
     call projdirs_exp%kill
     call e%kill

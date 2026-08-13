@@ -244,7 +244,7 @@ All must pass:
 
 Base-lambda scaling is not a research prior. `lambda I` appears in every PCG
 solve, including `_unfil`, so its strength must be defined relative to a
-homogeneous effective-data scale derived from master-reduced or trailing-
+linear effective-data scale derived from master-reduced or trailing-
 blended, data-only `D`. Workers still publish raw `(B,D)` only. This P0 contract
 must close before further distributed crop/ML work or `refine3D` integration.
 Shared/distributed execution, repartitioning, fractional updates, trailing, and

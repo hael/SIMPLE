@@ -217,6 +217,7 @@ contains
             t_phase = tic()
             crop_factor = real(params%box_crop) / real(params%box)
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
+            if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
             call pcgop%set_sym(build%pgrpsyms)
             call pcgop%set_mask(params%msk_crop)
             lims2 = pcgop%get_lims2()
@@ -274,6 +275,8 @@ contains
             t_phase = tic()
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
+            call report_regularization(state_here, half, params%pcg_lambda_rel, &
+                &pcgop%get_data_scale(), pcgop%get_effective_lambda())
             time_finalize = real(toc(t_phase),dp)
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             t_phase = tic()
@@ -286,7 +289,8 @@ contains
             call report_half_timings(state_here, half, time_metadata, time_particles, time_accum_init, &
                 &time_accum, time_finalize, time_solve, time_total)
             call write_half_diagnostics(state_here, half, size(pinds), result, rel_res_hist, &
-                &time_metadata, time_particles, time_accum_init, time_accum, time_finalize, time_solve, time_total)
+                &time_metadata, time_particles, time_accum_init, time_accum, time_finalize, time_solve, time_total, &
+                &pcgop%get_data_scale(), pcgop%get_effective_lambda())
             write(logfhandle,'(A,I0,3A,I0,2A)') '>>> PCG RECONSTRUCT3D: STATE ', state_here, ' ', trim(half), &
                 &' FINISHED AFTER ', niters, ' ITERATIONS, STOP=', trim(result%stop_reason)
             if( present(outcome) ) outcome = result
@@ -387,13 +391,14 @@ contains
         end subroutine report_half_timings
 
         subroutine write_half_diagnostics( state_here, half, nptcls, result, history, &
-                &metadata, particles, accum_init, accum, finalize, solve_time, total )
+                &metadata, particles, accum_init, accum, finalize, solve_time, total, data_scale, lambda_eff )
             integer,                  intent(in) :: state_here, nptcls
             character(len=*),         intent(in) :: half
             type(pcg_solver_outcome), intent(in) :: result
             real,                     intent(in) :: history(:)
             real(dp),                 intent(in) :: metadata, particles, accum_init, accum
             real(dp),                 intent(in) :: finalize, solve_time, total
+            real,                     intent(in) :: data_scale, lambda_eff
             type(string) :: fname
             integer :: funit, i
             fname = 'reconstruct3D_pcg_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_diagnostics.txt'
@@ -406,6 +411,9 @@ contains
             write(funit,'(A,ES14.6)') 'initial_rel_resid_l2=', result%initial_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',   result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_update=',     result%final_rel_update
+            write(funit,'(A,ES14.6)') 'pcg_data_scale=',       data_scale
+            write(funit,'(A,ES14.6)') 'pcg_lambda_relative=',  params%pcg_lambda_rel
+            write(funit,'(A,ES14.6)') 'pcg_lambda_effective=', lambda_eff
             write(funit,'(A,F12.6)')  'metadata_seconds=',     metadata
             write(funit,'(A,F12.6)')  'particle_io_prep_seconds=', particles
             write(funit,'(A,F12.6)')  'accum_init_seconds=',   accum_init
@@ -688,6 +696,7 @@ contains
             real(dp) :: time_reduce, time_finalize, time_solve
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
+            if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
             call pcgop%set_mask(params%msk_crop)
             call pcgop%begin_reduction
             nptcls = 0
@@ -709,6 +718,8 @@ contains
             t_phase = tic()
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
+            call report_regularization(state_here, half, params%pcg_lambda_rel, &
+                &pcgop%get_data_scale(), pcgop%get_effective_lambda())
             time_finalize = real(toc(t_phase),dp)
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             t_phase = tic()
@@ -723,7 +734,8 @@ contains
             write(logfhandle,'(A,I0,3A,I0,2A)') '>>> PCG DISTRIBUTED: STATE ', state_here, ' ', trim(half), &
                 &' FINISHED AFTER ', niters, ' ITERATIONS, STOP=', trim(result%stop_reason)
             call write_distributed_diagnostics(state_here, half, nptcls, result, rel_res_hist, &
-                &time_reduce, time_finalize, time_solve)
+                &time_reduce, time_finalize, time_solve, pcgop%get_data_scale(), &
+                &pcgop%get_effective_lambda())
             call pcgop%kill
             deallocate(x, rel_res_hist)
         end subroutine reduce_solve_state_half
@@ -799,12 +811,13 @@ contains
         end subroutine write_distributed_fsc_summary
 
         subroutine write_distributed_diagnostics( state_here, half, nptcls, result, history, &
-                &reduce_time, finalize_time, solve_time )
+                &reduce_time, finalize_time, solve_time, data_scale, lambda_eff )
             integer,                  intent(in) :: state_here, nptcls
             character(len=*),         intent(in) :: half
             type(pcg_solver_outcome), intent(in) :: result
             real,                     intent(in) :: history(:)
             real(dp),                 intent(in) :: reduce_time, finalize_time, solve_time
+            real,                     intent(in) :: data_scale, lambda_eff
             type(string) :: fname
             integer :: funit, i
             fname = 'reconstruct3D_pcg_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_diagnostics.txt'
@@ -819,6 +832,9 @@ contains
             write(funit,'(A,ES14.6)') 'initial_rel_resid_l2=',  result%initial_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',    result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_update=',      result%final_rel_update
+            write(funit,'(A,ES14.6)') 'pcg_data_scale=',        data_scale
+            write(funit,'(A,ES14.6)') 'pcg_lambda_relative=',   params%pcg_lambda_rel
+            write(funit,'(A,ES14.6)') 'pcg_lambda_effective=',  lambda_eff
             write(funit,'(A,F12.6)')  'raw_reduce_seconds=',    reduce_time
             write(funit,'(A,F12.6)')  'master_finalize_seconds=', finalize_time
             write(funit,'(A,F12.6)')  'solve_seconds=',         solve_time
@@ -830,6 +846,25 @@ contains
         end subroutine write_distributed_diagnostics
 
     end subroutine execute_rec3D_pcg_distributed_master
+
+    subroutine report_regularization( state, half, lambda_rel, data_scale, lambda_eff )
+        integer,          intent(in) :: state
+        character(len=*), intent(in) :: half
+        real,             intent(in) :: lambda_rel, data_scale, lambda_eff
+        if( lambda_rel >= 0.0 )then
+            write(logfhandle,'(A,I0,2A)') '>>> PCG REGULARIZATION: STATE ', state, ' ', trim(half)
+            write(logfhandle,'(A)')        '    mode             : relative'
+            write(logfhandle,'(A,ES14.6)') '    data scale       : ', data_scale
+            write(logfhandle,'(A,ES14.6)') '    lambda relative  : ', lambda_rel
+            write(logfhandle,'(A,ES14.6)') '    lambda effective : ', lambda_eff
+        else
+            write(logfhandle,'(A,I0,2A)') '>>> PCG REGULARIZATION: STATE ', state, ' ', trim(half)
+            write(logfhandle,'(A)')        '    mode             : legacy absolute'
+            write(logfhandle,'(A,ES14.6)') '    data scale       : ', data_scale
+            write(logfhandle,'(A,ES14.6)') '    lambda effective : ', lambda_eff
+        endif
+        call flush(logfhandle)
+    end subroutine report_regularization
 
     subroutine validate_pcg_common( params )
         type(parameters), intent(in) :: params

@@ -1,5 +1,6 @@
 !@descr: constructor and semantic execution, source, derivation, and validation phases for SIMPLE parameters
 submodule(simple_parameters) simple_parameters_phases
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_sp_project, only: sp_project
 implicit none
 #include "simple_local_flags.inc"
@@ -777,6 +778,13 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
+        if( .not. ieee_is_finite(self%pcg_lambda_rel) ) THROW_HARD('pcg_lambda_rel must be finite')
+        if( self%pcg_lambda_rel < 0.0 .and. self%pcg_lambda_rel /= -1.0 )then
+            THROW_HARD('pcg_lambda_rel must be non-negative or -1')
+        endif
+        if( self%pcg_lambda_rel >= 0.0 .and. trim(self%rec_backend) /= 'pcg' )then
+            THROW_HARD('pcg_lambda_rel requires rec_backend=pcg')
+        endif
         select case(trim(self%inpl_cont))
             case('yes','no')
             case DEFAULT

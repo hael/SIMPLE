@@ -55,7 +55,10 @@ type :: reconstructor_pcg
     integer          :: wlims(2)   = 0  !< [lo,hi] canonical period-box wrap range
     integer          :: sqlp       = 0  !< squared Nyquist radius
     integer          :: sq_rim     = 0  !< below this h^2+k^2 a KB window cannot wrap, see new
-    real             :: lambda     = 0.0
+    real             :: lambda     = 0.0 !< effective absolute coefficient used by apply_normal
+    real             :: lambda_rel = 0.0 !< coefficient relative to the weighted data-operator scale
+    real             :: data_scale = 0.0 !< deterministic scale derived from raw data-only D
+    logical          :: l_lambda_relative = .false.
     ! ---- per-particle inputs, cached once by prep_particles ----
     integer                       :: nptcls = 0
     integer                       :: nsym   = 1   !< point-group order; 1 = c1 (no replication)
@@ -146,6 +149,7 @@ type :: reconstructor_pcg
     procedure, private :: finalize_khat
     procedure :: set_deapod
     procedure :: set_mask
+    procedure :: set_lambda_relative
     procedure, private :: build_env
     procedure, private :: build_kb_envelope_1d
     procedure, private :: build_hk_luts
@@ -175,6 +179,8 @@ type :: reconstructor_pcg
     procedure :: get_env
     procedure :: get_invenv
     procedure :: get_rhs
+    procedure :: get_data_scale
+    procedure :: get_effective_lambda
     ! SOLVER
     procedure :: solve
     procedure :: solve_accum
@@ -193,6 +199,7 @@ type :: reconstructor_pcg
     procedure, private :: ensure_wimg
     procedure, private :: pad_vol
     procedure, private :: crop_vol
+    procedure, private :: update_lambda_from_density
 end type reconstructor_pcg
 
 contains
@@ -445,6 +452,22 @@ contains
         self%l_deapod = l_deapod
     end subroutine set_deapod
 
+    !> Interpret lambda as a dimensionless coefficient relative to the weighted
+    !! data normal operator. The effective absolute coefficient is derived only
+    !! after raw D has been reduced or trailing-blended; workers therefore keep
+    !! publishing raw (B,D), with no regularization embedded in the artifact.
+    subroutine set_lambda_relative( self, lambda_rel )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                       intent(in)    :: lambda_rel
+        if( .not. ieee_is_finite(lambda_rel) .or. lambda_rel < 0.0 )then
+            THROW_HARD('relative PCG lambda must be finite and non-negative')
+        endif
+        self%lambda_rel = lambda_rel
+        self%data_scale = 0.0
+        self%lambda     = 0.0
+        self%l_lambda_relative = .true.
+    end subroutine set_lambda_relative
+
     !>  \brief  Multiplies a real volume by E^-1, the inverse KB instrument
     !!          envelope -- the deapodization / roll-off correction.
     !!
@@ -587,6 +610,9 @@ contains
         self%sqlp   = 0
         self%sq_rim = 0
         self%lambda = 0.0
+        self%lambda_rel = 0.0
+        self%data_scale = 0.0
+        self%l_lambda_relative = .false.
         self%nptcls = 0
         self%nsym   = 1
         self%l_use_ctf   = .false.
@@ -1597,6 +1623,45 @@ contains
         call self%finalize_density_accum(rho_accum, .true., .false.)
     end subroutine precond_from_accum
 
+    !> Set the absolute Tikhonov coefficient from a homogeneous scale of the
+    !! raw data-only density. The first six native Fourier shells are common to
+    !! full and cropped representations of the same physical box, and avoid
+    !! making lambda depend on whether higher-resolution shells are present.
+    !! Zero bins remain in the fixed-support average: excluding them would make
+    !! the scale nonlinear when fractional updates cover different voxels. Raw
+    !! D is converted to the calibrated normal-operator convention by the same
+    !! padsc**2 factor as Khat.
+    subroutine update_lambda_from_density( self, rho_accum )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                       intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
+                                                               &self%lims3(2,1):self%lims3(2,2),&
+                                                               &self%lims3(3,1):self%lims3(3,2))
+        integer, parameter :: DATA_SCALE_NATIVE_SHELLS = 6
+        real(dp) :: dsum
+        real     :: dval
+        integer  :: h, k, m, hh, nscale, scale_lim_sq
+        scale_lim_sq = (self%padf * min(DATA_SCALE_NATIVE_SHELLS, self%Rnat))**2
+        dsum   = 0.0_dp
+        nscale = 0
+        do m = self%lims3(3,1), self%lims3(3,2)
+            do k = self%lims3(2,1), self%lims3(2,2)
+                do h = 0, self%lims3(1,2)
+                    if( h*h + k*k + m*m > scale_lim_sq ) cycle
+                    hh   = self%wrap(h)
+                    dval = rho_accum(hh,k,m)
+                    dsum   = dsum + real(dval,dp)
+                    nscale = nscale + 1
+                end do
+            end do
+        end do
+        if( nscale < 1 .or. dsum <= 0.0_dp ) THROW_HARD('cannot derive PCG data scale from empty D')
+        self%data_scale = real(dsum / real(nscale,dp)) * self%padsc**2
+        if( .not. ieee_is_finite(self%data_scale) .or. self%data_scale <= 0.0 )then
+            THROW_HARD('invalid PCG data scale derived from D')
+        endif
+        if( self%l_lambda_relative ) self%lambda = self%lambda_rel * self%data_scale
+    end subroutine update_lambda_from_density
+
     !> Fold the real density accumulator once into the packed Fourier layout.
     !! The preconditioner and Khat are two views of the same D accumulator, so
     !! producing them in one sphere-limited parallel pass avoids a second full
@@ -1617,6 +1682,7 @@ contains
         real    :: denom, rval
         integer(timer_int_kind) :: tp
         if( .not. l_precond .and. .not. l_kernel ) return
+        call self%update_lambda_from_density(rho_accum)
         cdim = self%wimg%get_array_shape()
         ! Data only ever reaches |loc| <= padf*Rnat, so beyond that radius rho is
         ! identically zero: those modes are completely unconstrained. Zero them,
@@ -2469,6 +2535,16 @@ contains
         class(reconstructor_pcg), intent(in) :: self
         get_nptcls = self%nptcls
     end function get_nptcls
+
+    pure real function get_data_scale( self )
+        class(reconstructor_pcg), intent(in) :: self
+        get_data_scale = self%data_scale
+    end function get_data_scale
+
+    pure real function get_effective_lambda( self )
+        class(reconstructor_pcg), intent(in) :: self
+        get_effective_lambda = self%lambda
+    end function get_effective_lambda
 
     ! SOLVER
 

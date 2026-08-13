@@ -165,6 +165,10 @@ subroutine new_automask( prgtab )
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits iterations', 'tolerance{0.001}', &
         &.false., 0.001, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call reconstruct3D%add_input(UI_FILT, 'pcg_lambda_rel', 'num', 'Relative PCG Tikhonov strength', &
+        &'Scale lambda against the reduced data operator; -1 keeps the legacy absolute 1e-3 coefficient', &
+        &'relative strength{-1}', .false., -1.0, visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         ! mask controls
         call reconstruct3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)

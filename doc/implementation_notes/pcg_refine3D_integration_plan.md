@@ -118,13 +118,15 @@ master-reduced or trailing-blended, data-only `D`:
 ```text
 lambda_eff = lambda_rel * s_data(D_chain)
 s_data(c D) = c s_data(D), for c > 0
+s_data(D1 + D2) = s_data(D1) + s_data(D2)
 ```
 
 The scale functional must use a declared, crop-aware support/band of `D` and
 must reflect the statistical weights and symmetry expansion already present in
 the data operator. It cannot depend on the number of files, workers, or parts.
-The homogeneity condition makes duplication, uniform weight scaling, and
-`u/f`/trailing mass changes scale lambda with the data term. Equivalently, the
+Linearity makes partition reduction and trailing blends compose exactly, while
+homogeneity makes duplication, uniform weight scaling, and `u/f` mass changes
+scale lambda with the data term. Equivalently, the
 solve may divide `B` and `H_data` by `s_data` and use `lambda_rel I`; the two
 forms must be numerically equivalent. Workers continue to publish raw `(B,D)`
 only. Lambda is derived by the master after reduction or trailing blend and is
