@@ -11,6 +11,7 @@ type(ui_program), target :: reproject
 type(ui_program), target :: subproject_distr
 type(ui_program), target :: ptcls_ppca_subproject_distr
 type(ui_program), target :: pcg_recon
+type(ui_program), target :: pcg_frac_update
 
 contains
 
@@ -23,6 +24,7 @@ contains
         call new_subproject_distr(tsttab)
         call new_ptcls_ppca_subproject_distr(tsttab)
         call new_pcg_recon(tsttab)
+        call new_pcg_frac_update(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -35,6 +37,7 @@ contains
         write(logfhandle,'(A)') subproject_distr%name%to_char()
         write(logfhandle,'(A)') ptcls_ppca_subproject_distr%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
+        write(logfhandle,'(A)') pcg_frac_update%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -172,5 +175,42 @@ contains
         ! add to ui_hash
         call add_ui_program('pcg_recon', pcg_recon, tsttab, UI_CATEGORY)
     end subroutine new_pcg_recon
+
+    subroutine new_pcg_frac_update( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call pcg_frac_update%new(&
+        &'pcg_frac_update',&
+        &'Project-backed PCG fractional-update validation',&
+        &'Uses reconstruct3D inputs and internally partitions every populated state/half into two '//&
+        &'deterministic complementary subsets. Validates raw (B,D) additivity, u/f continuation '//&
+        &'weighting, full-mass ensemble preservation, and continuation artifact replay.',&
+        &'simple_test_exec',&
+        &.true.)
+        call pcg_frac_update%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
+        &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
+        &'pixels{native box}', .false., 0.0)
+        call pcg_frac_update%add_input(UI_SRCH, trs)
+        call pcg_frac_update%add_input(UI_SRCH, pgrp)
+        call pcg_frac_update%add_input(UI_SRCH, objfun)
+        call pcg_frac_update%add_input(UI_SRCH, ptcl_src)
+        call pcg_frac_update%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction reconstruction', &
+        &'Accepted for reconstruct3D command compatibility; PCG validation requires no', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call pcg_frac_update%add_input(UI_FILT, ml_reg)
+        call pcg_frac_update%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map', &
+        &'Accepted for reconstruct3D command compatibility; no production maps are written by this test', &
+        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call pcg_frac_update%add_input(UI_FILT, 'maxits', 'num', 'PCG maximum iterations', &
+        &'Iterations used for the continuation replay comparison', 'iterations{2}', .false., 2.)
+        call pcg_frac_update%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
+        &'Tolerance used for the continuation replay comparison', 'tolerance{0}', .false., 0.0)
+        call pcg_frac_update%add_input(UI_FILT, 'pcg_lambda_rel', 'num', 'Relative PCG Tikhonov strength', &
+        &'Scale lambda against the raw data operator; -1 keeps legacy absolute 1e-3', &
+        &'relative strength{-1}', .false., -1.0)
+        call pcg_frac_update%add_input(UI_MASK, mskdiam)
+        call pcg_frac_update%add_input(UI_COMP, nparts, required_override=.false.)
+        call pcg_frac_update%add_input(UI_COMP, nthr)
+        call add_ui_program('pcg_frac_update', pcg_frac_update, tsttab, UI_CATEGORY)
+    end subroutine new_pcg_frac_update
 
 end module simple_test_ui_highlevel

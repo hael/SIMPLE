@@ -4,6 +4,7 @@ use simple_commanders_api
 use simple_matcher_2Dprep
 use simple_matcher_3Drec, only: calc_3Drec, calc_projdir3Drec
 use simple_refine3D_fnames, only: refine3D_fsc_fname, refine3D_state_halfvol_fname, refine3D_state_vol_fname
+use simple_sigma2_files, only: load_sigma2_groups
 implicit none
 #include "simple_local_flags.inc"
 
@@ -357,9 +358,9 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(parameters)     :: params
         type(builder)        :: build
-        type(string)         :: fname
         integer, allocatable :: pinds(:)
         integer              :: nptcls2update
+        logical              :: l_sigma_loaded
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_strategy3D_tbox(params)
         if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
@@ -371,11 +372,11 @@ contains
         if( trim(params%rec_backend) == 'pcg' )then
             call execute_rec3D_pcg_worker(params, build, cline, pinds)
         else
-            if( params%l_ml_reg )then
-                fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-                call build%esig%new(params, build%pftc, fname, params%box)
-                call build%esig%read_groups(build%spproj_field)
-            end if
+            if( params%cc_objfun == OBJFUN_EUCLID )then
+                call load_sigma2_groups(params, build%pftc, build%esig, build%spproj_field, &
+                    &cline, l_sigma_loaded)
+                if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
+            endif
             if( trim(params%projrec) == 'yes' )then
                 call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
             else

@@ -1,9 +1,11 @@
 !@descr: execution of test highlevel processing commanders
 module simple_test_exec_highlevel
 use simple_cmdline,                   only: cmdline
-use simple_commanders_test_highlevel, only: commander_test_mini_stream, commander_test_simulate_particles, commander_test_reproject, &
+use simple_commanders_test_highlevel, only: commander_test_mini_stream, commander_test_simulate_particles, &
+                                            commander_test_reproject, &
                                             commander_test_simulated_workflow, commander_test_subproject_distr, &
-                                            commander_test_ptcls_ppca_subproject_distr, commander_test_pcg_recon
+                                            commander_test_ptcls_ppca_subproject_distr, commander_test_pcg_recon, &
+                                            commander_test_pcg_frac_update
 implicit none
 
 public :: exec_test_highlevel_commander
@@ -16,6 +18,7 @@ type(commander_test_reproject)                   :: xreproject
 type(commander_test_subproject_distr)            :: xsubproject_distr
 type(commander_test_ptcls_ppca_subproject_distr) :: xptcls_ppca_subproject_distr
 type(commander_test_pcg_recon)                   :: xpcg_recon
+type(commander_test_pcg_frac_update)             :: xpcg_frac_update
 
 contains
 
@@ -42,6 +45,8 @@ contains
                 call xptcls_ppca_subproject_distr%execute(cline)
             case( 'pcg_recon' )
                 call xpcg_recon%execute(cline)
+            case( 'pcg_frac_update' )
+                call xpcg_frac_update%execute(cline)
             case default
                 l_did_execute = .false.
         end select

@@ -53,6 +53,11 @@ type, extends(commander_base) :: commander_test_pcg_recon
     procedure :: execute      => exec_test_pcg_recon
 end type commander_test_pcg_recon
 
+type, extends(commander_base) :: commander_test_pcg_frac_update
+  contains
+    procedure :: execute      => exec_test_pcg_frac_update
+end type commander_test_pcg_frac_update
+
 contains
 
 subroutine exec_test_mini_stream( self, cline )
@@ -2035,5 +2040,30 @@ subroutine exec_test_pcg_recon( self, cline )
     end function corr_of
 
 end subroutine exec_test_pcg_recon
+
+subroutine exec_test_pcg_frac_update( self, cline )
+    use simple_builder,            only: builder
+    use simple_parameters,         only: parameters
+    use simple_rec3D_pcg_strategy, only: validate_rec3D_pcg_fractional_updates
+    class(commander_test_pcg_frac_update), intent(inout) :: self
+    class(cmdline),                         intent(inout) :: cline
+    type(parameters) :: params
+    type(builder)    :: build
+
+    if( .not. cline%defined('maxits') ) call cline%set('maxits', 2.)
+    if( .not. cline%defined('rtol') ) call cline%set('rtol', 0.)
+    if( .not. cline%defined('trs') ) call cline%set('trs', 5.)
+    call cline%set('oritype', 'ptcl3D')
+    call cline%set('mkdir', 'no')
+    call build%init_params_and_build_general_tbox(cline, params)
+    call build%build_strategy3D_tbox(params)
+    if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
+    call build%spproj%write_segment_inside(params%oritype)
+    call validate_rec3D_pcg_fractional_updates(params, build, cline)
+    call build%esig%kill
+    call build%kill_strategy3D_tbox
+    call build%kill_general_tbox
+    call simple_end('**** SIMPLE_TEST_PCG_FRAC_UPDATE NORMAL STOP ****', print_simple=.false.)
+end subroutine exec_test_pcg_frac_update
 
 end module simple_commanders_test_highlevel

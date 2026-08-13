@@ -153,6 +153,9 @@ type :: reconstructor_pcg
     procedure :: end_accum
     procedure :: write_raw_accum
     procedure :: add_raw_accum
+    procedure :: add_raw_accum_weighted
+    procedure :: scale_raw_accum
+    procedure :: compare_raw_accum
     procedure, private :: accumulate_rhs_density
     procedure, private :: accumulate_absT2
     procedure, private :: accumulate_rhs
@@ -1542,6 +1545,129 @@ contains
         self%reduction_eo        = eo
         self%reduction_next_part = part + 1
     end subroutine add_raw_accum
+
+    !> Scale an open raw accumulator in the sufficient-statistics domain.
+    !! This is the only valid place to apply the u/f and (1-u) continuation
+    !! weights: neither finalized kernels nor reconstructed maps are additive.
+    subroutine scale_raw_accum( self, weight )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                     intent(in)    :: weight
+        if( .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open; scale_raw_accum')
+        if( .not. ieee_is_finite(weight) .or. weight < 0.0 ) THROW_HARD('invalid raw PCG accumulator weight')
+        self%b_work   = weight * self%b_work
+        self%acc_work = weight * self%acc_work
+    end subroutine scale_raw_accum
+
+    !> Relative L2 differences between two open raw accumulator chains. This
+    !! avoids materializing diagnostic copies of the padded B and D lattices.
+    subroutine compare_raw_accum( self, other, b_relerr, d_relerr )
+        class(reconstructor_pcg), intent(in) :: self, other
+        real,                     intent(out) :: b_relerr, d_relerr
+        real(dp) :: bnum, bden, dnum, dden
+        integer  :: h, k, m
+        if( .not. self%l_accum .or. .not. other%l_accum ) THROW_HARD('raw PCG comparison requires open accumulators')
+        if( self%box /= other%box .or. self%boxpd /= other%boxpd .or. any(self%lims3 /= other%lims3) )then
+            THROW_HARD('raw PCG comparison geometry mismatch')
+        endif
+        bnum = 0.0_dp
+        bden = 0.0_dp
+        dnum = 0.0_dp
+        dden = 0.0_dp
+        do m = self%lims3(3,1), self%lims3(3,2)
+            do k = self%lims3(2,1), self%lims3(2,2)
+                do h = self%lims3(1,1), self%lims3(1,2)
+                    bnum = bnum + real(abs(self%b_work(h,k,m)-other%b_work(h,k,m))**2,dp)
+                    bden = bden + real(abs(other%b_work(h,k,m))**2,dp)
+                    dnum = dnum + real((self%acc_work(h,k,m)-other%acc_work(h,k,m))**2,dp)
+                    dden = dden + real(other%acc_work(h,k,m)**2,dp)
+                enddo
+            enddo
+        enddo
+        b_relerr = real(sqrt(bnum / max(1.0_dp,bden)))
+        d_relerr = real(sqrt(dnum / max(1.0_dp,dden)))
+    end subroutine compare_raw_accum
+
+    !> Add one complete raw artifact with an explicit continuation weight.
+    !! Unlike add_raw_accum this routine does not participate in worker-part
+    !! ordering. It is for deterministic algebra on already reduced current
+    !! and previous chains after the worker reduction has completed.
+    subroutine add_raw_accum_weighted( self, fname, state, eo, part, nparts, provenance, weight, nptcls )
+        class(reconstructor_pcg), intent(inout) :: self
+        class(string),            intent(in)    :: fname
+        integer,                  intent(in)    :: state, eo, part, nparts
+        character(len=*),         intent(in)    :: provenance
+        real,                     intent(in)    :: weight
+        integer,                  intent(out)   :: nptcls
+        character(len=16) :: magic
+        character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
+        complex, allocatable :: bslice(:,:)
+        real,    allocatable :: dslice(:,:)
+        integer :: funit, ierr, m, version, state_file, eo_file, part_file
+        integer :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
+        real    :: smpd_file
+        integer(int64) :: file_size, stream_pos
+        if( .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open; add_raw_accum_weighted')
+        if( .not. ieee_is_finite(weight) .or. weight < 0.0 ) THROW_HARD('invalid weighted raw PCG contribution')
+        if( .not. file_exists(fname) ) THROW_HARD('weighted raw PCG accumulator artifact is missing')
+        prov_expected = ' '
+        if( len_trim(provenance) > 0 )then
+            prov_expected(1:min(len_trim(provenance),PCG_RAW_PROV_LEN)) = &
+                &provenance(1:min(len_trim(provenance),PCG_RAW_PROV_LEN))
+        endif
+        call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=ierr)
+        call fileiochk('add_raw_accum_weighted opening artifact', ierr)
+        read(funit, iostat=ierr) magic, version
+        call fileiochk('add_raw_accum_weighted reading magic', ierr)
+        read(funit, iostat=ierr) state_file, eo_file, part_file, nparts_file, nptcls
+        call fileiochk('add_raw_accum_weighted reading identity', ierr)
+        read(funit, iostat=ierr) box_file, boxpd_file, padf_file, lims_file, smpd_file
+        call fileiochk('add_raw_accum_weighted reading geometry', ierr)
+        read(funit, iostat=ierr) prov_file
+        call fileiochk('add_raw_accum_weighted reading provenance', ierr)
+        if( magic /= PCG_RAW_ACCUM_MAGIC .or. version /= PCG_RAW_ACCUM_VERSION ) THROW_HARD('weighted raw PCG format mismatch')
+        if( state_file /= state .or. eo_file /= eo .or. part_file /= part ) THROW_HARD('weighted raw PCG identity mismatch')
+        if( nparts_file /= nparts .or. nptcls < 0 ) THROW_HARD('weighted raw PCG accumulator partition mismatch')
+        if( box_file /= self%box .or. boxpd_file /= self%boxpd .or. padf_file /= self%padf ) THROW_HARD('weighted raw box mismatch')
+        if( any(lims_file /= self%lims3) ) THROW_HARD('weighted raw PCG accumulator lattice mismatch')
+        if( abs(smpd_file-self%smpd) > max(1.0e-6,1.0e-6*abs(self%smpd)) ) THROW_HARD('weighted raw PCG sampling mismatch')
+        if( prov_file /= prov_expected ) THROW_HARD('weighted raw PCG accumulator provenance mismatch')
+        if( nptcls > 0 .and. weight > 0.0 )then
+            allocate(bslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
+            allocate(dslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
+            do m = self%lims3(3,1), self%lims3(3,2)
+                read(funit, iostat=ierr) bslice
+                if( ierr /= 0 ) exit
+                self%b_work(:,:,m) = self%b_work(:,:,m) + weight * bslice
+            enddo
+            call fileiochk('add_raw_accum_weighted reading B', ierr)
+            do m = self%lims3(3,1), self%lims3(3,2)
+                read(funit, iostat=ierr) dslice
+                if( ierr /= 0 ) exit
+                self%acc_work(:,:,m) = self%acc_work(:,:,m) + weight * dslice
+            enddo
+            call fileiochk('add_raw_accum_weighted reading D', ierr)
+            deallocate(bslice, dslice)
+        else if( nptcls > 0 )then
+            allocate(bslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
+            allocate(dslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
+            do m = self%lims3(3,1), self%lims3(3,2)
+                read(funit, iostat=ierr) bslice
+                if( ierr /= 0 ) exit
+            enddo
+            call fileiochk('add_raw_accum_weighted skipping B', ierr)
+            do m = self%lims3(3,1), self%lims3(3,2)
+                read(funit, iostat=ierr) dslice
+                if( ierr /= 0 ) exit
+            enddo
+            call fileiochk('add_raw_accum_weighted skipping D', ierr)
+            deallocate(bslice, dslice)
+        endif
+        file_size  = -1_int64
+        stream_pos = -1_int64
+        inquire(unit=funit, size=file_size, pos=stream_pos)
+        call fclose(funit)
+        if( stream_pos-1_int64 /= file_size ) THROW_HARD('weighted raw PCG accumulator has trailing or missing bytes')
+    end subroutine add_raw_accum_weighted
 
     !> Accumulate the weighted RHS B and Gram/sampling-density precursor D in
     !! one particle traversal. Both scatters use the same orientation, rotated
