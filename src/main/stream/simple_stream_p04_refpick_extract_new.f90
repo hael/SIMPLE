@@ -459,15 +459,16 @@ contains
                 call spproj%write_segment_inside('ptcl3D', params%projfile)
                 call spproj%os_ptcl3D%kill
                 ! add optics
-                if(cline%defined('optics_dir')) then
-                    optics_map_id = get_latest_optics_map_id(params%optics_dir)
-                    if(optics_map_id .gt. 0) then
-                        mapfileprefix = params%optics_dir // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
-                        write(logfhandle,'(A,I8)')'>>> IMPORTING OPTICS FROM : ' // mapfileprefix%to_char()
-                        call spproj%import_optics_map(mapfileprefix)
-                        call spproj%write_segment_inside('optics', params%projfile)
-                    endif
-                endif
+                ! disabled
+                ! if(cline%defined('optics_dir')) then
+                !     optics_map_id = get_latest_optics_map_id(params%optics_dir)
+                !     if(optics_map_id .gt. 0) then
+                !         mapfileprefix = params%optics_dir // '/' // OPTICS_MAP_PREFIX // int2str(optics_map_id)
+                !         write(logfhandle,'(A,I8)')'>>> IMPORTING OPTICS FROM : ' // mapfileprefix%to_char()
+                !         call spproj%import_optics_map(mapfileprefix)
+                !         call spproj%write_segment_inside('optics', params%projfile)
+                !     endif
+                ! endif
                 call spproj%write_non_data_segments(params%projfile)
                 ! benchmark
                 if( DEBUG_HERE )then
