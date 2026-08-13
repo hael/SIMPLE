@@ -339,6 +339,12 @@ contains
                 self%scale_movies   = 1.0
             endif
         endif
+        ! The reconstruct3D UI uses zero as the sentinel for the native box.
+        ! Normalize it to an omitted value before deriving smpd_crop so the
+        ! generic source-resolution logic never divides by zero.
+        if( trim(self%prg%to_char()) == 'reconstruct3D' )then
+            if( cline%defined('box_crop') .and. self%box_crop == 0 ) call cline%delete('box_crop')
+        endif
         if( .not. cline%defined('box_crop') ) self%box_crop = self%box
         if( .not. cline%defined('smpd_crop') )then
             if( cline%defined('box_crop') )then
@@ -784,6 +790,10 @@ contains
         endif
         if( self%pcg_lambda_rel >= 0.0 .and. trim(self%rec_backend) /= 'pcg' )then
             THROW_HARD('pcg_lambda_rel requires rec_backend=pcg')
+        endif
+        if( trim(self%prg%to_char()) == 'reconstruct3D' )then
+            if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
+            if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')
         endif
         select case(trim(self%inpl_cont))
             case('yes','no')

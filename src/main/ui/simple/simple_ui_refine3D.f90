@@ -135,6 +135,9 @@ subroutine new_automask( prgtab )
         &'', .false., 'gridding', &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
         &visibility=UI_VIS_STANDARD)
+        call reconstruct3D%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
+        &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
+        &'pixels{native box}', .false., 0.0, visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

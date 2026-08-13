@@ -29,6 +29,8 @@ contains
     !!  an opportunistic probe here could silently mix cached and uncached partials
     !!  when a leftover cache is visible to some ranks only.
     subroutine calc_3Drec( params, build, cline, nptcls, pinds, cached )
+        use simple_image,        only: image
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
@@ -36,6 +38,7 @@ contains
         integer,           intent(in)    :: pinds(nptcls)
         logical, optional, intent(in)    :: cached
         type(fplane_type), allocatable   :: fpls(:)
+        type(image),       allocatable   :: crop_imgs(:)
         type(reconstructor) :: recvol
         integer, allocatable :: grouped_pinds(:), state_eo_offsets(:)
         integer :: batchlims(2), ibatch, batchsz, state, eo, group
@@ -56,7 +59,12 @@ contains
         ! primary sources, so l_cached and l_den_src are exclusive.
         l_cached = .false.
         if( present(cached) ) l_cached = cached
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls, cached=l_cached)
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls, cached=l_cached, &
+            &cropped=l_cached .or. params%box_crop < params%box)
+        if( .not. l_cached .and. params%box_crop < params%box )then
+            call alloc_imgarr(nthr_glob, [params%box_crop,params%box_crop,1], &
+                &params%smpd_crop, crop_imgs)
+        endif
         if( l_cached )then
             call prepimgbatch(params, build, MAXIMGBATCHSZ, box=params%box_crop, smpd=params%smpd_crop)
         else
@@ -92,7 +100,8 @@ contains
                     if( DEBUG ) t_read = t_read + toc(t)
                     if( DEBUG ) t = tic()
                     call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
-                        grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), cached=l_cached)
+                        &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), &
+                        &cached=l_cached, crop_imgs=crop_imgs)
                     if( DEBUG ) t_prep = t_prep + toc(t)
                     if( DEBUG ) t = tic()
                     call update_state_half_rec(state, eo, build, batchsz, &
@@ -107,6 +116,7 @@ contains
             call set_state_vol_output(params, cline, state)
         enddo
         call cleanup_rec_buffers(build, fpls)
+        if( allocated(crop_imgs) ) call dealloc_imgarr(crop_imgs)
         deallocate(grouped_pinds, state_eo_offsets)
         if( DEBUG .and. (params%part==1) )then
             t_tot = toc(t0)
@@ -124,6 +134,8 @@ contains
     !! sums are then inserted directly into the 3D reconstruction; they are
     !! never CTF-density corrected and never transformed through real space.
     subroutine calc_projdir3Drec( params, build, cline, nptcls, pinds, cached )
+        use simple_image,        only: image
+        use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
         class(parameters), intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
@@ -133,6 +145,7 @@ contains
         type(fourier_2d_accumulator) :: projdir_sums
         type(fplane_type), allocatable :: fpls(:)
         type(fplane_type) :: compact_fpl
+        type(image), allocatable :: crop_imgs(:)
         type(reconstructor) :: recvol
         type(ori) :: orientation
         integer, allocatable :: eopops(:), grouped_pinds(:), state_eo_offsets(:), proj2slice(:)
@@ -152,7 +165,12 @@ contains
         ! cavger_init_online).
         l_cached = .false.
         if( present(cached) ) l_cached = cached
-        call init_rec(params, build, MAXIMGBATCHSZ, fpls, cached=l_cached)
+        call init_rec(params, build, MAXIMGBATCHSZ, fpls, cached=l_cached, &
+            &cropped=l_cached .or. params%box_crop < params%box)
+        if( .not. l_cached .and. params%box_crop < params%box )then
+            call alloc_imgarr(nthr_glob, [params%box_crop,params%box_crop,1], &
+                &params%smpd_crop, crop_imgs)
+        endif
         if( l_cached )then
             call prepimgbatch(params, build, MAXIMGBATCHSZ, box=params%box_crop, smpd=params%smpd_crop)
         else
@@ -200,7 +218,8 @@ contains
                         call discrete_read_imgbatch(params, build, size(grouped_pinds), grouped_pinds, batchlims)
                     endif
                     call prep_imgs4rec(params, build, batchsz, build%imgbatch(:batchsz), &
-                        &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), cached=l_cached)
+                        &grouped_pinds(batchlims(1):batchlims(2)), fpls(:batchsz), &
+                        &cached=l_cached, crop_imgs=crop_imgs)
                     ! Each OpenMP iteration owns one projection-direction
                     ! accumulator, matching the race-free class-average policy.
                     !$omp parallel do default(shared) private(iproj,i,iptcl) &
@@ -236,6 +255,7 @@ contains
         deallocate(eopops, grouped_pinds, state_eo_offsets, proj2slice)
         call orientation%kill
         call cleanup_rec_buffers(build, fpls)
+        if( allocated(crop_imgs) ) call dealloc_imgarr(crop_imgs)
     end subroutine calc_projdir3Drec
 
     pure integer function state_eo_group( state, eo )
@@ -424,24 +444,28 @@ contains
 
     !>  Initiates objects required for online volumetric 3d reconstruction
     !>  Does not read images
-    !>  cached=.true. sizes the pad heap for downscaled-cache entries; it must match
-    !!  the cached argument later given to prep_imgs4rec. Explicit rather than probed
-    !!  here, so external init_rec callers (flex, offload) that never pass it keep
-    !!  full-size buffers no matter what cache state the process carries.
-    subroutine init_rec( params, build, maxbatchsz, fplanes, cached )
+    !>  cached=.true. sizes the pad heap for downscaled-cache entries; cropped can
+    !!  explicitly select the same grid for an uncached Fourier-crop path. Both are
+    !!  explicit rather than inferred from params, so external init_rec callers
+    !!  (flex, offload) keep full-size buffers unless they opt in.
+    subroutine init_rec( params, build, maxbatchsz, fplanes, cached, cropped )
         use simple_imgarr_utils, only: alloc_imgarr
         class(parameters),              intent(in)    :: params
         class(builder),                 intent(inout) :: build
         integer,                        intent(in)    :: maxbatchsz
         type(fplane_type), allocatable, intent(inout) :: fplanes(:)
         logical, optional,              intent(in)    :: cached
-        logical :: l_cached
+        logical, optional,              intent(in)    :: cropped
+        logical :: l_cached, l_cropped
         l_cached = .false.
         if( present(cached) ) l_cached = cached
-        ! sanity check for ml_reg
-        if( params%l_ml_reg )then
+        l_cropped = l_cached
+        if( present(cropped) ) l_cropped = cropped
+        ! Sigma weighting is part of the Euclidean data objective, independent
+        ! of whether volassemble subsequently adds the ML prior.
+        if( params%cc_objfun == OBJFUN_EUCLID )then
             if( .not. allocated(build%esig%sigma2_noise) )then
-                THROW_HARD('build%esig%sigma2_noise is not allocated while ml_reg is enabled; calc_3Drec')
+                THROW_HARD('sigma2_noise is not allocated for Euclidean reconstruction')
             endif
         endif
         ! allocate convenience CTF & memory aligned objects
@@ -451,7 +475,7 @@ contains
         ! extent (box*smpd == box_crop*smpd_crop), so a given Fourier index means
         ! the same spatial frequency on either grid; the cropped one simply stops
         ! at the crop Nyquist, which is all the box_crop reconstructor can hold.
-        if( l_cached )then
+        if( l_cropped )then
             call alloc_imgarr(nthr_glob, [params%box_croppd, params%box_croppd, 1], params%smpd_crop, build%img_pad_heap)
         else
             call alloc_imgarr(nthr_glob, [params%boxpd, params%boxpd, 1], params%smpd, build%img_pad_heap)
@@ -470,7 +494,7 @@ contains
     !!  gen_fplane4rec produces the same physical frequencies either way; the sigma2
     !!  range is capped at the crop Nyquist because gen_fplane4rec derives its
     !!  sigma2 source range from the box it is handed.
-    subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes, cached )
+    subroutine prep_imgs4rec( params, build, nptcls, ptcl_imgs, pinds, fplanes, cached, crop_imgs )
         use simple_image, only: image
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
@@ -479,21 +503,24 @@ contains
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), intent(inout) :: fplanes(nptcls)
         logical, optional, intent(in)    :: cached
+        type(image), allocatable, optional, intent(inout) :: crop_imgs(:)
         type(ctfparams) :: ctfparms(nthr_glob)
         real      :: shift(2), crop_factor
         integer   :: iptcl, i, ithr, kfromto(2)
-        logical   :: l_cached
+        logical   :: l_cached, l_crop
         l_cached = .false.
         if( present(cached) ) l_cached = cached
+        l_crop = present(crop_imgs)
+        if( l_crop ) l_crop = allocated(crop_imgs)
         ! logical/physical address mapping for padded Fourier planes
-        if( l_cached )then
+        if( l_cached .or. l_crop )then
             call memoize_ft_maps([params%box_croppd, params%box_croppd, 1], params%smpd_crop)
         else
             call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
         endif
         ! gridding batch loop
         kfromto = build%esig%get_kfromto()
-        if( l_cached ) kfromto(2) = min(kfromto(2), params%box_crop/2)
+        if( l_cached .or. l_crop ) kfromto(2) = min(kfromto(2), params%box_crop/2)
         crop_factor = real(params%box_crop) / real(params%box)
         !$omp parallel do default(shared) private(i,ithr,iptcl,shift) schedule(static) proc_bind(close)
         do i = 1,nptcls
@@ -502,18 +529,26 @@ contains
             if( l_cached )then
                 call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk_crop, &
                     &build%img_pad_heap(ithr), renorm=.false.)
+            else if( l_crop )then
+                ! Exact in-memory equivalent of cache construction plus cache
+                ! consumption: normalize at the native box, Fourier crop, then
+                ! taper and pad at box_crop without normalizing a second time.
+                call ptcl_imgs(i)%norm_noise_fft_clip_shift(build%lmsk, crop_imgs(ithr), [0.,0.])
+                call crop_imgs(ithr)%ifft
+                call crop_imgs(ithr)%norm_noise_taper_edge_pad_fft(build%lmsk_crop, &
+                    &build%img_pad_heap(ithr), renorm=.false.)
             else
                 call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
             endif
             ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
             shift = build%spproj_field%get_2Dshift(iptcl)
-            if( l_cached )then
+            if( l_cached .or. l_crop )then
                 ! shconst is in pixel units of the padded box the image actually has,
                 ! and the CTF kernel reads cycles/pixel of the current grid
                 ctfparms(ithr)%smpd = ctfparms(ithr)%smpd / crop_factor ! = smpd_crop
                 shift               = shift * crop_factor
             endif
-            if( params%l_ml_reg )then
+            if( params%cc_objfun == OBJFUN_EUCLID )then
                 call build%img_pad_heap(ithr)%gen_fplane4rec(kfromto, params%smpd_crop, ctfparms(ithr),&
                 &shift, fplanes(i), build%esig%sigma2_noise(kfromto(1):kfromto(2),iptcl))
             else

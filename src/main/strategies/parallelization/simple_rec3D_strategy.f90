@@ -9,6 +9,7 @@ use simple_commanders_rec_distr, only: commander_volassemble
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname, &
     &refine3D_pcg_raw_accum_fname
 use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_shared, execute_rec3D_pcg_distributed_master
+use simple_sigma2_files,         only: load_sigma2_groups
 implicit none
 
 public :: rec3D_strategy, rec3D_inmem_strategy, rec3D_distr_strategy, create_rec3D_strategy
@@ -186,9 +187,9 @@ contains
         type(commander_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in
-        type(string)         :: fname
         integer, allocatable :: pinds(:)
         integer              :: nptcls2update, state
+        logical              :: l_sigma_loaded
         ! Sampling
         if( params%l_update_frac .and. build%spproj_field%has_been_sampled() )then
             call build%spproj_field%sample4update_reprod([params%fromp,params%top], nptcls2update, pinds)
@@ -196,11 +197,12 @@ contains
             ! Sample all state > 0 and updatecnt > 0
             call build%spproj_field%sample4rec([params%fromp,params%top], nptcls2update, pinds)
         endif
-        ! ML-regularised sigma2 groups
-        if( params%l_ml_reg )then
-            fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
-            call build%esig%new(params, build%pftc, fname, params%box)
-            call build%esig%read_groups(build%spproj_field)
+        ! Sigma weighting belongs to the Euclidean data objective. ML
+        ! regularization is a separate FSC/SSNR prior applied by volassemble.
+        if( params%cc_objfun == OBJFUN_EUCLID )then
+            call load_sigma2_groups(params, build%pftc, build%esig, build%spproj_field, &
+                &cline, l_sigma_loaded)
+            if( .not. l_sigma_loaded ) THROW_HARD('gridding objfun=euclid requires sigma2 files')
         endif
         ! Legacy handshake for rec-writing helpers that still inspect this key.
         ! The strategy owns the actual assembly dispatch decision.
@@ -233,7 +235,6 @@ contains
         call cline%delete('force_volassemble')
         call cline_volassemble%kill
         if( allocated(pinds) ) deallocate(pinds)
-        if( params%l_ml_reg ) call fname%kill
     end subroutine inmem_execute
 
     subroutine pcg_inmem_execute(self, params, build, cline)
