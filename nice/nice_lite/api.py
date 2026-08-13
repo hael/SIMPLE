@@ -239,8 +239,8 @@ def index_classic(request):
         print_error(f"unknown classic job {jobid}")
         return JsonResponse(response, status=404)
 
-    workspace = Workspace(job.jobmodel.wspc_id)
-    project = Project(job.jobmodel.wspc.proj_id)
+    workspace = Workspace(job.jobmodel.dset_id)
+    project = Project(job.jobmodel.dset.proj_id)
     response = job.updateStats(request_json, project, workspace)
     return JsonResponse(response)
 
@@ -265,4 +265,3 @@ def image(request, src):
     except OSError:
         print_error("image IO error")
         return HttpResponse(status=404)
-

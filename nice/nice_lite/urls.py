@@ -56,6 +56,7 @@ urlpatterns = [
 
     # Stream job lifecycle
     path("newstream",                          views.view_job_builder,                             name="new_stream"),
+    path("createbatch",                        views.view_create_batch,                            name="create_batch"),
     path("createstream",                       stream_views.view_stream_create_stream,             name="create_stream"),
     path("termstream",                         stream_views.view_stream_terminate_stream,          name="terminate_stream"),
     path("deletestream",                       stream_views.view_stream_delete_stream,             name="delete_stream"),

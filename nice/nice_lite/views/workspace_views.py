@@ -55,6 +55,11 @@ def _is_workspace_accessible(workspace_obj, project_id, username=None):
     return owner == username
 
 
+def _is_batch_job(jobmodel):
+    """Return True for classic jobs stored in the shared JobModel table."""
+    return isinstance(jobmodel.master_stats, dict) and jobmodel.master_stats.get("job_type") == "batch"
+
+
 def _filter_by_selection(stats, latest):
     """Reduce ``latest`` to entries whose ``idx`` is in ``stats["selection"]``, when present."""
     selection = stats.get("selection")
@@ -104,8 +109,11 @@ def view_workspace(request):
         return response
 
     # Include stream statuses in checksum seed so parent iframe updates on state changes.
-    job_ids = JobModel.objects.filter(dset=workspace_obj.id).order_by("id").values_list("id", flat=True)
-    jobstats = "|".join(StreamJob(id=jobid).get_status() for jobid in job_ids)
+    jobs = list(JobModel.objects.filter(dset=workspace_obj.id).order_by("id"))
+    jobstats = "|".join(
+        job.status if _is_batch_job(job) else StreamJob(id=job.id).get_status()
+        for job in jobs
+    )
 
     workspacemodel = workspace_obj.get_workspacemodel()
     projectmodel = workspacemodel.proj
@@ -126,7 +134,6 @@ def view_workspace(request):
     checksum = hashlib.md5(json.dumps(context, sort_keys=True, default=str).encode()).hexdigest()
     old_checksum = request.COOKIES.get("workspace_checksum", "none")
     if old_checksum == "none" or old_checksum != checksum:
-        jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
         _normalize_latest_cls2d(jobs)
         context["jobs"] = jobs
         response = render(request, "workspace.html", context)

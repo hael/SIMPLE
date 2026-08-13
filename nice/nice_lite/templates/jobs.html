@@ -28,7 +28,11 @@
 <body class="bg-streambg h-screen flex flex-col font-sans">
   <div class="flex flex-wrap gap-3 content-start flex-1 overflow-y-auto px-5 py-4 ">
       {% for job in jobs %}
-          {% include 'nice_stream/includes/_stream_card.html' %}
+          {% if job.master_stats.job_type == "batch" %}
+              {% include 'nice_classic/_batch_card.html' %}
+          {% else %}
+              {% include 'nice_stream/includes/_stream_card.html' %}
+          {% endif %}
       {% empty %}
           <div class="col-span-full flex items-center justify-center py-24 text-streamlabel text-sm">
               no streams yet — click new stream to create one

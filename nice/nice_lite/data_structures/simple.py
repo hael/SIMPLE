@@ -3,6 +3,7 @@
 # global imports
 import json
 import os
+import shlex
 import shutil
 import stat
 import subprocess
@@ -357,6 +358,8 @@ class SIMPLEBatch:
             return False
         if not os.path.exists(self.parent_proj):
             return False
+        if not self.executable or not self.jobtype:
+            return False
         return self.dispatch()
 
     def dispatch(self):
@@ -379,13 +382,13 @@ class SIMPLEBatch:
             return False
 
         # copy project file into job dir, update it, then invoke the program
-        command_string  = "cp -v " + self.parent_proj + " workspace.simple\n"
+        command_string  = "cp -v " + shlex.quote(self.parent_proj) + " workspace.simple\n"
         command_string += "simple_exec prg=update_project projfile=workspace.simple\n"
-        command_string += self.executable + " prg=" + self.jobtype
+        command_string += self.executable + " prg=" + shlex.quote(self.jobtype)
         for key, val in self.args.items():
-            command_string += " " + key + "=" + str(val)
+            command_string += " " + key + "=" + shlex.quote(str(val))
         command_string += " mkdir=no projfile=workspace.simple"
-        command_string += " niceprocid=" + str(self.jobid) + " niceserver=" + dispatchmodel.url + "/api_classic"
+        command_string += " niceprocid=" + str(self.jobid) + " niceserver=" + shlex.quote(dispatchmodel.url + "/api_classic")
         command_string += " >> stdout.log 2>> stderr.log\n"
 
         # fill template placeholders and normalise line endings
@@ -432,8 +435,8 @@ class SIMPLEProject:
     """
     Initialises a new SIMPLE project file (workspace.simple) in a directory.
 
-    Used when creating a new workspace — runs simple_exec prg=new_project
-    so downstream jobs can find a valid project file.
+    Used when a workspace first needs to run a batch job, so downstream jobs
+    can copy a valid project file.
     """
 
     cmd = ["simple_exec", "prg=new_project", "projname=workspace"]
@@ -443,13 +446,18 @@ class SIMPLEProject:
 
     def create(self):
         """Run simple_exec to create workspace.simple in self.absdir."""
-        if self.absdir is None:
-            return
+        if self.absdir is None or not os.path.isdir(self.absdir):
+            return False
         cmd = self.cmd + ["dir=" + self.absdir]
         try:
-            subprocess.run(cmd)
+            subprocess.run(cmd, check=True)
         except subprocess.CalledProcessError as cpe:
-            print_error(cpe.stderr)
+            print_error(str(cpe))
+            return False
+        except OSError as error:
+            print_error(str(error))
+            return False
+        return os.path.isfile(os.path.join(self.absdir, "workspace.simple"))
 
 
 class SIMPLEProjFile:

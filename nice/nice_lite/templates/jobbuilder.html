@@ -268,7 +268,12 @@
 
                     {% if simple_program_inputs %}
                         {% for program in simple_program_inputs %}
-                        <div id="simple_program_{{ program.prg }}" class="hidden simple-program-config">
+                        <form id="batch_form_simple_{{ program.prg }}" method="POST"
+                              action="{% url 'nice_lite:create_batch' %}" target="workspace_iframe"
+                              class="hidden simple-program-config">
+                            {% csrf_token %}
+                            <input type="hidden" name="package" value="simple">
+                            <input type="hidden" name="program" value="{{ program.prg }}">
                             <div class="space-y-4 overflow-y-auto pr-1">
                                 {% for section in program.sections %}
                                 <div>
@@ -279,9 +284,9 @@
                                                   <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
                                                       for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}</label>
                                                   <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
-                                                   <input id="batch_{{ program.prg }}_{{ input.key }}" name="batch_{{ program.prg }}_{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
+                                                   <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
                                                        {% if input.required %}required{% endif %}
-                                                       {% if "value" in input %}value="{{ input.value }}"{% elif "placeholder" in input %}value="{{ input.placeholder }}"{% endif %}>
+                                                       {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
                                                 <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}</label>
@@ -289,33 +294,38 @@
                                                     {% if input.keytype == "int" %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "placeholder" in input %}value="{{ input.placeholder }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                     {% elif input.keytype == "float" %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="0.0001"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "placeholder" in input %}value="{{ input.placeholder }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                    {% elif input.keytype == "num" %}
+                                                        <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" step="any"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                     {% elif input.keytype == "multi" %}
                                                         <select id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                 {% if input.required %}required{% endif %}
                                                                 class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
                                                             {% for option in input.options %}
-                                                                <option value="{{ option.val }}"
-                                                                    {% if "value" in input and option.val == input.value %}selected
-                                                                    {% elif "placeholder" in option and option.placeholder %}selected
-                                                                    {% endif %}>{{ option.key }}</option>
+                                                                <option value="{{ option }}"
+                                                                    {% if "value" in input and option == input.value %}selected
+                                                                    {% elif input.has_default and option == input.default %}selected
+                                                                    {% endif %}>{{ option }}</option>
                                                             {% endfor %}
                                                         </select>
                                                     {% elif input.keytype == "binary" %}
                                                         <div class="w-full flex items-center">
                                                             <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden"
-                                                                   value="{% if "value" in input %}{{ input.value }}{% elif "placeholder" in input %}{{ input.placeholder }}{% else %}no{% endif %}">
+                                                                   value="{% if "value" in input %}{{ input.value }}{% elif input.has_default %}{{ input.default }}{% else %}no{% endif %}">
                                                             <label class="inline-flex items-center cursor-pointer select-none"
                                                                    for="batch_{{ program.prg }}_{{ input.key }}_toggle">
                                                                 <input id="batch_{{ program.prg }}_{{ input.key }}_toggle" type="checkbox" class="peer sr-only"
                                                                        {% if "value" in input and input.value == "yes" %}checked
-                                                                       {% elif "placeholder" in input and input.placeholder == "yes" %}checked
+                                                                       {% elif input.has_default and input.default == "yes" %}checked
                                                                        {% endif %}
                                                                        onchange="document.getElementById('batch_{{ program.prg }}_{{ input.key }}').value = this.checked ? 'yes' : 'no'; this.nextElementSibling.nextElementSibling.textContent = this.checked ? 'yes' : 'no';">
                                                                 <span class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
@@ -324,7 +334,7 @@
                                                     {% elif input.keytype == "dir" %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                         <button type="button" title="browse for directory"
                                                             onclick="openWorkspaceBrowser('dir', 'batch_{{ program.prg }}_{{ input.key }}')"
@@ -336,7 +346,7 @@
                                                     {% elif input.keytype == "file" %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                         <button type="button" title="browse for file"
                                                             onclick="openWorkspaceBrowser('file', 'batch_{{ program.prg }}_{{ input.key }}')"
@@ -348,7 +358,7 @@
                                                     {% else %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "placeholder" in input %}value="{{ input.placeholder }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                     {% endif %}
                                                 </div>
@@ -358,12 +368,12 @@
                                 </div>
                                 {% endfor %}
                             </div>
-                        </div>
+                        </form>
                         {% endfor %}
                     {% endif %}
                 </div>
                 <div id="simple_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 fixed bottom-0 left-0 w-full z-10 bg-streambar hidden">
-                    <button id="simple_batch_start" type="button"
+                    <button id="simple_batch_start" type="button" onclick="submitSelectedBatch('simple')"
                             class="text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors">
                         start
                     </button>
@@ -440,7 +450,12 @@
 
                     {% if single_program_inputs %}
                         {% for program in single_program_inputs %}
-                        <div id="single_program_{{ program.prg }}" class="hidden single-program-config">
+                        <form id="batch_form_single_{{ program.prg }}" method="POST"
+                              action="{% url 'nice_lite:create_batch' %}" target="workspace_iframe"
+                              class="hidden single-program-config">
+                            {% csrf_token %}
+                            <input type="hidden" name="package" value="single">
+                            <input type="hidden" name="program" value="{{ program.prg }}">
                             <div class="space-y-4 overflow-y-auto pr-1">
                                 {% for section in program.sections %}
                                 <div>
@@ -451,9 +466,9 @@
                                                   <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
                                                       for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}</label>
                                                   <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
-                                                   <input id="single_{{ program.prg }}_{{ input.key }}" name="single_{{ program.prg }}_{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
+                                                   <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
                                                        {% if input.required %}required{% endif %}
-                                                       {% if "value" in input %}value="{{ input.value }}"{% elif "placeholder" in input %}value="{{ input.placeholder }}"{% endif %}>
+                                                       {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
                                                 <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}</label>
@@ -461,33 +476,38 @@
                                                     {% if input.keytype == "int" %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "placeholder" in input %}value="{{ input.placeholder }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                     {% elif input.keytype == "float" %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="0.0001"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "placeholder" in input %}value="{{ input.placeholder }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
+                                                               class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                                                    {% elif input.keytype == "num" %}
+                                                        <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" step="any"
+                                                               {% if input.required %}required{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                     {% elif input.keytype == "multi" %}
                                                         <select id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                 {% if input.required %}required{% endif %}
                                                                 class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
                                                             {% for option in input.options %}
-                                                                <option value="{{ option.val }}"
-                                                                    {% if "value" in input and option.val == input.value %}selected
-                                                                    {% elif "placeholder" in option and option.placeholder %}selected
-                                                                    {% endif %}>{{ option.key }}</option>
+                                                                <option value="{{ option }}"
+                                                                    {% if "value" in input and option == input.value %}selected
+                                                                    {% elif input.has_default and option == input.default %}selected
+                                                                    {% endif %}>{{ option }}</option>
                                                             {% endfor %}
                                                         </select>
                                                     {% elif input.keytype == "binary" %}
                                                         <div class="w-full flex items-center">
                                                             <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden"
-                                                                   value="{% if "value" in input %}{{ input.value }}{% elif "placeholder" in input %}{{ input.placeholder }}{% else %}no{% endif %}">
+                                                                   value="{% if "value" in input %}{{ input.value }}{% elif input.has_default %}{{ input.default }}{% else %}no{% endif %}">
                                                             <label class="inline-flex items-center cursor-pointer select-none"
                                                                    for="single_{{ program.prg }}_{{ input.key }}_toggle">
                                                                 <input id="single_{{ program.prg }}_{{ input.key }}_toggle" type="checkbox" class="peer sr-only"
                                                                        {% if "value" in input and input.value == "yes" %}checked
-                                                                       {% elif "placeholder" in input and input.placeholder == "yes" %}checked
+                                                                       {% elif input.has_default and input.default == "yes" %}checked
                                                                        {% endif %}
                                                                        onchange="document.getElementById('single_{{ program.prg }}_{{ input.key }}').value = this.checked ? 'yes' : 'no'; this.nextElementSibling.nextElementSibling.textContent = this.checked ? 'yes' : 'no';">
                                                                 <span class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
@@ -496,7 +516,7 @@
                                                     {% elif input.keytype == "dir" %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                         <button type="button" title="browse for directory"
                                                             onclick="openWorkspaceBrowser('dir', 'single_{{ program.prg }}_{{ input.key }}')"
@@ -508,7 +528,7 @@
                                                     {% elif input.keytype == "file" %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                         <button type="button" title="browse for file"
                                                             onclick="openWorkspaceBrowser('file', 'single_{{ program.prg }}_{{ input.key }}')"
@@ -520,7 +540,7 @@
                                                     {% else %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}"
                                                                {% if input.required %}required{% endif %}
-                                                               {% if "value" in input %}value="{{ input.value }}"{% elif "placeholder" in input %}value="{{ input.placeholder }}"{% endif %}
+                                                               {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}placeholder="{{ input.default }}"{% elif input.placeholder %}placeholder="{{ input.placeholder }}"{% endif %}
                                                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
                                                     {% endif %}
                                                 </div>
@@ -530,12 +550,12 @@
                                 </div>
                                 {% endfor %}
                             </div>
-                        </div>
+                        </form>
                         {% endfor %}
                     {% endif %}
                 </div>
                 <div id="single_batch_actions" class="flex items-center justify-end mt-3 p-2 border-t border-streamline gap-2 fixed bottom-0 left-0 w-full z-10 bg-streambar hidden">
-                    <button id="single_batch_start" type="button"
+                    <button id="single_batch_start" type="button" onclick="submitSelectedBatch('single')"
                             class="text-xs px-6 py-1.5 rounded-lg font-medium bg-streamaccent text-white hover:bg-streamring transition-colors">
                         start
                     </button>
@@ -716,7 +736,7 @@
             }
             const configs = document.querySelectorAll(".simple-program-config");
             configs.forEach((el) => el.classList.add("hidden"));
-            const active = document.getElementById("simple_program_" + programKey);
+            const active = document.getElementById("batch_form_simple_" + programKey);
             if (active) active.classList.remove("hidden");
         }
 
@@ -766,8 +786,15 @@
             }
             const configs = document.querySelectorAll(".single-program-config");
             configs.forEach((el) => el.classList.add("hidden"));
-            const active = document.getElementById("single_program_" + programKey);
+            const active = document.getElementById("batch_form_single_" + programKey);
             if (active) active.classList.remove("hidden");
+        }
+
+        function submitSelectedBatch(packageName) {
+            const programKey = packageName === "simple" ? selectedSimpleProgramKey : selectedSingleProgramKey;
+            if (!programKey) return;
+            const form = document.getElementById("batch_form_" + packageName + "_" + programKey);
+            if (form) form.requestSubmit();
         }
 
         let hiddenInputsVisible = false;

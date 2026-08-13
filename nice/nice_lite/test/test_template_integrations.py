@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from django.test import SimpleTestCase
+from django.template.loader import render_to_string
 
 
 class TemplateIntegrationTests(SimpleTestCase):
@@ -82,6 +83,47 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("showSingleProgramConfig(selectedSingleProgramKey);", jobbuilder)
         self.assertIn("selectedSingleProgramKey = programKey;", jobbuilder)
         self.assertIn("selectedSingleProgramKey = null;", jobbuilder)
+
+    def test_batch_start_submits_selected_registered_program_form(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        self.assertEqual(jobbuilder.count("action=\"{% url 'nice_lite:create_batch' %}\""), 2)
+        self.assertIn('name="package" value="simple"', jobbuilder)
+        self.assertIn('name="package" value="single"', jobbuilder)
+        self.assertIn('name="program" value="{{ program.prg }}"', jobbuilder)
+        self.assertIn('onclick="submitSelectedBatch(\'simple\')"', jobbuilder)
+        self.assertIn('onclick="submitSelectedBatch(\'single\')"', jobbuilder)
+        self.assertIn('function submitSelectedBatch(packageName)', jobbuilder)
+        self.assertIn('if (form) form.requestSubmit();', jobbuilder)
+
+    def test_batch_inputs_render_current_ui_json_schema(self):
+        context = {
+            "stream_user_inputs": [],
+            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_program_inputs": [{
+                "prg": "demo",
+                "disp": "Demo",
+                "sections": [{
+                    "name": "inputs",
+                    "inputs": [
+                        {"key": "mode", "keytype": "multi", "label": "mode", "options": ["one", "two"], "has_default": True, "default": "two"},
+                        {"key": "count", "keytype": "int", "label": "count", "has_default": True, "default": 4},
+                        {"key": "offset", "keytype": "num", "label": "offset", "has_default": True, "default": -1.5},
+                    ],
+                }],
+            }],
+            "single_programs": [],
+            "single_program_inputs": [],
+        }
+
+        rendered = render_to_string("jobbuilder.html", context)
+
+        self.assertIn('<form id="batch_form_simple_demo"', rendered)
+        self.assertIn('<option value="two"\n                                                                    selected', rendered)
+        self.assertIn('placeholder="4"', rendered)
+        self.assertIn('name="offset" type="number" step="any"', rendered)
+        self.assertIn('placeholder="-1.5"', rendered)
+        self.assertNotIn('option value=""', rendered)
 
     def test_batch_panels_match_stream_spacing(self):
         jobbuilder = self._read_template("jobbuilder.html")

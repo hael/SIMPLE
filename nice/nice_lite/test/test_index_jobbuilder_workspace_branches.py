@@ -139,6 +139,49 @@ class JobBuilderBranchTests(SimpleTestCase):
         stream_inputs = response._ctx["stream_user_inputs"]
         self.assertEqual(stream_inputs[0]["value"], "2.5")
 
+    def test_create_batch_allowlists_program_and_arguments_from_ui(self):
+        request = self.factory.post("/createbatch", {
+            "package": "single",
+            "program": "pick",
+            "mode": "fast",
+            "unknown": "discard-me",
+        })
+        request.user = _AuthUser()
+
+        workspace = Mock()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "pick": {
+                "program": {"executable": "single_exec"},
+                "inputs": [
+                    {"key": "mode", "options": ["fast", "slow"]},
+                    {"key": "projfile", "required": True},
+                ],
+            },
+        }
+        batchjob = Mock()
+        batchjob.new.return_value = True
+
+        with patch.object(job_builder_views, "get_workspace_id", return_value=4), patch.object(job_builder_views, "get_project_id", return_value=3), patch.object(job_builder_views, "Workspace", return_value=workspace), patch.object(job_builder_views, "_is_workspace_accessible", return_value=True), patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher), patch.object(job_builder_views, "BatchJob", return_value=batchjob), patch.object(job_builder_views.messages, "add_message"):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob.new.assert_called_once_with(workspace, "single", "pick", {"mode": "fast"})
+
+    def test_create_batch_rejects_program_for_wrong_executable(self):
+        request = self.factory.post("/createbatch", {"package": "single", "program": "pick"})
+        request.user = _AuthUser()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "pick": {"program": {"executable": "simple_exec"}},
+        }
+
+        with patch.object(job_builder_views, "get_workspace_id", return_value=4), patch.object(job_builder_views, "get_project_id", return_value=3), patch.object(job_builder_views, "Workspace"), patch.object(job_builder_views, "_is_workspace_accessible", return_value=True), patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher), patch.object(job_builder_views, "BatchJob") as batchjob_cls, patch.object(job_builder_views.messages, "add_message"):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob_cls.assert_not_called()
+
 
 class WorkspaceAccessBranchTests(SimpleTestCase):
     def setUp(self):

@@ -10,6 +10,7 @@ from .index_views        import view_index
 from .index_views        import view_user_login
 from .index_views        import view_user_logout
 from .job_builder_views  import view_job_builder
+from .job_builder_views  import view_create_batch
 from .stream_views       import view_stream_create_stream
 from .stream_views       import view_stream_terminate_stream
 from .stream_views       import view_stream_delete_stream
@@ -35,6 +36,7 @@ __all__ = [
     "view_user_login",
     "view_user_logout",
     "view_job_builder",
+    "view_create_batch",
     "view_stream_create_stream",
     "view_stream_terminate_stream",
     "view_stream_delete_stream",

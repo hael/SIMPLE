@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from types import SimpleNamespace
 from unittest.mock import Mock
 from unittest.mock import patch
 
@@ -111,6 +112,24 @@ class ApiEndpointTests(SimpleTestCase):
         with patch.object(api, "StreamJob", return_value=stream_job):
             response = api.index(self._post_json("/api", payload))
         self.assertEqual(response.status_code, 400)
+
+    def test_index_classic_uses_shared_job_workspace_relationship(self):
+        payload = {"jobid": 9, "job_heartbeat": {}}
+        job = Mock()
+        job.jobmodel = SimpleNamespace(dset_id=4, dset=SimpleNamespace(proj_id=3))
+        job.updateStats.return_value = {"ok": True}
+
+        with patch.object(api, "BatchJob", return_value=job), patch.object(api, "Workspace") as workspace_cls, patch.object(api, "Project") as project_cls:
+            response = api.index_classic(self._post_json("/api_classic", payload))
+
+        self.assertEqual(response.status_code, 200)
+        workspace_cls.assert_called_once_with(4)
+        project_cls.assert_called_once_with(3)
+        job.updateStats.assert_called_once_with(
+            payload,
+            project_cls.return_value,
+            workspace_cls.return_value,
+        )
 
     def test_image_returns_404_when_path_invalid(self):
         request = self.factory.get("/image")

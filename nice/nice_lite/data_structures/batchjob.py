@@ -1,13 +1,14 @@
 # global imports
 import os
+import time
 
 # django imports
 from django.utils import timezone
 
 # local imports
 from ..helpers import directory_exists, ensure_directory, print_error
-from ..models import WorkspaceModel
-from .simple import SIMPLEBatch, SIMPLEProjFile
+from ..models import JobModel, WorkspaceModel
+from .simple import SIMPLEBatch, SIMPLEProjFile, SIMPLEProject
 from .job import Job
 
 
@@ -44,8 +45,10 @@ class BatchJob(Job):
 
     def load(self):
         """Populate fields from DB. Resets to empty state if not found."""
-        self.jobmodel = JobClassicModel.objects.filter(id=self.id).first()
-        if self.jobmodel is None:
+        self.jobmodel = JobModel.objects.filter(id=self.id).first()
+        metadata = self.jobmodel.master_stats if self.jobmodel is not None else None
+        if not isinstance(metadata, dict) or metadata.get("job_type") != "batch":
+            self.jobmodel = None
             self.id = 0
             self.absdir = None
             return
@@ -55,11 +58,11 @@ class BatchJob(Job):
         self.dirc = self.jobmodel.dirc
         self.cdat = self.jobmodel.cdat
         self.args = self.jobmodel.args
-        self.wspc = self.jobmodel.wspc
+        self.wspc = self.jobmodel.dset
         self.disp = self.jobmodel.disp
-        self.prog = self.jobmodel.prog
-        self.pckg = self.jobmodel.pckg
-        self.prnt = self.jobmodel.prnt
+        self.prog = metadata.get("program", "")
+        self.pckg = metadata.get("package", "")
+        self.prnt = metadata.get("parent", 0)
         self.status = self.jobmodel.status
         self.absdir = self.get_absdir()
 
@@ -120,6 +123,77 @@ class BatchJob(Job):
     # Lifecycle
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _metadata(pckg, prog, parent=0):
+        return {
+            "job_type": "batch",
+            "package": pckg,
+            "program": prog,
+            "parent": parent,
+        }
+
+    def new(self, workspace, pckg, prog, args):
+        """Create and launch a SIMPLE or SINGLE batch job."""
+        if workspace is None or pckg not in ("simple", "single") or not prog:
+            print_error("new: invalid batch job configuration")
+            return False
+        if not isinstance(args, dict):
+            print_error("new: args is not a dictionary")
+            return False
+
+        workspacemodel = workspace.get_workspacemodel()
+        workspace_dir = workspace.get_absdir()
+        if workspacemodel is None or not directory_exists(workspace_dir):
+            print_error("new: workspace is unavailable")
+            return False
+
+        parent_proj = os.path.join(workspace_dir, "workspace.simple")
+        if not os.path.isfile(parent_proj):
+            if not SIMPLEProject(workspace_dir).create():
+                print_error("new: failed to initialize workspace.simple")
+                return False
+
+        self.disp = workspacemodel.jcnt + 1
+        self.pckg = pckg
+        self.prog = prog
+        self.name = prog.replace("_", " ")
+        self.dirc = f"{self.disp}_{prog}"
+        self.args = dict(args)
+        if not self._create_dir(workspace_dir):
+            return False
+
+        jobmodel = JobModel(
+            dset=workspacemodel,
+            cdat=timezone.now(),
+            disp=self.disp,
+            args=self.args,
+            name=self.name,
+            dirc=self.dirc,
+            status="queued",
+            master_status="queued",
+            master_stats=self._metadata(pckg, prog),
+            master_heartbeat=0,
+        )
+        jobmodel.save()
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
+
+        self.id = jobmodel.id
+        self.jobmodel = jobmodel
+        self.wspc = workspacemodel
+        self.status = "queued"
+        self.absdir = self.get_absdir()
+
+        simple = SIMPLEBatch(pckg=pckg)
+        if simple.start(self.args, self.absdir, workspace_dir, prog, self.id):
+            return True
+
+        self.status = "failed"
+        jobmodel.status = "failed"
+        jobmodel.master_status = "failed"
+        jobmodel.save()
+        return False
+
     def linkParticleSet(self, project, workspace, set_proj):
         self.args = {}
 
@@ -129,9 +203,6 @@ class BatchJob(Job):
             return False
 
         self.disp = workspacemodel.jcnt + 1
-        workspacemodel.jcnt = self.disp
-        workspacemodel.save()
-
         self.name = "particle set"
         self.dirc = str(self.disp) + "_link_particle_set"
         workspace_dir = os.path.join(project.dirc, workspacemodel.dirc)
@@ -142,17 +213,20 @@ class BatchJob(Job):
         if not self.createLink(set_proj, link_dst):
             return False
 
-        jobmodel = JobClassicModel(
-            wspc=workspacemodel,
+        jobmodel = JobModel(
+            dset=workspacemodel,
             cdat=timezone.now(),
             disp=self.disp,
             args={},
-            pckg="simple_stream",
             name=self.name,
             dirc=self.dirc,
             status="finished",
+            master_status="finished",
+            master_stats=self._metadata("simple_stream", "link_particle_set"),
         )
         jobmodel.save()
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
 
         self.id = jobmodel.id
         self.jobmodel = jobmodel
@@ -171,9 +245,6 @@ class BatchJob(Job):
             return False
 
         self.disp = workspacemodel.jcnt + 1
-        workspacemodel.jcnt = self.disp
-        workspacemodel.save()
-
         self.pckg = "simple"
         self.prog = "selection"
         self.name = "particle set"
@@ -185,19 +256,20 @@ class BatchJob(Job):
         self.args["deselfile"] = set_desel
         self.args["oritype"] = "cls2D"
 
-        jobmodel = JobClassicModel(
-            wspc=workspacemodel,
+        jobmodel = JobModel(
+            dset=workspacemodel,
             cdat=timezone.now(),
             disp=self.disp,
-            pckg=self.pckg,
-            prog=self.prog,
             name=self.name,
-            prnt=self.prnt,
             args=self.args,
             dirc=self.dirc,
             status="queued",
+            master_status="queued",
+            master_stats=self._metadata(self.pckg, self.prog, self.prnt),
         )
         jobmodel.save()
+        workspacemodel.jcnt = self.disp
+        workspacemodel.save()
 
         self.id = jobmodel.id
         self.jobmodel = jobmodel
@@ -227,29 +299,32 @@ class BatchJob(Job):
     def markComplete(self, project, workspace):
         del project, workspace
         self.status = "finished"
-        jobmodel = JobClassicModel.objects.filter(id=self.id).first()
+        jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is None:
             return False
         jobmodel.status = self.status
+        jobmodel.master_status = self.status
         jobmodel.save()
         return True
 
     def updateStats(self, stats_json, project, workspace):
         del project, workspace
-        jobmodel = JobClassicModel.objects.filter(id=self.id).first()
+        jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is None:
             return {}
 
         response = {}
         if "job_heartbeat" in stats_json:
-            jobmodel.heartbeat = timezone.now()
+            jobmodel.master_heartbeat = int(time.time())
 
         if "job" in stats_json and "terminate" in stats_json["job"]:
             jobmodel.status = "finished"
+            jobmodel.master_status = "finished"
         else:
             jobmodel.status = "running"
-            response = jobmodel.update
-            jobmodel.update = {}
+            jobmodel.master_status = "running"
+            response = jobmodel.master_update or {}
+            jobmodel.master_update = {}
 
         jobmodel.save()
         return response
@@ -259,17 +334,17 @@ class BatchJob(Job):
     # ------------------------------------------------------------------
 
     def getProjectStats(self):
-        jobmodel = JobClassicModel.objects.filter(id=self.id).first()
+        jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is None:
             return None
-        projfile = os.path.join(jobmodel.wspc.proj.dirc, jobmodel.wspc.dirc, self.dirc, "workspace.simple")
+        projfile = os.path.join(jobmodel.dset.proj.dirc, jobmodel.dset.dirc, self.dirc, "workspace.simple")
         return SIMPLEProjFile(projfile).getGlobalStats()
 
     def getProjectFieldStats(self, oritype, fromp=None, top=None, sortkey=None, sortasc=None, hist=False, boxes=False, plotkey=None):
-        jobmodel = JobClassicModel.objects.filter(id=self.id).first()
+        jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is None:
             return None
-        projfile = os.path.join(jobmodel.wspc.proj.dirc, jobmodel.wspc.dirc, self.dirc, "workspace.simple")
+        projfile = os.path.join(jobmodel.dset.proj.dirc, jobmodel.dset.dirc, self.dirc, "workspace.simple")
         return SIMPLEProjFile(projfile).getFieldStats(oritype, fromp, top, sortkey, sortasc, hist, boxes, plotkey)
 
     # ------------------------------------------------------------------
@@ -278,11 +353,11 @@ class BatchJob(Job):
 
     def delete(self, project, workspace):
         del project
-        jobmodel = JobClassicModel.objects.filter(id=self.id).first()
+        jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is None:
             return False
 
-        workspace_dir = os.path.join(jobmodel.wspc.proj.dirc, jobmodel.wspc.dirc)
+        workspace_dir = os.path.join(jobmodel.dset.proj.dirc, jobmodel.dset.dirc)
         trash_dir = os.path.join(workspace_dir, "TRASH")
         if not ensure_directory(trash_dir):
             return False
