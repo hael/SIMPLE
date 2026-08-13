@@ -11,6 +11,8 @@ master reduction costs about 0.74 s per half. The small fixture is dominated by
 scheduler/process/artifact overhead and is not a scaling benchmark.
 Implemented behavior is defined in `doc/policies/reconstruct3D_pcg_policy.md`;
 this note tracks the remaining production gap, validation plan, and research.
+The concrete `refine3D` and `refine3D_auto` integration sequence is specified in
+`doc/implementation_notes/pcg_refine3D_integration_plan.md`.
 
 Two iterations retain or improve the eight-iteration FSC thresholds and cFAR;
 one iteration changes FSC=0.5 and the B-factor enough to keep two as the
@@ -136,8 +138,9 @@ Continuous pose/shift refinement remains separate in
 | 0. Freeze baseline | register existing test in CI; establish kernel-oracle tolerances; remeasure box-256 time/RSS; fix help drift | nine stages pass reproducibly with retained logs |
 | 1. Harden command | typed inputs; structured stop reasons; on-disk kernel fixture; negative tests; atomic output | real command I/O is covered and failures leave no valid-looking output |
 | 2. Shared `reconstruct3D` | separate even/odd solves and FSC; combine halfmaps; standard outputs; C1/C2/D2 gates; add `rec_backend` dispatch | **Implemented; runtime fixture and C1/C2/D2 acceptance remain** |
-| 3. Distributed `reconstruct3D` | versioned raw `(B,D)` artifacts; fixed-order reduction; sequential state/half master solves; standard outputs | **Implemented for standalone reconstruct3D; restart/resume and scale/resource gates remain** |
-| 4. Refinement semantics | states, crop/resolution, weights on both `B` and `D`, fractional updates, box growth, accumulator trailing, lambda scaling, existing cache consumption | ordering, partitioning, updates, restarts, and cached/uncached runs preserve the objective |
+| P0. Lambda-mass contract | define base lambda against a homogeneous effective-data scale derived from master-reduced/blended raw `D` | shared/distributed, repartitioned, fractional/trailing, and crop/full representations preserve relative regularization |
+| 3. Distributed `reconstruct3D` | versioned raw `(B,D)` artifacts; fixed-order reduction; sequential state/half master solves; standard outputs | **Implemented; restart/resume and scale/resource gates remain** |
+| 4. Refinement semantics | states, crop/resolution, weights on both `B` and `D`, fractional updates, box growth, accumulator trailing, existing cache consumption; soft state weights only after hard-state parity | ordering, partitioning, updates, restarts, and cached/uncached runs preserve the objective |
 | 5. Integrate `refine3D` | route shared/distributed refinement reconstruction through the selector while retaining normal assembly/project handoff | supported opt-in refine3D workflows pass production-usable gates |
 | 6. Promotion | benchmark matched kernel PCG and gridding | promote only with a material reproducible advantage |
 
@@ -237,17 +240,31 @@ All must pass:
   current evidence.
 - Optimize sigma2 storage only after measurement and without changing weights.
 
-## 7. Later research
+## 7. P0 prerequisite and later research
 
-Do not add priors until the unregularized kernel route passes Phase 2.
+Base-lambda scaling is not a research prior. `lambda I` appears in every PCG
+solve, including `_unfil`, so its strength must be defined relative to a
+homogeneous effective-data scale derived from master-reduced or trailing-
+blended, data-only `D`. Workers still publish raw `(B,D)` only. This P0 contract
+must close before further distributed crop/ML work or `refine3D` integration.
+Shared/distributed execution, repartitioning, fractional updates, trailing, and
+crop/full matched-band tests must not change the relative lambda.
+
+The FSC/SSNR `P_tau` term is separately required for parity with the gridding
+ML path. It is not optional research and is applied after the unregularized
+halfmap FSC, without entering persisted `B`, `D`, or the trailing chain.
+
+Do not add genuinely new priors until the unregularized kernel route and
+hard-state `refine3D` integration pass their parity gates.
 
 | Idea | Priority | Recommendation |
 | --- | --- | --- |
-| Tikhonov lambda scaling | P0 | define against effective data mass before distribution |
-| solvent-flatness quadratic prior | P1 | first new-prior experiment after independent halfmaps |
-| soft state weights | P1 / Phase 4 | land after hard-state parity; weight `B` and `D` |
-| smoothness quadratic prior | P1/P2 | controlled solvent-flatness comparator |
-| symmetry projection/permutation | P2 | pursue after distributed profiling |
+| Tikhonov lambda scaling | P0 prerequisite | close before integration; derive a homogeneous effective-data scale from reduced/blended raw `D` |
+| FSC/SSNR ML `P_tau` | parity requirement | implement in the standalone two-map path before `refine3D` |
+| soft state weights | P1 / Phase 4 | integration semantics after hard-state parity; weight both `B` and `D` |
+| solvent-flatness quadratic prior | P1 post-parity | first new-prior experiment after independent halfmaps and refine3D parity |
+| smoothness quadratic prior | P1/P2 post-parity | controlled solvent-flatness comparator |
+| symmetry projection/permutation | P2 post-parity | performance optimization only; pursue after distributed profiling |
 | total variation | P3 | separate nonlinear/proximal solver project |
 | non-negativity | P3 | defer until density sign/baseline is validated |
 | wavelet L1 | P3 | defer behind TV |

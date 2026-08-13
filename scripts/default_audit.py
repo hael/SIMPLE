@@ -76,8 +76,6 @@ INTENTIONAL_NON_UI_DEFAULTS = {
         "noise normalization is exposed only by the normalize workflow",
     ("simple_exec", "ctfops", "box"):
         "image geometry is inferred from supplied data; the no-stack fallback is internal setup",
-    ("simple_exec", "reconstruct3D_pcg", "nspace"):
-        "the PCG operator ignores the setup grid; this is an internal even placeholder",
     ("simple_exec", "volcluster", "box"):
         "box is derived from the first input volume",
     ("simple_stream", "abinitio2D_stream", "projfile_optics"):

@@ -7,7 +7,6 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('volum
 type(ui_program), target :: center
 type(ui_program), target :: reproject
 type(ui_program), target :: volops
-type(ui_program), target :: reconstruct3D_pcg
 
 contains
 
@@ -16,7 +15,6 @@ contains
         call new_center(prgtab)
         call new_reproject(prgtab)
         call new_volops(prgtab)
-        call new_reconstruct3D_pcg(prgtab)
     end subroutine construct_volume_programs
 
 subroutine new_center( prgtab )
@@ -175,60 +173,5 @@ subroutine new_center( prgtab )
         ! add to ui_hash
         call add_ui_program('volops', volops, prgtab, UI_CATEGORY)
     end subroutine new_volops
-
-    subroutine new_reconstruct3D_pcg( prgtab )
-        class(ui_hash), intent(inout) :: prgtab
-        ! PROGRAM SPECIFICATION
-        call reconstruct3D_pcg%new(&
-        &'reconstruct3D_pcg',&                 ! name
-        &'Experimental CTF/sigma-weighted PCG 3D reconstruction',&
-        &'is an experimental single-state 3D reconstruction program using a matrix-free, '//&
-        &'preconditioned-conjugate-gradient solver instead of Fourier gridding (doc/policies/'//&
-        &'reconstruct3D_pcg_policy.md). Reads a project and reconstructs one volume for one '//&
-        &'state from its current particle orientations, CTF, and shifts; orientations are inputs, not '//&
-        &'optimized. objfun=euclid requires sigma2 files and weights the fit by them; objfun=cc runs '//&
-        &'unweighted. nparts=1, no even/odd split, no distributed execution. Point-group symmetry '//&
-        &'is applied by coordinate replication (pgrp=c1 is a no-op). Writes to a new '//&
-        &'experimental output directory and never modifies the project.',&
-        &'simple_exec',&                       ! executable
-        &.true.)                                ! requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! parameter input/output
-        ! NOTE: projfile is deliberately NOT declared -- requires_sp_project
-        ! above makes params%new auto-discover a unique *.simple in the cwd,
-        ! exactly as reconstruct3D does. Declaring it would force the user to
-        ! pass it and defeat that discovery.
-        call reconstruct3D_pcg%add_input(UI_PARM, oritype, &
-        &visibility=UI_VIS_DEVELOPER)
-        call reconstruct3D_pcg%add_input(UI_PARM, objfun, &
-        &visibility=UI_VIS_DEVELOPER)
-        call reconstruct3D_pcg%add_input(UI_PARM, 'state', 'num', 'State to reconstruct', &
-            &'Index of the single state to reconstruct', 'state index{1}', .false., 1., &
-        &visibility=UI_VIS_DEVELOPER)
-        ! search controls
-        call reconstruct3D_pcg%add_input(UI_SRCH, pgrp)
-        call reconstruct3D_pcg%add_input(UI_SRCH, 'pcgop', 'multi', 'PCG normal operator', &
-            &'Normal-operator implementation: kernel is the section-8.1 Toeplitz operator, whose '//&
-            &'per-iteration cost is independent of particle count and is roughly 7x faster per '//&
-            &'iteration; matrixfree is the exact reference operator, slower but free of the '//&
-            &'kernel shift-invariance approximation(matrixfree|kernel){kernel}','', .false., 'kernel', &
-        &choices=ui_choices([character(len=10) :: 'matrixfree', 'kernel']), &
-        &visibility=UI_VIS_DEVELOPER)
-        ! filter controls
-        call reconstruct3D_pcg%add_input(UI_FILT, maxits, required_override=.false., &
-        &visibility=UI_VIS_DEVELOPER)
-        call reconstruct3D_pcg%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
-            &'Stop when the true L2 relative residual falls below this; use <=0 for fixed iterations', 'tolerance{0.001}', &
-            &.false., 0.001, &
-        &visibility=UI_VIS_DEVELOPER)
-        ! mask controls
-        call reconstruct3D_pcg%add_input(UI_MASK, mskdiam, required_override=.false., &
-        &visibility=UI_VIS_DEVELOPER)
-        ! computer controls
-        call reconstruct3D_pcg%add_input(UI_COMP, nthr, &
-        &visibility=UI_VIS_STANDARD)
-        ! add to ui_hash
-        call add_ui_program('reconstruct3D_pcg', reconstruct3D_pcg, prgtab, UI_CATEGORY)
-    end subroutine new_reconstruct3D_pcg
 
 end module simple_ui_volume

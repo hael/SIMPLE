@@ -3,7 +3,6 @@ module simple_exec_volume
 use simple_cmdline,           only: cmdline
 use simple_commanders_volops,    only: commander_centervol, commander_volops
 use simple_commanders_reproject, only: commander_reproject
-use simple_commanders_reconstruct3D_pcg, only: commander_reconstruct3D_pcg
 implicit none
 
 public :: exec_volume_commander
@@ -12,7 +11,6 @@ private
 type(commander_centervol)         :: xcenter
 type(commander_reproject)         :: xreproject
 type(commander_volops)            :: xvolops
-type(commander_reconstruct3D_pcg) :: xreconstruct3D_pcg
 
 contains
 
@@ -31,8 +29,6 @@ contains
                 call xreproject%execute(cline)
             case( 'volops' )
                 call xvolops%execute(cline)
-            case( 'reconstruct3D_pcg' )
-                call xreconstruct3D_pcg%execute(cline)
             case default
                 l_did_execute = .false.
         end select

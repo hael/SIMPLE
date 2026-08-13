@@ -1,8 +1,6 @@
-!@descr: experimental CTF/sigma-weighted, matrix-free Fourier-projection
-!  operator and preconditioned-conjugate-gradient volume solver. Isolated
-!  prototype, see doc/policies/reconstruct3D_pcg_policy.md. Does not touch
-!  reconstructor, reconstructor_eo, volassemble, or any production
-!  reconstruction path.
+!@descr: CTF/sigma-weighted Fourier-projection operator and
+!  preconditioned-conjugate-gradient volume solver used by the reconstruct3D
+!  PCG backend. See doc/policies/reconstruct3D_pcg_policy.md.
 !
 !  Per-particle data is cached once by prep_particles (not re-derived every CG
 !  iteration), the particle loop is OpenMP-parallel throughout, and the solve
@@ -1168,7 +1166,7 @@ contains
     !
     ! Peak memory during accumulation is one complex RHS and one real density
     ! accumulator plus the work image; that floor is constant in nptcls. See
-    ! doc/policies/reconstruct3D_pcg_policy.md section 1.
+    ! doc/policies/reconstruct3D_pcg_policy.md.
 
     subroutine begin_accum( self )
         class(reconstructor_pcg), intent(inout) :: self

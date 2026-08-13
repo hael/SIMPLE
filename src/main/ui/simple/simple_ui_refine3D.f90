@@ -131,10 +131,10 @@ subroutine new_automask( prgtab )
         ! <empty>
         ! parameter input/output
         call reconstruct3D%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
-        &'Reconstruction backend; PCG runs independent shared-memory kernel solves for the two halfsets(gridding|pcg){gridding}', &
+        &'Reconstruction backend; PCG runs independent kernel solves for the two halfsets(gridding|pcg){gridding}', &
         &'', .false., 'gridding', &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
-        &visibility=UI_VIS_DEVELOPER)
+        &visibility=UI_VIS_STANDARD)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -159,10 +159,12 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call reconstruct3D%add_input(UI_FILT, 'maxits', 'num', 'PCG maximum iterations', &
         &'Maximum kernel PCG iterations; used only when rec_backend=pcg', 'iterations{2}', .false., 2., &
-        &visibility=UI_VIS_DEVELOPER)
+        &visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits iterations', 'tolerance{0.001}', &
-        &.false., 0.001, visibility=UI_VIS_DEVELOPER)
+        &.false., 0.001, visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         ! mask controls
         call reconstruct3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)

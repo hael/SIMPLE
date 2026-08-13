@@ -1,18 +1,18 @@
-# `reconstruct3D_pcg` policy
+# `reconstruct3D` PCG backend policy
 
-Contract of the code that runs today: the experimental CTF- and sigma-weighted
+Contract of the code that runs today: the opt-in CTF- and sigma-weighted
 preconditioned-conjugate-gradient (PCG) reconstruction path. Work not yet
 implemented is specified in
 `doc/implementation_notes/pcg_reconstruction_production_readiness.md`.
 
-`reconstruct3D_pcg` remains an isolated one-volume prototype. The production
-`reconstruct3D` command now accepts the opt-in selector
+The production `reconstruct3D` command accepts the selector
 `rec_backend=gridding|pcg`, with `gridding` unchanged as the default. Its `pcg`
 branch runs independent kernel accumulation and solves for the even and odd
 halfsets, writes the standard halfmaps and FSC, and forms the merged map by
 averaging those two dense halfmaps. It supports both shared-memory execution and
-distributed worker accumulation followed by a master solve. It does not route
-through the incompatible experimental commander.
+distributed worker accumulation followed by a master solve. The former
+`reconstruct3D_pcg` command has been retired; there is one production workflow
+and one backend selector.
 
 The production backend currently supports full-box fixed-pose
 reconstruction from raw or denoised particle sources, multiple populated
@@ -36,34 +36,25 @@ reconstruction, and `conical_fsc=yes` regularization. Those cases require
 additional equivalence tests and must not silently fall back to gridding or
 matrix-free PCG.
 
-## 1. Isolated-command scope and fixed inputs
+## 1. Production scope and fixed inputs
 
-Reads a project and reconstructs one volume for one state by solving a CTF- and
-noise-weighted least-squares problem with PCG. For fixed orientations, states
-and shifts it answers one question: does solving the weighted normal equations
-exactly beat the diagonal gridding approximation by enough to justify the cost?
+For each populated state and halfset, the backend solves a CTF- and
+noise-weighted fixed-pose least-squares problem with PCG. Orientations, in-plane
+shifts, state assignments, half assignments, CTF parameters, phase shifts and
+`ctfflag` are read from the project and are never optimized by reconstruction.
+The Euclidean objective uses per-particle `sigma2`; correlation is unweighted.
+`mskdiam` supplies the soft solve support and `pgrp` is applied by coordinate
+replication.
 
-Every per-particle input is read-only, from the same metadata production uses:
+Shared execution accumulates and solves both halfsets in-process. Distributed
+workers publish raw accumulators and the master reduces, finalizes and solves
+them. Standard project volumes, halfmaps, FSC, cFAR, resolution fields and
+postprocessing handoffs are written by the ordinary `reconstruct3D` workflow.
+Per-half diagnostics record stop reason, requested/completed iteration count,
+convergence flag, initial/final true relative residual, final relative update,
+per-iteration residuals and timings.
 
-- orientation and in-plane shift are inputs, never optimized;
-- one state per run (`state`, default 1);
-- particles selected by `sample4rec` (state and, where available, `updatecnt`
-  gated), then filtered to the requested state;
-- CTF parameters, phase shift and `ctfflag` from the project;
-- per-particle Euclidean `sigma2` from the existing estimation machinery (§8);
-- `mskdiam`, if given, constrains the solve to a soft spherical support (§4);
-- `pgrp` is applied by coordinate replication (§6).
-
-`nparts=1` is enforced with a hard error. No even/odd split and no distributed
-execution (§10).
-
-Nothing is written back to the project. Output goes to a new numbered execution
-directory: `reconstruct3D_pcg_state<NN>.mrc` and a diagnostics table
-`reconstruct3D_pcg_diagnostics.txt` (stop reason, requested/completed iteration
-count, convergence flag, initial/final true relative residual, final relative
-update, per-iteration residuals, and timing).
-
-Particle images are streamed through a bounded batch. The command calls
+Particle images are streamed through a bounded batch. The backend calls
 `begin_accum`, repeats `accumulate_batch`, closes with `end_accum`, and solves
 with `solve_accum`; it never materializes all observed particle planes at once.
 The two particle-dependent accumulated quantities are the weighted RHS and the
@@ -72,9 +63,9 @@ are derived from those quantities, so the PCG iteration itself performs no
 particle-image I/O. Peak image/plane memory is therefore constant in particle
 count.
 
-Production streaming fuses those two updates. For each particle it evaluates
+Streaming accumulation fuses those two updates. For each particle it evaluates
 the CTF, rotated coordinate, and KB interpolation window once, then updates
-both accumulators in the same coloured OpenMP traversal. The standalone RHS
+both accumulators in the same coloured OpenMP traversal. The monolithic RHS
 and density routines remain the monolithic test oracle; the streaming-versus-
 monolithic gate covers both single-batch and multi-batch fused accumulation.
 It gates `B` and the `D`-derived kernel directly at `1e-6` relative error. The
@@ -94,9 +85,9 @@ rho shell statistics, then produces the reciprocal preconditioner and packed
 | `src/main/volume/simple_reconstructor_pcg.f90` | `reconstructor_pcg` operator/solver type |
 | `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90` | shared worker/master PCG orchestration |
 | `src/defs/simple_refine3D_fnames.f90` | raw `(state,half,part)` artifact names |
-| `src/main/commanders/simple/simple_commanders_reconstruct3D_pcg.f90` | `reconstruct3D_pcg` command |
-| `src/main/ui/simple/simple_ui_volume.f90` | UI record |
-| `src/main/exec/simple_exec_volume.f90` | exec routing |
+| `src/main/commanders/simple/simple_commanders_rec.f90` | `reconstruct3D` commander and backend default |
+| `src/main/ui/simple/simple_ui_refine3D.f90` | `reconstruct3D` UI and backend selector |
+| `src/main/strategies/parallelization/simple_rec3D_strategy.f90` | backend dispatch |
 | `src/main/params/simple_parameters*.f90` | `pcgop`, `rtol` parameters |
 | `src/fileio/simple_sigma2_files.f90` | shared, builder-free sigma2 discovery/loading |
 | `src/main/commanders/test/simple_commanders_test_highlevel.f90` | operator/solver tests |
@@ -208,17 +199,17 @@ answer.) Overall scale is the analytic constant `padsc^2`;
 `measure_kernel_scale` is a test-only check that it is right.
 
 The kernelized operator is shift-invariant and the true operator is not, so it
-stays an approximation (~3.4% interior error). The standalone prototype exposes
-`pcgop=matrixfree`, but that path is the exact numerical reference for unit
-tests and small diagnostic fixtures, **not a feasible real-workflow backend and
-not a production fallback**. Its per-iteration particle loop becomes
+stays an approximation (~3.4% interior error). The matrix-free path is the exact
+numerical reference for unit tests and small diagnostic fixtures, **not a
+feasible real-workflow backend and not a production fallback**. Its
+per-iteration particle loop becomes
 prohibitive at experimental particle counts and under symmetry replication.
 
 The approximation is not reliably positive definite under late over-iteration:
 on the deterministic fixture the residual bottoms out and then curvature fails
 after the useful map has already saturated. Production therefore defaults to
-two iterations and rejects `maxits>8`; the isolated prototype may still use a
-larger value to diagnose the approximation boundary.
+two iterations and rejects `maxits>8`. Low-level tests may use more iterations
+when diagnosing the approximation boundary.
 
 `pcgop=kernel` is therefore the only candidate for production workflows. It
 must be validated against matrix-free on deterministic, small enough fixtures
@@ -289,8 +280,8 @@ Successful completion returns a typed `pcg_solver_outcome` identifying `rtol`,
 `xtol`, intentional `fixed_iterations`, or exhausted `maxits`, with the
 requested/completed iteration count and initial/final residual/update values.
 Broken curvature, a non-finite state, a non-positive preconditioner, and a zero
-RHS still hard-error in the isolated command; conversion of those failures into
-recoverable workflow outcomes belongs to the production strategy.
+RHS are hard errors. Conversion of those failures into recoverable workflow
+outcomes remains future production work.
 
 The final fixed iteration does not apply the preconditioner because no next
 search direction will consume it. The terminal residual and update diagnostics
@@ -306,7 +297,7 @@ unweighted fallback — that would quietly change which objective is minimised.
 Sigma2 is per-particle-per-shell, read via `euclid_sigma2` over the group STAR
 file (as `flex_analysis` does), then upsampled to the operator's shell range.
 Discovery/carry-over/loading lives once in `src/fileio/simple_sigma2_files.f90`,
-called by both `flex_analysis` and `reconstruct3D_pcg`. That module is
+called by both `flex_analysis` and the `reconstruct3D` PCG strategy. That module is
 deliberately builder-free: `builder` depends on `euclid_sigma2`, so the sigma2
 side must not depend back on `builder`; callers pass `pftc`, `esig` and
 orientations explicitly.
@@ -341,22 +332,20 @@ kernel-versus-matrix-free gate. Production-sized runs exercise kernel only;
 they do not establish correctness by comparing kernel output with another
 kernel output.
 
-Not covered, and worth remembering before trusting a change: the command's own
+Not covered, and worth remembering before trusting a change: the backend's own
 particle I/O loop, and replicated symmetry through the matrix-free operator
 (stage 9 compares kernel to kernel).
 
-## 10. Deliberate non-goals of the isolated command
+## 10. Current backend exclusions
 
 Not implemented, and hard-errored or absent rather than silently approximated:
 
-- no even/odd half-set split;
-- no `nparts>1` / distributed execution;
-- no orientation, shift, state, sigma, FSC or resolution write-back;
-- no orientation search, probabilistic assignment, online partial
-  reconstruction, fractional updates or multi-state reconstruction;
+- no orientation search or pose optimization inside reconstruction;
+- no online partial reconstruction or fractional/trailing updates;
 - no adaptive regulariser, automask, nonuniform filtering or FSC feedback inside
   PCG;
-- no MPI/distributed reduction, no GPU/offload path;
+- no box cropping, projection-direction compression, conical-FSC regularization,
+  or GPU/offload path;
 - no reuse of SPIDER BP-CG real-space code — the design is Fourier
   central-section and the architectures do not transfer. There is no licensing
   barrier: SIMPLE is GPL-3.0 and SPIDER GPL-2.0-or-later.

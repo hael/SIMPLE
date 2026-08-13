@@ -540,15 +540,10 @@ need exists. Defer to stage 5 and revisit with numbers.
 Each stage must pass its gate before the next begins. This mirrors the staging
 that made the reconstruction operator trustworthy.
 
-**Stage 0 -- even/odd split and FSC in `reconstruct3D_pcg`.**
-This comes first and is not optional. At present there is *no quantitative way
-to tell whether any change helps* -- every judgement so far has been visual
-inspection in Chimera. Before adding thousands of free parameters to the fit, a
-gold-standard resolution curve must exist. This is also a prerequisite for the
-real-space priors sketched in the policy note's section 11 and for the half-set
-discipline in section 7.
-*Gate:* two independent half-set volumes and an FSC curve, reproducing a
-sensible resolution on a known dataset.
+**Stage 0 -- even/odd split and FSC in the `reconstruct3D` PCG backend: complete.**
+The production workflow now reconstructs independent halfsets, reports FSC and
+cFAR, and forms the merged map by averaging the halfmaps. This establishes the
+quantitative baseline required before adding pose degrees of freedom.
 
 **Stage 1 -- shifts only.**
 Analytic gradient (section 3.4), no new interpolation primitive, 2 parameters
