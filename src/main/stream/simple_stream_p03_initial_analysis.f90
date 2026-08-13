@@ -61,6 +61,7 @@ use simple_defs_fname,            only: DIR_PICKER, DIR_EXTRACT
 use simple_defs_stream,           only: DIR_STREAM
 use simple_abinitio_utils,        only: abinitio_rec_fbody
 use simple_ptcl_sieve,            only: ptcl_sieve
+use simple_class_compatibility,         only: class_compatibility, support_model_metrics, PREPROCESS_MORPH_SIZE
 use simple_gui_metadata_api
 
 implicit none
@@ -943,6 +944,8 @@ contains
                 integer,          allocatable                :: cavg_inds_local(:)
                 type(cavg_quality_model)                     :: model_local
                 type(cavg_quality_result)                    :: quality_local
+                type(class_compatibility)                    :: compatibility_model
+                type(support_model_metrics)                  :: compat_metrics
                 type(parameters)                             :: relation_params
                 type(cmdline)                                :: relation_cline
                 type(string)                                 :: cavgsstk_local
@@ -980,6 +983,15 @@ contains
                 call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.true.)
                 call write_quality_stack(string('quality_rejected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.false.)
                 call spproj_inout%map_cavgs_selection(quality_local%states)
+                call compatibility_model%new()
+                call compatibility_model%train(spproj_inout)
+                call compatibility_model%get_support_model_metrics(compat_metrics)
+                write(logfhandle,'(A,3(F10.4,1X),A,3(F10.4,1X),A,L1,A,L1,A,L1)') &
+                    '>>> COARSE COMPAT METRICS a/b/c=', &
+                    compat_metrics%axis_a, compat_metrics%axis_b, compat_metrics%axis_c, ' da/db/dc=', &
+                    compat_metrics%delta_a, compat_metrics%delta_b, compat_metrics%delta_c, ' valid=', &
+                    compat_metrics%valid, ' delta_valid=', compat_metrics%delta_valid, ' converged=', compat_metrics%converged
+                call compatibility_model%infer(spproj_inout)
                 ! mark unusable micrographs as rejected (state=0) while preserving row indices,
                 ! so mic/stk alignment remains stable for downstream micind use (do not delete)
                 do i_mic_local = spproj_inout%os_mic%get_noris(), 1, -1
