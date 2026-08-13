@@ -227,7 +227,7 @@ contains
     module subroutine gen_fplane4rec( self, kfromto,  smpd_crop, ctfparms, shift, fplane, sig2arr, &
         &store_transfer, observation_model )
         use simple_math,          only: ceil_div, floor_div
-        use simple_math_ft,       only: upsample_sigma2
+        use simple_math_ft,       only: resample_sigma2
         use simple_euclid_sigma2, only: euclid_sigma2
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: kfromto(2)
@@ -310,7 +310,8 @@ contains
         ! -----------------------
         if (l_ml_reg) then
             allocate(sigma2_noise(0:fplane%nyq), source=0.0)
-            call upsample_sigma2(kfromto(1), sigma_nyq, sig2arr, fplane%nyq, sigma2_noise)
+            call resample_sigma2(kfromto(1), sigma_nyq, sig2arr, fplane%nyq, &
+                &real(sigma_nyq)/real(fplane%nyq), sigma2_noise)
         end if
         ! -----------------------
         ! Shift phase recurrence

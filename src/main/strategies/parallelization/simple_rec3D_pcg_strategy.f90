@@ -9,7 +9,7 @@ use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_O
 use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, &
     &discrete_read_imgbatch_source, killimgbatch
 use simple_sigma2_files,      only: load_sigma2_groups
-use simple_math_ft,           only: upsample_sigma2
+use simple_math_ft,           only: resample_sigma2
 use simple_fsc,               only: phase_rand_fsc, fsc_area_score_result
 use simple_image,             only: image
 use simple_image_msk,         only: image_msk
@@ -113,10 +113,7 @@ contains
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
-            write(logfhandle,'(A,I0)') '>>> PCG SHARED OUTPUT PHASES: STATE ', state
-            write(logfhandle,'(A,F9.3)') '    halfmap + merged-map output : ', time_map_output
-            write(logfhandle,'(A,F9.3)') '    FSC + cFAR + summary        : ', time_fsc_output
-            call flush(logfhandle)
+            call write_output_diagnostics(state, 'shared', time_map_output, time_fsc_output)
 
             params%vols(state)      = fname_vol
             params%vols_even(state) = fname_even
@@ -249,8 +246,6 @@ contains
             time_accum     = 0.0_dp
             time_finalize  = 0.0_dp
             time_solve     = 0.0_dp
-            write(logfhandle,'(A,I0,3A,I0)') '>>> PCG RECONSTRUCT3D: STATE ', state_here, &
-                &' ', trim(half), ' PARTICLES = ', size(pinds)
             t_phase = tic()
             crop_factor = real(params%box_crop) / real(params%box)
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
@@ -263,8 +258,8 @@ contains
             if( params%cc_objfun == OBJFUN_EUCLID )then
                 kfromto = build%esig%get_kfromto()
                 do i = 1, size(pinds)
-                    call upsample_sigma2(kfromto(1), kfromto(2), &
-                        &build%esig%sigma2_noise(kfromto(1):kfromto(2),pinds(i)), R, sig2(0:R,i))
+                    call resample_sigma2(kfromto(1), kfromto(2), &
+                        &build%esig%sigma2_noise(kfromto(1):kfromto(2),pinds(i)), R, 1.0, sig2(0:R,i))
                 enddo
             endif
 
@@ -318,8 +313,6 @@ contains
             t_phase = tic()
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
-            call report_regularization(state_here, half, params%pcg_lambda_rel, &
-                &pcgop%get_data_scale(), pcgop%get_effective_lambda())
             time_finalize = real(toc(t_phase),dp)
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             t_phase = tic()
@@ -329,13 +322,11 @@ contains
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
             time_total = real(toc(t_half),dp)
-            call report_half_timings(state_here, half, time_metadata, time_particles, time_accum_init, &
-                &time_accum, time_finalize, time_solve, time_total)
             call write_half_diagnostics(state_here, half, 'base', size(pinds), result, rel_res_hist, &
                 &time_metadata, time_particles, time_accum_init, time_accum, time_finalize, time_solve, time_total, &
-                &pcgop%get_data_scale(), pcgop%get_effective_lambda())
-            write(logfhandle,'(A,I0,3A,I0,2A)') '>>> PCG RECONSTRUCT3D: STATE ', state_here, ' ', trim(half), &
-                &' FINISHED AFTER ', niters, ' ITERATIONS, STOP=', trim(result%stop_reason)
+                &pcgop%get_data_scale(), pcgop%get_effective_lambda(), pcgop=pcgop)
+            call report_solve_summary('SHARED', state_here, half, 'base', size(pinds), niters, &
+                &result%final_rel_residual, time_solve, result%stop_reason)
             if( present(outcome) ) outcome = result
 
             call pcgop%kill
@@ -358,9 +349,10 @@ contains
             type(pcg_solver_outcome) :: result
             type(string) :: fname
             real, allocatable :: x(:,:,:), rel_res_hist(:)
-            integer :: nptcls, niters
+            integer :: nptcls, niters, prior_npositive
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve, time_total
+            real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
 
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
@@ -376,9 +368,9 @@ contains
             call pcgop%set_ml_prior(fsc_here, params%tau, params%hp)
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
-            call report_regularization(state_here, half//' ML', params%pcg_lambda_rel, &
-                &pcgop%get_data_scale(), pcgop%get_effective_lambda())
             time_finalize = real(toc(t_phase),dp)
+            call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
+                &prior_to_khat_l1, prior_to_khat_rms)
             x = base_volume%get_rmat()
             t_phase = tic()
             call pcgop%solve_accum(x, maxits=params%maxits, rtol=params%rtol, &
@@ -387,11 +379,14 @@ contains
             time_total = time_reduce + time_finalize + time_solve
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
-            write(logfhandle,'(A,I0,3A,I0,2A)') '>>> PCG RECONSTRUCT3D ML: STATE ', state_here, &
-                &' ', trim(half), ' FINISHED AFTER ', niters, ' ITERATIONS, STOP=', trim(result%stop_reason)
             call write_half_diagnostics(state_here, half, 'ml', nptcls, result, rel_res_hist, &
                 &0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, time_finalize, time_solve, time_total, &
-                &pcgop%get_data_scale(), pcgop%get_effective_lambda(), reduce_time=time_reduce)
+                &pcgop%get_data_scale(), pcgop%get_effective_lambda(), reduce_time=time_reduce, &
+                &prior_npositive=prior_npositive, prior_positive_min=prior_positive_min, &
+                &prior_positive_max=prior_positive_max, prior_to_khat_l1=prior_to_khat_l1, &
+                &prior_to_khat_rms=prior_to_khat_rms, pcgop=pcgop)
+            call report_solve_summary('SHARED', state_here, half, 'ml', nptcls, niters, &
+                &result%final_rel_residual, time_solve, result%stop_reason)
             call pcgop%kill
             call fname%kill
             deallocate(x, rel_res_hist)
@@ -467,28 +462,10 @@ contains
             deallocate(res)
         end subroutine write_fsc_summary
 
-        subroutine report_half_timings( state_here, half, metadata, particles, accum_init, accum, &
-                &finalize, solve_time, total )
-            integer,          intent(in) :: state_here
-            character(len=*), intent(in) :: half
-            real(dp),         intent(in) :: metadata, particles, accum_init, accum, finalize, solve_time, total
-            real(dp) :: other
-            other = max(0.0_dp, total - metadata - particles - accum_init - accum - finalize - solve_time)
-            write(logfhandle,'(A,I0,2A)') '>>> PCG SHARED PHASES: STATE ', state_here, ' ', trim(half)
-            write(logfhandle,'(A,F9.3)') '    metadata/operator preparation : ', metadata
-            write(logfhandle,'(A,F9.3)') '    particle I/O + preprocessing  : ', particles
-            write(logfhandle,'(A,F9.3)') '    accumulator initialization    : ', accum_init
-            write(logfhandle,'(A,F9.3)') '    fused (B,D) accumulation      : ', accum
-            write(logfhandle,'(A,F9.3)') '    accumulator finalization      : ', finalize
-            write(logfhandle,'(A,F9.3)') '    PCG solve                     : ', solve_time
-            write(logfhandle,'(A,F9.3)') '    other                         : ', other
-            write(logfhandle,'(A,F9.3)') '    total half                    : ', total
-            call flush(logfhandle)
-        end subroutine report_half_timings
-
         subroutine write_half_diagnostics( state_here, half, solve_kind, nptcls, result, history, &
                 &metadata, particles, accum_init, accum, finalize, solve_time, total, data_scale, lambda_eff, &
-                &reduce_time )
+                &reduce_time, prior_npositive, prior_positive_min, prior_positive_max, prior_to_khat_l1, &
+                &prior_to_khat_rms, pcgop )
             integer,                  intent(in) :: state_here, nptcls
             character(len=*),         intent(in) :: half, solve_kind
             type(pcg_solver_outcome), intent(in) :: result
@@ -497,14 +474,21 @@ contains
             real(dp),                 intent(in) :: finalize, solve_time, total
             real,                     intent(in) :: data_scale, lambda_eff
             real(dp), optional,       intent(in) :: reduce_time
+            integer, optional,        intent(in) :: prior_npositive
+            real, optional,           intent(in) :: prior_positive_min, prior_positive_max
+            real, optional,           intent(in) :: prior_to_khat_l1, prior_to_khat_rms
+            type(reconstructor_pcg),   intent(in) :: pcgop
             type(string) :: fname
             integer :: funit, i
+            real(dp) :: other_time
             fname = 'reconstruct3D_pcg_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_'// &
                 &trim(solve_kind)//'_diagnostics.txt'
             call fopen(funit, file=fname, status='replace', action='write')
+            write(funit,'(A)')        'execution_mode=shared'
             write(funit,'(A,I0)')     'nptcls=',               nptcls
             write(funit,'(A,A)')      'solve_kind=',            trim(solve_kind)
             write(funit,'(A,I0)')     'requested_maxits=',     result%requested_maxits
+            write(funit,'(A,ES14.6)') 'requested_rtol=',       params%rtol
             write(funit,'(A,I0)')     'iteration_count=',      result%iteration_count
             write(funit,'(A,A)')      'stop_reason=',          trim(result%stop_reason)
             write(funit,'(A,L1)')     'converged=',            result%converged
@@ -514,6 +498,22 @@ contains
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',       data_scale
             write(funit,'(A,ES14.6)') 'pcg_lambda_relative=',  params%pcg_lambda_rel
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=', lambda_eff
+            if( params%pcg_lambda_rel >= 0.0 )then
+                write(funit,'(A)') 'pcg_lambda_mode=relative'
+            else
+                write(funit,'(A)') 'pcg_lambda_mode=legacy_absolute'
+            endif
+            if( present(prior_npositive) )then
+                if( .not. present(prior_positive_min) .or. .not. present(prior_positive_max) .or. &
+                    &.not. present(prior_to_khat_l1) .or. .not. present(prior_to_khat_rms) )then
+                    THROW_HARD('incomplete shared PCG ML prior diagnostics')
+                endif
+                write(funit,'(A,I0)')     'ml_prior_nonzero_bins=',       prior_npositive
+                write(funit,'(A,ES14.6)') 'ml_prior_positive_min=',       prior_positive_min
+                write(funit,'(A,ES14.6)') 'ml_prior_positive_max=',       prior_positive_max
+                write(funit,'(A,ES14.6)') 'ml_prior_to_data_khat_l1=',    prior_to_khat_l1
+                write(funit,'(A,ES14.6)') 'ml_prior_to_data_khat_rms=',   prior_to_khat_rms
+            endif
             write(funit,'(A,F12.6)')  'metadata_seconds=',     metadata
             write(funit,'(A,F12.6)')  'particle_io_prep_seconds=', particles
             write(funit,'(A,F12.6)')  'accum_init_seconds=',   accum_init
@@ -522,9 +522,20 @@ contains
             write(funit,'(A,F12.6)')  'solve_seconds=',        solve_time
             write(funit,'(A,F12.6)')  'total_half_seconds=',   total
             if( present(reduce_time) ) write(funit,'(A,F12.6)') 'raw_replay_seconds=', reduce_time
+            other_time = total - metadata - particles - accum_init - accum - finalize - solve_time
+            if( present(reduce_time) ) other_time = other_time - reduce_time
+            write(funit,'(A,F12.6)')  'other_seconds=', max(0.0_dp, other_time)
             do i = 1, size(history)
                 write(funit,'(A,I0,A,ES14.6)') 'iter', i, '_rel_resid_l2=', history(i)
+                write(funit,'(A,I0,A,ES14.6)') 'iter', i, '_rel_update=', result%rel_update_history(i)
+                if( result%preconditioned_residual_history(i) >= 0.0 )then
+                    write(funit,'(A,I0,A,ES14.6)') 'iter', i, '_preconditioned_resid=', &
+                        &result%preconditioned_residual_history(i)
+                endif
+                write(funit,'(A,I0,A,F12.6)') 'iter', i, '_seconds=', result%iteration_seconds(i)
             enddo
+            call pcgop%report_finalize_profile(funit)
+            call pcgop%report_profile(result%iteration_count, funit)
             call fclose(funit)
             call fname%kill
         end subroutine write_half_diagnostics
@@ -639,8 +650,8 @@ contains
             if( params%cc_objfun == OBJFUN_EUCLID )then
                 kfromto = build%esig%get_kfromto()
                 do i = 1, size(pinds)
-                    call upsample_sigma2(kfromto(1), kfromto(2), &
-                        &build%esig%sigma2_noise(kfromto(1):kfromto(2),pinds(i)), R, sig2(0:R,i))
+                    call resample_sigma2(kfromto(1), kfromto(2), &
+                        &build%esig%sigma2_noise(kfromto(1):kfromto(2),pinds(i)), R, 1.0, sig2(0:R,i))
                 enddo
             endif
             call selection%new(size(pinds), .true.)
@@ -761,9 +772,7 @@ contains
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
-            write(logfhandle,'(A,I0)') '>>> PCG DISTRIBUTED OUTPUT PHASES: STATE ', state
-            write(logfhandle,'(A,F9.3)') '    halfmap + merged-map output : ', time_map_output
-            write(logfhandle,'(A,F9.3)') '    FSC + cFAR + summary        : ', time_fsc_output
+            call write_output_diagnostics(state, 'distributed', time_map_output, time_fsc_output)
             params%vols(state)      = fname_vol
             params%vols_even(state) = fname_even
             params%vols_odd(state)  = fname_odd
@@ -824,9 +833,10 @@ contains
             type(pcg_solver_outcome) :: result
             type(string) :: fname
             real, allocatable :: x(:,:,:), rel_res_hist(:)
-            integer :: part_here, n_part, niters
+            integer :: part_here, n_part, niters, prior_npositive
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve
+            real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
             logical :: l_ml_solve
 
             l_ml_solve = present(fsc_prior)
@@ -848,8 +858,6 @@ contains
                 call fname%kill
             enddo
             time_reduce = real(toc(t_phase),dp)
-            write(logfhandle,'(A,I0,5A,I0)') '>>> PCG DISTRIBUTED: STATE ', state_here, &
-                &' ', trim(half), ' ', trim(solve_kind), ' PARTICLES = ', nptcls
             if( nptcls == 0 )then
                 call pcgop%kill
                 return
@@ -858,9 +866,11 @@ contains
             if( l_ml_solve ) call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
-            call report_regularization(state_here, half//' '//solve_kind, params%pcg_lambda_rel, &
-                &pcgop%get_data_scale(), pcgop%get_effective_lambda())
             time_finalize = real(toc(t_phase),dp)
+            if( l_ml_solve )then
+                call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
+                    &prior_to_khat_l1, prior_to_khat_rms)
+            endif
             if( l_ml_solve )then
                 x = warm_start%get_rmat()
             else
@@ -872,14 +882,18 @@ contains
             time_solve = real(toc(t_phase),dp)
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
-            write(logfhandle,'(A,F9.3)') '    fixed-order raw reduction    : ', time_reduce
-            write(logfhandle,'(A,F9.3)') '    master finalization          : ', time_finalize
-            write(logfhandle,'(A,F9.3)') '    master PCG solve             : ', time_solve
-            write(logfhandle,'(A,I0,5A,I0,2A)') '>>> PCG DISTRIBUTED: STATE ', state_here, ' ', trim(half), &
-                &' ', trim(solve_kind), ' FINISHED AFTER ', niters, ' ITERATIONS, STOP=', trim(result%stop_reason)
-            call write_distributed_diagnostics(state_here, half, solve_kind, nptcls, result, rel_res_hist, &
-                &time_reduce, time_finalize, time_solve, pcgop%get_data_scale(), &
-                &pcgop%get_effective_lambda())
+            if( l_ml_solve )then
+                call write_distributed_diagnostics(state_here, half, solve_kind, nptcls, result, rel_res_hist, &
+                    &time_reduce, time_finalize, time_solve, pcgop%get_data_scale(), &
+                    &pcgop%get_effective_lambda(), prior_npositive, prior_positive_min, prior_positive_max, &
+                    &prior_to_khat_l1, prior_to_khat_rms, pcgop)
+            else
+                call write_distributed_diagnostics(state_here, half, solve_kind, nptcls, result, rel_res_hist, &
+                    &time_reduce, time_finalize, time_solve, pcgop%get_data_scale(), &
+                    &pcgop%get_effective_lambda(), pcgop=pcgop)
+            endif
+            call report_solve_summary('DISTRIBUTED', state_here, half, solve_kind, nptcls, niters, &
+                &result%final_rel_residual, time_solve, result%stop_reason)
             call pcgop%kill
             deallocate(x, rel_res_hist)
         end subroutine reduce_solve_state_half
@@ -955,13 +969,18 @@ contains
         end subroutine write_distributed_fsc_summary
 
         subroutine write_distributed_diagnostics( state_here, half, solve_kind, nptcls, result, history, &
-                &reduce_time, finalize_time, solve_time, data_scale, lambda_eff )
+                &reduce_time, finalize_time, solve_time, data_scale, lambda_eff, prior_npositive, &
+                &prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms, pcgop )
             integer,                  intent(in) :: state_here, nptcls
             character(len=*),         intent(in) :: half, solve_kind
             type(pcg_solver_outcome), intent(in) :: result
             real,                     intent(in) :: history(:)
             real(dp),                 intent(in) :: reduce_time, finalize_time, solve_time
             real,                     intent(in) :: data_scale, lambda_eff
+            integer, optional,        intent(in) :: prior_npositive
+            real, optional,           intent(in) :: prior_positive_min, prior_positive_max
+            real, optional,           intent(in) :: prior_to_khat_l1, prior_to_khat_rms
+            type(reconstructor_pcg),   intent(in) :: pcgop
             type(string) :: fname
             integer :: funit, i
             fname = 'reconstruct3D_pcg_state'//int2str_pad(state_here,2)//'_'//trim(half)//'_'// &
@@ -972,6 +991,7 @@ contains
             write(funit,'(A,I0)')     'nparts=',                params%nparts
             write(funit,'(A,I0)')     'nptcls=',                nptcls
             write(funit,'(A,I0)')     'requested_maxits=',      result%requested_maxits
+            write(funit,'(A,ES14.6)') 'requested_rtol=',        params%rtol
             write(funit,'(A,I0)')     'iteration_count=',       result%iteration_count
             write(funit,'(A,A)')      'stop_reason=',           trim(result%stop_reason)
             write(funit,'(A,L1)')     'converged=',             result%converged
@@ -981,36 +1001,72 @@ contains
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',        data_scale
             write(funit,'(A,ES14.6)') 'pcg_lambda_relative=',   params%pcg_lambda_rel
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=',  lambda_eff
+            if( params%pcg_lambda_rel >= 0.0 )then
+                write(funit,'(A)') 'pcg_lambda_mode=relative'
+            else
+                write(funit,'(A)') 'pcg_lambda_mode=legacy_absolute'
+            endif
+            if( present(prior_npositive) )then
+                if( .not. present(prior_positive_min) .or. .not. present(prior_positive_max) .or. &
+                    &.not. present(prior_to_khat_l1) .or. .not. present(prior_to_khat_rms) )then
+                    THROW_HARD('incomplete distributed PCG ML prior diagnostics')
+                endif
+                write(funit,'(A,I0)')     'ml_prior_nonzero_bins=',       prior_npositive
+                write(funit,'(A,ES14.6)') 'ml_prior_positive_min=',       prior_positive_min
+                write(funit,'(A,ES14.6)') 'ml_prior_positive_max=',       prior_positive_max
+                write(funit,'(A,ES14.6)') 'ml_prior_to_data_khat_l1=',    prior_to_khat_l1
+                write(funit,'(A,ES14.6)') 'ml_prior_to_data_khat_rms=',   prior_to_khat_rms
+            endif
             write(funit,'(A,F12.6)')  'raw_reduce_seconds=',    reduce_time
             write(funit,'(A,F12.6)')  'master_finalize_seconds=', finalize_time
             write(funit,'(A,F12.6)')  'solve_seconds=',         solve_time
             do i = 1, size(history)
                 write(funit,'(A,I0,A,ES14.6)') 'iter', i, '_rel_resid_l2=', history(i)
+                write(funit,'(A,I0,A,ES14.6)') 'iter', i, '_rel_update=', result%rel_update_history(i)
+                if( result%preconditioned_residual_history(i) >= 0.0 )then
+                    write(funit,'(A,I0,A,ES14.6)') 'iter', i, '_preconditioned_resid=', &
+                        &result%preconditioned_residual_history(i)
+                endif
+                write(funit,'(A,I0,A,F12.6)') 'iter', i, '_seconds=', result%iteration_seconds(i)
             enddo
+            call pcgop%report_finalize_profile(funit)
+            call pcgop%report_profile(result%iteration_count, funit)
             call fclose(funit)
             call fname%kill
         end subroutine write_distributed_diagnostics
 
     end subroutine execute_rec3D_pcg_distributed_master
 
-    subroutine report_regularization( state, half, lambda_rel, data_scale, lambda_eff )
-        integer,          intent(in) :: state
-        character(len=*), intent(in) :: half
-        real,             intent(in) :: lambda_rel, data_scale, lambda_eff
-        if( lambda_rel >= 0.0 )then
-            write(logfhandle,'(A,I0,2A)') '>>> PCG REGULARIZATION: STATE ', state, ' ', trim(half)
-            write(logfhandle,'(A)')        '    mode             : relative'
-            write(logfhandle,'(A,ES14.6)') '    data scale       : ', data_scale
-            write(logfhandle,'(A,ES14.6)') '    lambda relative  : ', lambda_rel
-            write(logfhandle,'(A,ES14.6)') '    lambda effective : ', lambda_eff
-        else
-            write(logfhandle,'(A,I0,2A)') '>>> PCG REGULARIZATION: STATE ', state, ' ', trim(half)
-            write(logfhandle,'(A)')        '    mode             : legacy absolute'
-            write(logfhandle,'(A,ES14.6)') '    data scale       : ', data_scale
-            write(logfhandle,'(A,ES14.6)') '    lambda effective : ', lambda_eff
-        endif
+    subroutine report_solve_summary( execution_mode, state, half, solve_kind, nptcls, niters, &
+            &residual, solve_time, stop_reason )
+        character(len=*), intent(in) :: execution_mode, half, solve_kind, stop_reason
+        integer,          intent(in) :: state, nptcls, niters
+        real,             intent(in) :: residual
+        real(dp),         intent(in) :: solve_time
+        character(len=4) :: half_label, kind_label
+        half_label = adjustl(half)
+        kind_label = adjustl(solve_kind)
+        write(logfhandle,'(4A,I2,A,A4,A,A4,A,I6,A,I2,A,ES10.3,A,F7.2,2A)') &
+            &'>>> PCG ', trim(execution_mode), ' | ', 'STATE=', state, ' | HALF=', half_label, &
+            &' | KIND=', kind_label, ' | N=', nptcls, ' | ITS=', niters, ' | RESID=', residual, &
+            &' | TIME=', solve_time, ' s | STOP=', trim(stop_reason)
         call flush(logfhandle)
-    end subroutine report_regularization
+    end subroutine report_solve_summary
+
+    subroutine write_output_diagnostics( state, execution_mode, map_time, fsc_time )
+        integer,          intent(in) :: state
+        character(len=*), intent(in) :: execution_mode
+        real(dp),         intent(in) :: map_time, fsc_time
+        type(string) :: fname
+        integer :: funit
+        fname = 'reconstruct3D_pcg_state'//int2str_pad(state,2)//'_output_diagnostics.txt'
+        call fopen(funit, file=fname, status='replace', action='write')
+        write(funit,'(A,A)')     'execution_mode=', trim(execution_mode)
+        write(funit,'(A,F12.6)') 'halfmap_merged_output_seconds=', map_time
+        write(funit,'(A,F12.6)') 'fsc_cfar_summary_seconds=', fsc_time
+        call fclose(funit)
+        call fname%kill
+    end subroutine write_output_diagnostics
 
     subroutine validate_pcg_common( params )
         type(parameters), intent(in) :: params

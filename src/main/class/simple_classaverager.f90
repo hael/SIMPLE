@@ -373,7 +373,6 @@ interface
     end subroutine cavger_dealloc_online
 
     module subroutine cavger_update_sums( nptcls, ptcl_imgs )
-        use simple_math_ft, only: upsample_sigma2
         integer,      intent(in)    :: nptcls
         class(image), intent(inout) :: ptcl_imgs(nptcls)
     end subroutine cavger_update_sums

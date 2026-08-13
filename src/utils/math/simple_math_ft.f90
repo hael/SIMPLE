@@ -1,5 +1,6 @@
 !@descr: Fourier transform-related math routines
 module simple_math_ft
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_defs
 use simple_error, only: simple_exception
 use simple_is_check_assert
@@ -268,36 +269,41 @@ contains
         res = (ang/360.)*(pi*diam)
     end function resang
 
-    !>  Interpolates sigma2 for upsampled images
-    subroutine upsample_sigma2( kstart, nyq, sigma2, nyq_out, sigma2_out)
-        integer, intent(in)  :: kstart                  ! >= 0
-        integer, intent(in)  :: nyq, nyq_out            ! corresponding Nyquist indices
-        real,    intent(in)  :: sigma2(kstart:nyq)
-        real,    intent(out) :: sigma2_out(0:nyq_out)   ! starts at zero for convenience
-        real    :: ksc, scale, d
-        integer :: k, f,c
-        if( nyq_out < nyq )then
-            ! upsampling only
-            sigma2_out = -1.0
-        else if( nyq_out == nyq )then
-            sigma2_out(0:kstart)         = sigma2(kstart)
-            sigma2_out(kstart+1:nyq_out) = sigma2(kstart+1:nyq)
-        else
-            scale = real(nyq) / real(nyq_out)
-            do k = 0,nyq_out
-                ksc = scale*real(k)
-                f   = floor(ksc)
-                c   = f + 1
-                if( c <= kstart )then
-                    sigma2_out(k) = sigma2(kstart)
-                else if( c > nyq )then
-                    sigma2_out(k) = sigma2(nyq)
-                else
-                    d = ksc - real(f)
-                    sigma2_out(k) = (1.0-d)*sigma2(f) + d*sigma2(c)
-                endif
-            enddo
+    !> Map a positive shell-wise noise spectrum onto another Fourier lattice.
+    !! input_shell_step gives the input-shell coordinate increment represented
+    !! by one output shell. Use 1 for a physical-extent-preserving Fourier crop;
+    !! use nyq/nyq_out when padding refines the Fourier-shell spacing. Values
+    !! below kstart and above nyq are extended from the nearest valid endpoint.
+    subroutine resample_sigma2( kstart, nyq, sigma2, nyq_out, input_shell_step, sigma2_out )
+        integer, intent(in)  :: kstart, nyq, nyq_out
+        real,    intent(in)  :: sigma2(kstart:nyq), input_shell_step
+        real,    intent(out) :: sigma2_out(0:nyq_out)
+        real    :: ksc, d
+        integer :: k, f, c
+        if( kstart < 0 .or. nyq < kstart .or. nyq_out < 0 )then
+            call simple_exception('invalid sigma2 shell bounds', __FILENAME__, __LINE__)
         endif
-    end subroutine upsample_sigma2
+        if( .not. ieee_is_finite(input_shell_step) .or. input_shell_step <= 0.0 )then
+            call simple_exception('invalid sigma2 shell mapping', __FILENAME__, __LINE__)
+        endif
+        do k = kstart, nyq
+            if( .not. ieee_is_finite(sigma2(k)) .or. sigma2(k) <= 0.0 )then
+                call simple_exception('sigma2 values must be finite and positive', __FILENAME__, __LINE__)
+            endif
+        enddo
+        do k = 0, nyq_out
+            ksc = input_shell_step * real(k)
+            if( ksc <= real(kstart) )then
+                sigma2_out(k) = sigma2(kstart)
+            else if( ksc >= real(nyq) )then
+                sigma2_out(k) = sigma2(nyq)
+            else
+                f = floor(ksc)
+                c = f + 1
+                d = ksc - real(f)
+                sigma2_out(k) = (1.0-d)*sigma2(f) + d*sigma2(c)
+            endif
+        enddo
+    end subroutine resample_sigma2
 
 end module simple_math_ft

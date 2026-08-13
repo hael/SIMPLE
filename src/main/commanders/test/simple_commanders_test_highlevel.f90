@@ -1123,7 +1123,7 @@ subroutine exec_test_pcg_recon( self, cline )
     complex, allocatable    :: adj_out(:,:,:), y_planes(:,:,:), y_exp(:,:,:), y_crop(:,:,:)
     complex, allocatable    :: braw_full(:,:,:), braw_crop(:,:,:)
     integer :: lims2(2,2), lims3(3,2), i, j, k, b, g, c, niters, iseed_n
-    integer :: R, margin, lo, hi, ifrom, nb, nsym, nraw, nraw_total
+    integer :: R, margin, lo, hi, ifrom, nb, nsym, nraw, nraw_total, ml_prior_npositive
     integer :: lims2_crop(2,2), lims3_crop(3,2), raw_lim, hraw, kraw, mraw
     integer, allocatable :: iseed(:)
     real    :: ctr, dx, dy, dz, adjoint_err, corr, shift(2)
@@ -1134,6 +1134,7 @@ subroutine exec_test_pcg_recon( self, cline )
     real    :: mass_scale_err, mass_lambda_err, mass_solution_err
     real    :: crop_b_err, crop_d_err, crop_kernel_err, crop_factor
     real    :: ml_kernel_err, ml_prior_min, ml_prior_max
+    real    :: ml_prior_positive_min, ml_prior_positive_max, ml_prior_to_khat_l1, ml_prior_to_khat_rms
     real(dp):: lhs, rhs, dp_p_hq, dp_hp_q, dp_p_hp
     real(dp):: crop_b_num, crop_b_den, crop_d_num, crop_d_den, ml_prior_energy
     logical :: all_ok
@@ -1953,6 +1954,8 @@ subroutine exec_test_pcg_recon( self, cline )
         call pcg_ml%set_ml_prior(fsc_prior, 1.0, 100.0)
         call pcg_ml%end_accum(.true.)
         call pcg_ml%get_ml_prior(ml_prior_diag)
+        call pcg_ml%get_ml_prior_stats(ml_prior_npositive, ml_prior_positive_min, ml_prior_positive_max, &
+            &ml_prior_to_khat_l1, ml_prior_to_khat_rms)
         ml_prior_min = minval(ml_prior_diag)
         ml_prior_max = maxval(ml_prior_diag)
         write(logfhandle,'(a,es14.6,a,es14.6)') '    prior diagonal min = ', ml_prior_min, &
@@ -1962,6 +1965,18 @@ subroutine exec_test_pcg_recon( self, cline )
             all_ok = .false.
         else
             write(logfhandle,'(a)') '    PASS: ML prior is a nonzero positive-semidefinite diagonal'
+        endif
+        write(logfhandle,'(a,i0,4(a,es14.6))') '    positive bins = ', ml_prior_npositive, &
+            &' min+ = ', ml_prior_positive_min, ' max+ = ', ml_prior_positive_max, &
+            &' prior/Khat L1 = ', ml_prior_to_khat_l1, ' RMS = ', ml_prior_to_khat_rms
+        if( ml_prior_npositive /= count(ml_prior_diag > 0.0) .or. &
+            &abs(ml_prior_positive_min-minval(ml_prior_diag, mask=ml_prior_diag > 0.0)) > 0.0 .or. &
+            &abs(ml_prior_positive_max-ml_prior_max) > 0.0 .or. &
+            &ml_prior_to_khat_l1 <= 0.0 .or. ml_prior_to_khat_rms <= 0.0 )then
+            write(logfhandle,'(a)') '    FAIL: ML prior summary diagnostics are inconsistent'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: ML prior summary diagnostics are consistent'
         endif
         hm_ml = pcg_ml%apply_normal_matrixfree(p_crop)
         hk_ml = pcg_ml%apply_normal_kernel(p_crop)

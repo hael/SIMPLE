@@ -35,6 +35,10 @@ type :: pcg_solver_outcome
     real              :: final_rel_residual   = 0.0
     real              :: final_rel_update     = 0.0
     logical           :: converged            = .false.
+    real, allocatable  :: rel_residual_history(:)
+    real, allocatable  :: rel_update_history(:)
+    real, allocatable  :: preconditioned_residual_history(:)
+    real, allocatable  :: iteration_seconds(:)
 end type pcg_solver_outcome
 
 type :: reconstructor_pcg
@@ -191,6 +195,7 @@ type :: reconstructor_pcg
     procedure :: get_rhs
     procedure :: get_raw_accum
     procedure :: get_ml_prior
+    procedure :: get_ml_prior_stats
     procedure :: get_data_scale
     procedure :: get_effective_lambda
     ! SOLVER
@@ -201,7 +206,7 @@ type :: reconstructor_pcg
     procedure :: reset_profile
     procedure :: report_profile
     procedure, private :: reset_finalize_profile
-    procedure, private :: report_finalize_profile
+    procedure :: report_finalize_profile
     ! PRIVATE HELPERS
     procedure, private :: absT2_plane
     procedure, private :: prepare_fused_planes
@@ -476,6 +481,56 @@ contains
         if( .not. self%l_ml_prior ) THROW_HARD('PCG ML prior has not been built')
         allocate(prior, source=self%ml_prior)
     end subroutine get_ml_prior
+
+    !> Summarize the calibrated FSC/SSNR prior without copying its padded
+    !! lattice. Ratios compare P_tau with the calibrated data-only Khat over
+    !! exactly the bins where the prior is positive. Absolute Khat is used in
+    !! the L1 denominator because the finite-support Toeplitz approximation can
+    !! contain small negative bins even though the underlying operator is PSD.
+    subroutine get_ml_prior_stats( self, npositive, positive_min, positive_max, &
+            &prior_to_khat_l1, prior_to_khat_rms )
+        class(reconstructor_pcg), intent(in) :: self
+        integer, intent(out) :: npositive
+        real,    intent(out) :: positive_min, positive_max, prior_to_khat_l1, prior_to_khat_rms
+        real(dp) :: prior_l1, khat_l1, prior_sq, khat_sq
+        real     :: pval, kval
+        integer  :: i, j, k
+        if( .not. self%l_ml_prior ) THROW_HARD('PCG ML prior has not been built')
+        if( .not. self%l_kernel ) THROW_HARD('PCG ML prior statistics require finalized Khat')
+        npositive   = 0
+        positive_min = huge(1.0)
+        positive_max = 0.0
+        prior_l1 = 0.0_dp
+        khat_l1  = 0.0_dp
+        prior_sq = 0.0_dp
+        khat_sq  = 0.0_dp
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,pval,kval) &
+        !$omp reduction(+:npositive,prior_l1,khat_l1,prior_sq,khat_sq) &
+        !$omp reduction(min:positive_min) reduction(max:positive_max) schedule(static)
+        do k = 1, size(self%ml_prior,3)
+            do j = 1, size(self%ml_prior,2)
+                do i = 1, size(self%ml_prior,1)
+                    pval = self%ml_prior(i,j,k)
+                    if( pval <= 0.0 ) cycle
+                    kval = self%Khat(i,j,k)
+                    npositive    = npositive + 1
+                    positive_min = min(positive_min, pval)
+                    positive_max = max(positive_max, pval)
+                    prior_l1 = prior_l1 + real(pval,dp)
+                    khat_l1  = khat_l1  + abs(real(kval,dp))
+                    prior_sq = prior_sq + real(pval,dp)**2
+                    khat_sq  = khat_sq  + real(kval,dp)**2
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        if( npositive < 1 ) THROW_HARD('PCG ML prior statistics found no positive bins')
+        prior_to_khat_l1  = real(prior_l1 / max(khat_l1, DTINY))
+        prior_to_khat_rms = real(sqrt(prior_sq / max(khat_sq, DTINY)))
+        if( .not. ieee_is_finite(prior_to_khat_l1) .or. .not. ieee_is_finite(prior_to_khat_rms) )then
+            THROW_HARD('PCG ML prior-to-kernel statistics are not finite')
+        endif
+    end subroutine get_ml_prior_stats
 
     pure function get_invenv( self ) result( invenv )
         class(reconstructor_pcg), intent(in) :: self
@@ -1587,7 +1642,6 @@ contains
         deallocate(dwork)
         if( l_kernel ) call self%finalize_khat
         self%l_accum = .false.
-        call self%report_finalize_profile
     end subroutine end_accum
 
     ! SETUP: PRECONDITIONER AND KERNEL
@@ -1726,34 +1780,60 @@ contains
     !! raw data-only density. The first six native Fourier shells are common to
     !! full and cropped representations of the same physical box, and avoid
     !! making lambda depend on whether higher-resolution shells are present.
-    !! Zero bins remain in the fixed-support average: excluding them would make
-    !! the scale nonlinear when fractional updates cover different voxels. Raw
-    !! D is converted to the calibrated normal-operator convention by the same
-    !! padsc**2 factor as Khat.
+    !! Some Euclidean/simulated-data weights deliberately suppress that entire
+    !! low-frequency band. In that case extend the same origin-centred support
+    !! one native shell at a time until it contains data; do not confuse an
+    !! intentionally empty low-frequency band with an empty accumulator.
+    !!
+    !! Zero bins remain in the selected support average: excluding them would
+    !! make the scale nonlinear when fractional updates cover different voxels.
+    !! Raw D is converted to the calibrated normal-operator convention by the
+    !! same padsc**2 factor as Khat.
     subroutine update_lambda_from_density( self, rho_accum )
         class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: rho_accum(self%lims3(1,1):self%lims3(1,2),&
                                                                &self%lims3(2,1):self%lims3(2,2),&
                                                                &self%lims3(3,1):self%lims3(3,2))
         integer, parameter :: DATA_SCALE_NATIVE_SHELLS = 6
+        real(dp), allocatable :: shell_sum(:)
+        integer,  allocatable :: shell_count(:)
         real(dp) :: dsum
         real     :: dval
-        integer  :: h, k, m, hh, nscale, scale_lim_sq
-        scale_lim_sq = (self%padf * min(DATA_SCALE_NATIVE_SHELLS, self%Rnat))**2
-        dsum   = 0.0_dp
-        nscale = 0
+        integer  :: h, k, m, hh, nscale, base_shell, scale_shell, shell, rsq
+        allocate(shell_sum(0:self%Rnat), source=0.0_dp)
+        allocate(shell_count(0:self%Rnat), source=0)
         do m = self%lims3(3,1), self%lims3(3,2)
             do k = self%lims3(2,1), self%lims3(2,2)
                 do h = 0, self%lims3(1,2)
-                    if( h*h + k*k + m*m > scale_lim_sq ) cycle
+                    rsq = h*h + k*k + m*m
+                    if( rsq > (self%padf*self%Rnat)**2 ) cycle
+                    shell = ceiling(sqrt(real(rsq)) / real(self%padf))
+                    shell = min(shell, self%Rnat)
                     hh   = self%wrap(h)
                     dval = rho_accum(hh,k,m)
-                    dsum   = dsum + real(dval,dp)
-                    nscale = nscale + 1
+                    if( .not. ieee_is_finite(dval) .or. dval < 0.0 )then
+                        THROW_HARD('invalid value in raw PCG density accumulator')
+                    endif
+                    shell_sum(shell)   = shell_sum(shell) + real(dval,dp)
+                    shell_count(shell) = shell_count(shell) + 1
                 end do
             end do
         end do
+        base_shell  = min(DATA_SCALE_NATIVE_SHELLS, self%Rnat)
+        scale_shell = base_shell
+        dsum        = sum(shell_sum(0:scale_shell))
+        nscale      = sum(shell_count(0:scale_shell))
+        do while( dsum <= 0.0_dp .and. scale_shell < self%Rnat )
+            scale_shell = scale_shell + 1
+            dsum   = dsum   + shell_sum(scale_shell)
+            nscale = nscale + shell_count(scale_shell)
+        enddo
+        deallocate(shell_sum, shell_count)
         if( nscale < 1 .or. dsum <= 0.0_dp ) THROW_HARD('cannot derive PCG data scale from empty D')
+        if( scale_shell > base_shell )then
+            write(logfhandle,'(A,I0)') &
+                &'>>> PCG DATA SCALE: LOW BAND EMPTY; EXTENDED THROUGH NATIVE SHELL ', scale_shell
+        endif
         self%data_scale = real(dsum / real(nscale,dp)) * self%padsc**2
         if( .not. ieee_is_finite(self%data_scale) .or. self%data_scale <= 0.0 )then
             THROW_HARD('invalid PCG data scale derived from D')
@@ -2796,8 +2876,9 @@ contains
         ! perfectly well. The headline number and the stopping test are now the
         ! true relative residual ||r||_2 / ||b||_2, which is what a reader
         ! actually wants and costs two dot products against 1.5 s of FFTs. The
-        ! M-norm is still logged, because it is the honest diagnostic for the
-        ! PRECONDITIONER: a large gap between the two says M is a poor model of H.
+        ! M-norm is retained in the solver outcome for the diagnostic file,
+        ! because a large gap between it and the true residual says M is a poor
+        ! model of H.
         !
         ! RESIDUAL REPLACEMENT. CG propagates the residual by the recurrence
         ! r <- r - alpha*Hp rather than recomputing b - Hx, which is what makes
@@ -2816,15 +2897,15 @@ contains
         ! two solves stopped by a data-dependent criterion tests nothing.
         real, parameter :: PCG_XTOL = 1.5e-2
         real, allocatable :: r(:,:,:), p(:,:,:), hp(:,:,:), z(:,:,:), hist(:)
+        real, allocatable :: update_hist(:), mnorm_hist(:), iteration_times(:)
         real, allocatable :: rtr(:,:,:)
-        real(dp) :: rho, rho_new, rho0, alpha, beta, pHp, nrec, ntru
+        real(dp) :: rho, rho_new, rho0, alpha, beta, pHp
         real(dp) :: bnorm, rnorm, xnorm, dxnorm, mnorm, dxx
         integer  :: mmaxits, iter, n_done
         real     :: rrtol
         logical  :: stop_rtol, stop_xtol
         type(pcg_solver_outcome) :: result
         integer(timer_int_kind) :: t_it
-        real(timer_int_kind)    :: rt_it
         mmaxits = 50
         if( present(maxits) ) mmaxits = maxits
         if( mmaxits < 1 ) THROW_HARD('maxits must be at least 1; solve')
@@ -2834,7 +2915,8 @@ contains
         result%requested_maxits = mmaxits
         if( rrtol <= 0.0 ) result%stop_reason = 'fixed_iterations'
         if( rrtol > 0.0 )  result%stop_reason = 'maxits'
-        allocate(hist(mmaxits))
+        allocate(hist(mmaxits), update_hist(mmaxits), iteration_times(mmaxits))
+        allocate(mnorm_hist(mmaxits), source=-1.0)
         ! profile the ITERATIONS only: forming the RHS is a one-off setup cost
         ! and folding it in would flatter whichever phase it happens to share.
         call self%reset_profile
@@ -2857,8 +2939,6 @@ contains
         result%initial_rel_residual = real(rnorm / bnorm)
         n_done = 0
         dxx = 0.0_dp
-        write(logfhandle,'(a,i0,a,es12.5)') '>>> PCG: starting, maxits = ', mmaxits, ', rtol = ', rrtol
-        call flush(logfhandle)
         do iter = 1, mmaxits
             t_it = tic()
             hp  = self%apply_normal(p)
@@ -2869,12 +2949,7 @@ contains
             x  = x + real(alpha) * p
             r  = r - real(alpha) * hp
             if( mod(iter, RESID_REPLACE) == 0 )then
-                nrec = sqrt(self%dot_real_volume(r,r))
                 rtr  = self%b_rhs - self%apply_normal(x)
-                ntru = sqrt(self%dot_real_volume(rtr,rtr))
-                write(logfhandle,'(a,i4,a,es12.5,a,es12.5)') '>>> PCG residual replacement at iter ', &
-                    &iter, ':  recurrence = ', real(nrec), '   true = ', real(ntru)
-                call flush(logfhandle)
                 r = rtr
             endif
             n_done  = iter
@@ -2886,22 +2961,17 @@ contains
             dxnorm     = abs(alpha) * sqrt(self%dot_real_volume(p,p))
             dxx        = dxnorm / max(xnorm, epsilon(1.0_dp))
             hist(iter) = real(rnorm / bnorm)
+            update_hist(iter) = real(dxx)
             stop_rtol  = rrtol > 0.0 .and. rnorm / bnorm <= real(rrtol,dp)
             stop_xtol  = rrtol > 0.0 .and. dxx <= real(PCG_XTOL,dp)
             if( stop_rtol .or. stop_xtol .or. iter == mmaxits )then
-                rt_it = toc(t_it)
-                write(logfhandle,'(a,i4,a,es11.4,a,es10.3,a,f7.2,a)') '>>> PCG iter ', iter, &
-                    &'  |r|/|b| = ', hist(iter), '  dx/x = ', real(dxx), '  (', rt_it, ' s)'
-                call flush(logfhandle)
+                iteration_times(iter) = real(toc(t_it))
                 if( stop_rtol )then
                     result%stop_reason = 'rtol'
                     result%converged   = .true.
                     exit
                 endif
                 if( stop_xtol )then
-                    write(logfhandle,'(a,i0,a,es10.3,a,es10.3)') '>>> PCG: early stop at iter ', iter, &
-                        &', dx/x = ', real(dxx), ' <= xtol = ', PCG_XTOL
-                    call flush(logfhandle)
                     result%stop_reason = 'xtol'
                     result%converged   = .true.
                     exit
@@ -2911,14 +2981,8 @@ contains
             z       = self%apply_precond(r)
             rho_new = self%dot_real_volume(r,z)
             mnorm   = sqrt(abs(rho_new)/rho0)
-            rt_it   = toc(t_it)
-            ! Per-iteration progress. Without this the solver is silent between
-            ! setup and completion, which on a real data set is indistinguishable
-            ! from a hang.
-            write(logfhandle,'(a,i4,a,es11.4,a,es10.3,a,es10.3,a,f7.2,a)') '>>> PCG iter ', iter, &
-                &'  |r|/|b| = ', hist(iter), '  dx/x = ', real(dxx), &
-                &'  (M-norm ', real(mnorm), ')  (', rt_it, ' s)'
-            call flush(logfhandle)
+            mnorm_hist(iter) = real(mnorm)
+            iteration_times(iter) = real(toc(t_it))
             beta = rho_new / rho
             p    = z + real(beta) * p
             rho  = rho_new
@@ -2931,11 +2995,16 @@ contains
         result%iteration_count  = n_done
         result%final_rel_update = real(dxx)
         if( n_done > 0 ) result%final_rel_residual = hist(n_done)
+        if( n_done > 0 )then
+            allocate(result%rel_residual_history(n_done), source=hist(1:n_done))
+            allocate(result%rel_update_history(n_done), source=update_hist(1:n_done))
+            allocate(result%preconditioned_residual_history(n_done), source=mnorm_hist(1:n_done))
+            allocate(result%iteration_seconds(n_done), source=iteration_times(1:n_done))
+        endif
         if( present(niters) ) niters = n_done
         if( present(rel_res_hist) ) allocate(rel_res_hist(n_done), source=hist(1:n_done))
         if( present(outcome) ) outcome = result
         self%l_profile = .false.
-        if( n_done > 0 ) call self%report_profile(n_done)
     end subroutine solve_core
 
     ! PROFILING
@@ -2949,19 +3018,22 @@ contains
         self%t_fin_kernel = 0.0_dp
     end subroutine reset_finalize_profile
 
-    subroutine report_finalize_profile( self )
+    subroutine report_finalize_profile( self, funit )
         class(reconstructor_pcg), intent(in) :: self
+        integer, optional,          intent(in) :: funit
         real(dp) :: total
+        integer  :: out_unit
+        out_unit = logfhandle
+        if( present(funit) ) out_unit = funit
         total = self%t_fin_rhs + self%t_fin_rho + self%t_fin_fold + &
             &self%t_fin_dep + self%t_fin_kernel
-        write(logfhandle,'(a)') '>>> PCG ACCUMULATOR FINALIZATION (seconds)'
-        write(logfhandle,'(a,f9.3)') '    RHS fold + deapod + support : ', self%t_fin_rhs
-        write(logfhandle,'(a,f9.3)') '    rho shell statistics        : ', self%t_fin_rho
-        write(logfhandle,'(a,f9.3)') '    fused reciprocal + Khat pack: ', self%t_fin_fold
-        write(logfhandle,'(a,f9.3)') '    deposition envelope setup   : ', self%t_fin_dep
-        write(logfhandle,'(a,f9.3)') '    kernel correction + FFT     : ', self%t_fin_kernel
-        write(logfhandle,'(a,f9.3)') '    ---- accounted subtotal     : ', total
-        call flush(logfhandle)
+        write(out_unit,'(a)') '>>> PCG ACCUMULATOR FINALIZATION (seconds)'
+        write(out_unit,'(a,f9.3)') '    RHS fold + deapod + support : ', self%t_fin_rhs
+        write(out_unit,'(a,f9.3)') '    rho shell statistics        : ', self%t_fin_rho
+        write(out_unit,'(a,f9.3)') '    fused reciprocal + Khat pack: ', self%t_fin_fold
+        write(out_unit,'(a,f9.3)') '    deposition envelope setup   : ', self%t_fin_dep
+        write(out_unit,'(a,f9.3)') '    kernel correction + FFT     : ', self%t_fin_kernel
+        write(out_unit,'(a,f9.3)') '    ---- accounted subtotal     : ', total
     end subroutine report_finalize_profile
 
     subroutine reset_profile( self, l_on )
@@ -2985,29 +3057,32 @@ contains
     !!          (t_setvol + t_cmatcp + t_fold + t_prec -- which switching
     !!          operator does NOT remove, and which only a Fourier-domain
     !!          formulation of the solve eliminates)?
-    subroutine report_profile( self, niters )
+    subroutine report_profile( self, niters, funit )
         class(reconstructor_pcg), intent(in) :: self
         integer,                    intent(in) :: niters
+        integer, optional,          intent(in) :: funit
         real(dp) :: rn, tot, ffts
+        integer  :: out_unit
         if( niters < 1 ) return
+        out_unit = logfhandle
+        if( present(funit) ) out_unit = funit
         rn   = real(niters,dp)
         ffts = self%t_setvol + self%t_cmatcp + self%t_fold + self%t_prec
         tot  = ffts + self%t_ploop + self%t_khat
-        write(logfhandle,'(a)')    '>>> PCG PROFILE (seconds per iteration)'
-        write(logfhandle,'(a,f9.3)') '    pad + fwd FFT of iterate     : ', self%t_setvol / rn
-        write(logfhandle,'(a,f9.3)') '    get_cmat/set_cmat copies     : ', self%t_cmatcp / rn
-        write(logfhandle,'(a,f9.3)') '    particle loop                : ', self%t_ploop  / rn
-        write(logfhandle,'(a,f9.3)') '    kernel pointwise multiply    : ', self%t_khat   / rn
-        write(logfhandle,'(a,f9.3)') '    fold + inv FFT + crop        : ', self%t_fold   / rn
-        write(logfhandle,'(a,f9.3)') '    apply_precond (2 FFT + copy) : ', self%t_prec   / rn
-        write(logfhandle,'(a,f9.3)') '    ---- accounted subtotal      : ', tot / rn
+        write(out_unit,'(a)')    '>>> PCG PROFILE (seconds per iteration)'
+        write(out_unit,'(a,f9.3)') '    pad + fwd FFT of iterate     : ', self%t_setvol / rn
+        write(out_unit,'(a,f9.3)') '    get_cmat/set_cmat copies     : ', self%t_cmatcp / rn
+        write(out_unit,'(a,f9.3)') '    particle loop                : ', self%t_ploop  / rn
+        write(out_unit,'(a,f9.3)') '    kernel pointwise multiply    : ', self%t_khat   / rn
+        write(out_unit,'(a,f9.3)') '    fold + inv FFT + crop        : ', self%t_fold   / rn
+        write(out_unit,'(a,f9.3)') '    apply_precond (2 FFT + copy) : ', self%t_prec   / rn
+        write(out_unit,'(a,f9.3)') '    ---- accounted subtotal      : ', tot / rn
         if( tot > 0.0_dp )then
-            write(logfhandle,'(a,f7.1,a)') '    particle loop is ', &
+            write(out_unit,'(a,f7.1,a)') '    particle loop is ', &
                 &100.0_dp * self%t_ploop / tot, '% of accounted time'
-            write(logfhandle,'(a,f7.1,a)') '    FFT + lattice traffic is ', &
+            write(out_unit,'(a,f7.1,a)') '    FFT + lattice traffic is ', &
                 &100.0_dp * ffts / tot, '% of accounted time'
         endif
-        call flush(logfhandle)
     end subroutine report_profile
 
 end module simple_reconstructor_pcg
