@@ -69,6 +69,7 @@ select case(trim(prg))
     case( 'sieve_cavgs' )
         call xsieve_cavgs%execute(cline)
     case( 'abinitio2D_stream','pool2D' )
+        call cline%set('stepwise', 'yes') ! force stepwise mode for pool2D
         call xpool2D%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')

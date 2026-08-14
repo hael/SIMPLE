@@ -10,13 +10,20 @@
 !   Also responds to live GUI updates: mask-diameter changes and snapshot-2D
 !   write requests received on ipc_pipe_pool2D_out.
 !
+!   stepwise=yes (cline flag, default no): instead of importing every
+!   available sieved set in one go, import_sets_into_pool caps each batch to
+!   just enough sets to reach nptcls_threshold and defers the rest; the
+!   deferred sets are imported in a later batch once the pool is free again.
+!
 ! ENTRY POINT:
 !   stream_p06_pool2D%execute(cline) — called by the stream master
 !
 ! INTERNAL SUBROUTINES:
 !   unpause_pool          — clear the pause flag and log resumption
 !   import_sets_into_pool — read new sieve sets into the pool; initialise
-!                           clustering parameters on first import
+!                           clustering parameters on first import; when
+!                           stepwise=yes, caps the batch to nptcls_threshold
+!                           and defers remaining sets to a later call
 !   cleanup4restart       — remove stale files when restarting an existing job
 !   send_meta             — broadcast pool-2D progress metadata to the GUI
 !   send_meta_snapshot2D  — broadcast snapshot metadata to the GUI
@@ -51,6 +58,8 @@ public :: stream_p06_pool2D
 private
 #include "simple_local_flags.inc"
 
+logical, parameter :: L_ITERATION_SNAPSHOTS = .false.
+
 type, extends(commander_base) :: stream_p06_pool2D
   contains
     procedure :: execute => exec_stream_p06_pool2D
@@ -78,28 +87,30 @@ contains
         type(string),               allocatable   :: projects(:)
         character(len=:),           allocatable   :: update_pending
         logical,                    allocatable   :: l_imported(:)
-        type(string)                              :: snapshot_filename, snapshot_dir
+        type(string)                              :: snapshot_filename, snapshot_dir, iteration_snapshot_filename, iteration_snapshot_dir
         integer(kind=dp)                          :: time_last_import
         integer                                   :: i, nprojects, nimported, nptcls_glob, pool_iter, iter_last_import
         integer                                   :: mskdiam_update, extra_pause_iters, last_sent_iter
-        integer                                   :: snapshot_id, last_snapshot_id, nptcls_glob_state_1, nmics
+        integer                                   :: snapshot_id, last_snapshot_id, nptcls_glob_state_1, nmics, last_iteration_snapshot_id
         integer                                   :: nptcls_threshold, nptcls_max_threshold, nptcls_dynamic_threshold
         integer                                   :: state_1_particle_rate, optics_id_offset
         integer                                   :: update_expected_len
         logical                                   :: l_pause, l_terminate, l_once, l_changed, l_sieve_final
+        logical                                   :: l_stepwise
         real                                      :: final_mskdiam
-        update_expected_len   = -1
-        l_once               = .true.
-        l_terminate          = .false.
-        l_sieve_final        = .false. ! set when a sieved set flagged sieve_final=yes is imported
-        nptcls_glob          = 0
-        nptcls_glob_state_1  = 0
-        nmics                = 0
-        nptcls_threshold     = 0
-        nptcls_max_threshold = 0
-        nptcls_dynamic_threshold = 0
-        final_mskdiam        = 0.0
-        state_1_particle_rate = 0
+        update_expected_len        = -1
+        l_once                     = .true.
+        l_terminate                = .false.
+        l_sieve_final              = .false. ! set when a sieved set flagged sieve_final=yes is imported
+        nptcls_glob                = 0
+        nptcls_glob_state_1        = 0
+        nmics                      = 0
+        nptcls_threshold           = 0
+        nptcls_max_threshold       = 0
+        nptcls_dynamic_threshold   = 0
+        final_mskdiam              = 0.0
+        state_1_particle_rate      = 0
+        last_iteration_snapshot_id = 1
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         call cline%set('oritype',      'mic')
         call cline%set('mkdir',        'yes')
@@ -114,6 +125,8 @@ contains
         if( .not.cline%defined('dynreslim') ) call cline%set('dynreslim', 'yes')
         if( .not.cline%defined('center')    ) call cline%set('center',    'yes')
         if( .not.cline%defined('ncls')      ) call cline%set('ncls',       200)
+        if( .not.cline%defined('stepwise')  ) call cline%set('stepwise',  'no')
+        l_stepwise = cline%get_carg('stepwise') == 'yes'
         if( .not.cline%defined('projfile_optics') ) call cline%set('projfile_optics', OPTICS_JOB_NAME//METADATA_EXT)
         ! restart
         call cleanup4restart
@@ -315,6 +328,18 @@ contains
                     deallocate(meta_buffer)
                 endif
             enddo
+            ! per iteration snapshot
+            if( L_ITERATION_SNAPSHOTS .and. get_pool_iter() > last_iteration_snapshot_id ) then
+                iteration_snapshot_filename = 'pool2D_iter' // int2str(last_iteration_snapshot_id) // '.simple'
+                iteration_snapshot_dir      = string(CWD_GLOB) // '/iteration_snapshots/' // &
+                                    swap_suffix(iteration_snapshot_filename, "", ".simple")
+                call simple_mkdir(string(CWD_GLOB) // '/iteration_snapshots')
+                call simple_mkdir(iteration_snapshot_dir)
+                call write_project_stream2D(params,  force_snapshot=last_iteration_snapshot_id,                                                                      &
+                                snapshot_projfile      = iteration_snapshot_dir // '/' // iteration_snapshot_filename,                           &
+                                snapshot_starfile_base = iteration_snapshot_dir // '/' // swap_suffix(iteration_snapshot_filename, "", ".simple"))
+                last_iteration_snapshot_id  = get_pool_iter()
+            endif
             ! Wait
             call sleep(WAITTIME)
         enddo
@@ -343,9 +368,10 @@ contains
                 class(sp_project), pointer     :: pool
                 type(rec_iterator)             :: it
                 type(chunk_rec)                :: crec
-                logical, allocatable :: l_processed(:), l_imported(:)
+                logical, allocatable :: l_processed(:), l_imported(:), l_include_now(:)
                 integer :: nsets2import, iset, nptcls2import, nmics2import, pool_nmics, nptcls
                 integer :: i, fromp, imic, ind, iptcl, jptcl, jmic, nptcls_sel, nptcls_sel_tot, ptcl_match_class
+                integer :: stepwise_target, cum_sel
                 nimported = 0
                 if( setslist%size()== 0 ) return
                 ! at other times only import when the pool is free
@@ -354,6 +380,18 @@ contains
                 l_imported  = setslist%get_included_flags()
                 nsets2import = count(l_processed(:).and.(.not.l_imported(:)))
                 if( nsets2import == 0 ) return
+                ! stepwise import: cap this round's batch to just enough sets to reach nptcls_threshold,
+                ! deferring the remaining pending sets to a later call (once the pool is free again)
+                allocate(l_include_now(setslist%size()), source=.false.)
+                stepwise_target = huge(stepwise_target)
+                if( l_stepwise )then
+                    if( nptcls_threshold > 0 )then
+                        stepwise_target = nptcls_threshold
+                    else
+                        stepwise_target = max(params%ncls * 20, 1)
+                    endif
+                endif
+                cum_sel = nptcls_glob_state_1
                 ! read sets in
                 allocate(spprojs(setslist%size()))
                 nptcls2import = 0
@@ -382,7 +420,13 @@ contains
                     endif
                     nmics2import  = nmics2import  + spprojs(iset)%os_mic%get_noris()
                     nptcls2import = nptcls2import + spprojs(iset)%os_ptcl2D%get_noris()
+                    l_include_now(iset) = .true.
+                    cum_sel = cum_sel + spprojs(iset)%os_ptcl2D%get_noris(consider_state=.true.)
                     call it%next()
+                    if( l_stepwise .and. cum_sel >= stepwise_target )then
+                        write(logfhandle,'(A,I8)')'>>> STEPWISE IMPORT: DEFERRING REMAINING SETS UNTIL POOL PAUSES AGAIN, REACHED ', cum_sel
+                        exit
+                    endif
                 enddo
                 ! reallocations
                 call get_pool_ptr(pool)
@@ -405,7 +449,7 @@ contains
                 it             = setslist%begin()
                 do iset = 1,setslist%size()
                     call it%get(crec)
-                    if( crec%included .or. (.not.crec%processed .or. crec%busy) )then
+                    if( crec%included .or. (.not.crec%processed .or. crec%busy) .or. .not.l_include_now(iset) )then
                         ! move iterator
                         call it%next()
                         cycle
@@ -454,7 +498,7 @@ contains
                     ! move iterator
                     call it%next()
                 enddo
-                nimported = nsets2import
+                nimported = count(l_include_now)
                 ! average all previously imported sigmas
                 l_imported  = setslist%get_included_flags()
                 allocate(sigmas(count(l_imported)))
@@ -497,8 +541,9 @@ contains
                 do iset = 1,setslist%size()
                     call spprojs(iset)%kill
                 enddo
-                if( allocated(l_imported)  ) deallocate(l_imported)
-                if( allocated(l_processed) ) deallocate(l_processed)
+                if( allocated(l_imported)     ) deallocate(l_imported)
+                if( allocated(l_processed)    ) deallocate(l_processed)
+                if( allocated(l_include_now)   ) deallocate(l_include_now)
                 deallocate(spprojs)
                 nullify(pool)
             end subroutine import_sets_into_pool
