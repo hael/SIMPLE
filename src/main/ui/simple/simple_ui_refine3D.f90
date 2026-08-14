@@ -276,8 +276,8 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, 'inpl_cont', 'binary', &
         &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
-        &.false., 'no', group="search", &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
+        &.false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_SRCH, objfun_den, group="search", &
@@ -409,8 +409,8 @@ subroutine new_automask( prgtab )
          &.false., '', group="search", visibility=UI_VIS_DEVELOPER)
         call refine3D_auto%add_input(UI_SRCH, 'inpl_cont', 'binary', &
         &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
-        &.false., 'no', group="search", &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
+        &.false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
@@ -505,8 +505,8 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D_multi%add_input(UI_SRCH, 'inpl_cont', 'binary', &
         &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
-        &.false., 'no', group="search", &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
+        &.false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_multi%add_input(UI_SRCH, pgrp,                                  group="search", visibility=UI_VIS_STANDARD)

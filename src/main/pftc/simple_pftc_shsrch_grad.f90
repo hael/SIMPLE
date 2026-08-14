@@ -32,6 +32,7 @@ type :: pftc_shsrch_grad
     integer                   :: search_mode = SHSRCH_LEGACY !< configured numerical algorithm
     real(dp)                  :: joint_initial_cost = 0.d0 !< first optimizer evaluation for monotonic acceptance
     logical                   :: joint_initial_cost_valid = .false.
+    logical                   :: joint_cc = .false.      !< joint objective is cc (loss = -cc); else raw Euclidean
     logical                   :: coarse_init  = .false. !< whether to perform an intial coarse search over the range
     logical                   :: raw_roundtrip_check = .false. !< validate vector/scalar raw loss when diagnostics are enabled
     logical                   :: raw_roundtrip_failed = .false. !< diagnostic mismatch observed during this search
@@ -154,9 +155,10 @@ contains
         type(opt_factory) :: opt_fact
         call self%kill
         self%b_ptr => build
-        if( .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
-            THROW_HARD('joint angle path requires raw Euclidean objective; hybrid derivative is unavailable')
+        if( .not. self%b_ptr%pftc%is_joint_grad_objfun() )then
+            THROW_HARD('joint angle path requires the raw Euclidean or cc objective; hybrid derivative is unavailable')
         endif
+        self%joint_cc       = self%b_ptr%pftc%is_cc_objfun()
         self%nrots          = self%b_ptr%pftc%get_nrots()
         self%maxits         = maxits
         self%opt_angle      = .false.
@@ -194,6 +196,36 @@ contains
         call self%ospec%set_limits(lims)
     end subroutine set_limits
 
+    ! Objective dispatch for the joint continuous route. Both evaluators
+    ! return loss orientation: raw Euclidean loss, or -cc for the cc
+    ! objective, so the L-BFGS-B machinery and the monotonic acceptance in
+    ! minimize_joint apply unchanged.
+    subroutine joint_grad_at_angle( self, vec, cost, grad )
+        class(pftc_shsrch_grad), intent(inout) :: self
+        real(dp),                intent(in)    :: vec(3)
+        real(dp),                intent(out)   :: cost, grad(3)
+        if( self%joint_cc )then
+            call self%b_ptr%pftc%gen_corr_grad_at_angle(self%reference, self%particle, &
+                &vec(1:2), vec(3), cost, grad)
+        else
+            call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
+                &vec(1:2), vec(3), cost, grad)
+        endif
+    end subroutine joint_grad_at_angle
+
+    ! Map a joint loss to the legacy matcher score: exp(-loss) in [0,1] for
+    ! the raw Euclidean objective, -loss clamped to [-1,1] for cc (benign
+    ! series overshoot must not mint |cc| > 1)
+    real function joint_cost_to_score( self, cost )
+        class(pftc_shsrch_grad), intent(in) :: self
+        real(dp),                intent(in) :: cost
+        if( self%joint_cc )then
+            joint_cost_to_score = real(min(1.d0, max(-1.d0, -cost)))
+        else
+            joint_cost_to_score = real(exp(-max(0.d0, cost)))
+        endif
+    end function joint_cost_to_score
+
     function grad_shsrch_costfun( self, vec, D ) result( cost )
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
@@ -205,8 +237,7 @@ contains
                 if( self%search_mode == SHSRCH_JOINT )then
                     block
                         real(dp) :: joint_grad(3)
-                        call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
-                            &vec(1:2), vec(3), cost, joint_grad)
+                        call joint_grad_at_angle(self, vec(1:3), cost, joint_grad)
                     end block
                     if( .not. self%joint_initial_cost_valid )then
                         self%joint_initial_cost = cost
@@ -231,8 +262,7 @@ contains
             class is (pftc_shsrch_grad)
                 self%profile_gradient_evals = self%profile_gradient_evals + 1_int64
                 if( self%search_mode == SHSRCH_JOINT )then
-                    call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
-                        &vec(1:2), vec(3), joint_loss, joint_grad)
+                    call joint_grad_at_angle(self, vec(1:3), joint_loss, joint_grad)
                     grad = joint_grad
                 else
                     call self%b_ptr%pftc%gen_corr_grad_only_for_rot_8(self%reference, &
@@ -258,8 +288,7 @@ contains
                 self%profile_objective_evals = self%profile_objective_evals + 1_int64
                 self%profile_gradient_evals  = self%profile_gradient_evals  + 1_int64
                 if( self%search_mode == SHSRCH_JOINT )then
-                    call self%b_ptr%pftc%gen_raw_euclid_grad_at_angle(self%reference, self%particle, &
-                        &vec(1:2), vec(3), f, joint_grad)
+                    call joint_grad_at_angle(self, vec(1:3), f, joint_grad)
                     grad = joint_grad
                     if( .not. self%joint_initial_cost_valid )then
                         self%joint_initial_cost = f
@@ -480,8 +509,8 @@ contains
         if( self%search_mode /= SHSRCH_JOINT )then
             THROW_HARD('joint minimization requested from a non-joint search object')
         endif
-        if( .not. self%b_ptr%pftc%is_raw_euclid_objfun() )then
-            THROW_HARD('joint minimization requires raw Euclidean objective; hybrid derivative is unavailable')
+        if( .not. self%b_ptr%pftc%is_joint_grad_objfun() )then
+            THROW_HARD('joint minimization requires the raw Euclidean or cc objective; hybrid derivative is unavailable')
         endif
         if( irot_in < 1 .or. irot_in > self%nrots )then
             THROW_HARD('minimize_joint requires the selected in-plane cell as irot_in seed')
@@ -505,10 +534,18 @@ contains
         if( present(initial_cost_out) ) initial_cost_out = initial_cost
         if( self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) )then
             ! the incoming cell re-scored at xy_in, same mapping as the improved path
-            seed_corr = real(exp(-max(0.d0, initial_cost)))
+            seed_corr = joint_cost_to_score(self, initial_cost)
         endif
-        improve_tol = max(64.d0 * epsilon(1.d0) * max(1.d0, abs(initial_cost), abs(final_cost)), &
-            &JOINT_IMPROVE_REL_TOL * abs(initial_cost))
+        if( self%joint_cc )then
+            ! cc costs live in [-1,1] and legitimately cross zero, where a
+            ! purely relative guard is toothless; floor the material scale at
+            ! 1% correlation
+            improve_tol = max(64.d0 * epsilon(1.d0), &
+                &JOINT_IMPROVE_REL_TOL * max(abs(initial_cost), 1.d-2))
+        else
+            improve_tol = max(64.d0 * epsilon(1.d0) * max(1.d0, abs(initial_cost), abs(final_cost)), &
+                &JOINT_IMPROVE_REL_TOL * abs(initial_cost))
+        endif
         coordinate_tol = 64.d0 * real(epsilon(1.0),dp) * &
             &max(1.d0, max(abs(real(self%ospec%limits(:,1),dp)), &
             &abs(real(self%ospec%limits(:,2),dp))))
@@ -521,11 +558,20 @@ contains
         endif
         valid_result = self%joint_initial_cost_valid .and. ieee_is_finite(initial_cost) .and. &
             &ieee_is_finite(final_cost) .and. valid_coordinates
-        ! a materially negative loss invalidates the solve: exponentiating it
-        ! would mint a score > 1 that corrupts probability-table distances and
-        ! downstream weighting, and the pose itself is a descent into series
-        ! artifact, not signal
-        if( valid_result .and. final_cost < -JOINT_NEG_COST_TOL ) valid_result = .false.
+        if( valid_result )then
+            if( self%joint_cc )then
+                ! a correlation materially beyond +/-1 is an unphysical
+                ! interpolation artifact; the pose found by descending into it
+                ! cannot be trusted
+                if( abs(final_cost) > 1.d0 + JOINT_NEG_COST_TOL ) valid_result = .false.
+            else
+                ! a materially negative loss invalidates the solve:
+                ! exponentiating it would mint a score > 1 that corrupts
+                ! probability-table distances and downstream weighting, and
+                ! the pose itself is a descent into series artifact, not signal
+                if( final_cost < -JOINT_NEG_COST_TOL ) valid_result = .false.
+            endif
+        endif
         improved_result = valid_result .and. final_cost < initial_cost - improve_tol
         ! demote bound-pinned solutions to the discrete floor: collapsed
         ! dimensions (doshift=no) have zero range and are skipped
@@ -569,9 +615,9 @@ contains
         self%cur_inpl_rotind = self%ospec%x(3)
         self%cur_inpl_idx = modulo(nint(self%cur_inpl_rotind)-1,self%nrots)+1
         irot = self%cur_inpl_idx
-        ! clamp benign sub-tolerance series undershoot so the score keeps the
-        ! legacy [0,1] normalization contract
-        cxy(1) = real(exp(-max(0.d0, final_cost)))
+        ! clamp benign sub-tolerance series artifacts so the score keeps the
+        ! legacy normalization contract ([0,1] Euclidean, [-1,1] cc)
+        cxy(1) = joint_cost_to_score(self, final_cost)
         cxy(2:) = self%ospec%x(1:2)
         rotind_frac = self%cur_inpl_rotind
         if( sh_rot )then
@@ -848,6 +894,7 @@ contains
         self%search_mode = SHSRCH_LEGACY
         self%joint_initial_cost = 0.d0
         self%joint_initial_cost_valid = .false.
+        self%joint_cc = .false.
         call self%reset_profile
     end subroutine grad_shsrch_kill
 

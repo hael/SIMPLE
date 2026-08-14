@@ -134,7 +134,6 @@ contains
         write(*,'(a)') 'Continuous in-plane refine3D policy suite: START'
         call run_case_in_child('policy', failures)
         call run_rejection_in_child('policy_bad_value', 'inpl_cont must be yes or no', failures)
-        call run_rejection_in_child('policy_cc', 'requires objfun=euclid', failures)
         call run_rejection_in_child('policy_hybrid', 'does not support objfun_den=yes', failures)
         call run_rejection_in_child('policy_denoised', 'requires ptcl_src=raw', failures)
         call run_rejection_in_child('policy_projrec', 'does not support projrec=yes', failures)
@@ -220,7 +219,7 @@ contains
             call run_metadata_project_contract()
         case('synthetic_recovery')
             call run_synthetic_recovery_contract()
-        case('policy_bad_value', 'policy_cc', 'policy_hybrid', &
+        case('policy_bad_value', 'policy_hybrid', &
             &'policy_denoised', 'policy_projrec', 'policy_eval', &
             &'policy_sigma', 'policy_probabilistic', 'policy_neigh')
             call run_policy_rejection(trim(label))

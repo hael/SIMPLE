@@ -15,9 +15,11 @@ optimizer runs exactly once per particle per iteration to polish the
 committed assignment. The search trajectory is therefore identical to the
 validated legacy trajectory by construction, on every sample.
 
-Continuous refinement is active only for the raw Euclidean objective. It is
-unsupported for hybrid/denoised objectives; those opt-in requests fail rather
-than falling back to the callback. `abinitio2D_sgd` rejects `inpl_cont=yes`,
+Continuous refinement is active for the raw Euclidean and cc objectives (the
+cc route minimizes `-cc` with a quotient-rule angular derivative and reports
+the clamped correlation as its score). It is unsupported for hybrid/denoised
+objectives; those opt-in requests fail rather than falling back to the
+callback. `abinitio2D_sgd` rejects `inpl_cont=yes`,
 while time-series shift-only search invokes neither an angle callback nor the
 joint angle optimizer. The `abinitio2D` controller propagates the option to
 every `cluster2D` child, including terminal probabilistic and dense passes.

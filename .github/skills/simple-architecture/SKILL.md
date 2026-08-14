@@ -39,6 +39,23 @@ The common pattern is:
 - Repo overview: `README.md`, `doc/code_overview/code_base_map.md`
 - Policy docs worth checking before refactors: `doc/policies/*.md`, `doc/refactoring_notes/*.md`
 
+## Tests
+
+- Every `production/tests/simple_test_*.f90` is auto-globbed into its own
+  executable; adding a test needs no CMake edit to build.
+- Acceptance is direct execution of the `simple_test_*` binaries (usually with
+  `key=value` args parsed via `parse_oldschool`), not CTest. CTest entries are
+  an automatic side effect of the same glob loop.
+- A test whose fixture requires an external reference volume (`vol1=`) must be
+  added to `VOL1_FIXTURE_TESTS` in `production/CMakeLists.txt`; that list
+  guards the auto-registration so the test is only registered with CTest when
+  `-DSIMPLE_TEST_VOL1=<path.mrc>` is supplied instead of appearing as a
+  guaranteed failure.
+- New validation fixtures should be modeled on
+  `simple_test_continuous_inplane_rotation2D_stage1_validation.f90`
+  (builder + pftc setup from a volume, FD gradient checks, PASS/FAIL lines,
+  `error stop` on failure).
+
 ## Working Style
 
 - Treat `src/main/exec` as routing/orchestration.

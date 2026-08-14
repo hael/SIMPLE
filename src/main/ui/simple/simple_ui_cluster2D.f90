@@ -35,24 +35,27 @@ contains
         call new_abinitio2D_descriptor(abinitio2D, 'abinitio2D', &
             &'Generate reference-free 2D class averages from particle images', &
             &'is a distributed workflow for generating 2D class averages from particles', &
-            &UI_VIS_STANDARD, 'Create 2D Class Averages')
+            &UI_VIS_STANDARD, 'Create 2D Class Averages', 'yes')
         call add_ui_program('abinitio2D', abinitio2D, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2D
 
     subroutine new_abinitio2d_sgd( prgtab )
         class(ui_hash), intent(inout) :: prgtab
+        ! abinitio2D_sgd rejects inpl_cont=yes, so it keeps the legacy default
         call new_abinitio2D_descriptor(abinitio2d_sgd, 'abinitio2D_sgd', &
             &'Run experimental streaming-SGD 2D classification from particle images', &
             &'runs the development table-free SGD variant of staged 2D classification', &
-            &UI_VIS_DEVELOPER, 'Development 2D SGD')
+            &UI_VIS_DEVELOPER, 'Development 2D SGD', 'no')
         call add_abinitio2d_sgd_inputs(abinitio2d_sgd)
         call add_ui_program('abinitio2D_sgd', abinitio2d_sgd, prgtab, UI_CATEGORY)
     end subroutine new_abinitio2d_sgd
 
-    subroutine new_abinitio2D_descriptor( program, name, summary, help, visibility, display_name )
+    subroutine new_abinitio2D_descriptor( program, name, summary, help, visibility, display_name, &
+        &inpl_cont_default )
         type(ui_program), intent(inout) :: program
         character(len=*), intent(in) :: name, summary, help, display_name
         integer, intent(in) :: visibility
+        character(len=*), intent(in) :: inpl_cont_default
         ! PROGRAM SPECIFICATION
         call program%new(&
         &name,&                                                                         ! name
@@ -84,8 +87,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'inpl_cont', 'binary', &
         &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
-        &.false., 'no', group="search", &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){'//trim(inpl_cont_default)//'}', '', &
+        &.false., trim(inpl_cont_default), group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call program%add_input(UI_SRCH, 'sigma_est', 'multi', 'Sigma estimation method',&

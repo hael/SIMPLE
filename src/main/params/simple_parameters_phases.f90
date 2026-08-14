@@ -30,9 +30,9 @@ contains
             error_message = 'inpl_cont must be yes or no'
             return
         end select
-        if( trim(objfun) /= 'euclid' )then
-            error_message = 'refine3D inpl_cont=yes requires objfun=euclid'
-        elseif( trim(objfun_den) /= 'no' )then
+        ! objfun=euclid and objfun=cc both provide the analytic joint
+        ! (sx,sy,theta) gradient; only the hybrid/denoised blend does not
+        if( trim(objfun_den) /= 'no' )then
             error_message = 'refine3D inpl_cont=yes does not support objfun_den=yes'
         elseif( trim(ptcl_src) /= 'raw' )then
             error_message = 'refine3D inpl_cont=yes requires ptcl_src=raw'

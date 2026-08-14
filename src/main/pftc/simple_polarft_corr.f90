@@ -1602,6 +1602,149 @@ contains
         endif
     end subroutine eval_joint_coeffs_at_rotind
 
+    ! CC counterpart of gen_raw_euclid_grad_at_angle: evaluate the normalized
+    ! cross-correlation and its gradient at a continuous angular grid
+    ! coordinate, in loss orientation (f = -cc, grad = -dcc), so the joint
+    ! minimizer applies unchanged.  The correlation matched here is the
+    ! selection score of gen_corrs (unweighted shells; NOT the k-weighted
+    ! variant of gen_corr_cc_grad_for_rot_8), so on integer grid indices -f
+    ! reproduces gen_corrs, Nyquist bin included -- both series below therefore
+    ! accumulate p = 1:pftsz+1, unlike the Euclidean evaluator which zeroes
+    ! Nyquist.  The numerator N(theta) and its two shift-derivative series
+    ! reuse the batched three-section angular FFT of the Euclidean evaluator;
+    ! the denominator series D(theta) = sum_k FT(CTF2)*FT(REF2) is assembled
+    ! from memoized transforms (no extra FFT) and is shift-independent
+    ! (|shift phase| = 1), so the quotient rule only enters the theta
+    ! component:
+    !     cc         = N / sqrt(D*C),          C = sqsums_ptcls * 2*nrots
+    !     dcc/dshift = N_shift / sqrt(D*C)
+    !     dcc/dtheta = (N' - N*D'/(2*D)) / sqrt(D*C)
+    ! Dispatched from the joint continuous route (pftc_shsrch_grad) when the
+    ! objective is cc; validated by simple_test_continuous_inplane_cc_grad.
+    module subroutine gen_corr_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
+        real(dp),                    intent(out)   :: f, grad(3)
+        complex(sp), pointer :: coeffs(:,:)
+        complex(sp), pointer :: shmat(:,:)
+        complex(sp), pointer :: cjoint(:,:)
+        complex(sp) :: denom_coeffs(self%pftsz+1)
+        complex(sp) :: cross_term
+        real(sp) :: shift(2), shift_mag_sq
+        real(dp) :: numer, ngrad(3), denom_val, denom_dtheta, scale_fac
+        integer :: i, ithr, k, k0, kk, p, ieo
+        logical :: shifted
+
+        if( self%p_ptr%cc_objfun /= OBJFUN_CC )then
+            THROW_HARD('gen_corr_grad_at_angle requires objfun=cc')
+        endif
+        ithr         = omp_get_thread_num() + 1
+        i            = self%pinds(iptcl)
+        k0           = self%kfromto(1)
+        ieo          = merge(REF_EVEN, REF_ODD, self%iseven(i))
+        shift        = real(shvec,sp)
+        shift_mag_sq = sum(shift*shift)
+        ! gate on exact zero for smoothness in the shift variables (see
+        ! gen_raw_euclid_grad_at_angle; a SHERRSQ dead zone would break
+        ! L-BFGS-B)
+        shifted      = shift_mag_sq > 0._sp
+        coeffs       => self%heap_vars(ithr)%joint_coeffs
+        coeffs       = cmplx(0._sp,0._sp,kind=sp)
+        denom_coeffs = cmplx(0._sp,0._sp,kind=sp)
+        cjoint       => self%cmat_joint_many(ithr)%c
+        if( shifted )then
+            shmat => self%heap_vars(ithr)%shmat
+            call self%gen_shmat4aln(ithr, shift, shmat)
+        endif
+        ! column sections: numerator (kk), d/dsx (nk+kk), d/dsy (2*nk+kk)
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            if( shifted )then
+                cjoint(1:self%pftsz,kk) = shmat(:,k) * self%pfts_refs(:,k,iref,ieo)
+            else
+                cjoint(1:self%pftsz,kk) = self%pfts_refs(:,k,iref,ieo)
+            endif
+            cjoint(self%pftsz+1:self%nrots,kk) = conjg(cjoint(1:self%pftsz,kk))
+            cjoint(1:self%pftsz,self%nk+kk) = &
+                &real(self%argtransf(1:self%pftsz,k),sp) * cjoint(1:self%pftsz,kk)
+            cjoint(self%pftsz+1:self%nrots,self%nk+kk) = &
+                &-conjg(cjoint(1:self%pftsz,self%nk+kk))
+            cjoint(1:self%pftsz,2*self%nk+kk) = &
+                &real(self%argtransf(self%pftsz+1:self%nrots,k),sp) * cjoint(1:self%pftsz,kk)
+            cjoint(self%pftsz+1:self%nrots,2*self%nk+kk) = &
+                &-conjg(cjoint(1:self%pftsz,2*self%nk+kk))
+        enddo
+        call fftwf_execute_dft(self%plan_fwd3_many, cjoint, cjoint)
+        ! N series coefficient is +ft_ptcl_ctf*conj(FT(S*REF)); its shift
+        ! derivative follows from dFT(S*REF)/ds = i*FT(argtransf*S*REF), hence
+        ! the -i on the conjugated derivative sections
+        do k = self%kfromto(1), self%kfromto(2)
+            kk = k - k0 + 1
+            do p = 1,self%pftsz+1
+                cross_term  = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,kk))
+                coeffs(p,1) = coeffs(p,1) + cross_term
+                cross_term  = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,self%nk+kk))
+                coeffs(p,2) = coeffs(p,2) - cmplx(0._sp,1._sp,kind=sp) * cross_term
+                cross_term  = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,2*self%nk+kk))
+                coeffs(p,3) = coeffs(p,3) - cmplx(0._sp,1._sp,kind=sp) * cross_term
+                denom_coeffs(p) = denom_coeffs(p) + &
+                    &self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
+            enddo
+        enddo
+        ! numer = N(theta), ngrad(1:2) = dN/dshift, ngrad(3) = dN/dtheta
+        call eval_joint_coeffs_at_rotind(self, coeffs, rotind_frac, numer, ngrad)
+        call eval_series_at_rotind(self, denom_coeffs, rotind_frac, denom_val, denom_dtheta)
+        ! guard: interpolated reference power must be strictly positive (the
+        ! comparison also catches NaN). The normalized cc is undefined here,
+        ! so return a finite penalty loss outside the physical [-1,1] cc-loss
+        ! range: the optimizer retreats from it, and if a solve terminates on
+        ! it anyway the |cc| > 1 validity guard in minimize_joint demotes the
+        ! result to the seed. Returning f=0 instead would read as cc=0 and
+        ! could displace a negatively correlated seed as an "improvement".
+        if( .not. (denom_val > 0.d0) )then
+            f    = 2.d0
+            grad = 0.d0
+            return
+        endif
+        scale_fac = 1.d0 / sqrt(denom_val * self%sqsums_ptcls(i) * real(2*self%nrots,dp))
+        f       = -(numer * scale_fac)
+        grad(1) = -(ngrad(1) * scale_fac)
+        grad(2) = -(ngrad(2) * scale_fac)
+        grad(3) = -((ngrad(3) - numer*denom_dtheta/(2.d0*denom_val)) * scale_fac)
+    end subroutine gen_corr_grad_at_angle
+
+    ! Evaluate one angular coefficient series and its theta-derivative at a
+    ! fractional rotation index, in the same half-spectrum convention as
+    ! eval_joint_coeffs_at_rotind (interior weight 2, Nyquist weight 1).
+    subroutine eval_series_at_rotind(self, coeffs, rotind_frac, val, dval)
+        class(polarft_calc), intent(in)  :: self
+        complex(sp),         intent(in)  :: coeffs(:)
+        real(dp),            intent(in)  :: rotind_frac
+        real(dp),            intent(out) :: val, dval
+        complex(dp) :: phase_factor, z
+        real(dp) :: phase, dphase, frequency
+        integer :: m
+
+        phase  = DTWOPI * (rotind_frac - 1.d0) / real(self%nrots,dp)
+        dphase = DTWOPI / real(self%nrots,dp)
+        val    = real(coeffs(1),dp)
+        dval   = 0.d0
+        do m = 1,self%pftsz-1
+            frequency    = real(m,dp) * dphase
+            phase_factor = exp(cmplx(0.d0,real(m,dp)*phase,kind=dp))
+            z    = cmplx(real(coeffs(m+1),dp),aimag(coeffs(m+1)),kind=dp) * phase_factor
+            val  = val  + 2.d0 * real(z,dp)
+            dval = dval - 2.d0 * frequency * aimag(z)
+        enddo
+        m = self%pftsz
+        frequency    = real(m,dp) * dphase
+        phase_factor = exp(cmplx(0.d0,real(m,dp)*phase,kind=dp))
+        z    = cmplx(real(coeffs(m+1),dp),aimag(coeffs(m+1)),kind=dp) * phase_factor
+        val  = val  + real(z,dp)
+        dval = dval - frequency * aimag(z)
+    end subroutine eval_series_at_rotind
+
     module subroutine gen_denoised_corr_grad_for_rot_8( self, pft_ref, iptcl, shvec, irot, f, grad, shmat_8_ready )
         class(polarft_calc),  target, intent(inout) :: self
         complex(dp),         pointer, intent(inout) :: pft_ref(:,:)

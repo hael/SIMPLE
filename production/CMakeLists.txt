@@ -177,6 +177,7 @@ if(BUILD_TESTS)
   # Tests whose fixtures require an external reference volume (vol1=)
   set(VOL1_FIXTURE_TESTS
     continuous_inplane_rotation2D_stage1_validation
+    continuous_inplane_cc_grad
     continuous_inplane_refine3D
   )
   foreach(main_src IN LISTS TEST_MAINS)

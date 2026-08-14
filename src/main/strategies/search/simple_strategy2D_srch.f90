@@ -100,13 +100,12 @@ contains
         self%nrots       = self%b_ptr%pftc%get_nrots()
         if( self%nrots < 1 ) THROW_HARD('strategy2D_srch constructed before PFTC rotations were initialized')
         self%nrefs_eval  = 0
-        continuous_eligible = self%b_ptr%pftc%is_raw_euclid_objfun() .and. &
-            &(.not. self%p_ptr%l_objfun_den) .and. &
+        continuous_eligible = self%b_ptr%pftc%is_joint_grad_objfun() .and. &
             &(.not. self%p_ptr%l_sgd_streaming_active) .and. trim(self%p_ptr%tseries) /= 'yes'
         if( trim(self%p_ptr%inpl_cont) == 'yes' .and. &
             &(.not. self%p_ptr%l_sgd_streaming_active) .and. &
             &trim(self%p_ptr%tseries) /= 'yes' .and. (.not. continuous_eligible) )then
-            THROW_HARD('inpl_cont=yes requires the raw Euclidean joint objective')
+            THROW_HARD('inpl_cont=yes requires the raw Euclidean or cc joint objective')
         endif
         self%continuous_active = continuous_eligible .and. self%p_ptr%l_doshift .and. &
             &trim(self%p_ptr%inpl_cont) == 'yes'

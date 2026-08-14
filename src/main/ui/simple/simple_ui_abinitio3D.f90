@@ -76,8 +76,8 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, 'inpl_cont', 'binary', &
         &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
-        &.false., 'no', group="search", &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
+        &.false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, ptcl_src, group="search", &
@@ -181,8 +181,8 @@ contains
         &group="search", visibility=UI_VIS_DEVELOPER)
         call abinitio3D_cavgs%add_input(UI_SRCH, 'inpl_cont', 'binary', &
         &'Continuous in-plane refinement', &
-        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){no}', '', &
-        &.false., 'no', group="search", &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
+        &.false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         ! filter controls

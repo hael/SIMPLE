@@ -117,13 +117,12 @@ contains
         self%refine        = trim(self%p_ptr%refine)
         self%l_greedy      = str_has_substr(self%p_ptr%refine, 'greedy')
         if( trim(self%p_ptr%inpl_cont) == 'yes' .and. &
-            &((.not. self%b_ptr%pftc%is_raw_euclid_objfun()) .or. self%p_ptr%l_objfun_den) )then
-            THROW_HARD('inpl_cont=yes requires the raw Euclidean joint objective')
+            &(.not. self%b_ptr%pftc%is_joint_grad_objfun()) )then
+            THROW_HARD('inpl_cont=yes requires the raw Euclidean or cc joint objective')
         endif
         self%continuous_active = trim(self%p_ptr%inpl_cont) == 'yes' .and. &
             &self%p_ptr%l_doshift .and. &
-            &self%b_ptr%pftc%is_raw_euclid_objfun() .and. &
-            &(.not. self%p_ptr%l_objfun_den)
+            &self%b_ptr%pftc%is_joint_grad_objfun()
         self%continuous_route_outcome = CONT_ROUTE_NOT_ATTEMPTED
         lims(:,1)          = -self%p_ptr%trs
         lims(:,2)          =  self%p_ptr%trs

@@ -167,10 +167,10 @@ The desired restoration model is class-local: each class average should carry fo
 
 `inpl_cont=no|yes` is propagated by the `abinitio2D` controller to every
 `cluster2D` child, including probabilistic staged calls, the final staged
-invocation, and the terminal dense all-particle refresh. `no` is the default
-and preserves the historical alternating shift/discrete-angle callback route.
-`yes` replaces every callback-based angle/shift optimization with the joint
-raw-Euclidean `(sx,sy,rotind_frac)` optimizer.
+invocation, and the terminal dense all-particle refresh. `no` preserves the
+historical alternating shift/discrete-angle callback route. `yes` is the
+default and replaces every callback-based angle/shift optimization with the
+joint raw-Euclidean `(sx,sy,rotind_frac)` optimizer.
 
 During candidate profiling, each joint invocation keeps the selected class
 fixed but discards every incoming in-plane index or fractional coordinate. At
@@ -181,11 +181,13 @@ with a local plus-or-minus-two-cell angular bound. This initialization never
 scans alternative shifts: the legacy 5-by-5 shift/all-angle coarse initializer
 is not part of `inpl_cont=yes`.
 
-The active joint route is supported only by non-streaming, non-time-series raw
-Euclidean search. CC and hybrid/denoised objectives are not continuous-angle
-capabilities and fail rather than silently selecting the legacy callback;
-`abinitio2D_sgd` also rejects `inpl_cont=yes`. Time-series shift-only search
-uses its fixed-angle optimizer and invokes neither angle route.
+The active joint route is supported by non-streaming, non-time-series search
+under the raw Euclidean and cc objectives (the cc route minimizes `-cc` with
+a quotient-rule angular derivative and reports the clamped correlation as its
+score). The hybrid/denoised blend is not a continuous-angle capability and
+fails rather than silently selecting the legacy callback; `abinitio2D_sgd`
+also rejects `inpl_cont=yes`. Time-series shift-only search uses its
+fixed-angle optimizer and invokes neither angle route.
 
 Probabilistic particle and class/reference sampling remain discrete. During
 candidate profiling, the joint optimizer may evaluate a fractional angle, but

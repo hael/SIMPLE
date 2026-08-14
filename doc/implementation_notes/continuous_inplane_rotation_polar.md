@@ -384,6 +384,22 @@ Do `OBJFUN_EUCLID` first and completely.
   a *ratio* `N(θ)/sqrt(D(θ)·…)`, so every derivative needs the quotient rule.
   Mechanical once euclid is proven. Note `D(θ)` is shift-independent, the same
   hoist as §4.2.
+
+  *Status:* implemented as `gen_corr_grad_at_angle`
+  (`simple_polarft_corr.f90`), matching the `gen_corrs` selection score
+  (unweighted shells, Nyquist bin included — deliberately NOT the k-weighted
+  correlation of the legacy discrete shift gradient
+  `gen_corr_cc_grad_for_rot_8`). The `D(θ)` series is assembled from the
+  memoized `FT(CTF²)·FT(REF²)` products without an extra FFT and recomputed
+  per evaluation; hoisting it across L-BFGS-B iterations remains available
+  if profiling justifies the added state. Validated by
+  `simple_test_continuous_inplane_cc_grad` (on-grid identity vs `gen_corrs`
+  at 2.3e-7, three-variable FD gradient checks at 1.1e-4). Wired into the
+  joint continuous route: `new_joint`/`minimize_joint` dispatch on the
+  objective (`is_joint_grad_objfun`), with cc-aware score mapping
+  (`score = -loss` clamped to `[-1,1]` instead of `exp(-loss)`) and a
+  `|cc| > 1` invalidity guard replacing the Euclidean negative-loss guard.
+  The hybrid/denoised blend remains excluded everywhere.
 - **Hybrid / denoised** (`gen_hybrid_grad_for_rot_8_local`, `:1352`;
   `gen_denoised_corrs`, `:502`) is a *linear* blend of raw euclid and a
   cc-shaped denoised term with weight `objfun_den_w`. Once each component has a

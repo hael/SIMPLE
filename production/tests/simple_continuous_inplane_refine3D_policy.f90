@@ -18,15 +18,15 @@ type(cmdline)    :: child_cline
 type(parameters) :: defaults
 character(len=256) :: policy_error
 
-if( trim(defaults%inpl_cont) /= 'no' ) &
-    &error stop 'refine3D continuous in-plane default is not no'
+if( trim(defaults%inpl_cont) /= 'yes' ) &
+    &error stop 'refine3D continuous in-plane default is not yes'
 call make_ui
-if( .not. has_search_input('refine3D', 'inpl_cont', expected_default='no') ) &
-    &error stop 'refine3D UI does not expose inpl_cont=no'
-if( .not. has_search_input('refine3D_auto', 'inpl_cont', expected_default='no') ) &
-    &error stop 'refine3D_auto UI does not expose inpl_cont=no'
-if( .not. has_search_input('refine3D_multi', 'inpl_cont', expected_default='no') ) &
-    &error stop 'refine3D_multi UI does not expose inpl_cont=no'
+if( .not. has_search_input('refine3D', 'inpl_cont', expected_default='yes') ) &
+    &error stop 'refine3D UI does not expose inpl_cont=yes'
+if( .not. has_search_input('refine3D_auto', 'inpl_cont', expected_default='yes') ) &
+    &error stop 'refine3D_auto UI does not expose inpl_cont=yes'
+if( .not. has_search_input('refine3D_multi', 'inpl_cont', expected_default='yes') ) &
+    &error stop 'refine3D_multi UI does not expose inpl_cont=yes'
 
 policy_error = refine3D_inpl_cont_policy_error('no', 'cc', 'yes', &
     &'den', 'yes')
@@ -36,6 +36,10 @@ policy_error = refine3D_inpl_cont_policy_error('yes', 'euclid', 'no', &
     &'raw', 'no')
 if( len_trim(policy_error) > 0 ) &
     &error stop 'shared refine3D policy rejected the eligible opt-in route'
+policy_error = refine3D_inpl_cont_policy_error('yes', 'cc', 'no', &
+    &'raw', 'no')
+if( len_trim(policy_error) > 0 ) &
+    &error stop 'shared refine3D policy rejected the eligible cc opt-in route'
 call cline%set('prg', 'refine3D')
 call validate_refine3D_inpl_cont(cline)
 call cline%set('inpl_cont', 'no')
@@ -77,8 +81,6 @@ call cline%set('refine', 'shc')
 select case(trim(label))
 case('policy_bad_value')
     call cline%set('inpl_cont', 'invalid')
-case('policy_cc')
-    call cline%set('objfun', 'cc')
 case('policy_hybrid')
     call cline%set('objfun_den', 'yes')
 case('policy_denoised')

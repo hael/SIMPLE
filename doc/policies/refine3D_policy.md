@@ -271,9 +271,9 @@ This is intended current behavior, not a full soft-assignment EM update.
 
 ### Continuous in-plane policy
 
-`inpl_cont` has exactly two values. `no` is the default and preserves the
-historical alternating search: continuous shift optimization with the
-discrete in-plane angle callback. `yes` follows the **polish-only
+`inpl_cont` has exactly two values. `no` preserves the historical alternating
+search: continuous shift optimization with the discrete in-plane angle
+callback. `yes` is the default and follows the **polish-only
 principle**: continuous refinement changes pose *precision*, never search
 *behavior*. Selection sees exactly what the legacy route sees -- candidate
 scoring, probability-table profiling, shift-seed estimation, and multi-peak
@@ -285,13 +285,19 @@ by construction; the continuous route is a strict refinement of it and cannot
 alter exploration dynamics on any sample. Objective type is a capability
 check and must never activate continuous-angle behavior by itself.
 
-The refine3D opt-in requires `objfun=euclid`, `objfun_den=no`,
-`ptcl_src=raw`, and `projrec=no`. It is not restricted to `refine=shc`:
+`inpl_cont=yes` in refine3D requires `objfun_den=no`, `ptcl_src=raw`, and
+`projrec=no`. Both `objfun=euclid` and `objfun=cc` provide the analytic joint
+`(sx,sy,rotind_frac)` gradient; the cc route minimizes `-cc` with a
+quotient-rule angular derivative and maps scores as the clamped correlation
+rather than `exp(-loss)`. Only the hybrid/denoised blend lacks a
+continuous-angle derivative. The opt-in is not restricted to `refine=shc`:
 deterministic, neighborhood, evaluation, and probabilistic matcher routes use
 the same policy wherever they commit a pose. A mode with no pose search,
 such as sigma-only setup, naturally invokes neither optimizer. Unsupported
 capability combinations fail validation rather than silently reverting to the
-callback.
+callback. The joint cc route is validated on nanoparticle data as well, so
+the nano 2D/3D workflows follow the `inpl_cont=yes` default; only
+`abinitio2D_sgd` rejects the option, by design.
 
 Probability tables are pure legacy under both `inpl_cont` values: candidate
 scoring, shift-seed estimation, and per-candidate shift refinement use the
