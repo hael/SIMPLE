@@ -12,6 +12,7 @@ use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap
 use simple_ptcl_cache,    only: ptcl_cache_ensure
+use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -49,11 +50,6 @@ type :: refine3D_bench_state
     real(timer_int_kind)    :: rt_assemble = 0.
     real(timer_int_kind)    :: rt_tot      = 0.
 end type refine3D_bench_state
-
-type :: refine3D_stage_bench_state
-    real(timer_int_kind) :: rt_total      = 0.
-    real(timer_int_kind) :: rt_calc_pspec = 0.
-end type refine3D_stage_bench_state
 
 ! ======================================================================
 ! SHARED-MEMORY IMPLEMENTATION
@@ -155,6 +151,14 @@ contains
         call cline%delete('cache_dir')
     end subroutine strip_refine3D_search_only_args
 
+    !> Remove reconstruction-backend options from auxiliary children that do
+    !! not reconstruct. Matcher workers and assembly deliberately retain them.
+    subroutine strip_refine3D_backend_args( cline )
+        type(cmdline), intent(inout) :: cline
+        call cline%delete('rec_backend')
+        call cline%delete('pcg_lambda_rel')
+    end subroutine strip_refine3D_backend_args
+
     !> Strategy selection based on command-line shape.
     function create_refine3D_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
@@ -195,6 +199,43 @@ contains
         call volname%kill
         call vol_in%kill
     end subroutine prepare_assembly_cline
+
+    subroutine assemble_refine3D_pcg( cline, params, build )
+        type(cmdline),    intent(inout) :: cline
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        type(parameters) :: pcg_params
+        call validate_refine3D_pcg_integration(params)
+        pcg_params = params
+        pcg_params%maxits = 2
+        pcg_params%rtol   = 0.0
+        call execute_rec3D_pcg_distributed_master(pcg_params, build, cline)
+    end subroutine assemble_refine3D_pcg
+
+    subroutine validate_refine3D_pcg_integration( params )
+        type(parameters), intent(in) :: params
+        if( trim(params%rec_backend) /= 'pcg' ) return
+        if( trim(params%filt_mode) /= 'fsc' .and. trim(params%filt_mode) /= 'none' )then
+            THROW_HARD('initial refine3D PCG integration requires filt_mode=fsc or none')
+        endif
+    end subroutine validate_refine3D_pcg_integration
+
+    subroutine remove_pcg_raw_files( params )
+        type(parameters), intent(in) :: params
+        type(string) :: fname
+        integer :: state, part, eo
+        do state = 1, params%nstates
+            do eo = 0, 1
+                do part = 1, params%nparts
+                    fname = refine3D_pcg_raw_accum_fname(state, part, params%numlen, &
+                        &merge('odd ', 'even', eo == 1))
+                    call del_file(fname)
+                    call del_file(fname//'.tmp')
+                enddo
+            enddo
+        enddo
+        call fname%kill
+    end subroutine remove_pcg_raw_files
 
     subroutine invalidate_fresh_start_refs_from_volumes( params, cline, startit )
         type(parameters), intent(in) :: params
@@ -295,17 +336,33 @@ contains
     end subroutine refresh_matching_lp_from_project
 
     !> Copy a previous run's trailing accumulator chains into the current
-    !! directory as complete artifact sets only: any pre-existing destination
-    !! components are removed first, all four accumulator files are copied, and
-    !! the manifest is copied last so an interrupted or partial carry-over never
-    !! validates. A source without a complete set is skipped; volassemble then
-    !! bootstraps a fresh chain from the previous halfmaps.
+    !! directory as complete artifact sets only. PCG requires its paired raw
+    !! (B,D) artifacts because a halfmap cannot reconstruct those sufficient
+    !! statistics. The gridding path retains its four-file-plus-manifest
+    !! validation and previous-halfmap bootstrap policy.
     subroutine carry_over_trail_rec_chains( params, prev_refine_path )
         type(parameters), intent(in) :: params
         class(string),    intent(in) :: prev_refine_path
         type(string) :: chain_files(4), manifest
         integer      :: state, ifile
         logical      :: l_complete
+        if( trim(params%rec_backend) == 'pcg' )then
+            do state = 1, params%nstates
+                chain_files(1) = refine3D_pcg_trail_accum_fname(state, 'even')
+                chain_files(2) = refine3D_pcg_trail_accum_fname(state, 'odd')
+                do ifile = 1, 2
+                    if( file_exists(chain_files(ifile)) ) call del_file(chain_files(ifile))
+                enddo
+                l_complete = file_exists(prev_refine_path//chain_files(1)) .and. &
+                    &file_exists(prev_refine_path//chain_files(2))
+                if( .not. l_complete ) THROW_HARD('continued PCG refinement requires complete even/odd accumulator chains')
+                call simple_copy_file(prev_refine_path//chain_files(1), chain_files(1))
+                call simple_copy_file(prev_refine_path//chain_files(2), chain_files(2))
+                call chain_files(1)%kill
+                call chain_files(2)%kill
+            enddo
+            return
+        endif
         do state = 1,params%nstates
             chain_files(1) = refine3D_trail_rec_fname(state, 'even')
             chain_files(2) = refine3D_trail_rho_fname(state, 'even')
@@ -500,31 +557,6 @@ contains
         call benchfname%kill
     end subroutine write_strategy_bench_report
 
-    subroutine write_stage_bench_report( params, bench, execution_mode )
-        type(parameters),                   intent(in) :: params
-        type(refine3D_stage_bench_state),   intent(in) :: bench
-        character(len=*),                    intent(in) :: execution_mode
-        type(string) :: benchfname
-        integer :: fnr
-        if( .not. L_BENCH_GLOB ) return
-        benchfname = refine3D_stage_bench_fname(params%startit)
-        call fopen(fnr, FILE=benchfname, STATUS='REPLACE', action='WRITE')
-        write(fnr,'(a)') '*** BENCHMARK CONTEXT ***'
-        write(fnr,'(a,a)')  'refine3D execution mode             : ', trim(execution_mode)
-        write(fnr,'(a,a)')  'refine3D refine mode                : ', trim(params%refine)
-        write(fnr,'(a,a)')  'refine3D continuation mode          : ', trim(params%continue)
-        write(fnr,'(a,i0)') 'refine3D nspace                     : ', params%nspace
-        write(fnr,'(a,i0)') 'refine3D nstates                    : ', params%nstates
-        write(fnr,'(a,i0)') 'refine3D kfrom                      : ', params%kfromto(1)
-        write(fnr,'(a,i0)') 'refine3D kto                        : ', params%kfromto(2)
-        write(fnr,'(a)') ''
-        write(fnr,'(a)') '*** TIMINGS (s) ***'
-        write(fnr,'(a,1x,f0.2)') 'refine3D stage initialization total :', bench%rt_total
-        write(fnr,'(a,1x,f0.2)') 'refine3D stage-entry calc_pspec     :', bench%rt_calc_pspec
-        call fclose(fnr)
-        call benchfname%kill
-    end subroutine write_stage_bench_report
-
     ! ======================================================================
     ! SHARED-MEMORY STRATEGY METHODS
     ! ======================================================================
@@ -537,13 +569,11 @@ contains
         type(cmdline),                  intent(inout) :: cline
         type(commander_calc_pspec)            :: xcalc_pspec
         type(cmdline)                         :: cline_calc_pspec
-        type(refine3D_stage_bench_state)      :: stage_bench
-        integer(timer_int_kind)                :: t_stage_init, t_calc_pspec
         integer                               :: startit
         logical                               :: l_proj_dirty
-        if( L_BENCH_GLOB ) t_stage_init = tic()
         ! Full in-memory toolbox build (required for refine3D_exec)
         call build%init_params_and_build_strategy3D_tbox(cline, params)
+        call validate_refine3D_pcg_integration(params)
         ! startit
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
@@ -575,6 +605,7 @@ contains
         self%l_sigma = (params%cc_objfun == OBJFUN_EUCLID)
         self%cline_calc_group_sigmas = cline
         call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
+        call strip_refine3D_backend_args(self%cline_calc_group_sigmas)
         call self%cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
         if( self%l_sigma )then
             ! Ensure e/o partitioning prior to calc_pspec
@@ -585,10 +616,9 @@ contains
             if( sigma2_stage_needs_bootstrap(startit) )then
                 cline_calc_pspec = cline
                 call strip_refine3D_search_only_args(cline_calc_pspec)
+                call strip_refine3D_backend_args(cline_calc_pspec)
                 call cline_calc_pspec%set('prg', 'calc_pspec')
-                if( L_BENCH_GLOB ) t_calc_pspec = tic()
                 call xcalc_pspec%execute( cline_calc_pspec )
-                if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
             else
                 write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
             endif
@@ -602,10 +632,6 @@ contains
         ! invocation, before any iteration reads particles; may fall back to
         ! cache=no on cline, which child commands inherit via their copy
         call ptcl_cache_ensure(params, build, cline)
-        if( L_BENCH_GLOB )then
-            stage_bench%rt_total = toc(t_stage_init)
-            call write_stage_bench_report(params, stage_bench, 'shared-memory')
-        endif
     end subroutine inmem_initialize
 
     subroutine inmem_execute_iteration(self, params, build, cline, converged)
@@ -716,6 +742,7 @@ contains
             ! The strategy owns the actual assembly dispatch decision.
             call cline%set('force_volassemble', 'yes')
             call remove_partial_rec_files(params)
+            if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
         call refine3D_exec(params, build, cline, params%which_iter, converged, l_write_partial_recs)
         if( L_BENCH_GLOB )then
@@ -723,8 +750,12 @@ contains
             self%bench%t_assemble = tic()
         endif
         if( l_write_partial_recs )then
-            call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
-            call xvolassemble%execute(cline_volassemble)
+            if( trim(params%rec_backend) == 'pcg' )then
+                call assemble_refine3D_pcg(cline, params, build)
+            else
+                call prepare_assembly_cline(cline, params, params%nthr, cline_volassemble)
+                call xvolassemble%execute(cline_volassemble)
+            endif
             if( trim(params%volrec) .eq. 'yes' )then
                 do state = 1, params%nstates
                     volname = refine3D_state_vol_fname(state)
@@ -824,20 +855,18 @@ contains
         type(commander_rec3D)      :: xrec3D
         type(commander_calc_pspec) :: xcalc_pspec_distr
         type(cmdline) :: cline_tmp
-        type(refine3D_stage_bench_state) :: stage_bench
-        type(string)  :: prev_refine_path, target_name, fname_vol, vol, fsc_file
+        type(string)  :: prev_refine_path, target_name, fname_vol, vol, fsc_file, chain_files(2)
         type(string), allocatable :: list(:)
         real    :: smpd
         integer :: state, box, nfiles, i
-        integer(timer_int_kind) :: t_stage_init, t_calc_pspec
         logical :: err, fall_over, vol_defined, l_prob_state_mode, l_prob_neigh_mode
-        if( L_BENCH_GLOB ) t_stage_init = tic()
         ! deal with #threads for the master process
         call set_master_num_threads(self%nthr_master, string('REFINE3D'))
         ! Local options / flags
         self%l_multistates = cline%defined('nstates')
         ! init project
         call build%init_params_and_build_spproj(cline, params)
+        call validate_refine3D_pcg_integration(params)
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -874,6 +903,9 @@ contains
         call strip_refine3D_search_only_args(self%cline_calc_pspec_distr)
         call strip_refine3D_search_only_args(self%cline_postprocess)
         call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
+        call strip_refine3D_backend_args(self%cline_calc_pspec_distr)
+        call strip_refine3D_backend_args(self%cline_postprocess)
+        call strip_refine3D_backend_args(self%cline_calc_group_sigmas)
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         l_prob_state_mode = trim(params%refine) == 'prob_state'
@@ -919,12 +951,23 @@ contains
                     fsc_file  = refine3D_fsc_fname(state)
                     if( .not.file_exists(fsc_file)) THROW_HARD('Missing file: '//fsc_file%to_char())
                 end do
-                if( params%l_update_frac )then
+                if( params%l_update_frac .and. trim(params%rec_backend) /= 'pcg' )then
                     call simple_list_files(refine3D_partial_rec_glob(prev_refine_path%to_char()), list)
                     nfiles = size(list)
                     err = params%nparts * 4 /= nfiles
                     if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
                     deallocate(list)
+                endif
+                if( params%l_trail_rec .and. trim(params%rec_backend) == 'pcg' )then
+                    do state = 1, params%nstates
+                        chain_files(1) = refine3D_pcg_trail_accum_fname(state, 'even')
+                        chain_files(2) = refine3D_pcg_trail_accum_fname(state, 'odd')
+                        if( .not. file_exists(chain_files(1)) .or. .not. file_exists(chain_files(2)) )then
+                            THROW_HARD('continued PCG refinement requires complete even/odd accumulator chains')
+                        endif
+                        call chain_files(1)%kill
+                        call chain_files(2)%kill
+                    enddo
                 endif
                 if( params%cc_objfun==OBJFUN_EUCLID )then
                     call simple_list_files(prev_refine_path%to_char()//SIGMA2_FBODY//'*', list)
@@ -963,9 +1006,7 @@ contains
             ! objfun=cc never reads sigmas, so it must not pay for the bootstrap
             if( params%cc_objfun == OBJFUN_EUCLID )then
                 if( sigma2_stage_needs_bootstrap(params%startit) )then
-                    if( L_BENCH_GLOB ) t_calc_pspec = tic()
                     call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
-                    if( L_BENCH_GLOB ) stage_bench%rt_calc_pspec = toc(t_calc_pspec)
                 else
                     write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
                 endif
@@ -989,6 +1030,11 @@ contains
                 ! reconstructions needed
                 cline_tmp = self%cline_rec3D
                 call cline_tmp%delete('trail_rec')
+                if( trim(params%rec_backend) == 'pcg' )then
+                    if( params%l_trail_rec .and. params%cc_objfun == OBJFUN_CC ) call cline_tmp%set('trail_seed', 'yes')
+                    call cline_tmp%set('maxits', 2)
+                    call cline_tmp%set('rtol', 0.0)
+                endif
                 call cline_tmp%delete('objfun')
                 call cline_tmp%delete('objfun_den')
                 call cline_tmp%delete('objfun_den_w')
@@ -1029,10 +1075,6 @@ contains
         call self%job_descr%set('prg', 'refine3D')
         ! Keep consistent iteration counters
         if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
-        if( L_BENCH_GLOB )then
-            stage_bench%rt_total = toc(t_stage_init)
-            call write_stage_bench_report(params, stage_bench, 'distributed')
-        endif
         call prev_refine_path%kill
         call target_name%kill
         call fname_vol%kill
@@ -1134,6 +1176,7 @@ contains
         if( params%l_nonuniform_lpset .and. params%l_lpset ) call self%job_descr%set('lp', real2str(params%lp))
         if( trim(params%volrec).eq.'yes' )then
             call remove_partial_rec_files(params)
+            if( trim(params%rec_backend) == 'pcg' ) call remove_pcg_raw_files(params)
         endif
         ! schedule distributed jobs
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
@@ -1149,8 +1192,12 @@ contains
                 case('eval')
                     ! nothing
                 case DEFAULT
-                    call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
-                    call xvolassemble%execute(cline_volassemble)
+                    if( trim(params%rec_backend) == 'pcg' )then
+                        call assemble_refine3D_pcg(cline, params, build)
+                    else
+                        call prepare_assembly_cline(cline, params, self%nthr_master, cline_volassemble)
+                        call xvolassemble%execute(cline_volassemble)
+                    endif
                     if( trim(params%volrec).eq.'yes' )then
                         ! rename & add volumes to project & update job_descr
                         call build%spproj_field%get_pops(state_pops, 'state')

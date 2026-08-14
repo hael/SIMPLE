@@ -25,6 +25,7 @@ public :: refine3D_partial_rec_glob
 public :: refine3D_partial_rec_fname
 public :: refine3D_partial_rho_fname
 public :: refine3D_pcg_raw_accum_fname
+public :: refine3D_pcg_trail_accum_fname
 public :: refine3D_trail_rec_fbody
 public :: refine3D_trail_rec_fname
 public :: refine3D_trail_rho_fname
@@ -32,7 +33,6 @@ public :: refine3D_trail_manifest_fname
 public :: refine3D_reproj_model_fname
 public :: refine3D_bench_fname
 public :: refine3D_strategy_bench_fname
-public :: refine3D_stage_bench_fname
 public :: refine3D_volassemble_bench_fname
 
 contains
@@ -188,6 +188,15 @@ contains
             &'_part'//part_tag(part, numlen)//BIN_EXT
     end function refine3D_pcg_raw_accum_fname
 
+    ! Persistent, already reduced PCG continuation statistic for one
+    ! (state,half). It uses the raw-accumulator file format and is written
+    ! atomically only by the shared/master owner after u/f blending.
+    type(string) function refine3D_pcg_trail_accum_fname( state, half ) result(fname)
+        integer,          intent(in) :: state
+        character(len=*), intent(in) :: half
+        fname = string('pcg_trail_state')//state_tag(state)//half_suffix(half)//BIN_EXT
+    end function refine3D_pcg_trail_accum_fname
+
     ! Persistent trailing-reconstruction accumulator chain (blended, unregularized
     ! e/o Fourier sums + sampling densities). Deliberately does not contain the
     ! VOL_FBODY stem so partial-reconstruction globs and cleanup never match it.
@@ -232,11 +241,6 @@ contains
         integer, intent(in) :: iter
         fname = string('REFINE3D_STRATEGY_BENCH_ITER')//iter_tag(iter)//TXT_EXT
     end function refine3D_strategy_bench_fname
-
-    type(string) function refine3D_stage_bench_fname( iter ) result(fname)
-        integer, intent(in) :: iter
-        fname = string('REFINE3D_STAGE_BENCH_ITER')//iter_tag(iter)//TXT_EXT
-    end function refine3D_stage_bench_fname
 
     type(string) function refine3D_volassemble_bench_fname( iter ) result(fname)
         integer, intent(in) :: iter

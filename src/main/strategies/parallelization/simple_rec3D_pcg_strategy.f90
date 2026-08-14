@@ -8,13 +8,15 @@ use simple_parameters,        only: parameters
 use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL
 use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, &
     &discrete_read_imgbatch_source, killimgbatch
+use simple_ptcl_cache,        only: ptcl_cache_read_batch
 use simple_sigma2_files,      only: load_sigma2_groups
 use simple_math_ft,           only: resample_sigma2
 use simple_fsc,               only: phase_rand_fsc, fsc_area_score_result
 use simple_image,             only: image
 use simple_image_msk,         only: image_msk
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
-    &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname
+    &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
+    &refine3D_pcg_trail_accum_fname
 implicit none
 
 public :: execute_rec3D_pcg_shared, execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
@@ -311,6 +313,12 @@ contains
                     &size(pinds), pcg_raw_provenance(params))
                 call raw_fname_here%kill
             endif
+            if( pcg_trail_seed_requested(cline) )then
+                raw_fname_here = refine3D_pcg_trail_accum_fname(state_here, half)
+                call pcgop%write_raw_accum(raw_fname_here, state_here, eo_here, 1, 1, &
+                    &size(pinds), pcg_chain_provenance(params))
+                call raw_fname_here%kill
+            endif
             t_phase = tic()
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
@@ -573,9 +581,11 @@ contains
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         real, parameter :: RAW_TOL = 2.0e-5, REPLAY_TOL = 2.0e-6
-        integer, allocatable :: selected_pinds(:), half_pinds(:), subset1(:), subset2(:)
+        integer, allocatable :: selected_pinds(:), state_pinds(:), state_subset1(:), state_subset2(:)
+        integer, allocatable :: half_pinds(:), subset1(:), subset2(:)
         logical :: l_sigma_loaded
         integer :: nselected, state, eo, n_half, nhalves_tested
+        real :: state_f1, state_f2
         character(len=4) :: half
         integer :: funit
         type(string) :: diag_fname
@@ -601,20 +611,34 @@ contains
         nhalves_tested = 0
 
         do state = 1, params%nstates
+            call collect_state(state, selected_pinds, state_pinds)
+            if( size(state_pinds) == 0 )then
+                deallocate(state_pinds)
+                cycle
+            endif
+            call split_complementary(state_pinds, state_subset1, state_subset2)
+            state_f1 = real(size(state_subset1)) / real(size(state_pinds))
+            state_f2 = real(size(state_subset2)) / real(size(state_pinds))
             do eo = 0, 1
-                call collect_state_half(state, eo, selected_pinds, half_pinds)
+                call collect_state_half(state, eo, state_pinds, half_pinds)
+                call collect_state_half(state, eo, state_subset1, subset1)
+                call collect_state_half(state, eo, state_subset2, subset2)
                 n_half = size(half_pinds)
                 if( n_half == 0 )then
-                    deallocate(half_pinds)
+                    deallocate(half_pinds, subset1, subset2)
                     cycle
                 endif
                 if( n_half < 2 ) THROW_HARD('PCG fractional test needs two particles per state/half')
+                if( size(subset1) < 1 .or. size(subset2) < 1 )then
+                    THROW_HARD('PCG fractional test needs both state subsets represented in each half')
+                endif
                 half = merge('odd ', 'even', eo == 1)
-                call split_complementary(half_pinds, subset1, subset2)
-                call validate_half(state, eo, trim(half), half_pinds, subset1, subset2, funit)
+                call validate_half(state, eo, trim(half), half_pinds, subset1, subset2, &
+                    &state_f1, state_f2, funit)
                 nhalves_tested = nhalves_tested + 1
                 deallocate(half_pinds, subset1, subset2)
             enddo
+            deallocate(state_pinds, state_subset1, state_subset2)
         enddo
         if( nhalves_tested < 1 ) THROW_HARD('PCG fractional-update validation found no populated state/half')
         call fclose(funit)
@@ -624,6 +648,23 @@ contains
         call diag_fname%kill
 
     contains
+
+        subroutine collect_state( state_here, pinds, selected )
+            integer,              intent(in)  :: state_here, pinds(:)
+            integer, allocatable, intent(out) :: selected(:)
+            integer :: i, n
+            n = 0
+            do i = 1, size(pinds)
+                if( build%spproj_field%get_state(pinds(i)) == state_here ) n = n + 1
+            enddo
+            allocate(selected(n))
+            n = 0
+            do i = 1, size(pinds)
+                if( build%spproj_field%get_state(pinds(i)) /= state_here ) cycle
+                n = n + 1
+                selected(n) = pinds(i)
+            enddo
+        end subroutine collect_state
 
         subroutine collect_state_half( state_here, eo_here, pinds, selected )
             integer,              intent(in)  :: state_here, eo_here, pinds(:)
@@ -665,20 +706,19 @@ contains
             enddo
         end subroutine split_complementary
 
-        subroutine validate_half( state_here, eo_here, half_here, full_pinds, pinds1, pinds2, unit )
+        subroutine validate_half( state_here, eo_here, half_here, full_pinds, pinds1, pinds2, f1, f2, unit )
             integer,          intent(in) :: state_here, eo_here, full_pinds(:), pinds1(:), pinds2(:), unit
             character(len=*), intent(in) :: half_here
+            real,             intent(in) :: f1, f2
             type(reconstructor_pcg) :: op_full, op_subset, op_sum, op_ref
             type(reconstructor_pcg) :: op_blend, op_oracle, op_replay, op_ensemble
             type(string) :: f_full, f_sub1, f_sub2, f_chain1, f_chain2
             real, allocatable :: x_direct(:,:,:), x_replay(:,:,:), x_full(:,:,:), hist(:)
             character(len=256) :: provenance
-            real :: f1, f2, u, berr, derr, solve_err, sample_map_err
+            real :: u, berr, derr, solve_err, sample_map_err
             integer :: nraw, nraw_total, niters
 
             provenance = 'pcg-frac-update-v1'
-            f1 = real(size(pinds1)) / real(size(full_pinds))
-            f2 = real(size(pinds2)) / real(size(full_pinds))
             u  = 0.5
             if( params%l_ufrac_trec_defined ) u = params%ufrac_trec
             if( u <= 0.0 .or. u > 1.0 ) THROW_HARD('pcg_frac_update requires 0 < ufrac_trec <= 1')
@@ -690,7 +730,7 @@ contains
             write(unit,'(A,I0,A,A)') 'state=', state_here, ' half=', trim(half_here)
             write(unit,'(A,I0,A,I0,A,I0)') 'n_full=', size(full_pinds), &
                 &' n_subset1=', size(pinds1), ' n_subset2=', size(pinds2)
-            write(unit,'(A,F10.6,A,F10.6,A,F10.6)') 'f1=', f1, ' f2=', f2, ' u=', u
+            write(unit,'(A,F10.6,A,F10.6,A,F10.6)') 'state_f1=', f1, ' state_f2=', f2, ' u=', u
 
             call accumulate_raw(full_pinds, op_full)
             call op_full%write_raw_accum(f_full, state_here, eo_here, 1, 1, size(full_pinds), provenance)
@@ -701,6 +741,23 @@ contains
             call accumulate_raw(pinds2, op_subset)
             call op_subset%write_raw_accum(f_sub2, state_here, eo_here, 2, 2, size(pinds2), provenance)
             call op_subset%kill
+
+            call load_weighted(op_blend, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
+            call op_blend%scale_raw_accum(1.0/f1)
+            call op_blend%write_raw_accum(f_chain1, state_here, eo_here, 1, 1, size(full_pinds), provenance)
+            call op_blend%scale_raw_accum(f1)
+            call load_weighted(op_ref, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
+            call op_blend%compare_raw_accum(op_ref, berr, derr)
+            call require_raw('bootstrap working-mass restore', berr, derr, REPLAY_TOL)
+            call op_blend%kill
+            call op_ref%kill
+            call load_weighted(op_replay, f_chain1, state_here, eo_here, 1, 1, provenance, 1.0)
+            call load_weighted(op_oracle, f_sub1, state_here, eo_here, 1, 2, provenance, 1.0)
+            call op_oracle%scale_raw_accum(1.0/f1)
+            call op_replay%compare_raw_accum(op_oracle, berr, derr)
+            call require_raw('bootstrap full-mass chain seed', berr, derr, REPLAY_TOL)
+            call op_replay%kill
+            call op_oracle%kill
 
             call new_reduction(op_sum)
             call op_sum%add_raw_accum(f_sub1, state_here, eo_here, 1, 2, provenance, nraw)
@@ -931,23 +988,35 @@ contains
     !> Distributed worker: accumulate and atomically publish raw full-range B
     !! and real D for every local (state,half). Workers never call end_accum;
     !! folding and every nonlinear finalization step belong to the master.
-    subroutine execute_rec3D_pcg_worker( params, build, cline, selected_pinds )
+    subroutine execute_rec3D_pcg_worker( params, build, cline, selected_pinds, cached )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         integer,          intent(in)    :: selected_pinds(:)
+        logical, optional, intent(in)   :: cached
         integer, allocatable :: half_pinds(:)
         character(len=256) :: provenance
         integer :: state, eo, n_half
-        logical :: l_sigma_loaded
+        logical :: l_sigma_loaded, l_cached
 
-        call validate_pcg_common(params)
+        call validate_pcg_common(params, check_solver=.false.)
+        l_cached = .false.
+        if( present(cached) ) l_cached = cached
         provenance = pcg_raw_provenance(params)
         if( params%cc_objfun == OBJFUN_EUCLID )then
-            call load_sigma2_groups(params, build%pftc, build%esig, build%spproj_field, cline, l_sigma_loaded)
+            l_sigma_loaded = allocated(build%esig%sigma2_noise)
+            if( .not. l_sigma_loaded )then
+                call load_sigma2_groups(params, build%pftc, build%esig, build%spproj_field, cline, l_sigma_loaded)
+            endif
             if( .not. l_sigma_loaded ) THROW_HARD('PCG objfun=euclid requires sigma2 files')
         endif
-        if( size(selected_pinds) > 0 ) call prepimgbatch(params, build, MAXIMGBATCHSZ)
+        if( size(selected_pinds) > 0 )then
+            if( l_cached )then
+                call prepimgbatch(params, build, MAXIMGBATCHSZ, box=params%box_crop, smpd=params%smpd_crop)
+            else
+                call prepimgbatch(params, build, MAXIMGBATCHSZ)
+            endif
+        endif
         do state = 1, params%nstates
             do eo = 0, 1
                 call collect_worker_state_half(state, eo, selected_pinds, half_pinds)
@@ -1040,14 +1109,16 @@ contains
             do ibatch = 1, size(pinds), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
-                if( params%l_ptcl_src_den )then
+                if( l_cached )then
+                    call ptcl_cache_read_batch(params, build, size(pinds), pinds, batchlims)
+                else if( params%l_ptcl_src_den )then
                     call discrete_read_imgbatch_source(params, build, 'den', size(pinds), pinds, &
                         &batchlims, build%imgbatch(:batchsz))
                 else
                     call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
                 endif
                 do ii = 1, batchsz
-                    call build%imgbatch(ii)%norm_noise(build%lmsk, sdev_noise)
+                    if( .not. l_cached ) call build%imgbatch(ii)%norm_noise(build%lmsk, sdev_noise)
                     call build%imgbatch(ii)%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
                     call build%imgbatch(ii)%fft
                     y_batch(:,:,ii) = pcgop%extract_native_plane(build%imgbatch(ii))
@@ -1073,23 +1144,65 @@ contains
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
+        type(image) :: previous_even, previous_odd, previous_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         real, allocatable :: fsc(:), res0143s(:)
+        real, allocatable :: realized_fractions(:), update_weights(:)
         logical, allocatable :: state_written(:)
-        character(len=256) :: provenance
+        character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
+        integer :: n_active_state, n_sampled_state
         real :: res05, cfar
+        logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
 
         call validate_pcg_common(params)
-        if( params%nparts < 2 ) THROW_HARD('distributed PCG requires nparts>1')
         provenance = pcg_raw_provenance(params)
+        chain_provenance = pcg_chain_provenance(params)
+        l_has_updates = .false.
+        do iptcl = params%fromp, params%top
+            if( build%spproj_field%get_updatecnt(iptcl) > 0 )then
+                l_has_updates = .true.
+                exit
+            endif
+        enddo
+        allocate(realized_fractions(params%nstates), source=1.0)
+        allocate(update_weights(params%nstates), source=1.0)
+        if( params%l_trail_rec )then
+            call build%spproj%os_ptcl3D%get_state_update_fracs(params%nstates, realized_fractions)
+            update_weights = realized_fractions
+            if( params%l_ufrac_trec_defined )then
+                if( params%nstates == 1 )then
+                    update_weights(1) = params%ufrac_trec
+                else
+                    THROW_WARN('ufrac_trec ignored for multi-state PCG; using realized state update fractions')
+                endif
+            endif
+        endif
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         do state = 1, params%nstates
+            l_bootstrap = .false.
+            if( params%l_trail_rec )then
+                raw_fname = refine3D_pcg_trail_accum_fname(state, 'even')
+                l_even_chain = file_exists(raw_fname)
+                raw_fname = refine3D_pcg_trail_accum_fname(state, 'odd')
+                l_odd_chain = file_exists(raw_fname)
+                if( l_even_chain .neqv. l_odd_chain ) THROW_HARD('PCG trailing chain pair is incomplete')
+                l_bootstrap = .not. l_even_chain
+            endif
             call reduce_solve_state_half(state, 0, 'even', half_even, n_even, 'base')
             call reduce_solve_state_half(state, 1, 'odd',  half_odd,  n_odd,  'base')
+            if( params%l_trail_rec )then
+                call count_state_sampling(state, n_active_state, n_sampled_state)
+                if( n_even+n_odd /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
+                if( n_active_state > 0 )then
+                    if( abs(real(n_sampled_state)/real(n_active_state)-realized_fractions(state)) > 1.0e-6 )then
+                        THROW_HARD('PCG realized fraction disagrees with gridding sampling bookkeeping')
+                    endif
+                endif
+            endif
             if( n_even == 0 .and. n_odd == 0 )then
                 write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: STATE ', state, &
                     &' HAS NO SELECTED PARTICLES; SKIPPING'
@@ -1113,10 +1226,20 @@ contains
                 time_map_output = real(toc(t_state_phase),dp)
             endif
             t_state_phase = tic()
-            call calculate_distributed_fsc(state, half_even, half_odd, merged, &
-                &fsc, res05, res0143s(state), cfar)
+            if( l_bootstrap )then
+                call load_previous_state_halves(state, previous_even, previous_odd, previous_merged)
+                call calculate_distributed_fsc(state, previous_even, previous_odd, previous_merged, &
+                    &fsc, res05, res0143s(state), cfar)
+            else
+                call calculate_distributed_fsc(state, half_even, half_odd, merged, &
+                    &fsc, res05, res0143s(state), cfar)
+            endif
             call arr2file(fsc, fname_fsc)
-            call write_distributed_fsc_summary(state, merged, fsc, res05, res0143s(state), cfar)
+            if( l_bootstrap )then
+                call write_distributed_fsc_summary(state, previous_merged, fsc, res05, res0143s(state), cfar)
+            else
+                call write_distributed_fsc_summary(state, merged, fsc, res05, res0143s(state), cfar)
+            endif
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
@@ -1126,6 +1249,26 @@ contains
                 call merged%copy(ml_even)
                 call merged%add(ml_odd)
                 call merged%mul(0.5)
+            endif
+            if( l_bootstrap .and. update_weights(state) < 0.99 )then
+                if( params%l_ml_reg )then
+                    call blend_bootstrap_half(ml_even, previous_even, update_weights(state))
+                    call blend_bootstrap_half(ml_odd,  previous_odd,  update_weights(state))
+                else
+                    call blend_bootstrap_half(half_even, previous_even, update_weights(state))
+                    call blend_bootstrap_half(half_odd,  previous_odd,  update_weights(state))
+                endif
+                if( params%l_lpset )then
+                    call merged%kill
+                    if( params%l_ml_reg )then
+                        call merged%copy(ml_even)
+                        call merged%add(ml_odd)
+                    else
+                        call merged%copy(half_even)
+                        call merged%add(half_odd)
+                    endif
+                    call merged%mul(0.5)
+                endif
             endif
             t_state_phase = tic()
             if( params%l_ml_reg )then
@@ -1150,6 +1293,11 @@ contains
                 call ml_odd%kill
                 call fname_even_unfil%kill
                 call fname_odd_unfil%kill
+            endif
+            if( l_bootstrap )then
+                call previous_even%kill
+                call previous_odd%kill
+                call previous_merged%kill
             endif
             call merged%kill
             call fname_even%kill
@@ -1181,10 +1329,77 @@ contains
                 enddo
             enddo
         enddo
+        if( .not. params%l_trail_rec .and. .not. pcg_trail_seed_requested(cline) )then
+            do state = 1, params%nstates
+                raw_fname = refine3D_pcg_trail_accum_fname(state, 'even')
+                call del_file(raw_fname)
+                raw_fname = refine3D_pcg_trail_accum_fname(state, 'odd')
+                call del_file(raw_fname)
+            enddo
+        endif
         call raw_fname%kill
-        deallocate(res0143s, state_written)
+        deallocate(res0143s, state_written, realized_fractions, update_weights)
 
     contains
+
+        subroutine count_state_sampling( state_here, n_active, n_sampled )
+            integer, intent(in)  :: state_here
+            integer, intent(out) :: n_active, n_sampled
+            integer :: p, sample_ind
+            n_active  = 0
+            n_sampled = 0
+            ! Match get_state_update_fracs without reaching into the private
+            ! sampling API: the current cohort is the largest sampled index.
+            sample_ind = 0
+            do p = 1, build%spproj_field%get_noris()
+                sample_ind = max(sample_ind, build%spproj_field%get_sampled(p))
+            enddo
+            do p = 1, build%spproj_field%get_noris()
+                if( build%spproj_field%get_state(p) /= state_here ) cycle
+                if( build%spproj_field%get_updatecnt(p) < 1 ) cycle
+                n_active = n_active + 1
+                if( build%spproj_field%get_sampled(p) == sample_ind ) n_sampled = n_sampled + 1
+            enddo
+        end subroutine count_state_sampling
+
+        subroutine load_previous_state_halves( state_here, even, odd, avg )
+            integer,     intent(in)    :: state_here
+            type(image), intent(inout) :: even, odd, avg
+            type(string) :: previous_volume, previous_even_fname, previous_odd_fname
+            previous_volume     = params%vols(state_here)
+            previous_even_fname = add2fbody(previous_volume, MRC_EXT, '_even')
+            previous_odd_fname  = add2fbody(previous_volume, MRC_EXT, '_odd')
+            if( .not. file_exists(previous_even_fname) ) THROW_HARD('PCG trailing bootstrap requires the previous even halfmap')
+            if( .not. file_exists(previous_odd_fname) ) THROW_HARD('PCG trailing bootstrap requires the previous odd halfmap')
+            call even%read_and_crop(previous_even_fname, params%smpd, params%box_crop, params%smpd_crop)
+            call odd%read_and_crop(previous_odd_fname, params%smpd, params%box_crop, params%smpd_crop)
+            call avg%copy(even)
+            call avg%add(odd)
+            call avg%mul(0.5)
+            call previous_volume%kill
+            call previous_even_fname%kill
+            call previous_odd_fname%kill
+        end subroutine load_previous_state_halves
+
+        subroutine blend_bootstrap_half( current, previous, weight_current )
+            type(image), intent(inout) :: current, previous
+            real,        intent(in)    :: weight_current
+            call current%mul(weight_current)
+            call previous%mul(1.0-weight_current)
+            call current%add(previous)
+        end subroutine blend_bootstrap_half
+
+        integer function count_full_state_half( state_here, eo_here ) result(n)
+            integer, intent(in) :: state_here, eo_here
+            integer :: p
+            n = 0
+            do p = params%fromp, params%top
+                if( build%spproj_field%get_state(p) /= state_here ) cycle
+                if( build%spproj_field%get_eo(p) /= eo_here ) cycle
+                if( l_has_updates .and. build%spproj_field%get_updatecnt(p) < 1 ) cycle
+                n = n + 1
+            enddo
+        end function count_full_state_half
 
         subroutine reduce_solve_state_half( state_here, eo_here, half, volume, nptcls, solve_kind, &
                 &fsc_prior, warm_start )
@@ -1198,11 +1413,12 @@ contains
             type(pcg_solver_outcome) :: result
             type(string) :: fname
             real, allocatable :: x(:,:,:), rel_res_hist(:)
-            integer :: part_here, n_part, niters, prior_npositive
+            integer :: part_here, n_part, niters, prior_npositive, n_full_half
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
-            logical :: l_ml_solve
+            real :: realized_fraction, update_weight, current_scale
+            logical :: l_ml_solve, l_chain_exists, l_seed_chain
 
             l_ml_solve = present(fsc_prior)
             if( l_ml_solve .neqv. present(warm_start) )then
@@ -1215,17 +1431,59 @@ contains
             call pcgop%begin_reduction
             nptcls = 0
             t_phase = tic()
-            do part_here = 1, params%nparts
-                fname = refine3D_pcg_raw_accum_fname(state_here, part_here, params%numlen, half)
-                call pcgop%add_raw_accum(fname, state_here, eo_here, part_here, params%nparts, &
-                    &provenance, n_part)
-                nptcls = nptcls + n_part
+            if( l_ml_solve )then
+                fname = refine3D_pcg_trail_accum_fname(state_here, half)
+                call pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
+                    &chain_provenance, 1.0, nptcls)
                 call fname%kill
-            enddo
+                if( params%l_trail_rec )then
+                    if( l_bootstrap .or. 1.0-update_weights(state_here) <= 0.01 )then
+                        call pcgop%scale_raw_accum(realized_fractions(state_here))
+                    endif
+                endif
+            else
+                do part_here = 1, params%nparts
+                    fname = refine3D_pcg_raw_accum_fname(state_here, part_here, params%numlen, half)
+                    call pcgop%add_raw_accum(fname, state_here, eo_here, part_here, params%nparts, &
+                        &provenance, n_part)
+                    nptcls = nptcls + n_part
+                    call fname%kill
+                enddo
+            endif
             time_reduce = real(toc(t_phase),dp)
             if( nptcls == 0 )then
                 call pcgop%kill
                 return
+            endif
+            if( .not. l_ml_solve )then
+                n_full_half = count_full_state_half(state_here, eo_here)
+                if( n_full_half < nptcls ) THROW_HARD('PCG current half population exceeds its full population')
+                realized_fraction = realized_fractions(state_here)
+                update_weight = update_weights(state_here)
+                l_seed_chain = pcg_trail_seed_requested(cline)
+                fname = refine3D_pcg_trail_accum_fname(state_here, half)
+                l_chain_exists = file_exists(fname)
+                if( params%l_trail_rec )then
+                    if( realized_fraction <= 0.0 ) THROW_HARD('PCG trailing update has zero realized state fraction')
+                    if( l_chain_exists .and. 1.0-update_weight > 0.01 )then
+                        current_scale = update_weight / realized_fraction
+                        call pcgop%scale_raw_accum(current_scale)
+                        call pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
+                            &chain_provenance, 1.0-update_weight, n_part)
+                    else
+                        current_scale = 1.0 / realized_fraction
+                        call pcgop%scale_raw_accum(current_scale)
+                    endif
+                    call pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n_full_half, chain_provenance)
+                    if( .not. l_chain_exists .or. 1.0-update_weight <= 0.01 )then
+                        call pcgop%scale_raw_accum(realized_fraction)
+                    endif
+                    write(logfhandle,'(A,I0,A,A,A,F8.4,A,F8.4)') '>>> PCG TRAIL | STATE=', state_here, &
+                        &' | HALF=', trim(half), ' | F=', realized_fraction, ' | U=', update_weight
+                else if( params%l_ml_reg .or. l_seed_chain )then
+                    call pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n_full_half, chain_provenance)
+                endif
+                call fname%kill
             endif
             t_phase = tic()
             if( l_ml_solve ) call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
@@ -1433,17 +1691,30 @@ contains
         call fname%kill
     end subroutine write_output_diagnostics
 
-    subroutine validate_pcg_common( params )
+    logical function pcg_trail_seed_requested( cline ) result(l_seed)
+        class(cmdline), intent(in) :: cline
+        type(string) :: value
+        l_seed = .false.
+        if( .not. cline%defined('trail_seed') ) return
+        value = cline%get_carg('trail_seed')
+        l_seed = trim(value%to_char()) == 'yes'
+        call value%kill
+    end function pcg_trail_seed_requested
+
+    subroutine validate_pcg_common( params, check_solver )
         type(parameters), intent(in) :: params
+        logical, optional, intent(in) :: check_solver
+        logical :: l_check_solver
+        l_check_solver = .true.
+        if( present(check_solver) ) l_check_solver = check_solver
         if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
-        if( params%maxits < 1 .or. params%maxits > 8 ) THROW_HARD('production PCG requires 1<=maxits<=8')
+        if( l_check_solver )then
+            if( params%maxits < 1 .or. params%maxits > 8 ) THROW_HARD('production PCG requires 1<=maxits<=8')
+        endif
         if( trim(params%projrec) /= 'no' ) THROW_HARD('rec_backend=pcg does not yet support projrec=yes')
         if( abs(real(params%box)*params%smpd - real(params%box_crop)*params%smpd_crop) > &
             &1.0e-5*real(params%box)*params%smpd )then
             THROW_HARD('PCG crop must preserve the native physical box extent')
-        endif
-        if( params%l_update_frac .or. params%l_trail_rec )then
-            THROW_HARD('PCG fractional and trailing reconstruction are not implemented')
         endif
         if( trim(params%conical_fsc) == 'yes' ) THROW_HARD('PCG conical FSC integration is not implemented')
         if( params%msk <= 0.5 .or. params%msk_crop <= 0.5 ) THROW_HARD('rec_backend=pcg requires mskdiam')
@@ -1460,5 +1731,18 @@ contains
             &'|smpd_crop='//trim(real2str(params%smpd_crop))// &
             &'|msk='//trim(real2str(params%msk))//'|ctf='//trim(params%ctf)
     end function pcg_raw_provenance
+
+    ! Continuation identity deliberately excludes which_iter: the chain must
+    ! survive iteration boundaries, while geometry, objective and particle
+    ! source changes must invalidate it.
+    function pcg_chain_provenance( params ) result(provenance)
+        type(parameters), intent(in) :: params
+        character(len=256) :: provenance
+        provenance = 'pcgtrail-v1|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
+            &'|ptcl_src='//trim(params%ptcl_src)//'|box='//trim(int2str(params%box))// &
+            &'|smpd='//trim(real2str(params%smpd))//'|box_crop='//trim(int2str(params%box_crop))// &
+            &'|smpd_crop='//trim(real2str(params%smpd_crop))// &
+            &'|msk='//trim(real2str(params%msk))//'|ctf='//trim(params%ctf)
+    end function pcg_chain_provenance
 
 end module simple_rec3D_pcg_strategy

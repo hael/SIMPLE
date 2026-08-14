@@ -10,6 +10,7 @@ use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_eul_prob_tab,            only: eul_prob_tab
 use simple_matcher_2Dprep,          only: prepimg4align
 use simple_matcher_3Drec,           only: calc_3Drec, calc_projdir3Drec
+use simple_rec3D_pcg_strategy,      only: execute_rec3D_pcg_worker
 use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
 use simple_ptcl_cache,              only: ptcl_cache_in_use, ptcl_cache_assert_ready
 use simple_qsys_funs,               only: qsys_job_finished
@@ -197,7 +198,9 @@ contains
         if( ctrl%do_bench .and. p_ptr%part == 1 ) rss_after_teardown = get_current_rss_bytes()
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
-            if( ctrl%do_projrec )then
+            if( trim(params%rec_backend) == 'pcg' )then
+                call execute_rec3D_pcg_worker(params, build, cline, pinds, cached=ctrl%l_cached)
+            else if( ctrl%do_projrec )then
                 call calc_projdir3Drec(params, build, cline, nptcls2update, pinds, cached=ctrl%l_cached)
             else
                 call calc_3Drec(params, build, cline, nptcls2update, pinds, cached=ctrl%l_cached)

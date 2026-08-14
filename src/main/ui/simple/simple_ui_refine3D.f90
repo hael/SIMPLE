@@ -247,7 +247,13 @@ subroutine new_automask( prgtab )
         & sections for particle image matching', 'input volume e.g. vol.mrc', .false., 'vol1.mrc', &
         &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        ! <empty>
+        call refine3D%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
+        &'Reconstruction backend for per-iteration half-map assembly(gridding|pcg){gridding}', &
+        &'', .false., 'gridding', group="search", &
+        &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_PARM, 'box_crop', 'num', 'Refinement box', &
+        &'Even Fourier-cropped refinement box; native project geometry remains authoritative', &
+        &'pixels{native box}', .false., 0.0, group="search", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -337,6 +343,10 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, ml_reg, group="filter", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_FILT, 'pcg_lambda_rel', 'num', 'Relative PCG Tikhonov strength', &
+        &'Scale lambda against the reduced data operator; -1 keeps the legacy absolute 1e-3 coefficient', &
+        &'relative strength{-1}', .false., -1.0, group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, nu_refine, group="filter", &
         &visibility=UI_VIS_ADVANCED)

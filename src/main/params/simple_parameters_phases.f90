@@ -778,9 +778,11 @@ contains
         select case(trim(self%rec_backend))
             case('gridding')
             case('pcg')
-                if( trim(self%prg%to_char()) /= 'reconstruct3D' )then
-                    THROW_HARD('rec_backend=pcg is currently accepted only by reconstruct3D')
-                endif
+                select case(trim(self%prg%to_char()))
+                    case('reconstruct3D','refine3D')
+                    case DEFAULT
+                        THROW_HARD('rec_backend=pcg is accepted only by reconstruct3D and refine3D')
+                end select
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select

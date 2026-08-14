@@ -79,6 +79,25 @@ the existing gridding bootstrap: use the previous halfmaps for that iteration's
 legacy volume-domain handoff and seed the new PCG chain with
 `(B_current/f,D_current/f)` for subsequent iterations.
 
+### Future refactoring: shared fractional-update policy
+
+For initial refine3D integration, PCG must reproduce the current gridding
+policy exactly. One state-level realized fraction `f` is obtained from
+`get_state_update_fracs` and applied to both halves; normally `u=f`, with the
+existing single-state `ufrac_trec` override. Bootstrap, chain replacement, and
+the previous-halfmap fallback must also remain identical. This preserves the
+meaning of existing benchmarks and isolates backend differences to the
+reconstruction algorithm.
+
+Later, move calculation of `f`, `u`, bootstrap state, and chain weights into one
+shared policy routine used by both backends. A half-specific fraction may be a
+useful alternative when the sampled even/odd populations are imbalanced, but it
+must be introduced as an explicit, versioned experimental mode (for example,
+`trail_frac_mode=state|half`), never as a silent default change. Implement any
+new policy in gridding and PCG together and compare it with the frozen
+state-level baseline using identical particle cohorts, chain mass, raw and ML
+halfmaps, FSC/cFAR, resolution, and continuation behavior.
+
 ### Statistical weights versus priors
 
 Particle/data weights, including `1/sigma2`, multiply both data statistics:
