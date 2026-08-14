@@ -123,7 +123,7 @@ contains
         type(string) :: imgkind, abspath
         integer                       :: n_os_out, ind, i, ldim(3), ifoo
         select case(trim(which_imgkind))
-            case('vol_cavg','vol','vol_msk')
+            case('vol_cavg','vol','vol_msk','vol_flex')
                 ! find_dimension of inputted volume
                 call find_ldim_nptcls(vol, ldim, ifoo)
                 if(present(box))then
@@ -239,12 +239,13 @@ contains
         call self%os_out%delete(ind)
     end subroutine remove_entry_from_osout
 
-    ! removes only the artifacts that are state-associated: vol, vol_cavg & fsc
+    ! removes only the artifacts that are state-associated: vol, vol_cavg, vol_flex & fsc
     module subroutine remove_state_artifacts_from_osout( self, state )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: state
         call self%remove_entry_from_osout('vol',      state)
         call self%remove_entry_from_osout('vol_cavg', state)
+        call self%remove_entry_from_osout('vol_flex', state)
         call self%remove_entry_from_osout('fsc',      state)
     end subroutine remove_state_artifacts_from_osout
 
@@ -273,7 +274,7 @@ contains
         type(string) :: imgkind_here
         integer      :: i, ind, cnt
         select case(trim(imgkind))
-            case('vol_cavg','vol','vol_msk')
+            case('vol_cavg','vol','vol_msk','vol_flex')
                 ! all good
             case DEFAULT
                 THROW_HARD('invalid VOL kind: '//trim(imgkind)//'; get_vol')

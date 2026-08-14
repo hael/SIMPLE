@@ -48,7 +48,7 @@ contains
         logical,      optional, intent(in) :: split_eo
         logical :: l_floor_rho, l_reduced, l_fuse
         type(reconstructor), allocatable :: recs_o(:), recs_c(:), cur(:)
-        type(string) :: outvol_bak
+        type(string) :: outvol_bak, state_vol_fname
         integer :: eo_i, iview, nview
         type(reconstructor), allocatable :: state_recs(:)
         type(fplane_type), allocatable :: fpls(:)
@@ -254,37 +254,46 @@ contains
             else
                 call move_alloc(state_recs, cur)
             endif
-        do state=1,nstates
-            if( .not. l_reduced ) call cur(state)%compress_exp
-            ! Kernel weights live in [0,1] with most near zero, so rho is small and highly
-            ! variable here and an unfloored divide amplifies noise wherever occupancy is low.
-            ! Opt-in: the platform reconstructor is unchanged, and so is the diffusion-map path.
-            if( l_floor_rho ) call cur(state)%floor_rho_shellwise
-            call cur(state)%sampl_dens_correct
-            call cur(state)%ifft
-            call cur(state)%div(real(params%box))
-            call cur(state)%mul(gridcorr_img)
-            call state_img%copy(cur(state))
-            if( has_lowpass_filter(state) )then
-                call state_img%apply_filter(lowpass_filters(:,state))
-                write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE applied project-FSC low-pass filter to state=',state, &
-                    &' using_source_state=',lowpass_source_state(state)
-            endif
-            ! Background removal + soft spherical mask. Without both the states look like one smeared map:
-            ! each carries a different total kernel weight, so the difference between two states is
-            ! dominated by a constant baseline offset rather than by the conformational change
-            ! (zero_background reads the level off the box faces, shape-preserving), and solvent noise
-            ! dominates any unmasked comparison. Radius convention is the platform's (see reconstructor_eo).
-            call state_img%zero_background
-            call state_img%mask3D_soft(real(box_rec/2) - COSMSKHALFWIDTH - 1., backgr=0.)
-            call write_state(params,state_img,state)
-            call state_img%kill
-            call cur(state)%dealloc_rho
-            call cur(state)%kill
+            do state=1,nstates
+                if( .not. l_reduced ) call cur(state)%compress_exp
+                ! Kernel weights live in [0,1] with most near zero, so rho is small and highly
+                ! variable here and an unfloored divide amplifies noise wherever occupancy is low.
+                ! Opt-in: the platform reconstructor is unchanged, and so is the diffusion-map path.
+                if( l_floor_rho ) call cur(state)%floor_rho_shellwise
+                call cur(state)%sampl_dens_correct
+                call cur(state)%ifft
+                call cur(state)%div(real(params%box))
+                call cur(state)%mul(gridcorr_img)
+                call state_img%copy(cur(state))
+                if( has_lowpass_filter(state) )then
+                    call state_img%apply_filter(lowpass_filters(:,state))
+                    write(logfhandle,'(A,I0,A,I0)') '>>> FLEX PRE-IMAGE applied project-FSC low-pass filter to state=',state, &
+                        &' using_source_state=',lowpass_source_state(state)
+                endif
+                ! Background removal + soft spherical mask. Without both the states look like one smeared map:
+                ! each carries a different total kernel weight, so the difference between two states is
+                ! dominated by a constant baseline offset rather than by the conformational change
+                ! (zero_background reads the level off the box faces, shape-preserving), and solvent noise
+                ! dominates any unmasked comparison. Radius convention is the platform's (see reconstructor_eo).
+                call state_img%zero_background
+                call state_img%mask3D_soft(real(box_rec/2) - COSMSKHALFWIDTH - 1., backgr=0.)
+                call write_state(params, state_img, state, state_vol_fname)
+                ! Add merged volume only to project
+                if( iview == 1 ) then
+                    call build%spproj%add_vol2os_out(state_vol_fname, state_img%get_smpd(), state, 'vol_flex',&
+                        &box=state_img%get_box())
+                endif
+                ! clean up
+                call state_img%kill
+                call cur(state)%dealloc_rho
+                call cur(state)%kill
+            end do
         end do
-        end do
+        call build%spproj%write_segment_inside('out', params%projfile)
         params%outvol = outvol_bak
+        ! clean up
         call gridcorr_img%kill
+            call state_vol_fname%kill
         deallocate(scales,lowpass_filters,has_lowpass_filter,lowpass_source_state)
     end subroutine reconstruct_flex_weighted_states
 
@@ -413,15 +422,16 @@ contains
         call state_rec%reset_exp
     end subroutine init_state_reconstructor
 
-    subroutine write_state( params, img, state )
-        class(parameters), intent(in) :: params
-        type(image), intent(inout) :: img
-        integer, intent(in) :: state
-        type(string) :: fname, prefix, ext
+    subroutine write_state( params, img, state, vol_fname )
+        class(parameters), intent(in)    :: params
+        class(image),      intent(inout) :: img
+        integer,           intent(in)    :: state
+        class(string),     intent(inout) :: vol_fname
+        type(string) :: prefix, ext
         character(len=:), allocatable :: stem
         character(len=3) :: tag
         if( state==1 )then
-            fname=params%outvol
+            vol_fname = params%outvol
         else
             ext=fname2ext(params%outvol)
             prefix=get_fbody(params%outvol,ext)
@@ -431,11 +441,10 @@ contains
             endif
             prefix=string(stem)
             write(tag,'(I3.3)') state
-            fname=prefix//'_'//tag//MRC_EXT
+            vol_fname = prefix//'_'//tag//MRC_EXT
         endif
-        call img%write(fname,del_if_exists=.true.)
-        write(logfhandle,'(A,I0,A,A)') '>>> FLEX DIFFMAP NYSTROM PRE-IMAGE ',state,': ',fname%to_char()
-        call fname%kill
+        call img%write(vol_fname,del_if_exists=.true.)
+        write(logfhandle,'(A,I0,A,A)') '>>> FLEX DIFFMAP NYSTROM PRE-IMAGE ',state,': ',vol_fname%to_char()
         call prefix%kill
         call ext%kill
     end subroutine write_state
