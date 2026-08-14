@@ -91,7 +91,7 @@ The UI describes `refine3D_multi` as an automated multi-state 3D refinement
 workflow that requires an `sp_project`. It exposes search, filter, mask, and
 compute controls:
 
-- search: `maxits`, `nstates`, `pgrp`, `autoscale`, `continue`
+- search: `maxits`, `nstates`, `flex`, `pgrp`, `autoscale`, `continue`
 - mode: `multivol_mode`
 - filter: `filt_mode`, `lpstop`, `ml_reg`, `envfsc`, `envmsklp`
 - mask: `mskdiam`, `automsk`
@@ -128,6 +128,9 @@ value:
 - `automsk=no`
 - `overlap=0.99` for the `prob_neigh` phase
 - `keepvol=no`
+
+The `flex` initialization control is an explicit opt-in and defaults to `no` in
+both the typed parameter object and the UI.
 
 The public `filt_mode` values are `fsc`, `nonuniform_lpset`, and `none`;
 `nonuniform_lpset` is the default. Plain `nonuniform` is not a
@@ -187,6 +190,18 @@ active count honors existing selection state when possible and otherwise falls
 back to all `ptcl3D` rows.
 
 ## 5. Starting State Volumes
+
+`flex=yes` is an opt-in initialization path for state-0/1 projects. It requires
+`nstates >= 3`, uses the compatible state-1 project `vol` as the consensus mean
+for `flex_pca`, adopts the hard particle labels written by `flex_pca`, and uses
+the resulting `vol_flex` entries as the starting `vol1..volN` references. If
+the flex state-merge stage reduces the requested count, the merged count becomes
+the effective `nstates`. Existing multi-state projects and explicit `vol1..volN`
+inputs are rejected on this path. Flex runs before `refine3D_multi` resolves its
+effective state count, but after the ordinary `refine3D_multi` parameter parse
+has created its execution directory and private project copy. `flex_pca` runs
+there with `mkdir=no`; its final state count and state-volume paths are then
+adopted by the wrapper. The default `flex=no` path is unchanged.
 
 State volume policy is all-or-none.
 

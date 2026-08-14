@@ -709,6 +709,11 @@ contains
             case DEFAULT
                 THROW_HARD('memreport must be yes or no')
         end select
+        select case(trim(self%flex))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('flex must be yes or no')
+        end select
         select case(trim(self%sticky_class_sampling))
             case('yes','no')
             case DEFAULT

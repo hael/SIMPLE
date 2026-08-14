@@ -86,6 +86,7 @@ contains
         call reg%add_char('fbody', self%fbody)
         call reg%add_char('fill_holes', self%fill_holes)
         call reg%add_char('fillin', self%fillin)
+        call reg%add_char('flex', self%flex)
         call reg%add_char('update_missing', self%update_missing)
         call reg%add_char('filter', self%filter)
         call reg%add_char('flag', self%flag)

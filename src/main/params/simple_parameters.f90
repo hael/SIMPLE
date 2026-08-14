@@ -84,6 +84,7 @@ type :: parameters
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: fillin='no'          !< fillin particle sampling
+    character(len=3)          :: flex='no'            !< initialize refine3D_multi states with flex_pca(yes|no){no}
     character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
     character(len=3)          :: force_lp_range='no'  !< force abinitio3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
