@@ -5,6 +5,7 @@ use continuous_3D_pcg_refinement_volume_test, only: run_volume_fixture
 use continuous_3D_pcg_refinement_noise_test, only: run_volume_noise
 use continuous_3D_pcg_refinement_halfset_test, only: run_halfset_fsc
 use continuous_3D_pcg_refinement_shift_test, only: run_shift_gradient
+use continuous_3D_pcg_refinement_shift_polish_test, only: run_shift_polish
 use continuous_3D_pcg_refinement_kb_test, only: run_kb_derivative
 use continuous_3D_pcg_refinement_rotation_test, only: run_rotation_gradient
 use continuous_3D_pcg_refinement_recovery_test, only: run_pose_recovery
@@ -58,7 +59,7 @@ end function is_case_argument
 subroutine run_suite()
     character(len=*), parameter :: labels(*) = [character(len=24) :: &
         &'scaffold', 'volume_fixture', 'volume_noise', 'halfset_fsc', &
-        &'shift_gradient', 'kb_derivative', 'rotation_gradient', 'pose_recovery']
+        &'shift_gradient', 'shift_polish', 'kb_derivative', 'rotation_gradient', 'pose_recovery']
     integer :: failures, groups_passed, groups_run, groups_skipped, i
 
     failures = 0
@@ -172,6 +173,8 @@ subroutine run_case(label)
         call run_halfset_fsc()
     case('shift_gradient')
         call run_shift_gradient()
+    case('shift_polish')
+        call run_shift_polish()
     case('kb_derivative')
         call run_kb_derivative()
     case('rotation_gradient')
