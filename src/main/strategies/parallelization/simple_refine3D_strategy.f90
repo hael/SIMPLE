@@ -143,6 +143,7 @@ contains
     subroutine strip_refine3D_search_only_args( cline )
         type(cmdline), intent(inout) :: cline
         call cline%delete('inpl_cont')
+        call cline%delete('pcg_pose_polish')
         ! The children stripped here never consume the particle cache: sigma/pspec/
         ! postprocess/assembly read no particles, and the one-off starting-volume
         ! rec3D deliberately reads the originals (it may run before the cache is
@@ -1076,6 +1077,8 @@ contains
         ! prepare job description
         call cline%gen_job_descr(self%job_descr)
         call self%job_descr%set('prg', 'refine3D')
+        ! The distributed master owns the one post-loop polish and reconstruction.
+        call self%job_descr%delete('pcg_pose_polish')
         ! Keep consistent iteration counters
         if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
         call prev_refine_path%kill

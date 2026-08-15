@@ -251,6 +251,11 @@ subroutine new_automask( prgtab )
         &'Reconstruction backend for per-iteration half-map assembly(gridding|pcg){gridding}', &
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_PARM, 'pcg_pose_polish', 'binary', 'Final PCG pose polish', &
+        &'Polish particle rotations and shifts, then run one final PCG reconstruction(yes|no){no}', &
+        &'', .false., 'no', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_PARM, 'box_crop', 'num', 'Refinement box', &
         &'Even Fourier-cropped refinement box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0, group="search", visibility=UI_VIS_ADVANCED)

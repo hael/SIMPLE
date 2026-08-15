@@ -19,6 +19,13 @@ implicit none
 
 public :: reconstructor_pcg, pcg_solver_outcome, pcg_fourier_workspace
 public :: PCG_OP_MATRIXFREE, PCG_OP_KERNEL
+public :: SHIFT_LM_ACCEPTED_IMPROVEMENT, SHIFT_LM_FINITE_NO_IMPROVEMENT
+public :: SHIFT_LM_NO_RELIABLE_UPDATE, SHIFT_LM_STEP_BOUND_REJECTED
+public :: SHIFT_LM_INVALID_NUMERICS, SHIFT_LM_ITERATION_LIMIT
+public :: POSE_LM_ACCEPTED_IMPROVEMENT, POSE_LM_FINITE_NO_IMPROVEMENT
+public :: POSE_LM_NO_RELIABLE_UPDATE, POSE_LM_STEP_BOUND_REJECTED
+public :: POSE_LM_INVALID_NUMERICS, POSE_LM_ITERATION_LIMIT
+public :: right_increment_rotation
 private
 #include "simple_local_flags.inc"
 
@@ -41,15 +48,33 @@ type :: pcg_solver_outcome
     real, allocatable  :: preconditioned_residual_history(:)
     real, allocatable  :: iteration_seconds(:)
 end type pcg_solver_outcome
+integer, parameter :: SHIFT_LM_ACCEPTED_IMPROVEMENT = 1
+integer, parameter :: SHIFT_LM_FINITE_NO_IMPROVEMENT = 2
+integer, parameter :: SHIFT_LM_NO_RELIABLE_UPDATE = 3
+integer, parameter :: SHIFT_LM_STEP_BOUND_REJECTED = 4
+integer, parameter :: SHIFT_LM_INVALID_NUMERICS = 5
+integer, parameter :: SHIFT_LM_ITERATION_LIMIT = 6
+integer, parameter :: POSE_LM_ACCEPTED_IMPROVEMENT = SHIFT_LM_ACCEPTED_IMPROVEMENT
+integer, parameter :: POSE_LM_FINITE_NO_IMPROVEMENT = SHIFT_LM_FINITE_NO_IMPROVEMENT
+integer, parameter :: POSE_LM_NO_RELIABLE_UPDATE = SHIFT_LM_NO_RELIABLE_UPDATE
+integer, parameter :: POSE_LM_STEP_BOUND_REJECTED = SHIFT_LM_STEP_BOUND_REJECTED
+integer, parameter :: POSE_LM_INVALID_NUMERICS = SHIFT_LM_INVALID_NUMERICS
+integer, parameter :: POSE_LM_ITERATION_LIMIT = SHIFT_LM_ITERATION_LIMIT
+real(dp), parameter :: POSE_NUMERIC_FLOOR = epsilon(1._dp)**2
 
 !> Read-only snapshot of the padded Fourier volume for repeated local samples.
 !! One snapshot is shared across particles and derivative directions while the
 !! real-space volume is fixed. Rebuild it after every set_volume call.
 type :: pcg_fourier_workspace
     private
+    integer          :: box     = 0
     integer          :: boxpd   = 0
+    integer          :: padf    = 1
     integer          :: iwinsz  = 0
     integer          :: wdim    = 0
+    integer          :: lims2(2,2) = 0
+    integer          :: sqhp    = 0
+    integer          :: sqlp    = 0
     real             :: padsc   = 1.0
     type(kbinterpol) :: kbwin
     integer, allocatable :: wrap(:)
@@ -57,7 +82,20 @@ type :: pcg_fourier_workspace
     logical :: exists = .false.
   contains
     procedure :: kill => kill_fourier_workspace
+    procedure :: get_lims2 => get_fourier_workspace_lims2
+    procedure :: set_shell_range => set_fourier_workspace_shell_range
     procedure :: sample_with_grad => sample_fourier_with_grad
+    procedure :: shift_residual
+    procedure :: shift_jvp
+    procedure :: shift_jhz
+    procedure :: shift_objective_gradient
+    procedure :: refine_shift_lm
+    procedure :: rotation_jvp
+    procedure :: pose_objective_gradient
+    procedure :: refine_pose_lm
+    procedure, private :: shift_normal_terms
+    procedure, private :: pose_normal_terms
+    procedure :: count_stencil_switches
 end type pcg_fourier_workspace
 
 type :: reconstructor_pcg
@@ -202,6 +240,7 @@ type :: reconstructor_pcg
     procedure :: fourier_dot
     procedure :: adjoint_plane_add
     procedure :: build_transfer
+    procedure :: whiten_observation
     procedure :: extract_native_plane
     procedure :: dot_real_volume
     ! HIGH-LEVEL OPERATOR (uses the cached per-particle state)
@@ -245,6 +284,32 @@ type :: reconstructor_pcg
 end type reconstructor_pcg
 
 contains
+
+    !>  \brief  Applies a right tangent-space increment R <- R exp([omega]x).
+    pure function right_increment_rotation( rotmat, omega ) result(updated_rotmat)
+        real(dp), intent(in) :: rotmat(3,3), omega(3)
+        real(dp) :: updated_rotmat(3,3), skew(3,3), exp_skew(3,3)
+        real(dp) :: identity(3,3), theta2, theta4, sinc_theta, cosc_theta
+
+        identity = 0._dp
+        identity(1,1) = 1._dp
+        identity(2,2) = 1._dp
+        identity(3,3) = 1._dp
+        ! [omega]x u = omega x u.
+        skew = reshape([0._dp,omega(3),-omega(2), &
+            &-omega(3),0._dp,omega(1),omega(2),-omega(1),0._dp],[3,3])
+        theta2 = dot_product(omega,omega)
+        if( theta2 < 1.e-8_dp )then
+            theta4 = theta2*theta2
+            sinc_theta = 1._dp-theta2/6._dp+theta4/120._dp
+            cosc_theta = 0.5_dp-theta2/24._dp+theta4/720._dp
+        else
+            sinc_theta = sin(sqrt(theta2))/sqrt(theta2)
+            cosc_theta = (1._dp-cos(sqrt(theta2)))/theta2
+        endif
+        exp_skew = identity+sinc_theta*skew+cosc_theta*matmul(skew,skew)
+        updated_rotmat = matmul(rotmat,exp_skew)
+    end function right_increment_rotation
 
     ! CONSTRUCTOR
 
@@ -868,9 +933,14 @@ contains
         type(pcg_fourier_workspace), intent(inout) :: workspace
         call workspace%kill
         call self%ensure_wimg
+        workspace%box    = self%box
         workspace%boxpd  = self%boxpd
+        workspace%padf   = self%padf
         workspace%iwinsz = self%iwinsz
         workspace%wdim   = self%wdim
+        workspace%lims2  = self%lims2
+        workspace%sqhp   = 0
+        workspace%sqlp   = self%sqlp
         workspace%padsc  = self%padsc
         workspace%kbwin  = self%kbwin
         ! Preserve the negative physical indices of the periodic wrap table.
@@ -884,12 +954,35 @@ contains
         class(pcg_fourier_workspace), intent(inout) :: self
         if( allocated(self%wrap) ) deallocate(self%wrap)
         if( allocated(self%cmat) ) deallocate(self%cmat)
+        self%box    = 0
         self%boxpd  = 0
+        self%padf   = 1
         self%iwinsz = 0
         self%wdim   = 0
+        self%lims2  = 0
+        self%sqhp   = 0
+        self%sqlp   = 0
         self%padsc  = 1.0
         self%exists = .false.
     end subroutine kill_fourier_workspace
+
+    pure function get_fourier_workspace_lims2( self ) result(lims2)
+        class(pcg_fourier_workspace), intent(in) :: self
+        integer :: lims2(2,2)
+        lims2 = self%lims2
+    end function get_fourier_workspace_lims2
+
+    subroutine set_fourier_workspace_shell_range( self, kfromto )
+        class(pcg_fourier_workspace), intent(inout) :: self
+        integer, intent(in) :: kfromto(2)
+        integer :: khi, klo
+        if( .not. self%exists ) error stop 'set_shell_range called on an empty Fourier workspace'
+        klo = max(0,kfromto(1))
+        khi = min(self%box/2,kfromto(2))
+        if( khi < klo ) error stop 'set_shell_range requires an ordered nonempty range'
+        self%sqhp = klo*klo
+        self%sqlp = khi*khi
+    end subroutine set_fourier_workspace_shell_range
 
     !>  \brief  Samples the packed Fourier snapshot and its three fixed-cell
     !!          spatial derivatives at one oversampled-lattice coordinate.
@@ -913,6 +1006,621 @@ contains
         value       = self%padsc * value
         dvalue_dloc = self%padsc * dvalue_dloc
     end subroutine sample_fourier_with_grad
+
+    !>  \brief  Fixed-volume, CTF-free, unit-noise residual for a shifted
+    !!          Fourier projection: r = S(t) G(R)V - y.
+    subroutine shift_residual( self, rotmat, shift, observed, residual, objective )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2)
+        complex, intent(in)  :: observed(self%lims2(1,1):self%lims2(1,2),&
+                                          &self%lims2(2,1):self%lims2(2,2))
+        complex, intent(out) :: residual(self%lims2(1,1):self%lims2(1,2),&
+                                          &self%lims2(2,1):self%lims2(2,2))
+        real(dp), intent(out) :: objective
+        complex :: value, dvalue_dloc(3), phase
+        real(sp) :: loc(3), switch_margin(3)
+        real(dp) :: arg
+        integer :: h, k
+        if( .not. self%exists ) error stop 'shift_residual called on an empty Fourier workspace'
+        residual = cmplx(0.,0.)
+        objective = 0._dp
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k < self%sqhp .or. h*h + k*k > self%sqlp ) cycle
+                loc = real(self%padf,sp) * real(matmul(real([h,k,0],dp),rotmat),sp)
+                call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
+                arg = 2._dp * real(PI,dp) * &
+                    &(real(h,dp)*shift(1) + real(k,dp)*shift(2)) / real(self%box,dp)
+                phase = cmplx(cos(arg),sin(arg),kind=sp)
+                residual(h,k) = phase * value - observed(h,k)
+                objective = objective + 0.5_dp * real(conjg(cmplx(residual(h,k),kind=dp)) * &
+                    &cmplx(residual(h,k),kind=dp),dp)
+            enddo
+        enddo
+    end subroutine shift_residual
+
+    !>  \brief  Directional derivative of the CTF-free, unit-noise residual
+    !!          with respect to the two real image-shift parameters.
+    subroutine shift_jvp( self, rotmat, shift, direction, jv )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2), direction(2)
+        complex, intent(out) :: jv(self%lims2(1,1):self%lims2(1,2),&
+                                    &self%lims2(2,1):self%lims2(2,2))
+        complex :: value, dvalue_dloc(3), phase
+        real(sp) :: loc(3), switch_margin(3)
+        real(dp) :: arg, directional_frequency
+        integer :: h, k
+        if( .not. self%exists ) error stop 'shift_jvp called on an empty Fourier workspace'
+        jv = cmplx(0.,0.)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k < self%sqhp .or. h*h + k*k > self%sqlp ) cycle
+                loc = real(self%padf,sp) * real(matmul(real([h,k,0],dp),rotmat),sp)
+                call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
+                arg = 2._dp * real(PI,dp) * &
+                    &(real(h,dp)*shift(1) + real(k,dp)*shift(2)) / real(self%box,dp)
+                directional_frequency = 2._dp * real(PI,dp) * &
+                    &(real(h,dp)*direction(1) + real(k,dp)*direction(2)) / real(self%box,dp)
+                phase = cmplx(cos(arg),sin(arg),kind=sp)
+                jv(h,k) = cmplx(cmplx(0._dp,directional_frequency,kind=dp) * &
+                    &cmplx(phase*value,kind=dp),kind=sp)
+            enddo
+        enddo
+    end subroutine shift_jvp
+
+    !>  \brief  Real-parameter adjoint of the two shift-Jacobian columns.
+    subroutine shift_jhz( self, rotmat, shift, z, jhz )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2)
+        complex, intent(in) :: z(self%lims2(1,1):self%lims2(1,2),&
+                                  &self%lims2(2,1):self%lims2(2,2))
+        real(dp), intent(out) :: jhz(2)
+        complex :: value, dvalue_dloc(3), phase
+        complex(dp) :: jacobian_value
+        real(sp) :: loc(3), switch_margin(3)
+        real(dp) :: arg, frequency
+        integer :: axis, h, k
+        if( .not. self%exists ) error stop 'shift_jhz called on an empty Fourier workspace'
+        jhz = 0._dp
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k < self%sqhp .or. h*h + k*k > self%sqlp ) cycle
+                loc = real(self%padf,sp) * real(matmul(real([h,k,0],dp),rotmat),sp)
+                call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
+                arg = 2._dp * real(PI,dp) * &
+                    &(real(h,dp)*shift(1) + real(k,dp)*shift(2)) / real(self%box,dp)
+                phase = cmplx(cos(arg),sin(arg),kind=sp)
+                do axis = 1, 2
+                    frequency = 2._dp * real(PI,dp) * real(merge(h,k,axis==1),dp) / real(self%box,dp)
+                    jacobian_value = cmplx(0._dp,frequency,kind=dp) * &
+                        &cmplx(phase*value,kind=dp)
+                    jhz(axis) = jhz(axis) + real(conjg(jacobian_value) * &
+                        &cmplx(z(h,k),kind=dp),dp)
+                enddo
+            enddo
+        enddo
+    end subroutine shift_jhz
+
+    !>  \brief  Fused shift objective, gradient and Gauss-Newton block. This
+    !!          avoids materializing derivative planes inside local refinement.
+    subroutine shift_normal_terms( self, rotmat, shift, observed, objective, gradient, hessian, transfer )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2)
+        complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2),&
+                                         &self%lims2(2,1):self%lims2(2,2))
+        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
+                                                   &self%lims2(2,1):self%lims2(2,2))
+        real(dp), intent(out) :: objective, gradient(2), hessian(2,2)
+        complex :: value, dvalue_dloc(3), phase
+        complex(dp) :: model, residual, jacobian(2)
+        real(sp) :: loc(3), switch_margin(3)
+        real(dp) :: arg, frequency(2)
+        integer :: axis, h, jaxis, k
+        if( .not. self%exists ) error stop 'shift_normal_terms called on an empty Fourier workspace'
+        objective = 0._dp
+        gradient = 0._dp
+        hessian = 0._dp
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k < self%sqhp .or. h*h + k*k > self%sqlp ) cycle
+                loc = real(self%padf,sp) * real(matmul(real([h,k,0],dp),rotmat),sp)
+                call self%sample_with_grad(loc, value, dvalue_dloc, switch_margin)
+                arg = 2._dp * real(PI,dp) * &
+                    &(real(h,dp)*shift(1) + real(k,dp)*shift(2)) / real(self%box,dp)
+                phase = cmplx(cos(arg),sin(arg),kind=sp)
+                model = cmplx(phase*value,kind=dp)
+                if( present(transfer) ) model = model * cmplx(transfer(h,k),kind=dp)
+                residual = model - cmplx(observed(h,k),kind=dp)
+                frequency = 2._dp * real(PI,dp) * real([h,k],dp) / real(self%box,dp)
+                jacobian = cmplx(0._dp,frequency,kind=dp) * model
+                objective = objective + 0.5_dp*real(conjg(residual)*residual,dp)
+                do axis = 1, 2
+                    gradient(axis) = gradient(axis) + real(conjg(jacobian(axis))*residual,dp)
+                    do jaxis = 1, 2
+                        hessian(axis,jaxis) = hessian(axis,jaxis) + &
+                            &real(conjg(jacobian(axis))*jacobian(jaxis),dp)
+                    enddo
+                enddo
+            enddo
+        enddo
+    end subroutine shift_normal_terms
+
+    subroutine shift_objective_gradient( self, rotmat, shift, observed, objective, gradient, transfer )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2)
+        complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2), &
+                                         &self%lims2(2,1):self%lims2(2,2))
+        real(dp), intent(out) :: objective, gradient(2)
+        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2), &
+                                                   &self%lims2(2,1):self%lims2(2,2))
+        real(dp) :: hessian(2,2)
+        if( present(transfer) )then
+            call self%shift_normal_terms(rotmat,shift,observed,objective,gradient,hessian,transfer)
+        else
+            call self%shift_normal_terms(rotmat,shift,observed,objective,gradient,hessian)
+        endif
+    end subroutine shift_objective_gradient
+
+    !>  \brief  Directional derivative of the Fourier gather for a right
+    !!          tangent-space rotation. The transfer plane includes CTF and
+    !!          whitening when it is supplied by the production caller.
+    subroutine rotation_jvp( self, rotmat, shift, direction, jv, transfer )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2), direction(3)
+        complex, intent(out) :: jv(self%lims2(1,1):self%lims2(1,2),&
+                                    &self%lims2(2,1):self%lims2(2,2))
+        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
+                                                   &self%lims2(2,1):self%lims2(2,2))
+        complex :: value, dvalue_dloc(3), phase
+        complex(dp) :: derivative
+        real(sp) :: loc(3), switch_margin(3)
+        real(dp) :: arg, dloc(3)
+        integer :: h, k
+
+        if( .not. self%exists ) error stop 'rotation_jvp called on an empty Fourier workspace'
+        jv = cmplx(0.,0.)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h+k*k < self%sqhp .or. h*h+k*k > self%sqlp ) cycle
+                loc = real(self%padf,sp)*real(matmul(real([h,k,0],dp),rotmat),sp)
+                call self%sample_with_grad(loc,value,dvalue_dloc,switch_margin)
+                ! For row-vector gathers, d(loc)/d(epsilon) = loc x direction.
+                dloc = [real(loc(2),dp)*direction(3)-real(loc(3),dp)*direction(2), &
+                    &real(loc(3),dp)*direction(1)-real(loc(1),dp)*direction(3), &
+                    &real(loc(1),dp)*direction(2)-real(loc(2),dp)*direction(1)]
+                arg = 2._dp*real(PI,dp)*(real(h,dp)*shift(1)+real(k,dp)*shift(2))/real(self%box,dp)
+                phase = cmplx(cos(arg),sin(arg),kind=sp)
+                derivative = cmplx(phase,kind=dp)*sum(cmplx(dvalue_dloc,kind=dp)*dloc)
+                if( present(transfer) ) derivative = derivative*cmplx(transfer(h,k),kind=dp)
+                jv(h,k) = cmplx(derivative,kind=sp)
+            enddo
+        enddo
+    end subroutine rotation_jvp
+
+    !>  \brief  Fused objective, five-vector gradient and Gauss-Newton block
+    !!          for three right-rotation coordinates and two pixel shifts.
+    subroutine pose_normal_terms( self, rotmat, shift, observed, objective, gradient, &
+        &hessian, min_switch_margin, transfer )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2)
+        complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2),&
+                                         &self%lims2(2,1):self%lims2(2,2))
+        real(dp), intent(out) :: objective, gradient(5), hessian(5,5), min_switch_margin
+        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
+                                                   &self%lims2(2,1):self%lims2(2,2))
+        complex :: value, dvalue_dloc(3), phase
+        complex(dp) :: weighted_phase, model, residual, jacobian(5)
+        real(sp) :: loc(3), switch_margin(3)
+        real(dp) :: arg, dloc(3,3), frequency(2)
+        integer :: axis, h, jaxis, k
+
+        if( .not. self%exists ) error stop 'pose_normal_terms called on an empty Fourier workspace'
+        objective = 0._dp
+        gradient = 0._dp
+        hessian = 0._dp
+        min_switch_margin = huge(0._dp)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h+k*k < self%sqhp .or. h*h+k*k > self%sqlp ) cycle
+                loc = real(self%padf,sp)*real(matmul(real([h,k,0],dp),rotmat),sp)
+                call self%sample_with_grad(loc,value,dvalue_dloc,switch_margin)
+                min_switch_margin = min(min_switch_margin,real(minval(switch_margin),dp))
+                ! Columns are loc x e1, loc x e2 and loc x e3.
+                dloc(:,1) = [0._dp,real(loc(3),dp),-real(loc(2),dp)]
+                dloc(:,2) = [-real(loc(3),dp),0._dp,real(loc(1),dp)]
+                dloc(:,3) = [real(loc(2),dp),-real(loc(1),dp),0._dp]
+                arg = 2._dp*real(PI,dp)*(real(h,dp)*shift(1)+real(k,dp)*shift(2))/real(self%box,dp)
+                phase = cmplx(cos(arg),sin(arg),kind=sp)
+                weighted_phase = cmplx(phase,kind=dp)
+                if( present(transfer) ) weighted_phase = weighted_phase*cmplx(transfer(h,k),kind=dp)
+                model = weighted_phase*cmplx(value,kind=dp)
+                residual = model-cmplx(observed(h,k),kind=dp)
+                do axis = 1, 3
+                    jacobian(axis) = weighted_phase*sum(cmplx(dvalue_dloc,kind=dp)*dloc(:,axis))
+                enddo
+                frequency = 2._dp*real(PI,dp)*real([h,k],dp)/real(self%box,dp)
+                jacobian(4:5) = cmplx(0._dp,frequency,kind=dp)*model
+                objective = objective+0.5_dp*real(conjg(residual)*residual,dp)
+                do axis = 1, 5
+                    gradient(axis) = gradient(axis)+real(conjg(jacobian(axis))*residual,dp)
+                    do jaxis = 1, 5
+                        hessian(axis,jaxis) = hessian(axis,jaxis)+ &
+                            &real(conjg(jacobian(axis))*jacobian(jaxis),dp)
+                    enddo
+                enddo
+            enddo
+        enddo
+        if( min_switch_margin == huge(0._dp) ) min_switch_margin = 0._dp
+    end subroutine pose_normal_terms
+
+    subroutine pose_objective_gradient( self, rotmat, shift, observed, objective, gradient, transfer )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2)
+        complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2),&
+                                         &self%lims2(2,1):self%lims2(2,2))
+        real(dp), intent(out) :: objective, gradient(5)
+        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
+                                                   &self%lims2(2,1):self%lims2(2,2))
+        real(dp) :: hessian(5,5), min_switch_margin
+
+        if( present(transfer) )then
+            call self%pose_normal_terms(rotmat,shift,observed,objective,gradient,hessian, &
+                &min_switch_margin,transfer)
+        else
+            call self%pose_normal_terms(rotmat,shift,observed,objective,gradient,hessian,min_switch_margin)
+        endif
+    end subroutine pose_objective_gradient
+
+    !>  \brief  Counts active Fourier samples whose nearest-grid interpolation
+    !!          stencil changes between two rotation matrices.
+    function count_stencil_switches( self, rotmat, trial_rotmat ) result(nswitches)
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), trial_rotmat(3,3)
+        integer :: nswitches
+        real(dp) :: loc(3), trial_loc(3)
+        integer :: h, k
+
+        if( .not. self%exists ) error stop 'count_stencil_switches called on an empty Fourier workspace'
+        nswitches = 0
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h+k*k < self%sqhp .or. h*h+k*k > self%sqlp ) cycle
+                loc = real(self%padf,dp)*matmul(real([h,k,0],dp),rotmat)
+                trial_loc = real(self%padf,dp)*matmul(real([h,k,0],dp),trial_rotmat)
+                if( any(nint(loc) /= nint(trial_loc)) ) nswitches = nswitches+1
+            enddo
+        enddo
+    end function count_stencil_switches
+
+    !>  \brief  Damped two-parameter Gauss-Newton refinement. Only accepted,
+    !!          fully recomputed objective values are appended to the trace.
+    subroutine refine_shift_lm( self, rotmat, observed, shift, max_iterations, &
+        &accepted_objectives, naccepted, status, nattempted, max_trial_step, transfer )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3)
+        complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2),&
+                                         &self%lims2(2,1):self%lims2(2,2))
+        real(dp), intent(inout) :: shift(2)
+        integer, intent(in) :: max_iterations
+        real(dp), intent(out) :: accepted_objectives(0:)
+        integer, intent(out) :: naccepted
+        integer, intent(out), optional :: status, nattempted
+        real(dp), intent(out), optional :: max_trial_step
+        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
+                                                   &self%lims2(2,1):self%lims2(2,2))
+        real(dp) :: gradient(2), hessian(2,2), trial_gradient(2), trial_hessian(2,2)
+        real(dp) :: solve_matrix(2,2), diagonal(2), direction(2), trial_shift(2)
+        real(dp) :: objective, trial_objective, mu, det, predicted, actual, ratio, maxdiag
+        real(dp) :: discriminant, lambda_max, lambda_min, step_norm, relative_reduction
+        integer :: axis, iteration, outcome, attempted
+        logical :: bounded_trial
+        if( ubound(accepted_objectives,1) < max_iterations )then
+            error stop 'refine_shift_lm objective trace is shorter than max_iterations+1'
+        endif
+        if( present(transfer) )then
+            call self%shift_normal_terms(rotmat,shift,observed,objective,gradient,hessian,transfer)
+        else
+            call self%shift_normal_terms(rotmat,shift,observed,objective,gradient,hessian)
+        endif
+        accepted_objectives = huge(0._dp)
+        accepted_objectives(0) = objective
+        naccepted = 0
+        attempted = 0
+        bounded_trial = .false.
+        outcome = SHIFT_LM_ITERATION_LIMIT
+        if( present(max_trial_step) ) max_trial_step = 0._dp
+        if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
+            &any(.not. ieee_is_finite(hessian)) )then
+            outcome = SHIFT_LM_INVALID_NUMERICS
+            if( present(status) ) status = outcome
+            if( present(nattempted) ) nattempted = attempted
+            return
+        endif
+        mu = 1.e-3_dp
+        do iteration = 1, max_iterations
+            maxdiag = max(maxval([(hessian(axis,axis),axis=1,2)]),1._dp)
+            ! Eigenvalues diagnose whether both shift directions are observable.
+            discriminant = sqrt(max(0._dp,(hessian(1,1)-hessian(2,2))**2 + &
+                &4._dp*hessian(1,2)*hessian(2,1)))
+            lambda_max = 0.5_dp*(hessian(1,1)+hessian(2,2)+discriminant)
+            lambda_min = 0.5_dp*(hessian(1,1)+hessian(2,2)-discriminant)
+            if( lambda_max <= sqrt(epsilon(1._dp))*maxdiag .or. &
+                &lambda_min <= sqrt(epsilon(1._dp))*max(lambda_max,1._dp) )then
+                outcome = SHIFT_LM_NO_RELIABLE_UPDATE
+                exit
+            endif
+            if( sqrt(dot_product(gradient,gradient)) < 1.e-8_dp )then
+                outcome = merge(SHIFT_LM_ACCEPTED_IMPROVEMENT,SHIFT_LM_FINITE_NO_IMPROVEMENT,naccepted>0)
+                exit
+            endif
+            do axis = 1, 2
+                diagonal(axis) = max(hessian(axis,axis),sqrt(epsilon(1._dp))*maxdiag,epsilon(1._dp))
+            enddo
+            solve_matrix = hessian
+            solve_matrix(1,1) = solve_matrix(1,1) + mu*diagonal(1)
+            solve_matrix(2,2) = solve_matrix(2,2) + mu*diagonal(2)
+            det = solve_matrix(1,1)*solve_matrix(2,2) - solve_matrix(1,2)*solve_matrix(2,1)
+            if( abs(det) <= epsilon(1._dp)*maxdiag*maxdiag )then
+                outcome = SHIFT_LM_NO_RELIABLE_UPDATE
+                exit
+            endif
+            direction(1) = (-solve_matrix(2,2)*gradient(1) + solve_matrix(1,2)*gradient(2)) / det
+            direction(2) = ( solve_matrix(2,1)*gradient(1) - solve_matrix(1,1)*gradient(2)) / det
+            if( any(.not. ieee_is_finite(direction)) )then
+                outcome = SHIFT_LM_INVALID_NUMERICS
+                exit
+            endif
+            ! Shift coordinates are pixels; cap every trial displacement at one pixel.
+            step_norm = sqrt(dot_product(direction,direction))
+            if( step_norm > 1._dp )then
+                direction = direction/step_norm
+                bounded_trial = .true.
+            endif
+            step_norm = min(step_norm,1._dp)
+            if( present(max_trial_step) ) max_trial_step = max(max_trial_step,step_norm)
+            predicted = -dot_product(gradient,direction) - 0.5_dp * &
+                &dot_product(direction,matmul(hessian,direction))
+            if( .not. ieee_is_finite(predicted) )then
+                outcome = SHIFT_LM_INVALID_NUMERICS
+                exit
+            elseif( predicted <= 0._dp )then
+                mu = 4._dp * mu
+                cycle
+            endif
+            trial_shift = shift + direction
+            if( present(transfer) )then
+                call self%shift_normal_terms(rotmat,trial_shift,observed,trial_objective,&
+                    &trial_gradient,trial_hessian,transfer)
+            else
+                call self%shift_normal_terms(rotmat,trial_shift,observed,trial_objective,&
+                    &trial_gradient,trial_hessian)
+            endif
+            attempted = attempted + 1
+            if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
+                &any(.not. ieee_is_finite(trial_hessian)) )then
+                mu = 4._dp * mu
+                outcome = SHIFT_LM_INVALID_NUMERICS
+                cycle
+            endif
+            actual = objective - trial_objective
+            ratio = actual / predicted
+            if( actual > 0._dp .and. ratio >= 0.25_dp )then
+                relative_reduction = actual/max(abs(objective),1._dp)
+                shift = trial_shift
+                objective = trial_objective
+                gradient = trial_gradient
+                hessian = trial_hessian
+                naccepted = naccepted + 1
+                accepted_objectives(naccepted) = objective
+                if( ratio > 0.75_dp ) mu = max(mu/2._dp,epsilon(1._dp))
+                outcome = SHIFT_LM_ACCEPTED_IMPROVEMENT
+                if( step_norm < 1.e-8_dp .or. relative_reduction < 1.e-10_dp ) exit
+            else
+                mu = 4._dp * mu
+            endif
+        enddo
+        if( outcome == SHIFT_LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
+            &outcome = SHIFT_LM_STEP_BOUND_REJECTED
+        if( present(status) ) status = outcome
+        if( present(nattempted) ) nattempted = attempted
+    end subroutine refine_shift_lm
+
+    !>  \brief  Scaled, bounded five-parameter LM refinement for a right
+    !!          rotation increment and two image shifts.
+    subroutine refine_pose_lm( self, rotmat, observed, shift, rotation_scale, max_iterations, &
+        &accepted_objectives, naccepted, status, nattempted, max_rotation_step, &
+        &max_shift_step, nstencil_switches, transfer )
+        class(pcg_fourier_workspace), intent(in) :: self
+        real(dp), intent(inout) :: rotmat(3,3), shift(2)
+        complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2),&
+                                         &self%lims2(2,1):self%lims2(2,2))
+        real(dp), intent(in) :: rotation_scale
+        integer, intent(in) :: max_iterations
+        real(dp), intent(out) :: accepted_objectives(0:)
+        integer, intent(out) :: naccepted, status, nattempted
+        real(dp), intent(out) :: max_rotation_step, max_shift_step
+        integer, intent(out) :: nstencil_switches
+        complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
+                                                   &self%lims2(2,1):self%lims2(2,2))
+        real(dp) :: gradient(5), hessian(5,5), trial_gradient(5), trial_hessian(5,5)
+        real(dp) :: scaled_gradient(5), scaled_hessian(5,5), solve_matrix(5,5)
+        real(dp) :: diagonal(5), coordinate_scale(5), scaled_direction(5), direction(5)
+        real(dp) :: trial_rotmat(3,3), trial_shift(2), objective, trial_objective
+        real(dp) :: mu, predicted, actual, ratio, rotation_norm, shift_norm, hessian_scale
+        real(dp) :: relative_reduction, min_switch_margin, trial_switch_margin
+        integer :: axis, jaxis, iteration, trial_switches
+        logical :: bounded_trial, reliable
+
+        if( max_iterations < 1 ) error stop 'refine_pose_lm requires at least one LM iteration'
+        if( rotation_scale <= 0._dp .or. .not. ieee_is_finite(rotation_scale) ) &
+            &error stop 'refine_pose_lm requires a positive finite rotation scale'
+        if( ubound(accepted_objectives,1) < max_iterations ) &
+            &error stop 'refine_pose_lm objective trace is shorter than max_iterations+1'
+        if( present(transfer) )then
+            call self%pose_normal_terms(rotmat,shift,observed,objective,gradient,hessian, &
+                &min_switch_margin,transfer)
+        else
+            call self%pose_normal_terms(rotmat,shift,observed,objective,gradient,hessian,min_switch_margin)
+        endif
+        accepted_objectives = huge(0._dp)
+        accepted_objectives(0) = objective
+        naccepted = 0
+        nattempted = 0
+        nstencil_switches = 0
+        max_rotation_step = 0._dp
+        max_shift_step = 0._dp
+        bounded_trial = .false.
+        status = POSE_LM_ITERATION_LIMIT
+        if( .not. ieee_is_finite(objective) .or. any(.not. ieee_is_finite(gradient)) .or. &
+            &any(.not. ieee_is_finite(hessian)) )then
+            status = POSE_LM_INVALID_NUMERICS
+            return
+        endif
+
+        ! Dimensionless variables balance radians against pixel shifts.
+        coordinate_scale = [rotation_scale,rotation_scale,rotation_scale,1._dp,1._dp]
+        do axis = 1, 5
+            scaled_gradient(axis) = coordinate_scale(axis)*gradient(axis)
+            do jaxis = 1, 5
+                scaled_hessian(axis,jaxis) = &
+                    &coordinate_scale(axis)*hessian(axis,jaxis)*coordinate_scale(jaxis)
+            enddo
+        enddo
+        mu = 1.e-3_dp
+        do iteration = 1, max_iterations
+            ! Damping must not hide an unidentifiable five-parameter block.
+            call solve_pose_cholesky(scaled_hessian,-scaled_gradient,scaled_direction,reliable)
+            if( .not. reliable )then
+                status = merge(POSE_LM_ACCEPTED_IMPROVEMENT,POSE_LM_NO_RELIABLE_UPDATE,naccepted>0)
+                exit
+            endif
+            if( sqrt(dot_product(scaled_gradient,scaled_gradient)) < 1.e-8_dp )then
+                status = merge(POSE_LM_ACCEPTED_IMPROVEMENT,POSE_LM_FINITE_NO_IMPROVEMENT,naccepted>0)
+                exit
+            endif
+            hessian_scale = max(maxval(abs(scaled_hessian)),POSE_NUMERIC_FLOOR)
+            do axis = 1, 5
+                diagonal(axis) = max(scaled_hessian(axis,axis), &
+                    &sqrt(epsilon(1._dp))*hessian_scale,POSE_NUMERIC_FLOOR)
+            enddo
+            solve_matrix = scaled_hessian
+            do axis = 1, 5
+                solve_matrix(axis,axis) = solve_matrix(axis,axis)+mu*diagonal(axis)
+            enddo
+            call solve_pose_cholesky(solve_matrix,-scaled_gradient,scaled_direction,reliable)
+            if( .not. reliable )then
+                status = POSE_LM_NO_RELIABLE_UPDATE
+                exit
+            endif
+            direction = coordinate_scale*scaled_direction
+            if( any(.not. ieee_is_finite(direction)) )then
+                status = POSE_LM_INVALID_NUMERICS
+                exit
+            endif
+            ! Bound rotations in radians and shifts in pixels independently.
+            rotation_norm = sqrt(dot_product(direction(1:3),direction(1:3)))
+            if( rotation_norm > rotation_scale )then
+                direction(1:3) = direction(1:3)*(rotation_scale/rotation_norm)
+                bounded_trial = .true.
+            endif
+            shift_norm = sqrt(dot_product(direction(4:5),direction(4:5)))
+            if( shift_norm > 1._dp )then
+                direction(4:5) = direction(4:5)/shift_norm
+                bounded_trial = .true.
+            endif
+            rotation_norm = sqrt(dot_product(direction(1:3),direction(1:3)))
+            shift_norm = sqrt(dot_product(direction(4:5),direction(4:5)))
+            max_rotation_step = max(max_rotation_step,rotation_norm)
+            max_shift_step = max(max_shift_step,shift_norm)
+            predicted = -dot_product(gradient,direction)-0.5_dp* &
+                &dot_product(direction,matmul(hessian,direction))
+            if( .not. ieee_is_finite(predicted) )then
+                status = POSE_LM_INVALID_NUMERICS
+                exit
+            elseif( predicted <= 0._dp )then
+                mu = 4._dp*mu
+                cycle
+            endif
+            trial_rotmat = right_increment_rotation(rotmat,direction(1:3))
+            trial_shift = shift+direction(4:5)
+            trial_switches = self%count_stencil_switches(rotmat,trial_rotmat)
+            nstencil_switches = nstencil_switches+trial_switches
+            if( present(transfer) )then
+                call self%pose_normal_terms(trial_rotmat,trial_shift,observed,trial_objective, &
+                    &trial_gradient,trial_hessian,trial_switch_margin,transfer)
+            else
+                call self%pose_normal_terms(trial_rotmat,trial_shift,observed,trial_objective, &
+                    &trial_gradient,trial_hessian,trial_switch_margin)
+            endif
+            nattempted = nattempted+1
+            if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
+                &any(.not. ieee_is_finite(trial_hessian)) )then
+                mu = 4._dp*mu
+                status = POSE_LM_INVALID_NUMERICS
+                cycle
+            endif
+            actual = objective-trial_objective
+            ratio = actual/predicted
+            if( actual > 0._dp .and. ratio >= 0.25_dp )then
+                relative_reduction = actual/max(abs(objective),1._dp)
+                rotmat = trial_rotmat
+                shift = trial_shift
+                objective = trial_objective
+                gradient = trial_gradient
+                hessian = trial_hessian
+                do axis = 1, 5
+                    scaled_gradient(axis) = coordinate_scale(axis)*gradient(axis)
+                    do jaxis = 1, 5
+                        scaled_hessian(axis,jaxis) = &
+                            &coordinate_scale(axis)*hessian(axis,jaxis)*coordinate_scale(jaxis)
+                    enddo
+                enddo
+                naccepted = naccepted+1
+                accepted_objectives(naccepted) = objective
+                if( ratio > 0.75_dp ) mu = max(mu/2._dp,epsilon(1._dp))
+                status = POSE_LM_ACCEPTED_IMPROVEMENT
+                if( max(rotation_norm,shift_norm) < 1.e-8_dp .or. relative_reduction < 1.e-10_dp ) exit
+            else
+                mu = 4._dp*mu
+            endif
+        enddo
+        if( status == POSE_LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
+            &status = POSE_LM_STEP_BOUND_REJECTED
+    end subroutine refine_pose_lm
+
+    !>  \brief  Cholesky solve with a relative pivot test for a 5-by-5
+    !!          symmetric positive-definite pose block.
+    pure subroutine solve_pose_cholesky( matrix, rhs, solution, reliable )
+        real(dp), intent(in) :: matrix(5,5), rhs(5)
+        real(dp), intent(out) :: solution(5)
+        logical, intent(out) :: reliable
+        real(dp) :: lower(5,5), intermediate(5), pivot, pivot_floor, matrix_scale
+        integer :: i, j
+
+        solution = 0._dp
+        intermediate = 0._dp
+        lower = 0._dp
+        reliable = .false.
+        if( any(.not. ieee_is_finite(matrix)) .or. any(.not. ieee_is_finite(rhs)) ) return
+        matrix_scale = maxval(abs(matrix))
+        if( matrix_scale <= POSE_NUMERIC_FLOOR ) return
+        pivot_floor = sqrt(epsilon(1._dp))*matrix_scale
+        do i = 1, 5
+            do j = 1, i-1
+                lower(i,j) = (matrix(i,j)-dot_product(lower(i,1:j-1),lower(j,1:j-1)))/lower(j,j)
+            enddo
+            pivot = matrix(i,i)-dot_product(lower(i,1:i-1),lower(i,1:i-1))
+            if( .not. ieee_is_finite(pivot) .or. pivot <= pivot_floor ) return
+            lower(i,i) = sqrt(pivot)
+        enddo
+        do i = 1, 5
+            intermediate(i) = (rhs(i)-dot_product(lower(i,1:i-1),intermediate(1:i-1)))/lower(i,i)
+        enddo
+        do i = 5, 1, -1
+            solution(i) = (intermediate(i)-dot_product(lower(i+1:5,i),solution(i+1:5)))/lower(i,i)
+        enddo
+        reliable = all(ieee_is_finite(solution))
+    end subroutine solve_pose_cholesky
 
     !>  \brief  G_i F: gathers a full (unpacked) Fourier plane at orientation e
     !!          from the volume most recently passed to set_volume. Plane
@@ -1072,6 +1780,31 @@ contains
         end do
         !$omp end parallel do
     end function build_transfer
+
+    !>  \brief  Applies the production PCG inverse-noise amplitude to one raw
+    !!          Fourier observation: y_w = y / sqrt(sigma2(shell)).
+    function whiten_observation( self, plane, sig2arr ) result( whitened )
+        class(reconstructor_pcg), intent(in) :: self
+        complex, intent(in) :: plane(self%lims2(1,1):self%lims2(1,2), &
+                                      &self%lims2(2,1):self%lims2(2,2))
+        real, intent(in) :: sig2arr(0:)
+        complex :: whitened(self%lims2(1,1):self%lims2(1,2), &
+                             &self%lims2(2,1):self%lims2(2,2))
+        real :: sigma2
+        integer :: h, k, shell
+        whitened = cmplx(0.,0.)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                if( h*h + k*k > self%sqlp ) cycle
+                shell = min(self%shell_lut(h,k),ubound(sig2arr,1))
+                sigma2 = sig2arr(shell)
+                if( .not. ieee_is_finite(sigma2) .or. sigma2 <= 0.0 )then
+                    error stop 'whiten_observation requires finite positive sigma2'
+                endif
+                whitened(h,k) = plane(h,k) / sqrt(sigma2)
+            enddo
+        enddo
+    end function whiten_observation
 
     !>  \brief  2D, non-interpolated analog of the gather: reads a real
     !!          particle image's own Fourier plane directly into the lims2 disk
