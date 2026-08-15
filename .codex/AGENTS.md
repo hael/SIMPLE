@@ -11,6 +11,21 @@ default-off and opt-in paths before release.
   edit. Agents must verify and snapshot before and after changes, must use the
   guarded helper, and must never reinitialize or rewrite the history database.
 
+- `SPEC-First Workflow Policy for Codex.md` - mandatory SPEC-before-PLAN gate
+  for nontrivial features, behavior changes, significant fixes, integrations,
+  workflow changes, and multi-component work. Resolve blocking requirement
+  questions and finalize acceptance criteria before detailed planning or
+  implementation; trivial fully specified work may use a lightweight SPEC.
+  Store SPEC and PLAN files in `doc/implementation_notes/` by default and link
+  them to each other; use OneDrive or another external vault only when the user
+  explicitly requests it.
+
+- `ASD-STE100 Technical Communication and Test Evidence Policy.md` - mandatory
+  communication policy for implementations, test plans, result reviews, and
+  handoffs. Explain the algorithm and purpose before commands, cite important
+  changes with current file and line numbers, define test hypotheses and gates,
+  and explain why supplied evidence passes, fails, or needs more testing.
+
 - `doc/code_overview/code_base_map.md` — generated source tree and module overview.
 - `origin-push-workflow.md` — canonical-repository commit and push workflow.
 - `windows-msys-install-workflow.md` — Windows/MSYS build and install workflow.
