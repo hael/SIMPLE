@@ -9,6 +9,7 @@ use continuous_3D_pcg_refinement_shift_polish_test, only: run_shift_polish
 use continuous_3D_pcg_refinement_kb_test, only: run_kb_derivative
 use continuous_3D_pcg_refinement_rotation_test, only: run_rotation_gradient
 use continuous_3D_pcg_refinement_recovery_test, only: run_pose_recovery
+use continuous_3D_pcg_refinement_pose_contract_test, only: run_pose_contract
 implicit none
 
 character(len=256) :: selected_case
@@ -59,7 +60,8 @@ end function is_case_argument
 subroutine run_suite()
     character(len=*), parameter :: labels(*) = [character(len=24) :: &
         &'scaffold', 'volume_fixture', 'volume_noise', 'halfset_fsc', &
-        &'shift_gradient', 'shift_polish', 'kb_derivative', 'rotation_gradient', 'pose_recovery']
+        &'shift_gradient', 'shift_polish', 'kb_derivative', 'rotation_gradient', 'pose_recovery', &
+        &'pose_contract']
     integer :: failures, groups_passed, groups_run, groups_skipped, i
 
     failures = 0
@@ -181,6 +183,8 @@ subroutine run_case(label)
         call run_rotation_gradient()
     case('pose_recovery')
         call run_pose_recovery()
+    case('pose_contract')
+        call run_pose_contract()
     case default
         error stop 'unknown continuous 3D PCG refinement case: '//trim(label)
     end select
