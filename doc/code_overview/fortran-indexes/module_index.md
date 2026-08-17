@@ -3471,6 +3471,7 @@ Private symbols:
 - `reorder_1` — subroutine
 - `reorder_2` — subroutine
 - `report_declarations` — subroutine
+- `resample_sigma2` — subroutine
 - `resang` — function
 - `reset` — subroutine
 - `reset` — subroutine
@@ -3569,6 +3570,7 @@ Private symbols:
 - `set_prefix_by_index` — subroutine
 - `set_real` — subroutine
 - `set_refine3D_automsk_policy` — subroutine
+- `set_refine3D_backend_policy` — subroutine
 - `set_refine3D_balance_policy` — subroutine
 - `set_refine3D_envfsc_policy` — subroutine
 - `set_refine3D_filtering_policy` — subroutine
@@ -3822,7 +3824,6 @@ Private symbols:
 - `updatestack` — subroutine
 - `updateTextContentLength` — subroutine
 - `uppercase` — function
-- `upsample_sigma2` — subroutine
 - `vabs_dp` — function
 - `vabs_sp` — function
 - `vector_angle_norm` — function
@@ -3974,8 +3975,6 @@ Files:
 - `main/ori/simple_oris.f90`
 - `main/ori/simple_oris_dists.f90`
 - `main/ori/simple_oris_getters.f90`
-- `main/params/simple_parameters.f90`
-- `main/params/simple_parameters_phases.f90`
 - `main/pftc/simple_polarft_access.f90`
 - `main/pftc/simple_polarft_calc.f90`
 - `main/pftc/simple_polarft_core.f90`
@@ -6010,6 +6009,7 @@ Uses:
 - `simple_rec3d_pcg_strategy`
 - `simple_rec3d_strategy`
 - `simple_refine3d_fnames`
+- `simple_sigma2_files`
 
 Public symbols:
 - `accumulate_bootstrap_eo_counts` — subroutine
@@ -6045,12 +6045,14 @@ Uses:
 
 Public symbols:
 - `commander_volassemble` — type
+- `filter_pcg_nonuniform_maps` — subroutine
 
 Private symbols:
 - `assemble_state` — subroutine
 - `blend_trailing_accumulators` — subroutine
 - `capture_nonuniform_source_halves` — subroutine
 - `carry_forward_dropped_state` — subroutine
+- `cleanup_aux_images` — subroutine
 - `cleanup_context` — subroutine
 - `cleanup_nonuniform_state` — subroutine
 - `cleanup_nu_aux_images` — subroutine
@@ -6096,25 +6098,6 @@ Private symbols:
 - `write_trail_chain_set` — subroutine
 
 ---
-## Module: simple_commanders_reconstruct3D_pcg
-
-Files:
-- `main/commanders/simple/simple_commanders_reconstruct3D_pcg.f90`
-
-Uses:
-- `simple_commanders_api`
-- `simple_matcher_ptcl_io`
-- `simple_math_ft`
-- `simple_reconstructor_pcg`
-- `simple_sigma2_files`
-
-Public symbols:
-- `commander_reconstruct3D_pcg` — type
-
-Private symbols:
-- `exec_reconstruct3D_pcg` — subroutine
-
----
 ## Module: simple_commanders_refine3D
 
 Files:
@@ -6123,11 +6106,11 @@ Files:
 Uses:
 - `simple_abinitio_utils`
 - `simple_commanders_api`
+- `simple_commanders_flex_pca`
 - `simple_commanders_rec`
 - `simple_core_module_api`
 - `simple_estimate_ssnr`
 - `simple_nu_filter`
-- `simple_parameters`
 - `simple_pftc_srch_api`
 - `simple_refine3d_fnames`
 - `simple_refine3d_strategy`
@@ -6154,6 +6137,7 @@ Public symbols:
 - `prepare_refine3D_multi_class_sampling` — subroutine
 - `prepare_startup_reconstruct3D_cline` — subroutine
 - `read_update_coverage` — subroutine
+- `run_flex_pca` — subroutine
 - `run_refine3D_multi_missing_update` — subroutine
 - `run_refine3D_multi_stage` — subroutine
 - `seed_refine3D_auto_nonuniform_lpset` — subroutine
@@ -6162,7 +6146,6 @@ Public symbols:
 - `set_refine3D_multi_nstates` — subroutine
 - `set_refine3D_multi_sampling` — subroutine
 - `validate_input_volumes` — subroutine
-- `validate_refine3D_inpl_cont` — subroutine
 - `validate_refine3D_multi_combine_eo` — subroutine
 - `validate_refine3D_multi_filtering` — subroutine
 - `validate_refine3D_multi_mode` — subroutine
@@ -6466,6 +6449,7 @@ Files:
 
 Uses:
 - `simple_atoms`
+- `simple_builder`
 - `simple_commanders_abinitio`
 - `simple_commanders_abinitio2d`
 - `simple_commanders_api`
@@ -6481,8 +6465,10 @@ Uses:
 - `simple_imghead`
 - `simple_micproc`
 - `simple_molecule_data`
+- `simple_parameters`
 - `simple_projfile_utils`
 - `simple_qsys_env`
+- `simple_rec3d_pcg_strategy`
 - `simple_reconstructor_pcg`
 - `simple_stream_api`
 - `simple_string_utils`
@@ -6491,6 +6477,7 @@ Uses:
 
 Public symbols:
 - `commander_test_mini_stream` — type
+- `commander_test_pcg_frac_update` — type
 - `commander_test_pcg_recon` — type
 - `commander_test_ptcls_ppca_subproject_distr` — type
 - `commander_test_reproject` — type
@@ -6498,6 +6485,7 @@ Public symbols:
 - `commander_test_simulated_workflow` — type
 - `commander_test_subproject_distr` — type
 - `exec_test_mini_stream` — subroutine
+- `exec_test_pcg_frac_update` — subroutine
 - `exec_test_pcg_recon` — subroutine
 - `exec_test_ptcls_ppca_subproject_distr` — subroutine
 - `exec_test_reproject` — subroutine
@@ -8213,7 +8201,6 @@ Files:
 
 Uses:
 - `simple_cmdline`
-- `simple_commanders_reconstruct3d_pcg`
 - `simple_commanders_reproject`
 - `simple_commanders_volops`
 
@@ -8767,7 +8754,7 @@ Private symbols:
 - `get_queuetime` — function
 - `get_starttime` — function
 - `get_stoptime` — function
-- `kill` — subroutine
+- `kill_forked_process` — subroutine
 - `sigterm_handler` — subroutine
 - `skip` — subroutine
 - `start` — subroutine
@@ -12321,6 +12308,7 @@ Private symbols:
 - `grad_shsrch_set_indices` — subroutine
 - `grad_shsrch_update_discrete_angle` — subroutine
 - `grad_shsrch_update_discrete_angle_wrapper` — subroutine
+- `joint_grad_at_angle` — subroutine
 - `select_best_discrete_angle` — subroutine
 - `set_diagnostic_mode` — subroutine
 - `set_limits` — subroutine
@@ -13369,6 +13357,7 @@ Uses:
 - `simple_matcher_ptcl_io`
 - `simple_math_ft`
 - `simple_parameters`
+- `simple_ptcl_cache`
 - `simple_reconstructor_pcg`
 - `simple_refine3d_fnames`
 - `simple_sigma2_files`
@@ -13377,24 +13366,43 @@ Public symbols:
 - `execute_rec3D_pcg_distributed_master` — subroutine
 - `execute_rec3D_pcg_shared` — subroutine
 - `execute_rec3D_pcg_worker` — subroutine
+- `validate_rec3D_pcg_fractional_updates` — subroutine
 
 Private symbols:
+- `accumulate_raw` — subroutine
 - `accumulate_worker_state_half` — subroutine
+- `add_weighted` — subroutine
+- `blend_bootstrap_half` — subroutine
+- `build_blend` — subroutine
 - `calculate_distributed_fsc` — subroutine
 - `calculate_state_fsc` — subroutine
+- `collect_state` — subroutine
+- `collect_state_half` — subroutine
 - `collect_state_half` — subroutine
 - `collect_worker_state_half` — subroutine
+- `count_state_sampling` — subroutine
+- `finalize_and_solve` — subroutine
+- `frac_fname` — function
+- `load_previous_state_halves` — subroutine
+- `load_weighted` — subroutine
+- `new_reduction` — subroutine
+- `pcg_chain_provenance` — function
 - `pcg_raw_provenance` — function
 - `reduce_solve_state_half` — subroutine
 - `register_project_outputs` — subroutine
-- `report_half_timings` — subroutine
+- `regularize_state_half` — subroutine
+- `report_solve_summary` — subroutine
+- `require_raw` — subroutine
 - `solve_state_half` — subroutine
+- `split_complementary` — subroutine
+- `validate_half` — subroutine
 - `validate_pcg_common` — subroutine
 - `validate_supported_mode` — subroutine
 - `write_distributed_diagnostics` — subroutine
 - `write_distributed_fsc_summary` — subroutine
 - `write_fsc_summary` — subroutine
 - `write_half_diagnostics` — subroutine
+- `write_output_diagnostics` — subroutine
 
 ---
 ## Module: simple_rec3D_strategy
@@ -13415,6 +13423,7 @@ Uses:
 - `simple_qsys_funs`
 - `simple_rec3d_pcg_strategy`
 - `simple_refine3d_fnames`
+- `simple_sigma2_files`
 
 Public symbols:
 - `create_rec3D_strategy` — function
@@ -13682,8 +13691,10 @@ Private symbols:
 - `accumulate_rhs` — subroutine
 - `accumulate_rhs_density` — subroutine
 - `add_raw_accum` — subroutine
+- `add_raw_accum_weighted` — subroutine
 - `adjoint_plane_add` — subroutine
 - `apply_adjoint_all` — function
+- `apply_fourier_diagonal` — function
 - `apply_normal` — function
 - `apply_normal_kernel` — function
 - `apply_normal_matrixfree` — function
@@ -13694,10 +13705,12 @@ Private symbols:
 - `build_hk_luts` — subroutine
 - `build_kb_envelope_1d` — subroutine
 - `build_kernel` — subroutine
+- `build_ml_prior_from_density` — subroutine
 - `build_operators` — subroutine
 - `build_precond` — subroutine
 - `build_transfer` — function
 - `calibrate_kernel` — subroutine
+- `compare_raw_accum` — subroutine
 - `crop_vol` — function
 - `deapod_mul` — subroutine
 - `dot_real_volume` — function
@@ -13714,6 +13727,9 @@ Private symbols:
 - `get_invenv` — function
 - `get_lims2` — function
 - `get_lims3` — function
+- `get_ml_prior` — subroutine
+- `get_ml_prior_stats` — subroutine
+- `get_raw_accum` — subroutine
 - `get_rhs` — subroutine
 - `kill` — subroutine
 - `mask_mul` — subroutine
@@ -13727,6 +13743,7 @@ Private symbols:
 - `report_profile` — subroutine
 - `reset_finalize_profile` — subroutine
 - `reset_profile` — subroutine
+- `scale_raw_accum` — subroutine
 - `scatter_plane` — subroutine
 - `scatter_window` — subroutine
 - `scatter_window_cmplx_nowrap` — subroutine
@@ -13735,7 +13752,9 @@ Private symbols:
 - `scatter_window_pair_nowrap` — subroutine
 - `scatter_window_real` — subroutine
 - `set_deapod` — subroutine
+- `set_lambda_relative` — subroutine
 - `set_mask` — subroutine
+- `set_ml_prior` — subroutine
 - `set_op_mode` — subroutine
 - `set_sym` — subroutine
 - `set_volume` — subroutine
@@ -13743,6 +13762,7 @@ Private symbols:
 - `solve_accum` — subroutine
 - `solve_core` — subroutine
 - `transfer_plane_cmplx` — subroutine
+- `update_lambda_from_density` — subroutine
 - `write_raw_accum` — subroutine
 
 ---
@@ -13830,6 +13850,7 @@ Uses:
 - `simple_ptcl_cache`
 - `simple_qsys_env`
 - `simple_qsys_funs`
+- `simple_rec3d_pcg_strategy`
 - `simple_refine3d_fnames`
 - `simple_sp_project`
 - `simple_strategy3d_matcher`
@@ -13843,6 +13864,7 @@ Public symbols:
 
 Private symbols:
 - `activate_ptcl3D_states_from_selection` — subroutine
+- `assemble_refine3D_pcg` — subroutine
 - `assert_multistate_populations` — subroutine
 - `carry_over_trail_rec_chains` — subroutine
 - `cleanup_interface` — subroutine
@@ -13864,13 +13886,13 @@ Private symbols:
 - `materialize_reprojection_model` — subroutine
 - `prepare_assembly_cline` — subroutine
 - `refine3D_bench_state` — type
-- `refine3D_stage_bench_state` — type
 - `refresh_matching_lp_from_project` — subroutine
 - `refresh_resolution_fields_from_fsc` — subroutine
 - `remove_partial_rec_files` — subroutine
+- `remove_pcg_raw_files` — subroutine
 - `reset_refine3D_bench` — subroutine
 - `seed_multistate_startup_labels` — subroutine
-- `write_stage_bench_report` — subroutine
+- `validate_refine3D_pcg_integration` — subroutine
 - `write_strategy_bench_report` — subroutine
 
 ---
@@ -15064,6 +15086,7 @@ Uses:
 - `simple_pftc_srch_api`
 - `simple_ptcl_cache`
 - `simple_qsys_funs`
+- `simple_rec3d_pcg_strategy`
 - `simple_refine3d_fnames`
 - `simple_strategy3d`
 - `simple_strategy3d_alloc`
@@ -15404,6 +15427,7 @@ Uses:
 - `simple_starproject`
 - `simple_starproject_stream`
 - `simple_stream2d_state`
+- `simple_syslib`
 
 Public symbols:
 - `cleanup_root_folder` — subroutine
@@ -15421,6 +15445,7 @@ Private symbols:
 - `debug_print` — subroutine
 - `get_latest_optics_map` — subroutine
 - `get_latest_optics_map` — subroutine
+- `log_rss` — subroutine
 - `rank_cavgs` — subroutine
 - `rescale_cavgs` — subroutine
 - `rescale_refs` — subroutine
@@ -15609,6 +15634,7 @@ Uses:
 - `simple_cavg_quality_analysis`
 - `simple_cavg_quality_model`
 - `simple_cavg_quality_types`
+- `simple_class_compatibility`
 - `simple_commanders_abinitio`
 - `simple_commanders_abinitio2d`
 - `simple_commanders_cavgs`
@@ -15652,6 +15678,7 @@ Private symbols:
 - `send_meta` — subroutine
 - `send_meta2D` — subroutine
 - `send_micrograph_meta` — subroutine
+- `send_micrograph_meta_part` — subroutine
 - `send_pickref_meta` — subroutine
 - `send_selected_pickrefs` — subroutine
 - `send_to_initial_analysis_in_pipe` — subroutine
@@ -16317,6 +16344,7 @@ Uses:
 Public symbols:
 - `construct_test_highlevel_programs` — subroutine
 - `new_mini_stream` — subroutine
+- `new_pcg_frac_update` — subroutine
 - `new_pcg_recon` — subroutine
 - `new_ptcls_ppca_subproject_distr` — subroutine
 - `new_reproject` — subroutine
@@ -16573,15 +16601,26 @@ Public symbols:
 - `TIFFClose` — subroutine
 - `TIFFCurrentDirectory` — function
 - `TIFFfree` — function
+- `TIFFGetBitsPerSample` — function
+- `TIFFGetCompression` — function
 - `TIFFGetField` — function
+- `TIFFGetLength` — function
+- `TIFFGetMaxVal` — function
+- `TIFFGetMinVal` — function
+- `TIFFGetRowsPerStrip` — function
+- `TIFFGetSampleFormat` — function
+- `TIFFGetSamplesPerPixel` — function
 - `TIFFGetVersion` — function
+- `TIFFGetWidth` — function
 - `TIFFIsTiled` — function
 - `TIFFLastDirectory` — function
 - `TIFFmalloc` — function
 - `TIFFMuteWarnings` — subroutine
 - `TIFFNumberOfStrips` — function
+- `TIFFNumDirectories` — function
 - `TIFFOpen` — function
 - `TIFFPrintInfo` — subroutine
+- `TIFFRawStripSizer` — function
 - `TIFFReadDirectory` — function
 - `TIFFReadEncodedStrip` — function
 - `TIFFReadRawStrip` — function
@@ -17327,7 +17366,6 @@ Uses:
 Public symbols:
 - `construct_volume_programs` — subroutine
 - `new_center` — subroutine
-- `new_reconstruct3D_pcg` — subroutine
 - `new_reproject` — subroutine
 - `new_volops` — subroutine
 
@@ -18053,6 +18091,7 @@ Public symbols:
 - `dt_1d` — subroutine
 - `ensure_phase_shift_fields` — subroutine
 - `eval_joint_coeffs_at_rotind` — subroutine
+- `eval_series_at_rotind` — subroutine
 - `exec_refine3D` — subroutine
 - `fill_nu_frontier_dmat_from_bank` — subroutine
 - `gen_c1` — subroutine
@@ -18060,6 +18099,7 @@ Public symbols:
 - `gen_euclid_residual_grad` — subroutine
 - `gen_hybrid_grad_for_rot_8_local` — subroutine
 - `gen_many2many_euclids_cufft_kernel` — subroutine
+- `gen_normalized_corr_grad_at_angle` — subroutine
 - `gen_ortho_reprojs4viz` — subroutine
 - `gen_raw_euclid_vals_impl` — subroutine
 - `generate_random_volumes` — subroutine

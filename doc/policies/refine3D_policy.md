@@ -285,12 +285,14 @@ by construction; the continuous route is a strict refinement of it and cannot
 alter exploration dynamics on any sample. Objective type is a capability
 check and must never activate continuous-angle behavior by itself.
 
-`inpl_cont=yes` in refine3D requires `objfun_den=no`, `ptcl_src=raw`, and
-`projrec=no`. Both `objfun=euclid` and `objfun=cc` provide the analytic joint
-`(sx,sy,rotind_frac)` gradient; the cc route minimizes `-cc` with a
-quotient-rule angular derivative and maps scores as the clamped correlation
-rather than `exp(-loss)`. Only the hybrid/denoised blend lacks a
-continuous-angle derivative. The opt-in is not restricted to `refine=shc`:
+Raw `objfun=euclid`, `objfun=cc`, and the `objfun_den=yes` hybrid provide the
+analytic joint `(sx,sy,rotind_frac)` gradient. The cc route minimizes `-cc`
+with a quotient-rule angular derivative and maps scores as the clamped
+correlation rather than `exp(-loss)`. The hybrid route minimizes the negative
+of the established weighted score: raw `exp(-loss)` plus clamped denoised
+correlation. Parameter validation does not couple `inpl_cont` to `objfun`,
+`objfun_den`, `ptcl_src`, `projrec`, or a specific program. Objective capability
+is owned by the PFTC/search implementation. The opt-in is not restricted to `refine=shc`:
 deterministic, neighborhood, evaluation, and probabilistic matcher routes use
 the same policy wherever they commit a pose. A mode with no pose search,
 such as sigma-only setup, naturally invokes neither optimizer. Unsupported
@@ -298,6 +300,10 @@ capability combinations fail validation rather than silently reverting to the
 callback. The joint cc route is validated on nanoparticle data as well, so
 the nano 2D/3D workflows follow the `inpl_cont=yes` default; only
 `abinitio2D_sgd` rejects the option, by design.
+
+`simple_test_continuous_inplane_hybrid_grad` guards the hybrid route with an
+integer-grid score identity, finite-difference checks of all three derivative
+components, and construction of the production joint optimizer.
 
 Probability tables are pure legacy under both `inpl_cont` values: candidate
 scoring, shift-seed estimation, and per-candidate shift refinement use the

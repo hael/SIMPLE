@@ -3,7 +3,6 @@ module simple_commanders_refine3D
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_refine3D_fnames,   only: refine3D_state_vol_fname, refine3D_fsc_fname
-use simple_parameters,        only: refine3D_inpl_cont_policy_error
 implicit none
 #include "simple_local_flags.inc"
 
@@ -1364,7 +1363,6 @@ contains
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         call cline%set('oritype', 'ptcl3D')
         call cline%set('prg', 'refine3D')
-        call validate_refine3D_inpl_cont(cline)
         ! Select execution strategy (shared-memory vs distributed master)
         strategy = create_refine3D_strategy(cline)
         call strategy%initialize(params, build, cline)
@@ -1398,48 +1396,6 @@ contains
         call build%pftc%kill
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D
-
-    ! Validate the command shape before strategy setup. Parameter validation
-    ! repeats these restrictions so distributed workers cannot bypass the gate.
-    subroutine validate_refine3D_inpl_cont( cline )
-        class(cmdline), intent(in) :: cline
-        type(string) :: value
-        character(len=STDLEN) :: inpl_cont, objfun, objfun_den, ptcl_src, projrec
-        character(len=STDLEN) :: policy_error
-
-        if( .not. cline%defined('inpl_cont') ) return
-        inpl_cont = 'no'
-        objfun    = 'euclid'
-        objfun_den = 'no'
-        ptcl_src  = 'raw'
-        projrec   = 'no'
-        value = cline%get_carg('inpl_cont')
-        inpl_cont = value%to_char()
-        call value%kill
-        if( cline%defined('objfun') )then
-            value = cline%get_carg('objfun')
-            objfun = value%to_char()
-            call value%kill
-        endif
-        if( cline%defined('objfun_den') )then
-            value = cline%get_carg('objfun_den')
-            objfun_den = value%to_char()
-            call value%kill
-        endif
-        if( cline%defined('ptcl_src') )then
-            value = cline%get_carg('ptcl_src')
-            ptcl_src = value%to_char()
-            call value%kill
-        endif
-        if( cline%defined('projrec') )then
-            value = cline%get_carg('projrec')
-            projrec = value%to_char()
-            call value%kill
-        endif
-        policy_error = refine3D_inpl_cont_policy_error(inpl_cont, objfun, &
-            &objfun_den, ptcl_src, projrec)
-        if( len_trim(policy_error) > 0 ) THROW_HARD(trim(policy_error))
-    end subroutine validate_refine3D_inpl_cont
 
     !> Distributed worker (single-iteration execution). This should be the command
     !> invoked by the scheduler for each partition.

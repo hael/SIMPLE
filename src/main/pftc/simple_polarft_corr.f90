@@ -1498,8 +1498,8 @@ contains
         integer :: i, ithr, k, k0, kk, p, ieo
         logical :: shifted
 
-        if( .not. self%is_raw_euclid_objfun() )then
-            THROW_HARD('continuous joint gradient requires raw Euclidean objective; hybrid derivative is unavailable')
+        if( .not. self%is_euclid_objfun() )then
+            THROW_HARD('continuous Euclidean gradient requires objfun=euclid')
         endif
         ithr         = omp_get_thread_num() + 1
         i            = self%pinds(iptcl)
@@ -1628,18 +1628,75 @@ contains
         integer,                     intent(in)    :: iref, iptcl
         real(dp),                    intent(in)    :: shvec(2), rotind_frac
         real(dp),                    intent(out)   :: f, grad(3)
+        if( .not. self%is_cc_objfun() )then
+            THROW_HARD('gen_corr_grad_at_angle requires objfun=cc')
+        endif
+        call gen_normalized_corr_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, .false., f, grad)
+    end subroutine gen_corr_grad_at_angle
+
+    ! Continuous hybrid loss matching gen_hybrid_scores exactly:
+    !
+    !   score = (1-w)*exp(-max(0,Lraw)) + w*clamp(ccden,0,1)
+    !   f     = -score
+    !
+    ! The clamped branches are constant and therefore contribute zero
+    ! derivative. The denoised normalized-correlation term uses the denoised
+    ! particle memo without CTF, just as gen_denoised_corrs does.
+    module subroutine gen_hybrid_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
+        real(dp),                    intent(out)   :: f, grad(3)
+        real(dp) :: raw_loss, den_loss, raw_grad(3), den_grad(3)
+        real(dp) :: raw_score, den_score, wraw, wden
+
+        if( .not. self%is_hybrid_objfun() )then
+            THROW_HARD('gen_hybrid_grad_at_angle requires objfun=euclid and objfun_den=yes')
+        endif
+        wden = min(1.d0, max(0.d0, real(self%p_ptr%objfun_den_w,dp)))
+        wraw = 1.d0 - wden
+        raw_score = 0.d0
+        raw_grad  = 0.d0
+        den_score = 0.d0
+        den_grad  = 0.d0
+
+        if( wraw > 0.d0 )then
+            call self%gen_raw_euclid_grad_at_angle(iref, iptcl, shvec, rotind_frac, raw_loss, raw_grad)
+            raw_score = exp(-max(0.d0, raw_loss))
+            if( raw_loss > 0.d0 )then
+                raw_grad = raw_score * raw_grad
+            else
+                raw_grad = 0.d0
+            endif
+        endif
+        if( wden > 0.d0 )then
+            call gen_normalized_corr_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, .true., den_loss, den_grad)
+            den_score = min(1.d0, max(0.d0, -den_loss))
+            if( den_loss >= 0.d0 .or. den_loss <= -1.d0 ) den_grad = 0.d0
+        endif
+
+        f    = -(wraw * raw_score + wden * den_score)
+        grad = wraw * raw_grad + wden * den_grad
+    end subroutine gen_hybrid_grad_at_angle
+
+    subroutine gen_normalized_corr_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, denoised, f, grad)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
+        logical,                     intent(in)    :: denoised
+        real(dp),                    intent(out)   :: f, grad(3)
         complex(sp), pointer :: coeffs(:,:)
         complex(sp), pointer :: shmat(:,:)
         complex(sp), pointer :: cjoint(:,:)
         complex(sp) :: denom_coeffs(self%pftsz+1)
         complex(sp) :: cross_term
         real(sp) :: shift(2), shift_mag_sq
-        real(dp) :: numer, ngrad(3), denom_val, denom_dtheta, scale_fac
+        real(dp) :: numer, ngrad(3), denom_val, denom_dtheta, scale_fac, ptcl_sumsq
         integer :: i, ithr, k, k0, kk, p, ieo
         logical :: shifted
 
-        if( self%p_ptr%cc_objfun /= OBJFUN_CC )then
-            THROW_HARD('gen_corr_grad_at_angle requires objfun=cc')
+        if( denoised .and. .not. allocated(self%ft_ptcl_den) )then
+            THROW_HARD('denoised particle memo not available; continuous correlation gradient')
         endif
         ithr         = omp_get_thread_num() + 1
         i            = self%pinds(iptcl)
@@ -1654,6 +1711,8 @@ contains
         coeffs       => self%heap_vars(ithr)%joint_coeffs
         coeffs       = cmplx(0._sp,0._sp,kind=sp)
         denom_coeffs = cmplx(0._sp,0._sp,kind=sp)
+        denom_val     = 0.d0
+        denom_dtheta  = 0.d0
         cjoint       => self%cmat_joint_many(ithr)%c
         if( shifted )then
             shmat => self%heap_vars(ithr)%shmat
@@ -1667,6 +1726,13 @@ contains
             else
                 cjoint(1:self%pftsz,kk) = self%pfts_refs(:,k,iref,ieo)
             endif
+            if( denoised )then
+                ! The denoised selection score has no CTF, so reference power
+                ! is rotation- and shift-independent and is normalized exactly
+                ! as in gen_denoised_corrs.
+                denom_val = denom_val + sum(real(self%pfts_refs(:,k,iref,ieo) * &
+                    &conjg(self%pfts_refs(:,k,iref,ieo)),dp))
+            endif
             cjoint(self%pftsz+1:self%nrots,kk) = conjg(cjoint(1:self%pftsz,kk))
             cjoint(1:self%pftsz,self%nk+kk) = &
                 &real(self%argtransf(1:self%pftsz,k),sp) * cjoint(1:self%pftsz,kk)
@@ -1678,43 +1744,62 @@ contains
                 &-conjg(cjoint(1:self%pftsz,2*self%nk+kk))
         enddo
         call fftwf_execute_dft(self%plan_fwd3_many, cjoint, cjoint)
-        ! N series coefficient is +ft_ptcl_ctf*conj(FT(S*REF)); its shift
+        ! N series coefficient is +ft_ptcl*conjg(FT(S*REF)); its shift
         ! derivative follows from dFT(S*REF)/ds = i*FT(argtransf*S*REF), hence
         ! the -i on the conjugated derivative sections
         do k = self%kfromto(1), self%kfromto(2)
             kk = k - k0 + 1
             do p = 1,self%pftsz+1
-                cross_term  = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,kk))
+                if( denoised )then
+                    cross_term = self%ft_ptcl_den(p,k,i) * conjg(cjoint(p,kk))
+                else
+                    cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,kk))
+                endif
                 coeffs(p,1) = coeffs(p,1) + cross_term
-                cross_term  = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,self%nk+kk))
+                if( denoised )then
+                    cross_term = self%ft_ptcl_den(p,k,i) * conjg(cjoint(p,self%nk+kk))
+                else
+                    cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,self%nk+kk))
+                endif
                 coeffs(p,2) = coeffs(p,2) - cmplx(0._sp,1._sp,kind=sp) * cross_term
-                cross_term  = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,2*self%nk+kk))
+                if( denoised )then
+                    cross_term = self%ft_ptcl_den(p,k,i) * conjg(cjoint(p,2*self%nk+kk))
+                else
+                    cross_term = self%ft_ptcl_ctf(p,k,i) * conjg(cjoint(p,2*self%nk+kk))
+                endif
                 coeffs(p,3) = coeffs(p,3) - cmplx(0._sp,1._sp,kind=sp) * cross_term
-                denom_coeffs(p) = denom_coeffs(p) + &
-                    &self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
+                if( .not. denoised )then
+                    denom_coeffs(p) = denom_coeffs(p) + &
+                        &self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
+                endif
             enddo
         enddo
         ! numer = N(theta), ngrad(1:2) = dN/dshift, ngrad(3) = dN/dtheta
         call eval_joint_coeffs_at_rotind(self, coeffs, rotind_frac, numer, ngrad)
-        call eval_series_at_rotind(self, denom_coeffs, rotind_frac, denom_val, denom_dtheta)
-        ! guard: interpolated reference power must be strictly positive (the
-        ! comparison also catches NaN). The normalized cc is undefined here,
-        ! so return a finite penalty loss outside the physical [-1,1] cc-loss
-        ! range: the optimizer retreats from it, and if a solve terminates on
-        ! it anyway the |cc| > 1 validity guard in minimize_joint demotes the
-        ! result to the seed. Returning f=0 instead would read as cc=0 and
-        ! could displace a negatively correlated seed as an "improvement".
-        if( .not. (denom_val > 0.d0) )then
+        if( .not. denoised )then
+            call eval_series_at_rotind(self, denom_coeffs, rotind_frac, denom_val, denom_dtheta)
+        endif
+        ! Guard: interpolated reference and particle power must be strictly
+        ! positive (the comparisons also catch NaN). For standalone cc, the
+        ! finite penalty sits outside the physical [-1,1] loss range and is
+        ! rejected by minimize_joint. The hybrid wrapper clamps its denoised
+        ! score contribution to zero, matching gen_denoised_corrs.
+        if( denoised )then
+            ptcl_sumsq = self%sqsums_ptcls_den(i)
+        else
+            ptcl_sumsq = self%sqsums_ptcls(i)
+        endif
+        if( .not. (denom_val > 0.d0 .and. ptcl_sumsq > 0.d0) )then
             f    = 2.d0
             grad = 0.d0
             return
         endif
-        scale_fac = 1.d0 / sqrt(denom_val * self%sqsums_ptcls(i) * real(2*self%nrots,dp))
+        scale_fac = 1.d0 / sqrt(denom_val * ptcl_sumsq * real(2*self%nrots,dp))
         f       = -(numer * scale_fac)
         grad(1) = -(ngrad(1) * scale_fac)
         grad(2) = -(ngrad(2) * scale_fac)
         grad(3) = -((ngrad(3) - numer*denom_dtheta/(2.d0*denom_val)) * scale_fac)
-    end subroutine gen_corr_grad_at_angle
+    end subroutine gen_normalized_corr_grad_at_angle
 
     ! Evaluate one angular coefficient series and its theta-derivative at a
     ! fractional rotation index, in the same half-spectrum convention as

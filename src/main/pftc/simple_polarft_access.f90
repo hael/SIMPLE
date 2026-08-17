@@ -24,18 +24,21 @@ contains
         is_raw_euclid_objfun = self%is_euclid_objfun() .and. (.not. self%p_ptr%l_objfun_den)
     end function is_raw_euclid_objfun
 
+    module pure logical function is_hybrid_objfun(self)
+        class(polarft_calc), intent(in) :: self
+        is_hybrid_objfun = self%is_euclid_objfun() .and. self%p_ptr%l_objfun_den
+    end function is_hybrid_objfun
+
     module pure logical function is_cc_objfun(self)
         use simple_type_defs, only: OBJFUN_CC
         class(polarft_calc), intent(in) :: self
         is_cc_objfun = self%p_ptr%cc_objfun == OBJFUN_CC
     end function is_cc_objfun
 
-    ! objectives with a full analytic (sx,sy,theta) joint gradient; the
-    ! hybrid/denoised blend has no continuous-angle derivative yet
+    ! objectives with a full analytic (sx,sy,theta) joint gradient
     module pure logical function is_joint_grad_objfun(self)
         class(polarft_calc), intent(in) :: self
-        is_joint_grad_objfun = self%is_raw_euclid_objfun() .or. &
-            &(self%is_cc_objfun() .and. (.not. self%p_ptr%l_objfun_den))
+        is_joint_grad_objfun = self%is_euclid_objfun() .or. self%is_cc_objfun()
     end function is_joint_grad_objfun
 
     module pure function get_pdim_srch(self) result(pdim)

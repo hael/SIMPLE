@@ -151,14 +151,6 @@ contains
         call cline%delete('cache_dir')
     end subroutine strip_refine3D_search_only_args
 
-    !> Remove reconstruction-backend options from auxiliary children that do
-    !! not reconstruct. Matcher workers and assembly deliberately retain them.
-    subroutine strip_refine3D_backend_args( cline )
-        type(cmdline), intent(inout) :: cline
-        call cline%delete('rec_backend')
-        call cline%delete('pcg_lambda_rel')
-    end subroutine strip_refine3D_backend_args
-
     !> Strategy selection based on command-line shape.
     function create_refine3D_strategy(cline) result(strategy)
         class(cmdline), intent(in) :: cline
@@ -608,7 +600,6 @@ contains
         self%l_sigma = (params%cc_objfun == OBJFUN_EUCLID)
         self%cline_calc_group_sigmas = cline
         call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
-        call strip_refine3D_backend_args(self%cline_calc_group_sigmas)
         call self%cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
         if( self%l_sigma )then
             ! Ensure e/o partitioning prior to calc_pspec
@@ -619,7 +610,6 @@ contains
             if( sigma2_stage_needs_bootstrap(startit) )then
                 cline_calc_pspec = cline
                 call strip_refine3D_search_only_args(cline_calc_pspec)
-                call strip_refine3D_backend_args(cline_calc_pspec)
                 call cline_calc_pspec%set('prg', 'calc_pspec')
                 call xcalc_pspec%execute( cline_calc_pspec )
             else
@@ -906,9 +896,6 @@ contains
         call strip_refine3D_search_only_args(self%cline_calc_pspec_distr)
         call strip_refine3D_search_only_args(self%cline_postprocess)
         call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
-        call strip_refine3D_backend_args(self%cline_calc_pspec_distr)
-        call strip_refine3D_backend_args(self%cline_postprocess)
-        call strip_refine3D_backend_args(self%cline_calc_group_sigmas)
         call self%cline_rec3D%set( 'prg', 'reconstruct3D' )
         call self%cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )
         l_prob_state_mode = trim(params%refine) == 'prob_state'

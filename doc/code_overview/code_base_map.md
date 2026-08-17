@@ -42,6 +42,8 @@
       - `simple_test_clustering.f90`
       - `simple_test_cmdline.f90`
       - `simple_test_coarrays.f90`
+      - `simple_test_continuous_inplane_cc_grad.f90`
+      - `simple_test_continuous_inplane_hybrid_grad.f90`
       - `simple_test_continuous_inplane_refine3D.f90`
       - `simple_test_continuous_inplane_rotation2D.f90`
       - `simple_test_continuous_inplane_rotation2D_metadata.f90`
@@ -248,7 +250,6 @@
           - `simple_commanders_project_ptcl.f90` — project commanders for particle-related things
           - `simple_commanders_rec.f90` — 3D reconstruction and associated things
           - `simple_commanders_rec_distr.f90`
-          - `simple_commanders_reconstruct3D_pcg.f90` — experimental CTF/sigma-weighted PCG 3D reconstruction command, see
           - `simple_commanders_refine3D.f90` — supporting 3D orientation search
           - `simple_commanders_relion.f90` — supporting interoperability with RELION
           - `simple_commanders_reproject.f90` — reprojection commanders
@@ -619,7 +620,7 @@
         - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
         - `simple_reconstructor_eo.f90` — 3D reconstruction of even-odd pairs for FSC estimation
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
-        - `simple_reconstructor_pcg.f90` — experimental CTF/sigma-weighted, matrix-free Fourier-projection
+        - `simple_reconstructor_pcg.f90` — CTF/sigma-weighted Fourier-projection operator and
         - `simple_vol_pproc_policy.f90` — per-state automask policy decisions consumed by volume assembly
         - `simple_volanalyzer.f90` — for analyzing sets of ab initio volumes, current implementation just outputting the medoid
         - `simple_volcluster.f90` — clustering of pre-docked volumes from Fourier-shell correlations

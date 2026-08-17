@@ -35,10 +35,14 @@ simple_exec \
   nthr=8
 ```
 
-Omit `inpl_cont`, or set `inpl_cont=no`, to use the unchanged legacy path.
-The opt-in route requires raw Euclidean matching: `objfun=euclid`,
-`objfun_den=no`, `ptcl_src=raw`, and `projrec=no`. There is no `refine=shc`
-restriction. Deterministic, neighborhood, evaluation, and probabilistic
+Set `inpl_cont=no` to use the unchanged legacy path. Raw `objfun=euclid`,
+`objfun=cc`, and the `objfun_den=yes` hybrid expose the joint continuous
+gradient. The hybrid derivative matches the existing selection score by
+combining raw `exp(-loss)` with clamped denoised correlation. Parameter
+validation does not couple `inpl_cont` to the objective, particle source,
+reconstruction mode, or program; objective capability is checked by
+PFTC/search. There is no
+`refine=shc` restriction. Deterministic, neighborhood, evaluation, and probabilistic
 matcher routes follow the same callback-replacement policy wherever they
 perform pose search; modes with no pose search invoke neither optimizer.
 
@@ -216,12 +220,10 @@ work. The detailed review is recorded in the Obsidian report
 
 ### P3 findings and remediation
 
-1. The public commander and typed parameter layer duplicated the compatibility
-   policy, while the focused negative tests directly exercised only the
-   commander gate. **Resolved locally:** both layers now call the same pure
-   `refine3D_inpl_cont_policy_error` decision function owned by
-   `simple_parameters`; the commander only gathers effective command values,
-   and typed worker validation supplies resolved parameter values.
+1. The public commander and typed parameter layer once duplicated a
+   program-specific compatibility policy. **Resolved:** that policy and its
+   duplicate commander gate were retired. Typed parameters validate only the
+   `yes|no` value, while PFTC/search owns objective-gradient capability.
 2. The reviewed commander refinement-mode block called `value%kill` on fatal
    branches and then contained a later test of the same value. The P2
    refinement-mode allowlist removed this pattern incidentally; it remains
@@ -473,21 +475,13 @@ mode, normal completion, and shared-memory or distributed execution behavior.
 Implementation status: complete and verified on Oracle Linux. No continuous
 `refine3D` numerical path is enabled by this phase.
 
-The original focused policy suite passed the eligible default/off/on contract
-and eight rejection cases. The P2 hardening update adds `policy_neigh`, making
-the current rejection matrix nine cases:
+The focused policy case now covers the default, UI exposure, and stripping from
+non-matcher child commands. Objective-gradient eligibility is covered by the
+search and gradient suites rather than a duplicated command-line rejection
+matrix:
 
 ```text
 policy
-policy_bad_value
-policy_cc
-policy_hybrid
-policy_denoised
-policy_projrec
-policy_eval
-policy_sigma
-policy_probabilistic
-policy_neigh
 ```
 
 The run ended with `Continuous in-plane refine3D policy suite: PASS`.

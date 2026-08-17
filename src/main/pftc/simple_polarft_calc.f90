@@ -137,6 +137,7 @@ type :: polarft_calc
     procedure          :: get_nrots
     procedure          :: is_euclid_objfun
     procedure          :: is_raw_euclid_objfun
+    procedure          :: is_hybrid_objfun
     procedure          :: is_cc_objfun
     procedure          :: is_joint_grad_objfun
     procedure          :: get_pdim_interp
@@ -214,6 +215,7 @@ type :: polarft_calc
     procedure          :: gen_raw_euclid_grad_for_rot_8
     procedure          :: gen_raw_euclid_grad_at_angle
     procedure          :: gen_corr_grad_at_angle
+    procedure          :: gen_hybrid_grad_at_angle
     procedure, private :: gen_corr_cc_grad_for_rot_8
     procedure, private :: gen_euclid_grad_for_rot_8
     procedure, private :: gen_denoised_corr_grad_for_rot_8
@@ -376,6 +378,10 @@ interface
     module pure logical function is_raw_euclid_objfun(self)
         class(polarft_calc), intent(in) :: self
     end function is_raw_euclid_objfun
+
+    module pure logical function is_hybrid_objfun(self)
+        class(polarft_calc), intent(in) :: self
+    end function is_hybrid_objfun
 
     module pure logical function is_cc_objfun(self)
         class(polarft_calc), intent(in) :: self
@@ -916,6 +922,13 @@ interface
         real(dp),                    intent(in)    :: shvec(2), rotind_frac
         real(dp),                    intent(out)   :: f, grad(3)
     end subroutine gen_corr_grad_at_angle
+
+    module subroutine gen_hybrid_grad_at_angle(self, iref, iptcl, shvec, rotind_frac, f, grad)
+        class(polarft_calc), target, intent(inout) :: self
+        integer,                     intent(in)    :: iref, iptcl
+        real(dp),                    intent(in)    :: shvec(2), rotind_frac
+        real(dp),                    intent(out)   :: f, grad(3)
+    end subroutine gen_hybrid_grad_at_angle
 
     module subroutine gen_corr_cc_grad_for_rot_8( self, pft_ref, i, shvec, irot, f, grad)
         class(polarft_calc), target, intent(inout) :: self

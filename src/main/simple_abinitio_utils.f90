@@ -176,8 +176,6 @@ contains
         call cline_refine3D%delete('smpd_crop')
         ! symmetrization
         call cline_symmap%set('prg',                'symmetrize_map')
-        call cline_symmap%delete('rec_backend')
-        call cline_symmap%delete('pcg_lambda_rel')
         call cline_symmap%set('pgrp',                    params%pgrp)
         call cline_symmap%set('projfile',                   projfile)
         call cline_symmap%set('center',                        'yes')
@@ -201,8 +199,6 @@ contains
         call cline_reconstruct3D%delete('refs_odd')
         ! re-project volume, only with cavgs
         call cline_reproject%set('prg',                  'reproject')
-        call cline_reproject%delete('rec_backend')
-        call cline_reproject%delete('pcg_lambda_rel')
         call cline_reproject%set('pgrp',                 params%pgrp)
         call cline_reproject%set('outstk',        'reprojs'//MRC_EXT)
         call cline_reproject%set('smpd',                 params%smpd)
@@ -672,8 +668,6 @@ contains
         if( cline_refine3D%get_carg('ml_reg').eq.'yes' )then
             cline_calc_group_sigmas = cline_refine3D
             call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
-            call cline_calc_group_sigmas%delete('rec_backend')
-            call cline_calc_group_sigmas%delete('pcg_lambda_rel')
             call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
             call cline_calc_group_sigmas%kill
         endif

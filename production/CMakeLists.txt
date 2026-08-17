@@ -178,6 +178,7 @@ if(BUILD_TESTS)
   set(VOL1_FIXTURE_TESTS
     continuous_inplane_rotation2D_stage1_validation
     continuous_inplane_cc_grad
+    continuous_inplane_hybrid_grad
     continuous_inplane_refine3D
   )
   # The offload test declares data for mutually exclusive preprocessor

@@ -14,33 +14,6 @@ character(len=14), parameter :: NU_ENVMASK_REF_PRGS(4) = &
 
 contains
 
-    module pure function refine3D_inpl_cont_policy_error( inpl_cont, objfun, &
-        &objfun_den, ptcl_src, projrec ) result(error_message)
-        character(len=*), intent(in) :: inpl_cont, objfun, objfun_den
-        character(len=*), intent(in) :: ptcl_src, projrec
-        character(len=STDLEN) :: error_message
-
-        error_message = ''
-        select case(trim(inpl_cont))
-        case('no')
-            return
-        case('yes')
-            continue
-        case default
-            error_message = 'inpl_cont must be yes or no'
-            return
-        end select
-        ! objfun=euclid and objfun=cc both provide the analytic joint
-        ! (sx,sy,theta) gradient; only the hybrid/denoised blend does not
-        if( trim(objfun_den) /= 'no' )then
-            error_message = 'refine3D inpl_cont=yes does not support objfun_den=yes'
-        elseif( trim(ptcl_src) /= 'raw' )then
-            error_message = 'refine3D inpl_cont=yes requires ptcl_src=raw'
-        elseif( trim(projrec) /= 'no' )then
-            error_message = 'refine3D inpl_cont=yes does not support projrec=yes'
-        endif
-    end function refine3D_inpl_cont_policy_error
-
     module subroutine new(self, cline, silent)
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
@@ -703,7 +676,6 @@ contains
         class(parameters), intent(inout) :: self
         class(cmdline),    intent(inout) :: cline
         type(atoms) :: atoms_obj
-        character(len=STDLEN) :: inpl_policy_error
         select case(trim(self%memreport))
             case('yes','no')
             case DEFAULT
@@ -781,13 +753,7 @@ contains
                 THROW_HARD('unsupported objective function')
         end select
         select case(trim(self%rec_backend))
-            case('gridding')
-            case('pcg')
-                select case(trim(self%prg%to_char()))
-                    case('reconstruct3D','refine3D','abinitio3D')
-                    case DEFAULT
-                        THROW_HARD('rec_backend=pcg is accepted only by reconstruct3D, refine3D, and abinitio3D')
-                end select
+            case('gridding','pcg')
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
@@ -822,11 +788,6 @@ contains
             case DEFAULT
                 THROW_HARD('inpl_cont must be yes or no')
         end select
-        if( trim(self%prg%to_char()) == 'refine3D' )then
-            inpl_policy_error = refine3D_inpl_cont_policy_error(self%inpl_cont, &
-                &self%objfun, self%objfun_den, self%ptcl_src, self%projrec)
-            if( len_trim(inpl_policy_error) > 0 ) THROW_HARD(trim(inpl_policy_error))
-        endif
         select case(trim(self%sgd))
             case('yes')
                 self%l_sgd = .true.

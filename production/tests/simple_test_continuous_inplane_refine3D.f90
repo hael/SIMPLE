@@ -1,6 +1,6 @@
 program simple_test_continuous_inplane_refine3D
 use continuous_inplane_refine3D_baseline_test, only: run_legacy_baseline
-use continuous_inplane_refine3D_policy_test, only: run_policy_gate, run_policy_rejection
+use continuous_inplane_refine3D_policy_test, only: run_policy_gate
 use continuous_inplane_refine3D_state_test, only: run_search_state_contract
 use continuous_inplane_refine3D_joint_test, only: run_joint_state_contract
 use continuous_inplane_refine3D_direct_test, only: run_direct_route_contract
@@ -133,10 +133,6 @@ contains
         failures = 0
         write(*,'(a)') 'Continuous in-plane refine3D policy suite: START'
         call run_case_in_child('policy', failures)
-        call run_rejection_in_child('policy_bad_value', 'inpl_cont must be yes or no', failures)
-        call run_rejection_in_child('policy_hybrid', 'does not support objfun_den=yes', failures)
-        call run_rejection_in_child('policy_denoised', 'requires ptcl_src=raw', failures)
-        call run_rejection_in_child('policy_projrec', 'does not support projrec=yes', failures)
         if( failures /= 0 )then
             write(*,'(a,i0,a)') 'Continuous in-plane refine3D policy suite: FAIL (', &
                 &failures, ' failure(s))'
@@ -144,52 +140,6 @@ contains
         endif
         write(*,'(a)') 'Continuous in-plane refine3D policy suite: PASS'
     end subroutine run_policy_suite
-
-    subroutine run_rejection_in_child(label, expected_text, failures)
-        use simple_syslib, only: get_process_id
-        character(len=*), intent(in) :: label, expected_text
-        integer, intent(inout) :: failures
-        character(len=4096) :: executable, child_command, logfile
-        integer :: executable_len, command_status, exit_status
-
-        call get_command_argument(0, executable, executable_len, command_status)
-        if( command_status /= 0 .or. executable_len < 1 ) &
-            &error stop 'could not determine refine3D suite executable path'
-        write(logfile,'(a,i0,a)') 'simple_test_continuous_inplane_refine3D_', &
-            &get_process_id(), '_'//trim(label)//'.log'
-        child_command = '"'//trim(executable(:executable_len))//'" case='//trim(label)// &
-            &' > "'//trim(logfile)//'" 2>&1'
-        write(*,'(/,a)') '>>> TEST ['//trim(label)//'] START'
-        call execute_command_line(trim(child_command), wait=.true., &
-            &exitstat=exit_status, cmdstat=command_status)
-        if( command_status == 0 .and. exit_status /= 0 .and. &
-            &file_contains(logfile, expected_text) )then
-            write(*,'(a)') '>>> TEST ['//trim(label)//'] PASS'
-        else
-            failures = failures + 1
-            write(*,'(a,i0,a,i0,a)') '>>> TEST ['//trim(label)// &
-                &'] FAIL (cmdstat=', command_status, ', exitstat=', exit_status, ')'
-        endif
-    end subroutine run_rejection_in_child
-
-    logical function file_contains(filename, expected_text) result(found)
-        character(len=*), intent(in) :: filename, expected_text
-        character(len=4096) :: line
-        integer :: file_unit, ios
-
-        found = .false.
-        open(newunit=file_unit, file=trim(filename), status='old', action='read', iostat=ios)
-        if( ios /= 0 ) return
-        do
-            read(file_unit,'(a)',iostat=ios) line
-            if( ios /= 0 ) exit
-            if( index(line, trim(expected_text)) > 0 )then
-                found = .true.
-                exit
-            endif
-        enddo
-        close(file_unit)
-    end function file_contains
 
     subroutine run_case(label)
         character(len=*), intent(in) :: label
@@ -219,10 +169,6 @@ contains
             call run_metadata_project_contract()
         case('synthetic_recovery')
             call run_synthetic_recovery_contract()
-        case('policy_bad_value', 'policy_hybrid', &
-            &'policy_denoised', 'policy_projrec', 'policy_eval', &
-            &'policy_sigma', 'policy_probabilistic', 'policy_neigh')
-            call run_policy_rejection(trim(label))
         case default
             error stop 'unknown continuous in-plane refine3D regression case: '//trim(label)
         end select

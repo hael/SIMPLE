@@ -118,7 +118,7 @@ contains
         self%l_greedy      = str_has_substr(self%p_ptr%refine, 'greedy')
         if( trim(self%p_ptr%inpl_cont) == 'yes' .and. &
             &(.not. self%b_ptr%pftc%is_joint_grad_objfun()) )then
-            THROW_HARD('inpl_cont=yes requires the raw Euclidean or cc joint objective')
+            THROW_HARD('inpl_cont=yes requires a supported Euclidean, hybrid, or cc joint objective')
         endif
         self%continuous_active = trim(self%p_ptr%inpl_cont) == 'yes' .and. &
             &self%p_ptr%l_doshift .and. &

@@ -154,7 +154,6 @@ digraph module_graph {
   "simple_commanders_project_ptcl";
   "simple_commanders_rec";
   "simple_commanders_rec_distr";
-  "simple_commanders_reconstruct3D_pcg";
   "simple_commanders_refine3D";
   "simple_commanders_relion";
   "simple_commanders_reproject";
@@ -1393,6 +1392,7 @@ digraph module_graph {
   "simple_commanders_rec" -> "simple_rec3d_pcg_strategy";
   "simple_commanders_rec" -> "simple_rec3d_strategy";
   "simple_commanders_rec" -> "simple_refine3d_fnames";
+  "simple_commanders_rec" -> "simple_sigma2_files";
   "simple_commanders_rec_distr" -> "simple_commanders_api";
   "simple_commanders_rec_distr" -> "simple_fsc";
   "simple_commanders_rec_distr" -> "simple_gridding";
@@ -1400,18 +1400,13 @@ digraph module_graph {
   "simple_commanders_rec_distr" -> "simple_reconstructor_eo";
   "simple_commanders_rec_distr" -> "simple_refine3d_fnames";
   "simple_commanders_rec_distr" -> "simple_vol_pproc_policy";
-  "simple_commanders_reconstruct3D_pcg" -> "simple_commanders_api";
-  "simple_commanders_reconstruct3D_pcg" -> "simple_matcher_ptcl_io";
-  "simple_commanders_reconstruct3D_pcg" -> "simple_math_ft";
-  "simple_commanders_reconstruct3D_pcg" -> "simple_reconstructor_pcg";
-  "simple_commanders_reconstruct3D_pcg" -> "simple_sigma2_files";
   "simple_commanders_refine3D" -> "simple_abinitio_utils";
   "simple_commanders_refine3D" -> "simple_commanders_api";
+  "simple_commanders_refine3D" -> "simple_commanders_flex_pca";
   "simple_commanders_refine3D" -> "simple_commanders_rec";
   "simple_commanders_refine3D" -> "simple_core_module_api";
   "simple_commanders_refine3D" -> "simple_estimate_ssnr";
   "simple_commanders_refine3D" -> "simple_nu_filter";
-  "simple_commanders_refine3D" -> "simple_parameters";
   "simple_commanders_refine3D" -> "simple_pftc_srch_api";
   "simple_commanders_refine3D" -> "simple_refine3d_fnames";
   "simple_commanders_refine3D" -> "simple_refine3d_strategy";
@@ -1510,6 +1505,7 @@ digraph module_graph {
   "simple_commanders_test_geometry" -> "simple_sp_project";
   "simple_commanders_test_geometry" -> "simple_sym";
   "simple_commanders_test_highlevel" -> "simple_atoms";
+  "simple_commanders_test_highlevel" -> "simple_builder";
   "simple_commanders_test_highlevel" -> "simple_commanders_abinitio";
   "simple_commanders_test_highlevel" -> "simple_commanders_abinitio2d";
   "simple_commanders_test_highlevel" -> "simple_commanders_api";
@@ -1525,8 +1521,10 @@ digraph module_graph {
   "simple_commanders_test_highlevel" -> "simple_imghead";
   "simple_commanders_test_highlevel" -> "simple_micproc";
   "simple_commanders_test_highlevel" -> "simple_molecule_data";
+  "simple_commanders_test_highlevel" -> "simple_parameters";
   "simple_commanders_test_highlevel" -> "simple_projfile_utils";
   "simple_commanders_test_highlevel" -> "simple_qsys_env";
+  "simple_commanders_test_highlevel" -> "simple_rec3d_pcg_strategy";
   "simple_commanders_test_highlevel" -> "simple_reconstructor_pcg";
   "simple_commanders_test_highlevel" -> "simple_stream_api";
   "simple_commanders_test_highlevel" -> "simple_string_utils";
@@ -1933,7 +1931,6 @@ digraph module_graph {
   "simple_exec_validate" -> "simple_commanders_atoms";
   "simple_exec_validate" -> "simple_commanders_validate";
   "simple_exec_volume" -> "simple_cmdline";
-  "simple_exec_volume" -> "simple_commanders_reconstruct3d_pcg";
   "simple_exec_volume" -> "simple_commanders_reproject";
   "simple_exec_volume" -> "simple_commanders_volops";
   "simple_extract_strategy" -> "simple_cmdline";
@@ -2917,6 +2914,7 @@ digraph module_graph {
   "simple_rec3D_pcg_strategy" -> "simple_matcher_ptcl_io";
   "simple_rec3D_pcg_strategy" -> "simple_math_ft";
   "simple_rec3D_pcg_strategy" -> "simple_parameters";
+  "simple_rec3D_pcg_strategy" -> "simple_ptcl_cache";
   "simple_rec3D_pcg_strategy" -> "simple_reconstructor_pcg";
   "simple_rec3D_pcg_strategy" -> "simple_refine3d_fnames";
   "simple_rec3D_pcg_strategy" -> "simple_sigma2_files";
@@ -2932,6 +2930,7 @@ digraph module_graph {
   "simple_rec3D_strategy" -> "simple_qsys_funs";
   "simple_rec3D_strategy" -> "simple_rec3d_pcg_strategy";
   "simple_rec3D_strategy" -> "simple_refine3d_fnames";
+  "simple_rec3D_strategy" -> "simple_sigma2_files";
   "simple_rec_list" -> "simple_core_module_api";
   "simple_rec_list" -> "simple_linked_list";
   "simple_rec_list_tester" -> "simple_defs";
@@ -2998,6 +2997,7 @@ digraph module_graph {
   "simple_refine3D_strategy" -> "simple_ptcl_cache";
   "simple_refine3D_strategy" -> "simple_qsys_env";
   "simple_refine3D_strategy" -> "simple_qsys_funs";
+  "simple_refine3D_strategy" -> "simple_rec3d_pcg_strategy";
   "simple_refine3D_strategy" -> "simple_refine3d_fnames";
   "simple_refine3D_strategy" -> "simple_sp_project";
   "simple_refine3D_strategy" -> "simple_strategy3d_matcher";
@@ -3275,6 +3275,7 @@ digraph module_graph {
   "simple_strategy3D_matcher" -> "simple_pftc_srch_api";
   "simple_strategy3D_matcher" -> "simple_ptcl_cache";
   "simple_strategy3D_matcher" -> "simple_qsys_funs";
+  "simple_strategy3D_matcher" -> "simple_rec3d_pcg_strategy";
   "simple_strategy3D_matcher" -> "simple_refine3d_fnames";
   "simple_strategy3D_matcher" -> "simple_strategy3d";
   "simple_strategy3D_matcher" -> "simple_strategy3d_alloc";
@@ -3408,6 +3409,7 @@ digraph module_graph {
   "simple_stream_cluster2D_utils" -> "simple_starproject";
   "simple_stream_cluster2D_utils" -> "simple_starproject_stream";
   "simple_stream_cluster2D_utils" -> "simple_stream2d_state";
+  "simple_stream_cluster2D_utils" -> "simple_syslib";
   "simple_stream_communicator" -> "json_kinds";
   "simple_stream_communicator" -> "json_module";
   "simple_stream_communicator" -> "simple_core_module_api";
@@ -3447,6 +3449,7 @@ digraph module_graph {
   "simple_stream_p03_initial_analysis" -> "simple_cavg_quality_analysis";
   "simple_stream_p03_initial_analysis" -> "simple_cavg_quality_model";
   "simple_stream_p03_initial_analysis" -> "simple_cavg_quality_types";
+  "simple_stream_p03_initial_analysis" -> "simple_class_compatibility";
   "simple_stream_p03_initial_analysis" -> "simple_commanders_abinitio";
   "simple_stream_p03_initial_analysis" -> "simple_commanders_abinitio2d";
   "simple_stream_p03_initial_analysis" -> "simple_commanders_cavgs";
