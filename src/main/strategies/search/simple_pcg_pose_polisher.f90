@@ -219,13 +219,14 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
     type(pcg_pose_polish_summary) :: batch_summary
     type(reconstructor_pcg) :: pcgop
     type(pcg_fourier_workspace) :: workspace
-    type(image) :: halfmap
+    type(image) :: halfmap, mskimg
     type(ctfparams) :: ctfparms
     type(ori) :: orientation
     type(string) :: halfmap_name
     integer, allocatable :: selected_pinds(:), half_pinds(:), statuses(:)
     complex, allocatable :: observed(:,:,:), transfers(:,:,:)
     real, allocatable :: sig2(:,:), volume(:,:,:)
+    logical, allocatable :: normalization_mask(:,:,:)
     real(dp), allocatable :: rotmats(:,:,:), shifts(:,:)
     integer :: state, eo, ibatch, batchlims(2), batchsz, i, iptcl, nselected
     integer :: lims2(2,2), r, kfromto(2)
@@ -237,7 +238,7 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
         total_summary = pcg_pose_polish_summary()
         return
     endif
-    if( trim(params%rec_backend) /= 'pcg' .or. trim(params%volrec) /= 'yes' )then
+    if( trim(params%rec_backend) /= 'pcg' )then
         THROW_HARD('final PCG pose polish requires an executed PCG reconstruction route')
     endif
     if( params%box < 1 .or. params%box_crop < 1 )then
@@ -262,6 +263,18 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
         call prepimgbatch(params,build,POLISH_BATCH_SIZE,box=params%box_crop,smpd=params%smpd_crop)
     else
         call prepimgbatch(params,build,POLISH_BATCH_SIZE)
+        ! Distributed masters own the project but need not build the general-toolbox mask.
+        if( allocated(build%lmsk) )then
+            allocate(normalization_mask,source=build%lmsk)
+        else
+            call mskimg%disc([params%box,params%box,1],params%smpd,params%msk,normalization_mask)
+        endif
+        if( .not. allocated(normalization_mask) )then
+            THROW_HARD('final PCG pose polish could not build its normalization mask')
+        endif
+        if( any(shape(normalization_mask) /= [params%box,params%box,1]) )then
+            THROW_HARD('final PCG pose polish normalization mask has the wrong shape')
+        endif
     endif
     call orientation%new(.false.)
     crop_factor = real(params%box_crop) / real(params%box)
@@ -321,7 +334,7 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
                 edge_mean = 0.0
                 do i = 1, batchsz
                     iptcl = half_pinds(batchlims(1)+i-1)
-                    if( .not. l_cached ) call build%imgbatch(i)%norm_noise(build%lmsk,sdev_noise)
+                    if( .not. l_cached ) call build%imgbatch(i)%norm_noise(normalization_mask,sdev_noise)
                     call build%imgbatch(i)%taper_edges_particle(nint(COSMSKHALFWIDTH),edge_mean)
                     call build%imgbatch(i)%fft
                     observed(:,:,i) = pcgop%whiten_observation( &
@@ -355,6 +368,8 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
     enddo
     call orientation%kill
     call killimgbatch(build)
+    call mskimg%kill
+    if( allocated(normalization_mask) ) deallocate(normalization_mask)
     deallocate(selected_pinds)
     write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> PCG POSE POLISH: PARTICLES ', &
         &total_summary%nparticles, ' IMPROVED ', total_summary%nimproved, &

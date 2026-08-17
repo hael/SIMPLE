@@ -1336,16 +1336,11 @@ contains
     subroutine exec_refine3D( self, cline )
         use simple_core_module_api
         use simple_refine3D_strategy
-        use simple_pcg_pose_polisher, only: pcg_pose_polish_summary, execute_final_pcg_pose_polish
-        use simple_commanders_rec, only: commander_rec3D
         class(commander_refine3D), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(refine3D_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
-        type(commander_rec3D) :: xrec3D
-        type(pcg_pose_polish_summary) :: polish_summary
-        type(cmdline) :: cline_final_rec
         type(string)     :: filt_mode_arg
         logical          :: converged
         integer          :: niters
@@ -1394,24 +1389,6 @@ contains
             call strategy%finalize_iteration(params, build)
             if( converged .or. niters >= params%maxits ) exit
         end do
-        if( trim(params%pcg_pose_polish) == 'yes' )then
-            call execute_final_pcg_pose_polish(params,build,cline,polish_summary)
-            call build%spproj%write_segment_inside(params%oritype,params%projfile)
-            cline_final_rec = cline
-            call strip_refine3D_search_only_args(cline_final_rec)
-            call cline_final_rec%set('prg','reconstruct3D')
-            call cline_final_rec%set('mkdir','no')
-            call cline_final_rec%set('rec_backend','pcg')
-            call cline_final_rec%set('maxits',2)
-            call cline_final_rec%set('rtol',0.0)
-            call cline_final_rec%set('trail_rec','no')
-            call cline_final_rec%set('update_frac',1.0)
-            call cline_final_rec%delete('refine')
-            write(logfhandle,'(A)') '>>> PCG POSE POLISH: RUNNING FINAL PCG RECONSTRUCTION'
-            call xrec3D%execute(cline_final_rec)
-            call build%spproj%read_segment('out',params%projfile)
-            call cline_final_rec%kill
-        endif
         call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params)
         if( allocated(strategy) ) deallocate(strategy)

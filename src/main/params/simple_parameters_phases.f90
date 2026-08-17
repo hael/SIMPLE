@@ -801,17 +801,11 @@ contains
         select case(trim(self%pcg_pose_polish))
             case('no')
             case('yes')
-                if( trim(self%prg%to_char()) /= 'refine3D' )then
-                    THROW_HARD('pcg_pose_polish is accepted only by refine3D')
+                if( trim(self%prg%to_char()) /= 'reconstruct3D' )then
+                    THROW_HARD('pcg_pose_polish is accepted only by reconstruct3D')
                 endif
                 if( trim(self%rec_backend) /= 'pcg' )then
                     THROW_HARD('pcg_pose_polish=yes requires rec_backend=pcg')
-                endif
-                if( trim(self%volrec) /= 'yes' )then
-                    THROW_HARD('pcg_pose_polish=yes requires volrec=yes')
-                endif
-                if( trim(self%refine) == 'eval' .or. trim(self%refine) == 'sigma' )then
-                    THROW_HARD('pcg_pose_polish requires a refine3D route that reconstructs volumes')
                 endif
                 if( trim(self%combine_eo) == 'yes' )then
                     THROW_HARD('pcg_pose_polish requires independent even and odd final maps')

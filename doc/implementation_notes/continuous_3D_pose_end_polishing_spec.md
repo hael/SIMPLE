@@ -1,4 +1,4 @@
-# Continuous 3-D joint pose end-polishing SPEC
+# Continuous 3-D PCG post-reconstruction pose-polishing SPEC
 
 **Status:** FINAL
 
@@ -7,9 +7,10 @@
 ## Request and outcome
 
 The useful production unit is a joint local pose update, not a shift-only
-update. Add one opt-in end-polishing pass to `refine3D` that jointly refines the
-three rotational and two image-shift coordinates, then performs one final PCG
-reconstruction with the accepted poses.
+update. Add one opt-in post-reconstruction pass to `reconstruct3D` that jointly
+refines the three rotational and two image-shift coordinates against its fixed
+PCG half-maps, then performs one final PCG reconstruction with the accepted
+poses.
 
 The public option is `pcg_pose_polish=yes`. Its default is `no`. It replaces the
 uncommitted `pcg_shift_polish` prototype; there is no public shift-only mode.
@@ -20,12 +21,14 @@ The polish is allowed only when all these conditions are true:
 
 - `pcg_pose_polish=yes`;
 - `rec_backend=pcg`;
-- `volrec=yes`;
 - `combine_eo=no`;
-- the route has produced independent even and odd PCG half-maps.
+- `prg=reconstruct3D`;
+- the base reconstruction has produced independent even and odd PCG half-maps.
 
 Invalid combinations must stop with a clear error. Internal workers and child
-commands must not start a second polish.
+commands must not start a second polish. `refine3D` does not own a separate
+pose-polishing implementation; a completed refinement project is polished by a
+subsequent `reconstruct3D` invocation.
 
 ## Scientific contract
 
@@ -51,7 +54,8 @@ Requirements:
 - use the executed fast Kaiser--Bessel value and derivative paths;
 - use the PCG CTF flag, whitening, Fourier packing, phase, and precision
   conventions;
-- use the active refinement frequency limit, never a separate hand-set ladder;
+- use the active reconstruction frequency limit, never a separate hand-set
+  ladder;
 - refine each particle only against its matching fixed half-map;
 - keep state, half ownership, CTF metadata, observations, and search decisions
   unchanged;
@@ -76,7 +80,7 @@ Requirements:
 
 ## Out of scope
 
-- Replacing the discrete or probabilistic orientation search.
+- Running a discrete or probabilistic orientation search.
 - Alternating volume and pose updates; that remains Stage 4.
 - CTF-parameter refinement or a new reconstruction backend.
 - Platform-wide changes to the Kaiser--Bessel kernel.
@@ -95,7 +99,8 @@ Requirements:
 5. Even and odd particles use only their matching half-map.
 6. Accepted rotations and shifts persist and are consumed by the final PCG
    reconstruction; disabled and invalid routes cannot change poses.
-7. Shared and distributed routes obey the same activation and ownership rules.
+7. Shared and distributed reconstruction routes obey the same activation and
+   ownership rules.
 8. A frozen beta-gal A/B changes only `pcg_pose_polish`; angular changes remain
    local, terminal counts balance, and independent half-map FSC improves or is
    neutral under a predeclared tolerance.

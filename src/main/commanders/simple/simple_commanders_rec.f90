@@ -34,12 +34,14 @@ contains
         use simple_rec3D_strategy, only: rec3D_strategy, create_rec3D_strategy
         use simple_parameters,     only: parameters
         use simple_builder,        only: builder
+        use simple_pcg_pose_polisher, only: pcg_pose_polish_summary, execute_final_pcg_pose_polish
         class(commander_rec3D), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         class(rec3D_strategy), allocatable :: strategy
         type(parameters) :: params
         type(builder)    :: build
-        type(string)     :: rec_backend
+        type(pcg_pose_polish_summary) :: polish_summary
+        type(string)     :: rec_backend, pose_polish
         ! Commander-level defaults (apply to both modes)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)     ! to assure that shifts are being used
@@ -48,15 +50,34 @@ contains
         if( rec_backend .eq. 'pcg' )then
             if( .not. cline%defined('maxits') ) call cline%set('maxits', 2.)
         endif
+        pose_polish = string('no')
+        if( cline%defined('pcg_pose_polish') )then
+            pose_polish = cline%get_carg('pcg_pose_polish')
+            if( pose_polish .eq. 'yes' )then
+                ! Both PCG passes use the same fixed two-iteration solve.
+                call cline%set('maxits',2)
+                call cline%set('rtol',0.0)
+                call cline%set('trail_rec','no')
+                call cline%set('update_frac',1.0)
+            endif
+        endif
         call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         ! Select and run strategy
         strategy = create_rec3D_strategy(cline)
         call strategy%initialize(params, build, cline)
         call strategy%execute(params, build, cline)
+        if( trim(params%pcg_pose_polish) == 'yes' )then
+            ! Refine poses against the base half-maps before rebuilding them.
+            call execute_final_pcg_pose_polish(params,build,cline,polish_summary)
+            call build%spproj%write_segment_inside(params%oritype,params%projfile)
+            write(logfhandle,'(A)') '>>> PCG POSE POLISH: RUNNING FINAL PCG RECONSTRUCTION'
+            call strategy%execute(params,build,cline)
+        endif
         call strategy%finalize_run(params, build, cline)
         call strategy%cleanup(params, build, cline)
         call rec_backend%kill
+        call pose_polish%kill
         ! End gracefully (single unified termination)
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
         if( allocated(strategy) ) deallocate(strategy)
