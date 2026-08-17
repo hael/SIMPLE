@@ -113,56 +113,67 @@ interface
     ! These functions are defined in the C helper functions
     !
 
-    integer function TIFFRawStripSizer(my_tiff,strip) bind(c,name='TIFFRawStripSizer')
-        use iso_c_binding, only: c_ptr, c_int32_t
+    function TIFFRawStripSizer(my_tiff,strip) bind(c,name='TIFFRawStripSizer')
+        use iso_c_binding, only: c_ptr, c_int, c_int32_t
+        integer(kind=c_int)              :: TIFFRawStripSizer
         type(c_ptr),             value :: my_tiff
         integer(kind=c_int32_t), value :: strip
     end function TIFFRawStripSizer
 
-    integer function TIFFGetWidth(my_tiff) bind(c,name='TIFFGetWidth')
-        use iso_c_binding, only : c_ptr
+    function TIFFGetWidth(my_tiff) bind(c,name='TIFFGetWidth')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFGetWidth
         type(c_ptr),    value :: my_tiff
     end function
-    integer function TIFFGetLength(my_tiff) bind(c,name='TIFFGetLength')
-        use iso_c_binding, only : c_ptr
+    function TIFFGetLength(my_tiff) bind(c,name='TIFFGetLength')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFGetLength
         type(c_ptr),    value :: my_tiff
     end function
-    integer function TIFFGetCompression(my_tiff) bind(c,name='TIFFGetCompression')
-        use iso_c_binding, only : c_ptr
+    function TIFFGetCompression(my_tiff) bind(c,name='TIFFGetCompression')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFGetCompression
         type(c_ptr),    value :: my_tiff
     end function
-    integer function TIFFNumDirectories(my_tiff) bind(c,name='TIFFNumDirectories')
-        use iso_c_binding, only : c_ptr
+    function TIFFNumDirectories(my_tiff) bind(c,name='TIFFNumDirectories')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFNumDirectories
         type(c_ptr),    value :: my_tiff
     end function
     ! int TIFFGetSampleFormat(TIFF *my_tiff)
-    integer function TIFFGetSampleFormat(my_tiff) bind(c,name='TIFFGetSampleFormat')
-        use iso_c_binding, only : c_ptr
+    function TIFFGetSampleFormat(my_tiff) bind(c,name='TIFFGetSampleFormat')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFGetSampleFormat
         type(c_ptr),    value :: my_tiff
     end function
     ! int TIFFGetSamplesPerPixel(TIFF *my_tiff)
-    integer function TIFFGetSamplesPerPixel(my_tiff) bind(c,name='TIFFGetSamplesPerPixel')
-        use iso_c_binding, only : c_ptr
+    function TIFFGetSamplesPerPixel(my_tiff) bind(c,name='TIFFGetSamplesPerPixel')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFGetSamplesPerPixel
         type(c_ptr),    value :: my_tiff
     end function
     ! int TIFFGetBitsPerSample(TIFF *my_tiff)
-    integer function TIFFGetBitsPerSample(my_tiff) bind(c,name='TIFFGetBitsPerSample')
-        use iso_c_binding, only : c_ptr
+    function TIFFGetBitsPerSample(my_tiff) bind(c,name='TIFFGetBitsPerSample')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFGetBitsPerSample
         type(c_ptr),    value :: my_tiff
     end function
     ! intTIFFGetRowsPerStrip(TIFF *my_tiff)
-    integer function TIFFGetRowsPerStrip(my_tiff) bind(c,name='TIFFGetRowsPerStrip')
-        use iso_c_binding, only : c_ptr
+    function TIFFGetRowsPerStrip(my_tiff) bind(c,name='TIFFGetRowsPerStrip')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFGetRowsPerStrip
         type(c_ptr),    value :: my_tiff
     end function
     ! intTIFFGetMinVal(TIFF *my_tiff)
-    integer function TIFFGetMinVal(my_tiff) bind(c,name='TIFFGetMinVal')
-        use iso_c_binding, only : c_ptr
+    function TIFFGetMinVal(my_tiff) bind(c,name='TIFFGetMinVal')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFGetMinVal
         type(c_ptr),    value :: my_tiff
     end function
     ! intTIFFGetMaxVal(TIFF *my_tiff)
-    integer function TIFFGetMaxVal(my_tiff) bind(c,name='TIFFGetMaxVal')
-        use iso_c_binding, only : c_ptr
+    function TIFFGetMaxVal(my_tiff) bind(c,name='TIFFGetMaxVal')
+        use iso_c_binding, only : c_ptr, c_int
+        integer(kind=c_int) :: TIFFGetMaxVal
         type(c_ptr),    value :: my_tiff
     end function
 

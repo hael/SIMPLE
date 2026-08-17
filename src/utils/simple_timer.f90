@@ -42,7 +42,6 @@ integer, parameter :: timer_int_kind = sp
    integer               :: idx_elapsed = 0, num_elapsed = 3
    integer               :: num_profile_loops, num_profile_vars
    logical               :: in_loop = .false.
-   integer               :: profile_counter
    integer, parameter, public :: MAX_TOKENS = 10                          !< number of entries in token dictionary
    integer, parameter, public :: MAX_TOKEN_CHARSIZE = 30                  !< max char length of tokens
    real(timer_int_kind), allocatable, public :: elapsed_times(:)                 !< timer loop storage of elapsed times

@@ -1039,7 +1039,7 @@ contains
                 do iproj = 1,n_spprojs
                     fname = basename(completed_fnames(iproj))
                     fname = get_fbody(fname,METADATA_EXT,separator=.false.)
-                    id    = str2int(fname)
+                    id    = str2int(fname, iostat)
                     if( iostat==0 ) movies_set_counter = max(movies_set_counter, id)
                 enddo
                 ! update import id counter
@@ -1089,7 +1089,8 @@ contains
                 sent = 0
                 retry_count = 0
                 do while( sent < framed_nbytes )
-                    nwritten = c_write(ipc_pipe_preprocess_in(2), c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                    nwritten = int(c_write(ipc_pipe_preprocess_in(2), c_loc(cbuf(sent + 1)), &
+                        &int(framed_nbytes - sent, c_size_t)))
                     if( nwritten > 0 ) then
                         sent = sent + int(nwritten)
                         retry_count = 0
@@ -1138,7 +1139,7 @@ contains
                 max_meta_bytes = max_metadata_size()
                 allocate(raw(max_meta_bytes))
 
-                nread = c_read(ipc_pipe_preprocess_out(1), c_loc(raw(1)), int(size(raw), c_size_t))
+                nread = int(c_read(ipc_pipe_preprocess_out(1), c_loc(raw(1)), int(size(raw), c_size_t)))
                 if( nread < 0 ) then
                     err_no = ierrno()
                     if( err_no == int(EAGAIN) .or. err_no == int(EWOULDBLOCK) ) return

@@ -165,7 +165,7 @@ contains
             end if
         end if
         allocate(this%address)
-        this%address%sin_family      = l_protocol;
+        this%address%sin_family      = int(l_protocol, kind=kind(this%address%sin_family));
         this%address%sin_addr%s_addr = l_ip;
         this%address%sin_port        = c_htons(l_port);
         this%sock_fd = c_socket(l_protocol, SOCK_STREAM, 0)
@@ -225,7 +225,7 @@ contains
             write(*,*) c_errno(c_null_char)
             return
         endif
-        rc = c_send(this%sock_fd, c_loc(msg), msglen, 0)
+        rc = int(c_send(this%sock_fd, c_loc(msg), msglen, 0))
         if(rc < 0) then
             write(*,*) "failed to send message"
             write(*,*) c_errno(c_null_char)

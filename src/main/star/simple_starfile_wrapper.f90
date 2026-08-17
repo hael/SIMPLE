@@ -480,11 +480,11 @@ contains
         if( allocated(str) ) deallocate(str)
         allocate( character(len=partlength) :: str )
         call c_f_pointer(c_str, f_str, [partlength])
-        do i = 1, partlength
+         do i = 1, int(partlength)
              str(i:i) = f_str(i)
         end do
         call C_dealloc_str(c_str)
-        length = partlength
+         length = int(partlength)
     end subroutine starfile_table__write_omem
 
     subroutine starfile_table__close_ofile(this)

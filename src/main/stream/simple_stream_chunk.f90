@@ -55,7 +55,6 @@ type stream_chunk
     procedure          :: kill
 end type stream_chunk
 
-integer            :: ncls_rejected_glob = 0 ! counter of rejected classes
 logical, parameter :: DEBUG_HERE = .false.
 
 contains

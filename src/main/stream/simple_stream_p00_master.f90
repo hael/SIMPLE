@@ -949,7 +949,7 @@ contains
             character(len=max_msgsize)                    :: chunk
 
             if( fd < 0 .or. got_message ) return
-            nread = c_read(fd, c_loc(raw(1)), int(size(raw), c_size_t))
+            nread = int(c_read(fd, c_loc(raw(1)), int(size(raw), c_size_t)))
             if( nread > 0 ) then
                 do i = 1, nread
                     chunk(i:i) = transfer(raw(i), 'a')
@@ -1305,7 +1305,7 @@ contains
             sent = 0
             retry_count = 0
             do while( sent < framed_nbytes )
-                nwritten = c_write(fd, c_loc(st%cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                nwritten = int(c_write(fd, c_loc(st%cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t)))
                 if( nwritten > 0 ) then
                     sent = sent + int(nwritten)
                     retry_count = 0
@@ -1390,12 +1390,12 @@ contains
             integer(c_int)                  :: nread
             do
                 if( in_pipe(1) < 0 ) exit
-                nread = c_read(in_pipe(1), c_loc(raw(1)), int(size(raw), c_size_t))
+                nread = int(c_read(in_pipe(1), c_loc(raw(1)), int(size(raw), c_size_t)))
                 if( nread <= 0 ) exit
             end do
             do
                 if( out_pipe(1) < 0 ) exit
-                nread = c_read(out_pipe(1), c_loc(raw(1)), int(size(raw), c_size_t))
+                nread = int(c_read(out_pipe(1), c_loc(raw(1)), int(size(raw), c_size_t)))
                 if( nread <= 0 ) exit
             end do
             rx_state(ipipe) = pipe_rx_state()

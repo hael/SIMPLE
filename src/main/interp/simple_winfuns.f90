@@ -357,8 +357,8 @@ contains
         else
             ax = dble(abs(x))
             y = thresh/ax
-            bess = real(exp(ax)/sqrt(ax))*(qs(1)+y*(qs(2)+y*(qs(3)+&
-                &y*(qs(4)+y*(qs(5)+y*(qs(6)+y*(qs(7)+y*(qs(8)+y*qs(9)))))))))
+            bess = real(real(exp(ax)/sqrt(ax))*(qs(1)+y*(qs(2)+y*(qs(3)+&
+                &y*(qs(4)+y*(qs(5)+y*(qs(6)+y*(qs(7)+y*(qs(8)+y*qs(9))))))))), kind=kind(bess))
         endif
     end function bessi0
 

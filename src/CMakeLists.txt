@@ -90,6 +90,94 @@ list(APPEND JPG_src "extlibs/tiff/libtiff_funs.c")
 
 list(APPEND FILEIO_src "fileio/simple_posix.c")
 
+# Keep warnings from bundled third-party sources out of SIMPLE's warning
+# budget. Project-owned wrappers (for example fileio/simple_tifflib.f90) retain
+# the normal warning policy so interoperability defects remain visible.
+set(SIMPLE_VENDOR_SOURCES
+    ${GNUFOR_src}
+    ${JSON_src}
+    ${NETLIB_src}
+    ${STARFILE_src}
+    ${UNIX_src}
+    ${CURL_src}
+    ${XML_src}
+    ${CPLOT2D_src}
+    ${JPG_src}
+)
+set_source_files_properties(${SIMPLE_VENDOR_SOURCES} PROPERTIES COMPILE_OPTIONS "-w")
+
+# gfortran diagnoses private state in a parent module as unused even when its
+# submodules consume it. The offload reconstructor similarly keeps debug state
+# for a configuration selected by preprocessing. Suppress this warning only on
+# those translation units so genuinely unused module state elsewhere remains
+# visible to fix_warnings.py.
+set(SIMPLE_CROSS_UNIT_STATE_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/class/simple_classaverager.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/image/simple_image.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/nu_filt/simple_nu_filter.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/volume/simple_reconstructor_openmpoffload.f90"
+)
+set_source_files_properties(${SIMPLE_CROSS_UNIT_STATE_SOURCES}
+    PROPERTIES COMPILE_OPTIONS "-Wno-unused-value")
+
+# These sources contain declarations shared by mutually exclusive CPU and GPU
+# preprocessor branches. An ordinary debug build necessarily sees one branch's
+# declarations as unused; retain them for the alternate build configuration.
+set(SIMPLE_CONDITIONAL_BRANCH_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/pftc/simple_polarft_corr.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/volume/simple_reconstructor_openmpoffload.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_gpu_utils.f90"
+)
+set_property(SOURCE ${SIMPLE_CONDITIONAL_BRANCH_SOURCES} APPEND
+    PROPERTY COMPILE_OPTIONS "-Wno-unused-variable")
+
+# Private helpers in these modules are retained as test entry points, callback
+# implementations, or optional workflow hooks even when the current executable
+# set does not reference them directly.
+set(SIMPLE_INTENTIONAL_HELPER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_class_sample_io.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/commanders/test/simple_commanders_test_fft.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/flex/simple_flex_projected_latent_model.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/image/simple_image.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/motion/simple_motion_align_hybrid.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/motion/simple_opt_image_weights.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/ori/simple_ori.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/ori/simple_ori_utils.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_cluster2D_utils.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_p03_initial_analysis.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_p04_refpick_extract_new.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_pool2D_utils.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/comm/simple_ipc_tcp_socket_tester.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/persistent_worker/simple_persistent_worker_server_tester.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_private_prgs.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utils/simple_segmentation.f90"
+)
+set_property(SOURCE ${SIMPLE_INTENTIONAL_HELPER_SOURCES} APPEND
+    PROPERTY COMPILE_OPTIONS "-Wno-unused-function")
+
+# FoX exports a symbol named len with a declared type. Importing its umbrella
+# module triggers a GNU diagnostic about the intrinsic even though SIMPLE does
+# not redeclare or call that symbol.
+set(SIMPLE_FOX_IMPORT_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/star/simple_relion.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/star/simple_starproject.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/star/simple_starproject_stream.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/strategies/parallelization/simple_preprocess_strategy.f90"
+)
+set_property(SOURCE ${SIMPLE_FOX_IMPORT_SOURCES} APPEND
+    PROPERTY COMPILE_OPTIONS "-Wno-surprising")
+
+# GNU 16 emits descriptor-flow false positives around allocatable assignment
+# and move_alloc in these routines. The descriptors are initialized by the
+# language runtime before the reported statements execute.
+set(SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_imghead.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/star/simple_starproject_stream.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_watcher.f90"
+)
+set_property(SOURCE ${SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES} APPEND
+    PROPERTY COMPILE_OPTIONS "-Wno-maybe-uninitialized")
+
 # Add Windows-only stubs
 if(WIN32)
     list(APPEND FILEIO_src "fileio/symlink_stub.c")

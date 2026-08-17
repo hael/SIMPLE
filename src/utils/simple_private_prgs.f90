@@ -99,6 +99,7 @@ contains
     function get_n_private_keys_optional( prg ) result( nopt )
         character(len=*), intent(in)  :: prg
         integer :: nopt, iprg, i
+        nopt = 0
         iprg = 0
         do i=1,n_private_prgs
             if( trim(prg) .eq. private_prgs(i)%name%to_char() )then
@@ -115,6 +116,7 @@ contains
         integer,          intent(out) :: nopt
         type(string),     allocatable :: keys_optional(:)
         integer :: iprg, i
+        nopt = 0
         iprg = 0
         do i=1,n_private_prgs
             if( trim(prg) .eq. private_prgs(i)%name%to_char() )then

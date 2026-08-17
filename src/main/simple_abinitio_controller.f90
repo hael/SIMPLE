@@ -21,6 +21,7 @@ integer,          parameter :: NSPACE_SUB_BASE         = 2500
 integer,          parameter :: TURNED_OFF              = NSTAGES + 1 ! value for stage-based policies to indicate "turned off" 
 integer,          parameter :: GAUREF_LAST_STAGE       = 2           ! stop gaussian filtering after early stages
 integer,          parameter :: ML_REG_START_STAGE      = 3           ! first stage with ml_reg=yes; must match set_refine3D_stage_controls case split
+integer,          parameter :: PCG_REC_START_STAGE     = 3           ! first stage allowed to use the requested PCG backend
 integer,          parameter :: SYMSRCH_STAGE           = 3           ! search symmetry axis
 integer,          parameter :: PROB_REFINE_STAGE       = 3           ! prob refinement stages 3-5
 integer,          parameter :: TRAILREC_STAGE_SINGLE   = 5           ! first stage where trail_rec behavior changes
@@ -55,7 +56,7 @@ real,             parameter :: FULL_SAMPLE_SWITCH_FRAC    = 0.9  ! force all-act
 integer,          parameter :: NSAMPLE_ABINITIO3D_DEFAULT = 10000
 
 type :: refine3D_stage_cfg
-    type(string) :: pgrp, refine, ml_reg, trail_rec, fillin, conical_fsc, envfsc
+    type(string) :: pgrp, refine, rec_backend, ml_reg, trail_rec, fillin, conical_fsc, envfsc
     type(string) :: balance, partition, filt_mode, automsk, nu_refine, greedy_sampling, prob_neigh_mode
     integer :: iter, inspace, inspace_sub, imaxits
     real    :: trs, frac_best, overlap, fracsrch
@@ -205,6 +206,7 @@ contains
         call set_refine3D_update_policy( cfg, params, istage )
         call set_refine3D_symmetry_policy( cfg, params, istage )
         call set_refine3D_mode_policy( cfg, params, istage, l_cavgs )
+        call set_refine3D_backend_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_balance_policy( cfg, params )
         call set_refine3D_gauref_policy( cfg, params, istage, l_cavgs )
         call set_refine3D_trailrec_policy( cfg, params, istage )
@@ -317,6 +319,17 @@ contains
             cfg%prob_neigh_mode  = ''
         endif
     end subroutine set_refine3D_mode_policy
+
+    subroutine set_refine3D_backend_policy( cfg, params, istage, l_cavgs )
+        type(refine3D_stage_cfg), intent(inout) :: cfg
+        class(parameters),        intent(in)    :: params
+        integer,                  intent(in)    :: istage
+        logical,                  intent(in)    :: l_cavgs
+        cfg%rec_backend = 'gridding'
+        if( .not. l_cavgs .and. istage >= PCG_REC_START_STAGE )then
+            cfg%rec_backend = trim(params%rec_backend)
+        endif
+    end subroutine set_refine3D_backend_policy
 
     subroutine set_refine3D_balance_policy( cfg, params )
         type(refine3D_stage_cfg), intent(inout) :: cfg
@@ -518,6 +531,12 @@ contains
         call cline_refine3D%set('which_iter',             cfg%iter)
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
+        call cline_refine3D%set('rec_backend',            cfg%rec_backend)
+        if( cfg%rec_backend.eq.'pcg' )then
+            if( params%pcg_lambda_rel >= 0. ) call cline_refine3D%set('pcg_lambda_rel', params%pcg_lambda_rel)
+        else
+            call cline_refine3D%delete('pcg_lambda_rel')
+        endif
         if( cfg%refine.eq.'prob_neigh' )then
             call cline_refine3D%set('prob_neigh_mode',    cfg%prob_neigh_mode)
         else

@@ -157,7 +157,9 @@ contains
                     iter = iter+1
                     if( iter == spec%maxits )then
                        if(warn) THROW_WARN('brent exceeding maximum iterations; simple_opt_subs')
-                        return ! ‘rbrent’ may be used uninitialized in this function
+                        xmin   = x
+                        rbrent = fx
+                        return
                     endif
                     xm=0.5*(a+b)
                     tol1=spec%ftol*abs(x)+ZEPS

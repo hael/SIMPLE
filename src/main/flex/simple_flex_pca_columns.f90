@@ -113,7 +113,7 @@ contains
         real(dp),          intent(inout) :: S(n,n)
         integer, optional, intent(in)    :: niter
         real(dp), allocatable :: Mimp(:,:), evec(:,:), eval(:), work(:,:)
-        integer  :: it, nit, i, j, k, nrot, rr
+        integer  :: it, nit, i, k, nrot, rr
         real(dp) :: dmax
         if( n < 2 ) return
         rr  = max(1, min(r, n-1))
@@ -786,7 +786,7 @@ contains
         integer, allocatable, intent(out)  :: col_hkl(:,:)
         integer,              intent(out)  :: ncol
         real, allocatable :: snr(:,:,:)
-        integer :: kfromto(2), kmax, kmax_sq, h, k, l, sep, r_sq, target, hn, kn, ln, bh, bk, bl, s
+        integer :: kfromto(2), kmax, kmax_sq, h, k, l, sep, r_sq, target, bh, bk, bl, s
         real    :: best
         logical :: taken
         call estimate_snr_volume(params, build, mean_rec, pinds, nptcls, lb, ub, nyq_rec, snr)
@@ -865,7 +865,7 @@ contains
         real, allocatable :: var_acc(:,:,:), dens_acc(:,:,:), hi(:)
         real(dp) :: floor_noise
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, pf, h, k, l, nhi, sh, nyq_use
-        real    :: inv_pf2, av
+        real    :: inv_pf2
         complex :: cval
         integer(timer_int_kind) :: t_phase
         pf = OSMPL_PAD_FAC; inv_pf2 = 1.0/real(pf*pf)
@@ -2444,7 +2444,7 @@ contains
         real(dp), allocatable :: pwsh_thr(:,:), cntsh_thr(:,:), pwsh(:), cntsh(:)   ! per-shell noise profile
         complex(dp), allocatable :: bc_thr(:,:)
         integer,  allocatable :: nvalid_thr(:)
-        integer :: batchlims(2), batchsz, ibatch, i, iptcl, q, r, dd, a1, a2, nrot, keep, ncomp
+        integer :: batchlims(2), batchsz, ibatch, i, q, r, dd, a1, a2, nrot, keep, ncomp
         integer :: alpha, beta, gam1, delta, nvalid, ithr, nthr, nyq_rec, info
         real(dp) :: ridge, trc, gmax, sig2_eff, tr_bb, tr_g, tr_match, pw, cnt
         logical  :: l_trmatch
@@ -3101,7 +3101,7 @@ contains
         real(dp) :: rho_max, rrel
         logical :: l_relprior, l_stats_only, l_from_parts
         integer :: ihf
-        integer :: batchlims(2), batchsz, ibatch, i, iptcl, q, r, ithr, nthr, ia, row
+        integer :: batchlims(2), batchsz, ibatch, i, q, r, ithr, nthr, ia, row
         integer, allocatable :: nzeroG_thr(:), nzeroR_thr(:), nzeroZ_thr(:)   ! dead-basis counters
         real(dp) :: a, a_best, e_yy, e_mm, best_res, res, aa, sig2
         integer(timer_int_kind) :: t_phase
@@ -3827,7 +3827,7 @@ contains
         integer,  intent(in)    :: n
         real(dp), intent(inout) :: A(n,n), b(n)
         real(dp) :: L(n,n), s, y(n), ridge, dscale
-        integer  :: i, j, k, attempt
+        integer  :: i, j, attempt
         dscale = 0.d0
         do i = 1, n
             dscale = dscale + abs(A(i,i))
@@ -4050,7 +4050,7 @@ contains
         integer,           intent(in)  :: nyq
         real,              intent(in)  :: frac
         real(dp),          intent(out) :: pw, cnt
-        integer  :: pf, h, k, hmin, hmax, kmin, kmax, hp, kp, sh_lo, sh
+        integer  :: pf, h, k, hmin, hmax, kmin, kmax, sh_lo, sh
         complex(dp) :: c
         pf   = OSMPL_PAD_FAC
         sh_lo= nint(frac*real(nyq))

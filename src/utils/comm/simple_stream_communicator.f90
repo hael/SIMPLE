@@ -183,7 +183,7 @@ contains
             ! send parent X if self%exit is false, else Y
             snd = 'Y'
             if(self%exit) snd = 'X'
-            rc = c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t))
+            rc = int(c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t)))
             if (rc < 0) call simple_exception("Child write to background heartbeat pipe failed", __FILENAME__ , __LINE__)
             ! close pipes and exit
             rc = c_close(self%bg_pipe(1))
@@ -203,7 +203,7 @@ contains
         if(.not. self%active) return ! this process isn't communicating with nice
         snd = 'T'
         ! send child T to terminate
-        rc = c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t))
+        rc = int(c_write(self%bg_pipe(2), c_loc(snd), len(snd, kind=c_size_t)))
         if (rc < 0) call simple_exception("Parent write to background heartbeat pipe failed", __FILENAME__ , __LINE__)
         ! wait for child to terminate
         pid = c_waitpid(self%bg_pid, rc, 0)

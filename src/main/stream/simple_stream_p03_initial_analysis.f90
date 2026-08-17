@@ -93,27 +93,19 @@ contains
         logical,                   allocatable     :: accepted_bins(:)
         type(string),              allocatable     :: projects(:)                   ! batch of new project paths from the watcher
         type(string),              allocatable     :: imgfiles(:)                   ! cache of cavgs stack paths for each cluster, for use in process_selected_refs
-        type(oris)                                 :: nmics_ori                     ! single-ori container for writing STREAM_NMICS
-        type(string)                               :: projfile, cwd_master, cwd_cycle, cycle_dir, cycle_projfile, boxfile
+        type(string)                               :: projfile, cwd_master, cwd_cycle, cycle_projfile, boxfile
         type(string)                               :: proj_local                    ! local (bare filename) copy of a watched project, for per-project pick+extract
-        type(string)                               :: proj_stem                     ! basename of a watched project, minus its extension
         type(string)                               :: cur_projname                  ! projname of the project_list record currently being picked+extracted
         type(qsys_env)                             :: qenv
         type(ptcl_sieve)                           :: sieve
-        type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_shape_rank, cline_reextract, cline_abinitio3D, cline_cls_split
+        type(cmdline)                              :: cline_extract, cline_abinitio2D, cline_abinitio3D
         type(parameters)                           :: params, params_sieve
         type(sp_project)                           :: spproj, spproj_part, spproj_all
         type(stream_watcher)                       :: project_buff           ! monitors dir_target for new partial projects
-        type(commander_extract)                    :: xextract
-        type(commander_reextract)                  :: xreextract
         type(gui_metadata_cavg2D)                  :: meta_cavg2D
         type(gui_metadata_cavg2D)                  :: meta_pickrefs
-        type(commander_abinitio2D)                 :: xabinitio2D
         type(commander_reproject)                  :: xreproject
-        type(commander_cls_split)                  :: xcls_split
-        type(commander_make_cavgs)                 :: xmake_cavgs
         type(gui_metadata_micrograph)              :: meta_micrograph
-        type(commander_shape_rank_cavgs)           :: xshape_rank
         type(gui_metadata_stream_update)           :: meta_update            ! inbound: user selections and threshold updates
         type(gui_metadata_stream_opening2D)        :: meta_opening2D         ! outbound: 2D stage progress
         type(gui_metadata_stream_picking)          :: meta_initial_picking   ! outbound: micrograph / picking progress
@@ -127,26 +119,21 @@ contains
         integer                                    :: n_mics_imported, n_ptcls_imported ! counts returned by import_new_projects
         integer                                    :: last_import_time       ! timestamp of the most recent import
         integer                                    :: box_in_pix      =0      ! box size (px) set by segdiampick_mics; 0 until known
-        integer                                    :: box_for_pick    =0      ! box size used for reference picking
         integer                                    :: box_for_extract =0      ! box size used for particle extraction
-        integer                                    :: ithumb, xtiles, ytiles ! sprite-sheet thumbnail index and grid dims
-        integer                                    :: iori, iproj, i_max, i_start
+        integer                                    :: ithumb ! sprite-sheet thumbnail index and grid dims
+        integer                                    :: iori, iproj, i_max
         integer                                    :: nmics                  ! local copy of params%nmics passed to callee
         integer                                    :: n_selected_cavgs       ! number of quality-selected cavgs in current cycle
         integer                                    :: n_imported              ! number of micrographs imported in the current cycle
         integer                                    :: n_cycles      ! tracks how many "more mics" requests have been applied
         integer                                    :: vis_cycle
-        integer                                    :: ncavgs                 ! number of reference classes selected by user
-        integer                                    :: mindim                 ! minimum dimension of selected cavgs
         integer                                    :: envlen
         integer                                    :: extract_counter
         integer                                    :: iextract
         integer                                    :: imic
         integer                                    :: n_extract_done
-        logical                                    :: restart_requested
         logical                                    :: l_sieve_init
         real                                       :: mskdiam                ! mask diameter (A) for reference-based picking, set by segdiampick_mics; 0 until known
-        real                                       :: mskdiam_estimate=0     ! mask diameter (A) estimated by segdiampick_mics
         real                                       :: smpd_stk               ! pixel size of the cavgs stack
         call signal(SIGTERM, sigterm_handler)   ! graceful shutdown on SIGTERM
         ! validate required args and apply defaults
@@ -599,9 +586,8 @@ contains
                 type(string),        intent(in) :: cluster_projfile
                 type(string),        intent(in) :: outdir
                 integer,             intent(in) :: mskdiam_in
-                type(sp_project)                :: spproj_cluster
                 type(string)                    :: cwd, cwd_abinitio2D, server_address
-                integer :: nptcls, ncls_job, nthr2D, nsample_job
+                integer :: nptcls, ncls_job, nsample_job
                 nptcls = spproj_inout%os_ptcl2D%count_state_gt_zero()
                 ncls_job    = min(NCLS_MAX, max(NCLS_MIN, nptcls/params%nptcls_per_cls))
                 nsample_job = ((nptcls/5 + 999) / 1000) * 1000 ! round up to nearest 1000
@@ -639,9 +625,6 @@ contains
                 type(string),        intent(in) :: cluster_projfile
                 type(string),        intent(in) :: outdir
                 integer,             intent(in) :: mskdiam_in
-                type(sp_project)                :: spproj_cluster
-                type(string)                    :: cwd
-                integer :: nptcls, ncls_job, nthr2D
                 call spproj_inout%kill()
                 call spproj_inout%read(cluster_projfile)
                 call spproj_inout%write(string("test.simple"))
@@ -653,9 +636,8 @@ contains
                 type(string),        intent(in) :: cluster_projfile
                 type(string),        intent(in) :: outdir
                 integer,             intent(in) :: mskdiam_in
-                type(sp_project)                :: spproj_cluster
                 type(string)                    :: cwd, cwd_abinitio3D, server_address
-                integer :: nptcls, ncls_job, nthr2D
+                integer :: nptcls, ncls_job
                 nptcls = spproj_inout%os_ptcl2D%get_noris()
                 ncls_job = min(NCLS_MAX, max(NCLS_MIN, nptcls/params%nptcls_per_cls))
                 call simple_getcwd(cwd)
@@ -695,10 +677,8 @@ contains
                 integer,      intent(in) :: mskdiam_in            ! mask diameter (A) used by 3D/ref-projection steps
                 integer,     allocatable :: states(:), projs(:), nunique_proj(:), uniqbuf(:)
                 integer,     allocatable :: cavg_inds_local(:)    ! class-average indices for picking-reference metadata
-                type(commander_abinitio3D_cavgs) :: xabinitio3D_cavgs ! commander for abinitio3D with class-average-based rejection
                 type(cmdline)            :: cline_reproject       ! command line builder for the reproject commander
                 type(string)             :: cwd, volpath          ! saved working directory and selected volume path
-                type(string)             :: cavgsstk_local        ! cavgs stack path sent to the GUI
                 integer                  :: ldim(3)               ! selected volume box dimensions
                 integer                  :: ldim_clip(3)          ! particle-stack box dimensions for clipping/padding
                 integer                  :: ldim_new(3)           ! reprojection box dimensions after Fourier rescaling
@@ -707,7 +687,6 @@ contains
                 integer :: ivol, bestvol, i                          ! volume loop index and best-population volume id
                 real    :: vol_smpd
                 real    :: smpd_part                              ! particle-stack sampling distance (target)
-                real    :: smpd_new                               ! sampling distance after rescaling
                 call simple_getcwd(cwd)
                 call simple_chdir(outdir)
                 call spproj_inout%kill()
@@ -1027,7 +1006,7 @@ contains
                 type(image), allocatable    :: cavg_imgs_local(:)
                 type(image), allocatable    :: masks_local(:)
                 integer, allocatable        :: cavg_inds_local(:)
-                real,               allocatable :: diams_local(:), min_diams_local(:),shifts_local(:,:)
+                real,               allocatable :: diams_local(:), shifts_local(:,:)
                 integer,            allocatable :: selected_cavg_inds_local(:)
                 integer,            allocatable :: cls_states_local(:)
                 integer                     :: ncls_local, i_mic_local, xtiles_local, ytiles_local, i_mask_local
@@ -1578,7 +1557,8 @@ contains
                 sent = 0
                 retry_count = 0
                 do while( sent < framed_nbytes )
-                    nwritten = c_write(ipc_pipe_initial_analysis_in(2), c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                    nwritten = int(c_write(ipc_pipe_initial_analysis_in(2), c_loc(cbuf(sent + 1)), &
+                        &int(framed_nbytes - sent, c_size_t)))
                     if( nwritten > 0 ) then
                         sent = sent + int(nwritten)
                         retry_count = 0

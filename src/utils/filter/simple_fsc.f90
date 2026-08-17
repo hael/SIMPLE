@@ -647,7 +647,7 @@ contains
         class(image),                 intent(inout) :: even, odd
         integer,            optional, intent(in)    :: state
         logical, parameter :: VERBOSE = .false.
-        integer :: n, idir, loc(1)
+        integer :: idir, loc(1)
         if( .not. even%is_ft() ) call even%fft()
         if( .not. odd%is_ft()  ) call odd%fft()
         call even%conical_fsc(odd, self%dirs, self%cone_half_angle_deg, self%min_count, self%cfsc, self%counts)

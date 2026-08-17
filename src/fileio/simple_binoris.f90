@@ -201,15 +201,15 @@ contains
         ! write orientation data (2nd part)
         ibytes = self%header(isegment)%first_data_byte
         if( is_particle_seg(isegment) )then
-            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+             do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 call os%ori2prec(i, ptcl_record)
                 write(unit=self%funit,pos=ibytes) ptcl_record
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
         else
-            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+             do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 str_dyn = os%ori2str(i)
-                nspaces = self%header(isegment)%n_bytes_per_record - str_dyn%strlen_trim()
+                 nspaces = int(self%header(isegment)%n_bytes_per_record - str_dyn%strlen_trim())
                 if( nspaces > 0 )then
                     write(unit=self%funit,pos=ibytes) str_dyn%to_char()//spaces(nspaces)
                 else
@@ -263,8 +263,8 @@ contains
         ! WRITE FILE
         ! write orientation data (2nd part)
         ibytes = self%header(isegment)%first_data_byte
-        do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            nspaces = self%header(isegment)%n_bytes_per_record - os_strings(i)%strlen_trim()
+         do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
+             nspaces = int(self%header(isegment)%n_bytes_per_record - os_strings(i)%strlen_trim())
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) os_strings(i)%to_char()//spaces(nspaces)
             else
@@ -391,15 +391,15 @@ contains
         ! write orientation data
         ibytes = self%header(isegment)%first_data_byte
         if( is_particle_seg(isegment) )then ! is ptcl2D or ptcl3D segment, see simple_sp_project
-            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+             do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 call os%ori2prec(i, ptcl_record)
                 write(unit=self%funit,pos=ibytes) ptcl_record
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
         else
-            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+             do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 str_dyn = os%ori2str(i)
-                nspaces = self%header(isegment)%n_bytes_per_record - str_dyn%strlen_trim()
+                 nspaces = int(self%header(isegment)%n_bytes_per_record - str_dyn%strlen_trim())
                 if( nspaces > 0 )then
                     write(unit=self%funit,pos=ibytes) str_dyn%to_char()//spaces(nspaces)
                 else
@@ -424,8 +424,8 @@ contains
         call self%update_byte_ranges
         ! write orientation data
         ibytes = self%header(isegment)%first_data_byte
-        do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            nspaces = self%header(isegment)%n_bytes_per_record - sarr(i)%strlen_trim()
+         do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
+             nspaces = int(self%header(isegment)%n_bytes_per_record - sarr(i)%strlen_trim())
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) sarr(i)%to_char()//spaces(nspaces)
             else
@@ -541,7 +541,7 @@ contains
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
-        fromto_here    = self%header(isegment)%fromto
+         fromto_here    = int(self%header(isegment)%fromto)
         present_fromto = present(fromto)
         if( present_fromto ) fromto_here = fromto
         if( fromto_here(1)<self%header(isegment)%fromto(1) .or. fromto_here(1)>self%header(isegment)%fromto(2) )then
@@ -571,7 +571,7 @@ contains
             else
                 ibytes = self%header(isegment)%first_data_byte
                 ! read orientation data as strings
-                nl       = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
+                 nl       = int(self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1)
                 n        = nthr * THREAD_NSTRINGS
                 nbatches = ceiling(real(nl)/real(n))
                 batches  = split_nobjs_even(nl,nbatches)
@@ -627,7 +627,7 @@ contains
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             ! read orientation data into array of allocatable strings
             ibytes = self%header(isegment)%first_data_byte
-            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+             do i=int(self%header(isegment)%fromto(1)),int(self%header(isegment)%fromto(2))
                 allocate(character(len=self%header(isegment)%n_bytes_per_record) :: buffer)
                 read(unit=self%funit,pos=ibytes) buffer
                 sarr(i) = buffer
@@ -706,19 +706,19 @@ contains
         class(binoris),             intent(in) :: self
         integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         integer :: fromto(2)
-        fromto = self%header(isegment)%fromto
+         fromto = int(self%header(isegment)%fromto)
     end function get_fromto
 
     pure integer function get_n_records( self, isegment )
         class(binoris),             intent(in) :: self
         integer(kind(ENUM_ORISEG)), intent(in) :: isegment
-        get_n_records = self%header(isegment)%n_records
+         get_n_records = int(self%header(isegment)%n_records)
     end function get_n_records
 
     pure integer function get_n_bytes_per_record( self, isegment )
         class(binoris),             intent(in) :: self
         integer(kind(ENUM_ORISEG)), intent(in) :: isegment
-        get_n_bytes_per_record = self%header(isegment)%n_bytes_per_record
+         get_n_bytes_per_record = int(self%header(isegment)%n_bytes_per_record)
     end function get_n_bytes_per_record
 
     pure integer(kind=8) function get_n_bytes_tot( self )

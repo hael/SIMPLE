@@ -17,7 +17,7 @@ contains
         integer,       intent(out)   :: n_movies
         integer,       intent(out)   :: total_frames
         type(image) :: frame
-        integer     :: ldim_ref(3), ldim_cur(3), nframes, imov, iframe, ifoo
+        integer     :: ldim_ref(3), ldim_cur(3), nframes, imov, iframe
         logical     :: have_sum
 
         n_movies     = 0

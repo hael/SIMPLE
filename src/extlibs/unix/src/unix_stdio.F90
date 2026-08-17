@@ -84,7 +84,7 @@ module unix_stdio
         function c_fgets(str, size, stream) bind(c, name='fgets')
             import :: c_char, c_int, c_ptr
             implicit none
-            character(kind=c_char), intent(in)        :: str
+            character(kind=c_char), intent(out)       :: str(*)
             integer(kind=c_int),    intent(in), value :: size
             type(c_ptr),            intent(in), value :: stream
             type(c_ptr)                               :: c_fgets
@@ -152,15 +152,15 @@ module unix_stdio
         subroutine c_perror(str) bind(c, name='perror')
             import :: c_char
             implicit none
-            character(kind=c_char), intent(in) :: str
+            character(kind=c_char), intent(in) :: str(*)
         end subroutine c_perror
 
         ! FILE *popen(const char *command, const char *type)
         function c_popen(command, type) bind(c, name='popen')
             import :: c_char, c_ptr
             implicit none
-            character(kind=c_char), intent(in) :: command
-            character(kind=c_char), intent(in) :: type
+            character(kind=c_char), intent(in) :: command(*)
+            character(kind=c_char), intent(in) :: type(*)
             type(c_ptr)                        :: c_popen
         end function c_popen
 

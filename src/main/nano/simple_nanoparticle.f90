@@ -186,7 +186,7 @@ type :: nanoparticle
     type(atom_stats), allocatable :: atominfo(:)
     real,             allocatable :: coords4stats(:,:)
     ! OTHER
-    character(len=5)      :: element   = '     '
+    character(len=2)      :: element   = '  '
     character(len=4)      :: atom_name = '    '
     type(string)          :: npname
     type(string)          :: fbody
@@ -259,9 +259,9 @@ contains
         self%npname    = fname
         self%fbody     = get_fbody(basename(fname), fname2ext(fname))
         self%smpd      = params%smpd
-        self%atom_name = params%element
-        self%element   = params%element
-        el_ucase       = upperCase(params%element)
+        self%atom_name = params%element(1:len(self%atom_name))
+        self%element   = params%element(1:len(self%element))
+        el_ucase       = upperCase(params%element(1:len(el_ucase)))
         call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         call find_ldim_nptcls(self%npname, self%ldim, nptcls)
@@ -1391,7 +1391,7 @@ contains
                         max_size   = self%atominfo(cc)%size
                     endif
                 enddo
-                center(:) = self%atominfo(cc_largest)%center(:)
+                center(:) = int(self%atominfo(cc_largest)%center(:))
                 ! Write output as CSV file with the cc center at the origin for easy analysis
                 call fopen(funit, file=string(fn_slice), status='replace')
                 write(funit, '(A)') 'X'//CSV_DELIM//'Y'//CSV_DELIM//'INTENSITY'
@@ -1644,7 +1644,7 @@ contains
         deallocate(X,XTW,Y)
         call matinv(XTWX, XTWX_inv, 7, errflg)
         B   = matmul(XTWX_inv, XTWY)
-        amp = exp(B(1,1)) ! Best fit peak
+        amp = real(exp(B(1,1)), kind=kind(amp)) ! Best fit peak
         ! Generate covariance matrix
         cov_inv(1,1) = -2. * B(2,1)
         cov_inv(2,2) = -2. * B(3,1)
@@ -1656,7 +1656,7 @@ contains
         cov_inv(3,1) = cov_inv(1,3)
         cov_inv(3,2) = cov_inv(2,3)
         call matinv(cov_inv, cov, 3, errflg)
-        self%atominfo(cc)%aniso = cov
+        self%atominfo(cc)%aniso = real(cov, kind=kind(self%atominfo(cc)%aniso))
         ! Sample fit for goodness of fit and visualization
         max_int_out = 0.
         fit_mask    = .false.
@@ -1667,7 +1667,7 @@ contains
                     if( norm_2(rvec(:3,1)) < output_rad )then
                         fit_mask(i,j,k) = .true.
                         beta            = matmul(matmul(transpose(rvec),cov_inv),rvec)
-                        int             = amp * exp(-0.5 * beta(1,1))
+                        int             = real(amp * exp(-0.5 * beta(1,1)), kind=kind(int))
                         call fit%set_rmat_at(i, j, k, int)
                         if( int > max_int_out )then
                             max_int_out = int
@@ -1694,27 +1694,29 @@ contains
             self%atominfo(cc)%aniso     = 0.
             return
         endif
-        self%atominfo(cc)%u_evals(:3) = eigenvals(:3)
-        self%atominfo(cc)%doi         = eigenvals(3) / eigenvals(1)
-        self%atominfo(cc)%doi_min     = eigenvals(2) / eigenvals(1)
+        self%atominfo(cc)%u_evals(:3) = real(eigenvals(:3), kind=kind(self%atominfo(cc)%u_evals))
+        self%atominfo(cc)%doi         = real(eigenvals(3) / eigenvals(1), kind=kind(self%atominfo(cc)%doi))
+        self%atominfo(cc)%doi_min     = real(eigenvals(2) / eigenvals(1), kind=kind(self%atominfo(cc)%doi_min))
         ! Find azimuthal and polar angles of the major eigenvector
         majvector = eigenvecs(:,1)
         ! Sign of majvector is arbitrary. Use convention that y-coordinate must be >= 0
         if( majvector(2) < 0. )then
             majvector = -1. * majvector
         endif
-        self%atominfo(cc)%azimuth = atan(majvector(2) / majvector(1))
+        self%atominfo(cc)%azimuth = real(atan(majvector(2) / majvector(1)), kind=kind(self%atominfo(cc)%azimuth))
         if( majvector(1) > 0. )then
-            self%atominfo(cc)%azimuth = atan(majvector(2) / majvector(1))
+            self%atominfo(cc)%azimuth = real(atan(majvector(2) / majvector(1)), kind=kind(self%atominfo(cc)%azimuth))
         elseif( majvector(1) < 0. )then
-            self%atominfo(cc)%azimuth = atan(majvector(2) / majvector(1)) + PI
+            self%atominfo(cc)%azimuth = real(atan(majvector(2) / majvector(1)) + PI, kind=kind(self%atominfo(cc)%azimuth))
         else
             self%atominfo(cc)%azimuth = PI / 2
         endif
         if( majvector(3) > 0. )then
-            self%atominfo(cc)%polar = atan(sqrt(majvector(1)**2 + majvector(2)**2) / majvector(3))
+            self%atominfo(cc)%polar = real(atan(sqrt(majvector(1)**2 + majvector(2)**2) / majvector(3)), &
+                &kind=kind(self%atominfo(cc)%polar))
         elseif( majvector(3) < 0. )then
-            self%atominfo(cc)%polar = atan(sqrt(majvector(1)**2 + majvector(2)**2) / majvector(3)) + PI
+            self%atominfo(cc)%polar = real(atan(sqrt(majvector(1)**2 + majvector(2)**2) / majvector(3)) + PI, &
+                &kind=kind(self%atominfo(cc)%polar))
         else
             self%atominfo(cc)%polar = PI / 2
         endif

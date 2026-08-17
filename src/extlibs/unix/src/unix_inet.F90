@@ -33,7 +33,7 @@ module unix_inet
         function c_inet_addr(cp) bind(c, name='inet_addr')
             import :: c_char, c_in_addr_t
             implicit none
-            character(kind=c_char), intent(in) :: cp
+            character(kind=c_char), intent(in) :: cp(*)
             integer(kind=c_in_addr_t)          :: c_inet_addr
         end function c_inet_addr
     end interface

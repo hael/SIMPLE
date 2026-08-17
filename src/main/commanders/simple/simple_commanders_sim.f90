@@ -473,7 +473,7 @@ contains
                     ! generate atoms object
                     call atoms_obj%new(n)
                     do i = 1, n
-                        call atoms_obj%set_name(i,params%element//'  ')
+                        call atoms_obj%set_name(i,params%element(1:2)//'  ')
                         call atoms_obj%set_element(i,el1)
                     enddo
                     ! generate all coordinates
@@ -519,7 +519,7 @@ contains
                     ! generate atoms object
                     call atoms_obj%new(n)
                     do i = 1, n
-                        call atoms_obj%set_name(i,params%element//'  ')
+                        call atoms_obj%set_name(i,params%element(1:2)//'  ')
                         call atoms_obj%set_element(i,el1)
                     enddo
                     ! generate all coordinates

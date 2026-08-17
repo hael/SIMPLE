@@ -965,6 +965,8 @@ contains
             call simple_copy_file(src_projfile, work_projfile)
             cline_selection = cline
             call cline_selection%set('prg',      'selection')
+            call cline_selection%delete('rec_backend')
+            call cline_selection%delete('pcg_lambda_rel')
             call cline_selection%set('projfile', work_projfile)
             call cline_selection%set('projname', work_projname)
             call cline_selection%set('oritype',  'ptcl3D')
@@ -1178,6 +1180,8 @@ contains
             type(string),    allocatable     :: files_that_stay(:)
             character(len=*), parameter      :: INI3D_DIR='abinitio3D_cavgs/'
             cline_ini3D = cline
+            call cline_ini3D%delete('rec_backend')
+            call cline_ini3D%delete('pcg_lambda_rel')
             call cline_ini3D%set('nstages', abinitio_nstages_ini3D())
             ! Resolution limits
             if( .not. cline_ini3D%defined('lpstart_ini3D') ) call cline_ini3D%set('lpstart_ini3D', abinitio_lpstart_ini3D())

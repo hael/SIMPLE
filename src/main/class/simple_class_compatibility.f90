@@ -207,7 +207,7 @@ contains
         type(sp_project),           intent(inout) :: spproj
         type(image),                allocatable   :: imgs(:)
         integer,                    allocatable   :: states(:)
-        integer                                   :: nset, iimg
+        integer                                   :: iimg
         real                                      :: min_dim, max_dim
         imgs   = read_cavgs_into_imgarr(spproj)
         states = spproj%os_cls2D%get_all_asint('state')

@@ -232,7 +232,7 @@ contains
             return
         endif
         ! calc average
-        ave = sum(real(data,dp))/real(n,dp)
+        ave = real(sum(real(data,dp))/real(n,dp), kind=kind(ave))
         ! calc sum of devs and sum of devs squared
         ep_dp  = 0.d0
         var_dp = 0.d0
@@ -277,7 +277,7 @@ contains
             return
         endif
         ! calc average
-        ave = sum(real(data,dp))/real(n,dp)
+        ave = real(sum(real(data,dp))/real(n,dp), kind=kind(ave))
         ! calc sum of devs and sum of devs squared
         ep_dp = 0._dp
         var_dp = 0._dp
@@ -324,7 +324,7 @@ contains
             THROW_WARN('ERROR: n must be at least 2; moment_3')
             return
         endif
-        ave = sum(real(data,dp))/real(n,dp)
+        ave = real(sum(real(data,dp))/real(n,dp), kind=kind(ave))
         ! calc sum of devs and sum of devs squared
         ep_dp = 0._dp
         var_dp = 0._dp
@@ -374,7 +374,7 @@ contains
             return
         endif
         ! calc average
-        ave = sum(real(data,dp), mask=mask)/real(n,dp)
+        ave = real(sum(real(data,dp), mask=mask)/real(n,dp), kind=kind(ave))
         ! calc sum of devs and sum of devs squared
         ep_dp  = 0._dp
         var_dp = 0._dp
@@ -422,7 +422,7 @@ contains
             return
         endif
         ! calc average
-        ave = sum(real(data,dp), mask=mask)/real(n,dp)
+        ave = real(sum(real(data,dp), mask=mask)/real(n,dp), kind=kind(ave))
         ! calc sum of devs and sum of devs squared
         ep_dp  = 0._dp
         var_dp = 0._dp
@@ -490,7 +490,7 @@ contains
         endif
         if( k2 > DTINY )then
             sq = real(n, qp) * real(n-1, qp)
-            c = sqrt(sq) / real(n-2,dp) ! unbiased
+            c = real(sqrt(sq) / real(n-2,dp), kind=kind(c)) ! unbiased
             skewness_2 = real(c * k3 / k2**1.5d0)
         endif
     end function skewness_2
@@ -506,6 +506,7 @@ contains
             return
         endif
         mu = sum(real(data,dp)) / real(n,dp)
+        k4b = sum((real(data,dp)-mu)**4)
         k2 = sum((real(data,dp)-mu)**2) / real(n,dp)
         if( k2 > DTINY )then
             ! calculation split: numerical overflow

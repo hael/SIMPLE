@@ -88,14 +88,14 @@ contains
         else
             call starfile_table__read(tbl, path)
         end if
-        obj = starfile_table__firstobject(tbl)
+         obj = int(starfile_table__firstobject(tbl))
         if( obj < 0 ) then
             call starfile_table__delete(tbl)
             return
         end if
         count_objects = 1
         do
-            obj = starfile_table__nextobject(tbl)
+             obj = int(starfile_table__nextobject(tbl))
             if( obj < 0 ) exit
             count_objects = count_objects + 1
         end do

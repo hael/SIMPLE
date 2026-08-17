@@ -256,7 +256,7 @@ contains
                         call pickrefsoris%set(1, 'imgkind', 'pickrefs')
                         call pickrefsoris%set(1, 'stk', cwd_job//'/'//PICKREFS_FBODY//params%ext%to_char())
                         ! set box size
-                        params%box = pickrefsoris%get(1, 'box_for_extract')  ! assumes square boxes
+                        params%box = int(pickrefsoris%get(1, 'box_for_extract'))  ! assumes square boxes
                         ! create pickrefs jpeg
                         call mrc2jpeg_tiled(string(PICKREFS_FBODY)//params%ext, string(PICKREFS_FBODY)//".jpeg",&
                         &scale=pickrefs_thumbnail_scale, ntiles=n_pickrefs, n_xtiles=xtiles, n_ytiles=ytiles)
@@ -391,8 +391,8 @@ contains
 
             subroutine write_project()
                 integer, allocatable :: fromps(:)
-                integer              :: nptcls,fromp,top,i,iptcl,nmics,imic,micind,optics_map_id
-                type(string)         :: prev_projname, mapfileprefix
+                integer              :: nptcls, fromp, top, i, iptcl, nmics, imic, micind
+                type(string)         :: prev_projname
                 type(project_rec)    :: prec
                 type(rec_iterator)   :: it
                 write(logfhandle,'(A)')'>>> PROJECT UPDATE'
@@ -898,7 +898,8 @@ contains
                 sent = 0
                 retry_count = 0
                 do while( sent < framed_nbytes )
-                    nwritten = c_write(ipc_pipe_refpick_in(2), c_loc(cbuf(sent + 1)), int(framed_nbytes - sent, c_size_t))
+                    nwritten = int(c_write(ipc_pipe_refpick_in(2), c_loc(cbuf(sent + 1)), &
+                        &int(framed_nbytes - sent, c_size_t)))
                     if( nwritten > 0 ) then
                         sent = sent + int(nwritten)
                         retry_count = 0

@@ -145,14 +145,14 @@ contains
         call starfile_table__new(tbl)
         call starfile_table__read(tbl, fname, "particles")
         ! iterate objects by hand
-        obj = starfile_table__firstobject(tbl)
+         obj = int(starfile_table__firstobject(tbl))
         if (obj < 0) then
             call assert_true(.false., "particle readback: no first object")
             return
         end if
         do
             count = count + 1
-            obj = starfile_table__nextobject(tbl)
+             obj = int(starfile_table__nextobject(tbl))
             if (obj < 0) exit
         end do
         ! sanity check: must equal nexpected
@@ -252,8 +252,8 @@ contains
         ! Readback — now file contains TWO objects
         call starfile_table__new(t1)
         call starfile_table__read(t1, fname)
-        nobj1 = starfile_table__firstobject(t1)
-        nobj2 = starfile_table__nextobject(t1)
+         nobj1 = int(starfile_table__firstobject(t1))
+         nobj2 = int(starfile_table__nextobject(t1))
         call assert_true(nobj1 >= 0, "first object exists")
         call assert_true(nobj2 >= 0, "second object exists")
         call starfile_table__delete(t1)
@@ -292,13 +292,13 @@ contains
         ! Readback first (optics)
         call starfile_table__new(t)
         call starfile_table__read(t, fname, "optics")
-        ok = starfile_table__firstobject(t)
+         ok = int(starfile_table__firstobject(t))
         call assert_true(ok >= 0, "optics block found")
         call starfile_table__delete(t)
         ! Readback second (micrographs)
         call starfile_table__new(t)
         call starfile_table__read(t, fname, "micrographs")
-        ok = starfile_table__firstobject(t)
+         ok = int(starfile_table__firstobject(t))
         call assert_true(ok >= 0, "micrographs block found")
         call starfile_table__delete(t)
     end subroutine test_starfile_multiple_tables
@@ -425,7 +425,7 @@ contains
         call assert_true(file_exists(fname), "corrected micrographs star created")
         call starfile_table__new(checktbl)
         call starfile_table__read(checktbl,fname,"optics")
-        ok = starfile_table__firstobject(checktbl)
+         ok = int(starfile_table__firstobject(checktbl))
         call assert_true(ok >= 0,"optics block exists")
 
         call starfile_table__delete(checktbl)
@@ -465,7 +465,7 @@ contains
         call assert_true(file_exists(fname),"micrographs.star created")
         call starfile_table__new(checktbl)
         call starfile_table__read(checktbl,fname,"micrographs")
-        ok = starfile_table__firstobject(checktbl)
+         ok = int(starfile_table__firstobject(checktbl))
         call assert_true(ok >= 0, "micrographs table exists")
         call starfile_table__delete(checktbl)
     end subroutine test_relion_write_micrographs_star
@@ -512,7 +512,7 @@ contains
         call assert_true(file_exists(fname),"particles2D.star created")
         call starfile_table__new(checktbl)
         call starfile_table__read(checktbl,fname,"particles")
-        ok = starfile_table__firstobject(checktbl)
+         ok = int(starfile_table__firstobject(checktbl))
         call assert_true(ok >= 0, "particles table exists")
         call starfile_table__delete(checktbl)
     end subroutine test_relion_write_particles2D_star
@@ -628,7 +628,7 @@ contains
         ! the STAR parser contract exercised by this suite.
         call starfile_table__new(tbl)
         call starfile_table__read(tbl, fname, "micrographs")
-        obj = starfile_table__firstobject(tbl)
+         obj = int(starfile_table__firstobject(tbl))
         call assert_true(obj >= 0, "micrograph readback: first row exists")
         ok = starfile_table__getValue_string(tbl, EMDL_MICROGRAPH_NAME, micname)
         call assert_true(ok, "micrograph readback: name present")
@@ -639,9 +639,9 @@ contains
         ok = starfile_table__getValue_double(tbl, EMDL_CTF_PHASESHIFT, value)
         call assert_true(ok, "micrograph readback: phase shift present")
         call assert_double(45.0_dp, value, "micrograph readback: phase shift")
-        obj = starfile_table__nextobject(tbl)
+         obj = int(starfile_table__nextobject(tbl))
         call assert_true(obj >= 0, "micrograph readback: second row exists")
-        obj = starfile_table__nextobject(tbl)
+         obj = int(starfile_table__nextobject(tbl))
         call assert_true(obj < 0, "micrograph readback: exactly two rows")
         call starfile_table__delete(tbl)
     end subroutine test_star_micrographs_readback

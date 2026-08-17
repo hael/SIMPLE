@@ -167,7 +167,7 @@ contains
     if( n > size(self%pickrefs_selection) ) THROW_HARD('pickrefs_selection exceeds maximum size')
     self%l_assigned             = .true.
     self%pickrefs_selection_length = n
-    self%pickrefs_selection(1:n)   = selection  ! only 1:n is ever read back
+    self%pickrefs_selection(1:n)   = int(selection, kind=kind(self%pickrefs_selection))  ! only 1:n is ever read back
   end subroutine set_pickrefs_selection
 
   ! Retrieve the user's class selection as an integer array
@@ -191,7 +191,7 @@ contains
     n = size(clusters)
     if( n > size(self%pickrefs_clusters) ) THROW_HARD('pickrefs_clusters exceeds maximum size')
     self%l_assigned               = .true.
-    self%pickrefs_clusters(1:n)   = clusters  ! only 1:n is ever read back
+    self%pickrefs_clusters(1:n)   = int(clusters, kind=kind(self%pickrefs_clusters))  ! only 1:n is ever read back
   end subroutine set_pickrefs_clusters
 
   ! Retrieve the pickref cluster membership as an integer array
@@ -235,7 +235,7 @@ contains
     if( n > size(self%sieverefs_selection) ) THROW_HARD('sieverefs_selection exceeds maximum size')
     self%l_assigned                 = .true.
     self%sieverefs_selection_length = n
-    self%sieverefs_selection(1:n)   = selection  ! only 1:n is ever read back
+    self%sieverefs_selection(1:n)   = int(selection, kind=kind(self%sieverefs_selection))  ! only 1:n is ever read back
   end subroutine set_sieverefs_selection
 
   ! Retrieve the sieve-reference class selection as an integer array
@@ -298,7 +298,7 @@ contains
     self%snapshot2D_id                = snapshot_id
     self%snapshot2D_iteration         = iteration
     self%snapshot2D_selection_length  = n
-    self%snapshot2D_selection(1:n)    = selection
+    self%snapshot2D_selection(1:n)    = int(selection, kind=kind(self%snapshot2D_selection))
     self%snapshot2D_filename          = filename%to_char()
   end subroutine set_snapshot2D_update
 

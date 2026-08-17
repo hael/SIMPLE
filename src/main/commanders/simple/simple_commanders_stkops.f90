@@ -205,7 +205,7 @@ contains
             call copy_imgfile(params%stk, params%outstk, params%smpd, fromto=[params%fromp,params%top])
         else if( params%mirr .ne. 'no' ) then
             ! mirror
-            call mirror_imgfile(params%stk, params%outstk, params%mirr, params%smpd)
+            call mirror_imgfile(params%stk, params%outstk, params%mirr(1:1), params%smpd)
         else if( params%makemovie .eq. 'yes' ) then
             ! prepare for movie
             call prep_imgfile4movie(params%stk, params%smpd)

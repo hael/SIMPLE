@@ -93,7 +93,6 @@ contains
     subroutine flex_pca_run_stage( stage_id, label )
         integer,          intent(in) :: stage_id
         character(len=*), intent(in) :: label
-        type(parameters) :: dummy
         integer(timer_int_kind) :: t_round
         if( .not. l_master ) THROW_HARD('flex_pca_run_stage called outside the distributed master')
         t_round = tic()

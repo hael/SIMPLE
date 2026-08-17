@@ -161,7 +161,7 @@ contains
         integer,          parameter   :: NCLUST_MAX = 65
         type(image),      allocatable :: cavg_imgs(:)
         real,             allocatable :: mm(:,:), dmat(:,:), resvals_tmp(:), resvals(:)
-        logical,          allocatable :: l_non_junk(:), l_states(:)
+        logical,          allocatable :: l_non_junk(:)
         integer,          allocatable :: labels(:), clsinds(:), i_medoids(:), inds(:), tmp(:)
         integer,          allocatable :: clspops(:), states(:), labels4write(:), inds_glob(:)
         type(clust_info), allocatable :: clust_info_arr(:)

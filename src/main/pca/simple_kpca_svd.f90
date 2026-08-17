@@ -616,7 +616,8 @@ contains
                                 denom = denom + score
                             enddo
                         else
-                            proj_data(1:m,ithr) = max(real(matmul(norm_landmarks_t, norm_prev(:,ithr)),dp), 0._dp)
+                            proj_data(1:m,ithr) = real(max(real(matmul(norm_landmarks_t, &
+                                &norm_prev(:,ithr)),dp), 0._dp), kind=kind(proj_data))
                             proj_data(1:m,ithr) = real(real(proj_data(1:m,ithr),dp) ** real(self%kpca_cosine_weight_power, dp))
                             denom = sum(real(proj_data(1:m,ithr),dp))
                             self%data(:,ind)  = matmul(landmark_mat, proj_data(1:m,ithr))

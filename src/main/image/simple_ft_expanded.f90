@@ -277,7 +277,8 @@ contains
                 sk    = sin(argk)
                 do hind=self%flims(1,1),self%flims(1,2)
                     if( self%bandmsk(hind,kind) )then
-                        self_out%cmat(hind,kind) = self%cmat(hind,kind) * cmplx(ck*ch(hind)-sk*sh(hind), (sk*ch(hind)+ck*sh(hind)))
+                        self_out%cmat(hind,kind) = self%cmat(hind,kind) * &
+                            &cmplx(ck*ch(hind)-sk*sh(hind), sk*ch(hind)+ck*sh(hind), kind=sp)
                     endif
                 end do
             end do
@@ -289,7 +290,8 @@ contains
                 sk    = sin(argk)
                 do hind=self%flims(1,1),self%flims(1,2)
                     if( self%bandmsk(hind,kind) )then
-                        self%cmat(hind,kind) = self%cmat(hind,kind) * cmplx(ck*ch(hind)-sk*sh(hind), (sk*ch(hind)+ck*sh(hind)))
+                        self%cmat(hind,kind) = self%cmat(hind,kind) * &
+                            &cmplx(ck*ch(hind)-sk*sh(hind), sk*ch(hind)+ck*sh(hind), kind=sp)
                     endif
                 end do
             end do

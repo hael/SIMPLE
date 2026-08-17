@@ -1139,10 +1139,11 @@ contains
     !> Distributed master: reduce raw worker B,D artifacts in ascending part
     !! order, then perform all folding, finalization and PCG locally. Independent
     !! state/half reductions are completed and released one at a time.
-    subroutine execute_rec3D_pcg_distributed_master( params, build, cline )
+    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, trail_bootstrap_states )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
+        logical, optional, intent(out)  :: trail_bootstrap_states(:)
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(image) :: previous_even, previous_odd, previous_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
@@ -1158,6 +1159,11 @@ contains
         real(dp) :: time_map_output, time_fsc_output
 
         call validate_pcg_common(params)
+        if( present(trail_bootstrap_states) )then
+            if( size(trail_bootstrap_states) /= params%nstates ) &
+                &THROW_HARD('PCG trailing-bootstrap state output has invalid size')
+            trail_bootstrap_states = .false.
+        endif
         provenance = pcg_raw_provenance(params)
         chain_provenance = pcg_chain_provenance(params)
         l_has_updates = .false.
@@ -1192,6 +1198,7 @@ contains
                 if( l_even_chain .neqv. l_odd_chain ) THROW_HARD('PCG trailing chain pair is incomplete')
                 l_bootstrap = .not. l_even_chain
             endif
+            if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
             call reduce_solve_state_half(state, 0, 'even', half_even, n_even, 'base')
             call reduce_solve_state_half(state, 1, 'odd',  half_odd,  n_odd,  'base')
             if( params%l_trail_rec )then

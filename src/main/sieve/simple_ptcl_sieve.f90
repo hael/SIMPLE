@@ -621,10 +621,12 @@ contains
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(in)    :: new_chunk
     type(chunk2D_state), allocatable   :: tmp(:)
-    integer :: n
+    integer :: i, n
     n = self%get_n_chunks_coarse()
     allocate(tmp(n + 1))
-    if( n > 0 ) tmp(1:n) = self%chunks_coarse
+    do i = 1, n
+      tmp(i) = self%chunks_coarse(i)
+    enddo
     tmp(n + 1) = new_chunk
     call move_alloc(tmp, self%chunks_coarse)
   end subroutine append_chunk_coarse
@@ -634,10 +636,12 @@ contains
     class(ptcl_sieve),   intent(inout) :: self
     type(chunk2D_state), intent(in)    :: new_chunk
     type(chunk2D_state), allocatable   :: tmp(:)
-    integer :: n
+    integer :: i, n
     n = self%get_n_chunks_fine()
     allocate(tmp(n + 1))
-    if( n > 0 ) tmp(1:n) = self%chunks_fine
+    do i = 1, n
+      tmp(i) = self%chunks_fine(i)
+    enddo
     tmp(n + 1) = new_chunk
     call move_alloc(tmp, self%chunks_fine)
   end subroutine append_chunk_fine
@@ -717,7 +721,7 @@ contains
           if( projfiles(j) == unique_projfiles(i) ) call project_list%set_included_flags([ids(j), ids(j)])
         end do
 
-        self%last_import = c_time(0_c_long)
+        self%last_import = int(c_time(0_c_long))
       end do
 
       included = project_list%get_included_flags()
@@ -783,7 +787,7 @@ contains
       projfiles = remove_duplicates(projfiles)
       call write_filetable(string('imported_projects.txt'), projfiles)
 
-      self%last_import = c_time(0_c_long)
+      self%last_import = int(c_time(0_c_long))
 
       write(logfhandle,'(A,I6,A,I8,A)') &
         '>>> COARSE CHUNK # ', chunk_id, ' GENERATED WITH ', chunk_nptcls, ' PARTICLES'
@@ -1300,25 +1304,16 @@ contains
     type(string),        intent(in)    :: label
     type(image),         allocatable   :: cavg_imgs(:), out_imgs(:)
     integer,             allocatable   :: states(:)
-    type(commander_cluster_cavgs)      :: cluster_cavg_commander
     type(support_model_metrics)        :: compat_metrics
     type(cavg_quality_result)          :: quality
     type(cavg_quality_model)           :: model
     type(sp_project)                   :: spproj
-    type(sp_project)                   :: spproj_cluster
     type(parameters)                   :: relation_params
     type(cmdline)                      :: relation_cline
-    type(string)                       :: stkname, jpgname, cwd_before_cluster, cluster_projfile, cluster_projbase
+    type(string)                       :: stkname, jpgname
     integer(timer_int_kind)            :: t0
-    integer                            :: ncls, iimg, nout, non_zero_ptcls, n_total_ptcls
-    integer,             allocatable   :: clusters(:), uniq_clusters(:)
+    integer                            :: iimg, nout, non_zero_ptcls, n_total_ptcls
     type(string),        allocatable   :: overlay_reasons(:)
-    logical,             allocatable   :: overfit_metric_fail(:)
-    integer                            :: nuniq, ic, cid, n_in_cluster, n_fail_cluster
-    real                               :: overfit_fail_frac
-    real                               :: smpd_dummy
-    real                               :: bp_score
-    logical                            :: bp_fail
     real, parameter                    :: SIEVE_BP40_100_CENTER_EDGE_VAR_MIN_LOG = log(max(SIEVE_BP_CENTER_EDGE_VAR_HARD_REJECT_MIN, tiny(1.0)))
 
     if( .not. chunk%abinitio2D_complete ) return

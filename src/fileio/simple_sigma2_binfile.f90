@@ -50,7 +50,7 @@ contains
         self%file_header(2)   = top
         self%file_header(3:4) = kfromto
         self%headsz           = sizeof(self%file_header)
-        self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
+         self%sigmassz         = int(sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1))
         self%exists           = .true.
     end subroutine new
 
@@ -68,7 +68,7 @@ contains
         self%file_header(2)   = self%top
         self%file_header(3:4) = self%kfromto(:)
         self%headsz           = sizeof(self%file_header)
-        self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
+         self%sigmassz         = int(sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1))
         self%exists           = .true.
     end subroutine new_from_file
 

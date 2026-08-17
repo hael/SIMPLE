@@ -236,7 +236,7 @@ contains
         config = 0
         mask   = (states > 0) .and. (states <= nlabels)
         corrs  = os%get_all('corr')
-        projs  = os%get_all('proj')
+        projs  = int(os%get_all('proj'))
         order  = (/(iptcl,iptcl=1,nptcls)/)
         where( .not.mask )
             corrs = -1.

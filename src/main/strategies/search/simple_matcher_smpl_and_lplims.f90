@@ -205,7 +205,6 @@ contains
         integer, allocatable, intent(inout) :: pinds(:)
         type(class_sample),   allocatable   :: clssmp(:)
         type(string) :: fname
-        integer :: iptcl
         fname = CLASS_SAMPLING_FILE
         if( params%l_update_frac )then
             if( trim(params%balance).eq.'yes' )then

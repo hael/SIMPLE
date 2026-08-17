@@ -120,8 +120,8 @@ contains
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: state
         integer, optional, intent(in)    :: box, pop
-        type(string) :: imgkind, abspath
-        integer                       :: n_os_out, ind, i, ldim(3), ifoo
+        type(string) :: abspath
+        integer                       :: n_os_out, ind, ldim(3), ifoo
         select case(trim(which_imgkind))
             case('vol_cavg','vol','vol_msk','vol_flex')
                 ! find_dimension of inputted volume
@@ -175,8 +175,7 @@ contains
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: which_imgkind
         integer,           intent(out)   :: ind
-        type(string) :: imgkind
-        integer :: n_os_out, i
+        integer :: n_os_out
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 )then
@@ -255,8 +254,7 @@ contains
         class(sp_project), intent(in) :: self
         character(len=*),  intent(in) :: which_imgkind
         integer,           intent(in) :: state
-        type(string) :: imgkind
-        integer :: n_os_out, i, ind
+        integer :: n_os_out, ind
         isthere_in_osout = .false.
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 ) return

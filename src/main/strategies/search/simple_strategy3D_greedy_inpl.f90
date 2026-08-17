@@ -37,8 +37,6 @@ contains
         class(strategy3D_greedy_inpl), intent(inout) :: self
         class(oris),              intent(inout) :: os
         integer,                  intent(in)    :: ithr
-        integer :: iref, isample, loc(1)
-        real    :: inpl_corrs(self%s%nrots)
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr

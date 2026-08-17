@@ -53,7 +53,7 @@ contains
         real(dp), allocatable :: resid_energy(:), resid_mean_energy(:)
         real, allocatable :: state_weights(:,:), half_weights(:,:), targets(:,:), bandwidths(:), neff(:)
         integer :: nptcls, ncomp, nstates, min_neff, state_axis, ncols_req, col_sep, neigs_req, nkern
-        integer :: q, i, r, s, metric_valid_count, nfinch
+        integer :: q, i, r, s, nfinch
         integer :: nstates_merged
         integer, allocatable :: merge_label(:)
         real,    allocatable :: merged_weights(:,:), merged_targets(:,:), merged_bw(:)
@@ -99,7 +99,7 @@ contains
         state_axis = params%state_axis      ! <0 path, 0 k-means, >=1 legacy single axis
         ! nkern decouples the number of components the STATE STAGE uses from neigs, the number estimated.
         nkern      = params%nkern
-        if( nkern <= 0 ) nkern = huge(1)/2   ! clamped against ncomp once the fit is known
+        if( nkern <= 0 ) nkern = ishft(huge(1), -1) ! clamped against ncomp once the fit is known
         ncols_req  = max(4, params%ncols)
         col_sep    = max(1, params%column_separation)
 
@@ -620,10 +620,10 @@ contains
         real(dp), allocatable :: pk(:,:,:), cfull(:,:), cblk(:,:), edges(:)
         real(dp), allocatable :: ppath(:), tpath(:)   ! per-particle / per-target coordinate along the path
         integer,  allocatable :: occ(:)
-        real(dp) :: qlo, qhi, target, h, d2, u2, sumw, sumw2, best, zspread, bmin, chi2med, wsum_i
+        real(dp) :: h, d2, u2, sumw, sumw2, best, zspread, bmin, chi2med, wsum_i
         real(dp) :: orient_lam
         integer  :: nrenorm, ispace
-        integer  :: i, q, r, state, ilo, ihi, best_state, grow, nfed, occmax, ifloor, nunassigned, nsupp
+        integer  :: i, q, r, state, best_state, grow, nfed, occmax, ifloor, nunassigned, nsupp
         integer  :: nk, errflg
         logical  :: l_relpath, l_diffuse, l_gmm
         character(len=12) :: bwsrc
@@ -1451,7 +1451,7 @@ contains
         logical,      allocatable :: msk(:,:,:)
         type(image)  :: refvol
         type(string) :: fn
-        integer :: ik, iq, ir, ii, ldim(3), nvox, ord(ncomp)
+        integer :: ik, iq, ir, ii, ldim(3), nvox
         real(dp) :: acc, thr
         ok = .false.
         if( ncomp < 2 .or. smooth_lp <= 0. ) return
@@ -1686,8 +1686,8 @@ contains
         integer,  allocatable :: nodes(:), er(:), ec(:), sel(:), cell(:), ccnt(:)
         real(dp), allocatable :: ev(:), sig(:), qdeg(:), ddeg(:), V(:,:), W(:,:), lam(:)
         real(dp), allocatable :: psi(:,:), dmin(:), rw(:), zbar(:), sdv(:)
-        real(dp) :: d2, s, nrm, dot, best, wk1
-        integer  :: nnode, i, j, q, e, nedge, it, m, c, ibest, ni, nj
+        real(dp) :: d2, s, nrm, best, wk1
+        integer  :: nnode, i, j, q, e, nedge, it, m, c, ibest, ni
         ok = .false.
         if( nstates < 2 .or. nptcls < 100 ) return
         nnode = min(nptcls, NNODE_MAX)
@@ -2035,7 +2035,7 @@ contains
         real(dp), allocatable :: zbar(:), pa(:), pb(:), dirv(:), proj(:)
         real,     allocatable :: sproj(:)
         integer,  allocatable :: cnt(:)
-        real(dp) :: d2, best, dmax, dnorm, lo, hi, t
+        real(dp) :: d2, dmax, dnorm, lo, hi, t
         integer  :: i, q, s, ia, ib, islot
         allocate(zbar(ncomp), pa(ncomp), pb(ncomp), dirv(ncomp), proj(nptcls), &
             &sproj(nptcls), cnt(nstates))
@@ -2345,7 +2345,7 @@ contains
         logical,  intent(out) :: ok
         character(len=STDLEN)  :: fname
         character(len=LONGSTRLEN) :: line
-        integer :: u, s, q, ln, stat, nread
+        integer :: u, q, ln, stat, nread
         ok = .false.
         call get_environment_variable('SIMPLE_COV_TARGETFILE', fname, ln, stat)
         if( stat /= 0 .or. ln < 1 ) return
@@ -2599,7 +2599,7 @@ contains
 
     subroutine test_flex_pca_state_weights()
         integer,  parameter :: NPC = 150, NP = 2*NPC, NC = 2, NST = 2
-        integer  :: i, q, r, state, nlab(NST)
+        integer  :: i, q, state, nlab(NST)
         real(dp) :: z(NP,NC), eigvals(NC), prec(NC,NC,NP)
         real,     allocatable :: weights(:,:), targets(:,:), bandwidths(:), neff(:)
         integer,  allocatable :: labels(:)

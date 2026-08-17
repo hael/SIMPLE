@@ -416,7 +416,7 @@ contains
         complex(sp), pointer :: shmat(:,:)
         real(dp) :: ref_sumsq, denom, norm_factor
         real(sp) :: shift_mag_sq
-        integer  :: i, ithr, k, kk, k0, p, ieo
+        integer  :: i, ithr, k, kk, k0, ieo
         logical  :: needs_shift
         if( .not. allocated(self%ft_ptcl_den) ) THROW_HARD('denoised particle memo not available; gen_denoised_corrs')
         ithr    = omp_get_thread_num() + 1
@@ -496,7 +496,8 @@ contains
                 do p = 1,self%pftsz
                     c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
                     c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%cmat2_many(ithr)%c(p,kk))
-                    self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    self%crvec1(ithr)%c(p) = cmplx(self%crvec1(ithr)%c(p) + wk * c, &
+                        &kind=kind(self%crvec1(ithr)%c))
                 enddo
             enddo
         else
@@ -506,7 +507,8 @@ contains
                 do p = 1,self%pftsz
                     c = self%ft_ctf2(p,k,i) * self%ft_ref2(p,k,iref,ieo)
                     c = c - 2.0 * self%ft_ptcl_ctf(p,k,i) * conjg(self%ft_ref(p,k,iref,ieo))
-                    self%crvec1(ithr)%c(p) = self%crvec1(ithr)%c(p) + wk * c
+                    self%crvec1(ithr)%c(p) = cmplx(self%crvec1(ithr)%c(p) + wk * c, &
+                        &kind=kind(self%crvec1(ithr)%c))
                 enddo
             enddo
         endif

@@ -303,7 +303,7 @@ contains
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
         type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk
         real    :: fsc0143, fsc05, lplim
-        integer :: ldim(3), ldim_tmp(3)
+        integer :: ldim(3)
         logical :: has_fsc, do_envfsc, msk_exists, msk_compatible
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')

@@ -80,7 +80,7 @@ do i = 1, NSAMPLE
     dist_min_exhaustive_tot = dist_min_exhaustive_tot + dist_min
 end do
 exhaustive_time = toc(total_time)
-speedup = exhaustive_time / elapsed_tot
+speedup = real(exhaustive_time / elapsed_tot, kind=kind(speedup))
 print *, 'AVERAGE DISTANCE TO CLOSEST SUB-SPACE POINT = ', dist_subspace_tot / NSAMPLE
 print *, 'AVERAGE SEARCH TIME (ms)                    = ', elapsed_tot / NSAMPLE * 1e3
 print *, 'AVERAGE EXHAUSTIVE SEARCH TIME (ms)         = ', exhaustive_time / NSAMPLE * 1e3

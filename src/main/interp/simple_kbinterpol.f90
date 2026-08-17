@@ -126,7 +126,7 @@ contains
         endif
         arg = self%twooW * x
         arg = 1. - arg * arg
-        r = self%oneoW * bessi0(self%beta * sqrt(arg))
+        r = real(self%oneoW * bessi0(self%beta * sqrt(arg)), kind=kind(r))
     end function apod
 
     !>  \brief  fast KB apodization for the common KBWINSZ=1.5, KBALPHA=2 kernel
@@ -300,7 +300,7 @@ contains
             if(arg2 < TINY) then
                 r = 1.0
             else
-                r = sinhc( arg2 )
+                r = real(sinhc(arg2), kind=kind(r))
             endif
         else
             r = 1.0
@@ -417,14 +417,14 @@ contains
     pure real elemental function apod_device( self, x )
         type(kbinterpol), intent(in) :: self
         real,             intent(in) :: x
-        real :: r, arg
+        real :: arg
         if( abs(x) > self%Whalf )then
-            r = 0.
+            apod_device = 0.
             return ! for insignificant values return as soon as possible
         endif
         arg = self%twooW * x
         arg = 1. - arg * arg
-        apod_device = self%oneoW * bessi0(self%beta * sqrt(arg))
+        apod_device = real(self%oneoW * bessi0(self%beta * sqrt(arg)), kind=kind(apod_device))
     end function apod_device
 
     !>  \brief  is the Kaiser-Bessel apodization function

@@ -371,7 +371,7 @@ end type simple_nice_comm
         nice_thread_comm%terminate = .false.
         nice_thread_comm%procid    = this%stat_root%procid
         nice_thread_comm%ip        = this%ip
-        nice_thread_comm%port      = this%port
+        nice_thread_comm%port      = int(this%port, kind=kind(nice_thread_comm%port))
         rc = c_pthread_mutex_init(nice_thread_comm%lock, c_null_ptr)
         if(rc .ne. 0) then
             write(logfhandle, *) "simple_nice:start_comm_thread failed to init mutex. Remote sync deactivated"
@@ -649,7 +649,7 @@ end type simple_nice_comm
                 ctf_res_plot%colours(1) = "rgba(30, 144, 255, 0.5)"
                 do i=1, n
                     ctf_res_plot%labels(i) = int2str(int(ctf_res_bins(i))) // 'Å'
-                    ctf_res_plot%data(i)   = this%view_micrographs%ctf_res_histogram%get(i)
+                    ctf_res_plot%data(i)   = int(this%view_micrographs%ctf_res_histogram%get(i))
                 end do
                 if(this%view_micrographs%cutoff_ctf_res .gt. 0.0) then
                     call this%plot_object(ctf_res_hist, ctf_res_plot, name="ctf_resolution", value=trim(int2str(int(this%view_micrographs%cutoff_ctf_res))) // 'Å')
@@ -665,7 +665,7 @@ end type simple_nice_comm
                 ice_score_plot%colours(1) = "rgba(30, 144, 255, 0.5)"
                 do i=1, n
                     write(ice_score_plot%labels(i), "(F4.2)") ice_score_bins(i)
-                    ice_score_plot%data(i)   = this%view_micrographs%ice_score_histogram%get(i)
+                    ice_score_plot%data(i)   = int(this%view_micrographs%ice_score_histogram%get(i))
                 end do
                 if(this%view_micrographs%cutoff_ice_score .gt. 0.0) then
                     allocate(character(len=4) :: val_tmp)
@@ -684,7 +684,7 @@ end type simple_nice_comm
                 astig_plot%colours(1) = "rgba(30, 144, 255, 0.5)"
                 do i=1, n
                     astig_plot%labels(i) = int2str(int(astig_hist_bins(i))) // '%'
-                    astig_plot%data(i)   = this%view_micrographs%astig_histogram%get(i)
+                    astig_plot%data(i)   = int(this%view_micrographs%astig_histogram%get(i))
                 end do
                 call this%plot_object(astig_hist, astig_plot, name="astigmatism")
                 if(this%view_micrographs%cutoff_astigmatism .gt. 0.0) then
@@ -717,7 +717,7 @@ end type simple_nice_comm
                 res_plot%colours(1) = "rgba(30, 144, 255, 0.5)"
                 do i=1, n
                     res_plot%labels(i) = int2str(int(res_2d_bins(i))) // 'Å'
-                    res_plot%data(i)   = this%view_cls2D%res_histogram%get(i)
+                    res_plot%data(i)   = int(this%view_cls2D%res_histogram%get(i))
                 end do
                 if(this%view_cls2D%cutoff_res .gt. 0.0) then
                     call this%plot_object(res_hist, res_plot, name="class_resolution", value=trim(int2str(int(this%view_cls2D%cutoff_res))) // 'Å', extra_1=trim(this%view_cls2D%cutoff_type))
@@ -1462,7 +1462,7 @@ end type simple_nice_comm
                 msk = stats_mask > 0
                 meta_res%label = "pop"
                 meta_res%type  = 1
-                meta_res%data_int = pack(stats_population, msk)
+                meta_res%data_int = int(pack(stats_population, msk))
                 if(.not. allocated(this%view_cls2D%thumbnail%metadata)) allocate(this%view_cls2D%thumbnail%metadata(0))
                 this%view_cls2D%thumbnail%metadata = [meta_res, this%view_cls2D%thumbnail%metadata]
             end if

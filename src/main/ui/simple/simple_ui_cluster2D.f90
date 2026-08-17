@@ -68,7 +68,15 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call program%add_input(UI_PARM, 'cache', 'binary', 'Cache downscaled particles', &
+         &'Write Fourier-cropped particles once and read those instead of the originals on every iteration, &
+         &trading disk space for I/O(yes|no){no}', '', &
+         &.false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+         &visibility=UI_VIS_DEVELOPER)
+        call program%add_input(UI_PARM, 'cache_dir', 'dir', 'Particle cache directory', &
+         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
+         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
+         &.false., '', visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -112,15 +120,6 @@ contains
          &'Run the final ab-initio 2D frequency-marching stage with even/odd class averages(yes|no){yes}', '', &
          &.false., 'yes', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
          &visibility=UI_VIS_DEVELOPER)
-        call program%add_input(UI_SRCH, 'cache', 'binary', 'Cache downscaled particles', &
-         &'Write Fourier-cropped particles once and read those instead of the originals on every iteration, &
-         &trading disk space for I/O(yes|no){no}', '', &
-         &.false., 'no', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-         &visibility=UI_VIS_DEVELOPER)
-        call program%add_input(UI_SRCH, 'cache_dir', 'dir', 'Particle cache directory', &
-         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
-         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
-         &.false., '', group="search", visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call program%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)

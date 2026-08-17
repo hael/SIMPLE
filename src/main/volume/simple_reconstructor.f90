@@ -1001,7 +1001,7 @@ contains
         if( freqlim /= cones_obj%nfreqs ) then
             THROW_HARD('invalid freqlim; reconstructor add_conical_invtausq2rho')
         endif
-        cos_half  = cos(deg2rad(real(cones_obj%cone_half_angle_deg, kind=dp)))
+        cos_half  = real(cos(deg2rad(real(cones_obj%cone_half_angle_deg, kind=dp))), kind=kind(cos_half))
         nfreqs    = cones_obj%nfreqs
         ndirs     = cones_obj%ndirs
         fudge     = self%p_ptr %tau
@@ -1040,7 +1040,7 @@ contains
                 if( cctfsq_sums(ifreq,idir) > 1.d-10 )then
                     sig2 = real(real(cones_obj%counts(ifreq,idir),dp) / cctfsq_sums(ifreq,idir))
                 end if
-                tau2(ifreq,idir) = snr * sig2
+                tau2(ifreq,idir) = real(snr * sig2, kind=kind(tau2))
             end do
         enddo
         ! add Tau2 inverse to denominator
@@ -1064,7 +1064,7 @@ contains
                             &real(logi(2),kind=dp) * cones_obj%dirs(2,idir) + &
                             &real(logi(3),kind=dp) * cones_obj%dirs(3,idir)) / norm)
                         if( dot > maxdot ) then
-                            maxdot = dot
+                            maxdot = real(dot, kind=kind(maxdot))
                             maxdir = idir
                         endif
                     enddo

@@ -120,13 +120,13 @@ contains
         if( cline%defined('nsample_start') .and. cline%defined('nsample_stop') )then
             do i = 1, params%maxits
                 update_frac = calc_update_frac_dyn(params%nptcls, 1, [params%nsample_start,params%nsample_stop], i, params%maxits)
-                nsampl      = update_frac * real(params%nptcls)
+                nsampl      = int(update_frac * real(params%nptcls))
                 write(logfhandle,'(A,1X,I7,1X,A,1X,I7)') 'ITER:', i, 'NSAMPLE:', nsampl
             enddo
         else
             if( cline%defined('nsample_max') ) minmax(2) = params%nsample_max
             update_frac = calc_update_frac(params%nptcls, 1, minmax)
-            nsampl      = update_frac * real(params%nptcls)
+            nsampl      = int(update_frac * real(params%nptcls))
             write(logfhandle,'(A,1X,I7)') 'NSAMPLE:', nsampl
         endif
         ! end gracefully

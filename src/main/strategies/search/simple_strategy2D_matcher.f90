@@ -44,7 +44,7 @@ class(parameters), pointer :: p_ptr => null()
 real(timer_int_kind)       :: rt_startup, rt_alloc_ptcl_imgs2D, rt_prep_pftc_refs2D
 real(timer_int_kind)       :: rt_build_batch_particles2D, rt_align, rt_cavg, rt_tot
 real(timer_int_kind)       :: rt_cavg_interp_splat
-integer(timer_int_kind)    :: t, t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
+integer(timer_int_kind)    :: t_startup, t_alloc_ptcl_imgs2D, t_prep_pftc_refs2D
 integer(timer_int_kind)    :: t_build_batch_particles2D, t_align, t_cavg, t_tot
 type(string)               :: benchfname
 integer                    :: sgd_stream_dispatch_count = 0

@@ -130,16 +130,6 @@ type :: atoms
     procedure          :: kill
 end type atoms
 
-! module-level data for fit_bfactors cost function
-real,    allocatable, private :: fit5g_residual(:,:,:) !< target density extracted from MRC volume
-real,    private              :: fit5g_atom_xyz(3)     !< position of the atom being fitted
-real,    private              :: fit5g_smpd            !< sampling distance
-real,    private              :: fit5g_bfac            !< B-factor = (4*lp)^2
-real,    private              :: fit5g_cutoffsq        !< cutoff^2
-integer, private              :: fit5g_ldim(3)         !< volume dimensions
-integer, private              :: fit5g_icutoff          !< cutoff in pixels
-integer, private              :: fit5g_bbox(3,2)        !< bounding box for current atom
-
 contains
 
     ! CONSTRUCTORS
@@ -974,7 +964,8 @@ contains
         character(len=2)                :: uppercase_el
         character(len=2), optional, intent(inout) :: el
         uppercase_name = upperCase(name)
-        uppercase_el   = adjustl(uppercase_name)
+        uppercase_name = adjustl(uppercase_name)
+        uppercase_el   = uppercase_name(1:2)
         call get_element_Z_and_radius(uppercase_el,Z,r)
         if( Z == 0 ) THROW_HARD('Unknown element: '//uppercase_el)
         if( present(el) ) el = uppercase_el
@@ -2078,7 +2069,7 @@ contains
     subroutine test_atoms()
         use simple_image, only: image
         type(atoms)        :: a, b, c, one
-        logical            :: chatty
+        logical            :: chatty = .false.
         real               :: v3(3), cen1(3), cen2(3), mcen(3), mat(3,3), cc
         real, allocatable  :: aniso(:,:,:)
         integer            :: i

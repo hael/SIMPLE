@@ -189,13 +189,13 @@ contains
         call pcg_frac_update%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0)
+        call pcg_frac_update%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction', &
+        &'Accepted for reconstruct3D command compatibility; PCG validation requires no', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call pcg_frac_update%add_input(UI_SRCH, trs)
         call pcg_frac_update%add_input(UI_SRCH, pgrp)
         call pcg_frac_update%add_input(UI_SRCH, objfun)
         call pcg_frac_update%add_input(UI_SRCH, ptcl_src)
-        call pcg_frac_update%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction reconstruction', &
-        &'Accepted for reconstruct3D command compatibility; PCG validation requires no', '', .false., 'no', &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call pcg_frac_update%add_input(UI_FILT, ml_reg)
         call pcg_frac_update%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map', &
         &'Accepted for reconstruct3D command compatibility; no production maps are written by this test', &

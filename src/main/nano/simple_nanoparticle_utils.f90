@@ -359,7 +359,7 @@ contains
         ! refine lattice
         do i = 1, size(p0,1) ! 3
             call qr(A_matrix,p0(i,:),x2_ref)
-            xyzbeta(:,i) = x2_ref
+            xyzbeta(:,i) = real(x2_ref, kind=kind(xyzbeta))
         enddo
         origin  = xyzbeta(1,:)
         u       = xyzbeta(2,:)

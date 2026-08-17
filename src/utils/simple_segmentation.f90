@@ -704,7 +704,7 @@ contains
         call canny(img_in, img_edge)
         emat     = img_edge%get_rmat()
         diagonal = ceiling(sqrt(real(ldim(1))**2. + real(ldim(2))**2.))
-        r_size   = 2*diagonal
+        r_size   = int(2*diagonal)
         t_size   = nint(PI/theta_step) + 1
         allocate(rho(r_size), theta(t_size))
         rho      = [(-diagonal + (i - 1)*rho_step, i = 1, r_size)]

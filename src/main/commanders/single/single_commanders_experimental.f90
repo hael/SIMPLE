@@ -100,7 +100,7 @@ contains
             ! write cavgs & reprojections
             allocate(imgs(2*ncavgs), state_mask(ncavgs))
             cnt = 0
-            open(unit=funit, file="radial_analysis.csv")
+            open(newunit=funit, file="radial_analysis.csv")
             do i = 1,2*ncavgs,2
                 cnt = cnt + 1
                 if( rstates(cnt) > 0.5 )then
@@ -188,7 +188,7 @@ contains
         print *,"params", params%box
         allocate(rad_cc(ncavgs,params%box/2), rad_dists(ncavgs,params%box/2), state_mask(ncavgs))
         cnt = 0
-        open(unit=funit, file="evenodd_radial_analysis.csv")
+        open(newunit=funit, file="evenodd_radial_analysis.csv")
         print *, "ncavgs", ncavgs
         do i = 1, ncavgs
             cnt = cnt + 1

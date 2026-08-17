@@ -84,13 +84,13 @@ contains
             end do
         end do
         do i = 1, self%nframes
-            self%Dmat(i,i) = self%frames_ftexp(i)%corr_unnorm(self%frames_ftexp(i))
+            self%Dmat(i,i) = real(self%frames_ftexp(i)%corr_unnorm(self%frames_ftexp(i)), kind=kind(self%Dmat))
         end do
         !$omp parallel do default(shared) private(i,j,k) schedule(static) proc_bind(close)
         do k = 1, size(pairs,2)
             i = pairs(1,k)
             j = pairs(2,k)
-            self%Dmat(i,j) = self%frames_ftexp(i)%corr_unnorm_serial(self%frames_ftexp(j))
+            self%Dmat(i,j) = real(self%frames_ftexp(i)%corr_unnorm_serial(self%frames_ftexp(j)), kind=kind(self%Dmat))
             self%Dmat(j,i) = self%Dmat(i,j)
         end do
         !$omp end parallel do

@@ -35,7 +35,6 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(image_msk)  :: mskvol
-        integer          :: ldim(3)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'no')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('mskfile') ) THROW_HARD('mskfile is no longer supported; use automsk or mskdiam')

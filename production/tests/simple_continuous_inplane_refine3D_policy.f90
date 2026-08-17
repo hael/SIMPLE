@@ -8,6 +8,7 @@ contains
 subroutine run_policy_gate()
 use simple_cmdline, only: cmdline
 use simple_commanders_refine3D, only: validate_refine3D_inpl_cont
+use simple_defs, only: STDLEN
 use simple_parameters, only: parameters, refine3D_inpl_cont_policy_error
 use simple_refine3D_strategy, only: strip_refine3D_search_only_args
 use simple_ui, only: make_ui
@@ -16,7 +17,7 @@ implicit none
 type(cmdline)    :: cline
 type(cmdline)    :: child_cline
 type(parameters) :: defaults
-character(len=256) :: policy_error
+character(len=STDLEN) :: policy_error
 
 if( trim(defaults%inpl_cont) /= 'yes' ) &
     &error stop 'refine3D continuous in-plane default is not yes'

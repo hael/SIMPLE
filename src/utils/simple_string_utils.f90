@@ -588,7 +588,7 @@ contains
             n = n - 1
         end do
         if( n == 0 )then
-            symbol = fallback_name
+            symbol = fallback_name(1:len(symbol))
         else if( .not. is_fortran_symbol_start(symbol(1:1)) )then
             symbol = trim(invalid_start_prefix)//trim(symbol)
         endif

@@ -201,23 +201,26 @@ contains
     end subroutine prepare_assembly_cline
 
     subroutine assemble_refine3D_pcg( cline, params, build )
+        use simple_commanders_rec_distr, only: filter_pcg_nonuniform_maps
         type(cmdline),    intent(inout) :: cline
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         type(parameters) :: pcg_params
+        logical          :: l_trail_bootstrap(params%nstates)
         call validate_refine3D_pcg_integration(params)
         pcg_params = params
         pcg_params%maxits = 2
         pcg_params%rtol   = 0.0
-        call execute_rec3D_pcg_distributed_master(pcg_params, build, cline)
+        call execute_rec3D_pcg_distributed_master(pcg_params, build, cline, &
+            &trail_bootstrap_states=l_trail_bootstrap)
+        call filter_pcg_nonuniform_maps(pcg_params, build, l_trail_bootstrap)
     end subroutine assemble_refine3D_pcg
 
     subroutine validate_refine3D_pcg_integration( params )
         type(parameters), intent(in) :: params
         if( trim(params%rec_backend) /= 'pcg' ) return
-        if( trim(params%filt_mode) /= 'fsc' .and. trim(params%filt_mode) /= 'none' )then
-            THROW_HARD('initial refine3D PCG integration requires filt_mode=fsc or none')
-        endif
+        if( params%l_nonuniform .and. params%l_nu_refine ) &
+            &THROW_HARD('PCG nonuniform filtering does not yet support nu_refine=yes')
     end subroutine validate_refine3D_pcg_integration
 
     subroutine remove_pcg_raw_files( params )

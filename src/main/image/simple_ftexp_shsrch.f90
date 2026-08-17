@@ -223,18 +223,11 @@ contains
         ! seed the random number generator
         call seed_rnd
         ! generate noisy images
-        if( allocated(noisy_imgs) )then
-            do i=1,NNOISY
-                call noisy_imgs(i)%kill
-            end do
-            deallocate(noisy_imgs)
-        else
-            allocate(noisy_imgs(NNOISY))
-            do i=1,NNOISY
-                noisy_imgs(i) = img
-                call noisy_imgs(i)%add_gauran(SNR)
-            end do
-        endif
+        allocate(noisy_imgs(NNOISY))
+        do i=1,NNOISY
+            noisy_imgs(i) = img
+            call noisy_imgs(i)%add_gauran(SNR)
+        end do
         call test_shifted_correlator
         call profile_corrs
         contains

@@ -22,8 +22,6 @@ private
 
 ! Chunk rejection view
 type(string) :: chunk_rejected_jpeg
-integer      :: chunk_rejected_jpeg_ntiles  = 0
-integer      :: chunk_rejected_thumbnail_id = 0
 real         :: chunk_rejected_jpeg_scale   = 1.0
 
 contains

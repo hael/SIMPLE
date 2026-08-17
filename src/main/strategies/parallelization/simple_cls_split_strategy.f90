@@ -787,7 +787,7 @@ contains
             if( ieee_is_finite(eigvals(i)) .and. eigvals(i) > DTINY )then
                 spec(i) = log(eigvals(i))
             else
-                spec(i) = log(DTINY)
+                spec(i) = real(log(DTINY), kind=kind(spec))
             endif
         end do
         smin  = minval(spec)

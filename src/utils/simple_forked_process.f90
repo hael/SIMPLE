@@ -78,7 +78,7 @@ module simple_forked_process
     procedure :: execute => execute_test
     procedure :: start
     procedure :: terminate
-    procedure :: kill
+    procedure :: kill => kill_forked_process
     procedure :: destroy
     procedure :: skip
     procedure :: status
@@ -165,13 +165,13 @@ contains
   end subroutine terminate
 
   ! Send SIGKILL to the child, forcing immediate termination.
-  subroutine kill( self )
+  subroutine kill_forked_process( self )
     class(forked_process), intent(inout) :: self
     integer(kind=c_int)                  :: rc
     if( self%pid <= 0 ) return
     rc = c_kill(self%pid, SIGKILL)
     if( rc /= 0 ) THROW_HARD('Failed to send SIGKILL to forked child')
-  end subroutine kill
+  end subroutine kill_forked_process
 
   ! Mark the process as skipped, which will cause status() to return
   ! FORK_STATUS_SKIPPED and prevent future restarts.

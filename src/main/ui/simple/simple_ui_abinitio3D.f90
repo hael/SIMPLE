@@ -35,7 +35,28 @@ contains
         & for particle matching', 'input starting volume e.g. vol.mrc', .false., '', &
         &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        ! <empty>
+        call abinitio3D%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
+        &'Reconstruction backend from stage 3 onward; stages 1 and 2 always use gridding(gridding|pcg){gridding}', &
+        &'', .false., 'gridding', group="search", &
+        &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+        &visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_PARM, 'cavg_ini_ext', 'binary', 'External class-average 3D initialization', &
+            &'Use existing ptcl3D orientations and state assignments from a prior abinitio3D_cavgs run; skips the symmetry-search stage(yes|no){no}','', .false., 'no', group="model", visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call abinitio3D%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction', &
+            &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call abinitio3D%add_input(UI_PARM, 'cache', 'binary', 'Cache downscaled particles', &
+         &'Write Fourier-cropped particles once per stage and read those for alignment instead of the originals on &
+         &every iteration, trading disk space for I/O(yes|no){no}', '', &
+         &.false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+         &visibility=UI_VIS_DEVELOPER)
+        call abinitio3D%add_input(UI_PARM, 'cache_dir', 'dir', 'Particle cache directory', &
+         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
+         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
+         &.false., '', visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -46,12 +67,6 @@ contains
         call abinitio3D%add_input(UI_SRCH, pgrp, group="model", visibility=UI_VIS_STANDARD)
         call abinitio3D%add_input(UI_SRCH, pgrp_start, group="model", &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio3D%add_input(UI_SRCH, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED)
-        call abinitio3D%add_input(UI_SRCH, 'cavg_ini_ext', 'binary', 'External class-average 3D initialization', &
-            &'Use existing ptcl3D orientations and state assignments from a prior abinitio3D_cavgs run; skips the symmetry-search stage(yes|no){no}','', .false., 'no', group="model", visibility=UI_VIS_ADVANCED, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call abinitio3D%add_input(UI_SRCH, nsample, group="search", visibility=UI_VIS_STANDARD)
         call abinitio3D%add_input(UI_SRCH, 'nstages', 'num', 'Last ab initio stage to run',&
             &'Last abinitio3D stage to run; default is 5 for multivol_mode=independent and 8 otherwise; &
@@ -82,18 +97,6 @@ contains
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_SRCH, ptcl_src, group="search", &
         &visibility=UI_VIS_ADVANCED)
-        call abinitio3D%add_input(UI_SRCH, 'projrec', 'binary', 'Projection-direction reconstruction', &
-            &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', group="search", visibility=UI_VIS_ADVANCED, &
-        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call abinitio3D%add_input(UI_SRCH, 'cache', 'binary', 'Cache downscaled particles', &
-         &'Write Fourier-cropped particles once per stage and read those for alignment instead of the originals on &
-         &every iteration, trading disk space for I/O(yes|no){no}', '', &
-         &.false., 'no', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-         &visibility=UI_VIS_DEVELOPER)
-        call abinitio3D%add_input(UI_SRCH, 'cache_dir', 'dir', 'Particle cache directory', &
-         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
-         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
-         &.false., '', group="search", visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call abinitio3D%add_input(UI_FILT, hp, group="filter", &
         &visibility=UI_VIS_ADVANCED)

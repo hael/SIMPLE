@@ -597,7 +597,7 @@ contains
         cx = nx / 2 + 1   ! 1-indexed centre column
         mn = self%mean()
         r  = min(nx, ny) / 4
-        if( present(mskrad) ) r = mskrad
+        if( present(mskrad) ) r = int(mskrad)
         r1y = max(1,  cy - r)  
         r2y = min(ny, cy + r - 1)
         r1x = max(1,  cx - r)

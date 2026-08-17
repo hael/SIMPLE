@@ -325,6 +325,7 @@ contains
         class(*),        intent(inout) :: fun_self
         real,            intent(inout) :: x(:)
         real                           :: f
+        f = 0.
         if (.not. associated(self%costfun)) then
             write (*,*) 'error : simple_opt_spec: costfun not associated'
             return !  ‘f’ may be used uninitialized in this function
@@ -339,6 +340,7 @@ contains
         class(*),        intent(inout) :: fun_self
         real,            intent(inout) :: x(:)
         real,            intent(out)   :: grad(:)
+        grad = 0.
         if (.not. associated(self%gcostfun)) then
             write (*,*) 'error : simple_opt_spec: gcostfun not associated'
             return
@@ -353,6 +355,8 @@ contains
         class(*),        intent(inout) :: fun_self
         real,            intent(inout) :: x(:)
         real,            intent(out)   :: f, gradient(:)
+        f        = 0.
+        gradient = 0.
         if ((.not. associated(self%costfun)).or.(.not. associated(self%gcostfun))) then
             write (*,*) 'error : simple_opt_spec: costfun or gcostfun not associated'
             return
@@ -373,6 +377,7 @@ contains
         class(*),        intent(inout) :: fun_self
         real(dp),        intent(inout) :: x(:)
         real(dp)                       :: f
+        f = 0._dp
         if ((.not. associated(self%costfun)).and.(.not. associated(self%costfun_8))) then
             write (*,*) 'error : simple_opt_spec: no costfun associated'
             return !  ‘f’ may be used uninitialized in this function
@@ -392,6 +397,7 @@ contains
         class(*),        intent(inout) :: fun_self
         real(dp),        intent(inout) :: x(:)
         real(dp),        intent(out)   :: grad(:)
+        grad = 0._dp
         if ((.not. associated(self%gcostfun)).and.(.not. associated(self%gcostfun_8))) then
             write (*,*) 'error : simple_opt_spec: no gcostfun associated'
             return
@@ -413,6 +419,8 @@ contains
         real(dp),        intent(inout) :: x(:)
         real(dp),        intent(out)   :: f, gradient(:)
         real                           :: f_4
+        f        = 0._dp
+        gradient = 0._dp
         if(((.not. associated(self%costfun  )) .or. (.not. associated(self%gcostfun))) .and.  &
           &((.not. associated(self%costfun_8)) .or. (.not. associated(self%gcostfun_8))) ) then
             write (*,*) 'error : simple_opt_spec: no costfun or gcostfun associated'

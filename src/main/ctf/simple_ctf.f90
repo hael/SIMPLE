@@ -15,8 +15,6 @@ public :: ctf
 private
 #include "simple_local_flags.inc"
 
-real :: CTF_FIRST_LIM = PI !< Phase shift defining limit for intact CTF: CTF_FIRST_LIM==pi/2=>peak; CTF_FIRST_LIM==pi=>zero)
-
 type ctf
     private
     real    :: smpd            = 0.    !< sampling distance (input unit: A)

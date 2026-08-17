@@ -87,6 +87,12 @@ string(APPEND CMAKE_Fortran_FLAGS
        " -cpp -ffree-form -fimplicit-none -ffree-line-length-none"
        " -fno-second-underscore -Wall -Waliasing -Wampersand"
        " -Wsurprising -Wline-truncation"
+       # Passed-object and other interface dummies are intentionally retained
+       # across SIMPLE's commander/strategy hierarchy.
+       " -Wno-unused-dummy-argument"
+       # SIMPLE consistently uses kill for lifecycle methods; the GNU signal
+       # intrinsic is not intended at those declaration sites.
+       " -Wno-intrinsic-shadow"
        " -D__FILENAME__='\"\\$(notdir \\$<)\"'")
 
 # Release flags for Fortran
@@ -124,6 +130,12 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -fPIC"
 if(APPLE AND CMAKE_C_COMPILER_ID MATCHES "Clang|AppleClang")
     string(APPEND CMAKE_C_FLAGS " -Wno-overriding-deployment-version")
     string(APPEND CMAKE_CXX_FLAGS " -Wno-overriding-deployment-version")
+endif()
+
+# Installation rewrites executable RPATHs with install_name_tool. Reserve
+# enough Mach-O load-command space so that longer installed paths fit.
+if(APPLE)
+    string(APPEND CMAKE_EXE_LINKER_FLAGS " -Wl,-headerpad_max_install_names")
 endif()
 
 # ------------------------------------------------------------------------------

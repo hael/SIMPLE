@@ -201,7 +201,6 @@ contains
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: filename
         type(string) :: tmpstr
-        integer      :: i
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename%to_char() // " to ptcls2D"
@@ -246,7 +245,6 @@ contains
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: filename
         type(string) :: tmpstr
-        integer      :: i
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename%to_char() // " to ptcls3D"
@@ -271,7 +269,6 @@ contains
         class(string),      intent(in)    :: filename
         class(sp_project),  intent(inout) :: spproj
         class(string),      intent(in)    :: ctfflag
-        integer                           :: i
         write(logfhandle,'(A,A)')'>>> Importing ' , filename%to_char()
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
@@ -375,7 +372,7 @@ contains
                     else if(stardata%flags(flagsindex)%int) then
                         ival = entrystr%to_int()
                         if(stardata%flags(flagsindex)%mult > 0) then
-                            ival = ival * stardata%flags(flagsindex)%mult
+                            ival = int(real(ival) * stardata%flags(flagsindex)%mult)
                         end if
                         call sporis%set(projindex, stardata%flags(flagsindex)%splflag, ival)
                     else
@@ -1420,7 +1417,7 @@ contains
         type(ori)                         :: tmp_ori
         integer                           :: i, old_n, maxori, ogid
         call self%import_stardata(self%starfile%optics, opticsoris, .false.)
-        maxori = maxval(opticsoris%get_all("ogid"))
+         maxori = int(maxval(opticsoris%get_all("ogid")))
         allocate(self%starfile%opticsmap(maxori))
         old_n = opticsoris%get_noris()
         call tmp%copy(opticsoris, .false.)

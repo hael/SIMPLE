@@ -611,7 +611,7 @@ contains
             if( a>0. )then
                 allocate(deg_a(self%n))
                 do i=1,self%n
-                    deg_a(i)=max(deg(i),DTINY)**a
+                    deg_a(i)=real(max(deg(i),DTINY)**a, kind=kind(deg_a))
                 end do
                 do i=1,self%n
                     do p=self%rowptr(i),self%rowptr(i+1)-1
@@ -633,8 +633,8 @@ contains
             do i=1,self%n
                 do p=self%rowptr(i),self%rowptr(i+1)-1
                     j=self%colind(p)
-                    self%wnorm(p)=self%wnorm(p)*sqrt(sample_weights(i)*sample_weights(j))/ &
-                        &sqrt(max(weighted_deg(i),DTINY)*max(weighted_deg(j),DTINY))
+                    self%wnorm(p)=real(self%wnorm(p)*sqrt(sample_weights(i)*sample_weights(j))/ &
+                        &sqrt(max(weighted_deg(i),DTINY)*max(weighted_deg(j),DTINY)), kind=kind(self%wnorm))
                 end do
             end do
             deallocate(weighted_deg)
@@ -642,7 +642,7 @@ contains
             ! Coifman-Lafon density (alpha) normalization on the raw degree.
             allocate(deg_a(self%n))
             do i = 1,self%n
-                deg_a(i) = max(deg(i), DTINY)**a
+                deg_a(i) = real(max(deg(i), DTINY)**a, kind=kind(deg_a))
             end do
             ! Rescale weights and accumulate the rescaled degree.
             deg = 0.
@@ -657,7 +657,8 @@ contains
             do i = 1,self%n
                 do p = self%rowptr(i), self%rowptr(i+1) - 1
                     j = self%colind(p)
-                    self%wnorm(p) = self%wnorm(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
+                    self%wnorm(p) = real(self%wnorm(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY)), &
+                        &kind=kind(self%wnorm))
                 end do
             end do
             deallocate(deg_a)
@@ -665,7 +666,8 @@ contains
             do i = 1,self%n
                 do p = self%rowptr(i), self%rowptr(i+1) - 1
                     j = self%colind(p)
-                    self%wnorm(p) = self%w(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY))
+                    self%wnorm(p) = real(self%w(p) / sqrt(max(deg(i), DTINY) * max(deg(j), DTINY)), &
+                        &kind=kind(self%wnorm))
                 end do
             end do
         endif

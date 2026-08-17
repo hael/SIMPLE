@@ -6,7 +6,7 @@ use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_resolutio
     &refine3D_trail_rho_fname, refine3D_trail_manifest_fname
 implicit none
 private
-public :: commander_volassemble
+public :: commander_volassemble, filter_pcg_nonuniform_maps
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: commander_volassemble
@@ -482,6 +482,192 @@ contains
         end subroutine cleanup_restore_state
 
     end subroutine restore_state_from_parts
+
+    !> Apply the volume-assembly nonuniform-filtering contract to half-maps
+    !! restored directly by the PCG backend. Raw (B,D) trailing, including its
+    !! chain/bootstrap policy, remains wholly owned by the PCG master; this
+    !! consumer must never blend solved maps. PCG maps are already corrected in
+    !! the solved image domain, so this path deliberately omits the gridding
+    !! instrument-function correction performed by commander_volassemble.
+    subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap )
+        use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
+            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
+            &set_nu_filter_report, NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, &
+            &write_nu_local_resolution_map, nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, &
+            &print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT, NU_ENVMASK_RELATIVE, &
+            &NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
+        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
+            &NU_ENVMASK_ACTION_REGENERATE
+        type(parameters), intent(in)    :: params
+        type(builder),    intent(inout) :: build
+        logical,          intent(in)    :: l_trail_bootstrap(:)
+        type(image)                   :: vol_base_even, vol_base_odd, vol_aux_even, vol_aux_odd
+        type(image)                   :: vol_even_nu, vol_odd_nu
+        type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
+        type(image_msk)               :: nu_envmask
+        type(vol_pproc_plan)          :: pp_plan
+        type(nu_envmask_params)       :: envp
+        type(nu_envmask_stats)        :: envstats
+        type(string)                  :: eonames(2), volname, eonames_nu(2), volname_nu, locres_name
+        type(string)                  :: fsc_fname
+        real, allocatable             :: fsc(:), res(:), nu_align_lps(:)
+        integer, allocatable          :: state_pops(:)
+        logical, allocatable          :: l_env(:,:,:)
+        logical, allocatable          :: l_included(:)
+        integer                       :: state, i, n_ccs, n_ccs_kept, grow_px, edge_px, ldim(3)
+        real                          :: fsc05, fsc0143, aux_resolution, align_lp, selected_lp
+
+        if( .not. params%l_nonuniform ) return
+        if( params%l_nu_refine ) THROW_HARD('PCG nonuniform filtering does not yet support nu_refine=yes')
+        if( size(l_trail_bootstrap) /= params%nstates ) &
+            &THROW_HARD('PCG nonuniform trailing-bootstrap state input has invalid size')
+        call set_nu_filter_report(params%part == 1)
+        ldim = [params%box_crop, params%box_crop, params%box_crop]
+        res  = get_resarr(params%box_crop, params%smpd_crop)
+        allocate(state_pops(params%nstates), nu_align_lps(params%nstates), l_included(params%nstates))
+        state_pops  = 0
+        nu_align_lps = 0.
+        do state = 1, params%nstates
+            state_pops(state) = build%spproj_field%get_pop(state, 'state')
+            if( state_pops(state) < 1 ) cycle
+
+            eonames(1) = refine3D_state_halfvol_fname(state, 'even')
+            eonames(2) = refine3D_state_halfvol_fname(state, 'odd')
+            volname    = refine3D_state_vol_fname(state)
+            call vol_base_even%new(ldim, params%smpd_crop)
+            call vol_base_odd%new( ldim, params%smpd_crop)
+            if( params%l_ml_reg .and. .not. l_trail_bootstrap(state) )then
+                call vol_base_even%read(refine3D_state_halfvol_fname(state, 'even', unfil=.true.))
+                call vol_base_odd%read( refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.))
+                call vol_aux_even%new(ldim, params%smpd_crop)
+                call vol_aux_odd%new( ldim, params%smpd_crop)
+                call vol_aux_even%read(eonames(1))
+                call vol_aux_odd%read( eonames(2))
+                fsc_fname = refine3D_fsc_fname(state)
+                fsc       = file2rarr(fsc_fname)
+                call get_resolution(fsc, res, fsc05, fsc0143)
+                aux_resolution = fsc0143
+                if( params%l_lpset .and. params%lp > TINY ) aux_resolution = min(aux_resolution, params%lp)
+                allocate(nu_aux_even(1), nu_aux_odd(1))
+                call nu_aux_even(1)%copy(vol_aux_even)
+                call nu_aux_odd(1)%copy( vol_aux_odd)
+                call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [aux_resolution], &
+                    &nu_aux_even, nu_aux_odd)
+            else
+                if( params%l_ml_reg .and. l_trail_bootstrap(state) )then
+                    write(logfhandle,'(A,I0,A)') '>>> PCG NU: STATE ', state, &
+                        &' IS A CHAINLESS TRAILING BOOTSTRAP; FILTERING THE COHERENT STANDARD PAIR WITHOUT AN ML AUXILIARY'
+                endif
+                call vol_base_even%read(eonames(1))
+                call vol_base_odd%read( eonames(2))
+                call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [real ::])
+            endif
+            call cleanup_aux_images()
+            call vol_aux_even%kill
+            call vol_aux_odd%kill
+            call optimize_nu_cutoff_finds()
+
+            call plan_state_postprocess(params, state, params%which_iter, pp_plan)
+            if( pp_plan%l_nu_envmask_incompatible )then
+                write(logfhandle,'(A,1X,A)') &
+                    &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
+                    &pp_plan%nu_envmask_file%to_char()
+            endif
+            if( pp_plan%nu_envmask_action == NU_ENVMASK_ACTION_REGENERATE )then
+                envp%nsigma      = params%nu_msk_sig
+                envp%beta        = NU_ENVMASK_BETA
+                envp%dens_weight = NU_ENVMASK_DENS_WEIGHT
+                envp%lp_smooth   = params%amsklp
+                envp%l_relative  = NU_ENVMASK_RELATIVE
+                call nu_evidence_envelope(envp, l_env, envstats)
+                call print_nu_envmask_stats(envstats)
+                grow_px = max(1, nint(NU_ENVMASK_GROW_A / params%smpd_crop))
+                edge_px = max(1, nint(NU_ENVMASK_EDGE_A / params%smpd_crop))
+                call nu_envmask%kill_bimg
+                call nu_envmask%envmask3D_from_lmask(l_env, params%smpd_crop, grow_px, edge_px, &
+                    &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
+                call nu_envmask%write(pp_plan%nu_envmask_file, del_if_exists=.true.)
+                call wait_for_closure(pp_plan%nu_envmask_file)
+                write(logfhandle,'(A,I0,A,F8.3,A,I0,A,I0)') &
+                    &'>>> NU ENVELOPE OCCUPANCY: STATE ', state, ', SUPPORT FRACTION ', &
+                    &envstats%pct_signal, ' %, COMPONENTS KEPT ', n_ccs_kept, ' OF ', n_ccs
+                if( allocated(l_env) ) deallocate(l_env)
+            endif
+
+            call vol_base_even%kill
+            call vol_base_odd%kill
+            call nu_filter_vols(vol_even_nu, vol_odd_nu)
+            call print_nu_filtmap_lowpass_stats()
+            if( NU_DEV_OUTPUT .and. params%part == 1 ) call analyze_filtmap_neighbor_continuity()
+            eonames_nu(1) = add2fbody(eonames(1), MRC_EXT, NUFILT_SUFFIX)
+            eonames_nu(2) = add2fbody(eonames(2), MRC_EXT, NUFILT_SUFFIX)
+            volname_nu    = add2fbody(volname,    MRC_EXT, NUFILT_SUFFIX)
+            locres_name   = add2fbody(volname,    MRC_EXT, NULOCRES_SUFFIX)
+            call vol_even_nu%write(eonames_nu(1), del_if_exists=.true.)
+            call vol_odd_nu%write(eonames_nu(2), del_if_exists=.true.)
+            call vol_even_nu%add(vol_odd_nu)
+            call vol_even_nu%mul(0.5)
+            call vol_even_nu%write(volname_nu, del_if_exists=.true.)
+            call write_nu_local_resolution_map(locres_name)
+            call wait_for_closure(volname_nu)
+            call wait_for_closure(locres_name)
+            selected_lp = get_nu_filtmap_finest_selected_lp()
+            if( selected_lp > TINY ) nu_align_lps(state) = selected_lp
+
+            call vol_even_nu%kill
+            call vol_odd_nu%kill
+            call cleanup_nu_filter()
+            call nu_envmask%kill_bimg
+            call pp_plan%nu_envmask_file%kill
+            call eonames(1)%kill
+            call eonames(2)%kill
+            call eonames_nu(1)%kill
+            call eonames_nu(2)%kill
+            call volname%kill
+            call volname_nu%kill
+            call locres_name%kill
+            call fsc_fname%kill
+            if( allocated(fsc) ) deallocate(fsc)
+        enddo
+
+        l_included = (state_pops > 0) .and. (nu_align_lps > TINY)
+        if( any(l_included) )then
+            align_lp = minval(nu_align_lps, mask=l_included)
+            call build%spproj_field%set_all2single('lp', align_lp)
+            call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        endif
+        call cleanup_aux_images()
+        call vol_base_even%kill
+        call vol_base_odd%kill
+        call vol_aux_even%kill
+        call vol_aux_odd%kill
+        call vol_even_nu%kill
+        call vol_odd_nu%kill
+        call cleanup_nu_filter()
+        call nu_envmask%kill_bimg
+        call pp_plan%nu_envmask_file%kill
+        if( allocated(fsc) ) deallocate(fsc)
+        if( allocated(res) ) deallocate(res)
+        deallocate(state_pops, nu_align_lps, l_included)
+
+    contains
+
+        subroutine cleanup_aux_images()
+            if( allocated(nu_aux_even) )then
+                do i = 1, size(nu_aux_even)
+                    call nu_aux_even(i)%kill
+                enddo
+                deallocate(nu_aux_even)
+            endif
+            if( allocated(nu_aux_odd) )then
+                do i = 1, size(nu_aux_odd)
+                    call nu_aux_odd(i)%kill
+                enddo
+                deallocate(nu_aux_odd)
+            endif
+        end subroutine cleanup_aux_images
+
+    end subroutine filter_pcg_nonuniform_maps
 
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
