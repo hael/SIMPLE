@@ -20,6 +20,7 @@ real(dp), parameter :: RECOVERY_TOL = 2.e-3_dp
 
 contains
 
+!> Verify shift phase sign, Jv, JH z, gradients, and weighted production terms.
 subroutine run_shift_gradient()
     type(pcg_fourier_workspace) :: workspace
     type(reconstructor_pcg) :: pcgop
@@ -203,6 +204,7 @@ subroutine run_shift_gradient()
     call pcgop%kill
 end subroutine run_shift_gradient
 
+!> Compare the implemented Fourier phase with an independent direct-DFT shift convention.
 function independent_shift_sign_error(pcgop,workspace,rotmat,shift,zero_model,shifted_model,lims2) result(max_error)
     type(reconstructor_pcg), intent(in) :: pcgop
     type(pcg_fourier_workspace), intent(in) :: workspace
@@ -239,6 +241,7 @@ function independent_shift_sign_error(pcgop,workspace,rotmat,shift,zero_model,sh
     deallocate(transfer,scratch)
 end function independent_shift_sign_error
 
+!> Calculate the direct-DFT phase ratio for a real-space image translation.
 function translated_direct_dft_ratio(box,h,k,shift) result(ratio)
     integer, intent(in) :: box, h, k
     real(dp), intent(in) :: shift(2)
@@ -267,6 +270,7 @@ function translated_direct_dft_ratio(box,h,k,shift) result(ratio)
     ratio = shifted_dft/base_dft
 end function translated_direct_dft_ratio
 
+!> Evaluate the independent periodic real-space field used by the direct DFT.
 pure real(dp) function independent_periodic_field(x,y,box) result(value)
     real(dp), intent(in) :: x, y
     integer, intent(in) :: box
@@ -276,6 +280,7 @@ pure real(dp) function independent_periodic_field(x,y,box) result(value)
         &0.6_dp*cos(scale*(2._dp*x-y)+0.3_dp)
 end function independent_periodic_field
 
+!> Return the relative L2 error between two packed Fourier planes.
 function plane_relative_error(actual,expected,lims2) result(error)
     integer, intent(in) :: lims2(2,2)
     complex, intent(in) :: actual(lims2(1,1):lims2(1,2),lims2(2,1):lims2(2,2))
@@ -294,6 +299,7 @@ function plane_relative_error(actual,expected,lims2) result(error)
     error = sqrt(numerator/max(denominator,epsilon(1._dp)))
 end function plane_relative_error
 
+!> Return the real inner product used by the real-parameter adjoint test.
 function real_plane_inner_product(left,right,lims2) result(product)
     integer, intent(in) :: lims2(2,2)
     complex, intent(in) :: left(lims2(1,1):lims2(1,2),lims2(2,1):lims2(2,2))
@@ -309,6 +315,7 @@ function real_plane_inner_product(left,right,lims2) result(product)
     enddo
 end function real_plane_inner_product
 
+!> Return relative error between two complex Fourier samples.
 pure real(dp) function relative_complex_error(actual,expected) result(error)
     complex(dp), intent(in) :: actual, expected
     error = abs(actual-expected)/max(1._dp,abs(actual),abs(expected))

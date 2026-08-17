@@ -17,6 +17,7 @@ real(sp), parameter :: FD_POINTS(7) = [-1.20_sp, -0.75_sp, -0.27_sp, 0._sp, 0.36
 
 contains
 
+!> Verify the executed fast KB polynomial and normalized-stencil derivatives.
 subroutine run_kb_derivative()
     type(kbinterpol) :: kbwin
     integer :: iwinsz, wdim
@@ -33,6 +34,7 @@ subroutine run_kb_derivative()
     write(*,'(a)') 'CONTINUOUS_3D_PCG_KB_DERIVATIVE: PASS'
 end subroutine run_kb_derivative
 
+!> Compare the fast polynomial derivative with fixed-cell finite differences.
 subroutine test_fast_polynomial(kbwin)
     type(kbinterpol), intent(in) :: kbwin
     real(dp) :: ideal_deriv, ideal_value, max_ideal_deriv_error
@@ -91,6 +93,7 @@ subroutine test_fast_polynomial(kbwin)
         &real(value,dp), real(derivative,dp), real(outside_value,dp)
 end subroutine test_fast_polynomial
 
+!> Verify normalized 3-D stencil derivatives and the partition-of-unity derivative.
 subroutine test_normalized_stencil(kbwin, iwinsz, wdim)
     type(kbinterpol), intent(in) :: kbwin
     integer,            intent(in) :: iwinsz, wdim
@@ -145,6 +148,7 @@ subroutine test_normalized_stencil(kbwin, iwinsz, wdim)
         &max_value_difference, max_derivative_sum, max_fd_error
 end subroutine test_normalized_stencil
 
+!> Measure the discontinuity when nearest-grid stencil ownership changes.
 subroutine test_stencil_switch(kbwin, iwinsz, wdim)
     type(kbinterpol), intent(in) :: kbwin
     integer,            intent(in) :: iwinsz, wdim
@@ -182,6 +186,7 @@ subroutine test_stencil_switch(kbwin, iwinsz, wdim)
         &value_left, value_right, jump, deriv_left, deriv_right
 end subroutine test_stencil_switch
 
+!> Evaluate the ideal Bessel KB value and derivative only as an accuracy reference.
 pure subroutine ideal_kb_reference(x, value, derivative)
     real(dp), intent(in)  :: x
     real(dp), intent(out) :: value, derivative
@@ -208,6 +213,7 @@ pure subroutine ideal_kb_reference(x, value, derivative)
     derivative = dpdu * (-8._dp*x/width**2) / width
 end subroutine ideal_kb_reference
 
+!> Gather the analytic synthetic field with one normalized KB stencil.
 pure real(dp) function gather_synthetic_field(weights, i0) result(value)
     real(sp), intent(in) :: weights(:,:,:)
     integer,  intent(in) :: i0(3)

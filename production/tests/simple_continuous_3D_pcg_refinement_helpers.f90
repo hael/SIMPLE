@@ -24,6 +24,7 @@ public :: skip_unimplemented_case
 
 contains
 
+!> Stop the selected child case when a logical contract is false.
 subroutine assert_true(condition, message)
     logical,          intent(in) :: condition
     character(len=*), intent(in) :: message
@@ -31,6 +32,7 @@ subroutine assert_true(condition, message)
     if( .not. condition ) error stop trim(message)
 end subroutine assert_true
 
+!> Stop the selected child case when two integer values differ.
 subroutine assert_int_equal(actual, expected, message)
     integer,          intent(in) :: actual, expected
     character(len=*), intent(in) :: message
@@ -41,6 +43,7 @@ subroutine assert_int_equal(actual, expected, message)
     error stop trim(detail)
 end subroutine assert_int_equal
 
+!> Stop the selected child case when an absolute real tolerance is exceeded.
 subroutine assert_real_close(actual, expected, tolerance, message)
     use ieee_arithmetic, only: ieee_is_finite
     real,             intent(in) :: actual, expected, tolerance
@@ -56,6 +59,7 @@ subroutine assert_real_close(actual, expected, tolerance, message)
     error stop trim(detail)
 end subroutine assert_real_close
 
+!> Expand one scalar seed into the compiler's full deterministic random seed.
 subroutine set_deterministic_seed(base_seed)
     integer, intent(in) :: base_seed
     integer, allocatable :: seed(:)
@@ -73,6 +77,7 @@ subroutine set_deterministic_seed(base_seed)
     deallocate(seed)
 end subroutine set_deterministic_seed
 
+!> Build the asymmetric deterministic 3-D truth used by all component tests.
 subroutine build_truth_volume(volume)
     real, allocatable, intent(out) :: volume(:,:,:)
     real :: centre, dx, dy, dz
@@ -95,6 +100,7 @@ subroutine build_truth_volume(volume)
     enddo
 end subroutine build_truth_volume
 
+!> Mark an explicitly deferred child case with the suite's skip exit status.
 subroutine skip_unimplemented_case(case_name, planned_stage)
     character(len=*), intent(in) :: case_name, planned_stage
 

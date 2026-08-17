@@ -8,6 +8,7 @@ public :: run_volume_noise
 
 contains
 
+!> Run both volume-domain and observation-domain noise contracts.
 subroutine run_volume_noise()
     call run_gauran_replacement()
     call run_added_volume_noise()

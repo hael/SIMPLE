@@ -16,6 +16,7 @@ real(dp), parameter :: GRADIENT_TOL = 5.e-3_dp
 
 contains
 
+!> Compare the packed/Friedel Fourier gather derivative with fixed-cell finite differences.
 subroutine run_packed_gather_derivative()
     real(sp), parameter :: locs(3,N_FD_POINTS) = reshape([&
         & 2.17_sp, -1.23_sp,  0.31_sp, &
@@ -102,16 +103,19 @@ subroutine run_packed_gather_derivative()
     deallocate(plane, phantom)
 end subroutine run_packed_gather_derivative
 
+!> Return relative error between two complex Fourier samples.
 pure real(dp) function relative_complex_error(actual, expected) result(error)
     complex, intent(in) :: actual, expected
     error = real(abs(actual-expected),dp) / max(1._dp,real(abs(actual),dp),real(abs(expected),dp))
 end function relative_complex_error
 
+!> Report whether all real and imaginary vector components are finite.
 pure logical function complex_vector_is_finite(values) result(finite)
     complex, intent(in) :: values(:)
     finite = all(ieee_is_finite(real(values))) .and. all(ieee_is_finite(aimag(values)))
 end function complex_vector_is_finite
 
+!> Report whether both components of one complex value are finite.
 pure logical function complex_is_finite(value) result(finite)
     complex, intent(in) :: value
     finite = ieee_is_finite(real(value)) .and. ieee_is_finite(aimag(value))

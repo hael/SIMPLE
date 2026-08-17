@@ -30,6 +30,9 @@ end type random_rec_commander
 
 contains
 
+    !> Execute one reconstruction. When explicitly enabled for PCG, run a base
+    !! reconstruction, polish poses against its fixed half-maps, persist accepted
+    !! poses, and reconstruct once more from those poses.
     subroutine exec_rec3D( self, cline )
         use simple_rec3D_strategy, only: rec3D_strategy, create_rec3D_strategy
         use simple_parameters,     only: parameters
@@ -63,13 +66,14 @@ contains
         endif
         call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
-        ! Select and run strategy
+        ! The first strategy pass creates the fixed even/odd maps used by polishing.
         strategy = create_rec3D_strategy(cline)
         call strategy%initialize(params, build, cline)
         call strategy%execute(params, build, cline)
         if( trim(params%pcg_pose_polish) == 'yes' )then
             ! Refine poses against the base half-maps before rebuilding them.
             call execute_final_pcg_pose_polish(params,build,cline,polish_summary)
+            ! Make accepted poses authoritative before the final reconstruction reads them.
             call build%spproj%write_segment_inside(params%oritype,params%projfile)
             write(logfhandle,'(A)') '>>> PCG POSE POLISH: RUNNING FINAL PCG RECONSTRUCTION'
             call strategy%execute(params,build,cline)

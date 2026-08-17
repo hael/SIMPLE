@@ -19,6 +19,7 @@ real(dp), parameter :: FRAME_TOL = 1.e-3_dp
 
 contains
 
+!> Verify joint recovery, half-map isolation, terminal accounting, symmetry, and gauge handling.
 subroutine run_pose_contract()
     type(reconstructor_pcg) :: even_operator, odd_operator
     type(pcg_fourier_workspace) :: even_workspace, odd_workspace
@@ -115,6 +116,7 @@ subroutine run_pose_contract()
     call odd_operator%kill
 end subroutine run_pose_contract
 
+!> Build several known poses with small coupled rotation and shift errors.
 subroutine build_pose_fixture(truth_rotmats,estimate_rotmats,truth_shifts,estimate_shifts)
     real(dp), intent(out) :: truth_rotmats(3,3,NPARTICLES), estimate_rotmats(3,3,NPARTICLES)
     real(dp), intent(out) :: truth_shifts(2,NPARTICLES), estimate_shifts(2,NPARTICLES)
@@ -137,6 +139,7 @@ subroutine build_pose_fixture(truth_rotmats,estimate_rotmats,truth_shifts,estima
     enddo
 end subroutine build_pose_fixture
 
+!> Require complete accounting, accepted reductions, and bounded pose steps.
 subroutine assert_summary(summary,statuses,label)
     type(pcg_pose_polish_summary), intent(in) :: summary
     integer, intent(in) :: statuses(NHALF)
@@ -156,6 +159,7 @@ subroutine assert_summary(summary,statuses,label)
         &trim(label)//' pose batch exceeded its shift-step bound')
 end subroutine assert_summary
 
+!> Verify D2-equivalent pose distance after removal of one common global rotation.
 subroutine test_symmetry_and_global_gauge(truth_rotmats)
     real(dp), intent(in) :: truth_rotmats(3,3,NPARTICLES)
     real(dp) :: symmetries(3,3,4), equivalent(3,3), gauge(3,3), gauge_estimate(3,3)
@@ -186,6 +190,7 @@ subroutine test_symmetry_and_global_gauge(truth_rotmats)
         &symmetry_error,gauge_error
 end subroutine test_symmetry_and_global_gauge
 
+!> Return the four proper rotation matrices of point group D2.
 pure function d2_symmetries() result(symmetries)
     real(dp) :: symmetries(3,3,4)
     symmetries = 0._dp
@@ -194,6 +199,7 @@ pure function d2_symmetries() result(symmetries)
     symmetries(3,3,:) = [1._dp,-1._dp,-1._dp,1._dp]
 end function d2_symmetries
 
+!> Return the minimum angular distance over symmetry-equivalent right poses.
 pure function point_group_distance(left,right,symmetries) result(distance)
     real(dp), intent(in) :: left(3,3), right(3,3), symmetries(:,:,:)
     real(dp) :: distance
@@ -204,6 +210,7 @@ pure function point_group_distance(left,right,symmetries) result(distance)
     enddo
 end function point_group_distance
 
+!> Return the geodesic angle between two proper rotation matrices.
 pure function rotation_distance(left,right) result(distance)
     real(dp), intent(in) :: left(3,3), right(3,3)
     real(dp) :: distance, cosine
@@ -211,6 +218,7 @@ pure function rotation_distance(left,right) result(distance)
     distance = acos(max(-1._dp,min(1._dp,cosine)))
 end function rotation_distance
 
+!> Return the trace of a 3-by-3 matrix used by the rotation-distance formula.
 pure function trace3(matrix) result(trace)
     real(dp), intent(in) :: matrix(3,3)
     real(dp) :: trace

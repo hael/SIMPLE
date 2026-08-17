@@ -17,6 +17,7 @@ real(dp), parameter :: SHIFT_RECOVERY_TOL = 2.e-3_dp
 
 contains
 
+!> Recover one injected joint rotation and shift from independently generated data.
 subroutine run_pose_recovery()
     type(pcg_fourier_workspace) :: workspace
     type(reconstructor_pcg) :: pcgop
@@ -125,6 +126,7 @@ subroutine run_pose_recovery()
     call pcgop%kill
 end subroutine run_pose_recovery
 
+!> Return the geodesic angle between two proper rotation matrices.
 pure function rotation_distance(left,right) result(distance)
     real(dp), intent(in) :: left(3,3), right(3,3)
     real(dp) :: distance, cosine
@@ -132,6 +134,7 @@ pure function rotation_distance(left,right) result(distance)
     distance = acos(max(-1._dp,min(1._dp,cosine)))
 end function rotation_distance
 
+!> Return the trace used by the rotation-distance identity.
 pure function trace3(matrix) result(trace)
     real(dp), intent(in) :: matrix(3,3)
     real(dp) :: trace

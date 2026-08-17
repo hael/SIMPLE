@@ -32,6 +32,7 @@ real(dp), parameter :: FSC_BOUND_SLACK = 1.e-5_dp
 
 contains
 
+!> Verify fixed half ownership, independent noise, reconstruction, and FSC behavior.
 subroutine run_halfset_fsc()
     type(oris) :: even_oris, odd_oris
     type(reconstructor_pcg) :: sampler
@@ -233,6 +234,7 @@ subroutine run_halfset_fsc()
     call odd_oris%kill()
 end subroutine run_halfset_fsc
 
+!> Print shell FSC values for one selected PCG iteration.
 subroutine print_trajectory_fsc(iteration, fsc)
     integer, intent(in) :: iteration
     real, intent(in) :: fsc(:)
@@ -244,6 +246,7 @@ subroutine print_trajectory_fsc(iteration, fsc)
     enddo
 end subroutine print_trajectory_fsc
 
+!> Return scalar relative error for trajectory comparisons.
 pure real(dp) function relative_error(actual, expected) result(error)
     real(dp), intent(in) :: actual, expected
     error = abs(actual-expected) / max(abs(expected), tiny(expected))

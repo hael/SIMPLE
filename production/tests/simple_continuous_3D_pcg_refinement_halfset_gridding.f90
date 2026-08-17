@@ -18,6 +18,7 @@ public :: reconstruct_half_conventionally
 
 contains
 
+!> Reconstruct one half with SIMPLE's conventional gridding path for an A/B baseline.
 subroutine reconstruct_half_conventionally(orientations, observations, reconstruction)
     type(oris),        intent(inout) :: orientations
     real,              intent(in)    :: observations(:,:,:)

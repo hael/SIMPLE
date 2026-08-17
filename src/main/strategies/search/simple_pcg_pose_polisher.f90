@@ -27,6 +27,7 @@ public :: execute_final_pcg_pose_polish
 integer, parameter :: POLISH_BATCH_SIZE = min(32,MAXIMGBATCHSZ)
 integer, parameter :: POLISH_MAX_ITERATIONS = 8
 
+!> Aggregate terminal outcomes, objective values, step bounds, and stencil telemetry.
 type :: pcg_pose_polish_summary
     integer :: nparticles = 0
     integer :: nimproved = 0
@@ -47,6 +48,8 @@ end type pcg_pose_polish_summary
 
 contains
 
+!> Refine one batch of shifts against a fixed Fourier volume and restore every
+!! particle that does not finish with an accepted objective reduction.
 subroutine polish_fixed_volume_shifts(workspace, rotmats, observed, shifts, &
     &max_iterations, statuses, summary, transfers)
     type(pcg_fourier_workspace), intent(in) :: workspace
@@ -124,6 +127,8 @@ subroutine polish_fixed_volume_shifts(workspace, rotmats, observed, shifts, &
     deallocate(accepted_objectives)
 end subroutine polish_fixed_volume_shifts
 
+!> Refine rotations and shifts jointly against one fixed Fourier volume.
+!! Treat each particle pose as one transaction: accept or restore both fields.
 subroutine polish_fixed_volume_poses(workspace, rotmats, observed, shifts, rotation_scale, &
     &max_iterations, statuses, summary, transfers)
     type(pcg_fourier_workspace), intent(in) :: workspace
@@ -203,6 +208,7 @@ subroutine polish_fixed_volume_poses(workspace, rotmats, observed, shifts, rotat
 
 contains
 
+    !> Restore the complete input pose and account for its unchanged objective.
     subroutine restore_input_pose
         rotmats(:,:,iparticle) = input_rotmat
         shifts(:,iparticle) = input_shift
@@ -211,6 +217,12 @@ contains
 
 end subroutine polish_fixed_volume_poses
 
+!> Run the production post-reconstruction pose-polishing pass.
+!!
+!! For each state and gold-standard half, freeze its final PCG half-map, prepare
+!! observations with the production CTF and noise model, refine joint poses in
+!! bounded LM batches, and persist only particles with an accepted reduction.
+!! The commander performs the second PCG reconstruction after this routine.
 subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
     type(parameters), intent(inout) :: params
     type(builder), intent(inout) :: build
@@ -246,12 +258,14 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
     endif
 
     total_summary = pcg_pose_polish_summary()
+    ! Freeze the active reconstruction population before splitting by state and half.
     nselected = 0
     call build%spproj_field%sample4rec([params%fromp,params%top],nselected,selected_pinds)
     if( nselected < 1 ) THROW_HARD('final PCG pose polish found no active reconstruction particles')
     l_sigma_loaded = .false.
     call ptcl_cache_assert_ready(params,build)
     l_cached = ptcl_cache_in_use(params,build)
+    ! Reuse the reconstruction noise model so polishing evaluates the same data weighting.
     if( params%cc_objfun == OBJFUN_EUCLID )then
         l_sigma_loaded = allocated(build%esig%sigma2_noise)
         if( .not. l_sigma_loaded )then
@@ -281,6 +295,7 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
     ! One rotation step moves the mask edge by at most about one pixel.
     rotation_scale = 1._dp/max(real(params%msk_crop,dp),1._dp)
 
+    ! Gold-standard isolation: each particle sees only its state-matched half-map.
     do state = 1, params%nstates
         do eo = 0, 1
             call collect_state_half_particles(state,eo,half_pinds)
@@ -299,6 +314,7 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
             if( abs(halfmap%get_smpd()-params%smpd_crop) > 1.e-4*max(1.,params%smpd_crop) )then
                 THROW_HARD('final PCG pose polish half-map sampling does not match smpd_crop')
             endif
+            ! Snapshot one immutable Fourier workspace for all particles in this half.
             volume = halfmap%get_rmat()
             call pcgop%new(params%box_crop,params%smpd_crop,1.e-3)
             call pcgop%set_volume(volume)
@@ -314,6 +330,7 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
                 allocate(transfers(lims2(1,1):lims2(1,2),lims2(2,1):lims2(2,2),batchsz))
                 allocate(sig2(0:r,batchsz),source=1.0)
                 allocate(rotmats(3,3,batchsz),shifts(2,batchsz),statuses(batchsz))
+                ! Resample per-particle sigma2 onto the cropped reconstruction shells.
                 if( params%cc_objfun == OBJFUN_EUCLID )then
                     kfromto = build%esig%get_kfromto()
                     do i = 1, batchsz
@@ -332,6 +349,7 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
                 endif
                 sdev_noise = 0.0
                 edge_mean = 0.0
+                ! Build y and T from the same crop, CTF, whitening, and shift conventions.
                 do i = 1, batchsz
                     iptcl = half_pinds(batchlims(1)+i-1)
                     if( .not. l_cached ) call build%imgbatch(i)%norm_noise(normalization_mask,sdev_noise)
@@ -346,6 +364,7 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
                     ctfparms%smpd = params%smpd_crop
                     transfers(:,:,i) = pcgop%build_transfer(ctfparms,[0.,0.],sig2(:,i))
                 enddo
+                ! Solve all five pose coordinates while the half-map remains fixed.
                 call polish_fixed_volume_poses(workspace,rotmats,observed,shifts,rotation_scale, &
                     &POLISH_MAX_ITERATIONS,statuses,batch_summary,transfers)
                 call add_summary(total_summary,batch_summary)
@@ -387,6 +406,7 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
 
 contains
 
+    !> Select active particle indices for one state and one even/odd half.
     subroutine collect_state_half_particles(state_here,eo_here,pinds)
         integer, intent(in) :: state_here, eo_here
         integer, allocatable, intent(out) :: pinds(:)
@@ -407,6 +427,7 @@ contains
         enddo
     end subroutine collect_state_half_particles
 
+    !> Merge one batch summary into the production-run summary.
     subroutine add_summary(total,part)
         type(pcg_pose_polish_summary), intent(inout) :: total
         type(pcg_pose_polish_summary), intent(in) :: part
@@ -429,6 +450,8 @@ contains
 
 end subroutine execute_final_pcg_pose_polish
 
+!> Validate that a pose batch and optional transfer planes share one particle
+!! count and the Fourier bounds owned by the fixed-volume workspace.
 subroutine validate_batch_shapes(workspace, rotmats, observed, shifts, statuses, max_iterations, transfers)
     type(pcg_fourier_workspace), intent(in) :: workspace
     real(dp), intent(in) :: rotmats(:,:,:), shifts(:,:)

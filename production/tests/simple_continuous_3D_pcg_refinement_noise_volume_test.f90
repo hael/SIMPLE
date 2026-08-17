@@ -18,6 +18,7 @@ real(dp), parameter :: CORRELATION_TOLERANCE = 0.05_dp
 
 contains
 
+!> Verify seeded additive volume noise without modifying the clean fixture.
 subroutine run_added_volume_noise()
     type(image) :: clean_image, noisy_even_image, noisy_odd_image, replay_image
     real, allocatable :: clean(:,:,:), noisy_even(:,:,:), noisy_odd(:,:,:), replay(:,:,:)

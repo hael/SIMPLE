@@ -7,6 +7,7 @@ public :: run_scaffold_contract
 
 contains
 
+!> Verify mother/child case dispatch and shared test-helper contracts.
 subroutine run_scaffold_contract()
     integer, parameter :: FIXTURE_SEED = 20260811
     real :: first_draw(8), repeated_draw(8)

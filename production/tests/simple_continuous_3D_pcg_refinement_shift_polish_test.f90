@@ -14,6 +14,7 @@ real(dp), parameter :: RECOVERY_TOL = 2.e-3_dp
 
 contains
 
+!> Verify bounded shift-only LM, half isolation, rollback, and terminal accounting.
 subroutine run_shift_polish()
     type(reconstructor_pcg) :: even_operator, odd_operator, weak_operator
     type(pcg_fourier_workspace) :: even_workspace, odd_workspace, weak_workspace
@@ -132,6 +133,7 @@ subroutine run_shift_polish()
     call weak_operator%kill
 end subroutine run_shift_polish
 
+!> Build fixed rotations and known initial shift errors for both halves.
 subroutine set_fixture_poses(rotmats,true_shifts,shifts)
     real(dp), intent(out) :: rotmats(3,3,NPARTICLES)
     real(dp), intent(out) :: true_shifts(2,NPARTICLES), shifts(2,NPARTICLES)
@@ -157,6 +159,7 @@ subroutine set_fixture_poses(rotmats,true_shifts,shifts)
     enddo
 end subroutine set_fixture_poses
 
+!> Require balanced shift-polish outcomes and an aggregate objective reduction.
 subroutine assert_half_summary(summary,label)
     type(pcg_pose_polish_summary), intent(in) :: summary
     character(len=*), intent(in) :: label
@@ -173,6 +176,7 @@ subroutine assert_half_summary(summary,label)
         &trim(label)//' shift-polish batch exceeded the one-pixel trial bound')
 end subroutine assert_half_summary
 
+!> Verify the expected accepted and finite-no-improvement terminal statuses.
 subroutine assert_half_statuses(statuses,label)
     integer, intent(in) :: statuses(NHALF)
     character(len=*), intent(in) :: label

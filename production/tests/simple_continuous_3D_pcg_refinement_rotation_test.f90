@@ -18,6 +18,7 @@ real(dp), parameter :: ROTATION_UPDATE_TOL = 2.e-12_dp
 
 contains
 
+!> Compare analytic right-tangent rotation derivatives with independent finite differences.
 subroutine run_rotation_gradient()
     type(pcg_fourier_workspace) :: workspace
     type(reconstructor_pcg) :: pcgop
@@ -160,6 +161,7 @@ subroutine run_rotation_gradient()
     call pcgop%kill
 end subroutine run_rotation_gradient
 
+!> Apply an independent Rodrigues implementation for derivative-sign verification.
 pure function independent_right_increment(rotmat,omega) result(updated_rotmat)
     real(dp), intent(in) :: rotmat(3,3), omega(3)
     real(dp) :: updated_rotmat(3,3), theta, axis(3), cross_matrix(3,3), exponential(3,3)
@@ -181,6 +183,7 @@ pure function independent_right_increment(rotmat,omega) result(updated_rotmat)
     updated_rotmat = matmul(rotmat,exponential)
 end function independent_right_increment
 
+!> Return a 3-by-3 identity matrix for the independent exponential map.
 pure function identity3() result(identity)
     real(dp) :: identity(3,3)
     identity = 0._dp
@@ -189,6 +192,7 @@ pure function identity3() result(identity)
     identity(3,3) = 1._dp
 end function identity3
 
+!> Return the outer product used by the independent Rodrigues formula.
 pure function outer3(vector) result(product)
     real(dp), intent(in) :: vector(3)
     real(dp) :: product(3,3)
@@ -200,6 +204,7 @@ pure function outer3(vector) result(product)
     enddo
 end function outer3
 
+!> Return a 3-by-3 determinant for rotation-validity checks.
 pure function determinant3(matrix) result(determinant)
     real(dp), intent(in) :: matrix(3,3)
     real(dp) :: determinant
@@ -208,6 +213,7 @@ pure function determinant3(matrix) result(determinant)
         &matrix(1,3)*(matrix(2,1)*matrix(3,2)-matrix(2,2)*matrix(3,1))
 end function determinant3
 
+!> Return the relative L2 error between two packed Fourier planes.
 function plane_relative_error(actual,expected,lims2) result(error)
     integer, intent(in) :: lims2(2,2)
     complex, intent(in) :: actual(lims2(1,1):lims2(1,2),lims2(2,1):lims2(2,2))

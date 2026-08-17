@@ -11,12 +11,14 @@ public :: relative_error
 
 contains
 
+!> Return the population mean used by deterministic noise checks.
 pure real(NOISE_DP) function population_mean(values) result(mean_value)
     real, intent(in) :: values(:,:,:)
 
     mean_value = sum(real(values,NOISE_DP)) / real(size(values),NOISE_DP)
 end function population_mean
 
+!> Return the population variance about the measured population mean.
 pure real(NOISE_DP) function population_variance(values) result(variance)
     real, intent(in) :: values(:,:,:)
     real(NOISE_DP) :: mean_value
@@ -25,6 +27,7 @@ pure real(NOISE_DP) function population_variance(values) result(variance)
     variance = sum((real(values,NOISE_DP) - mean_value)**2) / real(size(values),NOISE_DP)
 end function population_variance
 
+!> Return the centered correlation used to test independent noise fields.
 pure real(NOISE_DP) function centered_correlation(first, second) result(correlation)
     real, intent(in) :: first(:,:,:), second(:,:,:)
     real(NOISE_DP) :: denominator, first_mean, second_mean
@@ -41,6 +44,7 @@ pure real(NOISE_DP) function centered_correlation(first, second) result(correlat
     endif
 end function centered_correlation
 
+!> Return scalar relative error with a finite denominator floor.
 pure real(NOISE_DP) function relative_error(actual, expected) result(error)
     real(NOISE_DP), intent(in) :: actual, expected
 

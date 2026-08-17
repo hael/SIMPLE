@@ -33,6 +33,7 @@ public :: run_extended_halfset_matrix
 
 contains
 
+!> Compare PCG trajectories, angular coverage, regularization, and gridding controls.
 subroutine run_extended_halfset_matrix()
     type(oris) :: even_oris, odd_oris
     type(reconstructor_pcg) :: sampler
@@ -301,6 +302,7 @@ subroutine run_extended_halfset_matrix()
     call odd_oris%kill()
 end subroutine run_extended_halfset_matrix
 
+!> Reduce one FSC curve to the predefined low- and high-shell means.
 subroutine summarize_fsc(fsc, means)
     real, intent(in) :: fsc(:)
     real(dp), intent(out) :: means(2)
@@ -311,6 +313,7 @@ subroutine summarize_fsc(fsc, means)
     means(2) = sum(real(fsc(size(fsc)-N_HIGH_SHELLS+1:size(fsc)),dp))/real(N_HIGH_SHELLS,dp)
 end subroutine summarize_fsc
 
+!> Print one labeled FSC trajectory for independent review.
 subroutine print_fsc_shells(prefix, iteration, fsc)
     character(len=*), intent(in) :: prefix
     integer, intent(in) :: iteration
@@ -323,6 +326,7 @@ subroutine print_fsc_shells(prefix, iteration, fsc)
     enddo
 end subroutine print_fsc_shells
 
+!> Return the direct relative L2 error against the supported truth volume.
 pure real(dp) function relative_l2_error(volume, truth) result(error)
     real, intent(in) :: volume(:,:,:), truth(:,:,:)
     real(dp) :: denominator
@@ -331,6 +335,7 @@ pure real(dp) function relative_l2_error(volume, truth) result(error)
     error = sqrt(sum((real(volume,dp)-real(truth,dp))**2)/max(denominator,tiny(denominator)))
 end function relative_l2_error
 
+!> Return relative L2 error after fitting one global amplitude scale.
 pure real(dp) function scaled_relative_l2_error(volume, truth) result(error)
     real, intent(in) :: volume(:,:,:), truth(:,:,:)
     real(dp) :: denominator, scale, truth_norm_sq
@@ -341,6 +346,7 @@ pure real(dp) function scaled_relative_l2_error(volume, truth) result(error)
     error = sqrt(sum((scale*real(volume,dp)-real(truth,dp))**2)/max(truth_norm_sq,tiny(truth_norm_sq)))
 end function scaled_relative_l2_error
 
+!> Report whether the minimum trajectory sample is not an endpoint.
 pure logical function interior_minimum(values) result(is_interior)
     real(dp), intent(in) :: values(:)
     integer :: location(1)
@@ -349,6 +355,7 @@ pure logical function interior_minimum(values) result(is_interior)
     is_interior = location(1) > 1 .and. location(1) < size(values)
 end function interior_minimum
 
+!> Create one timestamped directory for visual reconstruction artifacts.
 subroutine create_volume_directory(volume_dir)
     character(len=*), intent(out) :: volume_dir
     character(len=8) :: date
@@ -360,6 +367,7 @@ subroutine create_volume_directory(volume_dir)
     write(*,'(a,a)') 'CONTINUOUS_3D_MATRIX volume directory: ', trim(volume_dir)
 end subroutine create_volume_directory
 
+!> Write one named matrix-test volume into the current artifact directory.
 subroutine write_matrix_volume(volume, volume_dir, basename)
     real, intent(in) :: volume(:,:,:)
     character(len=*), intent(in) :: volume_dir, basename

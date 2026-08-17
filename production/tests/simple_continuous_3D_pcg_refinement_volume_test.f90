@@ -12,6 +12,7 @@ integer, parameter :: dp = real64
 
 contains
 
+!> Verify that the deterministic asymmetric truth-volume fixture is reproducible.
 subroutine run_volume_fixture()
     real, allocatable :: phantom(:,:,:), repeated_phantom(:,:,:)
     real(dp) :: mean_value, relative_reflection_error, relative_rotation_error
@@ -59,6 +60,7 @@ subroutine run_volume_fixture()
     write(*,'(a)') 'CONTINUOUS_3D_PCG_VOLUME: PASS'
 end subroutine run_volume_fixture
 
+!> Return the relative L2 difference between two volume fixtures.
 pure real(dp) function relative_l2_difference(first, second) result(relative_error)
     real, intent(in) :: first(:,:,:), second(:,:,:)
     real(dp) :: denominator

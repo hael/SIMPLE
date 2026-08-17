@@ -950,6 +950,7 @@ contains
         workspace%exists = .true.
     end subroutine begin_fourier_workspace
 
+    !> Release a fixed-volume Fourier snapshot and reset all sampling metadata.
     subroutine kill_fourier_workspace( self )
         class(pcg_fourier_workspace), intent(inout) :: self
         if( allocated(self%wrap) ) deallocate(self%wrap)
@@ -966,12 +967,14 @@ contains
         self%exists = .false.
     end subroutine kill_fourier_workspace
 
+    !> Return the native packed-plane bounds used by observations and transfers.
     pure function get_fourier_workspace_lims2( self ) result(lims2)
         class(pcg_fourier_workspace), intent(in) :: self
         integer :: lims2(2,2)
         lims2 = self%lims2
     end function get_fourier_workspace_lims2
 
+    !> Restrict the local objective to an inclusive native Fourier-shell range.
     subroutine set_fourier_workspace_shell_range( self, kfromto )
         class(pcg_fourier_workspace), intent(inout) :: self
         integer, intent(in) :: kfromto(2)
@@ -1145,6 +1148,8 @@ contains
         enddo
     end subroutine shift_normal_terms
 
+    !> Return the shift objective and gradient without exposing the computed
+    !! two-by-two Gauss-Newton block.
     subroutine shift_objective_gradient( self, rotmat, shift, observed, objective, gradient, transfer )
         class(pcg_fourier_workspace), intent(in) :: self
         real(dp), intent(in) :: rotmat(3,3), shift(2)
@@ -1253,6 +1258,8 @@ contains
         if( min_switch_margin == huge(0._dp) ) min_switch_margin = 0._dp
     end subroutine pose_normal_terms
 
+    !> Return the joint pose objective and five-vector gradient without exposing
+    !! the computed Gauss-Newton block or stencil margin.
     subroutine pose_objective_gradient( self, rotmat, shift, observed, objective, gradient, transfer )
         class(pcg_fourier_workspace), intent(in) :: self
         real(dp), intent(in) :: rotmat(3,3), shift(2)
@@ -1532,6 +1539,7 @@ contains
             shift_norm = sqrt(dot_product(direction(4:5),direction(4:5)))
             max_rotation_step = max(max_rotation_step,rotation_norm)
             max_shift_step = max(max_shift_step,shift_norm)
+            ! Quadratic LM model: predicted = -g^T d - 1/2 d^T H d.
             predicted = -dot_product(gradient,direction)-0.5_dp* &
                 &dot_product(direction,matmul(hessian,direction))
             if( .not. ieee_is_finite(predicted) )then
@@ -1559,6 +1567,7 @@ contains
                 status = POSE_LM_INVALID_NUMERICS
                 cycle
             endif
+            ! Gain ratio compares the recomputed reduction with the local model.
             actual = objective-trial_objective
             ratio = actual/predicted
             if( actual > 0._dp .and. ratio >= 0.25_dp )then

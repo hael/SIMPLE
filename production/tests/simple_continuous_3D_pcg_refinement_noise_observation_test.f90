@@ -30,6 +30,7 @@ real, parameter :: EULERS(3,NOBSERVATIONS) = reshape([&
 
 contains
 
+!> Verify independent Fourier-observation noise at a requested signal-to-noise ratio.
 subroutine run_observation_noise()
     type(image) :: clean_image, noisy_even_image, noisy_odd_image
     real, allocatable :: clean(:,:,:), noisy_even(:,:,:), noisy_odd(:,:,:)
@@ -84,6 +85,7 @@ subroutine run_observation_noise()
     call noisy_odd_image%kill()
 end subroutine run_observation_noise
 
+!> Generate clean projection observations from the independent truth projector.
 subroutine build_clean_observations(observations)
     real, allocatable, intent(out) :: observations(:,:,:)
     type(image) :: projection

@@ -32,6 +32,7 @@ public :: write_mrc_volume
 
 contains
 
+!> Build deterministic, nonoverlapping even and odd orientation sets.
 subroutine build_disjoint_half_orientations(nhalf, even_oris, odd_oris, even_ids, odd_ids)
     integer,          intent(in)    :: nhalf
     type(oris),       intent(inout) :: even_oris, odd_oris
@@ -60,6 +61,7 @@ subroutine build_disjoint_half_orientations(nhalf, even_oris, odd_oris, even_ids
     call all_oris%kill()
 end subroutine build_disjoint_half_orientations
 
+!> Generate clean projections and independent seeded noise for one half-set.
 subroutine build_independent_observations(sampler, orientations, noise_seed, requested_snr, &
                                           &planes, clean_planes, clean_images, noisy_images, noise, realized_snr)
     class(reconstructor_pcg), intent(in)    :: sampler
@@ -124,6 +126,7 @@ subroutine build_independent_observations(sampler, orientations, noise_seed, req
     call truth_projector%kill()
 end subroutine build_independent_observations
 
+!> Reconstruct one fixed half-set with the matrix-free PCG operator.
 subroutine reconstruct_half(orientations, planes, reconstruction, niters)
     type(oris),           intent(inout) :: orientations
     complex,              intent(in)    :: planes(-BOX/2:,-BOX/2:,:)
@@ -141,6 +144,7 @@ subroutine reconstruct_half(orientations, planes, reconstruction, niters)
     call pcgop%kill()
 end subroutine reconstruct_half
 
+!> Reconstruct matched clean and noisy half data with one fixed PCG policy.
 subroutine reconstruct_half_pair_fixed(orientations, clean_planes, noisy_planes, lambda, maxits, &
                                        &clean_reconstruction, noisy_reconstruction, niters, data_residuals)
     type(oris),        intent(inout) :: orientations
@@ -166,6 +170,7 @@ subroutine reconstruct_half_pair_fixed(orientations, clean_planes, noisy_planes,
     call pcgop%kill()
 end subroutine reconstruct_half_pair_fixed
 
+!> Measure ||A x-y||/||y|| with the same matrix-free forward operator.
 subroutine relative_forward_residual(pcgop, orientations, planes, volume, relative_residual)
     class(reconstructor_pcg), intent(inout) :: pcgop
     type(oris),               intent(inout) :: orientations
@@ -197,6 +202,7 @@ subroutine relative_forward_residual(pcgop, orientations, planes, volume, relati
     call orientation%kill()
 end subroutine relative_forward_residual
 
+!> Save PCG solutions at predefined iteration counts for trajectory analysis.
 subroutine reconstruct_half_trajectory(orientations, planes, iteration_counts, mask_radius, reconstructions, niters)
     type(oris),        intent(inout) :: orientations
     complex,           intent(in)    :: planes(-BOX/2:,-BOX/2:,:)
@@ -221,6 +227,7 @@ subroutine reconstruct_half_trajectory(orientations, planes, iteration_counts, m
     call pcgop%kill()
 end subroutine reconstruct_half_trajectory
 
+!> Apply the common spherical support used by all reconstruction comparisons.
 subroutine apply_fixed_support(volume)
     real, intent(inout) :: volume(:,:,:)
     type(image) :: volume_image
@@ -233,6 +240,7 @@ subroutine apply_fixed_support(volume)
     call volume_image%kill()
 end subroutine apply_fixed_support
 
+!> Calculate the shell FSC between two independently reconstructed volumes.
 subroutine calculate_fsc(even_volume, odd_volume, fsc)
     real,              intent(in)  :: even_volume(:,:,:), odd_volume(:,:,:)
     real, allocatable, intent(out) :: fsc(:)
@@ -251,6 +259,7 @@ subroutine calculate_fsc(even_volume, odd_volume, fsc)
     call odd_image%kill()
 end subroutine calculate_fsc
 
+!> Return the centered voxel correlation between two real volumes.
 pure real(dp) function centered_array_correlation(a, b) result(correlation)
     real, intent(in) :: a(:,:,:), b(:,:,:)
     real(dp) :: amean, bmean, denominator
@@ -262,6 +271,7 @@ pure real(dp) function centered_array_correlation(a, b) result(correlation)
         &max(denominator, tiny(denominator))
 end function centered_array_correlation
 
+!> Return the Euclidean norm of a real volume array.
 pure real(dp) function array_l2_norm(volume) result(norm)
     real, intent(in) :: volume(:,:,:)
 
@@ -269,6 +279,7 @@ pure real(dp) function array_l2_norm(volume) result(norm)
     norm = sqrt(sum(real(volume,dp)**2))
 end function array_l2_norm
 
+!> Write a real test array as a reviewable MRC volume.
 subroutine write_mrc_volume(volume, filename)
     real, intent(in) :: volume(:,:,:)
     character(len=*), intent(in) :: filename

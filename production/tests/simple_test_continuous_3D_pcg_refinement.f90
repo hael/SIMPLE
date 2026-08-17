@@ -29,6 +29,7 @@ endif
 
 contains
 
+!> Parse one optional case key and reject ambiguous child selection.
 subroutine find_selected_case(case_name, occurrences)
     character(len=*), intent(out) :: case_name
     integer,          intent(out) :: occurrences
@@ -48,6 +49,7 @@ subroutine find_selected_case(case_name, occurrences)
     enddo
 end subroutine find_selected_case
 
+!> Report whether one command argument is a case selector.
 logical function is_case_argument(argument) result(is_case)
     character(len=*), intent(in) :: argument
     integer :: separator
@@ -57,6 +59,7 @@ logical function is_case_argument(argument) result(is_case)
     if( is_case ) is_case = trim(argument(:separator-1)) == 'case'
 end function is_case_argument
 
+!> Schedule each scientific case in a separate child process and summarize outcomes.
 subroutine run_suite()
     character(len=*), parameter :: labels(*) = [character(len=24) :: &
         &'scaffold', 'volume_fixture', 'volume_noise', 'halfset_fsc', &
@@ -87,6 +90,7 @@ subroutine run_suite()
     write(*,'(a)') 'Continuous 3D PCG refinement test suite: PASS'
 end subroutine run_suite
 
+!> Run one named case in an isolated child so one failure does not hide later cases.
 subroutine run_case_in_child(label, groups_run, groups_passed, groups_skipped, failures)
     character(len=*), intent(in) :: label
     integer, intent(inout) :: groups_run, groups_passed, groups_skipped, failures
@@ -134,6 +138,7 @@ subroutine run_case_in_child(label, groups_run, groups_passed, groups_skipped, f
     endif
 end subroutine run_case_in_child
 
+!> Quote the current executable path for safe child-process invocation.
 function executable_command(executable) result(command)
     character(len=*), intent(in) :: executable
     character(len=:), allocatable :: command
@@ -145,6 +150,7 @@ function executable_command(executable) result(command)
 #endif
 end function executable_command
 
+!> Escape one shell token without changing its command-line value.
 function quoted_shell_token(value) result(quoted)
     character(len=*), intent(in) :: value
     character(len=:), allocatable :: quoted
@@ -160,6 +166,7 @@ function quoted_shell_token(value) result(quoted)
 #endif
 end function quoted_shell_token
 
+!> Dispatch one case key to its owning child test module.
 subroutine run_case(label)
     character(len=*), intent(in) :: label
 

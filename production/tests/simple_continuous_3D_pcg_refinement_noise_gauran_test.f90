@@ -15,6 +15,7 @@ real(dp), parameter :: UNIT_MOMENT_TOLERANCE = 0.05_dp
 
 contains
 
+!> Verify deterministic Gaussian noise statistics used by the test fixtures.
 subroutine run_gauran_replacement()
     type(image) :: noise_image
     real, allocatable :: samples(:,:,:)
