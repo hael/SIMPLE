@@ -62,6 +62,7 @@ if [[ $OBJFUN != cc && $OBJFUN != euclid ]]; then
     echo "ERROR: --objfun must be cc or euclid" >&2
     exit 2
 fi
+# Require the Python syntax level used by the evidence analyzers.
 python_supported() {
     command -v python3 >/dev/null 2>&1 && \
         python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 7))'
@@ -154,6 +155,7 @@ git -C "$SCRIPT_DIR/../../.." rev-parse HEAD >"$RESULT_ROOT/input/source_commit.
 (cd "$CHECKPOINT_DIR" && find . -type f -print0 | sort -z | xargs -0 sha256sum) \
     >"$RESULT_ROOT/input/checkpoint_manifest.sha256"
 
+# Run one required command and record a failure without stopping independent arms.
 run_success() {
     local workdir=$1
     local logfile=$2
@@ -169,6 +171,7 @@ run_success() {
     return 0
 }
 
+# Require a typed policy rejection and reject an earlier UI-input failure.
 expect_failure() {
     local name=$1
     local expected=$2
@@ -213,6 +216,7 @@ expect_failure() {
     fi
 }
 
+# Export pose and immutable metadata for matched A/B comparison.
 export_project_evidence() {
     local project=$1
     local evidence_dir=$2
@@ -225,6 +229,7 @@ export_project_evidence() {
     return "$status"
 }
 
+# Run one reconstruction arm from the frozen checkpoint and collect final evidence.
 run_arm() {
     local route=$1
     local enabled=$2

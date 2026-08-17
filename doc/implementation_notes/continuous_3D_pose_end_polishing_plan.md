@@ -142,7 +142,10 @@ after their Oracle gates:
 | `52de96f5c` | Shift/joint pose numerical and initial production-polisher implementation |
 | `1e8be6002` | Shift, rotation, recovery, and batch tests |
 | `2e00ea5b9` | FINAL joint-pose SPEC and initial PLAN |
-| current worktree | `reconstruct3D` ownership correction, pose contract, production A/B package, and truth-diagnostic matrix |
+| `1c7d5191b` | Move the opt-in production owner from `refine3D` to `reconstruct3D` |
+| `50f26f9c6` | Pose contract, production A/B package, and truth-diagnostic matrix |
+| `2c167c557` | Nine-phase implementation and evidence record |
+| current worktree | Routine documentation and corrected Phase 9 scientific result |
 
 ### Phase 1 — isolated mother/child test workbox
 
@@ -152,12 +155,12 @@ while keeping shared helpers free of substantive test logic.
 **Major file changes:**
 
 - Mother runner, `case=` selection, child execution, and suite accounting:
-  `production/tests/simple_test_continuous_3D_pcg_refinement.f90:1` and `:60`.
+  `production/tests/simple_test_continuous_3D_pcg_refinement.f90:1` and `:63`.
 - Shared assertions, deterministic seed, and reusable truth builder:
-  `production/tests/simple_continuous_3D_pcg_refinement_helpers.f90:27`, `:59`,
-  and `:76`.
+  `production/tests/simple_continuous_3D_pcg_refinement_helpers.f90:28`, `:63`,
+  and `:81`.
 - First executable contract:
-  `production/tests/simple_continuous_3D_pcg_refinement_scaffold_test.f90:10`.
+  `production/tests/simple_continuous_3D_pcg_refinement_scaffold_test.f90:11`.
 - Dedicated child-module ownership was established for volume, noise, half-set,
   KB, shift, rotation, and recovery cases. Their numerical bodies were filled
   in later phases. CMake already globbed these sources, so no CMake file changed.
@@ -177,17 +180,17 @@ and verify independent noisy observations before testing reconstruction.
 **Major file changes:**
 
 - Truth-volume builder shared by later cases:
-  `production/tests/simple_continuous_3D_pcg_refinement_helpers.f90:76`.
+  `production/tests/simple_continuous_3D_pcg_refinement_helpers.f90:81`.
 - Volume dimensions, fingerprints, variance, norm, and asymmetry:
-  `production/tests/simple_continuous_3D_pcg_refinement_volume_test.f90:15`.
+  `production/tests/simple_continuous_3D_pcg_refinement_volume_test.f90:16`.
 - Noise case coordinator:
-  `production/tests/simple_continuous_3D_pcg_refinement_noise_test.f90:11`.
+  `production/tests/simple_continuous_3D_pcg_refinement_noise_test.f90:12`.
 - Unit-Gaussian replacement:
-  `production/tests/simple_continuous_3D_pcg_refinement_noise_gauran_test.f90:18`.
+  `production/tests/simple_continuous_3D_pcg_refinement_noise_gauran_test.f90:19`.
 - Added volume noise and replay checks:
-  `production/tests/simple_continuous_3D_pcg_refinement_noise_volume_test.f90:21`.
+  `production/tests/simple_continuous_3D_pcg_refinement_noise_volume_test.f90:22`.
 - Independent noisy production-projector observations:
-  `production/tests/simple_continuous_3D_pcg_refinement_noise_observation_test.f90:33`.
+  `production/tests/simple_continuous_3D_pcg_refinement_noise_observation_test.f90:34`.
 - Shared statistical calculations only:
   `production/tests/simple_continuous_3D_pcg_refinement_noise_support.f90:1`.
 
@@ -217,11 +220,11 @@ a fixed-volume workspace that takes one padded Fourier snapshot.
 - One-snapshot Fourier workspace:
   `src/main/volume/simple_reconstructor_pcg.f90:931`.
 - Packed/Friedel value and gradient gather:
-  `src/main/volume/simple_reconstructor_pcg.f90:989`.
+  `src/main/volume/simple_reconstructor_pcg.f90:992`.
 - Polynomial, normalized stencil, support, and switch tests:
-  `production/tests/simple_continuous_3D_pcg_refinement_kb_test.f90:20`.
+  `production/tests/simple_continuous_3D_pcg_refinement_kb_test.f90:21`.
 - Packed gather and differentiated Friedel tests:
-  `production/tests/simple_continuous_3D_pcg_refinement_kb_gather_test.f90:19`.
+  `production/tests/simple_continuous_3D_pcg_refinement_kb_gather_test.f90:20`.
 
 **Progress and result:** the design preflight fixed the `rho` terminology,
 right-tangent and shift-phase conventions, fixed-cell derivative scope,
@@ -245,16 +248,16 @@ than by the PCG gather under test.
 **Major file changes:**
 
 - Half-set test coordinator and reported trajectories:
-  `production/tests/simple_continuous_3D_pcg_refinement_halfset_test.f90:35`.
+  `production/tests/simple_continuous_3D_pcg_refinement_halfset_test.f90:36`.
 - Disjoint orientations, independent observations, PCG trajectories, fixed
   support, residuals, FSC, and MRC output:
-  `production/tests/simple_continuous_3D_pcg_refinement_halfset_support.f90:35`,
-  `:63`, `:144`, `:169`, `:200`, and `:272`.
+  `production/tests/simple_continuous_3D_pcg_refinement_halfset_support.f90:36`,
+  `:65`, `:148`, `:174`, `:206`, and `:283`.
 - Conventional gridding control on identical observations:
-  `production/tests/simple_continuous_3D_pcg_refinement_halfset_gridding.f90:21`.
+  `production/tests/simple_continuous_3D_pcg_refinement_halfset_gridding.f90:22`.
 - Consolidated view-count, iteration, lambda, residual, norm, truth-error, FSC,
   and volume-output matrix:
-  `production/tests/simple_continuous_3D_pcg_refinement_halfset_matrix.f90:36`.
+  `production/tests/simple_continuous_3D_pcg_refinement_halfset_matrix.f90:37`.
 
 **Progress and result:** the first source had invalid Fortran continuations in
 seven assertion calls; compilation passed after those test-only corrections.
@@ -278,18 +281,18 @@ a half-isolated batch scaffold and production weighting.
 **Major file changes:**
 
 - Shift residual, Jv, real adjoint, normal terms, and objective gradient:
-  `src/main/volume/simple_reconstructor_pcg.f90:1012`, `:1044`, `:1072`,
-  `:1106`, and `:1148`.
+  `src/main/volume/simple_reconstructor_pcg.f90:1015`, `:1047`, `:1075`,
+  `:1109`, and `:1153`.
 - Bounded two-parameter LM and explicit outcomes:
-  `src/main/volume/simple_reconstructor_pcg.f90:1297`.
+  `src/main/volume/simple_reconstructor_pcg.f90:1304`.
 - Production transfer and observation whitening used by the tests:
-  `src/main/volume/simple_reconstructor_pcg.f90:1717` and `:1786`.
+  `src/main/volume/simple_reconstructor_pcg.f90:1726` and `:1795`.
 - Fixed-half shift batch and atomic rollback:
-  `src/main/strategies/search/simple_pcg_pose_polisher.f90:50`.
+  `src/main/strategies/search/simple_pcg_pose_polisher.f90:53`.
 - Shift sign, adjoint, gradient, recovery, exact, weak, and weighting tests:
-  `production/tests/simple_continuous_3D_pcg_refinement_shift_test.f90:23`.
+  `production/tests/simple_continuous_3D_pcg_refinement_shift_test.f90:24`.
 - Batch half-isolation and terminal-accounting test:
-  `production/tests/simple_continuous_3D_pcg_refinement_shift_polish_test.f90:17`.
+  `production/tests/simple_continuous_3D_pcg_refinement_shift_polish_test.f90:18`.
 
 **Progress and result:** the CTF-free/unit-noise scaffold passed first. The
 first production-weighted build then failed at a `tiny(1.0)` sigma guard because
@@ -313,18 +316,18 @@ right-tangent pose update and one scaled bounded LM solve.
 - Right-increment rotation composition:
   `src/main/volume/simple_reconstructor_pcg.f90:289`.
 - Rotation Jv, joint normal terms, objective gradient, and stencil telemetry:
-  `src/main/volume/simple_reconstructor_pcg.f90:1167`, `:1202`, `:1256`, and
-  `:1276`.
+  `src/main/volume/simple_reconstructor_pcg.f90:1172`, `:1207`, `:1263`, and
+  `:1283`.
 - Scaled bounded five-parameter LM:
-  `src/main/volume/simple_reconstructor_pcg.f90:1430`.
+  `src/main/volume/simple_reconstructor_pcg.f90:1437`.
 - Joint batch update and complete-pose rollback:
-  `src/main/strategies/search/simple_pcg_pose_polisher.f90:127`.
+  `src/main/strategies/search/simple_pcg_pose_polisher.f90:132`.
 - Rotation finite differences and independent right-increment oracle:
-  `production/tests/simple_continuous_3D_pcg_refinement_rotation_test.f90:21`.
+  `production/tests/simple_continuous_3D_pcg_refinement_rotation_test.f90:22`.
 - Joint recovery, exact-solution, weak-system, and rollback cases:
-  `production/tests/simple_continuous_3D_pcg_refinement_recovery_test.f90:20`.
+  `production/tests/simple_continuous_3D_pcg_refinement_recovery_test.f90:21`.
 - Mother-suite registration:
-  `production/tests/simple_test_continuous_3D_pcg_refinement.f90:60`.
+  `production/tests/simple_test_continuous_3D_pcg_refinement.f90:63`.
 - Frozen contract and this implementation plan:
   `doc/implementation_notes/continuous_3D_pose_end_polishing_spec.md:1` and
   `doc/implementation_notes/continuous_3D_pose_end_polishing_plan.md:1`.
@@ -357,7 +360,7 @@ PCG reconstruction.
 - `reconstruct3D` UI exposure and PCG-only activation:
   `src/main/ui/simple/simple_ui_refine3D.f90:138`.
 - Base reconstruction, final polish, project persistence, and second PCG pass:
-  `src/main/commanders/simple/simple_commanders_rec.f90:33`.
+  `src/main/commanders/simple/simple_commanders_rec.f90:36`.
 - Removal of the earlier terminal `refine3D` ownership attempt:
   `src/main/commanders/simple/simple_commanders_refine3D.f90:1336`.
 - Distributed worker stripping so only the master polishes:
@@ -367,13 +370,13 @@ PCG reconstruction.
   `:1077`.
 - Production fixed-half particle loading, CTF/whitening, accepted-pose write,
   normalization-mask fallback, terminal summary, and active Fourier limit:
-  `src/main/strategies/search/simple_pcg_pose_polisher.f90:214`, `:268`, `:306`,
-  `:337`, and `:355`.
+  `src/main/strategies/search/simple_pcg_pose_polisher.f90:226`, `:266`, `:299`,
+  `:358`, `:373`, and `:393`.
 - Point-group, global-gauge, multi-orientation, half-isolation, bounds, and
   terminal-accounting contract test:
-  `production/tests/simple_continuous_3D_pcg_refinement_pose_contract_test.f90:22`.
+  `production/tests/simple_continuous_3D_pcg_refinement_pose_contract_test.f90:23`.
 - Ten-case mother-suite registration:
-  `production/tests/simple_test_continuous_3D_pcg_refinement.f90:60` and `:183`.
+  `production/tests/simple_test_continuous_3D_pcg_refinement.f90:63` and `:193`.
 
 **Progress and result:** the first production runner used terminal `refine3D`
 arms. That design produced unmatched stochastic controls and exposed an
@@ -396,11 +399,11 @@ beta-gal checkpoint without running an orientation-search iteration.
 
 - One-directory, collect-all Oracle runner, policy cases, evidence export, and
   shared/distributed arms:
-  `production/tests/continuous_3D_pcg_pose_validation/run_oracle_validation.sh:157`,
-  `:172`, `:216`, and `:228`.
+  `production/tests/continuous_3D_pcg_pose_validation/run_oracle_validation.sh:159`,
+  `:175`, `:220`, and `:233`.
 - Pose/metadata/FSC parsing, A/B checks, default behavior, and route equivalence:
-  `production/tests/continuous_3D_pcg_pose_validation/analyze_pose_ab.py:96`,
-  `:211`, `:277`, and `:298`.
+  `production/tests/continuous_3D_pcg_pose_validation/analyze_pose_ab.py:104`,
+  `:227`, `:294`, and `:316`.
 - Reproducible command, fixed tolerances, artifact layout, and interpretation:
   `production/tests/continuous_3D_pcg_pose_validation/README.md:19`, `:48`,
   `:69`, and `:93`.
@@ -429,20 +432,20 @@ numerics.
 
 - Deterministic perturbation of only `e1`, `e3`, `x`, and `y` while preserving
   CTF and half metadata:
-  `production/tests/continuous_3D_pcg_pose_validation/prepare_truth_oritab.py:32`.
+  `production/tests/continuous_3D_pcg_pose_validation/prepare_truth_oritab.py:34`.
 - Deterministic alternating half ownership when the simulator table has no
   split, plus microscope-metadata validation:
-  `production/tests/continuous_3D_pcg_pose_validation/prepare_truth_oritab.py:46`
-  and `:57`.
+  `production/tests/continuous_3D_pcg_pose_validation/prepare_truth_oritab.py:49`
+  and `:61`.
 - One collect-all clean/noisy, exact/perturbed, full/FSC-limited 16-arm runner;
   source manifest; clean production-projector stack; project creation; FSC
   evidence; and final packaging:
-  `production/tests/continuous_3D_pcg_pose_validation/run_truth_diagnostic.sh:132`,
-  `:158`, `:234`, `:272`, and `:293`.
+  `production/tests/continuous_3D_pcg_pose_validation/run_truth_diagnostic.sh:135`,
+  `:163`, `:240`, `:279`, and `:301`.
 - Truth-pose errors, half-map and truth-map FSC changes, per-case decisions, and
   aggregate feature gate:
   `production/tests/continuous_3D_pcg_pose_validation/analyze_truth_matrix.py:34`,
-  `:52`, `:95`, and `:186`.
+  `:53`, `:99`, and `:192`.
 - User procedure and interpretation:
   `production/tests/continuous_3D_pcg_pose_validation/README.md:109`.
 
@@ -477,17 +480,44 @@ microscope values, assigns deterministic alternating half ownership when the
 input table has only `eo=0`, and requires the imported particle count and both
 half counts to pass before scheduling any arm.
 
-**Status:** corrected `SOURCE COMPLETE`; Bash syntax, Python AST, perturbation
-metadata, whitespace, and conflict-marker checks passed. The first Oracle run
-is a harness failure and provides no scientific evidence. Oracle rerun is
-pending. This is the current phase.
+The corrected Oracle run `continuous_3D_pose_truth_diagnostic_20260817_093049`
+completed all 16 reconstruction arms and reached the analyzer. The analyzer was
+the only recorded failure. The result is therefore scientific evidence, not a
+harness failure.
+
+The aggregate gate failed:
+
+- `clean_exact_full` moved all 2,000 truth-start particles. Rotation RMS changed
+  from `8.66466e-07` to `0.0171622` rad, shift RMS changed from `4.06222e-05`
+  to `0.105219` pixels, half-map FSC area changed by `-0.00980282`, and
+  truth-average FSC area changed by `-0.0211268`.
+- `clean_perturbed_full` reduced shift RMS from `0.320157` to `0.106914` pixels
+  but increased rotation RMS from `0.0173295` to `0.0223992` rad. It therefore
+  failed the required joint 50-percent recovery gate.
+- Full-band noisy exact and perturbed cases failed. The exact case moved truth
+  poses and reduced half-map FSC area by `-0.0112817`.
+- The FSC=0.5 and FSC=0.143 perturbed cases passed and improved FSC, but both
+  matched exact-pose controls failed their stationarity tolerances.
+- Every enabled arm reported 2,000 improved particles and zero unchanged,
+  unreliable, step-bound, invalid, or iteration-limit outcomes. A lower local
+  objective therefore did not identify whether a pose change was physically
+  correct.
+
+**Status:** `SCIENTIFIC FAIL`. The clean exact result supports a mismatch
+between the independent truth generator and the fixed-map polishing objective.
+Possible causes include an operator/objective inconsistency and bias in the
+reconstructed half-map used as the fixed reference. The current matrix does not
+separate those causes. Full-band noisy results also support noise overfitting.
+Keep the feature disabled by default.
 
 ## Current next command
 
-The complete command, inputs, output directory, and result-reading order are in
-[`production/tests/continuous_3D_pcg_pose_validation/README.md`](../../production/tests/continuous_3D_pcg_pose_validation/README.md#truth-diagnostic-matrix-after-an-ab-failure).
-Run only `run_truth_diagnostic.sh`; it schedules every Phase 9 arm and keeps all
-evidence in one timestamped directory.
+Do not rerun the same matrix. The next diagnostic must separate forward-operator
+consistency from reconstructed-map bias. Use the independent clean observations
+with (1) the exact truth volume as the fixed reference and (2) the reconstructed
+clean half-map as the fixed reference. Hold the starting truth poses, shell
+range, CTF convention, and optimizer policy fixed. This A/B identifies whether
+truth-pose drift begins before or after reconstruction supplies the fixed map.
 
 ## Review and verification roles
 
@@ -514,5 +544,7 @@ evidence in one timestamped directory.
 The component implementation and production connection have passed their
 focused, mother-suite, persistence, and shared/distributed gates. The feature
 is not scientifically complete because the frozen beta-gal A/B failed. The
-truth-diagnostic matrix must identify and resolve that failure before the SPEC
-can be accepted. Stage 4 alternating reconstruction remains blocked.
+truth-diagnostic matrix confirmed the failure but did not isolate its cause.
+The exact-truth-volume versus reconstructed-half-map diagnostic must identify
+and resolve the first source of truth-pose drift before the SPEC can be accepted.
+Stage 4 alternating reconstruction remains blocked.

@@ -69,6 +69,7 @@ for input_file in "$TRUTH_VOLUME" "$TRUTH_ORIS" "$NOISY_STACK"; do
     fi
 done
 
+# Require the Python syntax level used by the metadata and result analyzers.
 python_supported() {
     command -v python3 >/dev/null 2>&1 && \
         python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 7))'
@@ -115,6 +116,7 @@ record_failure() {
     printf 'FAIL [%02d] %s\n' "$FAILURE_COUNT" "$*" | tee -a "$FAILURE_LOG" >&2
 }
 
+# Package status, checksums, and the complete log after all scheduled arms finish.
 finalize() {
     local status=$?
     set +e
@@ -129,6 +131,7 @@ finalize() {
 }
 trap finalize EXIT
 
+# Run one required command and record a failure without hiding later independent arms.
 run_success() {
     local workdir=$1
     local logfile=$2
@@ -148,6 +151,7 @@ run_success() {
     return 0
 }
 
+# Export the final particle poses used by the truth-error analyzer.
 export_poses() {
     local project=$1
     local output=$2
@@ -155,6 +159,7 @@ export_poses() {
         keys=e1,e2,e3,x,y,eo >"$output" 2>&1
 }
 
+# Record exact source hashes so the diagnostic is tied to one implementation.
 write_source_manifest() {
     local list="$RESULT_ROOT/input/source_files.txt"
     local manifest="$RESULT_ROOT/input/source_manifest.sha256"
@@ -231,6 +236,7 @@ if [[ ! -f $CLEAN_STACK ]]; then
     exit 2
 fi
 
+# Import one observation stack and create matched exact and perturbed base projects.
 create_base() {
     local observation=$1
     local start=$2
@@ -269,6 +275,7 @@ for observation in clean noisy; do
     done
 done
 
+# Calculate half-map and truth-map FSC curves for one completed arm.
 calculate_fsc() {
     local name=$1
     local vol1=$2
@@ -290,6 +297,7 @@ calculate_fsc() {
         fsc="$workdir/fsc_state01.bin" box="$BOX" smpd="$SMPD" mkdir=no
 }
 
+# Run one off/on reconstruction arm and collect pose, map, and FSC evidence.
 run_arm() {
     local case_name=$1
     local observation=$2

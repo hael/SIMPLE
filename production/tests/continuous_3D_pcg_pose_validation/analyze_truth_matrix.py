@@ -32,6 +32,7 @@ KEY_PATTERN = re.compile(r"(?<![A-Za-z0-9_])([A-Za-z0-9_]+)=([-+0-9.Ee]+)")
 
 
 def parse_truth(path: Path) -> dict[int, tuple[int, tuple[float, ...]]]:
+    """Read the simulator truth poses in the common project-row representation."""
     rows: dict[int, tuple[int, tuple[float, ...]]] = {}
     for index, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         if not raw.strip():
@@ -54,6 +55,7 @@ def pose_errors(
     truth: dict[int, tuple[int, tuple[float, ...]]],
     symmetries: list[list[list[float]]],
 ) -> tuple[list[float], list[float]]:
+    """Calculate per-particle symmetry-aware rotation and image-shift errors."""
     if poses.keys() != truth.keys():
         raise ValueError("project and truth orientation tables have different particle index sets")
     rotations: list[float] = []
@@ -73,6 +75,7 @@ def pose_errors(
 
 
 def load_arm(root: Path, name: str) -> dict[str, object]:
+    """Load poses, FSC curves, and optional polish telemetry for one arm."""
     arm = root / "arms" / name
     evidence = arm / "evidence"
     return {
@@ -86,6 +89,7 @@ def load_arm(root: Path, name: str) -> dict[str, object]:
 
 
 def area_changes(off: dict[str, object], on: dict[str, object]) -> dict[str, float]:
+    """Calculate enabled-minus-disabled FSC-area changes for all map pairs."""
     changes: dict[str, float] = {}
     for key in ("half_fsc", "truth_avg_fsc", "truth_even_fsc", "truth_odd_fsc"):
         changes[key] = fsc_area(on[key]) - fsc_area(off[key])
@@ -99,6 +103,7 @@ def analyze_case(
     truth: dict[int, tuple[int, tuple[float, ...]]],
     symmetries: list[list[list[float]]],
 ) -> dict[str, object]:
+    """Apply the predeclared pose and FSC gates to one matched off/on case."""
     off = load_arm(root, f"{case}_off")
     on = load_arm(root, f"{case}_on")
     off_rotation, off_shift = pose_errors(off["poses"], truth, symmetries)
@@ -143,6 +148,7 @@ def analyze_case(
 
 
 def write_markdown(path: Path, report: dict[str, object]) -> None:
+    """Write a concise human-readable report from the complete result object."""
     lines = [
         "# Continuous 3-D pose truth-diagnostic result",
         "",
@@ -184,6 +190,7 @@ def write_markdown(path: Path, report: dict[str, object]) -> None:
 
 
 def main() -> int:
+    """Analyze all eight cases and apply the aggregate scientific feature gate."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--truth-oris", type=Path, required=True)
@@ -214,7 +221,10 @@ def main() -> int:
     interpretation: list[str] = []
     if results:
         if results.get("clean_exact_full", {}).get("conclusion") != "PASS":
-            interpretation.append("Clean exact failure supports an operator or objective consistency defect.")
+            interpretation.append(
+                "Clean exact failure supports a mismatch between the truth generator and the "
+                "fixed-map objective, including operator inconsistency or reconstruction-map bias."
+            )
         elif results.get("clean_perturbed_full", {}).get("conclusion") != "PASS":
             interpretation.append("Clean exact is stable, but clean recovery fails; inspect pose numerics and solver policy.")
         else:

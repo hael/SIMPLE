@@ -20,6 +20,7 @@ ROUTE_SHIFT_RMS_TOLERANCE = 0.02
 
 
 def parse_rows(path: Path, payload_count: int) -> dict[int, tuple[int, tuple[float, ...]]]:
+    """Read indexed active-state payload rows exported by the validation runner."""
     rows: dict[int, tuple[int, tuple[float, ...]]] = {}
     for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
         fields = raw.split()
@@ -38,6 +39,7 @@ def parse_rows(path: Path, payload_count: int) -> dict[int, tuple[int, tuple[flo
 
 
 def matmul(left: list[list[float]], right: list[list[float]]) -> list[list[float]]:
+    """Multiply two 3-by-3 matrices without external numerical dependencies."""
     return [
         [sum(left[i][k] * right[k][j] for k in range(3)) for j in range(3)]
         for i in range(3)
@@ -45,10 +47,12 @@ def matmul(left: list[list[float]], right: list[list[float]]) -> list[list[float
 
 
 def transpose(matrix: list[list[float]]) -> list[list[float]]:
+    """Transpose a 3-by-3 matrix."""
     return [[matrix[j][i] for j in range(3)] for i in range(3)]
 
 
 def simple_rotmat(angle_degrees: float, axis: int) -> list[list[float]]:
+    """Build one SIMPLE-convention elementary rotation about axis 2 or 3."""
     angle = math.radians(angle_degrees)
     cosine = math.cos(angle)
     sine = math.sin(angle)
@@ -60,6 +64,7 @@ def simple_rotmat(angle_degrees: float, axis: int) -> list[list[float]]:
 
 
 def euler2m(eulers: tuple[float, float, float]) -> list[list[float]]:
+    """Convert SIMPLE Euler angles to a rotation matrix."""
     first = simple_rotmat(eulers[0], 3)
     tilt = simple_rotmat(eulers[1], 2)
     third = simple_rotmat(eulers[2], 3)
@@ -67,6 +72,7 @@ def euler2m(eulers: tuple[float, float, float]) -> list[list[float]]:
 
 
 def symmetry_matrices(point_group: str) -> list[list[list[float]]]:
+    """Return the supported C1 or D2 proper point-group rotations."""
     identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
     normalized = point_group.lower()
     if normalized == "c1":
@@ -82,6 +88,7 @@ def symmetry_matrices(point_group: str) -> list[list[list[float]]]:
 
 
 def rotation_distance(left: list[list[float]], right: list[list[float]]) -> float:
+    """Return the geodesic angle between two proper rotation matrices."""
     relative = matmul(transpose(left), right)
     cosine = 0.5 * (relative[0][0] + relative[1][1] + relative[2][2] - 1.0)
     return math.acos(max(-1.0, min(1.0, cosine)))
@@ -90,10 +97,12 @@ def rotation_distance(left: list[list[float]], right: list[list[float]]) -> floa
 def point_group_distance(
     left: list[list[float]], right: list[list[float]], symmetries: list[list[list[float]]]
 ) -> float:
+    """Minimize rotation distance over symmetry-equivalent right poses."""
     return min(rotation_distance(left, matmul(right, symmetry)) for symmetry in symmetries)
 
 
 def parse_polish_summary(log_path: Path) -> dict[str, int]:
+    """Require and parse one complete production pose-polish telemetry block."""
     text = log_path.read_text(encoding="utf-8", errors="replace")
     patterns = {
         "primary": re.compile(
@@ -133,6 +142,7 @@ def parse_polish_summary(log_path: Path) -> dict[str, int]:
 
 
 def parse_fsc(path: Path) -> list[float]:
+    """Read finite shell FSC values from a SIMPLE text export."""
     pattern = re.compile(r">>> FSC:\s+([-+0-9.Ee]+)")
     values = [float(match.group(1)) for match in pattern.finditer(path.read_text(errors="replace"))]
     if len(values) < 3:
@@ -141,11 +151,13 @@ def parse_fsc(path: Path) -> list[float]:
 
 
 def fsc_area(values: list[float]) -> float:
+    """Return the arithmetic shell mean used as the FSC-area score."""
     shells = values[1:]
     return sum(max(-1.0, min(1.0, value)) for value in shells) / len(shells)
 
 
 def sha256_file(path: Path) -> str:
+    """Return a stable SHA-256 digest for immutable-input checks."""
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
@@ -154,6 +166,7 @@ def sha256_file(path: Path) -> str:
 
 
 def load_arm(root: Path, name: str) -> dict[str, object]:
+    """Load all exported evidence for one production validation arm."""
     evidence = root / "arms" / name / "evidence"
     arm_dir = root / "arms" / name
     volumes = [arm_dir / "recvol_state01_even.mrc", arm_dir / "recvol_state01_odd.mrc"]
@@ -174,6 +187,7 @@ def compare_metadata(
     label: str,
     failures: list[str],
 ) -> None:
+    """Report state or immutable-metadata differences between matched arms."""
     if left.keys() != right.keys():
         failures.append(f"{label}: particle index sets differ")
         return
@@ -188,6 +202,7 @@ def pose_deltas(
     right: dict[int, tuple[int, tuple[float, ...]]],
     symmetries: list[list[list[float]]],
 ) -> tuple[list[float], list[float]]:
+    """Calculate symmetry-aware rotation and shift changes between two arms."""
     if left.keys() != right.keys():
         raise ValueError("pose exports contain different particle index sets")
     rotations: list[float] = []
@@ -205,6 +220,7 @@ def pose_deltas(
 
 
 def rms(values: list[float]) -> float:
+    """Return the root-mean-square value of a nonempty sequence."""
     return math.sqrt(sum(value * value for value in values) / len(values))
 
 
@@ -216,6 +232,7 @@ def analyze_pair(
     angular_bound: float,
     failures: list[str],
 ) -> dict[str, object]:
+    """Apply production behavior, objective, metadata, pose, and FSC gates."""
     off = arms[f"{route}_off"]
     on = arms[f"{route}_on"]
     compare_metadata(off["invariant"], on["invariant"], f"{route} A/B", failures)
@@ -277,6 +294,7 @@ def analyze_pair(
 def analyze_default_behavior(
     arms: dict[str, dict[str, object]], failures: list[str]
 ) -> dict[str, object]:
+    """Verify that omitted and explicit-no routes preserve the same outputs."""
     default = arms["shared_default"]
     explicit_off = arms["shared_off"]
     default_log = Path(default["log"]).read_text(encoding="utf-8", errors="replace")
@@ -300,6 +318,7 @@ def analyze_route_equivalence(
     symmetries: list[list[list[float]]],
     failures: list[str],
 ) -> dict[str, object]:
+    """Compare shared and distributed enabled routes within fixed tolerances."""
     result: dict[str, object] = {}
     for mode in ("off", "on"):
         shared = arms[f"shared_{mode}"]
@@ -328,6 +347,7 @@ def analyze_route_equivalence(
 
 
 def write_markdown(path: Path, report: dict[str, object]) -> None:
+    """Write the production A/B decisions and measurements as Markdown."""
     lines = [
         "# Continuous 3-D PCG pose validation result",
         "",
@@ -361,6 +381,7 @@ def write_markdown(path: Path, report: dict[str, object]) -> None:
 
 
 def main() -> int:
+    """Analyze all production arms and return the aggregate gate status."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--pgrp", required=True)
