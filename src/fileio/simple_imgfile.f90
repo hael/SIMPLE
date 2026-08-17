@@ -12,7 +12,9 @@
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
 use, intrinsic :: iso_fortran_env, only: int16, int32, real32
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
+use simple_imghead, only: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16
 use simple_tifflib
 use gnufor2
 implicit none
@@ -27,19 +29,22 @@ integer,       parameter :: TIFF_SAMPLEFORMAT_IEEEFP        = 3
 integer,       parameter :: TIFF_SAMPLEFORMAT_VOID          = 4
 integer,       parameter :: TIFF_SAMPLEFORMAT_COMPLEXINT    = 5
 integer,       parameter :: TIFF_SAMPLEFORMAT_COMPLEXIEEEFP = 6
+integer,       parameter :: FLOAT16_WRITE_BUFFER_ELEMS      = 1024 * 1024
 
 type imgfile
     private
-    class(ImgHead), allocatable :: overall_head              !< Overall image head object
-    type(string)                :: fname                     !< Filename
-    character(len=1)            :: head_format    = ''       !< 'M' (MRC), 'S' (SPIDER) file format
-    integer                     :: funit          = 0        !< Unit number
-    logical                     :: was_written_to = .false.  !< Indicates whether data was written to the file since it was opened
-    logical                     :: isvol          = .false.  !< Indicates if SPIDER file is volume or stack
-    logical                     :: existence      = .false.  !< Set to true when the object exists, false when it's closed
+    class(ImgHead),  allocatable :: overall_head              !< Overall image head object
+    integer(kind=2), allocatable :: float16_write_buffer(:)   !< Reusable buffer for MRC mode-12 output
+    type(string)                 :: fname                     !< Filename
+    character(len=1)             :: head_format    = ''       !< 'M' (MRC), 'S' (SPIDER) file format
+    integer                      :: funit          = 0        !< Unit number
+    logical                      :: was_written_to = .false.  !< Indicates whether data was written to the file since it was opened
+    logical                      :: isvol          = .false.  !< Indicates if SPIDER file is volume or stack
+    logical                      :: existence      = .false.  !< Set to true when the object exists, false when it's closed
 contains
     procedure          :: open
     procedure, private :: open_local
+    procedure, private :: prepare_float16_write_buffer
     procedure          :: close
     procedure, private :: slice2recpos
     procedure, private :: slice2bytepos
@@ -131,6 +136,9 @@ contains
         else
             call self%overall_head%setPixSz(smpd)
         endif
+        if( write_enabled .and. self%head_format == 'M' )then
+            if( self%overall_head%getMode() == MRC_MODE_FLOAT16 ) call self%prepare_float16_write_buffer
+        endif
         ! The file-handle now exists
         self%existence = .true.
     end subroutine open
@@ -166,6 +174,14 @@ contains
         self%was_written_to = .false.
     end subroutine open_local
 
+    !>  \brief Prepare the bounded reusable buffer used for MRC mode-12 writes.
+    subroutine prepare_float16_write_buffer( self )
+        class(imgfile), intent(inout) :: self
+        if( .not. allocated(self%float16_write_buffer) )then
+            allocate(self%float16_write_buffer(FLOAT16_WRITE_BUFFER_ELEMS))
+        endif
+    end subroutine prepare_float16_write_buffer
+
     !>  \brief  close the file(s) and "de-initialise" the imgfile object
     subroutine close( self )
         class(imgfile), target, intent(inout) :: self
@@ -186,6 +202,7 @@ contains
             call self%overall_head%kill
             deallocate(self%overall_head)
         endif
+        if( allocated(self%float16_write_buffer) ) deallocate(self%float16_write_buffer)
         self%was_written_to = .false.
         self%existence      = .false.
     end subroutine close
@@ -275,7 +292,7 @@ contains
             first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
                 &*int(product(dims(1:2)),kind=8)*byteperpix
             read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:)
-        elseif( is_mrc .and. byteperpix == 2 .and. self%overall_head%getMode() == 12 )then
+        elseif( is_mrc .and. byteperpix == 2 .and. self%overall_head%getMode() == MRC_MODE_FLOAT16 )then
             ! fast mode 12: 16-bit real, read as 16-bit integer and convert manually
             allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)))
             first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
@@ -331,7 +348,7 @@ contains
                     allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)))
                     read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) &
                         &tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
-                    if( self%overall_head%getMode() == 12 )then
+                    if( self%overall_head%getMode() == MRC_MODE_FLOAT16 )then
                         ! mode 12: 16-bit real, not supported by all compilers, read as 16-bit integer and convert manually
                         rarr(1:dims(1),:,:) = real16_to_real32(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
                     else
@@ -626,20 +643,43 @@ contains
 
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
-    subroutine wmrcSlices( self, first_slice, last_slice, rarr, ldim, is_ft )        
+    subroutine wmrcSlices( self, first_slice, last_slice, rarr, ldim, is_ft )
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
         integer,                intent(in)    :: ldim(3)      !< Logical size of the array
         logical,                intent(in)    :: is_ft        !< to indicate FT status of image
-        integer         :: io_stat,dims(3)
-        integer(kind=8) :: first_byte,byteperpix
+        integer         :: io_stat,dims(3),mode,nslices
+        integer         :: islice,irow,icol,ipixel,ncopy,nbuffered,error_slice,error_row
+        integer(kind=8) :: first_byte,byteperpix,write_pos
         real            :: min_val,max_val
+        if( first_slice < 1 .or. last_slice < first_slice ) THROW_HARD('invalid MRC slice range')
+        nslices = last_slice - first_slice + 1
+        if( size(rarr,1) < ldim(1) .or. size(rarr,2) /= ldim(2) ) THROW_HARD('invalid MRC array dimensions')
+        if( size(rarr,3) /= nslices ) THROW_HARD('MRC array does not match slice range')
+        mode = self%overall_head%getMode()
+        if( is_ft )then
+            if( mode == MRC_MODE_FLOAT16 ) THROW_HARD('float16 MRC does not support Fourier data')
+            mode = MRC_MODE_COMPLEX_FLOAT32
+            call self%overall_head%setMode(mode)
+        else if( mode == MRC_MODE_COMPLEX_FLOAT32 )then
+            THROW_HARD('complex MRC mode requires Fourier data')
+        endif
+        select case(mode)
+            case(MRC_MODE_FLOAT32,MRC_MODE_COMPLEX_FLOAT32,MRC_MODE_FLOAT16)
+                continue
+            case DEFAULT
+                THROW_HARD('unsupported MRC output mode')
+        end select
+        if( mode == MRC_MODE_FLOAT16 )then
+            if( any(.not. ieee_is_finite(rarr(1:ldim(1),1:ldim(2),:))) ) THROW_HARD('float16 MRC requires finite values')
+            if( maxval(abs(rarr(1:ldim(1),1:ldim(2),:))) > 65504.0_real32 ) THROW_HARD('float16 MRC value exceeds range')
+        endif
         ! Redefine the file dims (to keep track of the index of the last image of the stack)
         dims = self%overall_head%getDims()
         dims(1)     = ldim(1)
-        dims(2)     = size(rarr,2)
+        dims(2)     = ldim(2)
         dims(3)     = max(last_slice,dims(3))
         call self%overall_head%setDims(dims)
         ! dims = dims_stored ! safety
@@ -648,23 +688,66 @@ contains
         first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
             &*int(product(dims(1:2)),kind=8)*byteperpix
         ! find minmax
-        max_val = maxval(rarr)
-        min_val = minval(rarr)
+        max_val = maxval(rarr(1:dims(1),1:dims(2),:))
+        min_val = minval(rarr(1:dims(1),1:dims(2),:))
         max_val = max(max_val, self%overall_head%getMaxPixVal())
         min_val = min(min_val, self%overall_head%getMinPixVal())
         call self%overall_head%setMinPixVal(min_val)
         call self%overall_head%setMaxPixVal(max_val)
-        write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
+        io_stat = 0
+        select case(mode)
+            case(MRC_MODE_FLOAT16)
+                if( .not. allocated(self%float16_write_buffer) ) THROW_HARD('float16 write buffer is not initialized')
+                write_pos   = first_byte
+                nbuffered   = 0
+                error_slice = first_slice
+                error_row   = 1
+                float16_slices: do islice = 1,nslices
+                    do irow = 1,dims(2)
+                        icol = 1
+                        do while( icol <= dims(1) )
+                            ncopy = min(dims(1)-icol+1,size(self%float16_write_buffer)-nbuffered)
+                            do ipixel = 1,ncopy
+                                self%float16_write_buffer(nbuffered+ipixel) = &
+                                    &real32_to_real16(real(rarr(icol+ipixel-1,irow,islice),kind=real32))
+                            enddo
+                            nbuffered = nbuffered + ncopy
+                            icol      = icol + ncopy
+                            if( nbuffered == size(self%float16_write_buffer) )then
+                                write(unit=self%funit,pos=write_pos,iostat=io_stat) self%float16_write_buffer
+                                if( io_stat /= 0 )then
+                                    error_slice = first_slice + islice - 1
+                                    error_row   = irow
+                                    exit float16_slices
+                                endif
+                                write_pos = write_pos + int(nbuffered,kind=8)*byteperpix
+                                nbuffered = 0
+                            endif
+                        enddo
+                    enddo
+                enddo float16_slices
+                if( io_stat == 0 .and. nbuffered > 0 )then
+                    error_slice = last_slice
+                    error_row   = dims(2)
+                    write(unit=self%funit,pos=write_pos,iostat=io_stat) self%float16_write_buffer(1:nbuffered)
+                endif
+            case DEFAULT
+                write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),1:dims(2),:)
+        end select
         ! Check the write was successful
         if( io_stat .ne. 0 )then
-            write(logfhandle,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', self%fname%to_char()
+            if( mode == MRC_MODE_FLOAT16 )then
+                write(logfhandle,'(a,i0,a,i0,a,i0,2a)') '**ERROR(wmrcSlices): I/O error ',io_stat, &
+                    &' at slice ',error_slice,', row ',error_row,' when writing to: ',self%fname%to_char()
+            else
+                write(logfhandle,'(a,i0,2a)') '**ERROR(wmrcSlices): I/O error ',io_stat, &
+                    &' when writing to: ',self%fname%to_char()
+            endif
             THROW_HARD('I/O')
         endif
         ! May need to update file dims
         dims(3) = max(dims(3),last_slice)
         call self%overall_head%setDims(dims)
-        ! May need to update FT status in the overall header head
-        if( is_ft ) call self%overall_head%setMode(4)
         ! Remember that we wrote to the file
         self%was_written_to = .true.
     end subroutine wmrcSlices
@@ -762,6 +845,7 @@ contains
         class(imgfile), intent(inout) :: self !< Imagefile object
         integer, intent(in)           :: mode !< MRC mode type
         call self%overall_head%setMode(mode)
+        if( mode == MRC_MODE_FLOAT16 ) call self%prepare_float16_write_buffer
         self%was_written_to = .true.
     end subroutine setMode
 
@@ -800,19 +884,60 @@ contains
     ! real32 to int16 that can be writen to disk as real16
     pure elemental integer(int16) function real32_to_real16( r32 )
         real(real32), intent(in) :: r32
-        integer(int32) :: raw, sign16, exp32, mant32, carry, exp16, raw16, wrapped
-        ! Fast IEEE 754 single-precision to half-precision bit packing.
-        ! Assumes finite nonzero inputs that remain normal half values after rounding:
-        ! zero, subnormal, infinity and NaN handling is intentionally not included.
+        integer(int32) :: raw, sign16, exp32, mant32, exp16, mant16, raw16, wrapped
+        integer(int32) :: exponent, significand, remainder, halfway, round_mask
+        integer        :: shift
+        ! IEEE 754 binary32 to binary16 conversion with round-to-nearest-even.
         raw    = transfer(r32, 0_int32)
         sign16 = merge(32768_int32, 0_int32, btest(raw, 31))   ! bit 31 -> bit 15
         exp32  = iand(ishft(raw, -23), 255_int32)              ! bits 30:23 -> 0..255
-        mant32 = iand(raw, 8388607_int32) + ishft(1_int32, 12) ! mantissa + round bit
-        carry  = merge(1_int32, 0_int32, btest(mant32, 23))    ! rounding overflow into exponent
-        mant32 = iand(mant32, 8388607_int32)                   ! clear implicit/carry bit
-        ! Remap exponent: single bias 127 -> half bias 15 (subtract 112), including carry.
-        exp16  = exp32 + carry - 112_int32
-        raw16  = sign16 + ishft(exp16, 10) + ishft(mant32, -13) ! pack sign/exponent/mantissa
+        mant32 = iand(raw, 8388607_int32)                       ! bits 22:0
+        select case(exp32)
+            case(255) ! infinity or NaN
+                if( mant32 == 0 )then
+                    raw16 = ior(sign16, 31744_int32)
+                else
+                    mant16 = ior(ishft(mant32, -13), 512_int32) ! preserve payload and quiet the NaN
+                    raw16  = ior(sign16, ior(31744_int32, mant16))
+                endif
+            case(0) ! binary32 zero/subnormal: always below the binary16 underflow threshold
+                raw16 = sign16
+            case DEFAULT
+                exponent = exp32 - 127_int32
+                if( exponent > 15 )then
+                    raw16 = ior(sign16, 31744_int32) ! finite overflow -> infinity
+                else if( exponent >= -14 )then
+                    exp16    = exponent + 15_int32
+                    mant16   = ishft(mant32, -13)
+                    remainder = iand(mant32, 8191_int32)
+                    if( remainder > 4096_int32 .or. &
+                        &(remainder == 4096_int32 .and. btest(mant16, 0)) ) mant16 = mant16 + 1_int32
+                    if( mant16 == 1024_int32 )then
+                        mant16 = 0_int32
+                        exp16  = exp16 + 1_int32
+                    endif
+                    if( exp16 >= 31_int32 )then
+                        raw16 = ior(sign16, 31744_int32)
+                    else
+                        raw16 = ior(sign16, ior(ishft(exp16, 10), mant16))
+                    endif
+                else if( exponent < -25 )then
+                    raw16 = sign16
+                else
+                    ! Include the implicit binary32 leading bit, then round into a
+                    ! binary16 subnormal significand. A result of 1024 naturally
+                    ! becomes the smallest normal binary16 value.
+                    significand = ior(mant32, 8388608_int32)
+                    shift       = -int(exponent) - 1
+                    mant16      = ishft(significand, -shift)
+                    round_mask  = ishft(1_int32, shift) - 1_int32
+                    remainder   = iand(significand, round_mask)
+                    halfway     = ishft(1_int32, shift - 1)
+                    if( remainder > halfway .or. &
+                        &(remainder == halfway .and. btest(mant16, 0)) ) mant16 = mant16 + 1_int32
+                    raw16 = ior(sign16, mant16)
+                endif
+        end select
         wrapped = iand(raw16, 65535_int32) ! preserve raw 16 bits before storing in signed int16
         real32_to_real16 = int(wrapped - ishft(iand(wrapped, 32768_int32), 1), int16)
     end function real32_to_real16

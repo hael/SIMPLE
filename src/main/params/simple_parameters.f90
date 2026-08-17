@@ -175,6 +175,7 @@ type :: parameters
     character(len=3)          :: vis='no'             !< visualise(yes|no)
     character(len=3)          :: verbose_exit='yes'   !< Whether to write a indicator file when task completes(yes|no){no}
     character(len=3)          :: volrec='yes'         !< volume reconstruction in 3D(yes|no){yes}
+    character(len=3)          :: wfloat16='no'        !< write MRC stacks in mode 12 float16 format(yes|no){no}
     character(len=3)          :: write_imgarr='no'    !< write out cavgs
     character(len=3)          :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order

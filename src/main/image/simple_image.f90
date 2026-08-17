@@ -955,11 +955,12 @@ interface
         integer,        intent(in)    :: index
     end subroutine read_single_mrc_image
 
-    module subroutine write( self, fname, i, del_if_exists)
+    module subroutine write( self, fname, i, del_if_exists, wfloat16 )
         class(image),      intent(inout) :: self
         class(string),     intent(in)    :: fname
         integer, optional, intent(in)    :: i
         logical, optional, intent(in)    :: del_if_exists
+        logical, optional, intent(in)    :: wfloat16
     end subroutine write
 
     module subroutine update_header_stats( self, fname, stats)

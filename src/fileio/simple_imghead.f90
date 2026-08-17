@@ -29,6 +29,7 @@ implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
 public :: test_imghead, find_ldim_nptcls, find_img_smpd, has_ldim_nptcls, update_stack_nimgs, get_mrcfile_info
+public :: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16, MRC_NVERSION_20141
 private
 #include "simple_local_flags.inc"
 
@@ -37,6 +38,10 @@ integer, parameter         :: NREMAINS        = 14
 integer, parameter         :: CLOSE2THEANSWER = 43
 integer, parameter         :: MRCHEADSZ       = 1024
 integer, parameter         :: NLABL           = 10
+integer, parameter         :: MRC_MODE_FLOAT32         = 2
+integer, parameter         :: MRC_MODE_COMPLEX_FLOAT32 = 4
+integer, parameter         :: MRC_MODE_FLOAT16         = 12
+integer, parameter         :: MRC_NVERSION_20141       = 20141
 
 type ImgHead
     private
@@ -100,6 +105,7 @@ type, extends(ImgHead) :: MrcImgHead
     !!            2 image: 32-bit reals (DEFAULT MODE)
     !!            3 transform: complex 16-bit integers
     !!            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
+    !!           12 image: IEEE 754 binary16 reals
     integer   :: nxstart      !< number of first column in map (default = 0)
     integer   :: nystart      !< number of first row in map
     integer   :: nzstart      !< number of first section in map
@@ -121,6 +127,7 @@ type, extends(ImgHead) :: MrcImgHead
     integer   :: ispg         !< space group number 0 or 1 (default=1)
     integer   :: nsymbt       !< number of bytes used for symmetry data (0 or 80)
     integer   :: extra        !< extra space used for anything - 0 by default
+    integer   :: nversion     !< MRC format version (word 28)
     integer   :: originx      !< origin in x used for transforms
     integer   :: originy      !< origin in y used for transforms
     integer   :: originz      !< origin in z used for transforms
@@ -566,6 +573,7 @@ contains
                 self%byte_array(89:92)   = transfer(self%ispg,    self%byte_array(89:92))
                 self%byte_array(93:96)   = transfer(self%nsymbt,  self%byte_array(93:96))
                 self%byte_array(97:100)  = transfer(self%extra,   self%byte_array(97:100))
+                self%byte_array(109:112) = transfer(self%nversion, self%byte_array(109:112))
                 self%byte_array(197:200) = transfer(self%originx, self%byte_array(197:200))
                 self%byte_array(201:204) = transfer(self%originy, self%byte_array(201:204))
                 self%byte_array(205:208) = transfer(self%originz, self%byte_array(205:208))
@@ -609,6 +617,7 @@ contains
                 self%ispg    = transfer(self%byte_array(89:92),   self%ispg)
                 self%nsymbt  = transfer(self%byte_array(93:96),   self%nsymbt)
                 self%extra   = transfer(self%byte_array(97:100),  self%extra)
+                self%nversion = transfer(self%byte_array(109:112), self%nversion)
                 self%originx = transfer(self%byte_array(197:200), self%originx)
                 self%originy = transfer(self%byte_array(201:204), self%originy)
                 self%originz = transfer(self%byte_array(205:208), self%originz)
@@ -633,7 +642,7 @@ contains
                 self%nx      = 0
                 self%ny      = 0
                 self%nz      = 0
-                self%mode    = 2
+                self%mode    = MRC_MODE_FLOAT32
                 self%nxstart = 0
                 self%nystart = 0
                 self%nzstart = 0
@@ -655,6 +664,7 @@ contains
                 self%ispg    = 1
                 self%nsymbt  = 0
                 self%extra   = 0
+                self%nversion = 0
                 self%originx = 0
                 self%originy = 0
                 self%originz = 0
@@ -839,10 +849,14 @@ contains
                 select case( self%mode )
                     case(0)
                         bytesPerPix = 1
-                    case(1,3,6,12)
+                    case(1,3,6,MRC_MODE_FLOAT16)
                         bytesPerPix = 2
-                    case(2,4)
+                    case(MRC_MODE_FLOAT32,MRC_MODE_COMPLEX_FLOAT32)
                         bytesPerPix = 4
+                    case(16)
+                        bytesPerPix = 3
+                    case DEFAULT
+                        THROW_HARD('unsupported MRC mode')
                 end select
         end select
     end function bytesPerPix
@@ -1182,7 +1196,7 @@ contains
     function getMode( self ) result( mode )
         class(ImgHead), intent(in) :: self
         integer :: mode
-        mode = 2
+        mode = MRC_MODE_FLOAT32
         select type( self )
             type is( MrcImgHead )
                 mode = self%mode
@@ -1205,7 +1219,13 @@ contains
         integer,        intent(in)    :: mode
         select type( self )
             type is( MrcImgHead )
-                self%mode = mode
+                select case(mode)
+                    case(0,1,MRC_MODE_FLOAT32,3,MRC_MODE_COMPLEX_FLOAT32,6,MRC_MODE_FLOAT16,16)
+                        self%mode = mode
+                        if( mode == MRC_MODE_FLOAT16 ) self%nversion = MRC_NVERSION_20141
+                    case DEFAULT
+                        THROW_HARD('unsupported MRC mode')
+                end select
         end select
     end subroutine setMode
 

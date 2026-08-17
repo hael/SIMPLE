@@ -133,6 +133,7 @@ contains
         if( .not. cline%defined('stream')         ) call cline%set('stream',          'no')
         if( .not. cline%defined('extractfrommov') ) call cline%set('extractfrommov',  'no')
         if( .not. cline%defined('backgr_subtr')   ) call cline%set('backgr_subtr',    'no')
+        if( .not. cline%defined('wfloat16')       ) call cline%set('wfloat16',        'no')
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
@@ -377,7 +378,7 @@ contains
                     call extractor%extract_particles_from_mic(micrograph, ptcl_inds, nint(boxdata), imgs,&
                         &stk_min,stk_max,stk_mean,stk_sdev)
                 endif
-                call stkio_w%open(stack, params%smpd, 'write', box=params%box)
+                call stkio_w%open(stack, params%smpd, 'write', box=params%box, wfloat16=trim(params%wfloat16).eq.'yes')
                 do i = 1,nptcls2extract
                     call stkio_w%write(i, imgs(i))
                 enddo

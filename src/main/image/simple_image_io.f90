@@ -1,5 +1,6 @@
 !@descr: for reading and writing images from/to disk
 submodule (simple_image) simple_image_io
+use simple_imghead, only: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16
 implicit none
 #include "simple_local_flags.inc"
 
@@ -36,6 +37,7 @@ contains
                     !            2 image: 32-bit reals (DEFAULT MODE)
                     !            3 transform: complex 16-bit integers
                     !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
+                    !           12 image: IEEE 754 binary16 reals
                     mode = ioimg%getMode()
                     if( mode == 3 .or. mode == 4 ) self%ft = .true.
                 case('F','S','J','L')
@@ -107,20 +109,23 @@ contains
     !===========================
     ! write
     !===========================
-    module subroutine write( self, fname, i, del_if_exists)
+    module subroutine write( self, fname, i, del_if_exists, wfloat16 )
         class(image),      intent(inout) :: self
         class(string),     intent(in)    :: fname
         integer, optional, intent(in)    :: i
         logical, optional, intent(in)    :: del_if_exists
+        logical, optional, intent(in)    :: wfloat16
         real             :: dev, mean
         type(imgfile)    :: ioimg
         character(len=1) :: form
-        integer          :: first_slice, last_slice, iform, ii
-        logical          :: isvol, die
-        isvol = .false.
-        die   = .false.
-        isvol = self%is_3d()
+        integer          :: first_slice, last_slice, iform, ii, mode
+        logical          :: isvol, die, existing_file, write_float16
+        isvol         = .false.
+        die           = .false.
+        write_float16 = .false.
+        isvol         = self%is_3d()
         if( present(del_if_exists) ) die = del_if_exists
+        if( present(wfloat16) ) write_float16 = wfloat16
         ii = 1 ! default location
         if( present(i) )then
             ! we are writing to a stack & in SIMPLE volumes are not allowed
@@ -137,14 +142,35 @@ contains
             last_slice = ii
         endif
         form = fname2format(fname)
+        if( write_float16 .and. form /= 'M' .and. form /= 'F' ) THROW_HARD('wfloat16 requires MRC output')
         select case(form)
             case('M','F')
+                if( write_float16 .and. self%ft ) THROW_HARD('wfloat16 does not support Fourier data')
+                existing_file = file_exists(fname) .and. .not. die
                 ! pixel size of object overrides pixel size in header
-                call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die, formatchar=form, readhead=.false.)
-                if( self%ft )then
-                    call ioimg%setMode(4)
+                call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die, formatchar=form, readhead=existing_file)
+                if( existing_file )then
+                    mode = ioimg%getMode()
+                    if( self%ft )then
+                        if( mode /= MRC_MODE_COMPLEX_FLOAT32 ) THROW_HARD('existing MRC mode does not match Fourier data')
+                    else if( present(wfloat16) )then
+                        if( write_float16 )then
+                            if( mode /= MRC_MODE_FLOAT16 ) THROW_HARD('existing MRC is not float16')
+                        else
+                            if( mode /= MRC_MODE_FLOAT32 ) THROW_HARD('existing MRC is not float32')
+                        endif
+                    else if( mode /= MRC_MODE_FLOAT32 .and. mode /= MRC_MODE_FLOAT16 )then
+                        THROW_HARD('existing MRC mode is not writable as a real image')
+                    endif
+                    if( mode == MRC_MODE_FLOAT16 ) call ioimg%setMode(MRC_MODE_FLOAT16)
                 else
-                    call ioimg%setMode(2)
+                    if( self%ft )then
+                        call ioimg%setMode(MRC_MODE_COMPLEX_FLOAT32)
+                    else if( write_float16 )then
+                        call ioimg%setMode(MRC_MODE_FLOAT16)
+                    else
+                        call ioimg%setMode(MRC_MODE_FLOAT32)
+                    endif
                 endif
                 call self%rmsd(dev, mean=mean)
                 call ioimg%setRMSD(dev)
@@ -192,7 +218,6 @@ contains
                 THROW_HARD('unsupported file format; write')
         end select
     end subroutine write
-
     !===========================
     ! update_header_stats
     !===========================
@@ -209,7 +234,6 @@ contains
             case('M','F')
                 ! pixel size of object overrides pixel size in header
                 call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=.false., formatchar=form, readhead=.true.)
-                call ioimg%setMode(2) ! 32-bit reals (DEFAULT MODE)
                 !  updates header
                 call ioimg%update_MRC_stats(stats)
                 ! writes header & close unit

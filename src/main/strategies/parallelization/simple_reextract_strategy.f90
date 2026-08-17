@@ -137,6 +137,7 @@ contains
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',     'ptcl3D')
         if( .not. cline%defined('extractfrommov') ) call cline%set('extractfrommov',  'no')
         if( .not. cline%defined('backgr_subtr')   ) call cline%set('backgr_subtr',    'no')
+        if( .not. cline%defined('wfloat16')       ) call cline%set('wfloat16',        'no')
     end subroutine set_reextract_defaults
 
     ! ====================================================================
@@ -372,9 +373,9 @@ contains
                         endif
                     endif
                     if( l_scale_particles )then
-                        call stkio_w%open(stack, params%osmpd, 'write', box=params%box)
+                        call stkio_w%open(stack, params%osmpd, 'write', box=params%box, wfloat16=trim(params%wfloat16).eq.'yes')
                     else
-                        call stkio_w%open(stack, params%smpd, 'write', box=params%box)
+                        call stkio_w%open(stack, params%smpd, 'write', box=params%box, wfloat16=trim(params%wfloat16).eq.'yes')
                     endif
                     do i = 1, nptcls2extract
                         call stkio_w%write(i, build%imgbatch(i))

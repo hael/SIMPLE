@@ -236,6 +236,7 @@ contains
         call reg%add_char('verbose_exit_fname', self%verbose_exit_fname)
         call reg%add_char('volrec', self%volrec)
         call reg%add_char('wcrit', self%wcrit)
+        call reg%add_char('wfloat16', self%wfloat16)
         call reg%add_char('worker_priority', self%worker_priority)
         call reg%add_char('worker_server', self%worker_server)
         call reg%add_char('write_imgarr', self%write_imgarr)

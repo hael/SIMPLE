@@ -144,6 +144,9 @@ subroutine new_assign_optics_groups( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call extract%add_input(UI_PARM, backgr_subtr, group="extract", &
         &visibility=UI_VIS_ADVANCED)
+        call extract%add_input(UI_PARM, 'wfloat16', 'binary', 'Write float16 particle stacks', &
+        &'Write extracted particle stacks as MRC mode 12 IEEE binary16 data(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="extract", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls
@@ -507,6 +510,9 @@ subroutine new_assign_optics_groups( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call reextract%add_input(UI_PARM, outside, &
         &visibility=UI_VIS_ADVANCED)
+        call reextract%add_input(UI_PARM, 'wfloat16', 'binary', 'Write float16 particle stacks', &
+        &'Write re-extracted particle stacks as MRC mode 12 IEEE binary16 data(yes|no){no}', '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), group="reextract", visibility=UI_VIS_ADVANCED)
         ! <no additional inputs>
         ! <empty>
         ! search controls

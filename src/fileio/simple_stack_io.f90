@@ -3,6 +3,7 @@ module simple_stack_io
 use simple_core_module_api
 use simple_image,   only: image
 use simple_imgfile, only: imgfile
+use simple_imghead, only: MRC_MODE_FLOAT32, MRC_MODE_COMPLEX_FLOAT32, MRC_MODE_FLOAT16
 implicit none
 
 public :: stack_io
@@ -36,7 +37,7 @@ end type stack_io
 
 contains
 
-    subroutine open_1( self, stkname, smpd, rwaction, is_ft, box, bufsz )
+    subroutine open_1( self, stkname, smpd, rwaction, is_ft, box, bufsz, wfloat16 )
         class(stack_io),   intent(inout) :: self
         class(string),     intent(in)    :: stkname
         character(len=*),  intent(in)    :: rwaction
@@ -44,14 +45,15 @@ contains
         logical, optional, intent(in)    :: is_ft
         integer, optional, intent(in)    :: box
         integer, optional, intent(in)    :: bufsz
+        logical, optional, intent(in)    :: wfloat16
         if( present(box) ) then
-            call self%open_2( stkname, smpd, rwaction, [box, box], is_ft=is_ft, bufsz=bufsz)
+            call self%open_2(stkname, smpd, rwaction, [box,box], is_ft=is_ft, bufsz=bufsz, wfloat16=wfloat16)
         else
-            call self%open_2( stkname, smpd, rwaction, [0,0], is_ft=is_ft, bufsz=bufsz)
+            call self%open_2(stkname, smpd, rwaction, [0,0], is_ft=is_ft, bufsz=bufsz, wfloat16=wfloat16)
         endif
     end subroutine open_1
 
-    subroutine open_2( self, stkname, smpd, rwaction, ldim, is_ft, bufsz )
+    subroutine open_2( self, stkname, smpd, rwaction, ldim, is_ft, bufsz, wfloat16 )
         class(stack_io),   intent(inout) :: self
         class(string),     intent(in)    :: stkname
         character(len=*),  intent(in)    :: rwaction
@@ -59,28 +61,48 @@ contains
         integer,           intent(in)    :: ldim(2)
         logical, optional, intent(in)    :: is_ft
         integer, optional, intent(in)    :: bufsz
+        logical, optional, intent(in)    :: wfloat16
         integer          :: mode ! FT or not in MRC file lingo
+        logical          :: ft_requested, write_float16
         call self%close
+        ft_requested  = .false.
+        write_float16 = .false.
+        if( present(is_ft) ) ft_requested = is_ft
+        if( present(wfloat16) ) write_float16 = wfloat16
         ! extract info about the stack file and open it
         self%stkname = stkname
         self%smpd    = smpd
         self%nptcls  = 0
+        self%n_in_buf = 0
         self%ft      = .false.
-        select case(trim(rwaction))
-            case('READ','read')
+        select case(lowercase(trim(rwaction)))
+            case('read')
+                if( write_float16 ) THROW_HARD('wfloat16 is only valid when writing a stack')
                 call find_ldim_nptcls(self%stkname, self%ldim, self%nptcls)
                 self%ldim(3) = 1
                 call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar='M', readhead=.true., rwaction='READ')
                 mode = self%ioimg%getMode()
-                if( mode == 3 .or. mode == 4 ) self%ft = .true.
+                if( mode == 3 .or. mode == MRC_MODE_COMPLEX_FLOAT32 ) self%ft = .true.
+                if( present(is_ft) ) self%ft = ft_requested
                 self%l_read = .true.
-            case DEFAULT
+            case('write')
                 if( ldim(1) <= 0 .or. ldim(2) <= 0 ) THROW_HARD('invalid ldim values')
+                if( write_float16 .and. ft_requested ) THROW_HARD('wfloat16 does not support Fourier data')
                 self%ldim = [ldim(1),ldim(2),1]
-                call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar='M', readhead=.false.)
+                self%ft = ft_requested
+                call self%ioimg%open(self%stkname, self%ldim, self%smpd, del_if_exists=.true., formatchar='M', &
+                    &readhead=.false., rwaction='WRITE')
+                if( self%ft )then
+                    call self%ioimg%setMode(MRC_MODE_COMPLEX_FLOAT32)
+                else if( write_float16 )then
+                    call self%ioimg%setMode(MRC_MODE_FLOAT16)
+                else
+                    call self%ioimg%setMode(MRC_MODE_FLOAT32)
+                endif
                 self%l_read = .false.
+            case DEFAULT
+                THROW_HARD('rwaction must be read or write')
         end select
-        if( present(is_ft) ) self%ft = is_ft
         ! allocate the buffer
         self%bufsz = BUFSZ_DEFAULT
         if( present(bufsz) ) self%bufsz = bufsz
