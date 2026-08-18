@@ -21,10 +21,12 @@ contains
         real, allocatable :: resarr(:), fsc_arr(:)
         real              :: fsc0143, fsc05, nu_align_lp
         real              :: mapres(params%nstates)
-        integer           :: s, loc(1), lp_ind, arr_sz, fsc_sz, nyqcrop_ind
+        integer           :: s, loc, lp_ind, arr_sz, fsc_sz, nyqcrop_ind
         type(string)      :: fsc_fname
         logical           :: fsc_bin_exists(params%nstates), all_fsc_bin_exist, l_nu_align_lp
-        l_nu_align_lp = .false.
+        l_nu_align_lp  = .false.
+        mapres(:)      = huge(0.0)
+        build%fsc(:,:) = 0.0
         if( params%l_lpset )then
             ! set Fourier index range
             params%kfromto(2) = calc_fourier_index(params%lp, params%box, params%smpd)
@@ -87,21 +89,17 @@ contains
                         deallocate(fsc_arr)
                         call get_resolution(build%fsc(s,:), resarr, fsc05, fsc0143)
                         mapres(s) = fsc0143
-                    else
-                        ! empty state
-                        mapres(s)      = 0.
-                        build%fsc(s,:) = 0.
                     endif
                 end do
             endif
             if( l_nu_align_lp )then
                 params%kfromto(2) = calc_fourier_index(nu_align_lp, params%box, params%smpd)
             else if( all_fsc_bin_exist )then
-                loc = minloc(mapres) ! best resolved
+                loc = minloc(mapres, dim=1) ! best resolved
                 if( params%nstates == 1 )then
                     lp_ind = get_find_at_crit(build%fsc(1,:), params%lplim_crit, incrreslim=params%l_incrreslim)
                 else
-                    lp_ind = get_find_at_crit(build%fsc(loc(1),:), params%lplim_crit)
+                    lp_ind = get_find_at_crit(build%fsc(loc,:), params%lplim_crit)
                 endif
                 ! interpolation limit is NOT Nyqvist in correlation search
                 params%kfromto(2) = calc_fourier_index(resarr(lp_ind), params%box, params%smpd)
