@@ -2,14 +2,47 @@
 
 ## Status
 
-Active implementation plan. This document supersedes the former direct-joint
-optimizer plan as the next development priority for `abinitio2D_sgd`.
+DRAFT, non-authoritative implementation plan. This document supersedes the
+former direct-joint optimizer plan as the next development priority for
+`abinitio2D_sgd`, but it cannot become final or authorize Phase 2 production
+integration until the governing SPEC is approved and frozen.
 
-Repository baseline reviewed on 2026-08-12: local `master` at `dc71602e8`.
-The branch is one commit ahead of `origin/master` because of unrelated
-continuous-3D work. The worktree also contains unrelated continuous-3D files
-and one continuous-in-plane route-identity test edit; none is part of this
-plan.
+Governing specification (`IN REVIEW`; Phase 2 implementation is blocked until
+requester approval and `FINAL` status):
+[`abinitio2d_sgd_class_stability_spec.md`](abinitio2d_sgd_class_stability_spec.md).
+
+Repository baseline refreshed on 2026-08-18: local `master` and
+`origin/master` at `884e7083f`. The worktree contains unrelated generated
+documentation, continuous-3D notes, and a continuous-in-plane mother-test edit;
+none is part of this plan.
+
+### Implementation checkpoint: 2026-08-15
+
+- Phase 0 is source-complete. The exhaustive winner and direct-shift numerical
+  paths are unchanged. Sampling, support, migration, winner-margin, and split
+  candidate/shift timing diagnostics are gated by the existing default-off
+  `sgd_diagnostic` switch.
+- The existing sampling expression and two-particle search boundary are now
+  named pure functions and have focused contract tests. The test deliberately
+  preserves the current zero-only restoration expectation so the population-
+  one mismatch remains visible until Phase 3.
+- Phase 1 is source-complete as an isolated pure candidate-index helper with
+  focused tests. No production module calls it, no parameter or UI field was
+  added, and the default exhaustive stream is unchanged.
+- Oracle Linux/BOX validation supplied on 2026-08-15 passed the focused
+  `case=sampling_restore` and `case=class_frontier` cases and the complete
+  seven-case `simple_test_sgd_base_suite` with seven passed and zero failed.
+  The observed log contains no `ERROR!`, segmentation fault, `NaN`, or
+  `Infinity`; SHA-256:
+  `F80AA9900BFFEB8C5F62765C13E6DB8743E3CD4AB9810CB35D105152828AC6EA`.
+- The diagnostic exhaustive-stream run sampled 120 of 200 active particles
+  (60 percent) at iterations 17 through 20 with the existing 200,000 cap. It
+  also exposed the baseline collapse that motivates integration: one nonzero
+  searchable class, three under-supported/zero classes, and zero reactivations
+  in every reported streamed iteration.
+- These results accept Phase 0 and isolated Phase 1. They do not validate
+  production frontier behavior because the helper still has no production
+  caller.
 
 The earlier hard-stream-seeded L-BFGS-B experiment is closed. Production
 already supplied the selected rotation seed to the established joint polisher,
@@ -64,8 +97,24 @@ does not change stage boundaries, warmup iterations, restart behavior, or the
 terminal conventional pass. A class-stability policy is evaluated only when
 `params%l_sgd_streaming_active` is already true.
 
-Stages 1 and 2 remain conventional. Existing stage-policy tests remain the
-authority for the exact `on` and `alternate` schedules.
+The literal current source schedule is:
+
+- `off`: no streamed iteration;
+- `on`: the controller enables the stream from stage 4;
+- `alternate`: the controller enables the stream from stage 3; and
+- after either enabled mode reaches `cluster2D`, the generic boundary guard
+  disables streaming when `startit > 10` and `which_iter == startit`.
+
+The controller converts stage 6 to mode `on`, and its comments say stage 6 is
+fully streamed. The boundary guard does not inspect the stage index, however,
+so its literal condition also matches the first stage-6 child iteration when
+that invocation has `startit > 10`. This pre-existing comment/condition
+discrepancy is frozen as Phase 0 evidence; class-stability work must not repair
+or otherwise change it incidentally.
+
+Stages 1 and 2 remain conventional. Existing stage-policy tests and a later
+workflow trace remain the authority for observed `on` and `alternate`
+behavior.
 
 ### Particle mini-batch
 
@@ -359,7 +408,10 @@ Before production behavior changes:
    - per-class population before and after the iteration;
    - particles that stayed in or left their incumbent class;
    - class reactivation count;
-   - raw winner and runner-up loss margin without storing a top-K table; and
+   - raw winning-class and first-runner-up-class loss margin without storing a
+     top-K table. First reduce every evaluated class to its best finite
+     rotation, then compare the best two distinct classes; two rotations from
+     the same class must not define this class-competition margin; and
    - time spent in candidate evaluation and shift refinement.
 5. Run the existing focused suite and one current exhaustive-stream workflow.
 
@@ -384,6 +436,13 @@ Pure/focused tests must prove:
 - full-exploration cadence and restart stability; and
 - exact exhaustive behavior when the policy is disabled.
 
+Before Phase 2 integration, resolve the nonpositive-bound contract explicitly.
+The current helper returns an empty ordinary-iteration frontier when
+`max_candidates <= 0`, even when a valid incumbent exists. The final interface
+must either reject a nonpositive candidate bound before calling the helper or
+define and test valid-incumbent retention for that input. Silent loss of the
+incumbent is not an accepted production behavior.
+
 ### Phase 2: provisional matcher integration behind explicit opt-in
 
 Integrate the helper only into the active SGD branch of
@@ -402,6 +461,29 @@ Required behavior:
 
 Do not commit assignments yet through a test-only shortcut. The next phase
 owns the global two-member support constraint before final orientation writes.
+
+#### Resolved opt-in interface
+
+The SPEC proposes one public development key:
+
+```text
+sgd_class_policy=exhaustive|frontier
+```
+
+- `exhaustive` is the default and must be route-identical to the current
+  streamed loop.
+- `frontier` is accepted only by `abinitio2D_sgd` and only influences an
+  iteration when the existing SGD stage policy is active.
+- Standard `abinitio2D` must not display, accept, set, or forward the key.
+- Candidate count and exploration cadence remain private policy constants or
+  constructor inputs in this version; no additional UI fields are added.
+- Invalid values fail typed command validation.
+
+Phase 2 acceptance maps to focused tests for default/explicit-exhaustive route
+identity, frontier bounds and deterministic dispatch, invalid-value rejection,
+standard-command invisibility, inactive-iteration isolation, and unchanged raw
+Euclidean/direct-shift API use. Implementation remains blocked until the user
+approves the governing SPEC.
 
 ### Phase 3: two-member floor and low-support restoration
 
@@ -483,10 +565,19 @@ Record:
 - direct-shift attempts, accepted steps, final loss, and bound compliance; and
 - output project consistency.
 
-Freeze acceptance thresholds before reading final experiment results. The
-frontier is acceptable only if it improves class survival consistently without
-a material loss in class quality or an unacceptable runtime increase. A
-single improved best class is not sufficient.
+The governing SPEC predeclares the proposed decision thresholds before any
+frontier workflow result is read:
+
+- at least three fixed seeds per dataset;
+- no matched arm may finish with fewer viable classes than exhaustive mode;
+- median final viable-class count must be strictly higher on both datasets;
+- across-seed median ranked-class resolution and median resolution among
+  classes below 9 Angstrom may be at most 0.5 Angstrom worse per dataset; and
+- median runtime may be at most 10 percent slower per dataset.
+
+These thresholds remain subject to requester approval while the SPEC is
+`IN REVIEW`. Once approved and frozen, they must not be relaxed in response to
+the observed results. A single improved best class is not sufficient.
 
 ### Phase 6: decide whether stronger support control is necessary
 
@@ -628,8 +719,9 @@ This plan is complete only when:
    and one;
 6. the two-member floor retains only the best same-class incumbents and never
    fabricates an unrelated rescue assignment;
-7. matched multi-seed workflows show improved class survival on at least two
-   datasets without material class-quality or runtime regression;
+7. matched three-seed workflows on beta-galactosidase and apoferritin satisfy
+   the frozen viable-class, resolution, and runtime thresholds in the
+   governing SPEC;
 8. diagnostics are default-off and all focused tests pass; and
 9. the result is reviewed before any default is changed.
 
