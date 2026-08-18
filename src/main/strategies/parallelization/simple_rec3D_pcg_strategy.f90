@@ -1684,7 +1684,7 @@ contains
             THROW_HARD(error_message)
         endif
         peak = maxval(abs(x))
-        if( peak <= tiny(peak) )then
+        if( peak <= 0.0 )then
             error_message = 'PCG '//trim(execution_mode)//' solve produced an empty map; state='// &
                 &int2str(state)//' half='//trim(half)//' kind='//trim(solve_kind)
             THROW_HARD(error_message)
