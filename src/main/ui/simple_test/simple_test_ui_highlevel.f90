@@ -200,7 +200,7 @@ contains
         call pcg_frac_update%add_input(UI_FILT, 'postprocess', 'binary', 'Postprocess final map', &
         &'Accepted for reconstruct3D command compatibility; no production maps are written by this test', &
         &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call pcg_frac_update%add_input(UI_FILT, 'maxits', 'num', 'PCG maximum iterations', &
+        call pcg_frac_update%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
         &'Iterations used for the continuation replay comparison', 'iterations{2}', .false., 2.)
         call pcg_frac_update%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Tolerance used for the continuation replay comparison', 'tolerance{0}', .false., 0.0)

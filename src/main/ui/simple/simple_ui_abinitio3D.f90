@@ -39,6 +39,10 @@ contains
         &'Reconstruction backend from stage 3 onward; stages 1 and 2 always use gridding(gridding|pcg){gridding}', &
         &'', .false., 'gridding', group="search", &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
+        call abinitio3D%add_input(UI_PARM, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+        &'Maximum kernel PCG iterations from stage 3 onward; independent of stage refinement iterations', &
+        &'iterations{2}', .false., 2., group="search", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)

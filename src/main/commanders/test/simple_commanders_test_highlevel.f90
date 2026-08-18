@@ -2050,8 +2050,6 @@ subroutine exec_test_pcg_frac_update( self, cline )
     type(parameters) :: params
     type(builder)    :: build
 
-    if( .not. cline%defined('maxits') ) call cline%set('maxits', 2.)
-    if( .not. cline%defined('rtol') ) call cline%set('rtol', 0.)
     if( .not. cline%defined('trs') ) call cline%set('trs', 5.)
     call cline%set('oritype', 'ptcl3D')
     call cline%set('mkdir', 'no')

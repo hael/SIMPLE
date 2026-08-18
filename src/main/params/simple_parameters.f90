@@ -387,6 +387,7 @@ type :: parameters
     integer :: kfromto(2)
     integer :: ldim(3)=0
     integer :: maxits=100          !< maximum # iterations
+    integer :: maxits_pcg=2        !< maximum # PCG reconstruction iterations{2}
     integer :: maxits_glob=100     !< maximum # iterations, global
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxits_sh=60        !< maximum # iterations of shifting lbfgsb
@@ -606,7 +607,7 @@ type :: parameters
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
-    real    :: rtol=1.0e-3         !< PCG relative residual tolerance for reconstruct3D{0.001}
+    real    :: rtol=0.             !< PCG relative residual tolerance; <=0 runs exactly maxits_pcg{0}
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale_movies=1.     !< movie scale factor
     real    :: sgd_eta_shift=0.25  !< direct-gradient shift learning rate

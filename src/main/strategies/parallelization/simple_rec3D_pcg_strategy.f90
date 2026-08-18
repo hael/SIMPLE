@@ -168,7 +168,7 @@ contains
                 THROW_HARD('shared PCG entry received distributed parameters')
             endif
             if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
-            if( params%maxits > 8 ) THROW_HARD('production rec_backend=pcg requires maxits<=8')
+            if( params%maxits_pcg > 8 ) THROW_HARD('production rec_backend=pcg requires maxits_pcg<=8')
             if( trim(params%projrec) /= 'no' ) THROW_HARD('rec_backend=pcg does not yet support projrec=yes')
             if( abs(real(params%box)*params%smpd - real(params%box_crop)*params%smpd_crop) > &
                 &1.0e-5*real(params%box)*params%smpd )then
@@ -181,7 +181,7 @@ contains
             if( params%msk <= 0.5 .or. params%msk_crop <= 0.5 )then
                 THROW_HARD('rec_backend=pcg requires mskdiam for normalization and solve support')
             endif
-            if( params%maxits < 1 ) THROW_HARD('PCG maxits must be at least 1')
+            if( params%maxits_pcg < 1 ) THROW_HARD('PCG maxits_pcg must be at least 1')
             if( .not. ieee_is_finite(params%rtol) ) THROW_HARD('PCG rtol must be finite')
         end subroutine validate_supported_mode
 
@@ -325,9 +325,10 @@ contains
             time_finalize = real(toc(t_phase),dp)
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             t_phase = tic()
-            call pcgop%solve_accum(x, maxits=params%maxits, rtol=params%rtol, &
+            call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
             time_solve = real(toc(t_phase),dp)
+            call validate_solved_map(x, 'shared', state_here, half, 'base')
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
             time_total = real(toc(t_half),dp)
@@ -382,9 +383,10 @@ contains
                 &prior_to_khat_l1, prior_to_khat_rms)
             x = base_volume%get_rmat()
             t_phase = tic()
-            call pcgop%solve_accum(x, maxits=params%maxits, rtol=params%rtol, &
+            call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
             time_solve = real(toc(t_phase),dp)
+            call validate_solved_map(x, 'shared', state_here, half, 'ml')
             time_total = time_reduce + time_finalize + time_solve
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
@@ -606,7 +608,7 @@ contains
         write(funit,'(A,I0)') 'selected_particles=', nselected
         write(funit,'(A,I0)') 'box_crop=', params%box_crop
         write(funit,'(A,F12.6)') 'smpd_crop=', params%smpd_crop
-        write(funit,'(A,I0)') 'maxits=', params%maxits
+        write(funit,'(A,I0)') 'maxits_pcg=', params%maxits_pcg
         write(funit,'(A,ES14.6)') 'rtol=', params%rtol
         nhalves_tested = 0
 
@@ -943,7 +945,7 @@ contains
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             call op%end_accum(.true.)
             call op%set_op_mode(PCG_OP_KERNEL)
-            call op%solve_accum(x, maxits=params%maxits, rtol=params%rtol, rel_res_hist=history, niters=niters)
+            call op%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, rel_res_hist=history, niters=niters)
         end subroutine finalize_and_solve
 
         subroutine require_raw( label, b_err, d_err, tolerance )
@@ -1438,17 +1440,19 @@ contains
             call pcgop%begin_reduction
             nptcls = 0
             t_phase = tic()
-            if( l_ml_solve )then
+            if( l_ml_solve .and. params%l_trail_rec )then
                 fname = refine3D_pcg_trail_accum_fname(state_here, half)
                 call pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
                     &chain_provenance, 1.0, nptcls)
                 call fname%kill
-                if( params%l_trail_rec )then
-                    if( l_bootstrap .or. 1.0-update_weights(state_here) <= 0.01 )then
-                        call pcgop%scale_raw_accum(realized_fractions(state_here))
-                    endif
+                if( l_bootstrap .or. 1.0-update_weights(state_here) <= 0.01 )then
+                    call pcgop%scale_raw_accum(realized_fractions(state_here))
                 endif
             else
+                ! Without trailing, replay the current worker statistics
+                ! directly for ML regularization. The persistent trail file is
+                ! reserved for full-mass continuation data and must not double
+                ! as an ML scratch artifact carrying fractional mass.
                 do part_here = 1, params%nparts
                     fname = refine3D_pcg_raw_accum_fname(state_here, part_here, params%numlen, half)
                     call pcgop%add_raw_accum(fname, state_here, eo_here, part_here, params%nparts, &
@@ -1487,7 +1491,7 @@ contains
                     endif
                     write(logfhandle,'(A,I0,A,A,A,F8.4,A,F8.4)') '>>> PCG TRAIL | STATE=', state_here, &
                         &' | HALF=', trim(half), ' | F=', realized_fraction, ' | U=', update_weight
-                else if( params%l_ml_reg .or. l_seed_chain )then
+                else if( l_seed_chain )then
                     call pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n_full_half, chain_provenance)
                 endif
                 call fname%kill
@@ -1507,9 +1511,10 @@ contains
                 allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             endif
             t_phase = tic()
-            call pcgop%solve_accum(x, maxits=params%maxits, rtol=params%rtol, &
+            call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
             time_solve = real(toc(t_phase),dp)
+            call validate_solved_map(x, 'distributed', state_here, half, solve_kind)
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
             if( l_ml_solve )then
@@ -1667,6 +1672,25 @@ contains
 
     end subroutine execute_rec3D_pcg_distributed_master
 
+    subroutine validate_solved_map( x, execution_mode, state, half, solve_kind )
+        real,             intent(in) :: x(:,:,:)
+        character(len=*), intent(in) :: execution_mode, half, solve_kind
+        integer,          intent(in) :: state
+        character(len=256) :: error_message
+        real :: peak
+        if( any(.not. ieee_is_finite(x)) )then
+            error_message = 'PCG '//trim(execution_mode)//' solve produced a non-finite map; state='// &
+                &int2str(state)//' half='//trim(half)//' kind='//trim(solve_kind)
+            THROW_HARD(error_message)
+        endif
+        peak = maxval(abs(x))
+        if( peak <= tiny(peak) )then
+            error_message = 'PCG '//trim(execution_mode)//' solve produced an empty map; state='// &
+                &int2str(state)//' half='//trim(half)//' kind='//trim(solve_kind)
+            THROW_HARD(error_message)
+        endif
+    end subroutine validate_solved_map
+
     subroutine report_solve_summary( execution_mode, state, half, solve_kind, nptcls, niters, &
             &residual, solve_time, stop_reason )
         character(len=*), intent(in) :: execution_mode, half, solve_kind, stop_reason
@@ -1716,7 +1740,8 @@ contains
         if( present(check_solver) ) l_check_solver = check_solver
         if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
         if( l_check_solver )then
-            if( params%maxits < 1 .or. params%maxits > 8 ) THROW_HARD('production PCG requires 1<=maxits<=8')
+            if( params%maxits_pcg < 1 .or. params%maxits_pcg > 8 ) &
+                &THROW_HARD('production PCG requires 1<=maxits_pcg<=8')
         endif
         if( trim(params%projrec) /= 'no' ) THROW_HARD('rec_backend=pcg does not yet support projrec=yes')
         if( abs(real(params%box)*params%smpd - real(params%box_crop)*params%smpd_crop) > &

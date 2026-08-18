@@ -50,15 +50,12 @@ contains
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)     ! to assure that shifts are being used
         if( .not. cline%defined('rec_backend') ) call cline%set('rec_backend', 'gridding')
         rec_backend = cline%get_carg('rec_backend')
-        if( rec_backend .eq. 'pcg' )then
-            if( .not. cline%defined('maxits') ) call cline%set('maxits', 2.)
-        endif
         pose_polish = string('no')
         if( cline%defined('pcg_pose_polish') )then
             pose_polish = cline%get_carg('pcg_pose_polish')
             if( pose_polish .eq. 'yes' )then
                 ! Both PCG passes use the same fixed two-iteration solve.
-                call cline%set('maxits',2)
+                call cline%set('maxits_pcg',2)
                 call cline%set('rtol',0.0)
                 call cline%set('trail_rec','no')
                 call cline%set('update_frac',1.0)

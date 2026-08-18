@@ -13,6 +13,9 @@ class(rec3D_strategy), allocatable :: strategy
 if( trim(params%rec_backend) /= 'gridding' )then
     error stop 'rec_backend default must preserve gridding'
 endif
+if( params%maxits_pcg /= 2 )then
+    error stop 'maxits_pcg default must be 2'
+endif
 if( rec3D_backend_id('gridding') /= REC3D_BACKEND_GRIDDING )then
     error stop 'gridding backend resolution failed'
 endif

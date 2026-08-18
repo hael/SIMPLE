@@ -165,13 +165,13 @@ subroutine new_automask( prgtab )
         &'Postprocess reconstructed volumes using the generated FSC curves','', .false., 'yes', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call reconstruct3D%add_input(UI_FILT, 'maxits', 'num', 'PCG maximum iterations', &
+        call reconstruct3D%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
         &'Maximum kernel PCG iterations; used only when rec_backend=pcg', 'iterations{2}', .false., 2., &
         &visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
-        &'Stop at this true L2 relative residual; use <=0 for exactly maxits iterations', 'tolerance{0.001}', &
-        &.false., 0.001, visibility=UI_VIS_ADVANCED, &
+        &'Stop at this true L2 relative residual; use <=0 for exactly maxits_pcg iterations', 'tolerance{0}', &
+        &.false., 0.0, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'pcg_lambda_rel', 'num', 'Relative PCG Tikhonov strength', &
         &'Scale lambda against the reduced data operator; -1 keeps the legacy absolute 1e-3 coefficient', &
@@ -348,6 +348,10 @@ subroutine new_automask( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, ml_reg, group="filter", &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+        &'Maximum kernel PCG iterations; independent of refine3D outer maxits', 'iterations{2}', &
+        &.false., 2., group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, 'pcg_lambda_rel', 'num', 'Relative PCG Tikhonov strength', &
         &'Scale lambda against the reduced data operator; -1 keeps the legacy absolute 1e-3 coefficient', &
         &'relative strength{-1}', .false., -1.0, group="filter", visibility=UI_VIS_ADVANCED, &

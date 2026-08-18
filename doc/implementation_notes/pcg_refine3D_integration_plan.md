@@ -204,7 +204,7 @@ both finalized half operators while waiting for the FSC. The correctness path
 therefore replays deterministic kernel finalization from persisted raw `(B,D)`
 for the ML solves. Retaining both operators is not an acceptable default; a
 smaller finalized-operator cache may be considered only after measurement. Both
-solves initially receive the same `pcg_maxits` bound; the warm-started ML solve
+solves initially receive the same `maxits_pcg` bound; the warm-started ML solve
 may be shortened only after a measured equivalence gate.
 
 When `filt_mode=nonuniform*`, the NU bank is constructed from the `_unfil`
@@ -236,9 +236,9 @@ generation/iteration. `objfun=cc` remains unweighted.
 ### Solver controls
 
 `refine3D` already uses `maxits` for the number of refinement iterations. PCG
-therefore receives distinct typed controls, `pcg_maxits` and `pcg_rtol`, with
-defaults 2 and 0 respectively. The existing `reconstruct3D maxits/rtol` CLI can
-remain as a compatibility interface.
+therefore receives the distinct typed control `maxits_pcg`, with default 2.
+The existing PCG-specific `rtol` control defaults to 0. `maxits` is never
+interpreted as a PCG solve count.
 
 ## Implementation phases
 
@@ -429,7 +429,7 @@ Gate:
 
 Work:
 
-- register `rec_backend`, `pcg_maxits`, and `pcg_rtol` for `refine3D`;
+- register `rec_backend`, `maxits_pcg`, and `rtol` for `refine3D`;
 - allow `rec_backend=pcg` in typed validation with a precise supported-mode
   matrix;
 - dispatch the post-search reconstruction boundary to the reusable PCG raw
@@ -522,8 +522,8 @@ Coding should begin only after approval of these five contracts:
    priors applied only after blending.
 5. Isotropic ML regularization is a separate positive precision operator,
    derived from unregularized post-trailing FSC, not a modification of stored
-   `B` or `D`. `pcg_maxits`/`pcg_rtol` remain distinct from refinement-loop
-   `maxits`.
+   `B` or `D`. `maxits_pcg` remains distinct from refinement-loop `maxits`;
+   `rtol` is PCG-specific.
 6. The only prior-related prerequisite before integration is P0 base-lambda
    scaling. `P_tau` is required gridding parity; solvent-flatness and smoothness
    priors are post-parity research and cannot be used to close integration

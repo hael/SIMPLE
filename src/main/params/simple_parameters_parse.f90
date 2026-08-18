@@ -349,6 +349,7 @@ contains
         call reg%add_int('iptcl', self%iptcl)
         call reg%add_int('job_memory_per_task2D', self%job_memory_per_task2D)
         call reg%add_int('maxits', self%maxits)
+        call reg%add_int('maxits_pcg', self%maxits_pcg)
         call reg%add_int('maxits_glob', self%maxits_glob)
         call reg%add_int('maxits_between', self%maxits_between)
         call reg%add_int('maxits_sh', self%maxits_sh)

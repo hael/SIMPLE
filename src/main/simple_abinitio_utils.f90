@@ -176,6 +176,8 @@ contains
         call cline_refine3D%delete('smpd_crop')
         ! symmetrization
         call cline_symmap%set('prg',                'symmetrize_map')
+        call cline_symmap%delete('rec_backend')
+        call cline_symmap%delete('pcg_lambda_rel')
         call cline_symmap%set('pgrp',                    params%pgrp)
         call cline_symmap%set('projfile',                   projfile)
         call cline_symmap%set('center',                        'yes')
@@ -199,6 +201,8 @@ contains
         call cline_reconstruct3D%delete('refs_odd')
         ! re-project volume, only with cavgs
         call cline_reproject%set('prg',                  'reproject')
+        call cline_reproject%delete('rec_backend')
+        call cline_reproject%delete('pcg_lambda_rel')
         call cline_reproject%set('pgrp',                 params%pgrp)
         call cline_reproject%set('outstk',        'reprojs'//MRC_EXT)
         call cline_reproject%set('smpd',                 params%smpd)
@@ -225,6 +229,48 @@ contains
         call child_cline%delete('smpd')
         call child_cline%delete('smpd_crop')
     end subroutine strip_refine3D_planning_keys
+
+    ! Copy only controls that genuinely define the reconstruction performed at
+    ! the current refinement stage. refine3D maxits is an outer alignment count
+    ! and is deliberately not part of this interface.
+    subroutine apply_refine3D_reconstruction_controls( child_cline )
+        class(cmdline), intent(inout) :: child_cline
+        if( cline_refine3D%defined('rec_backend') )then
+            call child_cline%set('rec_backend', cline_refine3D%get_carg('rec_backend'))
+        endif
+        if( cline_refine3D%defined('pcg_lambda_rel') )then
+            call child_cline%set('pcg_lambda_rel', cline_refine3D%get_rarg('pcg_lambda_rel'))
+        else
+            call child_cline%delete('pcg_lambda_rel')
+        endif
+        if( cline_refine3D%defined('maxits_pcg') )then
+            call child_cline%set('maxits_pcg', cline_refine3D%get_iarg('maxits_pcg'))
+        endif
+        if( cline_refine3D%defined('rtol') )then
+            call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
+        endif
+        if( cline_refine3D%defined('ml_reg') )then
+            call child_cline%set('ml_reg', cline_refine3D%get_carg('ml_reg'))
+        endif
+        if( cline_refine3D%defined('objfun') )then
+            call child_cline%set('objfun', cline_refine3D%get_carg('objfun'))
+        endif
+        if( cline_refine3D%defined('envfsc') )then
+            call child_cline%set('envfsc', cline_refine3D%get_carg('envfsc'))
+        endif
+        if( cline_refine3D%defined('envmsklp') )then
+            call child_cline%set('envmsklp', cline_refine3D%get_rarg('envmsklp'))
+        endif
+        if( cline_refine3D%defined('conical_fsc') )then
+            call child_cline%set('conical_fsc', cline_refine3D%get_carg('conical_fsc'))
+        endif
+        if( cline_refine3D%defined('ptcl_src') )then
+            call child_cline%set('ptcl_src', cline_refine3D%get_carg('ptcl_src'))
+        endif
+        if( cline_refine3D%defined('which_iter') )then
+            call child_cline%set('which_iter', cline_refine3D%get_iarg('which_iter'))
+        endif
+    end subroutine apply_refine3D_reconstruction_controls
 
     subroutine inject_refine3D_volume( params, state, vol )
         class(parameters), intent(inout) :: params
@@ -497,7 +543,8 @@ contains
             enddo
             if( present(xrec3D) )then
                 ! symmetric reconstruction
-                cline_symrec = cline_refine3D
+                cline_symrec = cline_reconstruct3D
+                call apply_refine3D_reconstruction_controls(cline_symrec)
                 call cline_symrec%set('prg',        'reconstruct3D')
                 call cline_symrec%set('mkdir',      'no')
                 call cline_symrec%set('projfile',   projfile)
@@ -538,11 +585,12 @@ contains
         class(commander_base),   intent(inout) :: xrec3D
         integer,                 intent(in)    :: istage
         logical, optional,       intent(in)    :: current_sample_only
-        type(string)      :: vol_even, vol_odd, tmpl, src, dest, dest_main, dest_even, dest_odd, sstate, sstage, pgrp, vol_diag
+        type(string)      :: vol_even, vol_odd, vol_even_unfil, vol_odd_unfil
+        type(string)      :: tmpl, src, dest, dest_main, dest_even, dest_odd, sstate, sstage, pgrp, vol_diag
         type(cmdline)     :: cline_rec
         integer           :: state
         real              :: lp_snapshot
-        logical           :: have_even_stage, have_odd_stage, l_current_sample_only, l_seed_trail_chain
+        logical           :: have_even_stage, have_odd_stage, l_current_sample_only, l_seed_trail_chain, l_pcg_rec
         l_current_sample_only = .false.
         if( present(current_sample_only) ) l_current_sample_only = current_sample_only
         ! Seed the trailing accumulator chain only when the stage this boundary
@@ -555,7 +603,8 @@ contains
         ! Reconstruction
         pgrp = trim(params%pgrp)
         if( istage <= abinitio_symsrch_stage() ) pgrp = trim(params%pgrp_start)
-        cline_rec = cline_refine3D
+        cline_rec = cline_reconstruct3D
+        call apply_refine3D_reconstruction_controls(cline_rec)
         call cline_rec%set('prg',       'reconstruct3D')
         call cline_rec%set('mkdir',     'no')
         call cline_rec%set('projfile',  projfile)
@@ -564,15 +613,18 @@ contains
         call cline_rec%set('trail_rec', 'no')
         call cline_rec%delete('sticky_class_sampling')
         if( cline_rec%get_carg('ml_reg').ne.'yes' ) call cline_rec%set('objfun','cc')
+        l_pcg_rec = cline_rec%defined('rec_backend')
+        if( l_pcg_rec ) l_pcg_rec = cline_rec%get_carg('rec_backend').eq.'pcg'
         do state = 1,params%nstates
             call cline_rec%delete('vol'//int2str(state))
         enddo
         call cline_rec%delete('vol_even')
         call cline_rec%delete('vol_odd')
         if( l_current_sample_only )then
-            if( .not. cline_rec%defined('update_frac') )then
+            if( .not. cline_refine3D%defined('update_frac') )then
                 THROW_HARD('current-sample reconstruction requires update_frac')
             endif
+            call cline_rec%set('update_frac', cline_refine3D%get_rarg('update_frac'))
         else
             call cline_rec%delete('update_frac')
             ! A full stage-boundary reconstruction is the producer of the
@@ -605,7 +657,12 @@ contains
             vol_even = refine3D_state_halfvol_fname(state, 'even')
             if( file_exists(vol_even) )then
                 dest = tmpl//'_even_unfil'//MRC_EXT
-                call simple_copy_file(vol_even, dest)
+                vol_even_unfil = refine3D_state_halfvol_fname(state, 'even', unfil=.true.)
+                if( l_pcg_rec .and. file_exists(vol_even_unfil) )then
+                    call simple_rename(vol_even_unfil, dest)
+                else
+                    call simple_copy_file(vol_even, dest)
+                endif
                 dest = tmpl//'_even'//MRC_EXT
                 call simple_rename(vol_even, dest)
                 dest_even = dest
@@ -614,7 +671,12 @@ contains
             vol_odd  = refine3D_state_halfvol_fname(state, 'odd')
             if( file_exists(vol_odd) )then
                 dest = tmpl//'_odd_unfil'//MRC_EXT
-                call simple_copy_file(vol_odd, dest)
+                vol_odd_unfil = refine3D_state_halfvol_fname(state, 'odd', unfil=.true.)
+                if( l_pcg_rec .and. file_exists(vol_odd_unfil) )then
+                    call simple_rename(vol_odd_unfil, dest)
+                else
+                    call simple_copy_file(vol_odd, dest)
+                endif
                 dest = tmpl//'_odd'//MRC_EXT
                 call simple_rename(vol_odd, dest)
                 dest_odd = dest
@@ -630,6 +692,8 @@ contains
             call register_stage_volume(params, state, dest_main, projfile)
         enddo
         call vol_diag%kill
+        call vol_even_unfil%kill
+        call vol_odd_unfil%kill
         call cline_rec%kill
     end subroutine calc_rec
 
@@ -668,6 +732,8 @@ contains
         if( cline_refine3D%get_carg('ml_reg').eq.'yes' )then
             cline_calc_group_sigmas = cline_refine3D
             call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
+            call cline_calc_group_sigmas%delete('rec_backend')
+            call cline_calc_group_sigmas%delete('pcg_lambda_rel')
             call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
             call cline_calc_group_sigmas%kill
         endif

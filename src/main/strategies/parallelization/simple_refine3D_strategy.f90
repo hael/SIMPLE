@@ -201,8 +201,6 @@ contains
         logical          :: l_trail_bootstrap(params%nstates)
         call validate_refine3D_pcg_integration(params)
         pcg_params = params
-        pcg_params%maxits = 2
-        pcg_params%rtol   = 0.0
         call execute_rec3D_pcg_distributed_master(pcg_params, build, cline, &
             &trail_bootstrap_states=l_trail_bootstrap)
         call filter_pcg_nonuniform_maps(pcg_params, build, l_trail_bootstrap)
@@ -1022,8 +1020,6 @@ contains
                 call cline_tmp%delete('trail_rec')
                 if( trim(params%rec_backend) == 'pcg' )then
                     if( params%l_trail_rec .and. params%cc_objfun == OBJFUN_CC ) call cline_tmp%set('trail_seed', 'yes')
-                    call cline_tmp%set('maxits', 2)
-                    call cline_tmp%set('rtol', 0.0)
                 endif
                 call cline_tmp%delete('objfun')
                 call cline_tmp%delete('objfun_den')
