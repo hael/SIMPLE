@@ -1,8 +1,40 @@
 # Continuous 3-D PCG post-reconstruction pose-polishing SPEC
 
-**Status:** FINAL
+**Status:** FINAL (operator-contract clarification, 2026-08-17)
 
+**Frozen original proposal:** [continuous_3D_refinement_on_pcg_operator.md](continuous_3D_refinement_on_pcg_operator.md)
 **PLAN:** [continuous_3D_pose_end_polishing_plan.md](continuous_3D_pose_end_polishing_plan.md)
+
+## Decision summary
+
+This FINAL SPEC is not awaiting interpretation or approval. It defines one
+isolated, default-off `reconstruct3D` experiment. The implementation may be
+committed while disabled because its activation, rollback, half-map ownership,
+and operator contracts are explicit and its component tests pass.
+
+The feature is **not scientifically accepted**. The completed truth matrix
+failed exact-pose rotation stationarity, clean joint recovery, and noisy FSC
+criteria. Therefore:
+
+- keep `pcg_pose_polish=no` by default;
+- do not recommend the option for production data;
+- do not integrate it into `abinitio3D` or `refine3D_auto`;
+- do not weaken the acceptance thresholds.
+
+Hans and the refinement researchers are needed only if work continues under a
+new or revised SPEC. That discussion must decide:
+
+1. whether polishing is a terminal command, a repeated refinement stage, or
+   should stop at the present research result;
+2. what statistically valid fixed reference replaces or constrains the biased
+   same-half reconstructed map;
+3. whether reconstruction and polishing should share a new explicit frequency
+   or rotation-regularization policy; and
+4. what held-out or dataset-level signal may accept a particle update when the
+   per-particle fixed-map objective decreases but truth pose or FSC worsens.
+
+Everything below is the frozen technical contract for the implementation that
+was tested. It is detail for verification, not an open design discussion.
 
 ## Request and outcome
 
@@ -32,14 +64,63 @@ subsequent `reconstruct3D` invocation.
 
 ## Scientific contract
 
-For particle $i$, minimize the weighted fixed-half-map objective
+For particle $i$, first construct the fixed observed plane
+
+$$
+\bar y_i=Q_i(I_i;\eta_i),
+$$
+
+where $Q_i$ is the existing PCG particle-input path: noise normalization,
+particle-edge taper, native FFT, packed-plane extraction, and whitening. The
+statistics $\eta_i$ measured from $I_i$ are fixed data; they are not functions
+of a trial pose or prediction. Minimize
 
 $$
 \Phi_i(R_i,t_i)=\frac{1}{2}\left\|
-\frac{y_i}{\sqrt{\sigma_i^2}}-
-\frac{C_i}{\sqrt{\sigma_i^2}}S(t_i)G(R_i)V_{h(i)}
+\bar y_i-\mathcal A_i(R_i,t_i)V_{h(i)}
 \right\|_2^2 .
 $$
+
+Let $u_h$ denote the unconstrained solve coordinate and let $V_h=P u_h$ be the
+already supported half-map written by PCG. Here $\mathcal A_i$ is the complete
+executed observation operator, not a bare Fourier gather. Its required chain is
+
+$$
+\mathcal A_i(R_i,t_i)V_h=
+T_i(t_i)\,G_P(R_i)\,E^{-1}V_h,
+\qquad
+T_i(t_i)=\frac{C_iS_i(t_i)}{\sqrt{\sigma_i^2}}.
+$$
+
+The factors have these fixed meanings:
+
+- $P$ is the reconstruction support already represented in $V_h$. A soft
+  support must not be applied a second time to the stored half-map;
+- $E^{-1}$ is the PCG inverse Kaiser--Bessel gather envelope used before the
+  forward gather when deapodization is enabled;
+- $G_P(R_i)$ is the executed oversampled Fourier gather, with its actual fast
+  interpolation value and derivative;
+- $T_i$ uses the executed shift, CTF, `ctfflag`, whitening, sampling, precision,
+  Fourier packing, and operation order from the PCG reconstruction operator;
+- $Q_i$ is data-side preprocessing only. A mean, variance, edge profile, or
+  amplitude statistic derived from the observed particle is measured once and
+  held fixed while evaluating every trial objective.
+
+This SPEC does **not** insert the simulator's padded inverse FFT, real-space
+clip, or native FFT into $\mathcal A_i$. The current PCG reconstruction does not
+apply that model-side operation. If evidence selects a finite-box model
+$\mathcal B_i\mathcal A_i$, it must be introduced as a coordinated change to
+the reconstruction forward operator, its adjoint and normal operator, and the
+pose Jacobian. Adding $\mathcal B_i$ only to pose polishing is nonconforming.
+A simulator-matched operator is not automatically the experimental-data
+operator.
+
+The pose Jacobian is the derivative of this complete chain. Since $P$,
+$E^{-1}$, $C_i$, and $\sigma_i^2$ are independent of rotation, the rotation
+columns differentiate $G_P(R_i)$ and then apply $T_i$; the shift columns
+differentiate only $S_i(t_i)$. Finite differences of a gather that omits
+$E^{-1}$, support, transfer, whitening, or the selected shell range do not
+validate $\mathcal A_i$.
 
 The local update has five coordinates,
 
@@ -52,10 +133,16 @@ $$
 Requirements:
 
 - use the executed fast Kaiser--Bessel value and derivative paths;
+- verify that the fixed half-map is the supported PCG output, apply the PCG
+  inverse envelope exactly once, and only then create the Fourier workspace;
+- evaluate every predicted value and all five Jacobian columns with the exact
+  PCG $T_iG_PE^{-1}$ chain from the already supported $V_h$; do not apply
+  data-only normalization or taper to a trial prediction;
 - use the PCG CTF flag, whitening, Fourier packing, phase, and precision
   conventions;
-- use the active reconstruction frequency limit, never a separate hand-set
-  ladder;
+- use exactly the shell range used by the preceding PCG reconstruction. The
+  reconstruction operator and pose workspace must obtain it from one shared
+  setting; a pose-only shell restriction is not conforming;
 - refine each particle only against its matching fixed half-map;
 - keep state, half ownership, CTF metadata, observations, and search decisions
   unchanged;
@@ -89,22 +176,30 @@ Requirements:
 ## Acceptance criteria
 
 1. Rotation and joint-pose derivatives agree with fixed-cell finite differences
-   of the executed forward operator.
-2. Known joint perturbations are recovered from multiple orientations; exact,
+   of the complete executed PCG operator $\mathcal A_i$, including support,
+   inverse envelope, transfer, whitening, and shell restriction.
+2. An independent forward generator passes a declared operator matrix that
+   separates bare gather, inverse-envelope gather, finite-box gather, and their
+   combination over realistic box/support margins. The matrix determines
+   whether the independent generator is a valid test of the PCG model; it does
+   not silently redefine that model. Any selected replacement production model
+   and its adjoint must pass a numerical dot-product identity before entering
+   PCG.
+3. Known joint perturbations are recovered from multiple orientations; exact,
    weak, and singular cases remain unchanged.
-3. Accepted objectives decrease monotonically, and all rotation and shift steps
+4. Accepted objectives decrease monotonically, and all rotation and shift steps
    remain within their declared bounds.
-4. Pose-error tests fix the global gauge and minimize over symmetry-equivalent
+5. Pose-error tests fix the global gauge and minimize over symmetry-equivalent
    rotations.
-5. Even and odd particles use only their matching half-map.
-6. Accepted rotations and shifts persist and are consumed by the final PCG
+6. Even and odd particles use only their matching half-map.
+7. Accepted rotations and shifts persist and are consumed by the final PCG
    reconstruction; disabled and invalid routes cannot change poses.
-7. Shared and distributed reconstruction routes obey the same activation and
+8. Shared and distributed reconstruction routes obey the same activation and
    ownership rules.
-8. A frozen beta-gal A/B changes only `pcg_pose_polish`; angular changes remain
+9. A frozen beta-gal A/B changes only `pcg_pose_polish`; angular changes remain
    local, terminal counts balance, and independent half-map FSC improves or is
    neutral under a predeclared tolerance.
-9. Focused and mother tests pass on Oracle Linux.
+10. Focused and mother tests pass on Oracle Linux.
 
 ## Constraints
 
