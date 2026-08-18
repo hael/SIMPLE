@@ -11,7 +11,7 @@ Usage:
     --box 144 --smpd 1.3 --mskdiam 120 --pgrp c1 \
     --kv 300 --cs 2.7 --fraca 0.1 \
     --lp-fsc05 4.255 --lp-fsc0143 3.671 \
-    [--nthr 8] [--output-parent "$PWD"]
+    [--nthr 64] [--output-parent "$PWD"]
 
 The runner executes all 16 matched arms after preflight. It collects clean and
 noisy, exact and perturbed, and full/FSC-limited evidence in one timestamped
@@ -31,7 +31,7 @@ CS=""
 FRACA=""
 LP_FSC05=""
 LP_FSC0143=""
-NTHR=8
+NTHR=64
 OUTPUT_PARENT="$PWD"
 
 while [[ $# -gt 0 ]]; do
@@ -104,6 +104,16 @@ cp "$SCRIPT_DIR/analyze_truth_matrix.py" "$RESULT_ROOT/input/validation_source/"
 cp "$SCRIPT_DIR/analyze_pose_ab.py" "$RESULT_ROOT/input/validation_source/"
 cp "$SCRIPT_DIR/prepare_truth_oritab.py" "$RESULT_ROOT/input/validation_source/"
 cp "$SCRIPT_DIR/README.md" "$RESULT_ROOT/input/validation_source/"
+# Freeze the scientific contract and handoff with the executable evidence.
+cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_end_polishing_spec.md" \
+    "$RESULT_ROOT/input/"
+cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_end_polishing_plan.md" \
+    "$RESULT_ROOT/input/"
+cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_end_polishing_handoff.md" \
+    "$RESULT_ROOT/input/"
+cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md" \
+    "$RESULT_ROOT/input/"
+cp "$SOURCE_ROOT/doc/policies/reconstruct3D_pcg_policy.md" "$RESULT_ROOT/input/"
 exec > >(tee -a "$RESULT_ROOT/diagnostic.log") 2>&1
 echo "Diagnostic directory: $RESULT_ROOT"
 
@@ -171,6 +181,11 @@ production/tests/continuous_3D_pcg_pose_validation/run_truth_diagnostic.sh
 production/tests/continuous_3D_pcg_pose_validation/analyze_truth_matrix.py
 production/tests/continuous_3D_pcg_pose_validation/analyze_pose_ab.py
 production/tests/continuous_3D_pcg_pose_validation/prepare_truth_oritab.py
+doc/implementation_notes/continuous_3D_pose_end_polishing_spec.md
+doc/implementation_notes/continuous_3D_pose_end_polishing_plan.md
+doc/implementation_notes/continuous_3D_pose_end_polishing_handoff.md
+doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md
+doc/policies/reconstruct3D_pcg_policy.md
 EOF
     : >"$manifest"
     while IFS= read -r relative; do

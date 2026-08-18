@@ -1,4 +1,5 @@
 module simple_pcg_pose_polisher
+!$ use omp_lib, only: omp_get_max_threads
 use ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_builder, only: builder
@@ -24,7 +25,6 @@ private
 public :: pcg_pose_polish_summary, polish_fixed_volume_shifts, polish_fixed_volume_poses
 public :: execute_final_pcg_pose_polish
 
-integer, parameter :: POLISH_BATCH_SIZE = min(32,MAXIMGBATCHSZ)
 integer, parameter :: POLISH_MAX_ITERATIONS = 8
 
 !> Aggregate terminal outcomes, objective values, step bounds, and stencil telemetry.
@@ -139,81 +139,99 @@ subroutine polish_fixed_volume_poses(workspace, rotmats, observed, shifts, rotat
     integer, intent(out) :: statuses(:)
     type(pcg_pose_polish_summary), intent(out) :: summary
     complex, optional, intent(in) :: transfers(:,:,:)
-    real(dp), allocatable :: accepted_objectives(:)
-    real(dp) :: input_rotmat(3,3), input_shift(2), max_rotation_step, max_shift_step
-    integer :: iparticle, naccepted, nattempted, status, nstencil_switches
+    real(dp), allocatable :: objectives_before(:), objectives_after(:)
+    real(dp), allocatable :: max_rotation_steps(:), max_shift_steps(:)
+    integer, allocatable :: accepted_steps(:), attempted_steps(:), stencil_switches(:)
+    integer :: iparticle
 
     call validate_batch_shapes(workspace,rotmats,observed,shifts,statuses,max_iterations,transfers)
     if( rotation_scale <= 0._dp .or. .not. ieee_is_finite(rotation_scale) ) &
         &error stop 'pose polish requires a positive finite rotation scale'
     summary = pcg_pose_polish_summary()
     summary%nparticles = size(shifts,2)
-    allocate(accepted_objectives(0:max_iterations))
+    allocate(objectives_before(summary%nparticles),objectives_after(summary%nparticles),source=0._dp)
+    allocate(max_rotation_steps(summary%nparticles),max_shift_steps(summary%nparticles),source=0._dp)
+    allocate(accepted_steps(summary%nparticles),attempted_steps(summary%nparticles),source=0)
+    allocate(stencil_switches(summary%nparticles),source=0)
 
+    ! Particle LM systems are independent while the Fourier workspace is fixed.
+    !$omp parallel do default(shared) private(iparticle) schedule(static) proc_bind(close)
     do iparticle = 1, summary%nparticles
-        ! A particle pose is one transaction: retain both R and t or restore both.
-        input_rotmat = rotmats(:,:,iparticle)
-        input_shift = shifts(:,iparticle)
-        if( present(transfers) )then
-            call workspace%refine_pose_lm(rotmats(:,:,iparticle),observed(:,:,iparticle), &
-                &shifts(:,iparticle),rotation_scale,max_iterations,accepted_objectives,naccepted, &
-                &status,nattempted,max_rotation_step,max_shift_step,nstencil_switches, &
-                &transfers(:,:,iparticle))
-        else
-            call workspace%refine_pose_lm(rotmats(:,:,iparticle),observed(:,:,iparticle), &
-                &shifts(:,iparticle),rotation_scale,max_iterations,accepted_objectives,naccepted, &
-                &status,nattempted,max_rotation_step,max_shift_step,nstencil_switches)
-        endif
-        statuses(iparticle) = status
-        summary%naccepted_steps = summary%naccepted_steps+naccepted
-        summary%nattempted_steps = summary%nattempted_steps+nattempted
-        summary%max_rotation_step = max(summary%max_rotation_step,max_rotation_step)
-        summary%max_shift_step = max(summary%max_shift_step,max_shift_step)
-        summary%nstencil_switches = summary%nstencil_switches+nstencil_switches
-        if( ieee_is_finite(accepted_objectives(0)) ) &
-            &summary%objective_before = summary%objective_before+accepted_objectives(0)
+        call refine_one_pose(iparticle)
+    enddo
+    !$omp end parallel do
 
-        select case(status)
+    ! Reduce in particle order so accounting and objective sums stay deterministic.
+    do iparticle = 1, summary%nparticles
+        summary%naccepted_steps = summary%naccepted_steps+accepted_steps(iparticle)
+        summary%nattempted_steps = summary%nattempted_steps+attempted_steps(iparticle)
+        summary%max_rotation_step = max(summary%max_rotation_step,max_rotation_steps(iparticle))
+        summary%max_shift_step = max(summary%max_shift_step,max_shift_steps(iparticle))
+        summary%nstencil_switches = summary%nstencil_switches+stencil_switches(iparticle)
+        summary%objective_before = summary%objective_before+objectives_before(iparticle)
+        summary%objective_after = summary%objective_after+objectives_after(iparticle)
+        select case(statuses(iparticle))
         case(POSE_LM_ACCEPTED_IMPROVEMENT)
+            summary%nimproved = summary%nimproved+1
+        case(POSE_LM_FINITE_NO_IMPROVEMENT)
+            summary%nunchanged = summary%nunchanged+1
+        case(POSE_LM_NO_RELIABLE_UPDATE)
+            summary%nunreliable = summary%nunreliable+1
+        case(POSE_LM_STEP_BOUND_REJECTED)
+            summary%nstep_bound = summary%nstep_bound+1
+        case(POSE_LM_INVALID_NUMERICS)
+            summary%ninvalid = summary%ninvalid+1
+        case(POSE_LM_ITERATION_LIMIT)
+            summary%niteration_limit = summary%niteration_limit+1
+        case default
+            error stop 'pose polish returned an unknown LM outcome'
+        end select
+    enddo
+    deallocate(objectives_before,objectives_after,max_rotation_steps,max_shift_steps)
+    deallocate(accepted_steps,attempted_steps,stencil_switches)
+
+contains
+
+    !> Solve one independent particle and retain or restore its complete pose.
+    subroutine refine_one_pose(index)
+        integer, intent(in) :: index
+        real(dp) :: accepted_objectives(0:max_iterations)
+        real(dp) :: input_rotmat(3,3), input_shift(2)
+        integer :: naccepted, nattempted, status, nswitches
+
+        input_rotmat = rotmats(:,:,index)
+        input_shift = shifts(:,index)
+        if( present(transfers) )then
+            call workspace%refine_pose_lm(rotmats(:,:,index),observed(:,:,index), &
+                &shifts(:,index),rotation_scale,max_iterations,accepted_objectives,naccepted, &
+                &status,nattempted,max_rotation_steps(index),max_shift_steps(index),nswitches, &
+                &transfers(:,:,index))
+        else
+            call workspace%refine_pose_lm(rotmats(:,:,index),observed(:,:,index), &
+                &shifts(:,index),rotation_scale,max_iterations,accepted_objectives,naccepted, &
+                &status,nattempted,max_rotation_steps(index),max_shift_steps(index),nswitches)
+        endif
+        statuses(index) = status
+        accepted_steps(index) = naccepted
+        attempted_steps(index) = nattempted
+        stencil_switches(index) = nswitches
+        if( ieee_is_finite(accepted_objectives(0)) )then
+            objectives_before(index) = accepted_objectives(0)
+            objectives_after(index) = accepted_objectives(0)
+        endif
+
+        if( status == POSE_LM_ACCEPTED_IMPROVEMENT )then
             if( naccepted < 1 ) error stop 'accepted pose polish has no accepted LM step'
             if( .not. ieee_is_finite(accepted_objectives(naccepted)) ) &
                 &error stop 'accepted pose polish has a non-finite objective'
             if( accepted_objectives(naccepted) >= accepted_objectives(0) ) &
                 &error stop 'accepted pose polish did not reduce the objective'
-            summary%nimproved = summary%nimproved+1
-            summary%objective_after = summary%objective_after+accepted_objectives(naccepted)
-        case(POSE_LM_FINITE_NO_IMPROVEMENT)
-            summary%nunchanged = summary%nunchanged+1
-            call restore_input_pose
-        case(POSE_LM_NO_RELIABLE_UPDATE)
-            summary%nunreliable = summary%nunreliable+1
-            call restore_input_pose
-        case(POSE_LM_STEP_BOUND_REJECTED)
-            summary%nstep_bound = summary%nstep_bound+1
-            call restore_input_pose
-        case(POSE_LM_INVALID_NUMERICS)
-            summary%ninvalid = summary%ninvalid+1
-            rotmats(:,:,iparticle) = input_rotmat
-            shifts(:,iparticle) = input_shift
-            if( ieee_is_finite(accepted_objectives(0)) ) &
-                &summary%objective_after = summary%objective_after+accepted_objectives(0)
-        case(POSE_LM_ITERATION_LIMIT)
-            summary%niteration_limit = summary%niteration_limit+1
-            call restore_input_pose
-        case default
-            error stop 'pose polish returned an unknown LM outcome'
-        end select
-    enddo
-    deallocate(accepted_objectives)
-
-contains
-
-    !> Restore the complete input pose and account for its unchanged objective.
-    subroutine restore_input_pose
-        rotmats(:,:,iparticle) = input_rotmat
-        shifts(:,iparticle) = input_shift
-        summary%objective_after = summary%objective_after+accepted_objectives(0)
-    end subroutine restore_input_pose
+            objectives_after(index) = accepted_objectives(naccepted)
+        else
+            rotmats(:,:,index) = input_rotmat
+            shifts(:,index) = input_shift
+        endif
+    end subroutine refine_one_pose
 
 end subroutine polish_fixed_volume_poses
 
@@ -241,6 +259,7 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
     logical, allocatable :: normalization_mask(:,:,:)
     real(dp), allocatable :: rotmats(:,:,:), shifts(:,:)
     integer :: state, eo, ibatch, batchlims(2), batchsz, i, iptcl, nselected
+    integer :: polish_batch_size, polish_nthreads, polish_progress_stride
     integer :: lims2(2,2), r, kfromto(2)
     real :: crop_factor, sdev_noise, edge_mean
     real(dp) :: rotation_scale
@@ -265,6 +284,13 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
     l_sigma_loaded = .false.
     call ptcl_cache_assert_ready(params,build)
     l_cached = ptcl_cache_in_use(params,build)
+    polish_nthreads = 1
+    !$ polish_nthreads = omp_get_max_threads()
+    ! Match reconstruct3D batching while nthr controls simultaneous LM workers.
+    polish_batch_size = MAXIMGBATCHSZ
+    polish_progress_stride = 5*polish_batch_size
+    write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> PCG POSE POLISH THREADS: REQUESTED ', &
+        &params%nthr,' ACTIVE ',polish_nthreads,' BATCH ',polish_batch_size
     ! Reuse the reconstruction noise model so polishing evaluates the same data weighting.
     if( params%cc_objfun == OBJFUN_EUCLID )then
         l_sigma_loaded = allocated(build%esig%sigma2_noise)
@@ -274,9 +300,9 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
         if( .not. l_sigma_loaded ) THROW_HARD('final PCG pose polish requires sigma2 files for objfun=euclid')
     endif
     if( l_cached )then
-        call prepimgbatch(params,build,POLISH_BATCH_SIZE,box=params%box_crop,smpd=params%smpd_crop)
+        call prepimgbatch(params,build,polish_batch_size,box=params%box_crop,smpd=params%smpd_crop)
     else
-        call prepimgbatch(params,build,POLISH_BATCH_SIZE)
+        call prepimgbatch(params,build,polish_batch_size)
         ! Distributed masters own the project but need not build the general-toolbox mask.
         if( allocated(build%lmsk) )then
             allocate(normalization_mask,source=build%lmsk)
@@ -317,14 +343,16 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
             ! Snapshot one immutable Fourier workspace for all particles in this half.
             volume = halfmap%get_rmat()
             call pcgop%new(params%box_crop,params%smpd_crop,1.e-3)
+            ! A = A_tilde E^-1: the stored half-map already contains the support P.
+            volume = volume*pcgop%get_invenv()
             call pcgop%set_volume(volume)
             call pcgop%begin_fourier_workspace(workspace)
-            call workspace%set_shell_range(params%kfromto)
+            ! Keep the workspace's native-Nyquist range from the preceding PCG solve.
             lims2 = pcgop%get_lims2()
             r = lims2(1,2)
 
-            do ibatch = 1, size(half_pinds), POLISH_BATCH_SIZE
-                batchlims = [ibatch,min(size(half_pinds),ibatch+POLISH_BATCH_SIZE-1)]
+            do ibatch = 1, size(half_pinds), polish_batch_size
+                batchlims = [ibatch,min(size(half_pinds),ibatch+polish_batch_size-1)]
                 batchsz = batchlims(2)-batchlims(1)+1
                 allocate(observed(lims2(1,1):lims2(1,2),lims2(2,1):lims2(2,2),batchsz))
                 allocate(transfers(lims2(1,1):lims2(1,2),lims2(2,1):lims2(2,2),batchsz))
@@ -376,6 +404,12 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
                         call build%spproj_field%set_shift(iptcl,real(shifts(:,i)/real(crop_factor,dp)))
                     endif
                 enddo
+                ! Match SIMPLE's large-loop convention: log every five batches and the final batch.
+                if( batchlims(2) == size(half_pinds) .or. &
+                    &mod(batchlims(2),polish_progress_stride) == 0 )then
+                    write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> PCG POSE POLISH PROGRESS: STATE ', &
+                        &state,' HALF ',eo,' PROCESSED ',batchlims(2),' OF ',size(half_pinds)
+                endif
                 deallocate(observed,transfers,sig2,rotmats,shifts,statuses)
             enddo
             call workspace%kill

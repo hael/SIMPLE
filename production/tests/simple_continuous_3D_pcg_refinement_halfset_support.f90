@@ -1,7 +1,7 @@
 module continuous_3D_pcg_refinement_halfset_support
 use continuous_3D_pcg_refinement_test_helpers, only: build_truth_volume, set_deterministic_seed, &
     &BOX => TRUTH_VOLUME_BOX
-use simple_defs, only: dp
+use simple_defs, only: dp, OSMPL_PAD_FAC
 use simple_image, only: image
 use simple_ori, only: ori
 use simple_oris, only: oris
@@ -25,6 +25,7 @@ public :: HALFSET_LAMBDA
 public :: HALFSET_MASK_RADIUS
 public :: HALFSET_SMPD
 public :: reconstruct_half
+public :: reconstruct_half_fixed
 public :: reconstruct_half_pair_fixed
 public :: reconstruct_half_trajectory
 public :: relative_forward_residual
@@ -61,7 +62,7 @@ subroutine build_disjoint_half_orientations(nhalf, even_oris, odd_oris, even_ids
     call all_oris%kill()
 end subroutine build_disjoint_half_orientations
 
-!> Generate clean projections and independent seeded noise for one half-set.
+!> Generate simulator-path clean projections and independent seeded noise.
 subroutine build_independent_observations(sampler, orientations, noise_seed, requested_snr, &
                                           &planes, clean_planes, clean_images, noisy_images, noise, realized_snr)
     class(reconstructor_pcg), intent(in)    :: sampler
@@ -74,7 +75,7 @@ subroutine build_independent_observations(sampler, orientations, noise_seed, req
     real, allocatable,         intent(out)   :: noisy_images(:,:,:)
     real, allocatable,         intent(out)   :: noise(:,:,:)
     real(dp),                  intent(out)   :: realized_snr
-    type(image) :: projection
+    type(image) :: source_volume, padded_projection, projection
     type(ori) :: orientation
     type(projector) :: truth_projector
     real, allocatable :: clean(:,:,:), noisy(:,:,:), phantom(:,:,:)
@@ -89,10 +90,14 @@ subroutine build_independent_observations(sampler, orientations, noise_seed, req
     allocate(noise(BOX,BOX,nprojs), source=0.)
     allocate(clean(BOX,BOX,1), noisy(BOX,BOX,1))
     call build_truth_volume(phantom)
-    call truth_projector%new([BOX,BOX,BOX], HALFSET_SMPD, wthreads=.false.)
-    call truth_projector%set_rmat(phantom, .false.)
+    call source_volume%new([BOX,BOX,BOX],HALFSET_SMPD,wthreads=.false.)
+    call source_volume%set_rmat(phantom,.false.)
+    call truth_projector%new(OSMPL_PAD_FAC*[BOX,BOX,BOX],HALFSET_SMPD,wthreads=.false.)
+    call source_volume%pad(truth_projector)
     call truth_projector%fft()
     call truth_projector%expand_cmat(BOX)
+    call padded_projection%new([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], &
+        &HALFSET_SMPD,wthreads=.false.)
     call projection%new([BOX,BOX,1], HALFSET_SMPD, wthreads=.false.)
     call orientation%new(.false.)
     call set_deterministic_seed(noise_seed)
@@ -100,14 +105,21 @@ subroutine build_independent_observations(sampler, orientations, noise_seed, req
     noise_power = 0._dp
     do i = 1, nprojs
         call orientations%get_ori(i, orientation)
-        ! The production projector is independent of the PCG gather used to fit the data.
-        call truth_projector%fproject_serial(orientation, projection)
-        clean_planes(:,:,i) = sampler%extract_native_plane(projection)
-        call projection%ifft()
+        ! Match simulate_particles: padded projection followed by a real-space clip.
+        call truth_projector%fproject_serial(orientation,padded_projection)
+        ! simimg performs this no-CTF Fourier round trip before detector noise.
+        call padded_projection%ifft()
+        call padded_projection%fft()
+        call padded_projection%ifft()
+        call padded_projection%clip(projection)
         call projection%get_rmat_sub(clean)
+        clean_images(:,:,i) = clean(:,:,1)
+        call projection%fft()
+        clean_planes(:,:,i) = sampler%extract_native_plane(projection)
+        ! Calibrate white noise on the tested native observations so their SNR is explicit.
+        call projection%ifft()
         call projection%add_gauran(requested_snr)
         call projection%get_rmat_sub(noisy)
-        clean_images(:,:,i) = clean(:,:,1)
         noisy_images(:,:,i) = noisy(:,:,1)
         noise(:,:,i) = noisy(:,:,1) - clean(:,:,1)
         clean_mean = sum(real(clean(:,:,1),dp)) / real(BOX*BOX,dp)
@@ -122,8 +134,10 @@ subroutine build_independent_observations(sampler, orientations, noise_seed, req
 
     call orientation%kill()
     call projection%kill()
+    call padded_projection%kill()
     call truth_projector%kill_expanded()
     call truth_projector%kill()
+    call source_volume%kill()
 end subroutine build_independent_observations
 
 !> Reconstruct one fixed half-set with the matrix-free PCG operator.
@@ -143,6 +157,28 @@ subroutine reconstruct_half(orientations, planes, reconstruction, niters)
     call pcgop%solve(planes, reconstruction, maxits=40, rtol=1.e-3, niters=niters)
     call pcgop%kill()
 end subroutine reconstruct_half
+
+!> Reconstruct one half with explicit regularization, iteration, and support controls.
+subroutine reconstruct_half_fixed(orientations,planes,lambda,maxits,mask_radius,reconstruction, &
+    &niters,data_residual)
+    type(oris), intent(inout) :: orientations
+    complex, intent(in) :: planes(-BOX/2:,-BOX/2:,:)
+    real, intent(in) :: lambda, mask_radius
+    integer, intent(in) :: maxits
+    real, allocatable, intent(out) :: reconstruction(:,:,:)
+    integer, intent(out) :: niters
+    real(dp), intent(out) :: data_residual
+    type(reconstructor_pcg) :: pcgop
+
+    call pcgop%new(BOX,HALFSET_SMPD,lambda)
+    if( mask_radius > 0. ) call pcgop%set_mask(mask_radius)
+    call pcgop%prep_particles(orientations,use_ctf=.false.)
+    call pcgop%build_operators(.false.)
+    allocate(reconstruction(BOX,BOX,BOX),source=0.)
+    call pcgop%solve(planes,reconstruction,maxits=maxits,rtol=0.,niters=niters)
+    call relative_forward_residual(pcgop,orientations,planes,reconstruction,data_residual)
+    call pcgop%kill()
+end subroutine reconstruct_half_fixed
 
 !> Reconstruct matched clean and noisy half data with one fixed PCG policy.
 subroutine reconstruct_half_pair_fixed(orientations, clean_planes, noisy_planes, lambda, maxits, &

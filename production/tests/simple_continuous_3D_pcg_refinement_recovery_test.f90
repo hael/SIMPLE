@@ -1,4 +1,5 @@
 module continuous_3D_pcg_refinement_recovery_test
+!$ use omp_lib, only: omp_get_max_threads, omp_set_num_threads
 use continuous_3D_pcg_refinement_test_helpers, only: assert_true, build_truth_volume, TRUTH_VOLUME_BOX
 use ieee_arithmetic, only: ieee_is_finite
 use simple_defs, only: dp, sp
@@ -11,6 +12,7 @@ private
 public :: run_pose_recovery
 
 integer, parameter :: MAX_RECOVERY_ITERATIONS = 20
+integer, parameter :: PARALLEL_EQUIVALENCE_PARTICLES = 8
 real(dp), parameter :: ROTATION_SCALE = 0.10_dp
 real(dp), parameter :: ROTATION_RECOVERY_TOL = 8.e-4_dp
 real(dp), parameter :: SHIFT_RECOVERY_TOL = 2.e-3_dp
@@ -21,9 +23,10 @@ contains
 subroutine run_pose_recovery()
     type(pcg_fourier_workspace) :: workspace
     type(reconstructor_pcg) :: pcgop
-    type(pcg_pose_polish_summary) :: batch_summary
+    type(pcg_pose_polish_summary) :: batch_summary, serial_summary, parallel_summary
     real, allocatable :: phantom(:,:,:)
     complex, allocatable :: observed(:,:), zero_plane(:,:), batch_observed(:,:,:), transfers(:,:,:)
+    complex, allocatable :: equivalence_observed(:,:,:), equivalence_transfers(:,:,:)
     real(dp) :: truth_rotmat(3,3), estimate_rotmat(3,3), initial_rotmat(3,3)
     real(dp) :: truth_shift(2), estimate_shift(2), initial_shift(2)
     real(dp) :: accepted_objectives(0:MAX_RECOVERY_ITERATIONS)
@@ -31,8 +34,15 @@ subroutine run_pose_recovery()
     real(dp) :: max_rotation_step, max_shift_step, ignored_objective
     real(dp) :: recovery_max_rotation_step, recovery_max_shift_step
     real(dp) :: batch_rotmats(3,3,2), batch_shifts(2,2), weak_rotmat(3,3), weak_shift(2)
+    real(dp) :: serial_rotmats(3,3,PARALLEL_EQUIVALENCE_PARTICLES)
+    real(dp) :: parallel_rotmats(3,3,PARALLEL_EQUIVALENCE_PARTICLES)
+    real(dp) :: serial_shifts(2,PARALLEL_EQUIVALENCE_PARTICLES)
+    real(dp) :: parallel_shifts(2,PARALLEL_EQUIVALENCE_PARTICLES)
     integer :: lims2(2,2), naccepted, nattempted, nstencil_switches, status, statuses(2)
     integer :: recovery_naccepted, recovery_nattempted, recovery_nswitches
+    integer :: serial_statuses(PARALLEL_EQUIVALENCE_PARTICLES)
+    integer :: parallel_statuses(PARALLEL_EQUIVALENCE_PARTICLES)
+    integer :: iparticle, saved_nthreads, parallel_nthreads
 
     call build_truth_volume(phantom)
     call pcgop%new(TRUTH_VOLUME_BOX,1._sp)
@@ -116,15 +126,78 @@ subroutine run_pose_recovery()
     call assert_true(batch_summary%nimproved == 1 .and. batch_summary%nunreliable == 1, &
         &'joint pose batch summary misclassified its particles')
 
+    ! The OpenMP path must preserve the serial pose transaction and summary.
+    allocate(equivalence_observed(lims2(1,1):lims2(1,2),lims2(2,1):lims2(2,2), &
+        &PARALLEL_EQUIVALENCE_PARTICLES))
+    allocate(equivalence_transfers(lims2(1,1):lims2(1,2),lims2(2,1):lims2(2,2), &
+        &PARALLEL_EQUIVALENCE_PARTICLES))
+    do iparticle = 1, PARALLEL_EQUIVALENCE_PARTICLES
+        if( mod(iparticle,2) == 1 )then
+            serial_rotmats(:,:,iparticle) = initial_rotmat
+            serial_shifts(:,iparticle) = initial_shift
+            equivalence_observed(:,:,iparticle) = observed
+            equivalence_transfers(:,:,iparticle) = cmplx(1.,0.)
+        else
+            serial_rotmats(:,:,iparticle) = weak_rotmat
+            serial_shifts(:,iparticle) = weak_shift
+            equivalence_observed(:,:,iparticle) = cmplx(0.,0.)
+            equivalence_transfers(:,:,iparticle) = cmplx(0.,0.)
+        endif
+    enddo
+    parallel_rotmats = serial_rotmats
+    parallel_shifts = serial_shifts
+    saved_nthreads = 1
+    !$ saved_nthreads = omp_get_max_threads()
+    parallel_nthreads = max(1,min(4,saved_nthreads))
+    !$ call omp_set_num_threads(1)
+    call polish_fixed_volume_poses(workspace,serial_rotmats,equivalence_observed,serial_shifts, &
+        &ROTATION_SCALE,MAX_RECOVERY_ITERATIONS,serial_statuses,serial_summary,equivalence_transfers)
+    !$ call omp_set_num_threads(parallel_nthreads)
+    call polish_fixed_volume_poses(workspace,parallel_rotmats,equivalence_observed,parallel_shifts, &
+        &ROTATION_SCALE,MAX_RECOVERY_ITERATIONS,parallel_statuses,parallel_summary,equivalence_transfers)
+    !$ call omp_set_num_threads(saved_nthreads)
+    call assert_true(all(parallel_statuses == serial_statuses), &
+        &'parallel pose polish changed a terminal outcome')
+    call assert_true(maxval(abs(parallel_rotmats-serial_rotmats)) == 0._dp .and. &
+        &maxval(abs(parallel_shifts-serial_shifts)) == 0._dp, &
+        &'parallel pose polish changed a retained pose')
+    call assert_equivalent_summaries(serial_summary,parallel_summary)
+
     write(*,'(a,4(es14.6,1x))') 'CONTINUOUS_3D_PCG_POSE initial/final rotation/shift errors: ', &
         &initial_rotation_error,final_rotation_error,initial_shift_error,final_shift_error
     write(*,'(a,2(es14.6,1x),3(i0,1x))') 'CONTINUOUS_3D_PCG_POSE max rotation/shift, accepted/tried/switches: ', &
         &recovery_max_rotation_step,recovery_max_shift_step,recovery_naccepted,recovery_nattempted,recovery_nswitches
+    write(*,'(a,2(i0,1x))') 'CONTINUOUS_3D_PCG_POSE serial/parallel threads: ',1,parallel_nthreads
     write(*,'(a)') 'CONTINUOUS_3D_PCG_POSE_RECOVERY: PASS'
     deallocate(phantom,observed,zero_plane,batch_observed,transfers)
+    deallocate(equivalence_observed,equivalence_transfers)
     call workspace%kill
     call pcgop%kill
 end subroutine run_pose_recovery
+
+!> Require identical deterministic reductions from serial and parallel batches.
+subroutine assert_equivalent_summaries(serial_summary,parallel_summary)
+    type(pcg_pose_polish_summary), intent(in) :: serial_summary, parallel_summary
+    logical :: same_counts, same_reals
+
+    same_counts = serial_summary%nparticles == parallel_summary%nparticles .and. &
+        &serial_summary%nimproved == parallel_summary%nimproved .and. &
+        &serial_summary%nunchanged == parallel_summary%nunchanged .and. &
+        &serial_summary%nunreliable == parallel_summary%nunreliable .and. &
+        &serial_summary%nstep_bound == parallel_summary%nstep_bound .and. &
+        &serial_summary%ninvalid == parallel_summary%ninvalid .and. &
+        &serial_summary%niteration_limit == parallel_summary%niteration_limit .and. &
+        &serial_summary%naccepted_steps == parallel_summary%naccepted_steps .and. &
+        &serial_summary%nattempted_steps == parallel_summary%nattempted_steps .and. &
+        &serial_summary%nstencil_switches == parallel_summary%nstencil_switches
+    same_reals = serial_summary%objective_before == parallel_summary%objective_before .and. &
+        &serial_summary%objective_after == parallel_summary%objective_after .and. &
+        &serial_summary%max_trial_step == parallel_summary%max_trial_step .and. &
+        &serial_summary%max_rotation_step == parallel_summary%max_rotation_step .and. &
+        &serial_summary%max_shift_step == parallel_summary%max_shift_step
+    call assert_true(same_counts .and. same_reals, &
+        &'parallel pose polish changed its deterministic summary')
+end subroutine assert_equivalent_summaries
 
 !> Return the geodesic angle between two proper rotation matrices.
 pure function rotation_distance(left,right) result(distance)

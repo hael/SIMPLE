@@ -10,6 +10,11 @@ use continuous_3D_pcg_refinement_kb_test, only: run_kb_derivative
 use continuous_3D_pcg_refinement_rotation_test, only: run_rotation_gradient
 use continuous_3D_pcg_refinement_recovery_test, only: run_pose_recovery
 use continuous_3D_pcg_refinement_pose_contract_test, only: run_pose_contract
+use continuous_3D_pcg_refinement_fixed_reference_test, only: run_fixed_reference_diagnostic
+use continuous_3D_pcg_refinement_forward_path_test, only: run_forward_path_diagnostic
+use continuous_3D_pcg_refinement_matched_window_test, only: run_matched_window_diagnostic
+use continuous_3D_pcg_refinement_reference_bias_test, only: run_reference_bias_diagnostic
+use continuous_3D_pcg_refinement_operator_contract_test, only: run_operator_contract_diagnostic
 implicit none
 
 character(len=256) :: selected_case
@@ -192,6 +197,16 @@ subroutine run_case(label)
         call run_pose_recovery()
     case('pose_contract')
         call run_pose_contract()
+    case('fixed_reference')
+        call run_fixed_reference_diagnostic()
+    case('forward_path')
+        call run_forward_path_diagnostic()
+    case('matched_window')
+        call run_matched_window_diagnostic()
+    case('reference_bias')
+        call run_reference_bias_diagnostic()
+    case('operator_contract')
+        call run_operator_contract_diagnostic()
     case default
         error stop 'unknown continuous 3D PCG refinement case: '//trim(label)
     end select
