@@ -1204,4 +1204,231 @@ contains
 
     end subroutine validate_and_repair_project_file
 
+    !> Remap supported dataset paths from one root directory to another.
+    !>
+    !> The routine validates every target in the selected scope before changing
+    !> any project field. Paths must match old_root on a path-component boundary.
+    subroutine remap_project_paths( proj, old_root, new_root, nremapped, scope, require_match )
+        class(sp_project), intent(inout) :: proj
+        class(string),     intent(in)    :: old_root, new_root
+        integer,           intent(out)   :: nremapped
+        character(len=*), optional, intent(in) :: scope
+        logical,          optional, intent(in) :: require_match
+        character(len=:), allocatable :: old_root_norm, new_root_norm
+        character(len=5) :: scope_here
+        integer :: nmatched, nmissing
+        logical :: require_match_here
+        scope_here = 'all'
+        if( present(scope) ) scope_here = trim(adjustl(scope))
+        select case(trim(scope_here))
+            case('all','mic','ptcl','cavg','vol')
+            case DEFAULT
+                write(logfhandle,'(A)') '>>> UNSUPPORTED REMAP SCOPE: '//trim(scope_here)
+                THROW_HARD('remap_project_paths: unsupported scope')
+        end select
+        require_match_here = .true.
+        if( present(require_match) ) require_match_here = require_match
+        old_root_norm = normalize_root(old_root%to_char())
+        new_root_norm = normalize_root(new_root%to_char())
+        if( len(old_root_norm) == 0 ) THROW_HARD('remap_project_paths requires a non-empty old_root')
+        if( len(new_root_norm) == 0 ) THROW_HARD('remap_project_paths requires a non-empty new_root')
+        if( is_filesystem_root(old_root_norm) )then
+            THROW_HARD('remap_project_paths refuses a filesystem root as old_root')
+        endif
+        if( old_root_norm == new_root_norm )then
+            THROW_HARD('remap_project_paths requires different old and new roots')
+        endif
+        if( .not.dir_exists(new_root_norm) )then
+            write(logfhandle,'(A)') '>>> MISSING NEW ROOT: '//new_root_norm
+            THROW_HARD('remap_project_paths: new_root does not exist')
+        endif
+        ! Validate the complete scope before mutating any project field.
+        nmatched = 0
+        nmissing = 0
+        call process_scope(.false., nmatched, nmissing)
+        if( nmatched == 0 )then
+            nremapped = 0
+            if( .not.require_match_here ) return
+            write(logfhandle,'(A)') '>>> OLD ROOT WITH NO MATCHES: '//old_root_norm
+            write(logfhandle,'(A)') '>>> REMAP SCOPE: '//trim(scope_here)
+            THROW_HARD('remap_project_paths: no paths matched old_root')
+        endif
+        if( nmissing > 0 )then
+            write(logfhandle,'(A,I0)') '>>> REMAP_PROJECT_PATHS MISSING TARGETS: ', nmissing
+            THROW_HARD('remap_project_paths: target validation failed')
+        endif
+        nremapped = 0
+        nmissing  = 0
+        call process_scope(.true., nremapped, nmissing)
+        write(logfhandle,'(A,A,A,I0)') '>>> REMAP_PROJECT_PATHS SCOPE=', trim(scope_here), &
+            &' UPDATED PATHS: ', nremapped
+
+      contains
+
+        subroutine process_scope( apply_changes, nfound, nbad )
+            logical, intent(in)    :: apply_changes
+            integer, intent(inout) :: nfound, nbad
+            select case(trim(scope_here))
+                case('all')
+                    call process_mic_fields(apply_changes, nfound, nbad)
+                    call process_ptcl_fields(apply_changes, nfound, nbad)
+                    call process_cavg_fields(apply_changes, nfound, nbad)
+                    call process_vol_fields(apply_changes, nfound, nbad)
+                case('mic')
+                    call process_mic_fields(apply_changes, nfound, nbad)
+                case('ptcl')
+                    call process_ptcl_fields(apply_changes, nfound, nbad)
+                case('cavg')
+                    call process_cavg_fields(apply_changes, nfound, nbad)
+                case('vol')
+                    call process_vol_fields(apply_changes, nfound, nbad)
+            end select
+        end subroutine process_scope
+
+        subroutine process_mic_fields( apply_changes, nfound, nbad )
+            logical, intent(in)    :: apply_changes
+            integer, intent(inout) :: nfound, nbad
+            call process_field(proj%os_mic, 'mic', 'movie', apply_changes, nfound, nbad)
+            call process_field(proj%os_mic, 'mic', 'intg', apply_changes, nfound, nbad)
+            call process_field(proj%os_mic, 'mic', 'boxfile', apply_changes, nfound, nbad)
+        end subroutine process_mic_fields
+
+        subroutine process_ptcl_fields( apply_changes, nfound, nbad )
+            logical, intent(in)    :: apply_changes
+            integer, intent(inout) :: nfound, nbad
+            call process_field(proj%os_stk, 'stk', 'stk', apply_changes, nfound, nbad)
+            call process_field(proj%os_stk, 'stk', 'stk_den', apply_changes, nfound, nbad)
+            call process_field(proj%os_stk, 'stk', 'boxfile', apply_changes, nfound, nbad)
+        end subroutine process_ptcl_fields
+
+        subroutine process_cavg_fields( apply_changes, nfound, nbad )
+            logical, intent(in)    :: apply_changes
+            integer, intent(inout) :: nfound, nbad
+            call process_field(proj%os_out, 'out', 'stk', apply_changes, nfound, nbad)
+            call process_field(proj%os_out, 'out', 'stkpath', apply_changes, nfound, nbad, path_is_dir=.true.)
+            call process_field(proj%os_out, 'out', 'frcs', apply_changes, nfound, nbad, &
+                &required_imgkind='frc2D')
+            call process_field(proj%os_out, 'out', 'sigma2', apply_changes, nfound, nbad)
+        end subroutine process_cavg_fields
+
+        subroutine process_vol_fields( apply_changes, nfound, nbad )
+            logical, intent(in)    :: apply_changes
+            integer, intent(inout) :: nfound, nbad
+            call process_field(proj%os_out, 'out', 'vol', apply_changes, nfound, nbad)
+            call process_field(proj%os_out, 'out', 'fsc', apply_changes, nfound, nbad)
+            call process_field(proj%os_out, 'out', 'frcs', apply_changes, nfound, nbad, &
+                &required_imgkind='frc3D')
+        end subroutine process_vol_fields
+
+        subroutine process_field( os, segment, key, apply_changes, nfound, nbad, path_is_dir, required_imgkind )
+            class(oris),      intent(inout) :: os
+            character(len=*), intent(in)    :: segment, key
+            logical,          intent(in)    :: apply_changes
+            integer,          intent(inout) :: nfound, nbad
+            logical, optional, intent(in)    :: path_is_dir
+            character(len=*), optional, intent(in) :: required_imgkind
+            type(string) :: path_old, path_new
+            logical      :: matched, is_directory
+            integer      :: i
+            is_directory = .false.
+            if( present(path_is_dir) ) is_directory = path_is_dir
+            do i = 1,os%get_noris()
+                if( .not.os%isthere(i, key) ) cycle
+                if( present(required_imgkind) )then
+                    if( os%isthere(i, 'imgkind') )then
+                        if( os%get_str(i, 'imgkind') /= trim(required_imgkind) ) cycle
+                    endif
+                endif
+                path_old = os%get_str(i, key)
+                call remap_one_path(path_old, old_root_norm, new_root_norm, path_new, matched)
+                if( .not.matched ) cycle
+                nfound = nfound + 1
+                if( is_directory )then
+                    matched = dir_exists(path_new)
+                else
+                    matched = file_exists(path_new)
+                endif
+                if( .not.matched )then
+                    nbad = nbad + 1
+                    write(logfhandle,'(A,A,A,I0,A,A,A)') '>>> MISSING REMAPPED PATH: segment=', &
+                        trim(segment), ' row=', i, ' key=', trim(key), ' path='//path_new%to_char()
+                    cycle
+                endif
+                if( apply_changes )then
+                    call os%set(i, key, path_new)
+                    write(logfhandle,'(A,A,A,I0,A,A)') '>>> REMAPPED: segment=', trim(segment), &
+                        ' row=', i, ' key=', trim(key)
+                    write(logfhandle,'(A)') '>>>   old: '//path_old%to_char()
+                    write(logfhandle,'(A)') '>>>   new: '//path_new%to_char()
+                endif
+            enddo
+        end subroutine process_field
+
+        subroutine remap_one_path( path_in, root_old, root_new, path_out, matched )
+            class(string),     intent(in)  :: path_in
+            character(len=*),  intent(in)  :: root_old, root_new
+            type(string),      intent(out) :: path_out
+            logical,           intent(out) :: matched
+            character(len=:), allocatable :: path_norm, suffix
+            integer :: old_len
+            path_norm = normalize_separators(path_in%to_char())
+            path_out  = path_in
+            matched   = .false.
+            if( len(path_norm) == 0 ) return
+            old_len = len(root_old)
+            if( path_norm == root_old )then
+                path_out = root_new
+                matched  = .true.
+                return
+            endif
+            if( len(path_norm) <= old_len ) return
+            if( path_norm(:old_len) /= root_old ) return
+            if( path_norm(old_len+1:old_len+1) /= '/' ) return
+            suffix = path_norm(old_len+1:)
+            if( root_new == '/' )then
+                path_out = '/'//suffix(2:)
+            else if( len(root_new) == 3 .and. root_new(2:3) == ':/' )then
+                path_out = root_new//suffix(2:)
+            else
+                path_out = root_new//suffix
+            endif
+            matched = .true.
+        end subroutine remap_one_path
+
+        function normalize_root( path ) result( normalized )
+            character(len=*), intent(in) :: path
+            character(len=:), allocatable :: normalized
+            integer :: n
+            normalized = normalize_separators(trim(adjustl(path)))
+            n = len(normalized)
+            do while( n > 1 .and. normalized(n:n) == '/' )
+                if( n == 3 .and. normalized(2:3) == ':/' ) exit
+                n = n - 1
+            enddo
+            normalized = normalized(:n)
+        end function normalize_root
+
+        function normalize_separators( path ) result( normalized )
+            character(len=*), intent(in) :: path
+            character(len=:), allocatable :: normalized
+            integer :: i
+            normalized = trim(adjustl(path))
+            do i = 1,len(normalized)
+                if( normalized(i:i) == '\' ) normalized(i:i) = '/'
+            enddo
+        end function normalize_separators
+
+        logical function is_filesystem_root( path )
+            character(len=*), intent(in) :: path
+            is_filesystem_root = path == '/'
+            if( len(path) == 2 )then
+                is_filesystem_root = is_filesystem_root .or. path(2:2) == ':'
+            endif
+            if( len(path) == 3 )then
+                is_filesystem_root = is_filesystem_root .or. path(2:3) == ':/'
+            endif
+        end function is_filesystem_root
+
+    end subroutine remap_project_paths
+
 end module simple_projfile_utils

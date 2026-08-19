@@ -9,6 +9,8 @@ contains
         class(parameters), intent(inout) :: self
         self%boxfile=''           !< file with EMAN particle coordinates(.txt)
         self%boxtab=''            !< table (text file) of files with EMAN particle coordinates(.txt)
+        self%cavg_new_root=''     !< new root for relocated class-average data
+        self%cavg_old_root=''     !< old root stored for class-average data
         self%ciffile=''           !< PDBx/mmCIF file
         self%class_assignment=''  !< text file listing class ids assigned to a worker
         self%classdoc=''          !< doc with per-class stats(.txt)
@@ -39,9 +41,13 @@ contains
         self%infile2=''           !< file with inputs(.txt)
         self%infile=''            !< file with inputs(.txt)
         self%last_prev_dir=''     !< last previous execution directory
+        self%mic_new_root=''      !< new root for relocated micrograph data
+        self%mic_old_root=''      !< old root stored for micrograph data
         self%msklist=''           !< table (text file) of mask volume files(.txt)
         self%mskvols(MAXS)=''
+        self%new_root=''          !< global new root for relocated project data
         self%niceserver=''        !< address and port of nice server for comms
+        self%old_root=''          !< global old root stored in project data paths
         self%optics_dir=''        !< directory containing stream optics
         self%oritab2=''           !< 2nd table of orientations(.txt|.simple)
         self%oritab=''            !< table  of orientations(.txt|.simple)
@@ -62,11 +68,14 @@ contains
         self%projfile_orig=''     !< original SIMPLE *.simple project file
         self%projfile_merged=''   !< merged SIMPLE *.simple project file output
         self%projfile_optics=''   !< SIMPLE *.simple project file containing optics group definitions
+        self%projfile_out=''      !< output SIMPLE project file for non-destructive updates
         self%projfile_raw=''      !< raw SIMPLE project used as input to denoise_project
         self%projfile_ref=''      !< SIMPLE project containing reference assignments
         self%projfile_target=''   !< another SIMPLE *.simple project file
         self%projname=''          !< SIMPLE  project name
         self%projtab=''           !< table of SIMPLE *.simple project files
+        self%ptcl_new_root=''     !< new root for relocated particle data
+        self%ptcl_old_root=''     !< old root stored for particle data
         self%refs=''              !< initial2Dreferences.ext
         self%refs_even=''
         self%refs_odd=''
@@ -86,7 +95,9 @@ contains
         self%subprojname=''       !< SIMPLE  subproject name
         self%vol=''
         self%vol_even=''          !< even reference volume
+        self%vol_new_root=''      !< new root for relocated volume data
         self%vol_odd=''           !< odd  reference volume
+        self%vol_old_root=''      !< old root stored for volume data
         self%vols(MAXS)=''
         self%vols_even(MAXS)=''
         self%vols_odd(MAXS)=''

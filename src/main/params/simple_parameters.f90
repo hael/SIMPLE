@@ -183,6 +183,8 @@ type :: parameters
     type(string)              :: boxfile              !< file with EMAN particle coordinates(.txt)
     type(string)              :: boxtab               !< table (text file) of files with EMAN particle coordinates(.txt)
     type(string)              :: cache_dir            !< where to keep the downscaled particle cache
+    type(string)              :: cavg_new_root        !< new root for relocated class-average data
+    type(string)              :: cavg_old_root        !< old root stored for class-average data
     type(string)              :: ciffile              !< xPDB/mmCIF file
     type(string)              :: class_assignment     !< text file listing class ids assigned to a worker
     type(string)              :: classdoc             !< doc with per-class stats(.txt)
@@ -214,9 +216,13 @@ type :: parameters
     type(string)              :: infile2              !< file with inputs(.txt)
     type(string)              :: keys
     type(string)              :: last_prev_dir        !< last previous execution directory
+    type(string)              :: mic_new_root         !< new root for relocated micrograph data
+    type(string)              :: mic_old_root         !< old root stored for micrograph data
     type(string)              :: msklist              !< table (text file) of mask volume files(.txt)
     type(string)              :: mskvols(MAXS)
+    type(string)              :: new_root             !< global new root for relocated project data
     type(string)              :: niceserver           !< address and port of nice server for comms
+    type(string)              :: old_root             !< global old root stored in project data paths
     type(string)              :: optics_dir           !< directory containing stream optics
     type(string)              :: oritab               !< table  of orientations(.txt|.simple)
     type(string)              :: oritab2              !< 2nd table of orientations(.txt|.simple)
@@ -238,11 +244,14 @@ type :: parameters
     type(string)              :: projfile_orig        !< original SIMPLE *.simple project file (unbootstrap source)
     type(string)              :: projfile_merged      !< merged SIMPLE *.simple project file output
     type(string)              :: projfile_optics      !< SIMPLE *.simple project file containing optics group definitions
+    type(string)              :: projfile_out         !< output SIMPLE project file for non-destructive updates
     type(string)              :: projfile_raw         !< raw SIMPLE project used as input to denoise_project
     type(string)              :: projfile_ref         !< SIMPLE project file containing reference assignments
     type(string)              :: projfile_target      !< another SIMPLE *.simple project file
     type(string)              :: projname             !< SIMPLE  project name
     type(string)              :: projtab              !< table of SIMPLE *.simple project files
+    type(string)              :: ptcl_new_root        !< new root for relocated particle data
+    type(string)              :: ptcl_old_root        !< old root stored for particle data
     type(string)              :: refs                 !< initial2Dreferences.ext
     type(string)              :: refs_even
     type(string)              :: refs_odd
@@ -263,7 +272,9 @@ type :: parameters
     type(string)              :: verbose_exit_fname   !< File name of indicator file when task completes(TASK_FINISHED)
     type(string)              :: vol
     type(string)              :: vol_even             !< even reference volume
+    type(string)              :: vol_new_root         !< new root for relocated volume data
     type(string)              :: vol_odd              !< odd  reference volume
+    type(string)              :: vol_old_root         !< old root stored for volume data
     type(string)              :: vols(MAXS)
     type(string)              :: vols_even(MAXS)
     type(string)              :: vols_odd(MAXS)

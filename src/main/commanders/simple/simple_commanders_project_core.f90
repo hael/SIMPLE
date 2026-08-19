@@ -258,23 +258,114 @@ contains
     end subroutine exec_print_project_field
 
     subroutine exec_update_project( self, cline )
+        use simple_projfile_utils, only: remap_project_paths
         class(commander_update_project), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(simple_nice_comm) :: nice_comm
         type(parameters)       :: params
         type(sp_project)       :: spproj
+        integer, parameter :: NREMAP_SCOPES = 4
+        character(len=5), parameter :: REMAP_SCOPES(NREMAP_SCOPES) = &
+            [character(len=5) :: 'mic', 'ptcl', 'cavg', 'vol']
+        character(len=20), parameter :: REMAP_OLD_KEYS(NREMAP_SCOPES) = &
+            [character(len=20) :: 'mic_old_root', 'ptcl_old_root', 'cavg_old_root', 'vol_old_root']
+        character(len=20), parameter :: REMAP_NEW_KEYS(NREMAP_SCOPES) = &
+            [character(len=20) :: 'mic_new_root', 'ptcl_new_root', 'cavg_new_root', 'vol_new_root']
+        type(string) :: projfile_out, output_dir
+        type(string) :: scope_old_roots(NREMAP_SCOPES), scope_new_roots(NREMAP_SCOPES)
+        integer      :: nremapped, nremapped_scope, projfile_len, iscope
+        logical      :: has_old_root, has_new_root, remap_requested
+        logical      :: has_scope_old, has_scope_new
+        logical      :: has_scope_mapping(NREMAP_SCOPES), use_scope_mapping(NREMAP_SCOPES)
+        has_old_root = cline%defined('old_root')
+        has_new_root = cline%defined('new_root')
+        if( has_old_root .neqv. has_new_root )then
+            THROW_HARD('update_project relocation requires both old_root and new_root')
+        endif
+        has_scope_mapping = .false.
+        do iscope = 1,NREMAP_SCOPES
+            has_scope_old = cline%defined(trim(REMAP_OLD_KEYS(iscope)))
+            has_scope_new = cline%defined(trim(REMAP_NEW_KEYS(iscope)))
+            if( has_scope_old .neqv. has_scope_new )then
+                write(logfhandle,'(A)') '>>> INCOMPLETE ROOT PAIR: '//trim(REMAP_SCOPES(iscope))
+                THROW_HARD('update_project relocation requires complete scoped root pairs')
+            endif
+            has_scope_mapping(iscope) = has_scope_old
+        enddo
+        use_scope_mapping = has_scope_mapping .or. has_old_root
+        remap_requested = any(use_scope_mapping)
+        if( cline%defined('projfile_out') .and. .not.remap_requested )then
+            THROW_HARD('update_project projfile_out requires a root mapping')
+        endif
         call params%new(cline)
+        scope_old_roots(1) = params%mic_old_root
+        scope_old_roots(2) = params%ptcl_old_root
+        scope_old_roots(3) = params%cavg_old_root
+        scope_old_roots(4) = params%vol_old_root
+        scope_new_roots(1) = params%mic_new_root
+        scope_new_roots(2) = params%ptcl_new_root
+        scope_new_roots(3) = params%cavg_new_root
+        scope_new_roots(4) = params%vol_new_root
+        if( has_old_root )then
+            do iscope = 1,NREMAP_SCOPES
+                if( has_scope_mapping(iscope) ) cycle
+                scope_old_roots(iscope) = params%old_root
+                scope_new_roots(iscope) = params%new_root
+            enddo
+        endif
         ! nice communicator init
         call nice_comm%init(params%niceprocid, params%niceserver)
         call nice_comm%cycle()
-        ! read relevant segments
-        call spproj%read_non_data_segments(params%projfile)
+        if( remap_requested )then
+            if( cline%defined('projfile_out') )then
+                projfile_out = params%projfile_out
+                if( fname2format(projfile_out) /= 'O' )then
+                    THROW_HARD('update_project projfile_out must end in .simple')
+                endif
+                output_dir = get_fpath(projfile_out)
+                if( .not.dir_exists(output_dir) )then
+                    write(logfhandle,'(A)') '>>> MISSING OUTPUT DIRECTORY: '//output_dir%to_char()
+                    THROW_HARD('update_project projfile_out directory does not exist')
+                endif
+                output_dir   = simple_abspath(output_dir)
+                projfile_out = filepath(output_dir, basename(projfile_out))
+            else
+                projfile_len = params%projfile%strlen_trim()
+                projfile_out = params%projfile%to_char([1,projfile_len-len(METADATA_EXT)])//&
+                    &'_remapped'//METADATA_EXT
+            endif
+            if( file_exists(projfile_out) )then
+                write(logfhandle,'(A)') '>>> EXISTING OUTPUT PROJECT: '//projfile_out%to_char()
+                THROW_HARD('update_project refuses to overwrite the output project')
+            endif
+            call spproj%read(params%projfile)
+            nremapped = 0
+            do iscope = 1,NREMAP_SCOPES
+                if( .not.use_scope_mapping(iscope) ) cycle
+                call remap_project_paths(spproj, scope_old_roots(iscope), scope_new_roots(iscope), &
+                    &nremapped_scope, scope=trim(REMAP_SCOPES(iscope)), &
+                    &require_match=has_scope_mapping(iscope))
+                nremapped = nremapped + nremapped_scope
+            enddo
+            if( nremapped == 0 )then
+                THROW_HARD('update_project found no paths matching the requested roots')
+            endif
+            call cline%set('projfile', projfile_out)
+        else
+            ! Preserve the existing metadata-only update path by default.
+            call spproj%read_non_data_segments(params%projfile)
+        endif
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
         call spproj%update_compenv( cline )
-        ! write the last bit of the project file
-        call spproj%write_non_data_segments(params%projfile)
+        if( remap_requested )then
+            call spproj%write(projfile_out)
+            write(logfhandle,'(A,I0)') '>>> UPDATE_PROJECT REMAPPED PATHS: ', nremapped
+            write(logfhandle,'(A)') '>>> UPDATE_PROJECT WROTE: '//projfile_out%to_char()
+        else
+            call spproj%write_non_data_segments(params%projfile)
+        endif
         ! no printing for this program
         call nice_comm%terminate()
     end subroutine exec_update_project

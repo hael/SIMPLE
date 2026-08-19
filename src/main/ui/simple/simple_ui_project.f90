@@ -780,8 +780,8 @@ subroutine new_export_relion( prgtab )
         ! PROGRAM SPECIFICATION
         call update_project%new(&
         &'update_project',&                  ! name
-        &'Update project identity and computing settings',& ! summary
-        &'is a program for updating an existing project: changing the name/user_email/computer controls',& ! help
+        &'Update project settings or relocate project data',& ! summary
+        &'updates project identity/computer settings or writes a new project with relocated dataset paths',& ! help
         &'simple_exec',&                     ! executable
         &.true., &
         &visibility=UI_VIS_ADVANCED)                             ! requires sp_project
@@ -793,7 +793,39 @@ subroutine new_export_relion( prgtab )
         &visibility=UI_VIS_STANDARD)
         call update_project%add_input(UI_PARM, user_email, &
         &visibility=UI_VIS_ADVANCED)
-        ! <no additional inputs>
+        call update_project%add_input(UI_PARM, 'old_root', 'string', 'Old dataset root', &
+            'Existing path prefix stored in the project', 'e.g. /old/data', .false., '', &
+            visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_PARM, 'new_root', 'dir', 'New dataset root', &
+            'Existing directory containing the relocated dataset', 'e.g. /new/data', .false., '', &
+            visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_FILE, 'projfile_out', 'file', 'Output project file', &
+            'New relocated project; defaults to <project>_remapped.simple', &
+            'e.g. project_remapped.simple', .false., '', visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_PARM, 'mic_old_root', 'string', 'Old micrograph root', &
+            'Override old_root for movie, integrated-micrograph, and box paths', &
+            'e.g. /old/micrographs', .false., '', visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_PARM, 'mic_new_root', 'dir', 'New micrograph root', &
+            'Override new_root for movie, integrated-micrograph, and box paths', &
+            'e.g. /new/micrographs', .false., '', visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_PARM, 'ptcl_old_root', 'string', 'Old particle root', &
+            'Override old_root for raw and denoised particle-stack paths', &
+            'e.g. /old/particles', .false., '', visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_PARM, 'ptcl_new_root', 'dir', 'New particle root', &
+            'Override new_root for raw and denoised particle-stack paths', &
+            'e.g. /new/particles', .false., '', visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_PARM, 'cavg_old_root', 'string', 'Old class-average root', &
+            'Override old_root for class-average stack, FRC, and sigma paths', &
+            'e.g. /old/class_averages', .false., '', visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_PARM, 'cavg_new_root', 'dir', 'New class-average root', &
+            'Override new_root for class-average stack, FRC, and sigma paths', &
+            'e.g. /new/class_averages', .false., '', visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_PARM, 'vol_old_root', 'string', 'Old volume root', &
+            'Override old_root for volume, FSC, and 3D FRC paths', &
+            'e.g. /old/volumes', .false., '', visibility=UI_VIS_ADVANCED)
+        call update_project%add_input(UI_PARM, 'vol_new_root', 'dir', 'New volume root', &
+            'Override new_root for volume, FSC, and 3D FRC paths', &
+            'e.g. /new/volumes', .false., '', visibility=UI_VIS_ADVANCED)
         ! <empty>
         ! search controls
         ! <empty>
