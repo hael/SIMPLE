@@ -37,11 +37,12 @@ Major source anchors:
   and `analyze_truth_matrix.py:26`.
 
 The first 64-thread truth run exposed a serial pose-polishing loop after the
-parallel PCG reconstruction. A source-only correction now uses the active
+parallel PCG reconstruction. The corrected implementation uses the active
 OpenMP thread count, parallelizes independent particle LM systems, and reports
-batch progress. Oracle compilation, serial/parallel equivalence, and runtime
-scaling remain pending. Do not interpret the incomplete old-binary run as
-scientific evidence.
+batch progress. Oracle compilation, one-thread/four-thread equivalence, the
+ten-case mother suite, a complete 64-worker truth matrix, and the focused
+500-particle-batch runtime gate have now completed. Large-N scaling remains
+unmeasured.
 
 ## Important workflow limitation
 
@@ -61,15 +62,81 @@ workflow boundary is decided.
 Purpose: test whether the corrected production operator keeps exact truth poses
 stationary and recovers controlled perturbations.
 
-Oracle directory `continuous_3D_pose_truth_diagnostic_20260818_111338`
-completed all 16 arms. The harness and 64-thread execution passed, but the
-scientific analyzer failed. Clean exact rotation drifted to `0.0038695` rad;
+Oracle directory `continuous_3D_pose_truth_diagnostic_20260818_114404`
+completed all 16 arms. Every enabled arm reported `REQUESTED 64 ACTIVE 64
+BATCH 500` and completed in `68.5`--`70.2` seconds. The harness and 64-thread
+execution passed, but the scientific analyzer failed. Clean exact rotation
+drifted to `0.0038695` rad;
 clean perturbed rotation improved by only about 17 percent; noisy exact FSC
 declined; and noisy perturbed truth-average FSC declined by `0.00630986`.
 Nominal full/FSC05/FSC0143 noisy arms were identical, so `lp` did not create
 distinct pose-objective shell policies. Review the retained
-`analysis/truth_matrix.md` and PLAN Phase 10F before proposing another
-numerical change.
+`analysis/truth_matrix.md` and PLAN Phases 10F--10G before proposing another
+numerical change. Its analysis JSON is byte-identical to the earlier
+64-particle-batch run, so batching improved runtime without changing the
+scientific outcome.
+
+## Manual code-review conclusion
+
+The core production path was reviewed manually after the batch-500 gate. The
+review checked the command sequence, PCG preprocessing, fixed half-map and
+inverse-envelope preparation, CTF/noise transfer, right-increment rotation
+derivative, positive shift phase, five-parameter Gauss--Newton system, LM gain
+ratio, rollback, persistence, and final reconstruction. No basic sign,
+handedness, weighting, or pose-persistence defect was found.
+
+This makes the failure less likely to be a misunderstanding about the coded
+derivative. It does not prove the proposed method is scientifically wrong. The
+tested same-half reconstructed reference is biased toward the particles it
+polishes, and the independent simulator includes a finite-box operation that
+the declared PCG operator intentionally excludes. The optimizer can therefore
+lower its fixed-map objective while truth pose or FSC worsens.
+
+Three narrower implementation gaps remain part of the handoff:
+
+- the `lp` arguments did not set the pose workspace shell range, so the three
+  nominal frequency arms are not three frequency experiments;
+- stencil-switch margins are measured but not used as a step safeguard; and
+- the production truth matrix covers `ml_reg=no`, `pgrp=c1`, and no held-out
+  acceptance signal. The common-FSC regularized reference and non-`c1` routes
+  require separate evidence if a revised SPEC selects them.
+
+These gaps do not justify an agent-selected patch. They depend on the reference,
+frequency, regularization, symmetry, and acceptance policies requested below.
+
+## `reconstruct3D` caller map
+
+`commander_rec3D` is called by the public `reconstruct3D` dispatcher, by
+`refine3D_auto`, `refine3D_multi`, the base refinement strategy,
+`abinitio3D`, `abinitio3D_cavgs`, bootstrap reconstruction, random
+reconstruction, and nano-trajectory reconstruction. The source anchors are:
+
+- public dispatch:
+  `production/simple_exec.f90:53`,
+  `src/main/exec/simple_exec_refine3D.f90:39`, and
+  `src/main/commanders/simple/simple_commanders_rec.f90:36`;
+- distributed worker dispatch:
+  `production/simple_private_exec_driver.f90:322`;
+- `refine3D_auto` and `refine3D_multi`:
+  `src/main/commanders/simple/simple_commanders_refine3D.f90:200`, `:216`,
+  `:670`, and `:990`;
+- missing starting-volume reconstruction:
+  `src/main/strategies/parallelization/simple_refine3D_strategy.f90:1033`;
+- ab initio reconstruction, symmetry, split, and final helpers:
+  `src/main/simple_abinitio_utils.f90:507`, `:584`, and `:744`, called from
+  `src/main/commanders/simple/simple_commanders_abinitio.f90:244`, `:283`,
+  `:821`, `:893`, `:896`, `:912`, and `:924`;
+- bootstrap and random reconstruction:
+  `src/main/commanders/simple/simple_commanders_rec.f90:116`, `:122`, and
+  `:431`; and
+- nano-trajectory reconstruction:
+  `src/main/commanders/single/single_commanders_nano3D.f90:332` and `:374`.
+
+No higher-level caller currently propagates `pcg_pose_polish=yes`; all retain
+the default `no`. Broad propagation would affect startup, split, symmetry,
+bootstrap, random, trajectory, and final reconstructions. It would not mean
+one well-defined end-polishing pass. Hans must choose the owning caller and
+stopping protocol first.
 
 Run from the Oracle validation checkout:
 

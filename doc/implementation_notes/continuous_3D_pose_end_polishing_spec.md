@@ -1,208 +1,169 @@
-# Continuous 3-D PCG post-reconstruction pose-polishing SPEC
+# Continuous 3-D pose refinement in `refine3D` SPEC
 
-**Status:** FINAL (operator-contract clarification, 2026-08-17)
+**Status:** DECOMMISSIONED (2026-08-19)
 
-**Frozen original proposal:** [continuous_3D_refinement_on_pcg_operator.md](continuous_3D_refinement_on_pcg_operator.md)
+> This PFTC-based integration contract is no longer authoritative. Hans
+> clarified that the immediate work is an isolated PCG Cartesian pose-capture
+> experiment with no `refine3D` integration. The document is retained only as
+> design history. See
+> [continuous_3D_pose_polishing_hans_clarification_2026-08-19.md](continuous_3D_pose_polishing_hans_clarification_2026-08-19.md).
+
 **PLAN:** [continuous_3D_pose_end_polishing_plan.md](continuous_3D_pose_end_polishing_plan.md)
+**Frozen research proposal:** [continuous_3D_refinement_on_pcg_operator.md](continuous_3D_refinement_on_pcg_operator.md)
 
-## Decision summary
+## Request and context
 
-This FINAL SPEC is not awaiting interpretation or approval. It defines one
-isolated, default-off `reconstruct3D` experiment. The implementation may be
-committed while disabled because its activation, rollback, half-map ownership,
-and operator contracts are explicit and its component tests pass.
+Hans Elmlund directed this work to the `refine3D` matching workflow. It must
+not be presented as PCG and must not run from `reconstruct3D`. The feature must
+follow the local-polishing position of `inpl_cont`, remain protected by
+`pose_cont=yes|no`, and include a pure continuous mode for simulated-data
+testing.
 
-The feature is **not scientifically accepted**. The completed truth matrix
-failed exact-pose rotation stationarity, clean joint recovery, and noisy FSC
-criteria. Therefore:
+The earlier default-off `reconstruct3D` activation has been removed. Its
+scientific evidence is historical input, not the contract for this feature.
 
-- keep `pcg_pose_polish=no` by default;
-- do not recommend the option for production data;
-- do not integrate it into `abinitio3D` or `refine3D_auto`;
-- do not weaken the acceptance thresholds.
+## Initial state
 
-Hans and the refinement researchers are needed only if work continues under a
-new or revised SPEC. That discussion must decide:
+`refine3D` performs a discrete or probabilistic pose search. With
+`inpl_cont=yes`, it can then refine the selected in-plane angle and two shifts
+while keeping the projection direction fixed.
 
-1. whether polishing is a terminal command, a repeated refinement stage, or
-   should stop at the present research result;
-2. what statistically valid fixed reference replaces or constrains the biased
-   same-half reconstructed map;
-3. whether reconstruction and polishing should share a new explicit frequency
-   or rotation-regularization policy; and
-4. what held-out or dataset-level signal may accept a particle update when the
-   per-particle fixed-map objective decreases but truth pose or FSC worsens.
+The executed matcher uses PFTC reference planes created from preprocessed
+even/odd reference volumes. The reprojection-model header owns the matching
+shell range. The matcher objective supplies the CTF, shift phase, noise
+weights, normalization, state, and half-set conventions.
 
-Everything below is the frozen technical contract for the implementation that
-was tested. It is detail for verification, not an open design discussion.
+## Required outcome
 
-## Request and outcome
-
-The useful production unit is a joint local pose update, not a shift-only
-update. Add one opt-in post-reconstruction pass to `reconstruct3D` that jointly
-refines the three rotational and two image-shift coordinates against its fixed
-PCG half-maps, then performs one final PCG reconstruction with the accepted
-poses.
-
-The public option is `pcg_pose_polish=yes`. Its default is `no`. It replaces the
-uncommitted `pcg_shift_polish` prototype; there is no public shift-only mode.
-
-## Activation contract
-
-The polish is allowed only when all these conditions are true:
-
-- `pcg_pose_polish=yes`;
-- `rec_backend=pcg`;
-- `combine_eo=no`;
-- `prg=reconstruct3D`;
-- the base reconstruction has produced independent even and odd PCG half-maps.
-
-Invalid combinations must stop with a clear error. Internal workers and child
-commands must not start a second polish. `refine3D` does not own a separate
-pose-polishing implementation; a completed refinement project is polished by a
-subsequent `reconstruct3D` invocation.
-
-## Scientific contract
-
-For particle $i$, first construct the fixed observed plane
+Add an opt-in, local five-parameter refinement
 
 $$
-\bar y_i=Q_i(I_i;\eta_i),
-$$
-
-where $Q_i$ is the existing PCG particle-input path: noise normalization,
-particle-edge taper, native FFT, packed-plane extraction, and whitening. The
-statistics $\eta_i$ measured from $I_i$ are fixed data; they are not functions
-of a trial pose or prediction. Minimize
-
-$$
-\Phi_i(R_i,t_i)=\frac{1}{2}\left\|
-\bar y_i-\mathcal A_i(R_i,t_i)V_{h(i)}
-\right\|_2^2 .
-$$
-
-Let $u_h$ denote the unconstrained solve coordinate and let $V_h=P u_h$ be the
-already supported half-map written by PCG. Here $\mathcal A_i$ is the complete
-executed observation operator, not a bare Fourier gather. Its required chain is
-
-$$
-\mathcal A_i(R_i,t_i)V_h=
-T_i(t_i)\,G_P(R_i)\,E^{-1}V_h,
+q=(\omega_x,\omega_y,\omega_z,\delta t_x,\delta t_y),
 \qquad
-T_i(t_i)=\frac{C_iS_i(t_i)}{\sqrt{\sigma_i^2}}.
+R=R_0\exp([\omega]_\times),
+\qquad
+t=t_0+\delta t.
 $$
 
-The factors have these fixed meanings:
+The first version supports two `refine3D` routes:
 
-- $P$ is the reconstruction support already represented in $V_h$. A soft
-  support must not be applied a second time to the stored half-map;
-- $E^{-1}$ is the PCG inverse Kaiser--Bessel gather envelope used before the
-  forward gather when deapodization is enabled;
-- $G_P(R_i)$ is the executed oversampled Fourier gather, with its actual fast
-  interpolation value and derivative;
-- $T_i$ uses the executed shift, CTF, `ctfflag`, whitening, sampling, precision,
-  Fourier packing, and operation order from the PCG reconstruction operator;
-- $Q_i$ is data-side preprocessing only. A mean, variance, edge profile, or
-  amplitude statistic derived from the observed particle is measured once and
-  held fixed while evaluating every trial objective.
+1. **Normal SHC route:** refine the selected SHC pose before that iteration
+   reconstructs.
+2. **Pure route:** `refine=pose_cont pose_cont=yes` starts from stored poses,
+   performs no discrete search, and performs one pose pass followed by one
+   reconstruction.
 
-This SPEC does **not** insert the simulator's padded inverse FFT, real-space
-clip, or native FFT into $\mathcal A_i$. The current PCG reconstruction does not
-apply that model-side operation. If evidence selects a finite-box model
-$\mathcal B_i\mathcal A_i$, it must be introduced as a coordinated change to
-the reconstruction forward operator, its adjoint and normal operator, and the
-pose Jacobian. Adding $\mathcal B_i$ only to pose polishing is nonconforming.
-A simulator-matched operator is not automatically the experimental-data
-operator.
+## Public contract
 
-The pose Jacobian is the derivative of this complete chain. Since $P$,
-$E^{-1}$, $C_i$, and $\sigma_i^2$ are independent of rotation, the rotation
-columns differentiate $G_P(R_i)$ and then apply $T_i$; the shift columns
-differentiate only $S_i(t_i)$. Finite differences of a gather that omits
-$E^{-1}$, support, transfer, whitening, or the selected shell range do not
-validate $\mathcal A_i$.
+- `pose_cont=yes|no` is accepted by `refine3D`; the default is `no`.
+- `refine=pose_cont` selects the pure route.
+- The initial supported normal route is `refine=shc`.
+- The initial objective is `objfun=euclid` with one state.
+- The initial routes require normal even/odd ownership and `volrec=yes`.
+- The reconstruction backend remains independent of pose refinement.
+- `refine3D_auto`, `refine3D_multi`, `abinitio3D`, neighborhood search, and
+  probabilistic search do not expose the feature in the first version.
+- Unsupported combinations stop with a clear error before matching starts.
 
-The local update has five coordinates,
+When both polishers are enabled in the normal SHC route, the order is:
 
-$$
-R_i\leftarrow R_i\exp([\omega_i]_\times),\qquad
-t_i\leftarrow t_i+\delta t_i,qquad
-q_i=(\omega_x,\omega_y,\omega_z,\delta t_x,\delta t_y).
-$$
+1. discrete SHC selection;
+2. existing `inpl_cont` refinement;
+3. five-parameter `pose_cont` refinement;
+4. reconstruction from the accepted pose.
 
-Requirements:
+The pure route does not run a separate `inpl_cont` solve.
 
-- use the executed fast Kaiser--Bessel value and derivative paths;
-- verify that the fixed half-map is the supported PCG output, apply the PCG
-  inverse envelope exactly once, and only then create the Fourier workspace;
-- evaluate every predicted value and all five Jacobian columns with the exact
-  PCG $T_iG_PE^{-1}$ chain from the already supported $V_h$; do not apply
-  data-only normalization or taper to a trial prediction;
-- use the PCG CTF flag, whitening, Fourier packing, phase, and precision
-  conventions;
-- use exactly the shell range used by the preceding PCG reconstruction. The
-  reconstruction operator and pose workspace must obtain it from one shared
-  setting; a pose-only shell restriction is not conforming;
-- refine each particle only against its matching fixed half-map;
-- keep state, half ownership, CTF metadata, observations, and search decisions
-  unchanged;
-- commit a pose only after a finite, fully recomputed objective improvement;
-- restore the complete input pose for every rejected or unreliable result;
-- scale radians and pixels explicitly, bound both step types, and report
-  stencil switches and all terminal outcomes;
-- treat weak or singular five-parameter systems as no-update results;
-- keep the current local symmetry representative and evaluate pose error modulo
-  the configured point group;
-- anchor each local pass to its fixed half-map. Synthetic pose metrics must fix
-  the global rigid-body gauge before comparison.
+## Scientific and numerical contract
+
+The pose objective must be the executed PFTC raw-Euclidean matcher objective,
+not the former PCG Cartesian-plane objective.
+
+- Retain an immutable even/odd reference volume after the same mask, filter,
+  centering, low-resolution parity blending, padding, and FFT preparation that
+  creates the PFTC reference bank.
+- Use the exact `kfromto` stored in the reprojection-model header.
+- Use the matcher particle PFT, CTF, Fourier shift phase, sigma weighting,
+  normalization, state, symmetry, and even/odd ownership.
+- Evaluate reference values and rotation derivatives through the executed
+  normalized fast Kaiser--Bessel interpolation path.
+- Differentiate the executed polynomial and normalized stencil. Do not
+  substitute the ideal Kaiser--Bessel derivative.
+- Use right tangent-space rotation increments and pixel-unit image shifts.
+- Accept a pose only after a finite, fully recomputed objective reduction.
+- Restore the complete input pose after an invalid, singular, bounded-out, or
+  non-improving result.
+- Keep the accepted orientation in the current symmetry representative and
+  refresh its nearest discrete `proj` metadata for restart.
+- Use the existing matcher OpenMP particle loop. Shared and distributed
+  workers must use the same scientific model.
+
+The first optimizer is per-particle Gauss--Newton/Levenberg--Marquardt. It uses
+at most eight iterations, a rotation scale and per-step rotation bound of
+$1/\mathrm{msk\_crop}$ radians, a one-pixel per-step shift bound, a total
+rotation bound equal to the current angular grid spacing, and a total shift
+bound equal to `trs`. A trial step requires a positive reduction and an LM
+gain ratio of at least `0.25`.
 
 ## Scope
 
-- Generalize the validated shift component to a joint five-parameter Jacobian
-  and per-particle Levenberg--Marquardt solve.
-- Persist accepted rotations and shifts through the normal `ptcl3D` project
-  path.
-- Run one final PCG reconstruction after polishing.
-- Keep shared and distributed scientific behavior equivalent.
+- Exact five-parameter PFTC value, Jacobian, and local optimizer.
+- Normal SHC integration and one-pass pure continuous refinement.
+- Pose persistence through the normal `ptcl3D` project path.
+- Shared and distributed execution equivalence.
+- Focused numerical tests and matched simulated beta-gal validation.
 
 ## Out of scope
 
-- Running a discrete or probabilistic orientation search.
-- Alternating volume and pose updates; that remains Stage 4.
-- CTF-parameter refinement or a new reconstruction backend.
-- Platform-wide changes to the Kaiser--Bessel kernel.
-- A claim that standalone PCG is superior to gridding.
+- Changing PCG, gridding, or ordinary `reconstruct3D` behavior.
+- Replacing the discrete search.
+- Multiple states, CTF refinement, or a new frequency schedule.
+- CC or hybrid continuous-pose objectives.
+- Automatic propagation to other refinement or ab-initio workflows.
+- Production recommendation before the scientific gates pass.
 
 ## Acceptance criteria
 
-1. Rotation and joint-pose derivatives agree with fixed-cell finite differences
-   of the complete executed PCG operator $\mathcal A_i$, including support,
-   inverse envelope, transfer, whitening, and shell restriction.
-2. An independent forward generator passes a declared operator matrix that
-   separates bare gather, inverse-envelope gather, finite-box gather, and their
-   combination over realistic box/support margins. The matrix determines
-   whether the independent generator is a valid test of the PCG model; it does
-   not silently redefine that model. Any selected replacement production model
-   and its adjoint must pass a numerical dot-product identity before entering
-   PCG.
-3. Known joint perturbations are recovered from multiple orientations; exact,
-   weak, and singular cases remain unchanged.
-4. Accepted objectives decrease monotonically, and all rotation and shift steps
-   remain within their declared bounds.
-5. Pose-error tests fix the global gauge and minimize over symmetry-equivalent
-   rotations.
-6. Even and odd particles use only their matching half-map.
-7. Accepted rotations and shifts persist and are consumed by the final PCG
-   reconstruction; disabled and invalid routes cannot change poses.
-8. Shared and distributed reconstruction routes obey the same activation and
-   ownership rules.
-9. A frozen beta-gal A/B changes only `pcg_pose_polish`; angular changes remain
-   local, terminal counts balance, and independent half-map FSC improves or is
-   neutral under a predeclared tolerance.
-10. Focused and mother tests pass on Oracle Linux.
+1. The five analytic derivative columns agree with fixed-cell finite
+   differences of the executed PFTC model to relative error at most `1e-2`.
+2. At a discrete pose, the new evaluator reproduces the existing PFTC
+   Euclidean objective within `1e-4`.
+3. Exact synthetic poses remain within `1e-4` radians and `1e-3` pixels.
+4. Known local perturbations reduce rotation and shift errors by at least
+   50 percent and finish below `8e-4` radians and `2e-3` pixels.
+5. Accepted objectives decrease monotonically; every step and total update
+   obeys its bound; all terminal outcomes balance the attempted particles.
+6. Weak, singular, invalid, rejected, symmetry-equivalent, and stencil-switch
+   cases have defined, tested outcomes.
+7. `pose_cont=no` preserves the established path and does not create or load
+   the continuous-pose reference workspace.
+8. The normal and pure routes persist accepted poses, and reconstruction
+   consumes those poses.
+9. Shared and distributed routes produce equivalent poses and terminal
+   accounting.
+10. A frozen simulated beta-gal matrix tests all four `inpl_cont`/`pose_cont`
+    combinations from identical inputs. Exact-pose stationarity, perturbation
+    recovery, metadata integrity, FSC area, cFAR, and runtime are reported.
+    FSC-area decline greater than `0.01` fails the scientific gate.
+11. Focused tests and the mother suite compile and pass on Oracle Linux.
 
 ## Constraints
 
-- Preserve the original continuous-refinement implementation note unchanged.
-- Preserve SIMPLE ownership boundaries and particle-cache policy.
-- Oracle Linux is the compilation and runtime gate.
+- Preserve the frozen original proposal.
+- Preserve ordinary `refine3D`, `inpl_cont`, and reconstruction behavior when
+  `pose_cont` is omitted or `no`.
+- Keep numerical algorithms in their owning projector/PFTC modules and
+  workflow sequencing in matcher/search modules.
+- Oracle Linux supplies compilation and runtime evidence.
+
+## Review decisions awaiting confirmation
+
+Before this SPEC becomes FINAL or FINAL (FROZEN), Hans and the requester must
+confirm:
+
+1. both the normal SHC route and the pure one-pass route;
+2. the initial Euclidean, one-state, SHC-only boundary;
+3. the order `discrete -> inpl_cont -> pose_cont` when both options are on;
+4. the stated numerical and scientific acceptance gates.
+
+Implementation must not start while this SPEC remains IN REVIEW.
