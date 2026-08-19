@@ -195,15 +195,13 @@ contains
     subroutine assemble_refine3D_pcg( cline, params, build )
         use simple_commanders_rec_distr, only: filter_pcg_nonuniform_maps
         type(cmdline),    intent(inout) :: cline
-        type(parameters), intent(in)    :: params
+        type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
-        type(parameters) :: pcg_params
         logical          :: l_trail_bootstrap(params%nstates)
         call validate_refine3D_pcg_integration(params)
-        pcg_params = params
-        call execute_rec3D_pcg_distributed_master(pcg_params, build, cline, &
+        call execute_rec3D_pcg_distributed_master(params, build, cline, &
             &trail_bootstrap_states=l_trail_bootstrap)
-        call filter_pcg_nonuniform_maps(pcg_params, build, l_trail_bootstrap)
+        call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap)
     end subroutine assemble_refine3D_pcg
 
     subroutine validate_refine3D_pcg_integration( params )
