@@ -90,6 +90,25 @@ class FileBrowserViewTests(SimpleTestCase):
         self.assertIn('selectDir(this,', html)
         self.assertIn('selectBrowserEntry(element);\n            watchDouble += 1;', html)
 
+    def test_root_directory_entry_uses_single_leading_slash(self):
+        html = render_to_string(
+            "filebrowser.html",
+            {
+                "type": "file",
+                "purpose": "external_input",
+                "path": "/",
+                "parentdir": "/",
+                "error": False,
+                "errortext": "",
+                "files": [],
+                "dirs": ["mnt"],
+            },
+        )
+
+        self.assertIn('name="selectedpath" value="/mnt"', html)
+        self.assertNotIn('name="selectedpath" value="//mnt"', html)
+        self.assertIn("joinBrowserPath(path, dir)", html)
+
     def test_project_root_picker_allows_no_project_selection(self):
         with tempfile.TemporaryDirectory() as base_dir:
             request = self.factory.get("/filebrowser/dir", {"purpose": "project_root", "selectedpath": base_dir})

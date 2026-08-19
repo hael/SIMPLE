@@ -40,6 +40,13 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('onclick="openClassicFileBrowser(this, \'file\')"', classic_newjob)
         self.assertIn('new URLSearchParams({ selectedpath: selectedPath })', classic_newjob)
 
+    def test_file_browser_navigation_passes_paths_as_query_parameters(self):
+        filebrowser = self._read_template("filebrowser.html")
+
+        self.assertNotIn("{% url 'nice_lite:file_browser' type parentdir %}", filebrowser)
+        self.assertNotIn("{% url 'nice_lite:file_browser' type path|add:'/'|add:dir %}", filebrowser)
+        self.assertIn('name="selectedpath" value="{{ parentdir }}"', filebrowser)
+
     def test_file_browser_openers_share_last_directory(self):
         filebrowser = self._read_template("filebrowser.html")
         jobbuilder = self._read_template("jobbuilder.html")

@@ -37,8 +37,9 @@
                 </div>
                 <div class="flex items-center gap-2 mb-3">
                     <div class="bg-streamsurface border border-streamline rounded-lg flex-1 flex items-center overflow-hidden">
-                        <form method="GET" action={% url 'nice_lite:file_browser' type parentdir %} class="shrink-0">
+                        <form method="GET" action="{% url 'nice_lite:file_browser' type %}" class="shrink-0">
                             {% csrf_token %}
+                            <input type="hidden" name="selectedpath" value="{{ parentdir }}">
                             {% if purpose %}<input type="hidden" name="purpose" value="{{ purpose }}">{% endif %}
                             <button type="button" onclick="this.form.submit()"
                                     class="h-8 px-2 text-streamicon hover:text-streamsubtle transition-colors">
@@ -69,8 +70,9 @@
                     <div class="flex-1 min-h-0 overflow-auto bg-streamsurface border border-streamline rounded-lg p-1">
                         <div class="flex flex-col text-xs text-streaminput">
                             {% for dir in dirs %}
-                                <form method="GET" action={% url 'nice_lite:file_browser' type path|add:'/'|add:dir %}>
+                                <form method="GET" action="{% url 'nice_lite:file_browser' type %}">
                                     {% csrf_token %}
+                                    <input type="hidden" name="selectedpath" value="{% if path == '/' %}/{{ dir }}{% else %}{{ path }}/{{ dir }}{% endif %}">
                                     {% if purpose %}<input type="hidden" name="purpose" value="{{ purpose }}">{% endif %}
                                     <button type="button"
                                             class="browser-entry w-full text-left flex flex-row items-center whitespace-nowrap rounded px-1.5 py-1 hover:bg-streambg cursor-pointer"
@@ -116,6 +118,10 @@
 
         let watchDouble = 0;
 
+        const joinBrowserPath = (path, name) => {
+            return path.replace(/\/+$/, "") + "/" + name.replace(/^\/+/, "");
+        };
+
         const getHostIframe = () => {
             const byName = parent.document.getElementsByName(window.name)[0];
             if (byName) return byName;
@@ -150,13 +156,13 @@
 
         const selectFile = (element, path, file, type) => {
             selectBrowserEntry(element);
-            document.querySelector("#selectedpath").value = path + "/" + file;
+            document.querySelector("#selectedpath").value = joinBrowserPath(path, file);
         };
 
         const selectDir = (element, path, dir, type) => {
             if (type === "dir") {
                 selectBrowserEntry(element);
-                document.querySelector("#selectedpath").value = path + "/" + dir;
+                document.querySelector("#selectedpath").value = joinBrowserPath(path, dir);
                 return;
             }
             selectBrowserEntry(element);
@@ -165,14 +171,14 @@
                 if (watchDouble === 2) {
                     element.form.submit();
                 } else if (watchDouble === 1) {
-                    document.querySelector("#selectedpath").value = path + "/" + dir;
+                    document.querySelector("#selectedpath").value = joinBrowserPath(path, dir);
                 }
                 watchDouble = 0;
             }, 200);
         };
 
         const openDir = (path, dir) => {
-            document.querySelector("#selectedpath").value = path + "/" + dir;
+            document.querySelector("#selectedpath").value = joinBrowserPath(path, dir);
             document.querySelector("#selectedpath_form").submit();
         };
 
