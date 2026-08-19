@@ -1179,7 +1179,7 @@ contains
         complex :: value, dvalue_dloc(3), phase
         complex(dp) :: derivative
         real(sp) :: loc(3), switch_margin(3)
-        real(dp) :: arg, dloc(3)
+        real(dp) :: args, dloc(3)
         integer :: h, k
 
         if( .not. self%exists ) error stop 'rotation_jvp called on an empty Fourier workspace'
@@ -1193,8 +1193,8 @@ contains
                 dloc = [real(loc(2),dp)*direction(3)-real(loc(3),dp)*direction(2), &
                     &real(loc(3),dp)*direction(1)-real(loc(1),dp)*direction(3), &
                     &real(loc(1),dp)*direction(2)-real(loc(2),dp)*direction(1)]
-                arg = 2._dp*real(PI,dp)*(real(h,dp)*shift(1)+real(k,dp)*shift(2))/real(self%box,dp)
-                phase = cmplx(cos(arg),sin(arg),kind=sp)
+                args = 2._dp*real(PI,dp)*(real(h,dp)*shift(1)+real(k,dp)*shift(2))/real(self%box,dp)
+                phase = cmplx(cos(args),sin(args),kind=sp)
                 derivative = cmplx(phase,kind=dp)*sum(cmplx(dvalue_dloc,kind=dp)*dloc)
                 if( present(transfer) ) derivative = derivative*cmplx(transfer(h,k),kind=dp)
                 jv(h,k) = cmplx(derivative,kind=sp)
@@ -1436,7 +1436,8 @@ contains
     !!          rotation increment and two image shifts.
     subroutine refine_pose_lm( self, rotmat, observed, shift, rotation_scale, max_iterations, &
         &accepted_objectives, naccepted, status, nattempted, max_rotation_step, &
-        &max_shift_step, nstencil_switches, transfer )
+        &max_shift_step, nstencil_switches, transfer, accepted_rotmats, accepted_shifts, &
+        &active_parameters, anchor_rotmat, anchor_shift, max_total_rotation, max_total_shift )
         class(pcg_fourier_workspace), intent(in) :: self
         real(dp), intent(inout) :: rotmat(3,3), shift(2)
         complex, intent(in) :: observed(self%lims2(1,1):self%lims2(1,2),&
@@ -1449,20 +1450,46 @@ contains
         integer, intent(out) :: nstencil_switches
         complex, optional, intent(in) :: transfer(self%lims2(1,1):self%lims2(1,2),&
                                                    &self%lims2(2,1):self%lims2(2,2))
+        real(dp), optional, intent(out) :: accepted_rotmats(:,:,0:), accepted_shifts(:,0:)
+        logical, optional, intent(in) :: active_parameters(5)
+        real(dp), optional, intent(in) :: anchor_rotmat(3,3), anchor_shift(2)
+        real(dp), optional, intent(in) :: max_total_rotation, max_total_shift
         real(dp) :: gradient(5), hessian(5,5), trial_gradient(5), trial_hessian(5,5)
         real(dp) :: scaled_gradient(5), scaled_hessian(5,5), solve_matrix(5,5)
         real(dp) :: diagonal(5), coordinate_scale(5), scaled_direction(5), direction(5)
         real(dp) :: trial_rotmat(3,3), trial_shift(2), objective, trial_objective
         real(dp) :: mu, predicted, actual, ratio, rotation_norm, shift_norm, hessian_scale
         real(dp) :: relative_reduction, min_switch_margin, trial_switch_margin
+        real(dp) :: cumulative_rotation, cumulative_shift, sine_half
         integer :: axis, jaxis, iteration, trial_switches
-        logical :: bounded_trial, reliable
+        logical :: active(5), bounded_trial, cumulative_guard, reliable
 
         if( max_iterations < 1 ) error stop 'refine_pose_lm requires at least one LM iteration'
         if( rotation_scale <= 0._dp .or. .not. ieee_is_finite(rotation_scale) ) &
             &error stop 'refine_pose_lm requires a positive finite rotation scale'
         if( ubound(accepted_objectives,1) < max_iterations ) &
             &error stop 'refine_pose_lm objective trace is shorter than max_iterations+1'
+        if( present(accepted_rotmats) )then
+            if( size(accepted_rotmats,1) /= 3 .or. size(accepted_rotmats,2) /= 3 .or. &
+                &ubound(accepted_rotmats,3) < max_iterations ) &
+                &error stop 'refine_pose_lm rotation trace has invalid dimensions'
+        endif
+        if( present(accepted_shifts) )then
+            if( size(accepted_shifts,1) /= 2 .or. ubound(accepted_shifts,2) < max_iterations ) &
+                &error stop 'refine_pose_lm shift trace has invalid dimensions'
+        endif
+        active = .true.
+        if( present(active_parameters) ) active = active_parameters
+        if( .not. any(active) ) error stop 'refine_pose_lm requires one active parameter'
+        cumulative_guard = present(anchor_rotmat) .and. present(anchor_shift) .and. &
+            &present(max_total_rotation) .and. present(max_total_shift)
+        if( cumulative_guard .neqv. (present(anchor_rotmat) .or. present(anchor_shift) .or. &
+            &present(max_total_rotation) .or. present(max_total_shift)) ) &
+            &error stop 'refine_pose_lm cumulative guard requires all four arguments'
+        if( cumulative_guard )then
+            if( max_total_rotation <= 0._dp .or. max_total_shift <= 0._dp ) &
+                &error stop 'refine_pose_lm cumulative bounds must be positive'
+        endif
         if( present(transfer) )then
             call self%pose_normal_terms(rotmat,shift,observed,objective,gradient,hessian, &
                 &min_switch_margin,transfer)
@@ -1471,6 +1498,8 @@ contains
         endif
         accepted_objectives = huge(0._dp)
         accepted_objectives(0) = objective
+        if( present(accepted_rotmats) ) accepted_rotmats(:,:,0) = rotmat
+        if( present(accepted_shifts) ) accepted_shifts(:,0) = shift
         naccepted = 0
         nattempted = 0
         nstencil_switches = 0
@@ -1493,6 +1522,7 @@ contains
                     &coordinate_scale(axis)*hessian(axis,jaxis)*coordinate_scale(jaxis)
             enddo
         enddo
+        call apply_pose_parameter_mask(scaled_gradient,scaled_hessian,active)
         mu = 1.e-3_dp
         do iteration = 1, max_iterations
             ! Damping must not hide an unidentifiable five-parameter block.
@@ -1551,6 +1581,18 @@ contains
             endif
             trial_rotmat = right_increment_rotation(rotmat,direction(1:3))
             trial_shift = shift+direction(4:5)
+            nattempted = nattempted+1
+            if( cumulative_guard )then
+                sine_half = sqrt(sum((trial_rotmat-anchor_rotmat)**2))/(2._dp*sqrt(2._dp))
+                cumulative_rotation = 2._dp*asin(max(0._dp,min(1._dp,sine_half)))
+                cumulative_shift = sqrt(sum((trial_shift-anchor_shift)**2))
+                if( cumulative_rotation > max_total_rotation+10._dp*epsilon(1._dp) .or. &
+                    &cumulative_shift > max_total_shift+10._dp*epsilon(1._dp) )then
+                    mu = 4._dp*mu
+                    bounded_trial = .true.
+                    cycle
+                endif
+            endif
             trial_switches = self%count_stencil_switches(rotmat,trial_rotmat)
             nstencil_switches = nstencil_switches+trial_switches
             if( present(transfer) )then
@@ -1560,7 +1602,6 @@ contains
                 call self%pose_normal_terms(trial_rotmat,trial_shift,observed,trial_objective, &
                     &trial_gradient,trial_hessian,trial_switch_margin)
             endif
-            nattempted = nattempted+1
             if( .not. ieee_is_finite(trial_objective) .or. any(.not. ieee_is_finite(trial_gradient)) .or. &
                 &any(.not. ieee_is_finite(trial_hessian)) )then
                 mu = 4._dp*mu
@@ -1584,8 +1625,11 @@ contains
                             &coordinate_scale(axis)*hessian(axis,jaxis)*coordinate_scale(jaxis)
                     enddo
                 enddo
+                call apply_pose_parameter_mask(scaled_gradient,scaled_hessian,active)
                 naccepted = naccepted+1
                 accepted_objectives(naccepted) = objective
+                if( present(accepted_rotmats) ) accepted_rotmats(:,:,naccepted) = rotmat
+                if( present(accepted_shifts) ) accepted_shifts(:,naccepted) = shift
                 if( ratio > 0.75_dp ) mu = max(mu/2._dp,epsilon(1._dp))
                 status = POSE_LM_ACCEPTED_IMPROVEMENT
                 if( max(rotation_norm,shift_norm) < 1.e-8_dp .or. relative_reduction < 1.e-10_dp ) exit
@@ -1596,6 +1640,21 @@ contains
         if( status == POSE_LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
             &status = POSE_LM_STEP_BOUND_REJECTED
     end subroutine refine_pose_lm
+
+    !> Freeze inactive pose coordinates while retaining one five-vector LM path.
+    pure subroutine apply_pose_parameter_mask( gradient, hessian, active )
+        real(dp), intent(inout) :: gradient(5), hessian(5,5)
+        logical, intent(in) :: active(5)
+        integer :: axis
+
+        do axis = 1, 5
+            if( active(axis) ) cycle
+            gradient(axis) = 0._dp
+            hessian(axis,:) = 0._dp
+            hessian(:,axis) = 0._dp
+            hessian(axis,axis) = 1._dp
+        enddo
+    end subroutine apply_pose_parameter_mask
 
     !>  \brief  Cholesky solve with a relative pivot test for a 5-by-5
     !!          symmetric positive-definite pose block.
@@ -1731,7 +1790,7 @@ contains
         complex   :: T(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
         type(ctf)     :: tfun
         type(ctfvars) :: ctfvals
-        real      :: cval, arg, sw, sum_df, diff_df, angast, wl, half_wl2_cs, accc, phc, cterm, df, phsh, s2
+        real      :: cval, args, sw, sum_df, diff_df, angast, wl, half_wl2_cs, accc, phc, cterm, df, phsh, s2
         integer   :: h, k, shell
         logical   :: l_ctf, l_flip
         ! ctfflag, exactly as image%gen_fplane4rec reads it: CTFFLAG_NO means the
@@ -1758,7 +1817,7 @@ contains
         endif
         T = cmplx(0.,0.)
         !$omp parallel do collapse(2) default(shared) &
-        !$omp private(h,k,cval,arg,shell,sw,cterm,df,phsh,s2) schedule(static) proc_bind(close)
+        !$omp private(h,k,cval,args,shell,sw,cterm,df,phsh,s2) schedule(static) proc_bind(close)
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
                 if( h*h + k*k > self%sqlp ) cycle
@@ -1778,13 +1837,13 @@ contains
                 ! here would shift every particle by twice its own displacement in
                 ! the wrong direction -- invisible on synthetic
                 ! data, where the same build_transfer generates the observations.
-                arg       = 2.0*PI * (real(h)*shift(1) + real(k)*shift(2)) / real(self%box)
+                args       = 2.0*PI * (real(h)*shift(1) + real(k)*shift(2)) / real(self%box)
                 sw        = 1.0
                 if( present(sig2arr) )then
                     shell = min(self%shell_lut(h,k), ubound(sig2arr,1))
                     sw    = 1.0 / sqrt(sig2arr(shell))
                 endif
-                T(h,k) = cval * cmplx(cos(arg), sin(arg)) * sw
+                T(h,k) = cval * cmplx(cos(args), sin(args)) * sw
             end do
         end do
         !$omp end parallel do

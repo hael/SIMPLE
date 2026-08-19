@@ -12,8 +12,12 @@ public :: run_rotation_gradient
 integer, parameter :: N_FD_STEPS = 3
 integer, parameter :: MAX_FD_SHELL = 4
 real(dp), parameter :: FD_STEPS(N_FD_STEPS) = [2.e-4_dp,1.e-4_dp,5.e-5_dp]
+real(dp), parameter :: SHIFT_FD_STEPS(N_FD_STEPS) = [2.e-3_dp,1.e-3_dp,5.e-4_dp]
 real(dp), parameter :: ROTATION_JVP_TOL = 8.e-3_dp
 real(dp), parameter :: OBJECTIVE_TOL = 8.e-3_dp
+real(dp), parameter :: POSE_COLUMN_JVP_TOL = 1.5e-2_dp
+real(dp), parameter :: POSE_COMPONENT_GRAD_TOL = 3.e-2_dp
+real(dp), parameter :: POSE_COMPONENT_SCALE_FLOOR = 1.e-5_dp
 real(dp), parameter :: ROTATION_UPDATE_TOL = 2.e-12_dp
 
 contains
@@ -30,6 +34,9 @@ subroutine run_rotation_gradient()
     real(dp) :: independent_rotmat(3,3), shift(2), true_shift(2), rotation_direction(3), pose_direction(5)
     real(dp) :: gradient(5), ignored_objective, objective_minus, objective_plus, directional_derivative
     real(dp) :: jvp_errors(N_FD_STEPS), objective_errors(N_FD_STEPS), weighted_errors(N_FD_STEPS)
+    real(dp) :: column_jvp_errors(5), probe_column_jvp_errors(5), weighted_column_jvp_errors(5)
+    real(dp) :: component_grad_errors(5), probe_component_grad_errors(5)
+    real(dp) :: weighted_component_grad_errors(5), probe_rotmat(3,3), probe_shift(2)
     real(dp) :: update_error, orthogonality_error, determinant_error
     real(dp) :: input_orthogonality_error, input_determinant_error
     integer :: fixed_cell_count, h, istep, lims2(2,2), minus_switches, plus_switches, measured_switches
@@ -90,6 +97,24 @@ subroutine run_rotation_gradient()
     call assert_true(minval(objective_errors) < OBJECTIVE_TOL, &
         &'joint pose objective gradient disagrees with centred differences')
 
+    ! A single directional dot product can hide compensating column errors.
+    ! Check every rotation and shift column at two nonstationary poses.
+    probe_rotmat = independent_right_increment(rotmat,[0.006_dp,-0.004_dp,0.005_dp])
+    probe_shift = shift+[0.13_dp,-0.09_dp]
+    call check_pose_jacobian_columns(workspace,rotmat,shift,zero_plane,column_jvp_errors)
+    call check_pose_jacobian_columns(workspace,probe_rotmat,probe_shift,zero_plane, &
+        &probe_column_jvp_errors)
+    call check_pose_gradient_components(workspace,rotmat,shift,observed,zero_plane, &
+        &component_grad_errors)
+    call check_pose_gradient_components(workspace,probe_rotmat,probe_shift,observed,zero_plane, &
+        &probe_component_grad_errors)
+    call assert_true(all(column_jvp_errors < POSE_COLUMN_JVP_TOL) .and. &
+        &all(probe_column_jvp_errors < POSE_COLUMN_JVP_TOL), &
+        &'an analytic pose-Jacobian column disagrees with centred residual differences')
+    call assert_true(all(component_grad_errors < POSE_COMPONENT_GRAD_TOL) .and. &
+        &all(probe_component_grad_errors < POSE_COMPONENT_GRAD_TOL), &
+        &'an analytic pose-gradient component disagrees with centred objective differences')
+
     ! This independent exponential detects a left/right or skew-sign mismatch.
     input_orthogonality_error = sqrt(sum((matmul(transpose(rotmat),rotmat)-identity3())**2))
     input_determinant_error = abs(determinant3(rotmat)-1._dp)
@@ -144,6 +169,14 @@ subroutine run_rotation_gradient()
     enddo
     call assert_true(minval(weighted_errors) < OBJECTIVE_TOL, &
         &'CTF/sigma-weighted joint pose gradient disagrees with centred differences')
+    call check_pose_jacobian_columns(workspace,rotmat,shift,zero_plane, &
+        &weighted_column_jvp_errors,transfer)
+    call check_pose_gradient_components(workspace,rotmat,shift,weighted_observed,zero_plane, &
+        &weighted_component_grad_errors,transfer)
+    call assert_true(all(weighted_column_jvp_errors < POSE_COLUMN_JVP_TOL), &
+        &'a weighted analytic pose-Jacobian column disagrees with centred residual differences')
+    call assert_true(all(weighted_component_grad_errors < POSE_COMPONENT_GRAD_TOL), &
+        &'a weighted analytic pose-gradient component disagrees with centred objective differences')
     call assert_true(all(ieee_is_finite([minval(jvp_errors),minval(objective_errors), &
         &minval(weighted_errors),update_error,orthogonality_error,determinant_error])), &
         &'rotation derivative test produced non-finite diagnostics')
@@ -151,6 +184,17 @@ subroutine run_rotation_gradient()
     write(*,'(a,3(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION Jv fixed-cell errors: ', jvp_errors
     write(*,'(a,3(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION pose-gradient errors: ', objective_errors
     write(*,'(a,3(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION weighted-gradient errors: ', weighted_errors
+    write(*,'(a,5(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION column-Jv errors: ',column_jvp_errors
+    write(*,'(a,5(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION probe column-Jv errors: ', &
+        &probe_column_jvp_errors
+    write(*,'(a,5(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION component-gradient errors: ', &
+        &component_grad_errors
+    write(*,'(a,5(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION probe component-gradient errors: ', &
+        &probe_component_grad_errors
+    write(*,'(a,5(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION weighted column-Jv errors: ', &
+        &weighted_column_jvp_errors
+    write(*,'(a,5(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION weighted component-gradient errors: ', &
+        &weighted_component_grad_errors
     write(*,'(a,3(es14.6,1x),2(i0,1x))') 'CONTINUOUS_3D_PCG_ROTATION update/orthogonal/determinant/fixed/switch: ', &
         &update_error,orthogonality_error,determinant_error,fixed_cell_count,measured_switches
     write(*,'(a,2(es14.6,1x))') 'CONTINUOUS_3D_PCG_ROTATION input orthogonal/determinant errors: ', &
@@ -160,6 +204,186 @@ subroutine run_rotation_gradient()
     call workspace%kill
     call pcgop%kill
 end subroutine run_rotation_gradient
+
+!> Compare each of the five analytic residual-Jacobian columns with centred
+!! differences of the executed Fourier prediction. The reported value is the
+!! second-smallest error over three step sizes, so one lucky or noisy step
+!! cannot make a broken column pass.
+subroutine check_pose_jacobian_columns(workspace,rotmat,shift,zero_plane,column_errors,transfer)
+    type(pcg_fourier_workspace), intent(in) :: workspace
+    real(dp), intent(in) :: rotmat(3,3), shift(2)
+    complex, intent(in) :: zero_plane(-TRUTH_VOLUME_BOX/2:,-TRUTH_VOLUME_BOX/2:)
+    real(dp), intent(out) :: column_errors(5)
+    complex, optional, intent(in) :: transfer(-TRUTH_VOLUME_BOX/2:,-TRUTH_VOLUME_BOX/2:)
+    complex, allocatable :: minus_plane(:,:), plus_plane(:,:), jv(:,:)
+    real(dp) :: basis3(3), minus_rotmat(3,3), plus_rotmat(3,3)
+    real(dp) :: minus_shift(2), plus_shift(2), step_errors(N_FD_STEPS)
+    real(dp) :: ignored_objective, step
+    integer :: axis, istep, lims2(2,2)
+
+    lims2 = workspace%get_lims2()
+    allocate(minus_plane,mold=zero_plane)
+    allocate(plus_plane,mold=zero_plane)
+    allocate(jv,mold=zero_plane)
+    do axis = 1, 5
+        step_errors = huge(0._dp)
+        basis3 = 0._dp
+        if( axis <= 3 )then
+            basis3(axis) = 1._dp
+            if( present(transfer) )then
+                call workspace%rotation_jvp(rotmat,shift,basis3,jv,transfer)
+            else
+                call workspace%rotation_jvp(rotmat,shift,basis3,jv)
+            endif
+            do istep = 1, N_FD_STEPS
+                step = FD_STEPS(istep)
+                minus_rotmat = independent_right_increment(rotmat,-step*basis3)
+                plus_rotmat = independent_right_increment(rotmat,step*basis3)
+                if( workspace%count_stencil_switches(rotmat,minus_rotmat)+ &
+                    &workspace%count_stencil_switches(rotmat,plus_rotmat) /= 0 ) cycle
+                call workspace%shift_residual(minus_rotmat,shift,zero_plane,minus_plane,ignored_objective)
+                call workspace%shift_residual(plus_rotmat,shift,zero_plane,plus_plane,ignored_objective)
+                if( present(transfer) )then
+                    minus_plane = transfer*minus_plane
+                    plus_plane = transfer*plus_plane
+                endif
+                step_errors(istep) = plane_relative_error( &
+                    &(plus_plane-minus_plane)/real(2._dp*step,sp),jv,lims2)
+            enddo
+        else
+            if( present(transfer) )then
+                call workspace%shift_jvp(rotmat,shift,unit_shift(axis-3),jv)
+                jv = transfer*jv
+            else
+                call workspace%shift_jvp(rotmat,shift,unit_shift(axis-3),jv)
+            endif
+            do istep = 1, N_FD_STEPS
+                step = SHIFT_FD_STEPS(istep)
+                minus_shift = shift-step*unit_shift(axis-3)
+                plus_shift = shift+step*unit_shift(axis-3)
+                call workspace%shift_residual(rotmat,minus_shift,zero_plane,minus_plane,ignored_objective)
+                call workspace%shift_residual(rotmat,plus_shift,zero_plane,plus_plane,ignored_objective)
+                if( present(transfer) )then
+                    minus_plane = transfer*minus_plane
+                    plus_plane = transfer*plus_plane
+                endif
+                step_errors(istep) = plane_relative_error( &
+                    &(plus_plane-minus_plane)/real(2._dp*step,sp),jv,lims2)
+            enddo
+        endif
+        column_errors(axis) = second_smallest(step_errors)
+    enddo
+    deallocate(minus_plane,plus_plane,jv)
+end subroutine check_pose_jacobian_columns
+
+!> Compare every analytic objective-gradient component with centred finite
+!! differences of an independently accumulated prediction-residual norm.
+subroutine check_pose_gradient_components(workspace,rotmat,shift,observed,zero_plane, &
+    &component_errors,transfer)
+    type(pcg_fourier_workspace), intent(in) :: workspace
+    real(dp), intent(in) :: rotmat(3,3), shift(2)
+    complex, intent(in) :: observed(-TRUTH_VOLUME_BOX/2:,-TRUTH_VOLUME_BOX/2:)
+    complex, intent(in) :: zero_plane(-TRUTH_VOLUME_BOX/2:,-TRUTH_VOLUME_BOX/2:)
+    real(dp), intent(out) :: component_errors(5)
+    complex, optional, intent(in) :: transfer(-TRUTH_VOLUME_BOX/2:,-TRUTH_VOLUME_BOX/2:)
+    real(dp) :: analytic_gradient(5), basis3(3), minus_objective, plus_objective
+    real(dp) :: minus_rotmat(3,3), plus_rotmat(3,3), minus_shift(2), plus_shift(2)
+    real(dp) :: ignored_objective, finite_difference, scale, step
+    real(dp) :: step_errors(N_FD_STEPS)
+    integer :: axis, istep
+
+    if( present(transfer) )then
+        call workspace%pose_objective_gradient(rotmat,shift,observed, &
+            &ignored_objective,analytic_gradient,transfer)
+    else
+        call workspace%pose_objective_gradient(rotmat,shift,observed, &
+            &ignored_objective,analytic_gradient)
+    endif
+    do axis = 1, 5
+        step_errors = huge(0._dp)
+        basis3 = 0._dp
+        if( axis <= 3 ) basis3(axis) = 1._dp
+        do istep = 1, N_FD_STEPS
+            if( axis <= 3 )then
+                step = FD_STEPS(istep)
+                minus_rotmat = independent_right_increment(rotmat,-step*basis3)
+                plus_rotmat = independent_right_increment(rotmat,step*basis3)
+                if( workspace%count_stencil_switches(rotmat,minus_rotmat)+ &
+                    &workspace%count_stencil_switches(rotmat,plus_rotmat) /= 0 ) cycle
+                minus_shift = shift
+                plus_shift = shift
+            else
+                step = SHIFT_FD_STEPS(istep)
+                minus_rotmat = rotmat
+                plus_rotmat = rotmat
+                minus_shift = shift-step*unit_shift(axis-3)
+                plus_shift = shift+step*unit_shift(axis-3)
+            endif
+            if( present(transfer) )then
+                call independent_pose_objective(workspace,minus_rotmat,minus_shift,observed, &
+                    &zero_plane,minus_objective,transfer)
+                call independent_pose_objective(workspace,plus_rotmat,plus_shift,observed, &
+                    &zero_plane,plus_objective,transfer)
+            else
+                call independent_pose_objective(workspace,minus_rotmat,minus_shift,observed, &
+                    &zero_plane,minus_objective)
+                call independent_pose_objective(workspace,plus_rotmat,plus_shift,observed, &
+                    &zero_plane,plus_objective)
+            endif
+            finite_difference = (plus_objective-minus_objective)/(2._dp*step)
+            scale = max(POSE_COMPONENT_SCALE_FLOOR,abs(finite_difference),abs(analytic_gradient(axis)))
+            step_errors(istep) = abs(finite_difference-analytic_gradient(axis))/scale
+        enddo
+        component_errors(axis) = second_smallest(step_errors)
+    enddo
+end subroutine check_pose_gradient_components
+
+!> Recompute the objective from the public prediction path without using the
+!! fused pose-gradient accumulation that is under test.
+subroutine independent_pose_objective(workspace,rotmat,shift,observed,zero_plane,objective,transfer)
+    type(pcg_fourier_workspace), intent(in) :: workspace
+    real(dp), intent(in) :: rotmat(3,3), shift(2)
+    complex, intent(in) :: observed(-TRUTH_VOLUME_BOX/2:,-TRUTH_VOLUME_BOX/2:)
+    complex, intent(in) :: zero_plane(-TRUTH_VOLUME_BOX/2:,-TRUTH_VOLUME_BOX/2:)
+    real(dp), intent(out) :: objective
+    complex, optional, intent(in) :: transfer(-TRUTH_VOLUME_BOX/2:,-TRUTH_VOLUME_BOX/2:)
+    complex, allocatable :: prediction(:,:), residual(:,:)
+    real(dp) :: ignored_objective
+
+    allocate(prediction,mold=zero_plane)
+    allocate(residual,mold=zero_plane)
+    call workspace%shift_residual(rotmat,shift,zero_plane,prediction,ignored_objective)
+    if( present(transfer) ) prediction = transfer*prediction
+    residual = prediction-observed
+    objective = 0.5_dp*sum(real(conjg(cmplx(residual,kind=dp))*cmplx(residual,kind=dp),dp))
+    deallocate(prediction,residual)
+end subroutine independent_pose_objective
+
+!> Return one Cartesian shift basis vector.
+pure function unit_shift(axis) result(vector)
+    integer, intent(in) :: axis
+    real(dp) :: vector(2)
+    vector = 0._dp
+    vector(axis) = 1._dp
+end function unit_shift
+
+!> Return the second-smallest of three errors.
+pure function second_smallest(values) result(value)
+    real(dp), intent(in) :: values(3)
+    real(dp) :: value, ordered(3), temporary
+    integer :: left, right
+    ordered = values
+    do left = 1, 2
+        do right = left+1, 3
+            if( ordered(right) < ordered(left) )then
+                temporary = ordered(left)
+                ordered(left) = ordered(right)
+                ordered(right) = temporary
+            endif
+        enddo
+    enddo
+    value = ordered(2)
+end function second_smallest
 
 !> Apply an independent Rodrigues implementation for derivative-sign verification.
 pure function independent_right_increment(rotmat,omega) result(updated_rotmat)
