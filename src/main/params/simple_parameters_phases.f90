@@ -764,21 +764,6 @@ contains
         if( self%pcg_lambda_rel >= 0.0 .and. trim(self%rec_backend) /= 'pcg' )then
             THROW_HARD('pcg_lambda_rel requires rec_backend=pcg')
         endif
-        select case(trim(self%pcg_pose_polish))
-            case('no')
-            case('yes')
-                if( trim(self%prg%to_char()) /= 'reconstruct3D' )then
-                    THROW_HARD('pcg_pose_polish is accepted only by reconstruct3D')
-                endif
-                if( trim(self%rec_backend) /= 'pcg' )then
-                    THROW_HARD('pcg_pose_polish=yes requires rec_backend=pcg')
-                endif
-                if( trim(self%combine_eo) == 'yes' )then
-                    THROW_HARD('pcg_pose_polish requires independent even and odd final maps')
-                endif
-            case DEFAULT
-                THROW_HARD('pcg_pose_polish must be yes or no')
-        end select
         if( trim(self%prg%to_char()) == 'reconstruct3D' )then
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
             if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')

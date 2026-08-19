@@ -135,11 +135,6 @@ subroutine new_automask( prgtab )
         &'', .false., 'gridding', &
         &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), &
         &visibility=UI_VIS_STANDARD)
-        call reconstruct3D%add_input(UI_PARM, 'pcg_pose_polish', 'binary', 'Final PCG pose polish', &
-        &'Polish rotations and shifts, then reconstruct with accepted poses(yes|no){no}', &
-        &'', .false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-        &visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0, visibility=UI_VIS_ADVANCED)

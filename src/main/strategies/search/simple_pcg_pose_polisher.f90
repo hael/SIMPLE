@@ -23,7 +23,6 @@ implicit none
 private
 #include "simple_local_flags.inc"
 public :: pcg_pose_polish_summary, polish_fixed_volume_shifts, polish_fixed_volume_poses
-public :: execute_final_pcg_pose_polish
 
 integer, parameter :: POLISH_MAX_ITERATIONS = 8
 
@@ -265,10 +264,6 @@ subroutine execute_final_pcg_pose_polish(params, build, cline, total_summary)
     real(dp) :: rotation_scale
     logical :: l_cached, l_sigma_loaded
 
-    if( trim(params%pcg_pose_polish) /= 'yes' )then
-        total_summary = pcg_pose_polish_summary()
-        return
-    endif
     if( trim(params%rec_backend) /= 'pcg' )then
         THROW_HARD('final PCG pose polish requires an executed PCG reconstruction route')
     endif

@@ -303,8 +303,6 @@ contains
         ! setup distributed execution
         call self%qenv%new(params, params%nparts)
         call cline%gen_job_descr(self%job_descr)
-        ! The distributed master owns the one post-reconstruction pose polish.
-        call self%job_descr%delete('pcg_pose_polish')
     end subroutine distr_initialize
 
     subroutine distr_execute(self, params, build, cline)
