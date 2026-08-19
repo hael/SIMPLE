@@ -12,6 +12,31 @@
     - `simple_test_exec.f90` — executes SIMPLE tests workflows
     - `single_exec.f90` — executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows
     - **tests/** — home of executable unit tests
+      - `simple_continuous_3D_pcg_refinement_fixed_reference_test.f90`
+      - `simple_continuous_3D_pcg_refinement_forward_path_test.f90`
+      - `simple_continuous_3D_pcg_refinement_halfset_gridding.f90`
+      - `simple_continuous_3D_pcg_refinement_halfset_matrix.f90`
+      - `simple_continuous_3D_pcg_refinement_halfset_support.f90`
+      - `simple_continuous_3D_pcg_refinement_halfset_test.f90`
+      - `simple_continuous_3D_pcg_refinement_helpers.f90`
+      - `simple_continuous_3D_pcg_refinement_kb_gather_test.f90`
+      - `simple_continuous_3D_pcg_refinement_kb_test.f90`
+      - `simple_continuous_3D_pcg_refinement_matched_window_test.f90`
+      - `simple_continuous_3D_pcg_refinement_noise_gauran_test.f90`
+      - `simple_continuous_3D_pcg_refinement_noise_observation_test.f90`
+      - `simple_continuous_3D_pcg_refinement_noise_support.f90`
+      - `simple_continuous_3D_pcg_refinement_noise_test.f90`
+      - `simple_continuous_3D_pcg_refinement_noise_volume_test.f90`
+      - `simple_continuous_3D_pcg_refinement_operator_contract_support.f90`
+      - `simple_continuous_3D_pcg_refinement_operator_contract_test.f90`
+      - `simple_continuous_3D_pcg_refinement_pose_contract_test.f90`
+      - `simple_continuous_3D_pcg_refinement_recovery_test.f90`
+      - `simple_continuous_3D_pcg_refinement_reference_bias_test.f90`
+      - `simple_continuous_3D_pcg_refinement_rotation_test.f90`
+      - `simple_continuous_3D_pcg_refinement_scaffold_test.f90`
+      - `simple_continuous_3D_pcg_refinement_shift_polish_test.f90`
+      - `simple_continuous_3D_pcg_refinement_shift_test.f90`
+      - `simple_continuous_3D_pcg_refinement_volume_test.f90`
       - `simple_continuous_inplane_refine3D_baseline.f90`
       - `simple_continuous_inplane_refine3D_direct.f90`
       - `simple_continuous_inplane_refine3D_joint.f90`
@@ -42,8 +67,8 @@
       - `simple_test_clustering.f90`
       - `simple_test_cmdline.f90`
       - `simple_test_coarrays.f90`
+      - `simple_test_continuous_3D_pcg_refinement.f90`
       - `simple_test_continuous_inplane_cc_grad.f90`
-      - `simple_test_continuous_inplane_hybrid_grad.f90`
       - `simple_test_continuous_inplane_refine3D.f90`
       - `simple_test_continuous_inplane_rotation2D.f90`
       - `simple_test_continuous_inplane_rotation2D_metadata.f90`
@@ -133,6 +158,7 @@
       - `simple_test_uniform_rot.f90` — from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361
       - `simple_test_units.f90` — runs all implemented unit tests
       - `test_socket_comm_distr.f90`
+      - **continuous_3D_pcg_pose_validation/**
   - **scripts/** — home of scripts and code generators
     - **memory/**
   - **src/** — main source code folder
@@ -510,6 +536,7 @@
           - `simple_matcher_ptcl_io.f90` — particle image batch I/O routines shared by matcher workflows
           - `simple_matcher_refvol_utils.f90` — shared helpers for reading, masking, filtering and reprojecting reference volumes
           - `simple_matcher_smpl_and_lplims.f90` — search-space and particle-selection policy routines for matcher workflows
+          - `simple_pcg_pose_polisher.f90`
           - `simple_ptcl_cache.f90` — downscaled particle cache shared by the 2D and 3D matcher workflows
           - `simple_strategy2D.f90` — abstract base class defining the common strategy2D interface
           - `simple_strategy2D_alloc.f90` — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads

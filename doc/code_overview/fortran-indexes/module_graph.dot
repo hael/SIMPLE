@@ -377,6 +377,7 @@ digraph module_graph {
   "simple_particle_extractor";
   "simple_pca";
   "simple_pca_svd";
+  "simple_pcg_pose_polisher";
   "simple_persistent_worker_message_base";
   "simple_persistent_worker_message_heartbeat";
   "simple_persistent_worker_message_status";
@@ -1389,6 +1390,7 @@ digraph module_graph {
   "simple_commanders_rec" -> "simple_matcher_2dprep";
   "simple_commanders_rec" -> "simple_matcher_3drec";
   "simple_commanders_rec" -> "simple_parameters";
+  "simple_commanders_rec" -> "simple_pcg_pose_polisher";
   "simple_commanders_rec" -> "simple_rec3d_pcg_strategy";
   "simple_commanders_rec" -> "simple_rec3d_strategy";
   "simple_commanders_rec" -> "simple_refine3d_fnames";
@@ -2217,6 +2219,7 @@ digraph module_graph {
   "simple_imgfile" -> "gnufor2";
   "simple_imgfile" -> "iso_fortran_env";
   "simple_imgfile" -> "simple_core_module_api";
+  "simple_imgfile" -> "simple_imghead";
   "simple_imgfile" -> "simple_string_utils";
   "simple_imgfile" -> "simple_tifflib";
   "simple_imghead" -> "simple_defs";
@@ -2599,6 +2602,18 @@ digraph module_graph {
   "simple_particle_extractor" -> "simple_starfile_wrappers";
   "simple_pca_svd" -> "simple_core_module_api";
   "simple_pca_svd" -> "simple_pca";
+  "simple_pcg_pose_polisher" -> "ieee_arithmetic";
+  "simple_pcg_pose_polisher" -> "simple_builder";
+  "simple_pcg_pose_polisher" -> "simple_cmdline";
+  "simple_pcg_pose_polisher" -> "simple_core_module_api";
+  "simple_pcg_pose_polisher" -> "simple_image";
+  "simple_pcg_pose_polisher" -> "simple_matcher_ptcl_io";
+  "simple_pcg_pose_polisher" -> "simple_math_ft";
+  "simple_pcg_pose_polisher" -> "simple_parameters";
+  "simple_pcg_pose_polisher" -> "simple_ptcl_cache";
+  "simple_pcg_pose_polisher" -> "simple_reconstructor_pcg";
+  "simple_pcg_pose_polisher" -> "simple_refine3d_fnames";
+  "simple_pcg_pose_polisher" -> "simple_sigma2_files";
   "simple_persistent_worker_message_heartbeat" -> "simple_persistent_worker_message_base";
   "simple_persistent_worker_message_heartbeat" -> "simple_persistent_worker_message_types";
   "simple_persistent_worker_message_status" -> "simple_defs";
@@ -3057,6 +3072,7 @@ digraph module_graph {
   "simple_stack_io" -> "simple_core_module_api";
   "simple_stack_io" -> "simple_image";
   "simple_stack_io" -> "simple_imgfile";
+  "simple_stack_io" -> "simple_imghead";
   "simple_stackops" -> "simple_core_module_api";
   "simple_stackops" -> "simple_image";
   "simple_starfile" -> "simple_core_module_api";

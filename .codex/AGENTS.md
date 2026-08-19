@@ -1,11 +1,13 @@
-# Feature safety rule
+# SIMPLE Codex agent Instructions
+
+## Feature safety rule
 
 Every new feature must be protected by an explicit opt-in key, with the default
 set to disabled. Existing behavior must remain unchanged unless the user
 enables the feature deliberately. Add validation for the key and test both the
 default-off and opt-in paths before release.
 
-# Codex Repository References
+## Codex Repository References
 
 - `local-history.md` - mandatory local-only history workflow for every `.codex`
   edit. Agents must verify and snapshot before and after changes, must use the
@@ -25,6 +27,11 @@ default-off and opt-in paths before release.
   handoffs. Explain the algorithm and purpose before commands, cite important
   changes with current file and line numbers, define test hypotheses and gates,
   and explain why supplied evidence passes, fails, or needs more testing.
+
+- `msys-ucrt64-rsync-oracle-workflow.md` - controlled Windows-to-Oracle rsync,
+  remote line-ending normalization, and debug-compilation procedure. These are
+  high-risk operations and require the user's explicit approval for each dry
+  run, real transfer, remote rewrite, and compilation action.
 
 - `doc/code_overview/code_base_map.md` — generated source tree and module overview.
 - `origin-push-workflow.md` — canonical-repository commit and push workflow.
