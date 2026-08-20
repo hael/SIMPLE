@@ -199,8 +199,12 @@ contains
         type(builder),    intent(inout) :: build
         logical          :: l_trail_bootstrap(params%nstates)
         call validate_refine3D_pcg_integration(params)
+        ! params%kfromto(2) is the current iteration's matching band
+        ! (set_bp_range3D runs before assembly); solved maps are zeroed
+        ! beyond it because unmatched PCG shells are not convergence-
+        ! controlled and detonate the euclid objective at stage transitions.
         call execute_rec3D_pcg_distributed_master(params, build, cline, &
-            &trail_bootstrap_states=l_trail_bootstrap)
+            &trail_bootstrap_states=l_trail_bootstrap, matched_band_kstop=params%kfromto(2))
         call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap)
     end subroutine assemble_refine3D_pcg
 

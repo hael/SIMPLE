@@ -1141,11 +1141,12 @@ contains
     !> Distributed master: reduce raw worker B,D artifacts in ascending part
     !! order, then perform all folding, finalization and PCG locally. Independent
     !! state/half reductions are completed and released one at a time.
-    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, trail_bootstrap_states )
+    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, trail_bootstrap_states, matched_band_kstop )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         logical, optional, intent(out)  :: trail_bootstrap_states(:)
+        integer, optional, intent(in)   :: matched_band_kstop
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(image) :: previous_even, previous_odd, previous_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
@@ -1154,13 +1155,15 @@ contains
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
-        integer :: n_active_state, n_sampled_state
+        integer :: n_active_state, n_sampled_state, band_kstop
         real :: res05, cfar
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
 
         call validate_pcg_common(params)
+        band_kstop = 0
+        if( present(matched_band_kstop) ) band_kstop = matched_band_kstop
         if( present(trail_bootstrap_states) )then
             if( size(trail_bootstrap_states) /= params%nstates ) &
                 &THROW_HARD('PCG trailing-bootstrap state output has invalid size')
@@ -1517,6 +1520,7 @@ contains
             call validate_solved_map(x, 'distributed', state_here, half, solve_kind)
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
+            call bandlimit_solved_volume(volume, band_kstop, state_here, half, solve_kind)
             if( l_ml_solve )then
                 call write_distributed_diagnostics(state_here, half, solve_kind, nptcls, result, rel_res_hist, &
                     &time_reduce, time_finalize, time_solve, pcgop%get_data_scale(), &
@@ -1690,6 +1694,68 @@ contains
             THROW_HARD(error_message)
         endif
     end subroutine validate_solved_map
+
+    !> Zero Fourier shells above the matching band in a solved PCG map.
+    !! The accumulation is full-band, but beyond the matching/sigma2-estimation
+    !! band the fixed-iteration solve is not convergence-controlled and can
+    !! leave content orders of magnitude above the data-consistent level. That
+    !! content is invisible to the matcher until a stage transition extends
+    !! kfromto(2) into it, at which point it corrupts the group sigma2
+    !! estimates and overflows the scale-sensitive euclid objective (see
+    !! doc/implementation_notes/pcg_euclid_crash_investigation.md). The
+    !! gridding backend needs no equivalent because sampl_dens_correct
+    !! normalizes every voxel by its sampling density, keeping beyond-band
+    !! content at the data-consistent level. kstop is in native crop-box shell
+    !! units; kstop < 1 or >= the volume's shell limit disables the cut, so
+    !! callers without an authoritative matching band pass 0.
+    subroutine bandlimit_solved_volume( volume, kstop, state, half, solve_kind )
+        type(image),      intent(inout) :: volume
+        integer,          intent(in)    :: kstop, state
+        character(len=*), intent(in)    :: half, solve_kind
+        real, parameter :: SUPPRESSION_REPORT_RATIO = 10.
+        complex  :: comp
+        real(dp) :: sumsq_edge, sumsq_cut
+        real     :: ratio
+        integer  :: lims(3,2), phys(3), h, k, l, sh, n_edge, n_cut
+        if( kstop < 1 .or. kstop >= volume%get_filtsz() ) return
+        call volume%fft()
+        lims       = volume%loop_lims(2)
+        sumsq_edge = 0.0_dp
+        sumsq_cut  = 0.0_dp
+        n_edge     = 0
+        n_cut      = 0
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys,comp) &
+        !$omp reduction(+:sumsq_edge,sumsq_cut,n_edge,n_cut) schedule(static) proc_bind(close)
+        do h = lims(1,1),lims(1,2)
+            do k = lims(2,1),lims(2,2)
+                do l = lims(3,1),lims(3,2)
+                    sh = nint(sqrt(real(h*h + k*k + l*l)))
+                    if( sh > kstop )then
+                        phys = volume%comp_addr_phys(h,k,l)
+                        comp = volume%get_cmat_at(phys(1),phys(2),phys(3))
+                        sumsq_cut = sumsq_cut + real(comp,dp)**2 + real(aimag(comp),dp)**2
+                        n_cut     = n_cut + 1
+                        call volume%set_cmat_at(phys(1),phys(2),phys(3), cmplx(0.,0.))
+                    else if( sh == kstop )then
+                        phys = volume%comp_addr_phys(h,k,l)
+                        comp = volume%get_cmat_at(phys(1),phys(2),phys(3))
+                        sumsq_edge = sumsq_edge + real(comp,dp)**2 + real(aimag(comp),dp)**2
+                        n_edge     = n_edge + 1
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        call volume%ifft()
+        if( n_cut < 1 .or. n_edge < 1 ) return
+        if( sumsq_edge <= 0.0_dp ) return
+        ratio = real(sqrt( (sumsq_cut / real(n_cut,dp)) / (sumsq_edge / real(n_edge,dp)) ))
+        if( ratio >= SUPPRESSION_REPORT_RATIO )then
+            write(logfhandle,'(A,I0,A,A,A,A,A,I0,A,ES9.2)') '>>> PCG BAND LIMIT: STATE ', state, &
+                &' | HALF=', trim(half), ' | KIND=', trim(solve_kind), ' | ZEROED SHELLS > ', kstop, &
+                &' | SUPPRESSED/EDGE RMS RATIO=', ratio
+        endif
+    end subroutine bandlimit_solved_volume
 
     subroutine report_solve_summary( execution_mode, state, half, solve_kind, nptcls, niters, &
             &residual, solve_time, stop_reason )
