@@ -27,7 +27,7 @@ contains
         class(string),           intent(out)   :: boxfile_out, thumb_den_out
         real,                    intent(in)    :: smpd    !< sampling distance in A
         integer,                 intent(out)   :: nptcls
-        class(image),  optional, intent(inout) :: pickrefs(:)
+        class(image),            intent(inout) :: pickrefs(:)
         class(string), optional, intent(in)    :: dir_out
         integer,       optional, intent(in)    :: nboxes_max
         type(pickref)                  :: refp, refp_refine
