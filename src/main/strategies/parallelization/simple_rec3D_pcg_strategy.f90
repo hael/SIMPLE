@@ -331,6 +331,8 @@ contains
             call validate_solved_map(x, 'shared', state_here, half, 'base')
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
+            call apply_output_convention(volume, params)
+            call report_beyond_band_excess(volume, params, state_here, half, 'base')
             time_total = real(toc(t_half),dp)
             call write_half_diagnostics(state_here, half, 'base', size(pinds), result, rel_res_hist, &
                 &time_metadata, time_particles, time_accum_init, time_accum, time_finalize, time_solve, time_total, &
@@ -381,7 +383,9 @@ contains
             time_finalize = real(toc(t_phase),dp)
             call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
                 &prior_to_khat_l1, prior_to_khat_rms)
-            x = base_volume%get_rmat()
+            ! the base map is stored in the output convention; the solve runs in
+            ! the solver's native convention
+            x = base_volume%get_rmat() * pcg_mag_correction(params)
             t_phase = tic()
             call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
@@ -390,6 +394,8 @@ contains
             time_total = time_reduce + time_finalize + time_solve
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
+            call apply_output_convention(volume, params)
+            call report_beyond_band_excess(volume, params, state_here, half, 'ml')
             call write_half_diagnostics(state_here, half, 'ml', nptcls, result, rel_res_hist, &
                 &0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, time_finalize, time_solve, time_total, &
                 &pcgop%get_data_scale(), pcgop%get_effective_lambda(), reduce_time=time_reduce, &
@@ -1141,12 +1147,11 @@ contains
     !> Distributed master: reduce raw worker B,D artifacts in ascending part
     !! order, then perform all folding, finalization and PCG locally. Independent
     !! state/half reductions are completed and released one at a time.
-    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, trail_bootstrap_states, matched_band_kstop )
+    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, trail_bootstrap_states )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         logical, optional, intent(out)  :: trail_bootstrap_states(:)
-        integer, optional, intent(in)   :: matched_band_kstop
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(image) :: previous_even, previous_odd, previous_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
@@ -1155,15 +1160,13 @@ contains
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
-        integer :: n_active_state, n_sampled_state, band_kstop
+        integer :: n_active_state, n_sampled_state
         real :: res05, cfar
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
 
         call validate_pcg_common(params)
-        band_kstop = 0
-        if( present(matched_band_kstop) ) band_kstop = matched_band_kstop
         if( present(trail_bootstrap_states) )then
             if( size(trail_bootstrap_states) /= params%nstates ) &
                 &THROW_HARD('PCG trailing-bootstrap state output has invalid size')
@@ -1509,7 +1512,9 @@ contains
                     &prior_to_khat_l1, prior_to_khat_rms)
             endif
             if( l_ml_solve )then
-                x = warm_start%get_rmat()
+                ! the base map is stored in the output convention; the solve
+                ! runs in the solver's native convention
+                x = warm_start%get_rmat() * pcg_mag_correction(params)
             else
                 allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             endif
@@ -1520,7 +1525,8 @@ contains
             call validate_solved_map(x, 'distributed', state_here, half, solve_kind)
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
-            call bandlimit_solved_volume(volume, band_kstop, state_here, half, solve_kind)
+            call apply_output_convention(volume, params)
+            call report_beyond_band_excess(volume, params, state_here, half, solve_kind)
             if( l_ml_solve )then
                 call write_distributed_diagnostics(state_here, half, solve_kind, nptcls, result, rel_res_hist, &
                     &time_reduce, time_finalize, time_solve, pcgop%get_data_scale(), &
@@ -1695,67 +1701,97 @@ contains
         endif
     end subroutine validate_solved_map
 
-    !> Zero Fourier shells above the matching band in a solved PCG map.
-    !! The accumulation is full-band, but beyond the matching/sigma2-estimation
-    !! band the fixed-iteration solve is not convergence-controlled and can
-    !! leave content orders of magnitude above the data-consistent level. That
-    !! content is invisible to the matcher until a stage transition extends
-    !! kfromto(2) into it, at which point it corrupts the group sigma2
-    !! estimates and overflows the scale-sensitive euclid objective (see
-    !! doc/implementation_notes/pcg_euclid_crash_investigation.md). The
-    !! gridding backend needs no equivalent because sampl_dens_correct
-    !! normalizes every voxel by its sampling density, keeping beyond-band
-    !! content at the data-consistent level. kstop is in native crop-box shell
-    !! units; kstop < 1 or >= the volume's shell limit disables the cut, so
-    !! callers without an authoritative matching band pass 0.
-    subroutine bandlimit_solved_volume( volume, kstop, state, half, solve_kind )
+    !> Amplitude convention of the maps this backend writes, shared with the
+    !! gridding backend: reconstructor_eo divides its real-space maps by the
+    !! original box size (mag_correction, "consistent with the current
+    !! scheme") and every downstream consumer -- reference reprojection and
+    !! the euclid objective first of all -- expects maps at that scale. The
+    !! PCG solve itself runs in the solver's native convention, in which the
+    !! solution is the plain data quotient (one box-size factor above
+    !! gridding's output); the factor is applied to the solved maps on output
+    !! and removed again from a stored base map that seeds an ML solve. See
+    !! doc/implementation_notes/drop_legacy_box_division.md for retiring the
+    !! convention itself.
+    real function pcg_mag_correction( params ) result( f )
+        type(parameters), intent(in) :: params
+        f = real(params%box)
+    end function pcg_mag_correction
+
+    subroutine apply_output_convention( volume, params )
         type(image),      intent(inout) :: volume
-        integer,          intent(in)    :: kstop, state
-        character(len=*), intent(in)    :: half, solve_kind
-        real, parameter :: SUPPRESSION_REPORT_RATIO = 10.
+        type(parameters), intent(in)    :: params
+        call volume%div(pcg_mag_correction(params))
+    end subroutine apply_output_convention
+
+    !> The current matching band in native crop-box shells (params%kfromto(2)),
+    !! or 0 when it does not describe a usable band of this volume.
+    integer function matched_band_kstop( params, volume ) result( kstop )
+        type(parameters), intent(in) :: params
+        type(image),      intent(in) :: volume
+        kstop = params%kfromto(2)
+        if( kstop < 1 .or. kstop >= volume%get_filtsz() ) kstop = 0
+    end function matched_band_kstop
+
+    !> Diagnostic only (the map is not modified): compare the RMS amplitude of
+    !! the shells beyond the matching band with that of the band-edge shell and
+    !! report when the former dominates. Reconstructing beyond the matching
+    !! band is essential (resolution extending past the matching limit is the
+    !! validation that the map is right), but the fixed-iteration PCG solve has
+    !! been observed to leave beyond-band content orders of magnitude above the
+    !! band edge under bootstrap-scale sigma2 (see
+    !! doc/implementation_notes/pcg_euclid_crash_investigation.md §13). Such
+    !! content is invisible to the matcher until a stage transition extends the
+    !! band into it, so this line is the regression signal for that solver
+    !! defect. Silent when no matching band is known.
+    subroutine report_beyond_band_excess( volume, params, state, half, solve_kind )
+        type(image),      intent(in) :: volume
+        type(parameters), intent(in) :: params
+        integer,          intent(in) :: state
+        character(len=*), intent(in) :: half, solve_kind
+        real, parameter :: EXCESS_REPORT_RATIO = 10.
+        type(image) :: tmpvol
         complex  :: comp
-        real(dp) :: sumsq_edge, sumsq_cut
+        real(dp) :: sumsq_edge, sumsq_beyond
         real     :: ratio
-        integer  :: lims(3,2), phys(3), h, k, l, sh, n_edge, n_cut
-        if( kstop < 1 .or. kstop >= volume%get_filtsz() ) return
-        call volume%fft()
-        lims       = volume%loop_lims(2)
-        sumsq_edge = 0.0_dp
-        sumsq_cut  = 0.0_dp
-        n_edge     = 0
-        n_cut      = 0
+        integer  :: lims(3,2), phys(3), h, k, l, sh, n_edge, n_beyond, kstop
+        kstop = matched_band_kstop(params, volume)
+        if( kstop < 1 ) return
+        call tmpvol%copy(volume)
+        call tmpvol%fft()
+        lims         = tmpvol%loop_lims(2)
+        sumsq_edge   = 0.0_dp
+        sumsq_beyond = 0.0_dp
+        n_edge       = 0
+        n_beyond     = 0
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys,comp) &
-        !$omp reduction(+:sumsq_edge,sumsq_cut,n_edge,n_cut) schedule(static) proc_bind(close)
+        !$omp reduction(+:sumsq_edge,sumsq_beyond,n_edge,n_beyond) schedule(static) proc_bind(close)
         do h = lims(1,1),lims(1,2)
             do k = lims(2,1),lims(2,2)
                 do l = lims(3,1),lims(3,2)
                     sh = nint(sqrt(real(h*h + k*k + l*l)))
-                    if( sh > kstop )then
-                        phys = volume%comp_addr_phys(h,k,l)
-                        comp = volume%get_cmat_at(phys(1),phys(2),phys(3))
-                        sumsq_cut = sumsq_cut + real(comp,dp)**2 + real(aimag(comp),dp)**2
-                        n_cut     = n_cut + 1
-                        call volume%set_cmat_at(phys(1),phys(2),phys(3), cmplx(0.,0.))
-                    else if( sh == kstop )then
-                        phys = volume%comp_addr_phys(h,k,l)
-                        comp = volume%get_cmat_at(phys(1),phys(2),phys(3))
+                    if( sh < kstop ) cycle
+                    phys = tmpvol%comp_addr_phys(h,k,l)
+                    comp = tmpvol%get_cmat_at(phys(1),phys(2),phys(3))
+                    if( sh == kstop )then
                         sumsq_edge = sumsq_edge + real(comp,dp)**2 + real(aimag(comp),dp)**2
                         n_edge     = n_edge + 1
+                    else
+                        sumsq_beyond = sumsq_beyond + real(comp,dp)**2 + real(aimag(comp),dp)**2
+                        n_beyond     = n_beyond + 1
                     endif
                 end do
             end do
         end do
         !$omp end parallel do
-        call volume%ifft()
-        if( n_cut < 1 .or. n_edge < 1 ) return
-        if( sumsq_edge <= 0.0_dp ) return
-        ratio = real(sqrt( (sumsq_cut / real(n_cut,dp)) / (sumsq_edge / real(n_edge,dp)) ))
-        if( ratio >= SUPPRESSION_REPORT_RATIO )then
-            write(logfhandle,'(A,I0,A,A,A,A,A,I0,A,ES9.2)') '>>> PCG BAND LIMIT: STATE ', state, &
-                &' | HALF=', trim(half), ' | KIND=', trim(solve_kind), ' | ZEROED SHELLS > ', kstop, &
-                &' | SUPPRESSED/EDGE RMS RATIO=', ratio
+        call tmpvol%kill
+        if( n_edge < 1 .or. n_beyond < 1 .or. sumsq_edge <= 0.0_dp ) return
+        ratio = real(sqrt( (sumsq_beyond / real(n_beyond,dp)) / (sumsq_edge / real(n_edge,dp)) ))
+        if( ratio >= EXCESS_REPORT_RATIO )then
+            write(logfhandle,'(A,I0,A,A,A,A,A,I0,A,ES9.2)') '>>> PCG BEYOND-BAND EXCESS: STATE ', state, &
+                &' | HALF=', trim(half), ' | KIND=', trim(solve_kind), ' | BAND EDGE k=', kstop, &
+                &' | BEYOND/EDGE RMS RATIO=', ratio
         endif
-    end subroutine bandlimit_solved_volume
+    end subroutine report_beyond_band_excess
 
     subroutine report_solve_summary( execution_mode, state, half, solve_kind, nptcls, niters, &
             &residual, solve_time, stop_reason )

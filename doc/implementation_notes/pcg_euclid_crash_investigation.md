@@ -1,15 +1,20 @@
 # PCG reconstruct3D → euclid crash: investigation handoff
 
-**Status:** root cause substantially narrowed (see §13, added 2026-08-20 by a
-follow-up analysis session), and the containment fix from §13.5(1) is
-**implemented** (see §14): refine3D-driven PCG assembly now zeroes solved maps
-beyond the iteration's matching band. The failure is NOT an in-band mis-scaling
-of the stage-2 solve: PCG maps carry ~345x-hot spectral content **just above
-the alignment band** at every stage, invisible until a stage transition extends
-`kto` into it; the euclid sigma2 estimate then absorbs the hot shell, the
-1/sigma2 reconstruction weights collapse, the 2-iteration solve stops
-converging, and euclid finally overflows at stage 3. §§1–12 below are the
-original handoff, kept verbatim; corrections are in §13, the fix in §14.
+**Status:** TWO distinct defects identified. Defect A (§13): PCG solves can
+leave hot spectral content just above the matching band, exposed when a stage
+transition extends `kto`; it is diagnosed in the log (`PCG BEYOND-BAND
+EXCESS` line, §14) and the solver-level fix is open (§13.5). Defect B (§15,
+found on the 2026-08-21 rerun with the actual run directory in hand, fixed in
+§15.3): the PCG solution is a uniform ~×200 above gridding's data-quotient
+amplitude convention, so the gridding→PCG backend handoff at stage 3 jumps
+the reference amplitudes faster than the euclid sigma2 equilibrium can adapt
+— this, not defect A, is the original iter-41/42 crash. Root cause: gridding
+divides its output by the original box size (`reconstructor_eo%mag_correction`,
+a retained historical normalization) and PCG did not; PCG now applies the
+same convention on output (§15.3), identically in both execution paths (§16).
+Retiring the convention itself is planned in
+`drop_legacy_box_division.md`. §§1–12 are the original handoff, kept
+verbatim.
 
 **Date:** 2026-08-20
 **Workspace:** `/home/elmlundho/src/SIMPLE` (branch `master`)
@@ -383,27 +388,24 @@ profiles*, not whole-map stats (whole-volume L2/max hide the defect; that is
 why the §8.4 whole-volume-L2 ML guard could never fire — and in this run it
 never did: all failing solves are `KIND=base`, which the guard does not wrap).
 
-### 13.5 Fix candidates, ranked
+### 13.5 Fix candidates (solver level)
 
-1. **Band-limit or taper the solved PCG output beyond the stage's matching
-   band before writing** (or at `kstop + small margin`). Beyond-band content is
-   invisible to the matcher until a stage transition, contributes nothing to
-   alignment, and is exactly what detonates sigma2/euclid. Gridding survives
-   because its beyond-band content is quotient-normalized noise; zeroing is the
-   conservative equivalent. This alone should unblock abinitio3D + PCG.
-2. **Warm-start the base solve from the preconditioned quotient** `x0 = P·b`
+The map keeps its full band throughout: resolution extending beyond the
+matching limit is the validation of the map, so the fix belongs in the solve.
+
+1. **Warm-start the base solve from the preconditioned quotient** `x0 = P·b`
    (≈ the gridding solution) instead of x0=0, so the 2-iteration budget refines
    a data-consistent spectrum rather than leaving transients; costs one extra
    operator application. (Distinct from the §8.4 ML warm-start, which starts
    from the *base map* for a *different* operator.)
-3. **Put the shell-floor into the operator, not only the preconditioner** — a
+2. **Put the shell-floor into the operator, not only the preconditioner** — a
    shell-relative Tikhonov Λ(sh) = frac·mean_rho(sh) (the absolute λ=1e-3 is
    ~1e-11 of D and regularizes nothing). This damps sampling-gap voxels
    consistently in H and P.
-4. **Sigma2 hygiene at stage transitions**: when kto grows, the first estimate
+3. **Sigma2 hygiene at stage transitions**: when kto grows, the first estimate
    of the new shell is made against references sampled from a map that was
-   never constrained by matching at that shell; with (1) in place this becomes
-   benign automatically.
+   never constrained by matching at that shell; once the solver's beyond-band
+   content is data-consistent this is the normal euclid band extension.
 
 ### 13.6 Answers to §11's open questions
 
@@ -416,7 +418,7 @@ never did: all failing solves are `KIND=base`, which the guard does not wrap).
 3. (does sigma2 range blow up rho) Yes, but as propagation: post-pollution
    D spans ~4 extra orders across the band edge and the fixed 2-iteration solve
    returns residual ~1.0.
-4. (which fix) See §13.5 — (1) is the safety fix, (2)/(3) the structural ones;
+4. (which fix) See §13.5 — (1)/(2) are the structural candidates;
    data-scale-tracking lambda alone would not remove the beyond-band defect at
    stage 1 conditions (sigma2 was flat then; the defect predates any sigma2
    dynamic-range issue).
@@ -430,49 +432,145 @@ gold-standard splitting inherits the correlated beyond-band junk (8.07–8.58 Å
 
 ---
 
-## 14. Implemented fix (2026-08-20)
+## 14. Defect A diagnostic and cleanup (2026-08-20/21)
 
-§13.5(1) is in place; §13.5(2)/(3) remain candidate follow-ups if the
-instrumented shell profiles justify a solver-level change.
+`report_beyond_band_excess` (module-level, `simple_rec3D_pcg_strategy.f90`,
+called after every solve in both execution paths) compares the RMS of the
+shells beyond the matching band with the band-edge shell and logs
+`>>> PCG BEYOND-BAND EXCESS ... BEYOND/EDGE RMS RATIO=` when the ratio
+reaches 10. The map is not modified. This is the regression signal for the
+§13 defect: it would have printed ~3e2 every iteration of the restart run, and
+it is silent when the solver behaves. The matching band is
+`params%kfromto(2)` (`matched_band_kstop`, 0 = unknown → silent), read the
+same way in every execution path.
 
-**Change.** `execute_rec3D_pcg_distributed_master` takes an optional
-`matched_band_kstop`; when a positive, sub-Nyquist value is supplied, every
-solved half map (base and ML) is hard-zeroed beyond that shell right after the
-solve (`bandlimit_solved_volume` in `simple_rec3D_pcg_strategy.f90`, same
-`nint`-shell semantics as gridding's `sampl_dens_correct` cut at `sh_lim`).
-`assemble_refine3D_pcg` (the single assembly entry for BOTH shared-memory and
-distributed refine3D with `rec_backend=pcg`) passes `params%kfromto(2)`, which
-`set_bp_range3D` has set to the current iteration's matching band before
-assembly runs. Consequences, all confined to refine3D+PCG:
+The 2026-08-21 rerun (default `PCG_REC_START_STAGE=3`, proper sigma2) showed
+the beyond-band content of the stage-3 PCG solves to be mild (ratio ≤ 10), so
+in that configuration defect A is not active; it was severe only in the
+from-stage-1 configuration with bootstrap-scale, near-flat sigma2.
 
-- Reference reprojection at the next stage's extended `kto` samples zeros
-  instead of x345 junk; the first sigma2 estimate of a newly matched shell is
-  made against a zero reference, i.e. measures particle power — the normal
-  euclid band-extension behavior.
-- FSC is computed from the tapered halves, so it dies honestly at the band
-  edge instead of reporting correlated junk out to Nyquist.
-- The ML solve warm-starts from a tapered base map and its output is tapered
-  again; the trailing-chain raw (B,D) accumulators are untouched (full-band
-  sufficient statistics, as before).
-- The helper logs `>>> PCG BAND LIMIT ...` with the suppressed-vs-band-edge
-  RMS ratio whenever that ratio exceeds 10 — on the streptavidin data this
-  should print ~3e2 every iteration and is the live measurement of the §13.3
-  defect; if a later solver-level fix (quotient warm start, shell-relative
-  lambda) removes the junk, the line disappears by itself.
-
-**Deliberately unchanged:** standalone `reconstruct3D` (both the shared and
-distributed PCG paths pass no band and are not tapered — their `params%kfromto`
-is not authoritative), the gridding backend, all accumulation/worker code, and
-`validate_rec3D_pcg_fractional_updates`.
-
-**Cleanup done alongside** (worktree state as of this section):
+**Cleanup of the original investigation's changes:**
 
 - Removed the temporary `EUCLID DIAG` (simple_polarft_corr.f90) and
   `PCG SCALE DIAG` prints (§8.1–8.2).
 - Removed the `rescale_ml_map_to_base` whole-volume-L2 guard and the ML
-  zero-start experiment (§8.4); the guard's metric cannot see a band-localized
-  defect (and it never fired — the failing solves are `KIND=base`), and with
-  sane base maps the original ML warm start is the better-converging choice.
-- `PCG_REC_START_STAGE` reverted to 3 (§8.3). With the fix, both the default
-  (PCG from stage 3) and the experimental from-stage-1 configuration are
-  protected, since every stage's output is limited to its own matching band.
+  zero-start experiment (§8.4); the guard compared the wrong pair of maps
+  (ML vs base within one iteration — see §15 for the pair that matters) and
+  never fired on the failing base solves; with the right anchor in place the
+  original ML warm start is the better-converging choice.
+- `PCG_REC_START_STAGE` reverted to 3 (§8.3).
+
+---
+
+## 15. Second defect (2026-08-21 rerun): absolute-scale discontinuity at the gridding→PCG handoff
+
+The workflow was rerun with the default `PCG_REC_START_STAGE=3`, so stages
+1–2 used gridding and PCG (base+ML, euclid-weighted) first activated at stage
+3. The crash reproduced in the ORIGINAL mode: iteration 41 aligned fine on the
+stage-2 gridding references, both PCG solves converged (RESID 0.11 base /
+0.07 ml), and iteration 42's prob table threw all-invalid on the first PCG
+references. Shell spectra of the written iteration-41 maps are smooth and
+falling across the matched band with no excess beyond it (ratio ≤ 10).
+Defect A was not the killer in this configuration.
+
+### 15.1 The measurement (run dir 6_abinitio3D, shellspec on the actual maps)
+
+| map | in-band character | L2 |
+|---|---|---|
+| `recvol_state01_stage01_lp.mrc` (stage-1 final, **gridding**, lp snapshot) | smooth, falling | **0.99** |
+| `recvol_state01_iter041_lp.mrc` (iter-41, **PCG**, lp snapshot) | smooth, falling, same shape | **194** |
+| `recvol_state01_even_unfil.mrc` (iter-41 PCG base half) | smooth | 206 |
+| `recvol_state01_even.mrc` (iter-41 PCG ML half) | smooth | 196 |
+
+Per-shell RMS ratios PCG/gridding over the deeply shared band (shells 0–10):
+~150–260, i.e. a **uniform ~×200 amplitude convention difference** between the
+PCG solution and gridding's `sampl_dens_correct` data-quotient convention
+(base and ML equally — the ML solve is not the cause).
+
+### 15.2 Why ×200 is lethal at the handoff but not in steady state
+
+The euclid objective is scale-sensitive, but the group sigma2 estimates
+equilibrate to whatever stable reference amplitude they see (the §13 restart
+run aligned happily for 20+ iterations on PCG-scale maps, refs 0.0055 with
+sigma2 ~5e-6; the gridding stages align happily at gridding scale). What
+euclid cannot survive is an abrupt scale change between consecutive
+iterations: references ×200 → `crvec` ×4e4 → `v = 1 + crvec/norm` far above
+the 23.03 invalidation threshold for EVERY rotation and reference of every
+particle, one iteration before calc_group_sigmas could re-equilibrate. The
+gridding→PCG backend switch inside stage 3 is exactly such a jump; the
+original run's iter-41/42 crash is this defect, not defect A. (Note the
+asymmetry: refs *below* particle scale drive v→1 — flat but usable — which is
+why the gridding stages ran fine even though their reference amplitudes are
+tiny in the polar convention.)
+
+### 15.3 Fix implemented: PCG adopts the gridding amplitude convention
+
+`pcg_mag_correction`/`apply_output_convention` (module-level,
+`simple_rec3D_pcg_strategy.f90`): every solved map, in both execution paths
+and for both solve kinds, is divided by `params%box` right after the solve —
+exactly what `reconstructor_eo` does to its maps (`mag_correction`). The
+solves themselves stay in the solver's native convention: a stored base map
+that seeds an ML solve is multiplied back by the same factor before it is
+used as the warm start. With this the first PCG map after the gridding stages
+lands on the same scale as the map it replaces, the euclid/sigma2
+equilibrium is undisturbed, and no per-iteration measurement or rescaling is
+needed (the interim `apply_scale_continuity` anchor was removed).
+
+The measured remainder (~1.5 over 128) is not a convention: it reflects the
+different alignment states of the two maps compared in §15.1 (the ratio rises
+with resolution) plus second-order KB-deconvolution differences, and is
+within what sigma2 absorbs between consecutive iterations. The same-inputs
+dual-backend test in `drop_legacy_box_division.md` §5.2 pins it down.
+
+### 15.4 Root cause: `mag_correction = box`, and where the deapodization sits
+
+Tracing both chains with SIMPLE's transform convention (`fft` = (1/N)Σ,
+`ifft` = Σ, a true pair, so Fourier cropping and zero-padding are
+amplitude-neutral): gridding rescales the padded 2D plane by `pf²` back to
+the native coefficient convention, inserts with per-axis-normalized KB
+weights into numerator and `rho` alike, divides pointwise, inverse-transforms
+on the native lattice — and then divides by the ORIGINAL box size
+(`simple_reconstructor_eo.f90:119`, `mag_correction = real(params%box)`,
+"consistent with the current scheme"; applied at lines 522/532/571/582/601/602
+and 770). PCG's factors (`padsc` in `b`, `padsc²` in `Khat`, the 176-lattice
+interpolation, the same normalized weights, the deapodization bracket on `H`
+and `b`) all cancel, so its solution is the plain data quotient. PCG/gridding
+= box = 128, against 160–260 measured on non-identical maps.
+
+The gridding deapodization is not in the reconstructor objects: `volassemble`
+(`simple_commanders_rec_distr.f90`, `restore_state_from_parts`) multiplies the
+merged volume and the nonuniform-filter source halves by `gridcorr_img =
+prep3D_inv_instrfun4mul(ldim, ldim_pd, smpd_crop)`; the half-map files are
+not corrected; `filter_pcg_nonuniform_maps` applies no gridcorr to PCG maps
+(deapodized inside the solver), so there is no double correction. The
+correction itself is wrong for the current reconstructor: it evaluates the
+continuous KB instrument function at `1/ldim_croppd` — the envelope of a
+window on the 2x padded lattice — while the reconstructor inserts on the
+native lattice with a 1.5-native-voxel window, whose envelope (period `box`)
+is twice as steep. Gridding maps are therefore under-deapodized by
+R_grid = 0.94/0.79/0.62/0.53 at r = 10/20/30/40 (on axis, box 88).
+
+Same-alignment measurement (stage-2 gridding snapshot = iteration 40, vs the
+PCG iteration-41 map; both lp snapshots of the merged volumes): L2 ratio
+inside r < 24 is 175–177. The box convention alone gives 128; box × gridding's
+envelope deficit gives 140–156; the remaining ×1.2–1.26 rises with spatial
+frequency and toward the core, consistent with the shift search switching on
+at stage 3 (`trs = 0` in stages 1–2). Decomposition of the ~200 first measured
+on stage-1 vs stage-3 maps: ×128 convention, ×~1.15 gridding envelope
+deficit (streptavidin is small; up to ~1.8 at the periphery of a box-filling
+particle), ×~1.2–1.4 map/alignment differences. Details and the fix for the
+envelope in `drop_legacy_box_division.md` §2.1 and §5.3.
+
+Why the convention should go rather than be propagated, and the plan for
+doing so, are in `drop_legacy_box_division.md`.
+
+---
+
+## 16. Design principle applied on review (2026-08-21)
+
+**Shared-memory and distributed execution must be methodologically
+identical.** They are two parallelizations of one algorithm. The output
+convention and the diagnostics are implemented once at module level and
+invoked the same way from `execute_rec3D_pcg_shared` and
+`execute_rec3D_pcg_distributed_master`; no entry point receives special
+arguments, and nothing depends on which path produced the maps.
