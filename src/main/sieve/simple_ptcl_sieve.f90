@@ -1338,7 +1338,7 @@ contains
 
     if( label == LABEL_COARSE ) then
       if( self%model_rejection_enabled ) then
-          call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, 0.0, quality, model, CAVG_QUALITY_CONTEXT_SIEVE, relation_params)
+          call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, 0.0, quality, model, relation_params)
       else
           call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, 0.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
       end if
@@ -1367,7 +1367,7 @@ contains
       call self%coarse_compatibility_model%infer(spproj)
     else
       if( self%model_rejection_enabled ) then
-          call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, 0.0, quality, model, CAVG_QUALITY_CONTEXT_SIEVE, relation_params)
+          call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, 0.0, quality, model, relation_params)
       else
           call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, 0.0, quality, CAVG_QUALITY_CONTEXT_SIEVE)
       end if

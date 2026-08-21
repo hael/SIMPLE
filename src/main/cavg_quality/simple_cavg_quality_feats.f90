@@ -303,10 +303,10 @@ contains
                     bp_center_edge_var < BP_CENTER_EDGE_VAR_HARD_REJECT_MIN .or. &
                     locvar_fg < CHUNK_LOCVAR_FG_HARD_REJECT_MAX
             case(CAVG_QUALITY_CONTEXT_SIEVE)
-                ! Sieve is the small-chunk screening route. It intentionally uses
-                ! conservative hard gates only and does not inherit the shared
-                ! chunk/pool validity gates, because no learned model is meant to
-                ! rescue or reinterpret these very small 2D runs.
+                ! Sieve is the small-chunk screening route. Its conservative
+                ! pre-model gates do not inherit the shared chunk/pool validity
+                ! gates. Surviving rows are passed to the selected regression
+                ! model by the caller.
                 cavg_hard_reject_for_context = .false.
                 reason                       = CAVG_REJECT_REASON_NONE
                 if( pop < pop_hard_threshold ) then

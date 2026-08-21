@@ -1,16 +1,14 @@
 !@descr: analysis of class averages
 module simple_commanders_cavgs
 use simple_commanders_api
-use simple_cavg_quality_analysis, only: evaluate_cavg_quality, evaluate_cavg_quality_hard_reject, &
+use simple_cavg_quality_analysis, only: evaluate_cavg_quality, evaluate_cavg_quality_for_analysis, &
     write_cavg_quality_training_table, write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
-use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_SIEVE_DEFAULT, &
-    cavg_quality_model, write_cavg_quality_model_builtin_code
+use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
+    write_cavg_quality_model_builtin_code
 use simple_cavg_quality_relations, only: cavg_quality_relation_analysis
-use simple_cavg_quality_types,    only: CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
-    CAVG_QUALITY_CONTEXT_SIEVE, CAVG_QUALITY_CONTEXT_HARD_GATES, CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
+use simple_cavg_quality_types,    only: CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
     CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, cavg_quality_result
-use simple_string_utils,          only: lowercase
 use simple_strategy2D_utils
 use simple_imgarr_utils, only: read_cavgs_into_imgarr, dealloc_imgarr, write_imgarr, extract_imgarr, write_selected_cavgs, join_imgarrs, read_stk_into_imgarr
 implicit none
@@ -492,8 +490,8 @@ contains
         integer, parameter        :: QUALITY_MODE_PROMOTE = 5
         integer                   :: quality_mode
         real                      :: smpd
-        character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname
-        character(len=32)         :: quality_context
+        character(len=LONGSTRLEN) :: model_fname, report_fname, out_fname, model_source
+        character(len=32)         :: quality_context, context_source
         call cline%set('oritype', 'cls2D')
         call cline%set('ctf',      'no')
         call cline%set('objfun',   'cc')
@@ -524,8 +522,7 @@ contains
             model_fname = 'cavgs_quality_model_learned.txt'
             if( cline%defined('fname') ) model_fname = params%fname%to_char()
             report_fname = 'cavgs_quality_learn_report.txt'
-            call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname), &
-                trim(params%quality_context))
+            call learn_cavg_quality_model(analysis_files, model, trim(model_fname), trim(report_fname))
             write(logfhandle,'(A,A)') '>>> WROTE LEARNED CAVG QUALITY MODEL : ', trim(model_fname)
             if( allocated(analysis_files) ) deallocate(analysis_files)
             call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION LEARN NORMAL STOP ****', &
@@ -537,14 +534,16 @@ contains
         else
             call model%init_preset(params%quality_model)
         endif
+        model_source = 'built-in preset '//trim(model%name)
         ! Precedence: preset/default first, model file last.
         ! infile is a complete model and wins over the built-in preset.
-        if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' ) &
+        if( cline%defined('infile') .and. trim(params%infile%to_char()) /= '' )then
             call model%read(params%infile%to_char())
-        quality_context = resolve_quality_context()
-        model%context = trim(quality_context)
+            model_source = 'external file '//trim(params%infile%to_char())
+        endif
         if( quality_mode == QUALITY_MODE_PROMOTE )then
             if( .not. cline%defined('infile') ) THROW_HARD('model_cavgs_rejection quality_mode=promote requires infile')
+            call log_quality_model_selection(model%context, 'model artifact')
             out_fname = 'cavgs_quality_model_'//trim(model%name)//'_builtin_code.txt'
             if( cline%defined('fname') ) out_fname = params%fname%to_char()
             call write_cavg_quality_model_builtin_code(model, trim(out_fname))
@@ -555,6 +554,7 @@ contains
         endif
         if( quality_mode == QUALITY_MODE_EVALUATE )then
             if( cline%defined('filetab') )then
+                call log_quality_model_selection(model%context, 'model artifact')
                 call read_filetable(params%filetab, analysis_files)
                 report_fname = 'cavgs_quality_evaluate_report.txt'
                 if( cline%defined('fname') ) report_fname = params%fname%to_char()
@@ -566,6 +566,13 @@ contains
                 return
             endif
         endif
+        if( quality_mode == QUALITY_MODE_ANALYZE )then
+            quality_context = trim(params%quality_context)
+            context_source  = 'analysis command line'
+        else
+            quality_context = trim(model%context)
+            context_source  = 'model artifact'
+        endif
         if( trim(params%projfile%to_char()) == '' ) THROW_HARD('model_cavgs_rejection apply/analyze/evaluate requires projfile')
         if( .not. cline%defined('mskdiam') ) THROW_HARD('model_cavgs_rejection apply/analyze/evaluate requires mskdiam')
         call spproj%read(params%projfile)
@@ -575,22 +582,16 @@ contains
         cavg_imgs = read_cavgs_into_imgarr(spproj)
         if( size(cavg_imgs) /= ncls ) THROW_HARD('model_cavgs_rejection: # cavgs /= # cls2D entries')
         reference_states = spproj%os_cls2D%get_all_asint('state')
-        if( trim(quality_context) == CAVG_QUALITY_CONTEXT_HARD_GATES )then
-            ! Sieve is an explicit no-model route: apply/analyze/evaluate use
-            ! only the conservative sieve hard gates and skip model scoring.
-            model%name = 'hard_gates'
-            model%context = CAVG_QUALITY_CONTEXT_HARD_GATES
-            model%feature_policy = 'hard_gates'
-            model%weights = 0.0
-            call evaluate_cavg_quality_hard_reject(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, trim(quality_context))
-        else
-            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, &
+        if( quality_mode == QUALITY_MODE_ANALYZE )then
+            call evaluate_cavg_quality_for_analysis(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, &
                 trim(quality_context), params, relation_analysis)
+        else
+            call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, quality, model, params, &
+                relation_analysis)
         endif
         nsel = count(quality%states > 0)
         nrej = ncls - nsel
-        write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
-        write(logfhandle,'(A,A)') '>>> CAVG QUALITY CONTEXT        : ', trim(quality_context)
+        call log_quality_model_selection(quality_context, context_source)
         write(logfhandle,'(A,I6)') '>>> DEFAULT HARD GATES REJECTED: ', count(quality%hard_reject)
         write(logfhandle,'(A,I6,A,I6)') '>>> CAVG QUALITY SELECTED / REJECTED : ', nsel, ' / ', nrej
         write(logfhandle,'(A,F8.3,A,F8.3,A,F8.3)') '>>> CAVG QUALITY THRESHOLD RAW / OFFSET / EFFECTIVE : ', &
@@ -612,7 +613,7 @@ contains
                         CAVG_RELATIONAL_DEFAULT_CORR_HP, CAVG_RELATIONAL_DEFAULT_CORR_LP, &
                         CAVG_RELATIONAL_DEFAULT_CORR_TRS)
                 call write_cavg_quality_training_table(quality, reference_states, model, &
-                    'cavgs_quality_training.txt', params%projfile%to_char(), relation_analysis)
+                    'cavgs_quality_training.txt', params%projfile%to_char(), quality_context, relation_analysis)
             endif
         else
             call write_cavg_quality_feature_table(quality, model, 'cavgs_quality_features.txt', &
@@ -728,28 +729,14 @@ contains
             write(logfhandle,'(A,A)') '>>> WROTE ', trim(rank_fname)
         end subroutine write_ranked_quality_stack
 
-        function resolve_quality_context() result( context )
-            character(len=32) :: context
-            character(len=64) :: model_name
-            if( cline%defined('quality_context') )then
-                context = trim(params%quality_context)
-            else
-                ! Context controls the hard-gate policy: sieve is hard-gate-only
-                ! small-chunk screening, chunk is learned rejection on larger
-                ! pre-cleaned chunks, and pool is learned rejection before 3D.
-                context = trim(model%context)
-                model_name = lowercase(trim(model%name))
-                if( index(model_name, CAVG_QUALITY_CONTEXT_POOL) > 0  ) context = CAVG_QUALITY_CONTEXT_POOL
-                if( index(model_name, CAVG_QUALITY_CONTEXT_SIEVE) > 0 ) context = CAVG_QUALITY_CONTEXT_SIEVE
-                if( index(model_name, CAVG_QUALITY_CONTEXT_CHUNK) > 0 ) context = CAVG_QUALITY_CONTEXT_CHUNK
-                if( trim(context) == '' ) context = CAVG_QUALITY_CONTEXT_CHUNK
-            endif
-            select case(trim(context))
-                case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
-                case DEFAULT
-                    THROW_HARD('model_cavgs_rejection: quality_context must be chunk, pool, or sieve')
-            end select
-        end function resolve_quality_context
+        subroutine log_quality_model_selection( context, source )
+            character(len=*), intent(in) :: context, source
+            write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL          : ', trim(model%name)
+            write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL SOURCE   : ', trim(model_source)
+            write(logfhandle,'(A,A)') '>>> CAVG QUALITY MODEL CONTEXT  : ', trim(model%context)
+            write(logfhandle,'(A,A)') '>>> CAVG HARD-GATE CONTEXT      : ', trim(context)
+            write(logfhandle,'(A,A)') '>>> CAVG HARD-GATE SOURCE       : ', trim(source)
+        end subroutine log_quality_model_selection
 
     end subroutine exec_model_cavgs_rejection
 

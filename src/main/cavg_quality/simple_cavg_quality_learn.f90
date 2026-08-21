@@ -10,7 +10,7 @@ use simple_cavg_quality_model, only: cavg_quality_model, cavg_quality_classify_c
     build_classify_cache, kill_classify_cache, cached_decision_confusion, apply_cached_decision_to_quality
 use simple_cavg_quality_stats, only: calc_confusion, calc_binary_metrics, auc_for_values
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, &
-    CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, &
+    CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, &
     CAVG_RELATIONAL_SCHEMA_NONE, CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     cavg_quality_model_spec, cavg_quality_result, cavg_quality_training_dataset, cavg_quality_learn_diagnostics
 use simple_cavg_quality_relations, only: CAVG_RELATIONAL_FEATURE_NAME
@@ -94,106 +94,17 @@ end type cavg_quality_logistic_problem
 
 contains
 
-    subroutine learn_cavg_quality_model( analysis_files, learned_model, model_fname, report_fname, quality_context )
+    subroutine learn_cavg_quality_model( analysis_files, learned_model, model_fname, report_fname )
         class(string),             intent(in)    :: analysis_files(:)
         type(cavg_quality_model),  intent(inout) :: learned_model
         character(len=*),          intent(in)    :: model_fname, report_fname
-        character(len=*), intent(in)             :: quality_context
-        type(cavg_quality_training_dataset), allocatable :: dsets(:)
-        type(cavg_quality_classify_cache),   allocatable :: caches(:)
-        type(cavg_quality_model_spec) :: base_spec, candidate_spec, best_spec
-        type(cavg_quality_model_spec) :: top_specs(CAVG_QUALITY_LEARN_TOP_K)
-        type(cavg_quality_model_spec), allocatable :: best_tie_specs(:)
-        real :: suggested_weights(CAVG_QUALITY_NFEATS)
-        real :: top_scores(CAVG_QUALITY_LEARN_TOP_K)
-        real :: best_score, learn_score
-        integer :: ipol, im, isep, ilow, iwin, iomin, iomax, max_grid
-        integer :: n_grid, n_top, n_best_ties
-        character(len=32) :: context
-        context = trim(quality_context)
-        call validate_quality_context(context, 'learn_cavg_quality_model')
-        call learn_cavg_quality_pairwise_logistic_model(analysis_files, learned_model, model_fname, report_fname, &
-            trim(context))
-        return
-        call load_quality_training_datasets(analysis_files, dsets)
-        base_spec = abinitio_learn_base_spec()
-        base_spec%context = trim(context)
-        call calc_suggested_training_weights(dsets, suggested_weights)
-        best_spec  = base_spec
-        best_score = -huge(1.0)
-        top_scores = -huge(1.0)
-        n_top       = 0
-        n_grid      = 0
-        n_best_ties = 0
-        max_grid = n_feature_policies() * size(LEARN_MINSEPS) * &
-            size(LEARN_BOUNDARY_MARGINS) * n_otsu_grid_combinations() * size(LEARN_OTSU_FLAGS) * &
-            (1 + size(LEARN_MIN_ACCEPT_FRACS))
-        if( max_grid > 10000 ) write(logfhandle,'(A,I0)') &
-            '>>> CAVG QUALITY LEARN CANDIDATE GRID SIZE: ', max_grid
-        allocate(best_tie_specs(min(max_grid, CAVG_QUALITY_LEARN_MAX_TIES)))
-        allocate(caches(size(dsets)))
-        do ipol = 1, n_feature_policies()
-            candidate_spec = base_spec
-            candidate_spec%feature_policy = feature_policy_name(ipol)
-            candidate_spec%weights = suggested_weights
-            call apply_feature_policy(ipol, candidate_spec%weights)
-            ! For a fixed weight vector, the per-dataset scores,
-            ! k-medoids partition, raw threshold, and Otsu threshold are
-            ! reused across the whole threshold-control sub-grid.
-            call build_policy_caches(dsets, candidate_spec%weights, caches)
-            do isep = 1, size(LEARN_MINSEPS)
-                candidate_spec%min_score_separation = LEARN_MINSEPS(isep)
-                do im = 1, size(LEARN_BOUNDARY_MARGINS)
-                    candidate_spec%boundary_margin = LEARN_BOUNDARY_MARGINS(im)
-                    do ilow = 1, size(LEARN_OTSU_FLAGS)
-                        candidate_spec%use_lowsep_otsu = LEARN_OTSU_FLAGS(ilow)
-                        do iwin = 1, size(LEARN_OTSU_FLAGS)
-                            candidate_spec%use_otsu_window = LEARN_OTSU_FLAGS(iwin)
-                            if( candidate_spec%use_otsu_window )then
-                                do iomin = 1, size(LEARN_OTSU_MIN_OFFSETS)
-                                    candidate_spec%otsu_min_offset = LEARN_OTSU_MIN_OFFSETS(iomin)
-                                    do iomax = 1, size(LEARN_OTSU_MAX_OFFSETS)
-                                        candidate_spec%otsu_max_offset = LEARN_OTSU_MAX_OFFSETS(iomax)
-                                        if( candidate_spec%otsu_max_offset <= &
-                                            candidate_spec%otsu_min_offset + EPS ) cycle
-                                        call evaluate_policy_grid(dsets, caches, candidate_spec, &
-                                            n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
-                                            top_specs, top_scores, n_top)
-                                    end do
-                                end do
-                            else
-                                candidate_spec%otsu_min_offset = base_spec%otsu_min_offset
-                                candidate_spec%otsu_max_offset = base_spec%otsu_max_offset
-                                call evaluate_policy_grid(dsets, caches, candidate_spec, &
-                                    n_grid, best_spec, best_score, best_tie_specs, n_best_ties, &
-                                    top_specs, top_scores, n_top)
-                            endif
-                        end do
-                    end do
-                end do
-            end do
-        end do
-        call select_preferred_best_tie(base_spec, best_tie_specs, n_best_ties, best_spec)
-        best_spec%name = 'learned_v1'
-        best_spec%context = trim(context)
-        call learned_model%init_spec(best_spec)
-        learn_score = macro_balacc_for_model(dsets, learned_model)
-        call learned_model%write(model_fname)
-        call write_cavg_quality_learn_report(report_fname, dsets, base_spec, suggested_weights, learned_model, &
-            learn_score, n_grid, top_specs, top_scores, n_top, best_tie_specs, n_best_ties)
-        call kill_policy_caches(caches)
-        deallocate(caches)
-        call kill_training_datasets(dsets)
-        deallocate(best_tie_specs)
-        deallocate(dsets)
+        call learn_cavg_quality_pairwise_logistic_model(analysis_files, learned_model, model_fname, report_fname)
     end subroutine learn_cavg_quality_model
 
-    subroutine learn_cavg_quality_pairwise_logistic_model( analysis_files, learned_model, model_fname, report_fname, &
-                                                           quality_context )
+    subroutine learn_cavg_quality_pairwise_logistic_model( analysis_files, learned_model, model_fname, report_fname )
         class(string),             intent(in)    :: analysis_files(:)
         type(cavg_quality_model),  intent(inout) :: learned_model
         character(len=*),          intent(in)    :: model_fname, report_fname
-        character(len=*),          intent(in)    :: quality_context
         type(cavg_quality_training_dataset), allocatable :: dsets(:)
         type(cavg_quality_logistic_problem) :: problem
         type(cavg_quality_model) :: candidate, best_model
@@ -201,7 +112,11 @@ contains
         real(kind=8), allocatable :: solution(:)
         real :: score, best_score, objective, best_objective, learn_score
         integer :: ipol, ilambda, ithresh, n_candidates
+        character(len=32) :: quality_context
         call load_quality_training_datasets(analysis_files, dsets)
+        call infer_training_context(dsets, quality_context)
+        write(logfhandle,'(A,A)') '>>> CAVG QUALITY TRAINING CONTEXT: ', trim(quality_context)
+        call require_trainable_rows(dsets)
         call require_relational_training_datasets(dsets)
         best_score      = -huge(1.0)
         best_objective  = huge(1.0)
@@ -243,11 +158,48 @@ contains
     subroutine validate_quality_context( quality_context, caller )
         character(len=*), intent(in) :: quality_context, caller
         select case(trim(quality_context))
-            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
+            case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
             case DEFAULT
-                THROW_HARD(trim(caller)//': quality_context must be chunk or pool; sieve is hard-gates-only')
+                THROW_HARD(trim(caller)//': quality_context must be chunk, pool, or sieve')
         end select
     end subroutine validate_quality_context
+
+    subroutine infer_training_context( dsets, quality_context )
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        character(len=*),                    intent(out):: quality_context
+        character(len=XLONGSTRLEN) :: errmsg
+        integer :: ids
+        quality_context = trim(dsets(1)%quality_context)
+        if( trim(quality_context) == '' )then
+            errmsg = 'quality training file has no quality_context or model_context metadata: '//trim(dsets(1)%fname)
+            THROW_HARD(trim(errmsg))
+        endif
+        call validate_quality_context(quality_context, 'infer_training_context')
+        do ids = 1, size(dsets)
+            if( trim(dsets(ids)%quality_context) == '' )then
+                errmsg = 'quality training file has no quality_context or model_context metadata: '//&
+                    trim(dsets(ids)%fname)
+                THROW_HARD(trim(errmsg))
+            endif
+            if( trim(dsets(ids)%quality_context) /= trim(quality_context) )then
+                errmsg = 'quality training files mix contexts: expected '//trim(quality_context)//', file uses '//&
+                    trim(dsets(ids)%quality_context)//': '//trim(dsets(ids)%fname)
+                THROW_HARD(trim(errmsg))
+            endif
+        end do
+    end subroutine infer_training_context
+
+    subroutine require_trainable_rows( dsets )
+        type(cavg_quality_training_dataset), intent(in) :: dsets(:)
+        integer :: ids, ntrainable
+        ntrainable = 0
+        do ids = 1, size(dsets)
+            ntrainable = ntrainable + count_trainable_classes(dsets(ids))
+        end do
+        if( ntrainable == 0 )then
+            THROW_HARD('learn_cavg_quality_model: hard gates rejected every class average in the training set')
+        endif
+    end subroutine require_trainable_rows
 
     subroutine build_logistic_problem( dsets, ipolicy, lambda, problem )
         type(cavg_quality_training_dataset), intent(in)    :: dsets(:)
@@ -915,6 +867,10 @@ contains
         key   = trim(adjustl(tmp(3:ieq-1)))
         value = trim(adjustl(tmp(ieq+1:)))
         select case(trim(key))
+        case('quality_context')
+            dset%quality_context = trim(value)
+        case('model_context')
+            if( trim(dset%quality_context) == '' ) dset%quality_context = trim(value)
         case('relational_feature_schema')
             dset%relational_feature_schema = trim(value)
         case('relational_knn')

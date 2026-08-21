@@ -50,7 +50,7 @@ use simple_mini_stream_utils,     only: segdiampick_mics_multi, segdiampick_mics
 use simple_qsys_env,              only: qsys_env
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality
 use simple_cavg_quality_model,    only: cavg_quality_model, CAVG_QUALITY_MODEL_CHUNK_DEFAULT
-use simple_cavg_quality_types,    only: cavg_quality_result, CAVG_QUALITY_CONTEXT_CHUNK
+use simple_cavg_quality_types,    only: cavg_quality_result
 use simple_imgarr_utils,          only: dealloc_imgarr, read_cavgs_into_imgarr, read_stk_into_imgarr
 use simple_image_msk,             only: automask2D
 use simple_projfile_utils,        only: merge_chunk_projfiles, merge_selected_project_files
@@ -876,10 +876,8 @@ contains
                 call relation_cline%set('mskdiam',            mskdiam_inout)
                 call relation_params%new(relation_cline)
                 call model_local%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
-                !call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, mskdiam_inout, quality_local, &
-                !    model_local, CAVG_QUALITY_CONTEXT_CHUNK, relation_params=relation_params)
                 call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, 0.0, quality_local, &
-                    model_local, CAVG_QUALITY_CONTEXT_CHUNK, relation_params=relation_params)
+                    model_local, relation_params=relation_params)
                 call model_local%kill()
                 n_selected = count(quality_local%states > 0)
                 call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.true.)
@@ -956,7 +954,7 @@ contains
                 call relation_params%new(relation_cline)
                 call model_local%init_preset(CAVG_QUALITY_MODEL_CHUNK_DEFAULT)
                 call evaluate_cavg_quality(cavg_imgs_local, spproj_inout%os_cls2D, mskdiam_inout, quality_local, &
-                    model_local, CAVG_QUALITY_CONTEXT_CHUNK, relation_params=relation_params)
+                    model_local, relation_params=relation_params)
                 call model_local%kill()
                 n_selected = count(quality_local%states > 0)
                 call write_quality_stack(string('quality_selected_cavgs'//MRC_EXT), cavg_imgs_local, quality_local%states, ncls_local, selected=.true.)

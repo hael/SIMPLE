@@ -950,11 +950,34 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
         end select
-        if( trim(self%prg%to_char()) == 'model_cavgs_rejection' .and. trim(self%quality_mode) == 'learn' )then
-            if( cline%defined('quality_model') ) &
-                THROW_HARD('quality_mode=learn uses relational logistic training; quality_model is unsupported')
-        endif
         if( trim(self%prg%to_char()) == 'model_cavgs_rejection' )then
+            select case(trim(self%quality_mode))
+                case('apply')
+                    if( cline%defined('fname') ) &
+                        THROW_HARD('quality_mode=apply uses infile for model input; fname is output-only')
+                    if( cline%defined('quality_context') ) &
+                        THROW_HARD('quality_mode=apply gets quality_context from the selected model')
+                case('analyze')
+                    if( cline%defined('fname') ) &
+                        THROW_HARD('quality_mode=analyze uses infile for model input; fname is output-only')
+                    if( .not. cline%defined('quality_context') ) &
+                        THROW_HARD('quality_mode=analyze requires quality_context for its hard gates')
+                case('learn')
+                    if( cline%defined('quality_model') ) &
+                        THROW_HARD('quality_mode=learn uses ab initio training; quality_model is unsupported')
+                    if( cline%defined('infile') ) &
+                        THROW_HARD('quality_mode=learn uses ab initio training; infile is unsupported')
+                    if( cline%defined('quality_context') ) &
+                        THROW_HARD('quality_mode=learn infers quality_context from its training files')
+                case('evaluate')
+                    if( cline%defined('quality_context') ) &
+                        THROW_HARD('quality_mode=evaluate does not accept a quality_context override')
+                case('promote')
+                    if( cline%defined('quality_model') ) &
+                        THROW_HARD('quality_mode=promote requires infile; quality_model is unsupported')
+                    if( cline%defined('quality_context') ) &
+                        THROW_HARD('quality_mode=promote preserves infile context; quality_context is unsupported')
+            end select
             select case(trim(self%quality_context))
                 case('chunk','pool','sieve')
                 case DEFAULT

@@ -55,15 +55,15 @@ The model feature bank keeps the microchunk-style image-processing evidence, opt
 
 ## Hard-Reject Comparison
 
-Hard rejects in `model_cavgs_rejection` are selected by `quality_context=chunk|pool|sieve`, with `chunk` as the default.
+Hard rejects in `model_cavgs_rejection` are selected by the chunk, pool, or sieve context. Analyze mode requires an explicit `quality_context`; learned model artifacts store the consistent context inferred from their input tables, and application reads the context from the selected artifact.
 
 The contexts represent three workflow phases:
 
-- `sieve`: very small 2D runs on small particle chunks. This phase uses conservative hard gates only and deliberately avoids learned rejection.
+- `sieve`: very small 2D runs on small particle chunks. This phase uses conservative sieve gates before the selected logistic model.
 - `chunk`: the next 2D stage, where sieve-cleaned particles are processed in larger chunks, typically 10-30k particles. This phase uses hard gates plus the chunk logistic model.
 - `pool`: the final 2D phase before 3D analysis, where highly clean particle sets from chunk modeling have been merged. This phase uses its own pool model.
 
-Chunk and pool share non-negotiable validity gates. Chunk adds early-streaming cleanup gates for undersupported and fuzzy-ball-like class averages. Pool adds its own final pre-3D cleanup gates for low population, low band-pass localization, and poor nominal resolution. Sieve is a separate compatibility-analysis route with its own hard-gate policy and deliberately does not inherit the shared chunk/pool validity gates.
+Chunk and pool share non-negotiable validity gates. Chunk adds early-streaming cleanup gates for undersupported and fuzzy-ball-like class averages. Pool adds its own final pre-3D cleanup gates for low population, low band-pass localization, and poor nominal resolution. Sieve has its own pre-model gate policy and deliberately does not inherit the shared chunk/pool validity gates.
 
 | Criterion | Microchunk rule engine | `model_cavgs_rejection` |
 | --- | --- | --- |
@@ -74,9 +74,9 @@ Chunk and pool share non-negotiable validity gates. Chunk adds early-streaming c
 | No valid foreground component | Rejected after full-image connected components are pruned. | Hard rejected after the same style of foreground-component pruning. |
 | Foreground centroid outside mask | Rejected. | Hard rejected. |
 | Largest foreground component outside mask | Rejected when outside pixels exceed 10. | Hard rejected when outside pixels exceed 10. |
-| Local variance exactly degenerate | Rejected when both inside/outside scores are near zero. | Hard rejected when both foreground/background local variances are non-positive. |
+| Local variance exactly degenerate | Rejected when both inside/outside scores are near zero. | Chunk/pool hard reject when both foreground/background local variances are non-positive. |
 | Local variance low but not degenerate | Rejected by fixed robust-z thresholds. | Chunk only: reject an extreme absolute foreground local-variance floor; otherwise encoded as learned evidence. Pool does not apply this extra gate. |
-| Band-pass center/edge variance extremely low | Not used by the rule engine. | Chunk/sieve hard reject when raw `bp_center_edge_var < 1.5`; pool hard rejects when raw `bp_center_edge_var < 10.0`; less extreme values remain learned evidence. |
+| Band-pass center/edge variance extremely low | Not used by the rule engine. | Chunk hard rejects when raw `bp_center_edge_var < 1.5`; pool hard rejects when raw `bp_center_edge_var < 10.0`; sieve leaves this value as learned evidence. |
 
 Microchunk tier thresholds:
 
@@ -127,23 +127,24 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `quality_mode=apply` computes quality features, applies the selected model, writes `cavgs_quality_features.txt`, writes `quality_selected_cavgs.mrc`, `quality_rejected_cavgs.mrc`, `hard_gate_rejections.mrc`, `quality_ranked_cavgs.mrc`, and `quality_ranked_cavgs.txt`, maps the selected class averages into particle states, annotates `cls2D` with `quality`, `quality_cluster`, and `accept`, annotates `cls3D` when its class count matches `cls2D`, optionally prunes particles with `prune=yes`, and writes the project.
 
-`quality_mode=analyze` computes the same model output but treats the existing `cls2D` state as the manual reference. It writes the single canonical learner input `cavgs_quality_training.txt`, the selected/rejected stacks, `hard_gate_rejections.mrc`, and the score-ranked class-average stack plus rank table. The project selection is left unchanged.
+`quality_mode=analyze` requires `quality_context`, applies that context's hard gates, computes model output, and treats the existing `cls2D` state as the manual reference. It writes the single canonical learner input `cavgs_quality_training.txt`, including the gate context that produced its hard-reject mask, plus the selected/rejected stacks, `hard_gate_rejections.mrc`, and the score-ranked class-average stack and rank table. The project selection is left unchanged.
 
-`quality_mode=learn` reads a training file table of `cavgs_quality_training.txt` files from `filetab=` and fits the relational logistic model from a neutral `abinitio_learn_base` foundation. Every input must declare `relational_feature_schema=corr_knn_signal_v1` and contain the normalized CC-neighbour signal-statistics feature; missing or mixed relational schemas are rejected. `quality_context=chunk|pool` labels the learned version-10 model context. `quality_context=sieve` is intentionally rejected because sieve is a hard-gates-only screening phase. Learn mode does not accept `quality_model` or `infile` as a seed. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
+`quality_mode=learn` reads a training file table of `cavgs_quality_training.txt` files from `filetab=` and fits the relational logistic model from a neutral `abinitio_learn_base` foundation. Every input must declare `relational_feature_schema=corr_knn_signal_v1`, contain the normalized CC-neighbour signal-statistics feature, and record the same chunk, pool, or sieve context. Missing or mixed relational schemas, missing or mixed contexts, and a combined input set in which the hard gates rejected every class average are fatal before fitting. The shared input-table context becomes the learned version-10 model context. Learn mode does not accept `quality_context`, `quality_model`, or `infile`. It writes a learned model file controlled by `fname=` and writes `cavgs_quality_learn_report.txt`.
 
-`quality_mode=evaluate` applies the selected fixed model without refitting. With `filetab=`, it evaluates one or more saved `cavgs_quality_training.txt` files. Without `filetab=`, it evaluates a single project directly using the existing `cls2D` state as the manual reference, like analyze mode. It writes `cavgs_quality_evaluate_report.txt`, or the report path controlled by `fname=`.
+`quality_mode=evaluate` applies the selected fixed model without refitting. With `filetab=`, it evaluates one or more saved `cavgs_quality_training.txt` files and preserves the model artifact context because the saved hard gates are not recomputed. Without `filetab=`, it evaluates a single project directly using the existing `cls2D` state as the manual reference, like analyze mode. It writes `cavgs_quality_evaluate_report.txt`, or the report path controlled by `fname=`.
 
-`quality_mode=promote` reads a model file from `infile=` and writes a Fortran promotion snippet controlled by `fname=`.
+`quality_mode=promote` reads a model file from `infile=`, preserves its context, and writes a Fortran promotion snippet controlled by `fname=`.
 
 `apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `evaluate` requires either `filetab` or `projfile` plus `mskdiam`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
-For `apply`, `analyze`, and project-backed `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. If `quality_context` is omitted, the command uses the loaded model context and also falls back to model-name inference from `pool`, `sieve`, or `chunk` substrings. Project-backed runs with `quality_context=sieve` use the hard-gates-only evaluator and skip learned model scoring. Saved-analysis `evaluate filetab=...` runs do not write image stacks because they do not load a project or class-average stack.
+For `apply`, `analyze`, and project-backed `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. `infile` is the external model input; `fname` is output-only and is rejected in apply or analyze mode. Apply and evaluate do not accept `quality_context`: the complete internal or external model artifact supplies its context, that context selects the hard gates, and surviving rows are scored by the same model. Analyze is the only mode that accepts an explicit context because it owns generation of a context-tagged training table. Runtime output reports the model name, built-in or external source, model context, effective hard-gate context, and context source. Saved-analysis `evaluate filetab=...` runs do not write image stacks because they do not load a project or class-average stack; they reuse the saved gate masks while preserving the evaluated model's artifact context.
 
 ## Model Selection
 
 `quality_model` selects a built-in preset outside learn mode. The promoted built-ins are:
 
 - `chunk100mics`: default chunk/stream-style version-10 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/chunk_training5`; it includes `corr_knn_signal_v1` relational evidence.
+- `sieve`: version-10 pairwise logistic model for small-chunk sieve class averages.
 - `pool`: version-10 pairwise logistic model trained from `/Users/elmlundho/model_cavgs_rejection/pool_training4` for pooled class averages before 3D refinement.
 
 When `infile` is supplied, the model file is treated as a complete model and wins over the built-in preset.
@@ -219,7 +220,7 @@ Features outside the selected policy are encoded by zero weights.
 
 ## Hard Rejects
 
-Hard rejects are context-sensitive gates. For `chunk` and `pool`, they run before model fitting, clustering, and training-score calculation. For `sieve`, they are the whole rejection policy.
+Hard rejects are context-sensitive gates. For `chunk`, `pool`, and `sieve`, they run before model fitting, model scoring, and training-score calculation.
 
 A class average is hard rejected in `chunk` and `pool` when any shared validity condition holds:
 
@@ -243,16 +244,21 @@ For `quality_context=pool`, the chunk local-variance floor is not applied. Pool 
 - `pop < ceiling(sum(pop) * 5.0e-4)`;
 - raw 100 to 40 A band-pass center/edge variance is below `10.0`.
 
-For `quality_context=sieve`, the route intentionally uses a separate hard-gate policy for compatibility analysis. It does not inherit the shared chunk/pool validity gates, and it does not run a learned model. The sieve-specific gates are:
+For `quality_context=sieve`, the route uses a separate pre-model gate policy. It does not inherit the shared chunk/pool validity gates. The sieve-specific gates are:
 
 - `pop < ceiling(sum(pop) * 0.0035)`;
-- raw 100 to 40 A band-pass center/edge variance is below `1.5`.
+- the image contains invalid pixels;
+- foreground segmentation has no valid component after full-image connected components are pruned;
+- a segmented foreground component centroid lies outside the mask radius;
+- the largest foreground component has more than 10 pixels outside the mask disc.
+
+Classes that survive these gates are scored by the selected logistic model.
 
 Hard-rejected classes receive rejected state directly. Their normalized features are set to `-CLIP_Z`, their model scores are set to `-CLIP_Z`, and they remain visible in analysis and learning reports.
 
 The band-pass center/edge floor is deliberately conservative. In the v4 chunk training tables, `bp_center_edge_var < 1.5` preserved all manually selected classes while still removing additional manually rejected classes beyond population and resolution. More aggressive fuzzy-ball evidence should remain in the normalized feature vector and learned model, not in the default pre-training hard rejects.
 
-Project-backed `apply`, `analyze`, and `evaluate` runs also write `hard_gate_rejections.mrc`. For `chunk` and `pool`, this is a bookkeeping stack containing classes removed before the model stage. For `sieve`, it is the rejection decision stack because the context is hard-gates-only.
+Project-backed `apply`, `analyze`, and `evaluate` runs also write `hard_gate_rejections.mrc`. For every context, this is a bookkeeping stack containing classes removed before the model stage.
 
 ## Normalization
 
@@ -261,6 +267,8 @@ Project-backed `apply`, `analyze`, and `evaluate` runs also write `hard_gate_rej
 ## Built-In Presets
 
 `chunk100mics` uses feature policy `microchunk_plus_score_signal` and the relational logistic model. It was trained from `/Users/elmlundho/model_cavgs_rejection/chunk_training5`.
+
+`sieve` uses feature policy `microchunk_plus_score_signal`, a `0.25` acceptance probability threshold, and the `corr_knn_signal_v1` relational evidence schema.
 
 `pool` uses feature policy `microchunk_plus_signal`, a `0.30` acceptance probability threshold, and the same `corr_knn_signal_v1` relational evidence schema. It was trained from `/Users/elmlundho/model_cavgs_rejection/pool_training4`.
 
@@ -340,10 +348,13 @@ Common hard-only reasons are `too_few_trainable`, `flat_feature_distances`, `inv
 
 Every file must declare `relational_feature_schema=corr_knn_signal_v1`, contain
 `z_signal_stats_anchor_topk_mean`, and agree on `k`, high-pass, low-pass, and
-shift-range policy. Analyze guarantees this even when its scoring model is an
-older base-only artifact.
+shift-range policy. Every file must also record the hard-gate context that
+produced its mask, and all files in one learning run must record the same
+context. That shared value becomes the learned model context. Analyze
+guarantees this metadata even when its scoring model is an older base-only
+artifact.
 
-Hard-rejected rows are kept in reports but excluded from feature-weight estimation, candidate scoring, feature-signal diagnostics, feature-drop diagnostics, and feature-policy diagnostics.
+Hard-rejected rows are kept in reports but excluded from feature-weight estimation, candidate scoring, feature-signal diagnostics, feature-drop diagnostics, and feature-policy diagnostics. If every row across the combined input set is hard rejected, learn mode stops before fitting or writing a model.
 
 Learn mode assigns each dataset an automatic role:
 
@@ -390,6 +401,7 @@ Analyze a manually selected project:
 ```bash
 simple_exec prg=model_cavgs_rejection \
   quality_mode=analyze \
+  quality_context=chunk \
   projfile=my_project.simple \
   mskdiam=180 \
   mkdir=yes

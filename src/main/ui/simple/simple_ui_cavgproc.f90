@@ -86,11 +86,10 @@ subroutine new_cluster_cavgs( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call model_cavgs_rejection%add_input(UI_PARM, quality_model, &
             activation=ui_activation_equals_any('quality_mode', &
-            &[character(len=8) :: 'apply', 'analyze', 'evaluate', 'promote']), &
+            &[character(len=8) :: 'apply', 'analyze', 'evaluate']), &
         &visibility=UI_VIS_ADVANCED)
         call model_cavgs_rejection%add_input(UI_PARM, quality_context, &
-            activation=ui_activation_equals_any('quality_mode', &
-            &[character(len=8) :: 'apply', 'analyze', 'learn', 'evaluate', 'promote']), &
+            activation=ui_activation_equals_any('quality_mode', [character(len=8) :: 'analyze']), &
         &visibility=UI_VIS_ADVANCED)
         call model_cavgs_rejection%add_input(UI_PARM, prune, &
         &visibility=UI_VIS_ADVANCED)

@@ -43,10 +43,11 @@ real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_HP         = 100.0
 real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_LP         = 15.0
 real,             parameter :: CAVG_RELATIONAL_DEFAULT_CORR_TRS        = 10.0
 
-! Class-average quality contexts form a workflow ladder:
-! - sieve: very small 2D chunks; conservative hard gates only, no learned model.
-! - chunk: pre-cleaned 10-30k-particle chunks; logistic model rejection.
-! - pool : highly cleaned merged chunk output; final model rejection before 3D.
+! Class-average quality contexts select the hard gates that run before the
+! logistic model:
+! - sieve: very small 2D chunks.
+! - chunk: pre-cleaned 10-30k-particle chunks.
+! - pool : highly cleaned merged chunk output before 3D.
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_CHUNK             = 'chunk'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_SIEVE             = 'sieve'
 character(len=*), parameter :: CAVG_QUALITY_CONTEXT_POOL              = 'pool'
@@ -125,6 +126,7 @@ end type cavg_quality_result
 type :: cavg_quality_training_dataset
     character(len=LONGSTRLEN) :: fname      = ''
     character(len=LONGSTRLEN) :: dataset_id = ''
+    character(len=32)         :: quality_context = ''
     character(len=64)         :: relational_feature_schema = CAVG_RELATIONAL_SCHEMA_NONE
     integer                   :: relational_knn = 0
     real                      :: relational_corr_hp = 0.0

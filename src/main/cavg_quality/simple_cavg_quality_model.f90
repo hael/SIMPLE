@@ -7,7 +7,7 @@ use simple_string_utils,       only: str_is_true, lowercase, uppercase, &
 use simple_clustering_utils,   only: cluster_dmat
 use simple_srch_sort_loc,      only: hpsort
 use simple_cavg_quality_types, only: CAVG_QUALITY_NFEATS, CAVG_QUALITY_MAX_INTERACTIONS, EPS, CLIP_Z, &
-    CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_RELATIONAL_SCHEMA_NONE, &
+    CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE, CAVG_RELATIONAL_SCHEMA_NONE, &
     CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1, &
     CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, CAVG_RELATIONAL_DEFAULT_CORR_LP, &
     CAVG_RELATIONAL_DEFAULT_CORR_TRS, &
@@ -725,6 +725,12 @@ contains
 
     subroutine normalize( self )
         class(cavg_quality_model), intent(inout) :: self
+        select case(trim(self%context))
+        case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
+            continue
+        case default
+            THROW_HARD('normalize: model context must be chunk, pool, or sieve')
+        end select
         select case(trim(self%relational_feature_schema))
         case(CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1)
             if( self%relational_knn < 1 ) THROW_HARD('normalize: relational_knn must be positive')
@@ -1014,10 +1020,10 @@ contains
                     self%name = trim(val)
                 case('context')
                     select case(trim(val))
-                        case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL)
+                        case(CAVG_QUALITY_CONTEXT_CHUNK, CAVG_QUALITY_CONTEXT_POOL, CAVG_QUALITY_CONTEXT_SIEVE)
                             self%context = trim(val)
                         case DEFAULT
-                            THROW_HARD('read_model: context must be chunk or pool; sieve is hard-gates-only')
+                            THROW_HARD('read_model: context must be chunk, pool, or sieve')
                     end select
                 case('feature_policy', 'feature_family_set')
                     self%feature_policy = trim(val)

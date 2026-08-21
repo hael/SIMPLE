@@ -19,6 +19,7 @@ private
 #include "simple_local_flags.inc"
 
 public :: evaluate_cavg_quality
+public :: evaluate_cavg_quality_for_analysis
 public :: evaluate_cavg_quality_hard_reject
 public :: prepare_cavg_quality
 public :: write_cavg_quality_training_table
@@ -40,21 +41,44 @@ contains
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
     end subroutine prepare_cavg_quality
 
-    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, model, quality_context, relation_params, &
-                                      relation_result )
+    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, model, relation_params, relation_result )
         class(image),              intent(inout) :: imgs(:)
         type(oris),                intent(in)    :: cls_oris
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
         type(cavg_quality_model),  intent(in)    :: model
-        character(len=*), optional,intent(in)    :: quality_context
+        type(parameters), optional,intent(in)    :: relation_params
+        type(cavg_quality_relation_analysis), optional, intent(inout) :: relation_result
+        call evaluate_cavg_quality_in_context(imgs, cls_oris, mskdiam, quality, model, model%context, &
+            relation_params, relation_result)
+    end subroutine evaluate_cavg_quality
+
+    subroutine evaluate_cavg_quality_for_analysis( imgs, cls_oris, mskdiam, quality, model, quality_context, &
+                                                   relation_params, relation_result )
+        class(image),              intent(inout) :: imgs(:)
+        type(oris),                intent(in)    :: cls_oris
+        real,                      intent(in)    :: mskdiam
+        type(cavg_quality_result), intent(inout) :: quality
+        type(cavg_quality_model),  intent(in)    :: model
+        character(len=*),          intent(in)    :: quality_context
+        type(parameters), optional,intent(in)    :: relation_params
+        type(cavg_quality_relation_analysis), optional, intent(inout) :: relation_result
+        call evaluate_cavg_quality_in_context(imgs, cls_oris, mskdiam, quality, model, quality_context, &
+            relation_params, relation_result)
+    end subroutine evaluate_cavg_quality_for_analysis
+
+    subroutine evaluate_cavg_quality_in_context( imgs, cls_oris, mskdiam, quality, model, quality_context, &
+                                                 relation_params, relation_result )
+        class(image),              intent(inout) :: imgs(:)
+        type(oris),                intent(in)    :: cls_oris
+        real,                      intent(in)    :: mskdiam
+        type(cavg_quality_result), intent(inout) :: quality
+        type(cavg_quality_model),  intent(in)    :: model
+        character(len=*),          intent(in)    :: quality_context
         type(parameters), optional,intent(in)    :: relation_params
         type(cavg_quality_relation_analysis), optional, intent(inout) :: relation_result
         type(cavg_quality_relation_analysis) :: local_relation
-        character(len=32) :: context
-        context = trim(model%context)
-        if( present(quality_context) ) context = trim(quality_context)
-        call prepare_cavg_quality(imgs, cls_oris, mskdiam, quality, trim(context))
+        call prepare_cavg_quality(imgs, cls_oris, mskdiam, quality, trim(quality_context))
         if( model%supports_relational() )then
             if( .not. present(relation_params) ) &
                 THROW_HARD('evaluate_cavg_quality: relational model requires parameters')
@@ -71,7 +95,7 @@ contains
         else
             call model%classify(quality)
         end if
-    end subroutine evaluate_cavg_quality
+    end subroutine evaluate_cavg_quality_in_context
 
     subroutine evaluate_cavg_quality_hard_reject( imgs, cls_oris, mskdiam, quality, quality_context )
         class(image),              intent(inout) :: imgs(:)
@@ -117,12 +141,14 @@ contains
         deallocate(standard_hard_reject)
     end subroutine evaluate_cavg_quality_hard_reject
 
-    subroutine write_cavg_quality_training_table( quality, reference_states, model, fname, dataset_id, relation )
+    subroutine write_cavg_quality_training_table( quality, reference_states, model, fname, dataset_id, quality_context, &
+                                                  relation )
         type(cavg_quality_result), intent(in) :: quality
         integer,                   intent(in) :: reference_states(:)
         type(cavg_quality_model),  intent(in) :: model
         character(len=*),          intent(in) :: fname
         character(len=*),          intent(in) :: dataset_id
+        character(len=*),          intent(in) :: quality_context
         type(cavg_quality_relation_analysis), intent(in) :: relation
         logical, allocatable :: auto(:), ref(:)
         real,    allocatable :: suggested_weights(:)
@@ -161,6 +187,7 @@ contains
         write(funit,'(A)') '# cavg_quality_training_version=1'
         write(funit,'(A,A)') '# dataset_id=', trim(dataset)
         write(funit,'(A,A)') '# model_name=', trim(model%name)
+        write(funit,'(A,A)') '# quality_context=', trim(quality_context)
         write(funit,'(A,A)') '# relational_feature_schema=', CAVG_RELATIONAL_SCHEMA_CORR_KNN_SIGNAL_V1
         write(funit,'(A)') '# relation_anchor=rotmax_cc'
         write(funit,'(A,A)') '# relational_feature_name=', CAVG_RELATIONAL_FEATURE_NAME

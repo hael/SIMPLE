@@ -724,7 +724,8 @@ subroutine set_ui_params
     &choices=ui_choices([character(len=8) :: 'apply', 'analyze', 'learn', 'evaluate', 'promote']))
 
     call quality_context%set_param('quality_context', 'multi',  'Class-average quality context', &
-                                   'Hard-gate context for class-average quality rejection(chunk|pool|sieve){chunk}','', .false., 'chunk', &
+                                   'Required analysis hard-gate context for class-average quality rejection'//&
+                                   '(chunk|pool|sieve)','', .false., 'chunk', &
     &choices=ui_choices([character(len=5) :: 'chunk', 'pool', 'sieve']))
 
     call quality_model%set_param(  'quality_model',   'multi',  'Class-average quality model', &
