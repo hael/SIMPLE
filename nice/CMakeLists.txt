@@ -79,7 +79,7 @@ set(NICE_PY_PACKAGES
 # sqlite3 for pysqlite3 at runtime on Linux.
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   list(APPEND NICE_PY_PACKAGES
-    pysqlite3-binary==0.5.4
+    pysqlite3-binary==0.5.4.post2
     gunicorn==23.0.0
   )
 endif()
