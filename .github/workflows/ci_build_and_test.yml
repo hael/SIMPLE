@@ -26,7 +26,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev libopenblas-dev liblapack-dev libarpack2-dev
+             sudo apt-get -y install gcc cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev libopenblas-dev liblapack-dev libarpack2-dev
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
@@ -114,7 +114,7 @@ jobs:
         run: |
              sudo apt-get update
              echo "Install Basic Dependencies"
-             sudo apt-get -y install gcc cmake lzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev libopenblas-dev liblapack-dev libarpack2-dev
+             sudo apt-get -y install gcc cmake liblzma-dev libtiff-dev libwebp-dev libfftw3-dev libjpeg-dev gnuplot sqlite3 nvidia-cuda-toolkit nvidia-cuda-toolkit-gcc mpich libmpich-dev libcurl4-openssl-dev libopenblas-dev liblapack-dev libarpack2-dev
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
