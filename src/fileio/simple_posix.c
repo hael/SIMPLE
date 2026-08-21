@@ -606,7 +606,15 @@ int list_dirs(char * path, int*len, char * fout, int*len_fout, int* count, size_
             fcount = 0;
             struct dirent *dir;
             while((dir = readdir(d)) != NULL) {
-                if(dir-> d_type == DT_DIR && strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..") != 0) {
+                int is_directory = dir->d_type == DT_DIR;
+                // NFS and other network filesystems may not populate d_type.
+                if(!is_directory && dir->d_type == DT_UNKNOWN) {
+                    struct stat entry_stat;
+                    if(fstatat(dirfd(d), dir->d_name, &entry_stat, AT_SYMLINK_NOFOLLOW) == 0) {
+                        is_directory = S_ISDIR(entry_stat.st_mode);
+                    }
+                }
+                if(is_directory && strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..") != 0) {
                     fprintf(f, "%s\n", dir->d_name);
                     fcount++;
                 }
