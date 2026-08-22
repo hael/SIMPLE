@@ -3,7 +3,7 @@ module simple_flex_pca_rec3D
 use simple_core_module_api
 use simple_builder,                only: builder
 use simple_sp_project,             only: sp_project
-use simple_gridding,               only: prep3D_inv_instrfun4mul
+use simple_gridding,               only: prep3D_inv_kbenvelope4mul
 use simple_image,                  only: image
 use simple_matcher_3Drec,          only: init_rec, prep_imgs4rec, cleanup_rec_buffers
 use simple_matcher_ptcl_io,        only: discrete_read_imgbatch, discrete_read_imgbatch_source, prepimgbatch
@@ -222,8 +222,7 @@ contains
             return
         endif
 300     continue
-        gridcorr_img=prep3D_inv_instrfun4mul([box_rec,box_rec,box_rec], &
-            &OSMPL_PAD_FAC*[box_rec,box_rec,box_rec],smpd_rec)
+        gridcorr_img=prep3D_inv_kbenvelope4mul([box_rec,box_rec,box_rec], smpd_rec)
         outvol_bak = params%outvol
         nview = 1
         if( l_fuse )then

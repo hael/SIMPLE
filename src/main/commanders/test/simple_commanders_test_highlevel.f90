@@ -2085,6 +2085,7 @@ subroutine exec_test_rec3D_backends( self, cline )
     use simple_image,           only: image
     use simple_sp_project,      only: sp_project
     use simple_refine3D_fnames, only: refine3D_state_vol_fname, refine3D_state_vol_fbody
+    use simple_gridding,        only: kb_stencil_envelope_1d
     class(commander_test_rec3D_backends), intent(inout) :: self
     class(cmdline),                       intent(inout) :: cline
     character(len=8), parameter :: BACKENDS(2) = [character(len=8) :: 'gridding', 'pcg']
@@ -2095,10 +2096,16 @@ subroutine exec_test_rec3D_backends( self, cline )
     type(image)           :: vols(2)
     type(string)          :: projfile, vol_fname, out_fnames(2)
     real,    allocatable  :: spec(:,:), spec_tmp(:), corrs(:), radprof(:,:), ratios(:)
+    real,    allocatable  :: env_nat(:), env_leg(:), tprof(:,:)
     integer, allocatable  :: radcnt(:)
     real,    pointer      :: rmat(:,:,:) => null()
-    real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med
-    integer :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used
+    type(image)           :: truth, tvols(3)
+    type(kbinterpol)      :: kbwin
+    type(string)          :: truth_fname
+    real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, e0, bg, hp_here
+    real,    allocatable  :: tspec(:), tcorr(:,:), tspec_b(:,:)
+    integer :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used, it
+    logical :: l_truth
     if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)
     if( .not. cline%defined('mskdiam') ) THROW_HARD('mskdiam is required; exec_test_rec3D_backends')
     call cline%set('oritype',     'ptcl3D')
@@ -2119,6 +2126,9 @@ subroutine exec_test_rec3D_backends( self, cline )
         cline_rec = cline
         call cline_rec%set('prg',         'reconstruct3D')
         call cline_rec%set('rec_backend', trim(BACKENDS(ib)))
+        call cline_rec%delete('vol1')   ! ground-truth volume is for the comparison only
+        call cline_rec%delete('lp')
+        call cline_rec%delete('hp')
         write(logfhandle,'(A)') '>>> REC3D BACKENDS: RECONSTRUCTING WITH '//trim(BACKENDS(ib))
         call xrec3D%execute(cline_rec)
         vol_fname = refine3D_state_vol_fname(state)
@@ -2162,8 +2172,101 @@ subroutine exec_test_rec3D_backends( self, cline )
     enddo
     mskrad  = 0.5 * cline%get_rarg('mskdiam') / smpd_out
     nrb_msk = max(1, min(NRBINS, int(mskrad / rbin_width) + 1))
-    ! Fourier shell amplitudes and FSC between the backends
+    ! ground-truth mode: radial |rho| profiles against a known volume (synthetic data),
+    ! all maps low-passed identically; includes the gridding map re-deapodized with the
+    ! legacy padded-period instrument function so before/after is visible in one run
+    l_truth = cline%defined('vol1')
+    if( l_truth )then
+        truth_fname = cline%get_carg('vol1')
+        call truth%new(ldim, smpd_out)
+        call truth%read(truth_fname)
+        lp_here = 0.
+        if( cline%defined('lp') ) lp_here = cline%get_rarg('lp')
+        hp_here = 0.
+        if( cline%defined('hp') ) hp_here = cline%get_rarg('hp')
+        call tvols(1)%copy(vols(1))
+        call tvols(2)%copy(vols(2))
+        call tvols(3)%copy(vols(1))
+        ! legacy correction: continuous KB instrument function at 1/(2*box); native: discrete stencil, period box
+        kbwin = kbinterpol(KBWINSZ, KBALPHA)
+        call kb_stencil_envelope_1d(kbwin, ldim(1), env_nat)
+        allocate(env_leg(ldim(1)))
+        e0 = kbwin%instr(0.)
+        do i = 1, ldim(1)
+            env_leg(i) = kbwin%instr(real(i - c(1)) / real(2*ldim(1))) / e0
+        enddo
+        call tvols(3)%get_rmat_ptr(rmat)
+        do l = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    rmat(i,j,l) = rmat(i,j,l) * (env_nat(i)*env_nat(j)*env_nat(l)) / (env_leg(i)*env_leg(j)*env_leg(l))
+                enddo
+            enddo
+        enddo
+        nullify(rmat)
+        ! Fourier-shell comparison against the truth (all soft-masked, unfiltered)
+        call truth%mask3D_soft(mskrad)
+        call truth%fft
+        call truth%spectrum('sqrt', tspec)
+        allocate(tcorr(size(tspec),2), tspec_b(size(tspec),2), source=0.)
+        do it = 1, 2
+            call tvols(it)%mask3D_soft(mskrad)
+            call tvols(it)%fft
+            call tvols(it)%spectrum('sqrt', spec_tmp)
+            tspec_b(:,it) = spec_tmp
+            call truth%fsc(tvols(it), tcorr(:,it))
+            call tvols(it)%ifft
+        enddo
+        call truth%ifft
+        write(logfhandle,'(A)') '>>> REC3D BACKENDS: TRUTH SHELL TABLE (soft-masked)  k  res(A)  fsc(truth,gridding)  fsc(truth,pcg)  amp_gridding/truth  amp_pcg/truth'
+        do k = 1, size(tspec)
+            write(logfhandle,'(A,I4,F9.2,2F12.4,2F12.4)') '>>> REC3D BACKENDS: TRUTH SHELL ', k, truth%get_lp(k), &
+                &tcorr(k,1), tcorr(k,2), safe_ratio(tspec_b(k,1), tspec(k)), safe_ratio(tspec_b(k,2), tspec(k))
+        enddo
+        ! re-read the unmasked maps for the radial comparison
+        call truth%read(truth_fname)
+        call tvols(1)%copy(vols(1))
+        call tvols(2)%copy(vols(2))
+        if( lp_here > 0. .or. hp_here > 0. )then
+            call truth%bp(hp_here, lp_here)
+            do it = 1, 3
+                call tvols(it)%bp(hp_here, lp_here)
+            enddo
+        endif
+        ! background: mean outside the mask (+4 px), removed from every map before comparison;
+        ! per-shell least-squares scale <recon*truth>/<truth*truth> is immune to additive offsets
+        call truth%get_rmat_ptr(rmat)
+        bg = background_mean(rmat)
+        rmat = rmat - bg
+        allocate(tprof(NRBINS,4), source=0.)
+        do it = 1, 3
+            call tvols(it)%get_rmat_ptr(rmat)
+            bg   = background_mean(rmat)
+            rmat = rmat - bg
+            nullify(rmat)
+        enddo
+        call truth%get_rmat_ptr(rmat)
+        do it = 1, 3
+            call ls_scale_profile(tvols(it), rmat, tprof(:,it))
+        enddo
+        nullify(rmat)
+        write(logfhandle,'(A)') '>>> REC3D BACKENDS: TRUTH TABLE (per-shell LS scale recon/truth after background removal, normalised to bin 2; hp '//&
+            &real2str_trim(hp_here)//' lp '//real2str_trim(lp_here)//' A)  bin  r_lo-r_hi(px)  gridding  gridding_legacy_deapod  pcg'
+        do irb = 1, NRBINS
+            write(logfhandle,'(A,I4,F7.1,A,F6.1,3F12.4,A)') '>>> REC3D BACKENDS: TRUTH ', irb, &
+                &real(irb-1)*rbin_width, ' -', real(irb)*rbin_width, &
+                &safe_ratio(tprof(irb,1), tprof(2,1)), safe_ratio(tprof(irb,3), tprof(2,3)), &
+                &safe_ratio(tprof(irb,2), tprof(2,2)), merge('  (inside mask)', '               ', irb <= nrb_msk)
+        enddo
+        call truth%kill
+        do it = 1, 3
+            call tvols(it)%kill
+        enddo
+    endif
+    ! Fourier shell amplitudes and FSC between the backends (both soft-masked: the PCG
+    ! solution is support-masked by the solver, the gridding map is not)
     do ib = 1, 2
+        call vols(ib)%mask3D_soft(mskrad)
         call vols(ib)%fft
         call vols(ib)%spectrum('sqrt', spec_tmp)
         if( ib == 1 ) allocate(spec(size(spec_tmp),2), source=0.)
@@ -2248,6 +2351,78 @@ subroutine exec_test_rec3D_backends( self, cline )
                 safe_ratio = -1.
             endif
         end function safe_ratio
+
+        subroutine radial_abs_profile( rm, prof )
+            real, intent(in)  :: rm(:,:,:)
+            real, intent(out) :: prof(NRBINS)
+            integer :: cnt(NRBINS), ii, jj, ll, ib_loc
+            real    :: rad
+            prof = 0.; cnt = 0
+            do ll = 1, ldim(3)
+                do jj = 1, ldim(2)
+                    do ii = 1, ldim(1)
+                        rad    = sqrt(real((ii-c(1))**2 + (jj-c(2))**2 + (ll-c(3))**2))
+                        ib_loc = int(rad / rbin_width) + 1
+                        if( ib_loc > NRBINS ) cycle
+                        prof(ib_loc) = prof(ib_loc) + abs(rm(ii,jj,ll))
+                        cnt(ib_loc)  = cnt(ib_loc) + 1
+                    enddo
+                enddo
+            enddo
+            where( cnt > 0 ) prof = prof / real(cnt)
+        end subroutine radial_abs_profile
+
+        real function background_mean( rm )
+            real, intent(in) :: rm(:,:,:)
+            integer :: ii, jj, ll, cnt
+            real    :: rad, acc
+            acc = 0.; cnt = 0
+            do ll = 1, ldim(3)
+                do jj = 1, ldim(2)
+                    do ii = 1, ldim(1)
+                        rad = sqrt(real((ii-c(1))**2 + (jj-c(2))**2 + (ll-c(3))**2))
+                        if( rad < mskrad + 4. .or. rad > real(ldim(1)/2) ) cycle
+                        acc = acc + rm(ii,jj,ll); cnt = cnt + 1
+                    enddo
+                enddo
+            enddo
+            background_mean = 0.
+            if( cnt > 0 ) background_mean = acc / real(cnt)
+        end function background_mean
+
+        subroutine ls_scale_profile( vol_in, tm, prof )
+            class(image), intent(inout) :: vol_in
+            real,         intent(in)    :: tm(:,:,:)
+            real,         intent(out)   :: prof(NRBINS)
+            real, pointer :: rm(:,:,:) => null()
+            real(dp) :: num(NRBINS), den(NRBINS)
+            integer  :: ii, jj, ll, ib_loc
+            real     :: rad
+            call vol_in%get_rmat_ptr(rm)
+            num = 0.d0; den = 0.d0
+            do ll = 1, ldim(3)
+                do jj = 1, ldim(2)
+                    do ii = 1, ldim(1)
+                        rad    = sqrt(real((ii-c(1))**2 + (jj-c(2))**2 + (ll-c(3))**2))
+                        ib_loc = int(rad / rbin_width) + 1
+                        if( ib_loc > NRBINS ) cycle
+                        num(ib_loc) = num(ib_loc) + real(rm(ii,jj,ll),dp) * real(tm(ii,jj,ll),dp)
+                        den(ib_loc) = den(ib_loc) + real(tm(ii,jj,ll),dp)**2
+                    enddo
+                enddo
+            enddo
+            nullify(rm)
+            prof = 0.
+            where( den > 0.d0 ) prof = real(num / den)
+        end subroutine ls_scale_profile
+
+        function real2str_trim( x ) result( str )
+            real, intent(in) :: x
+            character(len=:), allocatable :: str
+            character(len=32) :: buf
+            write(buf,'(F0.1)') x
+            str = trim(adjustl(buf))
+        end function real2str_trim
 
 end subroutine exec_test_rec3D_backends
 

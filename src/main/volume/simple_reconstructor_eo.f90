@@ -6,6 +6,7 @@ use simple_parameters,      only: parameters
 use simple_image,           only: image
 use simple_sp_project,      only: sp_project
 use simple_refine3D_fnames, only: refine3D_fsc_fname
+use simple_gridding,        only: kb_stencil_inv_envelope_1d, deapodize3D_inplace
 use simple_fsc
 implicit none
 
@@ -21,6 +22,7 @@ type :: reconstructor_eo
     type(reconstructor) :: eosum
     type(string)        :: ext
     real, allocatable   :: fsc(:)
+    real, allocatable   :: invenv1d(:)       !< inverse KB-stencil envelope (deapodization), period box
     real                :: res_fsc05          !< target resolution at FSC=0.5
     real                :: res_fsc0143        !< target resolution at FSC=0.143
     real                :: cfar=0.
@@ -70,6 +72,7 @@ type :: reconstructor_eo
     procedure          :: calc_fsc4sampl_dens_correct
     procedure          :: write_fsc2txt
     procedure          :: sampl_dens_correct_sum
+    procedure, private :: deapodize
     ! DESTRUCTORS
     procedure          :: kill_exp
     procedure          :: kill
@@ -118,6 +121,8 @@ contains
         ! oversampled Fourier interpolation, so construct this at native size
         self%mag_correction = real(self%p_ptr %box) ! consistent with the current scheme
         self%ldim           = [self%box,self%box,self%box]
+        ! deapodization: inverse envelope of the normalized KB stencil on the native lattice
+        call kb_stencil_inv_envelope_1d(self%box, self%invenv1d)
         ! create composites
         call self%even%new(self%ldim, self%smpd)
         call self%even%alloc_rho(self%p_ptr, spproj, expand=l_expand)
@@ -520,6 +525,7 @@ contains
             call even%ifft()
             call even%clip_inplace([self%box,self%box,self%box])
             call even%div(self%mag_correction)
+            call self%deapodize(even)
             call even%write(add2fbody(fname_even,MRC_EXT,'_unfil'))
             ! odd
             cmat = self%odd%get_cmat()
@@ -530,6 +536,7 @@ contains
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
             call odd%div(self%mag_correction)
+            call self%deapodize(odd)
             call odd%write(add2fbody(fname_odd,MRC_EXT,'_unfil'))
             ! Regularization
             if( l_have_fsc )then
@@ -569,6 +576,7 @@ contains
             call even%zero_and_unflag_ft
             call self%even%clip(even)
             call even%div(self%mag_correction)
+            call self%deapodize(even)
             call even%write(fname_even, del_if_exists=.true.)
             call self%even%set_cmat(cmat)
             call even%kill
@@ -580,6 +588,7 @@ contains
             call odd%zero_and_unflag_ft
             call self%odd%clip(odd)
             call odd%div(self%mag_correction)
+            call self%deapodize(odd)
             call odd%write(fname_odd, del_if_exists=.true.)
             call self%odd%set_cmat(cmat)
             call odd%kill
@@ -600,6 +609,9 @@ contains
             ! FFTW padding correction
             call even%div(self%mag_correction)
             call odd%div(self%mag_correction)
+            ! deapodization
+            call self%deapodize(even)
+            call self%deapodize(odd)
             ! write un-normalised unmasked even/odd volumes
             call even%write(fname_even, del_if_exists=.true.)
             call odd%write(fname_odd,   del_if_exists=.true.)
@@ -768,8 +780,17 @@ contains
         call self%eosum%sampl_dens_correct
         call self%eosum%ifft()
         call self%eosum%div(self%mag_correction)
+        call self%deapodize(self%eosum)
         call self%eosum%clip(reference)
     end subroutine sampl_dens_correct_sum
+
+    !> \brief  divides a real-space map on the native lattice by the KB-stencil envelope
+    subroutine deapodize( self, vol )
+        class(reconstructor_eo), intent(in)    :: self
+        class(image),            intent(inout) :: vol
+        if( .not. allocated(self%invenv1d) ) THROW_HARD('deapodization envelope not built; reconstructor_eo::deapodize')
+        call deapodize3D_inplace(vol, self%invenv1d)
+    end subroutine deapodize
 
     ! DESTRUCTORS
 
@@ -798,7 +819,8 @@ contains
             ! set existence
             self%exists = .false.
         endif
-        if( allocated(self%fsc) ) deallocate(self%fsc)
+        if( allocated(self%fsc) )      deallocate(self%fsc)
+        if( allocated(self%invenv1d) ) deallocate(self%invenv1d)
     end subroutine kill
 
 end module simple_reconstructor_eo

@@ -2,7 +2,68 @@
 
 **Status:** in progress on branch `drop_legacy_box_division` (started
 2026-08-22). Steps 1 (instrumentation, §5.1) and 2 (dual-backend test, §5.2)
-are implemented; steps 3–6 are not started. Until step 3 lands, the PCG backend mirrors the convention
+are implemented. **The premise of §2 is refuted by the step-1 baseline and by
+the projector code (§0 below); step 3 is revised. Decision 2026-08-22: do
+the deapodization fix (§5.3) first; retiring the ÷box/×box pair together
+(§5.3a) is deferred but still wanted. The deapodization fix is done and
+verified (§5.3).**
+
+## 0. Revision (2026-08-22): the division is one half of a matched pair
+
+Two findings after steps 1 and 2:
+
+1. **Real-data gridding baseline** (streptavidin abinitio3D, `rec_backend=
+   gridding`, 86 iterations in `stage1_rec_backend_gridding/6_abinitio3D`):
+   ref/ptcl amplitude ratio 0.24–0.55 in the lowest band, falling with
+   resolution to 0.006–0.3 at the matching limit; euclid `v` q05/q50/q95 ≈
+   0.84/0.89/0.95 in stage 1 and 0.70/0.77/0.89 at the end of stage 2; no
+   invalid particles. This is the healthy regime of §3, not the
+   "refs ≪ particles by ~box" regime §2 predicts for the ÷box convention.
+2. **The projector multiplies by the original box.** `simple_projector::
+   expand_cmat(orig_box)` sets `factor = real(orig_box)` and stores
+   `cmat_exp = factor × cmat`; every reference path goes through it
+   (`read_mask_filter_refvols` → `expand_cmat(params%box)` →
+   `vol_pad2ref_pfts_opt`, and the batch projectors; `simulate_particles`
+   and `reproject` likewise). Under SIMPLE's `fft = (1/N)Σ` convention the
+   2D transform of a projection equals `box ×` the central slice of the 3D
+   transform (one extra summed dimension), so a volume whose Fourier
+   coefficients sit at the particle-coefficient scale (the plain data
+   quotient) must be divided by `box` to be stored as a volume, and its slice
+   multiplied by `box` to become a reprojection. `reconstructor_eo%
+   mag_correction = box` and `expand_cmat`'s `factor = box` are that pair.
+   They cancel on the reference path, so the map convention has NO effect on
+   the euclid objective; the §1 statement that "nothing else in the chain
+   introduces a box-sized factor" overlooked the projection side.
+
+Consequences:
+
+- The PCG crash mechanism stands, but its reading changes: PCG's undivided
+  solution was projected with the ×box factor still applied, so references
+  came out box× too large. `pcg_mag_correction` is therefore the correct
+  convention for a volume that will be projected by `expand_cmat`, not a
+  kludge, and the gridding↔PCG handoff is scale-continuous with it (step-2
+  test: in-band ratio 1.09, FSC 0.95–0.99).
+- **Step 3 as originally written (drop the division only) is wrong**: it
+  would put every gridding reference box× too large, i.e. reproduce the
+  crash in the production path. If the division is to be retired, the
+  projector's multiplication must be retired with it; the change is then
+  net-neutral for refinement (same references, same sigma2, same `v`) and
+  only changes map values on disk by ×box. That is a cosmetic/robustness
+  refactor (it removes the trap a new backend can fall into), to be decided
+  on its own merits. The acceptance criterion is equality, not improvement:
+  EUCLID DIAG and `test_rec3D_backends` output identical before and after.
+- The gridding deapodization mismatch of §2.1 is unaffected by this
+  revision and remains a real, separate item (§5.3 of the revised plan).
+- §2's explanation of the 2D class averages being "already at the
+  data-quotient scale" is consistent: there is no slice theorem in 2D, so
+  `cavger` carries neither factor; the 2D control's ratio ≈ 1.1 at low
+  resolution vs 3D's ≈ 0.5 reflects that and the 3D filters/masks, not a
+  convention error.
+- Open: why the synthetic 3D case (§5.1, SNR 0.1 simulated particles) shows
+  ratio 0.08 where real data shows 0.5. Both use the same projector, so it is
+  not the convention; likely `simulate_particles`' SNR definition and/or the
+  static `lp=10`. A 2D control on the real particles would settle what the
+  "expected signal" ratio is for that dataset. Until step 3 lands, the PCG backend mirrors the convention
 (`pcg_mag_correction` in `simple_rec3D_pcg_strategy.f90`) so the two backends
 are interchangeable.
 
@@ -310,7 +371,64 @@ identity above was established and is wrong.)
    radius on a particle of radius ≲ 26 px in a 128 box — the §2.1 prediction
    (R_grid ≈ 0.8 at r/box ≈ 0.19) is not resolved by this case; a
    box-filling particle is needed to test it.
-3. **Remove the division and fix the gridding deapodization.**
+3. **[REVISED, see §0] Retire the ÷box / ×box pair together, or leave both.**
+   If retired: `mag_correction` → 1 (six `div` sites), `pcg_mag_correction`/
+   `apply_output_convention` and the two warm-start multiplications deleted,
+   the flex and `volops` divisions of §1 removed, AND `expand_cmat`'s
+   `factor` → 1 (all callers pass `box` or `ldim(1)`; audit `simulate_
+   particles`, `reproject`, `symanalyzer`, `volpft_corrcalc`, `volinterp` for
+   any consumer that relied on the product). Acceptance: EUCLID DIAG and
+   `test_rec3D_backends` tables identical before/after (values on disk ×box).
+   The deapodization fix below is independent of this choice.
+
+   **Deapodization fix — implemented and verified against ground truth
+   (2026-08-22).** `simple_gridding` now owns `kb_stencil_envelope_1d`
+   (exact 1-D transform of the normalized origin stencil, period n),
+   `kb_stencil_inv_envelope_1d`, `deapodize3D_inplace` and
+   `prep3D_inv_kbenvelope4mul`; `prep3D_inv_instrfun4mul` is gone. The PCG
+   reconstructor's `build_kb_envelope_1d` delegates to the shared routine
+   (period `boxpd`; `test=pcg_recon` stages 1–9 still pass). For gridding the
+   correction lives in `reconstructor_eo` (`deapodize`, period `box_crop`,
+   built in `new`) and is applied to the merged map in
+   `sampl_dens_correct_sum` and to BOTH half-maps (`_unfil` and filtered) in
+   `sampl_dens_correct_eos`, so halves and merged share one convention and
+   the non-`lpset` reference path reads deapodized halves. `volassemble`
+   (`restore_state_from_parts`) no longer multiplies the files it reads;
+   the two flex sites and `simple_flex_pca_rec3D` use
+   `prep3D_inv_kbenvelope4mul`. The 2D `prep2D_inv_instrfun4mul` is unchanged.
+
+   Verification (`test=rec3D_backends ... vol1=<truth> lp=10 hp=50`, ground
+   truth = the volume the particles were simulated from; per-radial-shell
+   least-squares scale recon/truth after background removal, normalised to
+   r = 4–8 px; the test also re-deapodizes the gridding map analytically
+   with the legacy padded-period instrument function for a same-run
+   before/after):
+
+   | r (px) | 0–4 | 8–12 | 12–16 | 16–20 | 20–24 |
+   |---|---|---|---|---|---|
+   | gridding, new envelope | 0.97 | 1.03 | 0.99 | 1.01 | 0.95 |
+   | gridding, legacy envelope | 0.96 | 0.94 | 0.86 | 0.89 | 0.81 |
+   | PCG | 0.93 | 1.01 | 0.92 | 0.96 | 0.86 |
+
+   The legacy maps fade 14–19 % by r = 12–24 px (box 128); the corrected
+   maps are flat within ±5 %. The offset-averaged effective kernel was also
+   computed and differs from the origin stencil by < 0.5 % (0.965 vs 0.963
+   at r = 10), confirming the "second order" note above.
+
+   Two further findings from the same test: (i) without `hp` the gridding
+   map appears to fade even after the fix (0.91/0.88/0.79/0.71) — that is
+   NOT an envelope but a pre-existing low-frequency artifact: gridding's
+   amplitude in Fourier shells k = 1–2 (137 / 69 Å) is ~25 % above the
+   truth-relative level of every other shell (ratio 15.8 / 16.4 vs ≈ 12.8),
+   PCG's is uniform (12.1 / 12.9 vs ≈ 12.5); with FSC to truth ≥ 0.99 in
+   those shells it is an amplitude excess, not a phase error. It shows up as
+   a broad positive central blob with a negative ring at r = 32–44 px and
+   mimics a radial fade in any |ρ|-type comparison. Open item, §6.
+   (ii) `EUCLID DIAG` is unchanged by the fix within noise (synthetic:
+   ratio 0.083 → 0.081, `v` 0.86 → 0.86) — expected, since the envelope
+   enters reprojections only through the map's radial profile.
+
+   *Original text, kept for the record:* **Remove the division and fix the gridding deapodization.**
    `mag_correction` → 1 (or delete the member and its six `div` sites); delete
    `pcg_mag_correction`/`apply_output_convention` and the two warm-start
    multiplications in the PCG strategy; the flex and `volops` sites in §1.
@@ -332,11 +450,44 @@ identity above was established and is wrong.)
    particle noise power; gridding↔PCG switch mid-workflow with no scale
    discontinuity (the `PCG SCALE CONTINUITY`-type guard must not be needed
    and is not reinstated).
+   *Stage-2 results (2026-08-22, streptavidin, commit `285f55d2` = step 2
+   tool but BEFORE the deapodization fix; in `stage2_tests/`):*
+
+   - `abinitio3D rec_backend=pcg` (PCG from stage 3, iteration 41 on) vs the
+     stage-1 gridding run: low-band ref/ptcl ratio and `v` q50 at iterations
+     40 / 41 / 60 / 72 / 85 / 100 — gridding 0.458/0.545/0.527/0.523/0.51/—
+     and 0.83/0.79/0.77/0.77/0.85/—; PCG 0.462/0.546/0.623/0.638/0.60/0.52
+     and 0.83/0.80/0.77/0.76/0.84/0.94. No discontinuity at the backend
+     handoff (iteration 41 identical), no invalid particles in 220 iterations,
+     `v` identical to within 0.01; PCG references come out ~20 % stronger in
+     the lowest band during stages 3–4 (see the low-shell excess below).
+   - `abinitio2D` control on the same particles: low-band ratio 0.44–0.57
+     from iteration 4 on, `v` q50 0.78–0.94 — the same level as 3D
+     (0.46–0.66), which settles §6's second question: the polar
+     normalizations put the expected signal at ≈ 0.5 of the particle
+     amplitude at low resolution for this dataset, for cavgs and
+     reprojections alike.
+   - `test=rec3D_backends` inside the gridding run dir (pre-fix, and before
+     the comparison soft-masked both maps): FSC(gridding,pcg) 0.96–0.99 for
+     k = 4–40, in-band amplitude ratio pcg/gridding 0.80–0.87 (partly the
+     unmasked gridding map's outside-mask power), **pcg/gridding 1.7–2.0 at
+     k = 1–3** (137–46 Å) — the low-shell discrepancy between backends is
+     real on real data too, with the opposite sign to the synthetic case
+     relative to truth. Radial pcg/gridding 1.03 → 0.94 over r = 4–24 px,
+     centre bin 0.50 (gridding's central blob). To be rerun with the fixed
+     build.
+
 6. **Compatibility.** Release note on the ×box change of map values; a
    warning when a starting reference reprojects ≪ the particle scale.
 
 ## 6. Open items it does not settle
 
+- Gridding low-shell amplitude excess: the merged gridding map's Fourier
+  shells k = 1–2 are ~25 % too strong relative to the truth (§5.3 (ii)),
+  while PCG's are not. Candidates: the CTF²-weighted quotient at shells where
+  ctf ≈ fraca (noise amplification that PCG's Tikhonov term and support mask
+  regularize), the ML tau at FSC ≈ 1, or `floor_rho_shellwise`. To be
+  localized with `test=rec3D_backends ... vol1=` on synthetic data.
 - The PCG solver's beyond-band behaviour under near-flat bootstrap sigma2
   (`pcg_euclid_crash_investigation.md` §13, `PCG BEYOND-BAND EXCESS`
   diagnostic) is a separate solver-level question.

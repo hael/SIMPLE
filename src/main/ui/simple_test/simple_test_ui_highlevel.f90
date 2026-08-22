@@ -240,6 +240,12 @@ contains
         &'PCG iterations for the comparison', 'iterations{2}', .false., 2.)
         call rec3D_backends%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Tolerance for the comparison', 'tolerance{0}', .false., 0.0)
+        call rec3D_backends%add_input(UI_IMG, 'vol1', 'file', 'Ground-truth volume', &
+        &'Known volume the particles were simulated from; enables the radial recon/truth table', &
+        &'e.g. truth.mrc', .false., '')
+        call rec3D_backends%add_input(UI_FILT, 'lp', 'num', 'Low-pass limit for the truth comparison', &
+        &'Applied identically to the truth and both reconstructions before the radial comparison', &
+        &'Angstroms{0}', .false., 0.0)
         call rec3D_backends%add_input(UI_MASK, mskdiam)
         call rec3D_backends%add_input(UI_COMP, nthr)
         call add_ui_program('rec3D_backends', rec3D_backends, tsttab, UI_CATEGORY)

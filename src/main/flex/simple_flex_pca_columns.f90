@@ -14,7 +14,7 @@ use simple_flex_pca_parts,   only: flex_pca_part_fname, write_snr_part, reduce_s
     &write_mean_scale, read_mean_scale, &
     &write_columns_hkl, read_columns_hkl
 use simple_kbinterpol,       only: kbinterpol
-use simple_gridding,         only: prep3D_inv_instrfun4mul
+use simple_gridding,         only: prep3D_inv_kbenvelope4mul
 use simple_linalg,           only: jacobi, eigsrt, svd_solve
 use simple_math,             only: ceil_div, floor_div
 use simple_srch_sort_loc,    only: hpsort
@@ -1241,8 +1241,7 @@ contains
         call mean_rec%sampl_dens_correct
         call mean_rec%ifft
         call mean_rec%div(real(params%box))
-        gridcorr_img = prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
-            &OSMPL_PAD_FAC*[params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+        gridcorr_img = prep3D_inv_kbenvelope4mul([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         call mean_rec%mul(gridcorr_img)
         call gridcorr_img%kill
         fname = 'flex_pca_mean'//MRC_EXT
@@ -1997,8 +1996,7 @@ contains
         n1 = ub(1)-lb(1)+1; n2 = ub(2)-lb(2)+1; n3 = ub(3)-lb(3)+1
         allocate(vr(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
         allocate(vi(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
-        gridcorr_img = prep3D_inv_instrfun4mul([params%box_crop,params%box_crop,params%box_crop], &
-            &OSMPL_PAD_FAC*[params%box_crop,params%box_crop,params%box_crop],params%smpd_crop)
+        gridcorr_img = prep3D_inv_kbenvelope4mul([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         allocate(realvols(2*ncol))
         nreal = 0
         do s = 1, ncol

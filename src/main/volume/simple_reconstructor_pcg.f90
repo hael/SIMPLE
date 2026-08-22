@@ -14,6 +14,7 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_image, only: image
 use simple_ctf,   only: ctf
+use simple_gridding, only: kb_stencil_envelope_1d
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
 implicit none
 
@@ -504,29 +505,9 @@ contains
         class(reconstructor_pcg), intent(in) :: self
         integer,                    intent(in) :: n
         real, allocatable,          intent(out) :: env1d(:)
-        real :: w(self%wdim,self%wdim,self%wdim), w1(self%wdim)
-        real :: arg, ctrval
-        integer :: i, j, k, q, x, c
-        call self%kbwin%apod_mat_3d_fast([0.,0.,0.], self%iwinsz, self%wdim, w)
-        do i = 1, self%wdim
-            w1(i) = 0.0
-            do k = 1, self%wdim
-                do j = 1, self%wdim
-                    w1(i) = w1(i) + w(i,j,k)
-                end do
-            end do
-        end do
-        allocate(env1d(n), source=0.0)
-        c = n/2 + 1
-        do x = 1, n
-            do i = 1, self%wdim
-                q = i - self%iwinsz - 1
-                arg = 2.0 * PI * real(q * (x-c)) / real(n)
-                env1d(x) = env1d(x) + w1(i) * cos(arg)
-            end do
-        end do
-        ctrval = env1d(c)
-        if( abs(ctrval) > TINY ) env1d = env1d / ctrval
+        ! shared with the gridding backend (simple_gridding): same normalized
+        ! origin stencil, period n (the padded lattice here)
+        call kb_stencil_envelope_1d(self%kbwin, n, env1d)
     end subroutine build_kb_envelope_1d
 
     pure function get_env( self ) result( env )
