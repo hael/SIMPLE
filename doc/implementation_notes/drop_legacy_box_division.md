@@ -1,8 +1,8 @@
 # Dropping the legacy box division from reconstruction output
 
 **Status:** in progress on branch `drop_legacy_box_division` (started
-2026-08-22). Step 1 (instrumentation, §5.1) is implemented; steps 2–6 are
-not started. Until step 3 lands, the PCG backend mirrors the convention
+2026-08-22). Steps 1 (instrumentation, §5.1) and 2 (dual-backend test, §5.2)
+are implemented; steps 3–6 are not started. Until step 3 lands, the PCG backend mirrors the convention
 (`pcg_mag_correction` in `simple_rec3D_pcg_strategy.f90`) so the two backends
 are interchangeable.
 
@@ -277,6 +277,39 @@ identity above was established and is wrong.)
    gridding deapodization corrected the ratio must be ≈1 across the band and
    flat in radius; with only `mag_correction` removed the radial profile of
    the ratio must follow 1/R_grid of §2.1.
+
+   *Implemented (2026-08-22).* `simple_test_exec test=rec3D_backends
+   projfile=<run>.simple pgrp=.. mskdiam=.. nthr=..` (`exec_test_rec3D_backends`
+   in `simple_commanders_test_highlevel.f90`). Run it inside a `refine3D` run
+   directory: it executes the production `reconstruct3D` commander twice in
+   the cwd (gridding, then pcg; same project, orientations and
+   `sigma2_it_N.star`), keeps the merged maps as
+   `recvol_stateXX_gridding.mrc` / `recvol_stateXX_pcg.mrc`, and prints (a) a
+   shell table — mean Fourier amplitude per shell for both, ratio pcg/gridding,
+   FSC between the two maps; (b) a radial table — mean |ρ| in 16 radial bins,
+   ratio, ratio normalised to the centre bin; (c) a summary — the agreement
+   band (contiguous shells from k=2 with FSC(gridding,pcg) > 0.5), the median
+   shell ratio inside it, and the min/max of the normalised radial ratio over
+   bins fully inside 0.85×mask radius. No thresholds are enforced; it is the
+   measurement for step 3.
+
+   Caveat for the radial test: the PCG solver solves on a spherical support
+   (`pcgop%set_mask(params%msk_crop)`), so its map is zero outside the mask
+   radius and soft at the edge, while gridding's is not; only bins well inside
+   the mask are comparable, hence the 0.85 factor. Bin 1 (r < box/32) holds
+   few voxels and is noisy.
+
+   First reading (same synthetic project as §5.1, box 128, `mskdiam=60`,
+   PCG 2 iterations): agreement band k = 2–38 (3.6 Å), median in-band
+   amplitude ratio pcg/gridding **1.09** (1.01–1.12 for k = 3–30), FSC
+   between backends 0.95–0.99 in band — the convention mirror works. Beyond
+   k ≈ 31 gridding amplitudes fall much faster than PCG's and the ratio
+   explodes past k ≈ 40 with FSC ≈ 0: the PCG beyond-band excess of §6, now
+   visible in a same-inputs comparison. Radial: normalised ratio 0.78–0.81
+   flat over r = 4–24 px (centre bin 1.0, 18 % above), i.e. no rise with
+   radius on a particle of radius ≲ 26 px in a 128 box — the §2.1 prediction
+   (R_grid ≈ 0.8 at r/box ≈ 0.19) is not resolved by this case; a
+   box-filling particle is needed to test it.
 3. **Remove the division and fix the gridding deapodization.**
    `mag_correction` → 1 (or delete the member and its six `div` sites); delete
    `pcg_mag_correction`/`apply_output_convention` and the two warm-start

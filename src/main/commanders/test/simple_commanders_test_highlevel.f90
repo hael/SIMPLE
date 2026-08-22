@@ -58,6 +58,11 @@ type, extends(commander_base) :: commander_test_pcg_frac_update
     procedure :: execute      => exec_test_pcg_frac_update
 end type commander_test_pcg_frac_update
 
+type, extends(commander_base) :: commander_test_rec3D_backends
+  contains
+    procedure :: execute      => exec_test_rec3D_backends
+end type commander_test_rec3D_backends
+
 contains
 
 subroutine exec_test_mini_stream( self, cline )
@@ -2063,5 +2068,187 @@ subroutine exec_test_pcg_frac_update( self, cline )
     call build%kill_general_tbox
     call simple_end('**** SIMPLE_TEST_PCG_FRAC_UPDATE NORMAL STOP ****', print_simple=.false.)
 end subroutine exec_test_pcg_frac_update
+
+!> Same-inputs dual-backend reconstruction test (doc/implementation_notes/
+!> drop_legacy_box_division.md, plan step 2). Reconstructs ONE fixed set of
+!> particles/orientations/sigma2 with the gridding and the PCG backend through
+!> the production reconstruct3D commander, in the current directory (so the
+!> sigma2 group files of a refine3D run directory are found), and compares the
+!> two merged maps: per-shell amplitude ratio and FSC between backends, and the
+!> radial real-space profile ratio that exposes a deapodization mismatch.
+!> Expectation while the ÷box convention is mirrored by PCG (today): shell ratio
+!> ≈ 1 across the band and a radial ratio rising toward the box edge (gridding's
+!> under-deapodization, §2.1). After plan step 3: ≈ 1 across the band AND flat in
+!> radius. No thresholds are enforced; this is the measurement.
+subroutine exec_test_rec3D_backends( self, cline )
+    use simple_commanders_rec,  only: commander_rec3D
+    use simple_image,           only: image
+    use simple_sp_project,      only: sp_project
+    use simple_refine3D_fnames, only: refine3D_state_vol_fname, refine3D_state_vol_fbody
+    class(commander_test_rec3D_backends), intent(inout) :: self
+    class(cmdline),                       intent(inout) :: cline
+    character(len=8), parameter :: BACKENDS(2) = [character(len=8) :: 'gridding', 'pcg']
+    integer,          parameter :: NRBINS = 16
+    type(commander_rec3D) :: xrec3D
+    type(cmdline)         :: cline_rec
+    type(sp_project)      :: spproj
+    type(image)           :: vols(2)
+    type(string)          :: projfile, vol_fname, out_fnames(2)
+    real,    allocatable  :: spec(:,:), spec_tmp(:), corrs(:), radprof(:,:), ratios(:)
+    integer, allocatable  :: radcnt(:)
+    real,    pointer      :: rmat(:,:,:) => null()
+    real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med
+    integer :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used
+    if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)
+    if( .not. cline%defined('mskdiam') ) THROW_HARD('mskdiam is required; exec_test_rec3D_backends')
+    call cline%set('oritype',     'ptcl3D')
+    call cline%set('mkdir',       'no')
+    call cline%set('postprocess', 'no')
+    call cline%delete('nparts')   ! shared-memory execution of both backends
+    call cline%delete('part')
+    call cline%delete('rec_backend')
+    projfile = cline%get_carg('projfile')
+    call spproj%read(projfile)
+    smpd = spproj%get_smpd()
+    box  = spproj%get_box()
+    call spproj%kill
+    state = 1
+    if( cline%defined('state') ) state = cline%get_iarg('state')
+    ! reconstruct with both backends
+    do ib = 1, 2
+        cline_rec = cline
+        call cline_rec%set('prg',         'reconstruct3D')
+        call cline_rec%set('rec_backend', trim(BACKENDS(ib)))
+        write(logfhandle,'(A)') '>>> REC3D BACKENDS: RECONSTRUCTING WITH '//trim(BACKENDS(ib))
+        call xrec3D%execute(cline_rec)
+        vol_fname = refine3D_state_vol_fname(state)
+        if( .not. file_exists(vol_fname) )then
+            THROW_HARD('reconstruct3D ('//trim(BACKENDS(ib))//') did not produce '//vol_fname%to_char())
+        endif
+        out_fnames(ib) = refine3D_state_vol_fbody(state)//'_'//trim(BACKENDS(ib))//MRC_EXT
+        call simple_rename(vol_fname, out_fnames(ib), overwrite=.true.)
+        call cline_rec%kill
+    enddo
+    ! read the two maps
+    call find_ldim_nptcls(out_fnames(1), ldim, nptcls)
+    smpd_out = smpd * real(box) / real(ldim(1))
+    do ib = 1, 2
+        call vols(ib)%new(ldim, smpd_out)
+        call vols(ib)%read(out_fnames(ib))
+    enddo
+    ! real-space radial profiles of |rho| (before any FFT)
+    c          = ldim/2 + 1
+    rbin_width = real(ldim(1)/2) / real(NRBINS)
+    allocate(radprof(NRBINS,2), source=0.)
+    allocate(radcnt(NRBINS),    source=0)
+    do ib = 1, 2
+        call vols(ib)%get_rmat_ptr(rmat)
+        l2(ib) = sqrt(sum(rmat(1:ldim(1),1:ldim(2),1:ldim(3))**2))
+        do l = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    r   = sqrt(real((i-c(1))**2 + (j-c(2))**2 + (l-c(3))**2))
+                    irb = int(r / rbin_width) + 1
+                    if( irb > NRBINS ) cycle
+                    radprof(irb,ib) = radprof(irb,ib) + abs(rmat(i,j,l))
+                    if( ib == 1 ) radcnt(irb) = radcnt(irb) + 1
+                enddo
+            enddo
+        enddo
+        nullify(rmat)
+    enddo
+    do irb = 1, NRBINS
+        if( radcnt(irb) > 0 ) radprof(irb,:) = radprof(irb,:) / real(radcnt(irb))
+    enddo
+    mskrad  = 0.5 * cline%get_rarg('mskdiam') / smpd_out
+    nrb_msk = max(1, min(NRBINS, int(mskrad / rbin_width) + 1))
+    ! Fourier shell amplitudes and FSC between the backends
+    do ib = 1, 2
+        call vols(ib)%fft
+        call vols(ib)%spectrum('sqrt', spec_tmp)
+        if( ib == 1 ) allocate(spec(size(spec_tmp),2), source=0.)
+        spec(:,ib) = spec_tmp
+    enddo
+    lfny = size(spec, dim=1)
+    allocate(corrs(lfny), source=0.)
+    call vols(1)%fsc(vols(2), corrs)
+    ! report
+    write(logfhandle,'(A)') ''
+    write(logfhandle,'(A,I0,A,I0,A,F0.4,A)') '>>> REC3D BACKENDS: STATE ', state, ' BOX ', ldim(1), ' SMPD ', smpd_out, &
+        &'  MAPS: '//out_fnames(1)%to_char()//' '//out_fnames(2)%to_char()
+    write(logfhandle,'(A,ES11.4,A,ES11.4,A,F0.4)') '>>> REC3D BACKENDS: L2 gridding ', l2(1), ' pcg ', l2(2), &
+        &' pcg/gridding ', safe_ratio(l2(2), l2(1))
+    write(logfhandle,'(A)') '>>> REC3D BACKENDS: SHELL TABLE  k  res(A)  amp_gridding  amp_pcg  pcg/gridding  fsc(gridding,pcg)'
+    do k = 1, lfny
+        write(logfhandle,'(A,I4,F9.2,2ES14.4,F12.4,F10.4)') '>>> REC3D BACKENDS: SHELL ', k, vols(1)%get_lp(k), &
+            &spec(k,1), spec(k,2), safe_ratio(spec(k,2), spec(k,1)), corrs(k)
+    enddo
+    write(logfhandle,'(A)') '>>> REC3D BACKENDS: RADIAL TABLE  bin  r_lo-r_hi(px)  |rho|_gridding  |rho|_pcg  pcg/gridding  norm_to_bin1'
+    rnorm = safe_ratio(radprof(1,2), radprof(1,1))
+    do irb = 1, NRBINS
+        rr = safe_ratio(radprof(irb,2), radprof(irb,1))
+        write(logfhandle,'(A,I4,F7.1,A,F6.1,2ES14.4,2F12.4,A)') '>>> REC3D BACKENDS: RADIAL ', irb, &
+            &real(irb-1)*rbin_width, ' -', real(irb)*rbin_width, radprof(irb,1), radprof(irb,2), rr, &
+            &safe_ratio(rr, rnorm), merge('  (inside mask)', '               ', irb <= nrb_msk)
+    enddo
+    ! summary
+    ! agreement band: contiguous shells from k=2 with FSC(gridding,pcg) > 0.5
+    kagree = 1
+    do k = 2, lfny
+        if( corrs(k) <= 0.5 ) exit
+        kagree = k
+    enddo
+    allocate(ratios(lfny), source=0.)
+    n = 0
+    do k = 2, kagree
+        if( spec(k,1) > 0. .and. spec(k,2) > 0. )then
+            n = n + 1
+            ratios(n) = spec(k,2) / spec(k,1)
+        endif
+    enddo
+    med = -1.
+    if( n > 0 )then
+        call hpsort(ratios(1:n))
+        med = ratios(max(1, (n+1)/2))
+    endif
+    ! radial flatness: bins lying fully inside 0.85 x mask radius (clear of the PCG soft support edge)
+    rmin = huge(rmin); rmax = -huge(rmax); nrb_used = 0
+    do irb = 1, nrb_msk
+        if( real(irb)*rbin_width > 0.85*mskrad ) exit
+        if( radprof(irb,1) < 1.e-3*radprof(1,1) .or. radprof(irb,2) < 1.e-3*radprof(1,2) ) cycle
+        rr = safe_ratio(safe_ratio(radprof(irb,2), radprof(irb,1)), rnorm)
+        if( rr <= 0. ) cycle
+        nrb_used = nrb_used + 1
+        rmin = min(rmin, rr); rmax = max(rmax, rr)
+    enddo
+    write(logfhandle,'(A,I0,A,F0.2,A,F0.4)') '>>> REC3D BACKENDS: SUMMARY agreement band (FSC gridding/pcg > 0.5) k=2-', kagree, &
+        &' (', vols(1)%get_lp(kagree), ' A); median shell amplitude ratio pcg/gridding in band: ', med
+    write(logfhandle,'(A,F0.4,A,F0.4,A,I0,A)') '>>> REC3D BACKENDS: SUMMARY radial ratio inside 0.85 x mask radius, normalised to the centre bin: min ', rmin, &
+        &' max ', rmax, ' (', nrb_used, ' bins)'
+    write(logfhandle,'(A)') '>>> REC3D BACKENDS: EXPECTATION with the box division mirrored by PCG: shell ratio ~1, radial ratio rising toward the edge (gridding under-deapodized, S2.1)'
+    write(logfhandle,'(A)') '>>> REC3D BACKENDS: EXPECTATION after dropping the division and fixing gridding deapodization: shell ratio ~1 AND radial ratio flat (~1)'
+    do ib = 1, 2
+        call vols(ib)%kill
+    enddo
+    if( allocated(spec)     ) deallocate(spec)
+    if( allocated(spec_tmp) ) deallocate(spec_tmp)
+    if( allocated(corrs)    ) deallocate(corrs)
+    if( allocated(radprof)  ) deallocate(radprof)
+    if( allocated(radcnt)   ) deallocate(radcnt)
+    if( allocated(ratios)   ) deallocate(ratios)
+    call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
+
+    contains
+
+        pure real function safe_ratio( a, b )
+            real, intent(in) :: a, b
+            if( abs(b) > 0. )then
+                safe_ratio = a / b
+            else
+                safe_ratio = -1.
+            endif
+        end function safe_ratio
+
+end subroutine exec_test_rec3D_backends
 
 end module simple_commanders_test_highlevel

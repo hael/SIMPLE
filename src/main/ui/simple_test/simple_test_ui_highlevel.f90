@@ -12,6 +12,7 @@ type(ui_program), target :: subproject_distr
 type(ui_program), target :: ptcls_ppca_subproject_distr
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
+type(ui_program), target :: rec3D_backends
 
 contains
 
@@ -25,6 +26,7 @@ contains
         call new_ptcls_ppca_subproject_distr(tsttab)
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
+        call new_rec3D_backends(tsttab)
     end subroutine construct_test_highlevel_programs
 
     subroutine print_test_highlevel_programs( logfhandle)
@@ -38,6 +40,7 @@ contains
         write(logfhandle,'(A)') ptcls_ppca_subproject_distr%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
+        write(logfhandle,'(A)') rec3D_backends%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
 
@@ -212,5 +215,34 @@ contains
         call pcg_frac_update%add_input(UI_COMP, nthr)
         call add_ui_program('pcg_frac_update', pcg_frac_update, tsttab, UI_CATEGORY)
     end subroutine new_pcg_frac_update
+
+    subroutine new_rec3D_backends( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call rec3D_backends%new(&
+        &'rec3D_backends',&
+        &'Same-inputs gridding vs PCG reconstruction comparison',&
+        &'Reconstructs one fixed set of particles/orientations/sigma2 with reconstruct3D using the gridding '//&
+        &'and the PCG backend, in the current directory (run it inside a refine3D run directory so the sigma2 '//&
+        &'group files are found), and compares the merged maps: per-shell amplitude ratio and FSC between '//&
+        &'backends, and the radial real-space profile ratio that exposes a deapodization mismatch. Writes '//&
+        &'recvol_stateXX_gridding.mrc and recvol_stateXX_pcg.mrc. Measurement only, no thresholds '//&
+        &'(doc/implementation_notes/drop_legacy_box_division.md, plan step 2).',&
+        &'simple_test_exec',&
+        &.true.)
+        call rec3D_backends%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
+        &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
+        &'pixels{native box}', .false., 0.0)
+        call rec3D_backends%add_input(UI_SRCH, trs)
+        call rec3D_backends%add_input(UI_SRCH, pgrp)
+        call rec3D_backends%add_input(UI_SRCH, objfun)
+        call rec3D_backends%add_input(UI_FILT, ml_reg)
+        call rec3D_backends%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+        &'PCG iterations for the comparison', 'iterations{2}', .false., 2.)
+        call rec3D_backends%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
+        &'Tolerance for the comparison', 'tolerance{0}', .false., 0.0)
+        call rec3D_backends%add_input(UI_MASK, mskdiam)
+        call rec3D_backends%add_input(UI_COMP, nthr)
+        call add_ui_program('rec3D_backends', rec3D_backends, tsttab, UI_CATEGORY)
+    end subroutine new_rec3D_backends
 
 end module simple_test_ui_highlevel
