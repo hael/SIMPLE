@@ -313,16 +313,25 @@ contains
         call fsc_name%kill
     end subroutine register_stage_volume
 
-    subroutine write_abinitio_lowpass_snapshot( vol_in, lp, vol_out, smpd )
-        class(string), intent(in) :: vol_in, vol_out
-        real,          intent(in) :: lp, smpd
+    !> smpd/box describe the sampling the caller expects; the volume on disk
+    !! may be at another box (e.g. the full box after the symmetry search while
+    !! the stage runs cropped), in which case the pixel size is rescaled with
+    !! the box*smpd invariant so the header stays physically correct.
+    subroutine write_abinitio_lowpass_snapshot( vol_in, lp, vol_out, smpd, box )
+        class(string),     intent(in) :: vol_in, vol_out
+        real,              intent(in) :: lp, smpd
+        integer, optional, intent(in) :: box
         type(image) :: vol_lp
         integer :: ldim(3), nptcls
-        real    :: lp_eff
+        real    :: lp_eff, smpd_eff
         if( .not. file_exists(vol_in) ) return
         call find_ldim_nptcls(vol_in, ldim, nptcls)
-        lp_eff = max(2.0 * smpd, lp)
-        call vol_lp%new(ldim, smpd)
+        smpd_eff = smpd
+        if( present(box) )then
+            if( box > 0 .and. ldim(1) > 0 .and. ldim(1) /= box ) smpd_eff = smpd * real(box) / real(ldim(1))
+        endif
+        lp_eff = max(2.0 * smpd_eff, lp)
+        call vol_lp%new(ldim, smpd_eff)
         call vol_lp%read(vol_in)
         call vol_lp%fft()
         call vol_lp%bp(0., lp_eff)
@@ -487,7 +496,7 @@ contains
                 lp_snapshot = abinitio_state_fsc_lowpass(state, abinitio_stage_box_crop(params, istage), &
                     &abinitio_stage_smpd_crop(params, istage), lpinfo(istage)%lp, istage)
                 call write_abinitio_lowpass_snapshot(vol_name, lp_snapshot, vol_lp_stage, &
-                    &abinitio_stage_smpd_crop(params, istage))
+                    &abinitio_stage_smpd_crop(params, istage), box=abinitio_stage_box_crop(params, istage))
             endif
         enddo
         call vol_stage%kill
@@ -545,6 +554,10 @@ contains
                 ! symmetric reconstruction
                 cline_symrec = cline_reconstruct3D
                 call apply_refine3D_reconstruction_controls(cline_symrec)
+                ! the symmetric reconstruction belongs to the stage and runs at
+                ! its cropped sampling, like the stage-boundary reconstruction;
+                ! the base reconstruct3D command line carries no box keys
+                call cline_symrec%set('box_crop',   abinitio_stage_box_crop(params, istage))
                 call cline_symrec%set('prg',        'reconstruct3D')
                 call cline_symrec%set('mkdir',      'no')
                 call cline_symrec%set('projfile',   projfile)
@@ -570,7 +583,7 @@ contains
                 lp_snapshot  = abinitio_state_fsc_lowpass(state, abinitio_stage_box_crop(params, istage), &
                     &abinitio_stage_smpd_crop(params, istage), lpinfo(istage)%lp, istage)
                 call write_abinitio_lowpass_snapshot(vol_sym, lp_snapshot, vol_lp_stage, &
-                    &abinitio_stage_smpd_crop(params, istage))
+                    &abinitio_stage_smpd_crop(params, istage), box=abinitio_stage_box_crop(params, istage))
                 call inject_refine3D_volume(params, state, vol_sym)
                 call vol_stage%kill
                 call vol_lp_stage%kill
@@ -653,7 +666,7 @@ contains
             lp_snapshot = abinitio_state_fsc_lowpass(state, abinitio_stage_box_crop(params, istage), &
                 &abinitio_stage_smpd_crop(params, istage), lpinfo(istage)%lp, istage)
             call write_abinitio_lowpass_snapshot(dest_main, lp_snapshot, vol_diag, &
-                &abinitio_stage_smpd_crop(params, istage))
+                &abinitio_stage_smpd_crop(params, istage), box=abinitio_stage_box_crop(params, istage))
             vol_even = refine3D_state_halfvol_fname(state, 'even')
             if( file_exists(vol_even) )then
                 dest = tmpl//'_even_unfil'//MRC_EXT
@@ -967,7 +980,7 @@ contains
             call simple_copy_file(vol_name, vol_final)
             vol_final_lp = add2fbody(vol_final, MRC_EXT, LP_SUFFIX)
             lp_snapshot = abinitio_state_fsc_lowpass(state, params%box, params%smpd, lp)
-            call write_abinitio_lowpass_snapshot(vol_final, lp_snapshot, vol_final_lp, params%smpd)
+            call write_abinitio_lowpass_snapshot(vol_final, lp_snapshot, vol_final_lp, params%smpd, box=params%box)
             vol_pproc = add2fbody(vol_name, MRC_EXT, PPROC_SUFFIX)
             vol_final_pproc = add2fbody(vol_final, MRC_EXT, PPROC_SUFFIX)
             if( file_exists(vol_pproc) )then

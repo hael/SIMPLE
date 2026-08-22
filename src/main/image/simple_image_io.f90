@@ -118,7 +118,7 @@ contains
         real             :: dev, mean
         type(imgfile)    :: ioimg
         character(len=1) :: form
-        integer          :: first_slice, last_slice, iform, ii, mode
+        integer          :: first_slice, last_slice, iform, ii, mode, ldim_old(3), nfoo
         logical          :: isvol, die, existing_file, write_float16
         isvol         = .false.
         die           = .false.
@@ -147,6 +147,19 @@ contains
             case('M','F')
                 if( write_float16 .and. self%ft ) THROW_HARD('wfloat16 does not support Fourier data')
                 existing_file = file_exists(fname) .and. .not. die
+                ! A volume write replaces the whole file. Re-using the header of
+                ! an existing file is only meaningful for stacks (slice appends);
+                ! for a volume of different dimensions it mixes the old and the
+                ! new dims (the cell is computed from the old m before the dims
+                ! are updated, and nz takes max(old,new)), which corrupts the
+                ! pixel size per axis and leaves stale trailing data.
+                if( isvol .and. existing_file )then
+                    call find_ldim_nptcls(fname, ldim_old, nfoo)
+                    if( any(ldim_old /= self%ldim) )then
+                        die           = .true.
+                        existing_file = .false.
+                    endif
+                endif
                 ! pixel size of object overrides pixel size in header
                 call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die, formatchar=form, readhead=existing_file)
                 if( existing_file )then
