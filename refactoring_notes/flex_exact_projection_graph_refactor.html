@@ -1,0 +1,5607 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/refactoring_notes/flex_exact_projection_graph_refactor.html">
+      
+      
+        <link rel="prev" href="flex_analysis_diffusion_map_refactoring.html">
+      
+      
+        <link rel="next" href="phase_plate_support_reintroduction_plan.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#refactoring-proposal-exact-projection-sparse-graphs-for-flex-analysis" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement in abinitio2D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Mask in nu_filt3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/abinitio2d_sgd_class_stability_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/abinitio2d_sgd_class_stability_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification: table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_capture_experiment_summary_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D pose-capture experiment summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing_Literature%20Review%20and%20Recommended%20Path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Literature Review and Recommended Path for Forward-Model Matching and Reference-Induced Pose Bias in Cryo-EM Polishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D PCG pose-polishing scientific handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D PLAN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D SPEC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_polishing_hans_clarification_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose polishing: Hans clarification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_euclid_crash_investigation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruct3D → euclid crash: investigation handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_reconstruction_production_readiness.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruction production-readiness plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_refine3D_integration_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG integration plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/reference_picker_flcf_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_25" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_25" id="__nav_9_25_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_25_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_25">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_29" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_29" id="__nav_10_29_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_29_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_29">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="flex_exact_projection_graph_refactor.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Executive summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-decisions-fixed-by-this-proposal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Decisions fixed by this proposal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-clarification-of-terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Clarification of terminology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-current-behavior-that-must-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Current behavior that must change
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Current behavior that must change">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-projection-assignments-are-currently-recomputed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Projection assignments are currently recomputed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-angular-bins-currently-expand-until-a-particle-cap-is-reached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Angular bins currently expand until a particle cap is reached
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-current-defaults-encode-the-expanding-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Current defaults encode the expanding search
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-proposed-graph-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Proposed graph contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Proposed graph contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-mathematical-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Mathematical definition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-component-occupancy-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Component occupancy policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-candidate-cap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Candidate cap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-recommended-implementation-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Recommended implementation structure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Recommended implementation structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-generic-partitioned-graph-builder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Generic partitioned graph builder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-prefer-per-component-construction-followed-by-csr-concatenation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Prefer per-component construction followed by CSR concatenation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-bandwidth-estimation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Bandwidth estimation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-component-aware-diffusion-embedding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Component-aware diffusion embedding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Component-aware diffusion embedding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-why-the-current-global-eigensolve-cannot-be-retained" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Why the current global eigensolve cannot be retained
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-required-embedding-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Required embedding behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-coordinate-output-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.3 Coordinate output contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-downstream-behavior-and-safety-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Downstream behavior and safety boundary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Downstream behavior and safety boundary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-global-k-medoids-must-be-disabled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 Global k-medoids must be disabled
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-local-medoids-are-diagnostic-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.2 Local medoids are diagnostic only
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#83-nano3d-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.3 nano3D compatibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-future-global-alignment-without-graph-bridges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Future global alignment without graph bridges
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-distributed-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Distributed execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-parameter-and-ui-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Parameter and UI changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-file-level-refactoring-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. File-level refactoring map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="13. Tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#131-unit-tests-graph-eligibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.1 Unit tests: graph eligibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#132-unit-tests-component-embedding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.2 Unit tests: component embedding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#133-distributed-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.3 Distributed tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#134-scientific-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.4 Scientific validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Acceptance criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-principal-risks-and-mitigations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Principal risks and mitigations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-proposed-implementation-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Proposed implementation sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="16. Proposed implementation sequence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1a-graph-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1A: Graph contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1b-component-embedding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1B: Component embedding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1c-scientific-diagnostic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1C: Scientific diagnostic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-global-latent-alignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Global latent alignment
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-review-decisions-still-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Review decisions still required
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#final-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Final recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_8" id="__nav_11_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Executive summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-decisions-fixed-by-this-proposal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Decisions fixed by this proposal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-clarification-of-terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Clarification of terminology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-current-behavior-that-must-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Current behavior that must change
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Current behavior that must change">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-projection-assignments-are-currently-recomputed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Projection assignments are currently recomputed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-angular-bins-currently-expand-until-a-particle-cap-is-reached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Angular bins currently expand until a particle cap is reached
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-current-defaults-encode-the-expanding-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 Current defaults encode the expanding search
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-proposed-graph-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Proposed graph contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Proposed graph contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-mathematical-definition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Mathematical definition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-component-occupancy-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Component occupancy policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-candidate-cap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Candidate cap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-recommended-implementation-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Recommended implementation structure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Recommended implementation structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-generic-partitioned-graph-builder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Generic partitioned graph builder
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-prefer-per-component-construction-followed-by-csr-concatenation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Prefer per-component construction followed by CSR concatenation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-bandwidth-estimation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 Bandwidth estimation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-component-aware-diffusion-embedding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Component-aware diffusion embedding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Component-aware diffusion embedding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-why-the-current-global-eigensolve-cannot-be-retained" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Why the current global eigensolve cannot be retained
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-required-embedding-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 Required embedding behavior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-coordinate-output-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.3 Coordinate output contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-downstream-behavior-and-safety-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Downstream behavior and safety boundary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. Downstream behavior and safety boundary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-global-k-medoids-must-be-disabled" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 Global k-medoids must be disabled
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-local-medoids-are-diagnostic-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.2 Local medoids are diagnostic only
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#83-nano3d-compatibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.3 nano3D compatibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-future-global-alignment-without-graph-bridges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Future global alignment without graph bridges
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-distributed-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Distributed execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-parameter-and-ui-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Parameter and UI changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-file-level-refactoring-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. File-level refactoring map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="13. Tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#131-unit-tests-graph-eligibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.1 Unit tests: graph eligibility
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#132-unit-tests-component-embedding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.2 Unit tests: component embedding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#133-distributed-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.3 Distributed tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#134-scientific-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.4 Scientific validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-acceptance-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Acceptance criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-principal-risks-and-mitigations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Principal risks and mitigations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-proposed-implementation-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Proposed implementation sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="16. Proposed implementation sequence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1a-graph-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1A: Graph contract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1b-component-embedding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1B: Component embedding
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1c-scientific-diagnostic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1C: Scientific diagnostic
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-global-latent-alignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Global latent alignment
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-review-decisions-still-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Review decisions still required
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#final-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Final recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="refactoring-proposal-exact-projection-sparse-graphs-for-flex-analysis">Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis<a class="headerlink" href="#refactoring-proposal-exact-projection-sparse-graphs-for-flex-analysis" title="Permanent link">&para;</a></h1>
+<p><strong>Status:</strong> Proposal for review only<br />
+<strong>Implementation status:</strong> No implementation changes authorized or made<br />
+<strong>Date:</strong> July 28, 2026<br />
+<strong>Scope:</strong> FLEX graph construction, component-aware diffusion embedding, output contracts, distributed execution, and downstream safeguards</p>
+<h2 id="1-executive-summary">1. Executive summary<a class="headerlink" href="#1-executive-summary" title="Permanent link">&para;</a></h2>
+<p>This refactor replaces FLEX's expanding angular candidate search with an exact projection-assignment rule:</p>
+<p>[
+\mathcal{C}_i = {j \ne i : p_j = p_i},
+]</p>
+<p>where (p_i) is the projection-direction assignment inherited from the orientation search. For every particle, FLEX will compare residual features only with particles having the identical assignment. It will retain the nearest <code>k_nn</code> members of that set, with a proposed default of <code>k_nn=50</code>. There will be no cross-projection graph edges and no fallback that expands to neighboring projection directions.</p>
+<p>The graph remains globally stored and sparse, but it is intentionally a disconnected union of projection-specific components. Consequently, the current single global diffusion-map eigensolve, global ICM rank selection, global k-medoids, global kernel weights, and immediate 3D preimage reconstruction are no longer mathematically valid. The refactor must therefore perform diffusion embedding independently within each projection assignment and must block the current global state-volume path until a separate projection-aware latent-alignment model is available.</p>
+<p>The recommended implementation is staged:</p>
+<ol>
+<li>Implement exact-assignment graph construction and component-wise embeddings.</li>
+<li>Produce per-projection coordinates, spectra, and diagnostics.</li>
+<li>Validate whether same-projection embeddings recover known flexibility on simulation and reproduce across independent halves.</li>
+<li>Only then implement a graph-independent, projection-aware alignment of the local coordinates for global 3D reconstruction.</li>
+</ol>
+<p>This staging tests the central hypothesis - that cross-view comparisons are suppressing FLEX - without introducing unvalidated coordinate stitching or misleading state volumes.</p>
+<h2 id="2-decisions-fixed-by-this-proposal">2. Decisions fixed by this proposal<a class="headerlink" href="#2-decisions-fixed-by-this-proposal" title="Permanent link">&para;</a></h2>
+<p>The following are design requirements, not open implementation choices:</p>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Neighbor eligibility</td>
+<td>A particle may consider only particles with the identical projection-direction assignment</td>
+</tr>
+<tr>
+<td>Cross-projection graph edges</td>
+<td>Prohibited</td>
+</tr>
+<tr>
+<td>Neighbor retention</td>
+<td>Retain all selected nearest <code>k_nn</code> intra-assignment neighbors</td>
+</tr>
+<tr>
+<td>Initial <code>k_nn</code></td>
+<td>Change FLEX default from 100 to 50</td>
+</tr>
+<tr>
+<td>Candidate population</td>
+<td>Examine every other particle in the same assignment by default</td>
+</tr>
+<tr>
+<td>Candidate cap</td>
+<td>Do not introduce in the first implementation; reserve an optional cap only if profiling demonstrates a need</td>
+</tr>
+<tr>
+<td>Projection grid</td>
+<td>Inherited from the orientation search; FLEX must not tune or redefine <code>nspace</code></td>
+</tr>
+<tr>
+<td>Sparse representation</td>
+<td>Preserve sparse k-nearest-neighbor CSR storage</td>
+</tr>
+<tr>
+<td>Disconnected topology</td>
+<td>Treat as intentional and process explicitly</td>
+</tr>
+<tr>
+<td>State volumes</td>
+<td>Do not construct global states from unaligned component coordinates</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-clarification-of-terminology">3. Clarification of terminology<a class="headerlink" href="#3-clarification-of-terminology" title="Permanent link">&para;</a></h2>
+<p>“Identical projection direction” in this proposal means identical discrete projection assignment from the orientation search. It does not mean that the continuous Euler directions are numerically identical.</p>
+<p>The assignment is nevertheless the correct comparison unit because the registration and residual construction for particles in a given assignment use a compatible in-plane transformation and the same assigned mean projection. Particles assigned to different projection directions must not be compared in registered-image space.</p>
+<p>Two distinct sizes must be kept separate:</p>
+<ul>
+<li><code>n_p</code>: number of active particles assigned to projection component <code>p</code>.</li>
+<li><code>k_nn</code>: maximum number of nearest same-assignment neighbors retained for each particle.</li>
+</ul>
+<p>The candidate set normally has size <code>n_p-1</code>; the stored graph retains at most <code>k_nn</code> outgoing neighbors per particle before symmetric union.</p>
+<h2 id="4-current-behavior-that-must-change">4. Current behavior that must change<a class="headerlink" href="#4-current-behavior-that-must-change" title="Permanent link">&para;</a></h2>
+<h3 id="41-projection-assignments-are-currently-recomputed">4.1 Projection assignments are currently recomputed<a class="headerlink" href="#41-projection-assignments-are-currently-recomputed" title="Permanent link">&para;</a></h3>
+<p><code>prepare_flex_diffmap_features</code> currently builds an explicit Euler grid and assigns each active particle to the closest grid direction with <code>find_closest_proj</code>. The comment states that stored <code>proj</code> values may have been generated using a different <code>nspace</code>.</p>
+<p>Relevant source:</p>
+<ul>
+<li><code>src/main/flex/simple_flex_diffmap_features.f90</code>, approximately lines 169-182</li>
+</ul>
+<p>Required change:</p>
+<ul>
+<li>FLEX must consume the projection assignment associated with the orientation search used for registration.</li>
+<li>FLEX must not silently create a different grid or reassign particles on a new FLEX-selected <code>nspace</code>.</li>
+<li>If the workflow still needs <code>nspace</code> to reconstruct the orientation-search grid or mean projection stack, it must be inherited as workflow metadata/plumbing and validated against the stored assignments.</li>
+<li>A user-provided FLEX override that changes the orientation-search grid must be rejected.</li>
+<li>If assignment provenance is absent or inconsistent, fail with an explicit diagnostic rather than silently rebinning.</li>
+</ul>
+<h3 id="42-angular-bins-currently-expand-until-a-particle-cap-is-reached">4.2 Angular bins currently expand until a particle cap is reached<a class="headerlink" href="#42-angular-bins-currently-expand-until-a-particle-cap-is-reached" title="Permanent link">&para;</a></h3>
+<p><code>find_gated_euclidean_neighbors_rows</code> currently:</p>
+<ol>
+<li>sorts projection bins by angular separation;</li>
+<li>visits bins in that order;</li>
+<li>evaluates candidate residual distances;</li>
+<li>stops when <code>nang_nbrs</code> candidates have been examined;</li>
+<li>retains the closest <code>k_nn</code>.</li>
+</ol>
+<p>Relevant source:</p>
+<ul>
+<li><code>src/main/pca/simple_diff_map_graphs.f90</code>, approximately lines 90-205</li>
+</ul>
+<p>Required change:</p>
+<ul>
+<li>Remove angular sorting and the direction-expansion loop from the FLEX graph path.</li>
+<li>For row <code>i</code>, iterate only over the members of component <code>proj_ids(i)</code>.</li>
+<li>Examine all <code>n_p-1</code> eligible particles in phase 1.</li>
+<li>Retain the closest <code>min(k_nn,n_p-1)</code> candidates.</li>
+<li>Never expand to another projection assignment when <code>n_p-1 &lt; k_nn</code>.</li>
+</ul>
+<h3 id="43-current-defaults-encode-the-expanding-search">4.3 Current defaults encode the expanding search<a class="headerlink" href="#43-current-defaults-encode-the-expanding-search" title="Permanent link">&para;</a></h3>
+<p>Current FLEX defaults are:</p>
+<ul>
+<li><code>k_nn=100</code></li>
+<li><code>nang_nbrs=1000</code></li>
+<li><code>view_balance=yes</code></li>
+<li><code>dm_alpha=0</code></li>
+</ul>
+<p>Relevant source:</p>
+<ul>
+<li><code>src/main/flex/simple_flex_analysis_strategy.f90</code>, approximately lines 142-158</li>
+<li><code>src/main/ui/simple/simple_ui_denoise.f90</code>, approximately lines 350-376</li>
+</ul>
+<p>Required change:</p>
+<ul>
+<li>Set the FLEX default <code>k_nn=50</code>.</li>
+<li>Remove <code>nang_nbrs</code> from the active exact-assignment graph interface.</li>
+<li>Do not reinterpret <code>nang_nbrs</code> as an intra-component cap; use a separately named parameter if a cap is later justified.</li>
+<li>Remove or disable graph-stage <code>view_balance</code> for component-wise embeddings. Within a single component, inverse occupancy is constant and cancels under normalization.</li>
+<li>Retain any angular balancing needed for later 3D reconstruction as a decoder-level concern, not a graph-affinity concern.</li>
+</ul>
+<h2 id="5-proposed-graph-contract">5. Proposed graph contract<a class="headerlink" href="#5-proposed-graph-contract" title="Permanent link">&para;</a></h2>
+<h3 id="51-mathematical-definition">5.1 Mathematical definition<a class="headerlink" href="#51-mathematical-definition" title="Permanent link">&para;</a></h3>
+<p>For particle <code>i</code> with residual feature vector (x_i) and projection assignment (p_i):</p>
+<p>[
+d_{ij}^{2} = |x_i-x_j|^{2}
+\quad \text{only if} \quad p_i=p_j.
+]</p>
+<p>Let:</p>
+<p>[
+k_i = \min(k_{\mathrm{nn}}, n_{p_i}-1).
+]</p>
+<p>The directed neighbor set (N_i) contains the <code>k_i</code> smallest eligible distances. All of these directed neighbors are retained. The final undirected graph uses the current symmetric-union rule:</p>
+<p>[
+(i,j) \in E
+\quad \text{if} \quad
+j \in N_i \ \text{or}\ i \in N_j.
+]</p>
+<p>The edge kernel is evaluated within each projection component. No edge may satisfy (p_i \ne p_j).</p>
+<h3 id="52-component-occupancy-policy">5.2 Component occupancy policy<a class="headerlink" href="#52-component-occupancy-policy" title="Permanent link">&para;</a></h3>
+<p>Because <code>nspace</code> is fixed by orientation search, FLEX cannot guarantee uniform occupancy. The graph must support variable effective neighbor counts.</p>
+<p>Recommended policy:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">Component occupancy <code>n_p</code></th>
+<th>Effective graph behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;"><code>n_p = 1</code></td>
+<td>No graph edge; component is reported and excluded from embedding</td>
+</tr>
+<tr>
+<td style="text-align: right;"><code>n_p = 2</code></td>
+<td>One mutual edge; report as non-embeddable for diffusion coordinates</td>
+</tr>
+<tr>
+<td style="text-align: right;"><code>3 &lt;= n_p &lt;= k_nn</code></td>
+<td>Retain all <code>n_p-1</code> eligible neighbors; embed with at most <code>n_p-2</code> nontrivial modes</td>
+</tr>
+<tr>
+<td style="text-align: right;"><code>n_p &gt; k_nn</code></td>
+<td>Retain the closest <code>k_nn</code> eligible neighbors</td>
+</tr>
+</tbody>
+</table>
+<p>No component may borrow particles from another assignment.</p>
+<p>The run summary must report:</p>
+<ul>
+<li>occupied component count;</li>
+<li>minimum, median, mean, and maximum <code>n_p</code>;</li>
+<li>components below 3 particles;</li>
+<li>components below <code>k_nn+1</code>;</li>
+<li>particle fraction in underfull components;</li>
+<li>effective <code>k_i</code> distribution;</li>
+<li>connected-component count within every projection assignment.</li>
+</ul>
+<h3 id="53-candidate-cap">5.3 Candidate cap<a class="headerlink" href="#53-candidate-cap" title="Permanent link">&para;</a></h3>
+<p>The first implementation should compare all same-assignment candidates. Its computational complexity is:</p>
+<p>[
+O\left(d \sum_p n_p^2\right)
+]</p>
+<p>for feature dimension <code>d</code>, while graph storage remains:</p>
+<p>[
+O(N k_{\mathrm{nn}}).
+]</p>
+<p>The finely sampled angular grid should keep individual <code>n_p</code> small enough for this to be practical.</p>
+<p>If profiling later demonstrates that one or more components are too large, add an optional parameter named <code>max_intra_candidates</code>, with:</p>
+<ul>
+<li>default <code>0</code>, meaning all same-assignment candidates;</li>
+<li>no change to projection eligibility;</li>
+<li>deterministic, row-order-invariant candidate selection;</li>
+<li>mandatory reporting of affected components and sampling fractions;</li>
+<li>validation that results are stable relative to exhaustive same-component search.</li>
+</ul>
+<p>A naive “first N rows” cap is prohibited because it recreates acquisition-, frame-, or state-order bias.</p>
+<h2 id="6-recommended-implementation-structure">6. Recommended implementation structure<a class="headerlink" href="#6-recommended-implementation-structure" title="Permanent link">&para;</a></h2>
+<h3 id="61-generic-partitioned-graph-builder">6.1 Generic partitioned graph builder<a class="headerlink" href="#61-generic-partitioned-graph-builder" title="Permanent link">&para;</a></h3>
+<p>Add a partition-aware graph API rather than modifying the semantics of the current angularly gated routine:</p>
+<pre><code class="language-fortran">build_partitioned_euclidean_knn_graph(
+    features,
+    partition_ids,
+    k_nn,
+    graph,
+    component_summary,
+    bandwidth_mode,
+    bandwidth_tune
+)
+</code></pre>
+<p>Suggested helper:</p>
+<pre><code class="language-fortran">find_partitioned_euclidean_neighbors_rows(
+    features,
+    partition_ids,
+    k_nn,
+    rows,
+    nbrs,
+    d2s,
+    nneighbors,
+    ncandidates
+)
+</code></pre>
+<p>Use the generic name <code>partition_ids</code> inside <code>simple_diff_map_graphs.f90</code>; the FLEX caller supplies projection assignments.</p>
+<p>Do not reuse <code>find_gated_euclidean_neighbors_rows</code> with a special value of <code>nang_nbrs</code>. Exact partitioning is a different graph contract and should be explicit in names, validation, logs, and tests.</p>
+<h3 id="62-prefer-per-component-construction-followed-by-csr-concatenation">6.2 Prefer per-component construction followed by CSR concatenation<a class="headerlink" href="#62-prefer-per-component-construction-followed-by-csr-concatenation" title="Permanent link">&para;</a></h3>
+<p>The cleanest implementation is:</p>
+<ol>
+<li>group global feature rows by <code>partition_id</code>;</li>
+<li>build a local Euclidean kNN graph for each group;</li>
+<li>estimate the kernel scale within that group;</li>
+<li>map local row indices back to global feature rows;</li>
+<li>concatenate the component CSR blocks into one global CSR container.</li>
+</ol>
+<p>Advantages:</p>
+<ul>
+<li>existing <code>build_euclidean_knn_graph</code> already clamps local <code>k</code> to <code>n_p-1</code>;</li>
+<li>every candidate in the component can be examined exactly;</li>
+<li>bandwidth is estimated on comparable residuals only;</li>
+<li>variable <code>k_i</code> is naturally supported;</li>
+<li>block structure is explicit;</li>
+<li>no padded invalid neighbors are needed;</li>
+<li>component-specific diagnostics are easy to produce.</li>
+</ul>
+<p>The global <code>diffmap_graph</code> can remain the storage container, but its metadata must not imply a single connected diffusion operator. Add or return a component descriptor rather than overloading <code>graph%k_nn</code>.</p>
+<p>Suggested descriptor:</p>
+<pre><code class="language-fortran">type :: partitioned_graph_summary
+    integer :: npartitions
+    integer :: nembedded
+    integer :: nunderfull
+    integer, allocatable :: partition_id(:)
+    integer, allocatable :: occupancy(:)
+    integer, allocatable :: k_effective(:)
+    integer, allocatable :: internal_components(:)
+    real,    allocatable :: bandwidth(:)
+end type
+</code></pre>
+<h3 id="63-bandwidth-estimation">6.3 Bandwidth estimation<a class="headerlink" href="#63-bandwidth-estimation" title="Permanent link">&para;</a></h3>
+<p>The current graph estimates one global Ferguson or median bandwidth from all retained distances. That is inappropriate when no cross-projection distance is meaningful.</p>
+<p>Required behavior:</p>
+<ul>
+<li>estimate bandwidth independently for each projection component;</li>
+<li>use the requested Ferguson estimator when it is numerically supported;</li>
+<li>fall back to the component's median positive kth-neighbor distance;</li>
+<li>report the estimator, bandwidth, fallback status, and finite-distance count per component;</li>
+<li>never pool residual distances across projection assignments to set a common kernel scale.</li>
+</ul>
+<h2 id="7-component-aware-diffusion-embedding">7. Component-aware diffusion embedding<a class="headerlink" href="#7-component-aware-diffusion-embedding" title="Permanent link">&para;</a></h2>
+<h3 id="71-why-the-current-global-eigensolve-cannot-be-retained">7.1 Why the current global eigensolve cannot be retained<a class="headerlink" href="#71-why-the-current-global-eigensolve-cannot-be-retained" title="Permanent link">&para;</a></h3>
+<p>With no bridges, the global graph is block diagonal:</p>
+<p>[
+W = \operatorname{diag}(W_1,\ldots,W_P).
+]</p>
+<p>The normalized diffusion operator has one trivial eigenvector per connected component. The current <code>embed_graph</code> requests one additional eigenpair and removes only one trivial mode. A global call would therefore return projection-component indicator modes rather than conformational coordinates.</p>
+<p>Relevant source:</p>
+<ul>
+<li><code>src/main/pca/simple_diffusion_maps.f90</code>, approximately lines 55-128</li>
+</ul>
+<h3 id="72-required-embedding-behavior">7.2 Required embedding behavior<a class="headerlink" href="#72-required-embedding-behavior" title="Permanent link">&para;</a></h3>
+<p>Add a FLEX-specific component wrapper that:</p>
+<ol>
+<li>extracts each projection block;</li>
+<li>verifies its internal connected-component count;</li>
+<li>calls the existing generic <code>embed_graph</code> separately for each connected block;</li>
+<li>removes the trivial mode independently within every block;</li>
+<li>performs ICM/eigengap rank selection independently for each block;</li>
+<li>maps local coordinates back to global particle rows;</li>
+<li>preserves projection ID and local mode count for every row.</li>
+</ol>
+<p>Do not change generic <code>embed_graph</code> behavior for unrelated SIMPLE workflows.</p>
+<p>For component <code>p</code>, the maximum requested nontrivial rank is:</p>
+<p>[
+d_p \le \min(\texttt{neigs}, n_p-2).
+]</p>
+<p>If the kNN symmetric union fragments a nominal projection component, report that as a graph-quality failure. Do not silently treat the fragments as equivalent conformational coordinates.</p>
+<h3 id="73-coordinate-output-contract">7.3 Coordinate output contract<a class="headerlink" href="#73-coordinate-output-contract" title="Permanent link">&para;</a></h3>
+<p>The present <code>flex_embedding_result</code> assumes one dense global coordinate table with a shared meaning for each column. That contract cannot represent unaligned per-projection modes.</p>
+<p>Introduce a separate result type, for example:</p>
+<pre><code class="language-fortran">type :: flex_partitioned_embedding_result
+    integer :: nptcls
+    integer :: npartitions
+    integer :: max_local_modes
+    integer, allocatable :: pinds(:)
+    integer, allocatable :: partition_id(:)
+    integer, allocatable :: local_mode_count(:)
+    real(dp), allocatable :: z_local(:,:)
+    real(dp), allocatable :: eigvals_local(:,:)
+end type
+</code></pre>
+<p>Unused coordinate cells must be accompanied by <code>local_mode_count</code>; downstream code must never interpret padding as a physical zero.</p>
+<p>Recommended text outputs:</p>
+<p><code>flex_projection_component_summary.txt</code></p>
+<pre><code class="language-text"># projection_index occupancy k_effective internal_components selected_modes bandwidth fallback
+</code></pre>
+<p><code>flex_projection_local_coordinates.txt</code></p>
+<pre><code class="language-text"># feature_row raw_particle_index projection_index local_row selected_modes psi1 ... psiM
+</code></pre>
+<p><code>flex_projection_local_spectra.txt</code></p>
+<pre><code class="language-text"># projection_index mode eigenvalue selected
+</code></pre>
+<h2 id="8-downstream-behavior-and-safety-boundary">8. Downstream behavior and safety boundary<a class="headerlink" href="#8-downstream-behavior-and-safety-boundary" title="Permanent link">&para;</a></h2>
+<h3 id="81-global-k-medoids-must-be-disabled">8.1 Global k-medoids must be disabled<a class="headerlink" href="#81-global-k-medoids-must-be-disabled" title="Permanent link">&para;</a></h3>
+<p>The current preimage path constructs pairwise distances over the global <code>raw_coords</code> table and performs one global k-medoids clustering:</p>
+<ul>
+<li><code>src/main/flex/simple_flex_diffmap_preimage.f90</code>, approximately lines 17-54</li>
+</ul>
+<p>Distances between coordinates from different projection components have no meaning because:</p>
+<ul>
+<li>eigenvector signs are arbitrary;</li>
+<li>mode order may differ;</li>
+<li>selected rank may differ;</li>
+<li>coordinate scale and nonlinear parameterization may differ;</li>
+<li>different local modes may represent different phenomena.</li>
+</ul>
+<p>Therefore, the exact-projection graph mode must not call:</p>
+<ul>
+<li><code>select_flex_diffmap_preimages</code> globally;</li>
+<li><code>build_flex_preimage_kernel_weights</code> globally;</li>
+<li><code>reconstruct_flex_diffmap_weighted_states</code> from unaligned local weights;</li>
+<li><code>reconstruct_flex_diffmap_local_linear_states</code> from unaligned local coordinates.</li>
+</ul>
+<h3 id="82-local-medoids-are-diagnostic-only">8.2 Local medoids are diagnostic only<a class="headerlink" href="#82-local-medoids-are-diagnostic-only" title="Permanent link">&para;</a></h3>
+<p>Per-component medoids or coordinate quantiles may be written for inspection and simulation truth testing. They must not be pooled into global 3D states until cross-component coordinate identity and sense have been established.</p>
+<h3 id="83-nano3d-compatibility">8.3 <code>nano3D</code> compatibility<a class="headerlink" href="#83-nano3d-compatibility" title="Permanent link">&para;</a></h3>
+<p><code>fit_flex_analysis_embedding</code> currently returns <code>flex_embedding_result</code>, which is consumed by <code>simple_trajectory_chunker</code> and <code>nano3D</code>.</p>
+<p>Exact-projection component embeddings must not be silently packed into that global result. Until component alignment is implemented:</p>
+<ul>
+<li>make the partitioned result a distinct API;</li>
+<li>reject requests that require the current global embedding contract;</li>
+<li>leave the existing global path available behind its current mode for controlled A/B comparisons;</li>
+<li>do not change <code>nano3D</code> semantics as part of the graph-only phase.</li>
+</ul>
+<h2 id="9-future-global-alignment-without-graph-bridges">9. Future global alignment without graph bridges<a class="headerlink" href="#9-future-global-alignment-without-graph-bridges" title="Permanent link">&para;</a></h2>
+<p>No graph bridges are required or proposed. Global 3D reconstruction can instead align local coordinates through the physically compatible projection model.</p>
+<p>Let (u_i^{(p)}) be the local diffusion coordinates for particle <code>i</code> in projection component <code>p</code>. Introduce a component-specific latent transform (R_p) and shared 3D signed basis volumes (B_q):</p>
+<p>[
+r_i \approx
+C_i P_i
+\left(
+\sum_q [R_{p_i}u_i^{(p_i)}]_q B_q
+\right)
++ \epsilon_i,
+]</p>
+<p>where:</p>
+<ul>
+<li>(r_i) is the consensus-subtracted particle residual;</li>
+<li>(P_i) is the particle projection operator;</li>
+<li>(C_i) is its CTF operator;</li>
+<li>(R_p) maps a component's local coordinates into a shared latent basis;</li>
+<li>(B_q) are jointly estimated signed 3D variability volumes.</li>
+</ul>
+<p>For a one-dimensional local coordinate, (R_p) initially reduces to a sign and scale. For multiple modes it may include permutation, sign, and a low-dimensional orthogonal transform.</p>
+<p>An alternating fit could:</p>
+<ol>
+<li>normalize local coordinates within each projection component without forcing endpoint occupancy;</li>
+<li>initialize component transforms deterministically;</li>
+<li>fit shared basis volumes with the existing projection-aware M-step machinery;</li>
+<li>infer particle latent coordinates from the shared basis;</li>
+<li>update each (R_p) using a regularized component-wise alignment;</li>
+<li>repeat under independent-half validation.</li>
+</ol>
+<p>This aligns components through a common 3D forward model, not through direct comparisons between incompatibly registered projection images.</p>
+<p>The existing <code>simple_flex_projected_latent_model.f90</code> contains reusable CTF- and projection-aware M-step/E-step infrastructure, but component-specific transforms and their identifiability constraints would be new work. This should be a separately reviewed second phase.</p>
+<p>Do not use histogram matching or independent stretching of every component to <code>[0,1]</code>; those operations would force apparent endpoints and recreate a major ManifoldEM false-positive mechanism.</p>
+<h2 id="10-distributed-execution">10. Distributed execution<a class="headerlink" href="#10-distributed-execution" title="Permanent link">&para;</a></h2>
+<p>Current distributed FLEX:</p>
+<ol>
+<li>distributes feature preparation;</li>
+<li>assembles a global feature table on the master;</li>
+<li>constructs the graph on the master;</li>
+<li>performs one global embedding;</li>
+<li>distributes reconstruction.</li>
+</ol>
+<p>For the exact-projection graph phase:</p>
+<ul>
+<li>retain distributed feature preparation;</li>
+<li>retain the assembled global feature-row order and mapping;</li>
+<li>group rows by projection assignment on the master;</li>
+<li>parallelize independent component graph construction with OpenMP initially;</li>
+<li>build and embed each component independently;</li>
+<li>write component outputs from the master;</li>
+<li>do not schedule reconstruction until aligned global coordinates exist.</li>
+</ul>
+<p>The legacy stage-2 worker path serializes a fixed number of neighbors per row. If retained, it must support variable <code>k_i</code> and verify that every serialized neighbor has the same projection assignment. It may be simpler to retire or bypass this unused path for exact-projection mode rather than expand its file contract prematurely.</p>
+<p>Shared-memory and distributed runs must produce identical component membership, neighbor identities, distances, spectra within numerical tolerance, and particle-row mappings.</p>
+<h2 id="11-parameter-and-ui-changes">11. Parameter and UI changes<a class="headerlink" href="#11-parameter-and-ui-changes" title="Permanent link">&para;</a></h2>
+<p>Recommended exact-projection interface:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Proposed behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>k_nn</code></td>
+<td>Default 50; maximum retained same-assignment neighbors</td>
+</tr>
+<tr>
+<td><code>nang_nbrs</code></td>
+<td>Not used in exact-projection mode; retain only for the legacy angular-expansion mode during A/B validation</td>
+</tr>
+<tr>
+<td><code>max_intra_candidates</code></td>
+<td>Deferred; default 0 means exhaustive same-assignment candidates</td>
+</tr>
+<tr>
+<td><code>nspace</code></td>
+<td>Inherited orientation-search metadata/plumbing; not a FLEX tuning control</td>
+</tr>
+<tr>
+<td><code>view_balance</code></td>
+<td>Not used during component graph embedding</td>
+</tr>
+<tr>
+<td><code>bandwidth_mode</code></td>
+<td>Applied independently within each projection component</td>
+</tr>
+<tr>
+<td><code>bandwidth_tune</code></td>
+<td>Applied independently within each projection component</td>
+</tr>
+<tr>
+<td><code>neigs</code></td>
+<td>Maximum local modes per component, capped at <code>n_p-2</code></td>
+</tr>
+<tr>
+<td><code>npreimages</code></td>
+<td>Disabled for unaligned exact-projection component embeddings</td>
+</tr>
+<tr>
+<td><code>preimage_mode</code></td>
+<td>Disabled until global latent alignment is available</td>
+</tr>
+</tbody>
+</table>
+<p>For transition and A/B testing, introduce a clearly named graph policy:</p>
+<pre><code class="language-text">flex_graph_scope=(angular_expand|exact_projection){exact_projection}
+</code></pre>
+<p>The default should change only after the component-aware embedding path and regression tests pass. Output filenames must record the graph policy to prevent accidental comparison of incompatible coordinate semantics.</p>
+<h2 id="12-file-level-refactoring-map">12. File-level refactoring map<a class="headerlink" href="#12-file-level-refactoring-map" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Proposed change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>src/main/pca/simple_diff_map_graphs.f90</code></td>
+<td>Add generic partitioned kNN construction; exact same-partition validation; component-wise bandwidth; CSR block concatenation</td>
+</tr>
+<tr>
+<td><code>src/main/pca/simple_diffusion_maps.f90</code></td>
+<td>Keep generic eigensolver unchanged; optionally expose small helpers for local-to-global index mapping</td>
+</tr>
+<tr>
+<td><code>src/main/flex/simple_flex_diffmap_features.f90</code></td>
+<td>Consume and validate orientation-search projection assignments; preserve assignment provenance in feature maps</td>
+</tr>
+<tr>
+<td><code>src/main/flex/simple_flex_analysis_strategy.f90</code></td>
+<td>Add exact-projection policy, default <code>k_nn=50</code>, component grouping, per-component embedding/rank selection, diagnostics, and downstream reconstruction guard</td>
+</tr>
+<tr>
+<td><code>src/main/flex/simple_flex_diffmap_preimage.f90</code></td>
+<td>No phase-1 algorithm change; prevent global calls from partitioned embeddings; optional local diagnostic medoids later</td>
+</tr>
+<tr>
+<td><code>src/main/flex/simple_flex_diffmap_rec3D.f90</code></td>
+<td>No graph-phase reconstruction; later accept only aligned global latents</td>
+</tr>
+<tr>
+<td><code>src/main/flex/simple_flex_projected_latent_model.f90</code></td>
+<td>Phase 2 only: add component transforms and alternating projection-aware alignment</td>
+</tr>
+<tr>
+<td><code>src/main/ui/simple/simple_ui_denoise.f90</code></td>
+<td>Expose graph policy; set exact-mode neighbor description/default; remove <code>nspace</code> as a FLEX tuning concept; disable incompatible preimage controls</td>
+</tr>
+<tr>
+<td><code>src/main/nano/simple_trajectory_chunker.f90</code></td>
+<td>No phase-1 change; reject partitioned embeddings until a reviewed alignment contract exists</td>
+</tr>
+<tr>
+<td><code>src/main/flex/README.md</code></td>
+<td>Document exact-assignment topology, component coordinate semantics, and reconstruction safety boundary</td>
+</tr>
+</tbody>
+</table>
+<h2 id="13-tests">13. Tests<a class="headerlink" href="#13-tests" title="Permanent link">&para;</a></h2>
+<h3 id="131-unit-tests-graph-eligibility">13.1 Unit tests: graph eligibility<a class="headerlink" href="#131-unit-tests-graph-eligibility" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>No cross-assignment edges</strong></li>
+<li>Construct particles with interleaved row order and distinct partition IDs.</li>
+<li>
+<p>Assert <code>partition_id(i) == partition_id(j)</code> for every CSR edge.</p>
+</li>
+<li>
+<p><strong>Exhaustive candidate count</strong></p>
+</li>
+<li>
+<p>With <code>max_intra_candidates=0</code>, assert <code>ncandidates(i)=n_{p_i}-1</code>.</p>
+</li>
+<li>
+<p><strong>Nearest-neighbor retention</strong></p>
+</li>
+<li>Compare retained neighbors against brute-force within-component distances.</li>
+<li>
+<p>Assert all closest <code>min(k_nn,n_p-1)</code> neighbors are present.</p>
+</li>
+<li>
+<p><strong>Underfull component behavior</strong></p>
+</li>
+<li>Test occupancies 1, 2, 3, 25, 50, and 51 with <code>k_nn=50</code>.</li>
+<li>
+<p>Verify exclusion/embedding rules and <code>k_i</code>.</p>
+</li>
+<li>
+<p><strong>Row-order invariance</strong></p>
+</li>
+<li>Permute global particle rows.</li>
+<li>
+<p>After mapping back to particle IDs, require identical neighbors and distances.</p>
+</li>
+<li>
+<p><strong>No fallback</strong></p>
+</li>
+<li>Create a component with two particles beside a highly populated angular neighbor.</li>
+<li>Verify that no neighboring-component particle is added.</li>
+</ol>
+<h3 id="132-unit-tests-component-embedding">13.2 Unit tests: component embedding<a class="headerlink" href="#132-unit-tests-component-embedding" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>One trivial mode removed per component</strong></li>
+<li>Construct several connected block graphs.</li>
+<li>
+<p>Verify that projection indicator vectors do not appear in returned local coordinates.</p>
+</li>
+<li>
+<p><strong>Internal fragmentation detection</strong></p>
+</li>
+<li>Construct a nominal projection component containing two disconnected clusters.</li>
+<li>
+<p>Require an explicit diagnostic or failure according to the reviewed policy.</p>
+</li>
+<li>
+<p><strong>Rank bounds</strong></p>
+</li>
+<li>
+<p>Verify selected rank never exceeds <code>min(neigs,n_p-2)</code>.</p>
+</li>
+<li>
+<p><strong>Independent normalization</strong></p>
+<ul>
+<li>Rescale the features of one component.</li>
+<li>Verify that another component's coordinates and spectrum do not change.</li>
+</ul>
+</li>
+</ol>
+<h3 id="133-distributed-tests">13.3 Distributed tests<a class="headerlink" href="#133-distributed-tests" title="Permanent link">&para;</a></h3>
+<ol>
+<li>
+<p><strong>Shared/distributed parity</strong></p>
+<ul>
+<li>Compare component membership, retained neighbors, distances, bandwidths, spectra, and coordinates.</li>
+</ul>
+</li>
+<li>
+<p><strong>Partition-boundary independence</strong></p>
+<ul>
+<li>Change qsys row partitions while preserving input particle order.</li>
+<li>Require identical scientific outputs.</li>
+</ul>
+</li>
+<li>
+<p><strong>Feature-map provenance</strong></p>
+<ul>
+<li>Verify raw particle index, registered stack index, and orientation-search projection assignment survive all part assembly steps.</li>
+</ul>
+</li>
+</ol>
+<h3 id="134-scientific-validation">13.4 Scientific validation<a class="headerlink" href="#134-scientific-validation" title="Permanent link">&para;</a></h3>
+<ol>
+<li>
+<p><strong>IgG per-projection truth recovery</strong></p>
+<ul>
+<li>Measure per-component Spearman correlation between local modes and MD frame.</li>
+<li>Report the best mode, sign-adjusted correlation, occupancy, and half-set reproducibility per projection.</li>
+</ul>
+</li>
+<li>
+<p><strong>Current-versus-exact graph A/B</strong></p>
+<ul>
+<li>Hold features, particles, CTF handling, bandwidth policy, and rank limits fixed.</li>
+<li>Compare current angular expansion with exact projection components.</li>
+</ul>
+</li>
+<li>
+<p><strong>Neighbor purity</strong></p>
+<ul>
+<li>On simulation, compare the distribution of MD-frame differences among retained neighbors.</li>
+</ul>
+</li>
+<li>
+<p><strong>Independent-half local embeddings</strong></p>
+<ul>
+<li>Fit exact-projection embeddings separately in even and odd halves.</li>
+<li>Compare local spectral structure and truth recovery without sharing coordinates.</li>
+</ul>
+</li>
+<li>
+<p><strong><code>k_nn</code> sensitivity</strong></p>
+<ul>
+<li>At minimum test 25, 50, and the largest feasible value below component occupancy.</li>
+<li>The default 50 should be accepted only if it improves truth recovery or stability without fragmenting components.</li>
+</ul>
+</li>
+<li>
+<p><strong>Order sensitivity</strong></p>
+<ul>
+<li>Repeat after particle-row, stack-order, and within-projection permutations.</li>
+</ul>
+</li>
+<li>
+<p><strong>Performance</strong></p>
+<ul>
+<li>Record <code>sum(n_p^2)</code>, distance evaluations, peak memory, graph time, embedding time, and largest component.</li>
+</ul>
+</li>
+</ol>
+<h2 id="14-acceptance-criteria">14. Acceptance criteria<a class="headerlink" href="#14-acceptance-criteria" title="Permanent link">&para;</a></h2>
+<p>Phase 1 is acceptable only when all of the following hold:</p>
+<ol>
+<li>Every graph edge joins particles with the identical inherited projection assignment.</li>
+<li>With no candidate cap, every eligible same-assignment particle is examined.</li>
+<li>The closest <code>min(k_nn,n_p-1)</code> neighbors are retained for every particle.</li>
+<li>No underfull component expands into another projection assignment.</li>
+<li>Graph results are invariant to particle-row ordering.</li>
+<li><code>nspace</code> is inherited and validated, not retuned by FLEX.</li>
+<li>Bandwidth is estimated independently within each component.</li>
+<li>One trivial eigenvector is removed independently per connected component.</li>
+<li>Component-indicator eigenvectors are not presented as conformational coordinates.</li>
+<li>Shared-memory and distributed results agree within numerical tolerance.</li>
+<li>Exact-projection mode cannot invoke global k-medoids or reconstruct global state volumes from unaligned coordinates.</li>
+<li>IgG simulation reports per-projection truth recovery and independent-half stability before any claim that flexibility has been modeled.</li>
+</ol>
+<h2 id="15-principal-risks-and-mitigations">15. Principal risks and mitigations<a class="headerlink" href="#15-principal-risks-and-mitigations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Severity</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Component occupancy is too low for <code>k_nn=50</code></td>
+<td>High</td>
+<td>Variable <code>k_i=min(k_nn,n_p-1)</code>; explicit underfull diagnostics; no cross-projection fallback</td>
+</tr>
+<tr>
+<td>kNN graph fragments within a projection assignment</td>
+<td>High</td>
+<td>Component connectivity diagnostics; test lower/higher <code>k_nn</code>; do not silently merge fragments</td>
+</tr>
+<tr>
+<td>Independent local modes cannot be assembled into global states</td>
+<td>Critical</td>
+<td>Block global preimages; implement separately reviewed projection-aware latent alignment</td>
+</tr>
+<tr>
+<td>Per-component bandwidths create incomparable eigenvalue scales</td>
+<td>Medium</td>
+<td>Never compare raw eigenvalue magnitude across components without normalization; report local spectra</td>
+</tr>
+<tr>
+<td>Stored projection assignments lack grid provenance</td>
+<td>High</td>
+<td>Validate inherited search metadata and fail on ambiguity</td>
+</tr>
+<tr>
+<td>Exhaustive same-component comparisons become expensive</td>
+<td>Medium</td>
+<td>Profile first; add deterministic cap or approximate search only with exhaustive-reference validation</td>
+</tr>
+<tr>
+<td>Existing callers expect one global dense embedding</td>
+<td>High</td>
+<td>Introduce a distinct result type and reject incompatible callers</td>
+</tr>
+<tr>
+<td>Exact gating reduces orientation mixing but does not solve low SNR</td>
+<td>Critical scientific risk</td>
+<td>Use IgG truth and independent halves to decide whether local denoising is still required</td>
+</tr>
+</tbody>
+</table>
+<h2 id="16-proposed-implementation-sequence">16. Proposed implementation sequence<a class="headerlink" href="#16-proposed-implementation-sequence" title="Permanent link">&para;</a></h2>
+<h3 id="phase-1a-graph-contract">Phase 1A: Graph contract<a class="headerlink" href="#phase-1a-graph-contract" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Add partitioned graph builder.</li>
+<li>Consume inherited projection assignments.</li>
+<li>Set exact-mode default <code>k_nn=50</code>.</li>
+<li>Add exhaustive candidate and no-cross-edge tests.</li>
+<li>Add occupancy/connectivity diagnostics.</li>
+</ul>
+<h3 id="phase-1b-component-embedding">Phase 1B: Component embedding<a class="headerlink" href="#phase-1b-component-embedding" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Embed every valid projection component independently.</li>
+<li>Add ragged/component-aware output type and text artifacts.</li>
+<li>Add local spectra and rank-selection diagnostics.</li>
+<li>Validate shared/distributed parity.</li>
+</ul>
+<h3 id="phase-1c-scientific-diagnostic">Phase 1C: Scientific diagnostic<a class="headerlink" href="#phase-1c-scientific-diagnostic" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Run current-versus-exact graph A/B on IgG.</li>
+<li>Measure local truth recovery, neighbor purity, half reproducibility, and <code>k_nn</code> sensitivity.</li>
+<li>Decide whether the exact graph resolves the FLEX embedding failure.</li>
+</ul>
+<h3 id="phase-2-global-latent-alignment">Phase 2: Global latent alignment<a class="headerlink" href="#phase-2-global-latent-alignment" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Write a separate design review for component-specific latent transforms and the projection-aware 3D decoder.</li>
+<li>Fit and validate independent halves.</li>
+<li>Re-enable global state or basis-volume generation only after signed-basis and held-out tests pass.</li>
+</ul>
+<h2 id="17-review-decisions-still-required">17. Review decisions still required<a class="headerlink" href="#17-review-decisions-still-required" title="Permanent link">&para;</a></h2>
+<p>The graph policy itself is fully specified. The following implementation choices should be approved before coding:</p>
+<ol>
+<li>Whether underfull components with <code>3 &lt;= n_p &lt;= k_nn</code> should be embedded using all neighbors, as recommended, or excluded from scientific output.</li>
+<li>Whether the legacy <code>angular_expand</code> mode should remain temporarily for A/B testing or be removed immediately.</li>
+<li>Whether phase 1 should expose local diagnostic medoids/quantiles, clearly labeled as non-global, or only coordinates and spectra.</li>
+<li>Whether <code>flex_partitioned_embedding_result</code> should live beside <code>flex_embedding_result</code> or in a new transport module.</li>
+<li>Whether global latent alignment is intentionally deferred until the exact-projection IgG diagnostic demonstrates recoverable local conformational signal.</li>
+</ol>
+<h2 id="final-recommendation">Final recommendation<a class="headerlink" href="#final-recommendation" title="Permanent link">&para;</a></h2>
+<p>Implement phases 1A-1C before modifying the 3D decoder. The exact-projection graph is a clean and scientifically motivated test of the current cross-view mixing hypothesis. Its disconnected structure is not a defect; it is the required consequence of respecting registration compatibility. The corresponding safeguard is to treat its coordinates as local until a separate projection-aware 3D model aligns them.</p>
+<p>The first success criterion should therefore be improved and reproducible per-projection recovery of the known IgG coordinate, not the immediate production of visually different global volumes.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

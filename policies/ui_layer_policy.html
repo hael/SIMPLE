@@ -1,0 +1,4897 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/policies/ui_layer_policy.html">
+      
+      
+        <link rel="prev" href="sigma_calculation_policy.html">
+      
+      
+        <link rel="next" href="ui_parameter_visibility_review.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>UI Descriptor Layer Policy - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ui-descriptor-layer-policy" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              UI Descriptor Layer Policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement in abinitio2D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Mask in nu_filt3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/abinitio2d_sgd_class_stability_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/abinitio2d_sgd_class_stability_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification: table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_capture_experiment_summary_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D pose-capture experiment summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing_Literature%20Review%20and%20Recommended%20Path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Literature Review and Recommended Path for Forward-Model Matching and Reference-Induced Pose Bias in Cryo-EM Polishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D PCG pose-polishing scientific handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D PLAN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_end_polishing_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D SPEC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_pose_polishing_hans_clarification_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose polishing: Hans clarification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_euclid_crash_investigation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruct3D → euclid crash: investigation handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_reconstruction_production_readiness.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruction production-readiness plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/pcg_refine3D_integration_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG integration plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/reference_picker_flcf_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_25" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_25" id="__nav_9_25_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_25_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_25">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../implementation_notes/completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="ui_layer_policy.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Purpose and scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-source-of-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One source of truth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#default-ownership-and-precedence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default ownership and precedence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-class-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current class design
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current class design">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ui_param" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ui_param
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui_program_input-and-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ui_program_input and groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requirement-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirement groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui_program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ui_program
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#construction-and-registration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Construction and registration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#user-facing-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User-facing text
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="User-facing text">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#program-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#program-display-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program display name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#input-placeholder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input placeholder
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#json-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSON contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="JSON contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stream-gui-contract-update-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stream GUI contract update procedure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#change-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#refactor-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refactor status
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Refactor status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-phase-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current phase: complete
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deferred-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred review
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_29" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_29" id="__nav_10_29_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_29_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_29">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_8" id="__nav_11_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#purpose-and-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Purpose and scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#one-source-of-truth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One source of truth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#default-ownership-and-precedence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default ownership and precedence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-class-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current class design
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current class design">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ui_param" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ui_param
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui_program_input-and-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ui_program_input and groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requirement-groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirement groups
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ui_program" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ui_program
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#construction-and-registration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Construction and registration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#visibility" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Visibility
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#user-facing-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        User-facing text
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="User-facing text">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#program-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#program-display-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Program display name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#input-placeholder" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input placeholder
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#json-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSON contract
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="JSON contract">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stream-gui-contract-update-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stream GUI contract update procedure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#change-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#refactor-status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refactor status
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Refactor status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#current-phase-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current phase: complete
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#deferred-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred review
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ui-descriptor-layer-policy">UI Descriptor Layer Policy<a class="headerlink" href="#ui-descriptor-layer-policy" title="Permanent link">&para;</a></h1>
+<h2 id="purpose-and-scope">Purpose and scope<a class="headerlink" href="#purpose-and-scope" title="Permanent link">&para;</a></h2>
+<p>The UI descriptor layer is the shared description of SIMPLE commands. It is
+used by both the command-line interface and graphical clients. This policy
+applies to the Fortran code under <code>src/main/ui/</code> and to the JSON produced from
+that code.</p>
+<p>The descriptor layer describes programs and their inputs. It does not execute
+programs, independently own scientific defaults, or replace validation
+performed by the parameters, commander, strategy, or domain layers. CMake
+generates a read-only Fortran lookup module from the existing parameter and
+commander declarations; the UI uses that module only to expose display
+defaults.</p>
+<h2 id="one-source-of-truth">One source of truth<a class="headerlink" href="#one-source-of-truth" title="Permanent link">&para;</a></h2>
+<p>The Fortran backend is the only source of truth for UI descriptors.</p>
+<ul>
+<li>Program modules define program names, categories, descriptions, visibility,
+  executable ownership, project requirements, and input membership.</li>
+<li>Declaration-time initialization in <code>type(parameters)</code>, together with
+  <code>init_dynamic_defaults</code>, defines the baseline parameter defaults.</li>
+<li><code>ui_param</code> objects define reusable input names, types, descriptions, choices,
+  units, and display defaults. Program-specific semantics are stored in
+  <code>ui_program_input</code> bindings.</li>
+<li>JSON is a serialization of the in-memory Fortran objects. JSON must not add,
+  omit, reinterpret, or override descriptor data.</li>
+<li>TOML, Markdown, spreadsheets, and other documents must not contain an
+  independently maintained copy of UI metadata.</li>
+<li>Python or other code generators must not generate program metadata or UI
+  constructors. The CMake-generated Fortran default lookup is permitted
+  because it is derived only from the existing parameter and commander source
+  and contains no UI structure, descriptions, categories, or choices.</li>
+</ul>
+<p>JSON and graphical clients do not apply a separate runtime overlay: they
+consume the Fortran descriptor registered for the CLI.</p>
+<p>Documentation may explain the model and the editing procedure, but the values
+rendered by the CLI and GUI must come from Fortran.</p>
+<h2 id="default-ownership-and-precedence">Default ownership and precedence<a class="headerlink" href="#default-ownership-and-precedence" title="Permanent link">&para;</a></h2>
+<p>An input default is execution behavior, not display text. The parameter layer
+therefore owns defaults, and the UI descriptor layer publishes them.</p>
+<p>SIMPLE currently obtains missing input values from several places:</p>
+<ul>
+<li>declaration-time initialization of <code>type(parameters)</code>;</li>
+<li>initialization of dynamic <code>type(string)</code> components;</li>
+<li>conditional program or workflow assignments of the form
+  <code>if (.not. cline%defined(key)) call cline%set(key, value)</code>; and</li>
+<li>values derived at runtime from other inputs, project state, or input data.</li>
+</ul>
+<p>The initializations remain where they are. They are already the source used by
+the parameter lifecycle and are available before any program runs. CMake runs
+<code>scripts/default_audit.py</code> to generate <code>simple_ui_default_values.f90</code> in the
+build tree. It extracts baseline values and only exact, statically verified
+missing-key commander overrides. <code>ui_program</code> consults the generated
+<code>get_ui_default</code> routine while constructing each input. Commanders and the
+parameter lifecycle never read this UI-only module.</p>
+<p>The generator preserves the parameter parser's scalar meaning and natural CLI
+notation before it emits a display value. Integer defaults remain integers
+(for example, <code>3</code>, never <code>3.0</code>) in CLI examples and generated lookup text,
+while the descriptor may still parse them into its shared numeric storage for
+JSON serialization. JSON serialization rounds numeric defaults to at most six
+significant digits; this removes single-precision binary residue while
+retaining a practical, scientifically meaningful input value. The legacy
+numeric token <code>no</code> represents the command line's initialized numeric value and
+is exported as <code>0</code> for integer inputs and <code>0.0</code> for real inputs. Any other
+nonnumeric value for a known numeric parameter is a generation error; an
+invalid value must never reach a UI descriptor.</p>
+<p>A global parameter baseline can be valid for the CLI but outside the narrower
+choice set declared by one program. Before applying a generated binary or
+multiple-choice value, <code>ui_param</code> checks the program's declared choices. An
+incompatible baseline leaves that program's already-validated local default in
+place; without such a default, descriptor construction fails. This is shared
+Fortran descriptor validation, not a GUI override.</p>
+<p>Conditional <code>if (.not. cline%defined(key)) call cline%set(key, value)</code> calls
+remain program execution behavior. They can legitimately override a baseline
+value for one workflow, and the GUI cannot treat them as its universal default
+without reimplementing commander logic.</p>
+<p>The current implementation has two distinct meanings that must not be
+confused:</p>
+<ul>
+<li>the UI and JSON publish the generated baseline or verified program value
+  when one is available; and</li>
+<li>the executed program may choose a different value when an optional key is
+  omitted and its own command setup supplies a value.</li>
+</ul>
+<h2 id="current-class-design">Current class design<a class="headerlink" href="#current-class-design" title="Permanent link">&para;</a></h2>
+<p>The descriptor model uses composition:</p>
+<pre><code class="language-text">ui_hash
+  +-- references module-owned ui_program objects by program name
+
+ui_program
+  +-- program identity and presentation fields
+  +-- program-local groups     -- derived from input bindings
+  +-- image input/output       -- linked_list of ui_program_input values
+  +-- file input/output        -- linked_list of ui_program_input values
+  +-- parameter input/output   -- linked_list of ui_program_input values
+  +-- search controls          -- linked_list of ui_program_input values
+  +-- filter controls          -- linked_list of ui_program_input values
+  +-- mask controls            -- linked_list of ui_program_input values
+  +-- computer controls        -- linked_list of ui_program_input values
+
+ui_program_input
+  +-- reusable ui_param definition
+  +-- section, group, visibility, and activation semantics
+
+ui_requirement_group
+  +-- named key set and minimum/maximum selected counts
+</code></pre>
+<p><code>UI_ALT</code> and <code>alt_ios</code> have been removed. Inputs remain in their meaningful
+CLI sections—image input/output, file input/output, parameter input/output,
+search, filter, mask, or computer controls. A relationship between inputs is
+represented separately by a program-owned requirement group; it never creates
+another input section.</p>
+<p><code>UI_IMG</code> is reserved for image stacks and volumes, including output stacks and
+output volumes. <code>UI_FILE</code> contains every other path-like input or output:
+project, STAR, orientation, CTF, coordinate, and table files, together with
+directories. A list <em>of</em> stacks or volumes is still a table file and therefore
+uses <code>UI_FILE</code>. <code>UI_PARM</code> is for non-path scalar, choice, and Boolean settings.</p>
+<p><code>ui_hash</code> extends the generic <code>vrefhash</code> and supplies typed access to
+<code>ui_program</code> and <code>ui_param</code>. <code>ui_program</code> and <code>ui_param</code> do not inherit from
+one another.</p>
+<h3 id="ui_param"><code>ui_param</code><a class="headerlink" href="#ui_param" title="Permanent link">&para;</a></h3>
+<p><code>simple_ui_param.f90</code> defines one command input. Its current fields provide:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>key</code></td>
+<td>Exact CLI key. This is a stable interface identifier.</td>
+</tr>
+<tr>
+<td><code>keytype</code></td>
+<td>Input type used by CLI and GUI consumers.</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>Short field label.</td>
+</tr>
+<tr>
+<td><code>help</code></td>
+<td>Full help text.</td>
+</tr>
+<tr>
+<td><code>placeholder</code></td>
+<td>Short example or entry hint; empty for choice inputs. Numeric examples use the generated display default when available, with known units appended.</td>
+</tr>
+<tr>
+<td><code>cval_default</code>, <code>rval_default</code>, <code>has_default</code></td>
+<td>Current internal storage and presence flag for a display default.</td>
+</tr>
+<tr>
+<td><code>units</code></td>
+<td>Display units, empty when not applicable.</td>
+</tr>
+<tr>
+<td><code>choices</code></td>
+<td>Structured values accepted by binary and multiple-choice inputs.</td>
+</tr>
+</tbody>
+</table>
+<p>For visible numeric inputs, descriptor construction normalizes a unit only when
+it is explicitly stated in that input's label, help, or declared placeholder;
+it does not guess undocumented units. The standardized CLI placeholder then
+shows the unit alongside its example.</p>
+<p>The two <code>set_param</code> overloads construct numeric and character inputs. Binary
+and multiple-choice inputs must pass <code>choices=ui_choices([...])</code>; this creates
+an explicit <code>ui_choice</code> array with exact CLI values and matching display labels.
+The descriptor rejects missing, empty, duplicate, or incorrectly sized choice
+lists, as well as an optional default that is not one of the declared values.
+<code>ui_param</code> deliberately contains no visibility, group, activation, or renderer
+field.</p>
+<h3 id="ui_program_input-and-groups"><code>ui_program_input</code> and groups<a class="headerlink" href="#ui_program_input-and-groups" title="Permanent link">&para;</a></h3>
+<p><code>ui_program_input</code> is the registered use of one <code>ui_param</code> in one program. It
+owns the input's CLI-help section, Standard/Advanced/Developer visibility,
+optional input group, and optional activation predicate. The three
+<code>ui_program%add_input</code> overloads construct this binding directly; their
+client-neutral optional arguments are <code>group=</code>, <code>visibility=</code>, and
+<code>activation=</code>.</p>
+<p><code>group</code> creates or reuses a program-local <code>ui_input_group</code> with a stable id,
+plain-English label, and first-use order. <code>ui_program%groups</code> is derived while
+bindings are added, so no separate menu-list field can drift from actual input
+membership. JSON emits the ordered program group list and an input's group
+object.</p>
+<p>The current structured activation form is
+<code>ui_activation_equals_any(key, values)</code>. It records that a binding applies
+when the controlling CLI key equals one of explicit values. All former
+<code>quality_mode=...</code> pipe-delimited strings now use this form and JSON emits an
+<code>activation</code> object with <code>key</code> and <code>equals_any</code>. The predicate is descriptor
+data, not a renderer expression.</p>
+<p>The GUI needs one thing only: a sensible value to display before the user
+edits an optional input. It does not need to know how SIMPLE obtained that
+value. The default export therefore has no <code>default_kind</code> classification.</p>
+<h3 id="requirement-groups">Requirement groups<a class="headerlink" href="#requirement-groups" title="Permanent link">&para;</a></h3>
+<p><code>ui_requirement_group</code> records an input condition in shared descriptor data.
+It has a stable id, a plain-English label and explanation, a set of registered
+CLI keys, and inclusive <code>min_selected</code> and <code>max_selected</code> cardinalities. For
+example, an image operation may require exactly one of <code>stk</code> and <code>vol1</code>.</p>
+<p>Requirement members remain in their normal sections and retain their own
+labels, help, visibility, activation, and defaults. A group is not a GUI-only
+radio widget: CLI, JSON, and GUI clients all receive the same cardinality
+rule. The registry rejects an empty group, duplicate member, duplicate group
+id, invalid cardinality, or member key that is not an input of that program.</p>
+<p>The command-line parser evaluates requirement groups after it has parsed all
+provided keys. It prints the program's command guidance only when a group is
+unsatisfied, including the plain-English rule, accepted keys, supplied count,
+and required cardinality. When the group is satisfied, normal parsing proceeds
+without printing usage. Requirement groups describe unconditional key presence
+only; dependent or value-specific rules remain in activation predicates and
+commander validation until a richer shared rule is defined.</p>
+<p>Requirement guidance is intentionally compact but must be self-explanatory.
+Show every accepted alternative with the same aligned formatter used for
+ordinary CLI inputs: <code>key = label (choice1|choice2){default}; placeholder</code>.
+The choice and default fragments appear only when applicable. Then print
+<code>Supplied</code> and <code>Required</code> as trimmed lines. The text must come from the
+registered input binding in that program, rather than from an independently
+maintained requirement description. Do not print empty sections or padded
+lines.</p>
+<h3 id="ui_program"><code>ui_program</code><a class="headerlink" href="#ui_program" title="Permanent link">&para;</a></h3>
+<p><code>simple_ui_program.f90</code> defines one program accepted through <code>prg=</code> or
+<code>test=</code>. Its current fields provide:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>Exact CLI program name.</td>
+</tr>
+<tr>
+<td><code>category</code></td>
+<td>Stable category identifier inherited from the owning program module.</td>
+</tr>
+<tr>
+<td><code>category_display_name</code></td>
+<td>Plain-English category heading shared by CLI listings and JSON.</td>
+</tr>
+<tr>
+<td><code>category_order</code></td>
+<td>Display order within the owning executable.</td>
+</tr>
+<tr>
+<td><code>display_name</code></td>
+<td>Plain-English GUI title, separate from the CLI name.</td>
+</tr>
+<tr>
+<td><code>summary</code></td>
+<td>Short program summary.</td>
+</tr>
+<tr>
+<td><code>help</code></td>
+<td>Full program help.</td>
+</tr>
+<tr>
+<td><code>executable</code></td>
+<td>Executable that accepts the program.</td>
+</tr>
+<tr>
+<td><code>visibility</code></td>
+<td>Standard, Advanced, or Developer.</td>
+</tr>
+<tr>
+<td><code>groups</code></td>
+<td>Program-local groups derived from input bindings.</td>
+</tr>
+<tr>
+<td>seven input lists</td>
+<td>Inputs grouped into the existing CLI sections.</td>
+</tr>
+<tr>
+<td><code>requirements</code></td>
+<td>Program-owned input cardinality rules.</td>
+</tr>
+<tr>
+<td><code>sp_required</code></td>
+<td>Whether a SIMPLE project is required.</td>
+</tr>
+</tbody>
+</table>
+<p><code>ui_program%new</code> creates the program. Its <code>add_input</code> overloads create or copy
+a <code>ui_param</code> into a <code>ui_program_input</code> binding in one of the seven input
+lists. The same object supplies required-key checks, CLI help, program
+descriptions, group metadata, and JSON.</p>
+<h3 id="construction-and-registration">Construction and registration<a class="headerlink" href="#construction-and-registration" title="Permanent link">&para;</a></h3>
+<p>Common inputs are initialized by <code>set_ui_params</code>. The program modules then
+construct programs and register them:</p>
+<pre><code class="language-text">make_ui / make_test_ui
+  +-- set_ui_params
+  +-- executable group constructor
+      +-- simple_ui_* or single_ui_* constructor
+          +-- ui_program%new
+          +-- ui_program%add_input
+              +-- create ui_program_input binding
+              +-- derive program group metadata
+          +-- add_ui_program
+              +-- assign module category
+              +-- register in ui_hash
+</code></pre>
+<p>Each program-defining module declares one module-local <code>UI_CATEGORY</code> descriptor
+with an identifier, a plain-English heading, and an order. The identifier is
+the lowercase suffix of its module name. For example, <code>simple_ui_denoise</code> owns
+<code>denoise</code> with the heading <code>Denoising</code>, and <code>single_ui_atom</code> owns <code>atom</code> with
+the heading <code>Atom Analysis</code>. Every call to <code>add_ui_program</code> passes that one
+descriptor. Registration rejects incomplete category metadata and duplicate
+program names.</p>
+<p>This convention is deliberately open-ended. A new category is created by
+adding a new program module and including its constructor in the appropriate
+group module. Moving a program to a different category means moving its
+Fortran construction to the new owning module.</p>
+<p>The public <code>prg=list</code> paths traverse registered programs and group them by
+this metadata. JSON serializes the same identifier, heading, and order for
+each program. There are no handwritten program-list headings; changing a
+category descriptor changes CLI listings and JSON together.</p>
+<h2 id="visibility">Visibility<a class="headerlink" href="#visibility" title="Permanent link">&para;</a></h2>
+<p>Every program descriptor and every program-specific input binding must have
+exactly one of these visibility levels:</p>
+<ul>
+<li><strong>Standard</strong>: needed for the usual workflow and suitable for most users.</li>
+<li><strong>Advanced</strong>: useful for experienced users or less common workflows.</li>
+<li><strong>Developer</strong>: diagnostic, experimental, implementation-specific, or unsafe
+  without detailed knowledge of SIMPLE.</li>
+</ul>
+<p>Fortran stores these as the constants <code>UI_VIS_STANDARD</code>,
+<code>UI_VIS_ADVANCED</code>, and <code>UI_VIS_DEVELOPER</code>. JSON stores the corresponding
+lowercase names.</p>
+<p>Visibility is shared descriptor data, not a GUI add-on. <code>ui_program</code> owns the
+program visibility and each <code>ui_program_input</code> owns the visibility of that
+parameter in that program. A reusable <code>ui_param</code>, input section, and input
+group do not own visibility; clients derive section and group presentation
+from the programs and parameter bindings they contain.</p>
+<p>Program constructors and program-input bindings use the client-neutral
+<code>visibility</code> argument. Required inputs are always Standard. Optional inputs
+start as Advanced but may explicitly select Standard, Advanced, or Developer
+according to their program context. Programs without an explicit value
+continue to default to Developer.</p>
+<p>Visibility changes presentation only. They must never change whether a CLI
+key is accepted or how a program executes.</p>
+<h2 id="user-facing-text">User-facing text<a class="headerlink" href="#user-facing-text" title="Permanent link">&para;</a></h2>
+<p>User-facing text must explain the task in plain English. Keep scientific terms
+when they are necessary for accuracy, but do not expose internal class names,
+variable names, abbreviations, or implementation details as labels. CLI
+program names, input keys, file formats, and established scientific terms may
+remain exact.</p>
+<h3 id="program-summary">Program summary<a class="headerlink" href="#program-summary" title="Permanent link">&para;</a></h3>
+<p>For production programs, <code>summary</code> is the one-line answer to “what does this
+program do?” It is shown where a user chooses a program; it is not a title and
+must therefore carry useful meaning without the reader knowing the CLI name.</p>
+<ul>
+<li>Use one active phrase or sentence fragment of 30–100 characters. The
+  100-character ceiling is enforced by <code>ui_program%new</code>.</li>
+<li>Start with the action and name the main object, result, or workflow. For
+  example: <code>Estimate CTF parameters from micrographs</code>.</li>
+<li>State the user-visible outcome, not only an algorithm name. Include scope
+  such as <code>streaming</code>, <code>2D</code>, or <code>nanoparticle</code> when it changes what the
+  program is for.</li>
+<li>Do not repeat the program name, list controls, or describe implementation
+  details that belong in <code>help</code>.</li>
+<li><code>help</code> remains the complete explanation of purpose, workflow, constraints,
+  and scientific behavior. The summary must agree with it and with the
+  current implementation.</li>
+</ul>
+<p>Developer-only test programs may retain their technical test names until their
+own UI is reviewed; they are not part of the production program chooser.</p>
+<h3 id="program-display-name">Program display name<a class="headerlink" href="#program-display-name" title="Permanent link">&para;</a></h3>
+<p><code>display_name</code> is the program's plain-English title in a GUI. It identifies a
+program in a chooser, heading, breadcrumb, or batch-job card. <code>name</code> remains
+the exact CLI identifier and must never be changed to improve presentation.</p>
+<ul>
+<li>Use a short, scannable title: normally two to seven words and preferably no
+  more than 60 characters. The hard storage limit is 100 characters so an
+  established technical title is not silently truncated.</li>
+<li>Use title case and describe the user task or result: <code>Estimate CTF</code>,
+  <code>Create 2D Class Averages</code>, or <code>Import Particle Data</code>.</li>
+<li>Expand implementation-style CLI spellings into ordinary words where that is
+  clear. Retain established scientific terms and acronyms such as CTF, FSC,
+  2D, and 3D when expansion would reduce clarity.</li>
+<li>Do not include <code>prg=</code>, executable names, underscores, parameter keys, or a
+  trailing full stop. Do not make the title a sentence-length explanation;
+  that belongs in <code>summary</code> and <code>help</code>.</li>
+<li>The title and summary serve different reading situations: the title answers
+  “which tool?”, while the summary answers “what will it do?”. They may share
+  wording during migration, but category reviews must replace the fallback
+  with an explicit title when a shorter or clearer one is available.</li>
+</ul>
+<p>Every <code>ui_program</code> has a populated <code>display_name</code>. To preserve current UI
+coverage while titles are reviewed category by category, <code>ui_program%new</code>
+copies the existing plain-English <code>summary</code> when no explicit <code>display_name</code>
+is supplied. Callers can supply <code>display_name=</code> now; the fallback is a
+compatibility path, not another source of metadata.</p>
+<h3 id="input-placeholder">Input placeholder<a class="headerlink" href="#input-placeholder" title="Permanent link">&para;</a></h3>
+<p><code>placeholder</code> is a compact entry hint, not a second label or help paragraph.
+It must contain at most 40 characters. Scalar and choice inputs use a standard
+representation; file and directory inputs use a concise example that identifies
+the accepted artifact.</p>
+<table>
+<thead>
+<tr>
+<th>Input kind</th>
+<th>Rendered placeholder</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>number (<code>num</code>, <code>int</code>, <code>float</code>)</td>
+<td><code>e.g. &lt;generated display default&gt; &lt;unit&gt;</code> when known; otherwise a concise type-specific example</td>
+</tr>
+<tr>
+<td>image or volume file</td>
+<td><code>e.g. volume.mrc</code> or another accepted image format</td>
+</tr>
+<tr>
+<td>other file</td>
+<td>a concise example matching the accepted format</td>
+</tr>
+<tr>
+<td>directory</td>
+<td><code>e.g. /path/to/folder</code></td>
+</tr>
+<tr>
+<td>free text</td>
+<td><code>e.g. value</code></td>
+</tr>
+<tr>
+<td>choice, binary, or hidden input</td>
+<td>empty</td>
+</tr>
+</tbody>
+</table>
+<p>Choice widgets already render their accepted values, so their placeholder
+must be empty. Numeric placeholders may repeat the generated display default
+as a useful CLI entry example; this is presentation only and does not change
+the parameter-layer execution default. Units, ranges, choice lists, and
+explanatory prose belong respectively in <code>units</code>, <code>help</code>, <code>choices</code>, and
+<code>help</code>—never in a placeholder.</p>
+<p><code>file</code> describes the transport type, not the file content. Do not use
+<code>e.g. input.mrc</code> as a catch-all: project files, tabular files, STAR files,
+plain-text parameter tables, and other typed artifacts must advertise an
+example with their actual accepted extension or format. A parameter key may
+use a different placeholder in different program contexts when the accepted
+artifact differs.</p>
+<p>Every file and directory placeholder begins with <code>e.g.</code>. The complete UI
+validator rejects empty examples, the generic <code>e.g. input.mrc</code> and
+<code>e.g. input.file</code> fallbacks, embedded defaults or alternatives, and a known
+artifact key whose example has the wrong extension. Program-specific
+<code>placeholder_override=</code> values are part of the registered descriptor and must
+be preserved.</p>
+<p>Choice values are declared explicitly with <code>ui_choices([...])</code>. They are never
+parsed from placeholders. The placeholder for a choice is empty before JSON or
+CLI help is rendered. CLI help derives its parenthesized choice list and
+optional <code>{default}</code> marker directly from the structured descriptor, so it
+remains a complete representation of accepted command-line values.</p>
+<h2 id="json-contract">JSON contract<a class="headerlink" href="#json-contract" title="Permanent link">&para;</a></h2>
+<p>All JSON writers must serialize the same Fortran fields with the same meaning.
+At minimum, a program record includes its exact CLI <code>name</code>, <code>category</code>,
+<code>category_display_name</code>, <code>category_order</code>, <code>display_name</code>, descriptions,
+executable, visibility, and its derived groups. An input record includes its
+key, type, descriptions, required state, an optional display <code>default</code>,
+visibility, and any applicable units, choices, group, and activation object.
+Each program record also includes its requirement groups with keys and
+minimum/maximum selection counts.</p>
+<p>Every serialized program includes all seven section arrays, including <code>image
+input/output</code> and <code>file input/output</code>, even when a section is empty. The CLI
+uses the same lists for its headings, so a client cannot reclassify a file
+independently of the command description.</p>
+<p>When present, <code>default</code> is a display value and may be serialized as a string
+regardless of the input's eventual CLI type. The normal CLI parser remains
+responsible for interpreting the submitted value. When no sensible baseline
+value is available, the JSON record simply omits <code>default</code>.</p>
+<p>Choice values in JSON must come from <code>ui_param%choices</code>, not from parsing the
+placeholder again. Choice values remain exact CLI values.</p>
+<p>Visibility is the sole presentation classification. JSON must not serialize a
+second Boolean visibility flag.</p>
+<h3 id="stream-gui-contract-update-procedure">Stream GUI contract update procedure<a class="headerlink" href="#stream-gui-contract-update-procedure" title="Permanent link">&para;</a></h3>
+<p>The ordinary build checks that the complete UI JSON can be generated and read
+correctly. It does <strong>not</strong> reject a wording or layout change merely because a
+stream screen looks different. That separate review is run explicitly with:</p>
+<pre><code class="language-text">cmake --build &lt;build-dir&gt; --target validate_stream_ui_contract
+</code></pre>
+<p>This command protects the acquisition-facing <code>simple_stream</code> screens from an
+unreviewed change. It is a review step, not a routine JSON-format check.</p>
+<p>When the validator reports a stream-contract mismatch, the developer must:</p>
+<ol>
+<li>Inspect the Fortran descriptor change and the readable generated JSON diff.</li>
+<li>Confirm with the change owner that every affected title, summary, input,
+   default, visibility, or group change is intended for the stream GUI.</li>
+<li>Update the reviewed reference with:</li>
+</ol>
+<p><code>text
+   cmake --build &lt;build-dir&gt; --target update_stream_ui_contract</code></p>
+<ol>
+<li>Commit the descriptor changes and
+   <code>production/stream_ui_contract.json</code> in the same commit.</li>
+<li>Run <code>cmake --build &lt;build-dir&gt; --target validate_stream_ui_contract</code> again.
+   A passing result confirms that the reviewed screen is the one generated by
+   the executable.</li>
+</ol>
+<p>If the change was not intentional, restore or correct the descriptor instead
+of updating the reference file. The update target is used only after review;
+the normal build never changes the reference automatically.</p>
+<h2 id="change-rules">Change rules<a class="headerlink" href="#change-rules" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Preserve the one-to-one relationship between registered programs and CLI
+  programs, and between registered inputs and accepted CLI keys.</li>
+<li>Do not rename a program or input as part of a wording cleanup.</li>
+<li>Put every stack or volume path in <code>UI_IMG</code>; put every other file, table, or
+  directory path in <code>UI_FILE</code>. Do not use <code>UI_PARM</code> for a path-like value.</li>
+<li>Define shared input metadata once in <code>simple_ui_params_common.f90</code>; override
+  it in a program module only when that program genuinely differs.</li>
+<li>Do not add GUI-only descriptor fields, client overlays, JSON patches, or
+  renderer-side defaults. Add a shared semantic field only when both the CLI
+  and GUI can interpret the same meaning.</li>
+<li>Keep declaration-time and dynamic <code>parameters</code> initialization authoritative.
+  Do not add a literal UI default that duplicates a global baseline. An
+  explicit program default is permitted only when that program's declared
+  choice set narrows the global values and no exact routed commander default
+  has been generated; it must itself be one of the declared choices.</li>
+<li>Keep conditional commander defaults, runtime-derived values, and fixed
+  internal execution assignments distinct from baseline UI defaults.</li>
+<li>Keep category ownership in the program module. Do not add a second category
+  table in a renderer, JSON writer, or GUI.</li>
+<li>Update all JSON paths when a descriptor field changes. They are duplicated
+  today and must remain equivalent until serialization is consolidated.</li>
+<li>Validate duplicate keys, visibility values, categories, choices, and JSON
+  before merging descriptor changes.</li>
+</ul>
+<h2 id="refactor-status">Refactor status<a class="headerlink" href="#refactor-status" title="Permanent link">&para;</a></h2>
+<h3 id="current-phase-complete">Current phase: complete<a class="headerlink" href="#current-phase-complete" title="Permanent link">&para;</a></h3>
+<p>The UI-layer refactor is complete for the current scope:</p>
+<ul>
+<li>Programs and individual parameter bindings have explicit, context-dependent
+  visibility. Required parameters are always Standard; sections and groups do
+  not carry redundant visibility.</li>
+<li>The registered Fortran descriptors are the single source for CLI help,
+  program listings, and JSON. Obsolete module-local listings have been removed.</li>
+<li>Alternative input requirements replace <code>alt_ios</code> and describe accepted
+  inputs using the registered labels and placeholders.</li>
+<li>Routed defaults have been audited against execution setup. The optional
+  <code>audit_ui_defaults</code> report currently contains no errors or warnings, and
+  numeric JSON defaults are rendered without binary floating-point residue.</li>
+<li>Standard programs have concise display names and informative summaries.
+  Advanced and Developer programs may continue to use the documented summary
+  fallback until their text is worth reviewing.</li>
+<li>Every registered file and directory input has a format-appropriate example.
+  The complete JSON validator prevents generic path examples and checks known
+  artifact extensions.</li>
+<li>The ordinary build validates the complete UI JSON structure and references.
+  The exact stream GUI is protected separately by the readable
+  <code>production/stream_ui_contract.json</code> review workflow.</li>
+<li>Program visibility, parameter-instance visibility, placeholders, and CLI
+  output can be exported as review evidence without becoming runtime metadata
+  or slowing the ordinary build.</li>
+</ul>
+<h3 id="deferred-review">Deferred review<a class="headerlink" href="#deferred-review" title="Permanent link">&para;</a></h3>
+<p>These are maintenance opportunities, not blockers for this refactor:</p>
+<ul>
+<li>Give Advanced and Developer programs distinct display names and summaries
+  when those programs are promoted or otherwise exposed to users.</li>
+<li>Extend requirement expressions, activation validation, or semantic JSON
+  checks only when a concrete shared CLI/GUI execution rule requires them.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

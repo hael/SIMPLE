@@ -1,0 +1,5274 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/abinitio2d_sgd_class_stability_plan.html">
+      
+      
+        <link rel="prev" href="Local-linear_diffusion-map_pre-image.html">
+      
+      
+        <link rel="next" href="abinitio2d_sgd_class_stability_spec.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Table-free class stability for abinitio2D_sgd - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#table-free-class-stability-for-abinitio2d_sgd" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Table-free class stability for abinitio2D_sgd
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement in abinitio2D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Mask in nu_filt3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="abinitio2d_sgd_class_stability_plan.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#implementation-checkpoint-2026-08-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation checkpoint: 2026-08-15
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-verified-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current verified behavior
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current verified behavior">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#activation-and-schedule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activation and schedule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#particle-mini-batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle mini-batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#assignment-and-pose-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignment and pose refinement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#existing-class-preservation-gap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing class-preservation gap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem statement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-negotiable-compatibility-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-negotiable compatibility contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-v1-incumbent-aware-frontier-with-a-two-member-support-floor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed v1: incumbent-aware frontier with a two-member support floor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proposed v1: incumbent-aware frontier with a two-member support floor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#public-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#candidate-construction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Candidate construction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-member-support-floor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two-member support floor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exploration-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exploration safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-is-analogous-to-prob_snhc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this is analogous to prob_snhc
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-freeze-and-measure-the-current-exhaustive-stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: freeze and measure the current exhaustive stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-isolated-candidate-policy-helper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: isolated candidate-policy helper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-provisional-matcher-integration-behind-explicit-opt-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: provisional matcher integration behind explicit opt-in
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 2: provisional matcher integration behind explicit opt-in">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resolved-opt-in-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved opt-in interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-two-member-floor-and-low-support-restoration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: two-member floor and low-support restoration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-production-context-stability-fixture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: production-context stability fixture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-matched-workflow-experiment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: matched workflow experiment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-decide-whether-stronger-support-control-is-necessary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: decide whether stronger support control is necessary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 6: decide whether stronger support control is necessary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-capped-support-aware-score-adjustment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option: capped support-aware score adjustment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rejected-first-line-mechanisms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rejected first-line mechanisms
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred-optimizer-track" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred optimizer track
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-ownership-for-the-planned-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File ownership for the planned implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-and-workflow-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation and workflow rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commit-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commit boundaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#completion-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2d_sgd_class_stability_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification: table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_capture_experiment_summary_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D pose-capture experiment summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_Literature%20Review%20and%20Recommended%20Path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Literature Review and Recommended Path for Forward-Model Matching and Reference-Induced Pose Bias in Cryo-EM Polishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D PCG pose-polishing scientific handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D PLAN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D SPEC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_polishing_hans_clarification_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose polishing: Hans clarification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_euclid_crash_investigation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruct3D → euclid crash: investigation handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_reconstruction_production_readiness.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruction production-readiness plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_refine3D_integration_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG integration plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference_picker_flcf_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_25" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_25" id="__nav_9_25_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_25_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_25">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_29" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_29" id="__nav_10_29_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_29_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_29">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_8" id="__nav_11_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Status">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#implementation-checkpoint-2026-08-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation checkpoint: 2026-08-15
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-verified-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current verified behavior
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current verified behavior">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#activation-and-schedule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Activation and schedule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#particle-mini-batch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Particle mini-batch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#assignment-and-pose-refinement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assignment and pose refinement
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#existing-class-preservation-gap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Existing class-preservation gap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#problem-statement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Problem statement
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Terminology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-negotiable-compatibility-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-negotiable compatibility contract
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-v1-incumbent-aware-frontier-with-a-two-member-support-floor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed v1: incumbent-aware frontier with a two-member support floor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Proposed v1: incumbent-aware frontier with a two-member support floor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#public-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#candidate-construction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Candidate construction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-member-support-floor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two-member support floor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exploration-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exploration safety
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-this-is-analogous-to-prob_snhc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this is analogous to prob_snhc
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase plan
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase plan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-freeze-and-measure-the-current-exhaustive-stream" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: freeze and measure the current exhaustive stream
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-isolated-candidate-policy-helper" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: isolated candidate-policy helper
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-provisional-matcher-integration-behind-explicit-opt-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: provisional matcher integration behind explicit opt-in
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 2: provisional matcher integration behind explicit opt-in">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resolved-opt-in-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved opt-in interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-two-member-floor-and-low-support-restoration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: two-member floor and low-support restoration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-production-context-stability-fixture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: production-context stability fixture
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-matched-workflow-experiment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: matched workflow experiment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-decide-whether-stronger-support-control-is-necessary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: decide whether stronger support control is necessary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 6: decide whether stronger support control is necessary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#option-capped-support-aware-score-adjustment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option: capped support-aware score adjustment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rejected-first-line-mechanisms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rejected first-line mechanisms
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred-optimizer-track" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deferred optimizer track
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-ownership-for-the-planned-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File ownership for the planned implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-and-workflow-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation and workflow rules
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commit-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commit boundaries
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#completion-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion criteria
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="table-free-class-stability-for-abinitio2d_sgd">Table-free class stability for <code>abinitio2D_sgd</code><a class="headerlink" href="#table-free-class-stability-for-abinitio2d_sgd" title="Permanent link">&para;</a></h1>
+<h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
+<p>DRAFT, non-authoritative implementation plan. This document supersedes the
+former direct-joint optimizer plan as the next development priority for
+<code>abinitio2D_sgd</code>, but it cannot become final or authorize Phase 2 production
+integration until the governing SPEC is approved and frozen.</p>
+<p>Governing specification (<code>IN REVIEW</code>; Phase 2 implementation is blocked until
+requester approval and <code>FINAL</code> status):
+<a href="abinitio2d_sgd_class_stability_spec.html"><code>abinitio2d_sgd_class_stability_spec.md</code></a>.</p>
+<p>Repository baseline refreshed on 2026-08-18: local <code>master</code> and
+<code>origin/master</code> at <code>884e7083f</code>. The worktree contains unrelated generated
+documentation, continuous-3D notes, and a continuous-in-plane mother-test edit;
+none is part of this plan.</p>
+<h3 id="implementation-checkpoint-2026-08-15">Implementation checkpoint: 2026-08-15<a class="headerlink" href="#implementation-checkpoint-2026-08-15" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Phase 0 is source-complete. The exhaustive winner and direct-shift numerical
+  paths are unchanged. Sampling, support, migration, winner-margin, and split
+  candidate/shift timing diagnostics are gated by the existing default-off
+  <code>sgd_diagnostic</code> switch.</li>
+<li>The existing sampling expression and two-particle search boundary are now
+  named pure functions and have focused contract tests. The test deliberately
+  preserves the current zero-only restoration expectation so the population-
+  one mismatch remains visible until Phase 3.</li>
+<li>Phase 1 is source-complete as an isolated pure candidate-index helper with
+  focused tests. No production module calls it, no parameter or UI field was
+  added, and the default exhaustive stream is unchanged.</li>
+<li>Oracle Linux/BOX validation supplied on 2026-08-15 passed the focused
+  <code>case=sampling_restore</code> and <code>case=class_frontier</code> cases and the complete
+  seven-case <code>simple_test_sgd_base_suite</code> with seven passed and zero failed.
+  The observed log contains no <code>ERROR!</code>, segmentation fault, <code>NaN</code>, or
+  <code>Infinity</code>; SHA-256:
+  <code>F80AA9900BFFEB8C5F62765C13E6DB8743E3CD4AB9810CB35D105152828AC6EA</code>.</li>
+<li>The diagnostic exhaustive-stream run sampled 120 of 200 active particles
+  (60 percent) at iterations 17 through 20 with the existing 200,000 cap. It
+  also exposed the baseline collapse that motivates integration: one nonzero
+  searchable class, three under-supported/zero classes, and zero reactivations
+  in every reported streamed iteration.</li>
+<li>These results accept Phase 0 and isolated Phase 1. They do not validate
+  production frontier behavior because the helper still has no production
+  caller.</li>
+</ul>
+<p>The earlier hard-stream-seeded L-BFGS-B experiment is closed. Production
+already supplied the selected rotation seed to the established joint polisher,
+so the proposed extra seeding layer did not remove work from the real caller.
+That experiment is not a prerequisite for this plan.</p>
+<p>The completed development-commander plan is archived under
+<code>doc/implementation_notes/completed/</code>. The standard <code>abinitio2D</code> command must
+remain free of SGD-specific UI, checkpoint, scheduling, and search behavior.</p>
+<h2 id="decision-summary">Decision summary<a class="headerlink" href="#decision-summary" title="Permanent link">&para;</a></h2>
+<p>The next SGD problem is class stability, not replacement of the mature inner
+pose optimizer.</p>
+<ol>
+<li>Keep the current table-free hard stream and its validated direct shift
+   refinement as the starting point.</li>
+<li>Keep the existing fresh random particle mini-batch: 60 percent by default,
+   capped by SIMPLE's existing <code>NSAMPLE_DEFAULT_2D=200000</code> limit. Do not add a
+   second sample cap and do not reuse or modify legacy <code>update_frac</code>.</li>
+<li>Replace the zero-only safeguard with SIMPLE's actual minimum viable class
+   support: two particles. <code>prep_strategy2D_glob</code> converts populations below
+   two to zero before search, so a one-particle class is already dead to the
+   next matcher iteration.</li>
+<li>Protect a previously viable class with its two best incumbent particles.
+   This is a minimum support floor, not an empty-class rescue: it applies only
+   to a class that previously had at least two members and a valid model.</li>
+<li>Add a table-free class candidate frontier so one noisy iteration cannot
+   make every particle abandon a previously meaningful class merely because
+   all classes compete globally on every update.</li>
+<li>Keep one final hard winner per sampled particle. Do not restore SoftMax, top-K
+   likelihood tables, <code>eulprob_tab2D</code>, or the obsolete table SGD path.</li>
+<li>Keep continuous in-plane L-BFGS-B as the reference local polisher. The
+   development command currently rejects <code>inpl_cont=yes</code>; integrating that
+   independent feature is not part of the class-stability experiment.</li>
+<li>Do not introduce Adam, AdamW, or another stateful optimizer for the
+   three-variable per-particle pose solve. That small bounded problem has exact
+   gradients, and persistent moments or weight decay would add state and bias
+   without addressing class collapse.</li>
+<li>Retain the proposed direct joint projected solver only as deferred research.
+   It should be reconsidered only if a focused comparison shows it matches
+   L-BFGS-B final loss and pose quality with meaningfully fewer evaluations or
+   lower workflow runtime.</li>
+</ol>
+<h2 id="current-verified-behavior">Current verified behavior<a class="headerlink" href="#current-verified-behavior" title="Permanent link">&para;</a></h2>
+<h3 id="activation-and-schedule">Activation and schedule<a class="headerlink" href="#activation-and-schedule" title="Permanent link">&para;</a></h3>
+<p><code>abinitio2D_sgd</code> is an opt-in development commander. Its existing
+<code>sgd_stage4_mode</code> policy decides which iterations use the stream. This plan
+does not change stage boundaries, warmup iterations, restart behavior, or the
+terminal conventional pass. A class-stability policy is evaluated only when
+<code>params%l_sgd_streaming_active</code> is already true.</p>
+<p>The literal current source schedule is:</p>
+<ul>
+<li><code>off</code>: no streamed iteration;</li>
+<li><code>on</code>: the controller enables the stream from stage 4;</li>
+<li><code>alternate</code>: the controller enables the stream from stage 3; and</li>
+<li>after either enabled mode reaches <code>cluster2D</code>, the generic boundary guard
+  disables streaming when <code>startit &gt; 10</code> and <code>which_iter == startit</code>.</li>
+</ul>
+<p>The controller converts stage 6 to mode <code>on</code>, and its comments say stage 6 is
+fully streamed. The boundary guard does not inspect the stage index, however,
+so its literal condition also matches the first stage-6 child iteration when
+that invocation has <code>startit &gt; 10</code>. This pre-existing comment/condition
+discrepancy is frozen as Phase 0 evidence; class-stability work must not repair
+or otherwise change it incidentally.</p>
+<p>Stages 1 and 2 remain conventional. Existing stage-policy tests and a later
+workflow trace remain the authority for observed <code>on</code> and <code>alternate</code>
+behavior.</p>
+<h3 id="particle-mini-batch">Particle mini-batch<a class="headerlink" href="#particle-mini-batch" title="Permanent link">&para;</a></h3>
+<p>On every active SGD iteration,
+<code>sample_ptcls4update2D</code> counts active particles and computes</p>
+<p>[
+f_{\mathrm{batch}} = \min\left(
+    \mathtt{sgd_update_frac},
+    \frac{200000}{N_{\mathrm{active}}}
+\right).
+]</p>
+<p>It then calls <code>sample4update_rnd</code>, so the default batch is</p>
+<p>[
+N_{\mathrm{batch}} = \min(0.6N_{\mathrm{active}}, 200000).
+]</p>
+<p>The sampled set is freshly drawn on each active iteration. This is the
+stochastic outer loop. The SGD path must continue to use this SIMPLE-owned
+sampling API rather than add another sampler or cap.</p>
+<h3 id="assignment-and-pose-refinement">Assignment and pose refinement<a class="headerlink" href="#assignment-and-pose-refinement" title="Permanent link">&para;</a></h3>
+<p>For every sampled particle, the current stream:</p>
+<ol>
+<li>enters <code>strategy2D_greedy</code>;</li>
+<li>reads class populations through <code>prep_strategy2D_glob</code>, which rewrites
+   populations below two to zero, and skips those classes;</li>
+<li>evaluates all rotation bins of every remaining class with
+   <code>gen_raw_euclid_vals</code>;</li>
+<li>selects the single minimum raw Euclidean class/rotation state; and</li>
+<li>refines shift for that fixed winner with the bounded analytical-gradient
+   direct minimizer.</li>
+</ol>
+<p>In mathematical form,</p>
+<p>[
+(c_i,r_i)=\arg\min_{c\in C_{\mathrm{viable}},r}L_i(c,r,s_i),
+]</p>
+<p>followed by bounded refinement of <code>s_i</code> for the selected <code>(c_i,r_i)</code>.</p>
+<p>There is no candidate table, SoftMax, top-K posterior, or global
+class-frontier assignment in this path.</p>
+<h3 id="existing-class-preservation-gap">Existing class-preservation gap<a class="headerlink" href="#existing-class-preservation-gap" title="Permanent link">&para;</a></h3>
+<p>Before streamed restoration clears the accumulators, the class averager backs
+up the previous class images. If a class receives exactly zero particles in
+the current update and a previous model exists, <code>cavger_restore_cavgs</code> copies
+the previous image instead of writing a zero image.</p>
+<p>That boundary does not match search eligibility. <code>prep_strategy2D_glob</code>
+contains the explicit rule</p>
+<pre><code class="language-fortran">where( s2D%cls_pops &lt; 2 )
+    ! ignoring classes with one particle
+    s2D%cls_pops = 0
+end where
+</code></pre>
+<p>Therefore a one-particle class is reconstructed as a singleton but is treated
+as dead by the next search. The protection threshold must be <code>pop &lt; 2</code>, not
+<code>pop == 0</code>.</p>
+<p>This safeguard is necessary but incomplete:</p>
+<ul>
+<li>it preserves the model only at population zero;</li>
+<li>it does not preserve a population-one model at the actual death boundary;</li>
+<li>it does not preserve support;</li>
+<li>current greedy search skips both zero- and one-particle classes after the
+  population normalization; and</li>
+<li>a preserved class can therefore remain unavailable to particles after its
+  support falls below two.</li>
+</ul>
+<p>The existing focused test proves only the old <code>pop == 0</code> predicate and the
+60-percent sample count. It does not cover population one or prove that an
+end-to-end class retains the two members required by the production search.</p>
+<h2 id="problem-statement">Problem statement<a class="headerlink" href="#problem-statement" title="Permanent link">&para;</a></h2>
+<p>The hard exhaustive stream has a winner-takes-all feedback loop:</p>
+<pre><code class="language-text">slightly lower support
+        -&gt; noisier current average
+        -&gt; higher raw losses for more particles
+        -&gt; still lower support
+        -&gt; population below two
+        -&gt; normalized to dead for search
+</code></pre>
+<p>Preserving only an empty average misses the actual death boundary and does not
+break the feedback loop. Independent and matched preprocessing experiments
+showed that the stream can improve best-class resolution and runtime while
+retaining fewer useful/ranked classes than the conventional path. A better
+best class is not sufficient if biologically meaningful classes disappear.</p>
+<p>The objective of this plan is therefore:</p>
+<blockquote>
+<p>Improve survival and recoverability of previously viable classes in the
+stochastic hard-assignment stream without restoring the global probability
+table or forcing particles into scientifically implausible classes.</p>
+</blockquote>
+<h2 id="terminology">Terminology<a class="headerlink" href="#terminology" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Minimum viable support</strong>: two particles, matching the existing
+  <code>s2D%cls_pops &lt; 2</code> search rule.</li>
+<li><strong>Viable class</strong>: current population is at least two.</li>
+<li><strong>Under-supported class</strong>: current population is zero or one.</li>
+<li><strong>Previously viable class</strong>: the preceding assignment had at least two
+  members and a valid previous class model exists.</li>
+<li><strong>Incumbent class</strong>: the particle's class before the current SGD update.</li>
+<li><strong>Candidate frontier</strong>: the bounded set of classes evaluated for one
+  particle on a non-full-scan iteration.</li>
+<li><strong>Sticky candidate</strong>: the incumbent class is guaranteed to be in that
+  particle's frontier. It remains a candidate; it is not automatically the
+  winner.</li>
+<li><strong>Sticky support anchors</strong>: the two best incumbent particles retained for a
+  previously viable class when its provisional new support would fall below
+  two. Anchors are part of v1.</li>
+<li><strong>Full exploration</strong>: an iteration that evaluates all currently viable
+  classes. It does not offer every unrelated particle every under-supported
+  class.</li>
+</ul>
+<h2 id="non-negotiable-compatibility-contract">Non-negotiable compatibility contract<a class="headerlink" href="#non-negotiable-compatibility-contract" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Standard <code>simple_exec prg=abinitio2D</code> is byte-for-behavior unchanged.</li>
+<li>Default <code>abinitio2D_sgd</code> behavior remains the current exhaustive hard
+   stream until a new class-stability policy is explicitly selected.</li>
+<li>The new policy is development-only, explicit opt-in, and default disabled.</li>
+<li>Stages and iterations where streaming SGD is inactive remain unchanged.</li>
+<li>The terminal conventional pass remains unchanged.</li>
+<li>The particle mini-batch continues to use <code>sgd_update_frac</code> and the existing
+   200,000 SIMPLE cap.</li>
+<li>The raw Euclidean objective, its sign, the class/rotation winner rule, and
+   the direct shift optimizer are not redefined.</li>
+<li>Each sampled particle still produces exactly one hard class/rotation/shift
+   assignment.</li>
+<li>No SoftMax, top-K table, likelihood table, global candidate table, or
+   second baseline run is added to production.</li>
+<li>A never-viable or invalid class is not filled merely to satisfy a
+    target class count.</li>
+<li>The two-member floor may retain only particles whose incumbent class was
+    that same previously viable class. It never imports an unrelated particle
+    solely to revive a class.</li>
+<li>All detailed reporting remains behind <code>sgd_diagnostic</code>, which is default
+    off.</li>
+</ol>
+<h2 id="proposed-v1-incumbent-aware-frontier-with-a-two-member-support-floor">Proposed v1: incumbent-aware frontier with a two-member support floor<a class="headerlink" href="#proposed-v1-incumbent-aware-frontier-with-a-two-member-support-floor" title="Permanent link">&para;</a></h2>
+<h3 id="public-policy">Public policy<a class="headerlink" href="#public-policy" title="Permanent link">&para;</a></h3>
+<p>Add one development-only policy selector after the isolated policy has passed
+focused tests:</p>
+<pre><code class="language-text">sgd_class_policy=exhaustive|frontier
+</code></pre>
+<p>The default is <code>exhaustive</code>, which is the current behavior. <code>frontier</code> is
+accepted only by <code>abinitio2D_sgd</code>; it is not shown by standard <code>abinitio2D</code>.</p>
+<p>Do not add candidate-count or cadence UI parameters in the first code slice.
+Keep those values in the owned policy object/test fixture until measurements
+show that users need to tune them. This avoids creating permanent unused SGD
+arguments while the algorithm is still experimental.</p>
+<h3 id="candidate-construction">Candidate construction<a class="headerlink" href="#candidate-construction" title="Permanent link">&para;</a></h3>
+<p>For sampled particle <code>i</code> on an ordinary frontier iteration, build</p>
+<p>[
+C_i = {c_i^{\mathrm{old}}} \cup R_i,
+]</p>
+<p>where:</p>
+<ul>
+<li><code>c_i_old</code> is included when it was previously viable and its previous model
+  is valid, even when its provisional current population is below two;</li>
+<li><code>R_i</code> is a bounded, duplicate-free sample of currently viable classes;</li>
+<li>the incumbent is not counted twice when it is also viable; and</li>
+<li>if no incumbent model is valid, the frontier consists only of viable
+  alternatives.</li>
+</ul>
+<p>Candidate generation must be deterministic for a fixed project state,
+iteration, user seed, and particle index, independent of OpenMP scheduling.
+Do not share a mutable random-number generator across matcher threads. A
+stateless per-particle permutation/hash or an equivalent thread-safe existing
+SIMPLE API is required.</p>
+<p>For each candidate class, v1 continues to evaluate the complete current
+rotation grid with <code>gen_raw_euclid_vals</code>. This deliberately changes only the
+class competition. A local rotation neighborhood may be studied later, after
+class behavior is understood.</p>
+<p>The winner remains</p>
+<p>[
+(c_i,r_i)=\arg\min_{c\in C_i,r}L_i(c,r,s_i).
+]</p>
+<p>The existing direct shift refinement then operates on that one winner.</p>
+<h3 id="two-member-support-floor">Two-member support floor<a class="headerlink" href="#two-member-support-floor" title="Permanent link">&para;</a></h3>
+<p>The frontier produces provisional hard winners. Before assignments are
+committed, calculate the resulting class populations. For every previously
+viable class whose provisional population is below two:</p>
+<ol>
+<li>consider only particles whose incumbent class was that class;</li>
+<li>rank the incumbents that proposed leaving by the finite raw-loss penalty</li>
+</ol>
+<p>[
+   \Delta_i = L_i(c_i^{\mathrm{old}})-L_i(c_i^{\mathrm{winner}});
+   ]</p>
+<ol>
+<li>retain the smallest-penalty incumbents needed to reach population two; and</li>
+<li>commit one final hard assignment per particle.</li>
+</ol>
+<p>This is a constrained hard assignment, not a probability or rescue bonus. It
+never recruits a particle from an unrelated incumbent class. A class that was
+never viable receives no anchors. If fewer than two active incumbent particles
+remain available, the floor is impossible; the class is reported as dead and
+no unrelated particle is fabricated to satisfy it.</p>
+<p>The implementation must not build a particle-by-class table. It needs only
+the provisional winner, incumbent loss, winner loss, and a bounded two-entry
+selection per class. The resulting memory is linear in sampled particles plus
+classes.</p>
+<p>Class-average restoration must use the same viability rule. If an SGD class
+has population below two and a previous viable model exists, retain the
+previous model rather than constructing a singleton or zero image. The stored
+population remains truthful; model preservation and support accounting are
+separate facts.</p>
+<h3 id="exploration-safety">Exploration safety<a class="headerlink" href="#exploration-safety" title="Permanent link">&para;</a></h3>
+<p>Restricting every iteration forever can freeze a bad assignment. The policy
+therefore needs periodic full exploration over all viable classes. The
+cadence must:</p>
+<ul>
+<li>use global/restart-stable iteration state;</li>
+<li>remain independent of OpenMP thread count;</li>
+<li>be visible in diagnostics; and</li>
+<li>be frozen before matched scientific runs.</li>
+</ul>
+<p>Under-supported classes are not globally advertised during full exploration.
+They remain available only to particles for which they are a previously
+viable incumbent. This is a conservative protection rule: the class can retain
+its own best incumbents without receiving unrelated particles or a global
+rescue bonus.</p>
+<p>The first implementation must expose the cadence as an explicit constructor
+argument to the policy helper and tests. Whether it becomes a user parameter
+is a later decision based on sensitivity measurements.</p>
+<h3 id="why-this-is-analogous-to-prob_snhc">Why this is analogous to <code>prob_snhc</code><a class="headerlink" href="#why-this-is-analogous-to-prob_snhc" title="Permanent link">&para;</a></h3>
+<p>The conventional probabilistic neighborhood machinery reduces candidate
+competition through a sparse candidate set and later performs global
+probabilistic assignment. The proposed frontier reuses only the useful
+locality idea:</p>
+<ul>
+<li>evaluate a bounded changing subset rather than every class;</li>
+<li>always retain a relevant incumbent candidate; and</li>
+<li>periodically widen exploration.</li>
+</ul>
+<p>It intentionally does not reproduce the probability table, SoftMax weights,
+top-K storage, or global assignment pass. It is therefore a table-free
+analogue, not a reimplementation of <code>prob_snhc</code>.</p>
+<h2 id="phase-plan">Phase plan<a class="headerlink" href="#phase-plan" title="Permanent link">&para;</a></h2>
+<h3 id="phase-0-freeze-and-measure-the-current-exhaustive-stream">Phase 0: freeze and measure the current exhaustive stream<a class="headerlink" href="#phase-0-freeze-and-measure-the-current-exhaustive-stream" title="Permanent link">&para;</a></h3>
+<p>Before production behavior changes:</p>
+<ol>
+<li>Record the exact source baseline and stage schedule.</li>
+<li>Verify the 60-percent/200,000 sampling contract in the production caller.</li>
+<li>Record and test the existing <code>&lt; 2</code> search-viability rule, including the
+   mismatch with the current zero-only restoration predicate.</li>
+<li>Add diagnostic summaries for:</li>
+<li>sampled particle count and fraction;</li>
+<li>active, viable, under-supported, zero-population, and previously viable
+     classes;</li>
+<li>per-class population before and after the iteration;</li>
+<li>particles that stayed in or left their incumbent class;</li>
+<li>class reactivation count;</li>
+<li>raw winning-class and first-runner-up-class loss margin without storing a
+     top-K table. First reduce every evaluated class to its best finite
+     rotation, then compare the best two distinct classes; two rotations from
+     the same class must not define this class-competition margin; and</li>
+<li>time spent in candidate evaluation and shift refinement.</li>
+<li>Run the existing focused suite and one current exhaustive-stream workflow.</li>
+</ol>
+<p>No new class policy is enabled in this phase.</p>
+<h3 id="phase-1-isolated-candidate-policy-helper">Phase 1: isolated candidate-policy helper<a class="headerlink" href="#phase-1-isolated-candidate-policy-helper" title="Permanent link">&para;</a></h3>
+<p>Create one owner-aligned helper in the 2D search strategy subsystem. It owns
+candidate indices only; it does not evaluate images, losses, gradients, or
+class averages.</p>
+<p>Pure/focused tests must prove:</p>
+<ul>
+<li>incumbent inclusion;</li>
+<li>under-supported incumbent inclusion only when it was previously viable and
+  its previous model is valid;</li>
+<li>bounded size and no duplicates;</li>
+<li>alternatives are viable classes;</li>
+<li>deterministic results for fixed seed/iteration/particle;</li>
+<li>different iterations change the alternatives;</li>
+<li>thread-order independence;</li>
+<li>full-exploration cadence and restart stability; and</li>
+<li>exact exhaustive behavior when the policy is disabled.</li>
+</ul>
+<p>Before Phase 2 integration, resolve the nonpositive-bound contract explicitly.
+The current helper returns an empty ordinary-iteration frontier when
+<code>max_candidates &lt;= 0</code>, even when a valid incumbent exists. The final interface
+must either reject a nonpositive candidate bound before calling the helper or
+define and test valid-incumbent retention for that input. Silent loss of the
+incumbent is not an accepted production behavior.</p>
+<h3 id="phase-2-provisional-matcher-integration-behind-explicit-opt-in">Phase 2: provisional matcher integration behind explicit opt-in<a class="headerlink" href="#phase-2-provisional-matcher-integration-behind-explicit-opt-in" title="Permanent link">&para;</a></h3>
+<p>Integrate the helper only into the active SGD branch of
+<code>strategy2D_greedy</code>/its owning search state.</p>
+<p>Required behavior:</p>
+<ol>
+<li><code>sgd_class_policy=exhaustive</code> follows the existing loop unchanged.</li>
+<li><code>sgd_class_policy=frontier</code> evaluates the incumbent-aware frontier.</li>
+<li>Both modes call the same <code>gen_raw_euclid_vals</code> and the same direct shift
+   minimizer.</li>
+<li>All accepted orientations and stored score semantics remain unchanged.</li>
+<li>Standard and SGD-inactive routes do not construct or call the helper.</li>
+<li>Diagnostics identify frontier size, incumbent winner/stay/leave outcome,
+   and full-scan iterations.</li>
+</ol>
+<p>Do not commit assignments yet through a test-only shortcut. The next phase
+owns the global two-member support constraint before final orientation writes.</p>
+<h4 id="resolved-opt-in-interface">Resolved opt-in interface<a class="headerlink" href="#resolved-opt-in-interface" title="Permanent link">&para;</a></h4>
+<p>The SPEC proposes one public development key:</p>
+<pre><code class="language-text">sgd_class_policy=exhaustive|frontier
+</code></pre>
+<ul>
+<li><code>exhaustive</code> is the default and must be route-identical to the current
+  streamed loop.</li>
+<li><code>frontier</code> is accepted only by <code>abinitio2D_sgd</code> and only influences an
+  iteration when the existing SGD stage policy is active.</li>
+<li>Standard <code>abinitio2D</code> must not display, accept, set, or forward the key.</li>
+<li>Candidate count and exploration cadence remain private policy constants or
+  constructor inputs in this version; no additional UI fields are added.</li>
+<li>Invalid values fail typed command validation.</li>
+</ul>
+<p>Phase 2 acceptance maps to focused tests for default/explicit-exhaustive route
+identity, frontier bounds and deterministic dispatch, invalid-value rejection,
+standard-command invisibility, inactive-iteration isolation, and unchanged raw
+Euclidean/direct-shift API use. Implementation remains blocked until the user
+approves the governing SPEC.</p>
+<h3 id="phase-3-two-member-floor-and-low-support-restoration">Phase 3: two-member floor and low-support restoration<a class="headerlink" href="#phase-3-two-member-floor-and-low-support-restoration" title="Permanent link">&para;</a></h3>
+<p>Add the bounded per-class anchor selection after provisional hard assignment
+and before final orientation/class-average updates.</p>
+<p>Focused tests must prove:</p>
+<ul>
+<li>population zero and population one are both under-supported;</li>
+<li>population two is viable;</li>
+<li>only a previously viable class can receive anchors;</li>
+<li>only that class's own incumbents are eligible;</li>
+<li>the smallest finite raw-loss penalties are retained;</li>
+<li>at most two anchors are needed per class;</li>
+<li>final assignments remain unique and populations are recomputed exactly;</li>
+<li>an impossible floor reports class death rather than recruiting an unrelated
+  particle; and</li>
+<li>class-average restoration retains the previous model for both population
+  zero and population one while storing the truthful population.</li>
+</ul>
+<h3 id="phase-4-production-context-stability-fixture">Phase 4: production-context stability fixture<a class="headerlink" href="#phase-4-production-context-stability-fixture" title="Permanent link">&para;</a></h3>
+<p>Extend the SGD regression suite with a deterministic multi-class fixture that
+runs multiple stochastic updates. It must include:</p>
+<ul>
+<li>at least one strong class;</li>
+<li>at least one weaker but valid class;</li>
+<li>a class that falls below two members under exhaustive competition;</li>
+<li>a preserved prior average for that class; and</li>
+<li>particles whose incumbent loss remains scientifically competitive.</li>
+</ul>
+<p>Compare exhaustive and frontier policies from the same initial particle
+states, references, noise, and random seed. Report every iteration, then fail
+only after the complete comparison so all diagnostics are retained.</p>
+<p>The fixture must prove:</p>
+<ul>
+<li>each sampled particle has one hard winner;</li>
+<li>non-sampled particles are not silently reassigned;</li>
+<li>preserved class images are finite and unchanged at populations zero and
+  one;</li>
+<li>an under-supported previously viable incumbent remains a legitimate
+  candidate;</li>
+<li>the final protected class has exactly the two best incumbent anchors when
+  provisional support is below two;</li>
+<li>class support never increases through an unrelated rescue assignment;</li>
+<li>accepted shift steps remain finite, improving, and bounded; and</li>
+<li>default exhaustive results remain unchanged.</li>
+</ul>
+<h3 id="phase-5-matched-workflow-experiment">Phase 5: matched workflow experiment<a class="headerlink" href="#phase-5-matched-workflow-experiment" title="Permanent link">&para;</a></h3>
+<p>Fork every arm from the same preprocessing/project checkpoint and preserve the
+same stage schedule. Use at least beta-galactosidase and apoferritin and more
+than one fixed random seed.</p>
+<p>Compare:</p>
+<ol>
+<li>conventional <code>abinitio2D</code> reference;</li>
+<li>current <code>abinitio2D_sgd</code> exhaustive hard stream; and</li>
+<li><code>abinitio2D_sgd</code> incumbent-aware frontier.</li>
+</ol>
+<p>The conventional arm is scientific reference evidence, not a runtime
+dependency of production SGD.</p>
+<p>Record:</p>
+<ul>
+<li>normal completion and runtime;</li>
+<li>sampled particles per iteration;</li>
+<li>active, ranked, viable, under-supported, and zero-population classes per
+  iteration;</li>
+<li>number of anchored classes and retained anchor particles;</li>
+<li>class-survival curve and reactivations;</li>
+<li>minimum, median, maximum, and entropy/effective class population;</li>
+<li>best resolution;</li>
+<li>median resolution of ranked classes;</li>
+<li>classes below 9 Angstrom and their median resolution;</li>
+<li>raw objective and winner-margin distributions;</li>
+<li>incumbent stay/leave rate;</li>
+<li>direct-shift attempts, accepted steps, final loss, and bound compliance; and</li>
+<li>output project consistency.</li>
+</ul>
+<p>The governing SPEC predeclares the proposed decision thresholds before any
+frontier workflow result is read:</p>
+<ul>
+<li>at least three fixed seeds per dataset;</li>
+<li>no matched arm may finish with fewer viable classes than exhaustive mode;</li>
+<li>median final viable-class count must be strictly higher on both datasets;</li>
+<li>across-seed median ranked-class resolution and median resolution among
+  classes below 9 Angstrom may be at most 0.5 Angstrom worse per dataset; and</li>
+<li>median runtime may be at most 10 percent slower per dataset.</li>
+</ul>
+<p>These thresholds remain subject to requester approval while the SPEC is
+<code>IN REVIEW</code>. Once approved and frozen, they must not be relaxed in response to
+the observed results. A single improved best class is not sufficient.</p>
+<h3 id="phase-6-decide-whether-stronger-support-control-is-necessary">Phase 6: decide whether stronger support control is necessary<a class="headerlink" href="#phase-6-decide-whether-stronger-support-control-is-necessary" title="Permanent link">&para;</a></h3>
+<p>The two-member floor is already part of v1 because it matches SIMPLE's actual
+class-viability rule. If the frontier plus this floor is sufficient, stop. Do
+not add more machinery.</p>
+<p>If previously meaningful classes still collapse or remain permanently pinned
+at two without improving, evaluate one stronger mechanism at a time.</p>
+<h4 id="option-capped-support-aware-score-adjustment">Option: capped support-aware score adjustment<a class="headerlink" href="#option-capped-support-aware-score-adjustment" title="Permanent link">&para;</a></h4>
+<p>Only if anchors are insufficient, test a bounded class-support term such as</p>
+<p>[
+L'_i(c)=L_i(c)+\lambda\,\mathrm{clip}\left(
+\log\frac{n_c+\epsilon}{\bar n+\epsilon},-b,b
+\right).
+]</p>
+<p>For an under-supported class the logarithm is negative and lowers the adjusted
+assignment loss. The unadjusted raw loss must still be retained for scientific
+reporting and shift optimization.</p>
+<p>This option changes the assignment objective and therefore requires stronger
+justification, scale calibration, and matched validation. Its first experiment
+must compare against the fixed two-member floor without silently changing the
+anchor rule.</p>
+<h4 id="rejected-first-line-mechanisms">Rejected first-line mechanisms<a class="headerlink" href="#rejected-first-line-mechanisms" title="Permanent link">&para;</a></h4>
+<ul>
+<li>An unconditional bonus for every empty or singleton class.</li>
+<li>Forced equal class populations.</li>
+<li>A separate conventional baseline run during production.</li>
+<li>Global top-K/SoftMax tables.</li>
+<li>Class-balanced particle sampling presented as a collapse solution: it can
+  balance the input batch by old labels, but particles can still all migrate
+  after scoring.</li>
+</ul>
+<h2 id="deferred-optimizer-track">Deferred optimizer track<a class="headerlink" href="#deferred-optimizer-track" title="Permanent link">&para;</a></h2>
+<p>The former direct-joint optimizer plan is not the current work item.</p>
+<p>Current evidence supports this boundary:</p>
+<ul>
+<li>the established joint L-BFGS-B route already consumes a discrete seed and
+  performs bounded local continuous polishing;</li>
+<li>the attempted extra seeded wrapper was redundant in the production caller;</li>
+<li><code>inpl_cont=yes</code> focused tests established finite analytical gradients,
+  integer-route parity, accurate synthetic pose recovery, and operational
+  polishing behavior; and</li>
+<li>a separate direct projected solver has not demonstrated a workflow benefit.</li>
+</ul>
+<p>Future optimizer research may benchmark a bounded block-scaled projected-
+gradient method with Armijo backtracking against L-BFGS-B on the same particle,
+class, rotation seed, shift seed, bounds, and objective. It should advance only
+if it achieves comparable final loss and pose error with fewer evaluations or
+lower runtime across realistic data. Coordinate equality is not required in a
+shallow local objective; scientific pose quality and final loss are.</p>
+<p>This future track must remain orthogonal to class-frontier development. Do not
+change the inner optimizer and the outer class policy in the same experiment.</p>
+<h2 id="file-ownership-for-the-planned-implementation">File ownership for the planned implementation<a class="headerlink" href="#file-ownership-for-the-planned-implementation" title="Permanent link">&para;</a></h2>
+<p>Expected owners, subject to a fresh call-trace before each phase:</p>
+<ul>
+<li><code>src/main/strategies/search/simple_matcher_smpl_and_lplims.f90</code>:
+  preserve the existing SGD mini-batch contract; no new cap.</li>
+<li><code>src/main/strategies/search/simple_strategy2D_matcher.f90</code>:
+  active-stream orchestration, provisional/final assignment boundary, anchor
+  application, and aggregate diagnostics.</li>
+<li><code>src/main/strategies/search/simple_strategy2D_greedy.f90</code>:
+  consume the class frontier while retaining the existing raw-loss and shift
+  calls.</li>
+<li>a small owner-aligned 2D search policy module or existing allocation/state
+  module: deterministic candidate generation and bounded two-anchor selection.</li>
+<li><code>src/main/strategies/search/simple_strategy2D_alloc.f90</code>:
+  authority for the existing population-below-two viability rule; replace the
+  literal threshold with one shared 2D viability constant only if all current
+  callers and tests are audited together.</li>
+<li><code>src/main/class/simple_classaverager_restore.f90</code>:
+  align restoration with minimum viable support by preserving the previous
+  valid model at populations zero and one.</li>
+<li><code>src/main/params</code> and <code>src/main/ui/simple/simple_ui_cluster2D.f90</code>:
+  add only the final explicit development policy after the internal helper is
+  validated.</li>
+<li><code>production/tests/simple_sgd_base_suite_sampling_restore_test.f90</code> and the
+  split SGD suite modules: pure and production-context regressions.</li>
+</ul>
+<p>Do not modify standard <code>simple_commanders_abinitio2D.f90</code> to implement this
+policy. The development wrapper and existing internal delegation remain the
+activation boundary.</p>
+<h2 id="validation-and-workflow-rules">Validation and workflow rules<a class="headerlink" href="#validation-and-workflow-rules" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Follow <code>.codex/windows-msys-install-workflow.md</code> and
+  <code>.codex/compile_windows.sh</code> for the local Windows/MSYS build, with at most 12
+  build jobs.</li>
+<li>Use targeted source checks before asking for a long build.</li>
+<li>The user will run <code>simple_test_sgd_base_suite</code> and scientific workflows on
+  the Oracle Linux box.</li>
+<li>Do not claim Linux/BOX validation without observed output.</li>
+<li>A shared extracted project is necessary but not sufficient for a
+  deterministic A/B test. Record and control the assignment/random seed in
+  each arm.</li>
+<li>Checker scripts must prove attempted work, finite losses, class-support
+  behavior, and output consistency, not merely find an activation marker.</li>
+<li>Diagnostics must not change default numerical behavior and must remain off
+  in production unless explicitly requested.</li>
+</ul>
+<h2 id="commit-boundaries">Commit boundaries<a class="headerlink" href="#commit-boundaries" title="Permanent link">&para;</a></h2>
+<p>Keep implementation commits independently reviewable:</p>
+<ol>
+<li>baseline diagnostics, shared minimum-support contract, and
+   production-context low-support restoration test;</li>
+<li>isolated deterministic class-frontier helper and pure tests;</li>
+<li>opt-in provisional matcher/greedy integration and route-identity tests;</li>
+<li>bounded two-member anchor selection and final-assignment tests;</li>
+<li>deterministic multi-iteration class-stability fixture;</li>
+<li>workflow scripts/reporting, if changed;</li>
+<li>optional support-aware scoring only after a separate approved decision.</li>
+</ol>
+<p>Do not mix direct-joint optimizer work, standard <code>abinitio2D</code> changes,
+continuous-3D work, or unrelated test development into these commits.</p>
+<h2 id="completion-criteria">Completion criteria<a class="headerlink" href="#completion-criteria" title="Permanent link">&para;</a></h2>
+<p>This plan is complete only when:</p>
+<ol>
+<li>default standard and development paths retain their established behavior;</li>
+<li>the explicit frontier mode is deterministic, table-free, and produces one
+   hard winner per sampled particle;</li>
+<li>fresh mini-batch sampling and the existing 200,000 cap remain unchanged;</li>
+<li>the population-below-two death rule is represented by one tested policy
+   contract;</li>
+<li>previously viable classes retain their previous model at populations zero
+   and one;</li>
+<li>the two-member floor retains only the best same-class incumbents and never
+   fabricates an unrelated rescue assignment;</li>
+<li>matched three-seed workflows on beta-galactosidase and apoferritin satisfy
+   the frozen viable-class, resolution, and runtime thresholds in the
+   governing SPEC;</li>
+<li>diagnostics are default-off and all focused tests pass; and</li>
+<li>the result is reviewed before any default is changed.</li>
+</ol>
+<p>Until those gates pass, <code>sgd_class_policy=frontier</code> remains an explicitly
+development-only experiment and <code>exhaustive</code> remains the default stream
+policy.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

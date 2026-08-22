@@ -1,0 +1,5333 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/continuous_3D_pose_end_polishing_Literature%20Review%20and%20Recommended%20Path.html">
+      
+      
+        <link rel="prev" href="continuous_3D_pose_capture_experiment_summary_2026-08-19.html">
+      
+      
+        <link rel="next" href="continuous_3D_pose_end_polishing_handoff.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Literature Review and Recommended Path for Forward-Model Matching and Reference-Induced Pose Bias in Cryo-EM Polishing - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#literature-review-and-recommended-path-for-forward-model-matching-and-reference-induced-pose-bias-in-cryo-em-polishing" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Literature Review and Recommended Path for Forward-Model Matching and Reference-Induced Pose Bias in Cryo-EM Polishing
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement in abinitio2D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Mask in nu_filt3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2d_sgd_class_stability_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2d_sgd_class_stability_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification: table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_capture_experiment_summary_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D pose-capture experiment summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Literature Review and Recommended Path for Forward-Model Matching and Reference-Induced Pose Bias in Cryo-EM Polishing
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="continuous_3D_pose_end_polishing_Literature%20Review%20and%20Recommended%20Path.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Literature Review and Recommended Path for Forward-Model Matching and Reference-Induced Pose Bias in Cryo-EM Polishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#executive-conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive conclusion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-what-the-realspace_clip_native_fft-diagnostic-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. What the REALSPACE_CLIP_NATIVE_FFT diagnostic established
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-reconstruction-operator-now-matters-just-as-much-as-the-polishing-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The reconstruction operator now matters just as much as the polishing operator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. The reconstruction operator now matters just as much as the polishing operator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-this-changes-the-interpretation-of-the-46-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this changes the interpretation of the 4–6° drift
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-immediate-implementation-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The immediate implementation decision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. The immediate implementation decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#but-the-prototype-should-have-two-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        But the prototype should have two phases
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-a-mandatory-adjoint-test-should-be-added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. A mandatory adjoint test should be added
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-the-decisive-reconstructed-reference-experiment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. The decisive reconstructed-reference experiment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-what-the-cryo-em-literature-says-about-genuine-posereference-bias" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. What the cryo-EM literature says about genuine pose/reference bias
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. What the cryo-EM literature says about genuine pose/reference bias">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-reference-based-orientation-fitting-can-follow-noise-or-map-error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Reference-based orientation fitting can follow noise or map error
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-high-frequencies-deserve-less-trust-for-orientation-estimation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 High frequencies deserve less trust for orientation estimation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-a-good-polishing-algorithm-should-use-a-pose-prior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 A good polishing algorithm should use a pose prior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-recent-work-strengthens-the-bayesian-argument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Recent work strengthens the Bayesian argument
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-cross-validation-what-i-recommend-and-what-i-do-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Cross-validation: what I recommend and what I do not
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Cross-validation: what I recommend and what I do not">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#therefore-i-recommend-cross-fitting-as-a-diagnostic-6713" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Therefore I recommend cross-fitting as a diagnostic [6,7,13]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interpretation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpretation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-frequency-limited-polishing-should-be-the-next-methodological-control-57" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Frequency-limited polishing should be the next methodological control [5,7]
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-why-i-would-not-implement-joint-reconstruction-and-pose-optimization-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Why I would not implement joint reconstruction and pose optimization yet
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-recommended-experimental-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Recommended experimental sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Recommended experimental sequence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gate-1-matched-particle-forward-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 1 — matched particle forward operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-2-matched-reconstruction-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 2 — matched reconstruction operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-3-reconstructed-reference-stationarity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 3 — reconstructed-reference stationarity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-4-determine-the-source-of-remaining-reference-bias" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 4 — determine the source of remaining reference bias
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-5-production-pose-polishing-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 5 — production pose-polishing design
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-what-i-would-not-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. What I would not do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-production-implementation-after-the-explicit-prototype" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Production implementation after the explicit prototype
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-final-scientific-classification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Final scientific classification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="13. Final scientific classification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Established
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#very-likely" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Very likely
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-yet-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet established
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#if-drift-survives-matched-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If drift survives matched reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-final-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Final recommendation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="14. Final recommendation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#most-relevant-literature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Most relevant literature
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D PCG pose-polishing scientific handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D PLAN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D SPEC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_polishing_hans_clarification_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose polishing: Hans clarification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_euclid_crash_investigation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruct3D → euclid crash: investigation handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_reconstruction_production_readiness.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruction production-readiness plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_refine3D_integration_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG integration plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference_picker_flcf_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference_picker_flcf_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_25" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_25" id="__nav_9_25_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_25_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_25">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_29" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_29" id="__nav_10_29_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_29_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_29">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_8" id="__nav_11_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#executive-conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive conclusion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-what-the-realspace_clip_native_fft-diagnostic-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. What the REALSPACE_CLIP_NATIVE_FFT diagnostic established
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-reconstruction-operator-now-matters-just-as-much-as-the-polishing-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The reconstruction operator now matters just as much as the polishing operator
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. The reconstruction operator now matters just as much as the polishing operator">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-this-changes-the-interpretation-of-the-46-drift" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why this changes the interpretation of the 4–6° drift
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-immediate-implementation-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The immediate implementation decision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. The immediate implementation decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#but-the-prototype-should-have-two-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        But the prototype should have two phases
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-a-mandatory-adjoint-test-should-be-added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. A mandatory adjoint test should be added
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-the-decisive-reconstructed-reference-experiment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. The decisive reconstructed-reference experiment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-what-the-cryo-em-literature-says-about-genuine-posereference-bias" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. What the cryo-EM literature says about genuine pose/reference bias
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. What the cryo-EM literature says about genuine pose/reference bias">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-reference-based-orientation-fitting-can-follow-noise-or-map-error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Reference-based orientation fitting can follow noise or map error
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-high-frequencies-deserve-less-trust-for-orientation-estimation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 High frequencies deserve less trust for orientation estimation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#63-a-good-polishing-algorithm-should-use-a-pose-prior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.3 A good polishing algorithm should use a pose prior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#64-recent-work-strengthens-the-bayesian-argument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.4 Recent work strengthens the Bayesian argument
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-cross-validation-what-i-recommend-and-what-i-do-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Cross-validation: what I recommend and what I do not
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Cross-validation: what I recommend and what I do not">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#therefore-i-recommend-cross-fitting-as-a-diagnostic-6713" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Therefore I recommend cross-fitting as a diagnostic [6,7,13]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interpretation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpretation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-frequency-limited-polishing-should-be-the-next-methodological-control-57" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Frequency-limited polishing should be the next methodological control [5,7]
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-why-i-would-not-implement-joint-reconstruction-and-pose-optimization-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Why I would not implement joint reconstruction and pose optimization yet
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-recommended-experimental-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Recommended experimental sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Recommended experimental sequence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gate-1-matched-particle-forward-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 1 — matched particle forward operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-2-matched-reconstruction-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 2 — matched reconstruction operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-3-reconstructed-reference-stationarity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 3 — reconstructed-reference stationarity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-4-determine-the-source-of-remaining-reference-bias" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 4 — determine the source of remaining reference bias
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gate-5-production-pose-polishing-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gate 5 — production pose-polishing design
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-what-i-would-not-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. What I would not do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-production-implementation-after-the-explicit-prototype" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Production implementation after the explicit prototype
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-final-scientific-classification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Final scientific classification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="13. Final scientific classification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Established
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#very-likely" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Very likely
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-yet-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet established
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#if-drift-survives-matched-reconstruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If drift survives matched reconstruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-final-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Final recommendation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="14. Final recommendation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#most-relevant-literature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Most relevant literature
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="literature-review-and-recommended-path-for-forward-model-matching-and-reference-induced-pose-bias-in-cryo-em-polishing">Literature Review and Recommended Path for Forward-Model Matching and Reference-Induced Pose Bias in Cryo-EM Polishing<a class="headerlink" href="#literature-review-and-recommended-path-for-forward-model-matching-and-reference-induced-pose-bias-in-cryo-em-polishing" title="Permanent link">&para;</a></h1>
+<h2 id="executive-conclusion">Executive conclusion<a class="headerlink" href="#executive-conclusion" title="Permanent link">&para;</a></h2>
+<p>The literature supports the conclusion that the current scientific production gate should remain <strong>closed</strong>, but it changes one important part of the previous interpretation.</p>
+<p>The <code>REALSPACE_CLIP_NATIVE_FFT</code> result establishes that the simulator and the current PCG/polishing model implement different discrete forward operators. Real-space cropping/windowing is not merely an amplitude operation: multiplication by a finite real-space window produces convolution in Fourier space and introduces correlations between Fourier coefficients. Cryo-EM literature explicitly discusses this effect for real-space masks and finite particle boxes. [1]</p>
+<p>Therefore, for data produced as</p>
+<p>[
+y = F_N C F_P^{-1}G_P(R)V,
+]</p>
+<p>the scientifically matched forward operator is</p>
+<p>[
+A(R)=W G_P(R),
+\qquad
+W\equiv F_N C F_P^{-1}.
+]</p>
+<p>The corresponding pose derivative is</p>
+<p>[
+J_{\mathrm{matched}} = WJ_P,
+]</p>
+<p>exactly as proposed.</p>
+<p>However, the literature leads to a stronger recommendation:</p>
+<blockquote>
+<p><strong>The same matched operator must also be used when reconstructing the reference volume.</strong> [2–4]</p>
+</blockquote>
+<p>If PCG reconstructs the map with</p>
+<p>[
+A_{\mathrm{old}}(R)=G_N(R)
+]</p>
+<p>while the measurements were generated by (WG_P(R)), then the reconstruction itself can partially absorb the forward-model discrepancy. Polishing correct poses against that reconstructed map can subsequently convert a relatively small image-domain modeling error into a much larger orientation displacement.</p>
+<p>Consequently, the observed 4–6° drift should <strong>not yet be classified conclusively as an independent reference-bias phenomenon</strong>. It may be reference-induced, but the reference itself was apparently produced under the mismatched forward model.</p>
+<p>My recommended sequence is therefore:</p>
+<ol>
+<li>Match the forward model and Jacobian.</li>
+<li>Match the PCG reconstruction forward <strong>and adjoint</strong> operators.</li>
+<li>Reconstruct a new reference using the matched system.</li>
+<li>Repeat the exact-pose stationarity experiment against that new reconstruction.</li>
+<li>Only if substantial drift remains should the project move to explicit reference-bias countermeasures such as cross-fitted references, frequency/SNR weighting, pose priors, or eventually joint reconstruction/refinement.</li>
+</ol>
+<p>That ordering is the main conclusion of this literature review.</p>
+<hr />
+<h2 id="1-what-the-realspace_clip_native_fft-diagnostic-established">1. What the <code>REALSPACE_CLIP_NATIVE_FFT</code> diagnostic established<a class="headerlink" href="#1-what-the-realspace_clip_native_fft-diagnostic-established" title="Permanent link">&para;</a></h2>
+<p>Your measurements are unusually clean:</p>
+<table>
+<thead>
+<tr>
+<th>Test boundary</th>
+<th style="text-align: right;">Residual</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PCG vs. padded projection</td>
+<td style="text-align: right;">(1.54\times10^{-4})</td>
+<td>consistent</td>
+</tr>
+<tr>
+<td>Fourier round trip</td>
+<td style="text-align: right;">(1.28\times10^{-4})</td>
+<td>consistent</td>
+</tr>
+<tr>
+<td>real-space clip/native FFT</td>
+<td style="text-align: right;">(1.38\times10^{-2})</td>
+<td>inconsistent</td>
+</tr>
+</tbody>
+</table>
+<p>This is roughly a 90–108× increase relative to the two preceding control residuals.</p>
+<p>That pattern is exactly what would be expected when an additional spatial window is inserted into only one branch of the calculation.</p>
+<p>If</p>
+<p>[
+p_P = F_P^{-1}G_P(R)V
+]</p>
+<p>is the padded projection in real space and (C) extracts its central native-sized field of view, then</p>
+<p>[
+C p_P
+]</p>
+<p>is mathematically equivalent to multiplying the padded image by a rectangular spatial window and retaining that region.</p>
+<p>The convolution theorem then gives, schematically,</p>
+<p>[
+\mathcal F{p_P c}
+=</p>
+<p>\widehat p_P * \widehat c.
+]</p>
+<p>Cryo-EM analyses of masking explicitly note that real-space masking convolves the corresponding Fourier coefficients and can generate correlations between them. [1]</p>
+<p>Therefore,</p>
+<p>[
+F_N C F_P^{-1}G_P(R)V
+]</p>
+<p>is generally <strong>not equivalent</strong> to simply evaluating</p>
+<p>[
+G_N(R)V
+]</p>
+<p>on the native Fourier grid.</p>
+<p>They become approximately equivalent only under restrictive conditions—for example when the projection is sufficiently well confined inside the native real-space box that cropping effectively removes zero signal, while all Fourier coordinate and normalization conventions also agree.</p>
+<p>Your experiment demonstrates empirically that those conditions are not met.</p>
+<p>The frequency dependence is also consistent with a windowing discrepancy. Your low-frequency mismatch is only about 1%, while the middle band reaches 12.3% and the high-frequency correlation falls to 0.152. Window functions redistribute spectral information across frequencies rather than merely multiplying the complete spectrum by a constant. [1]</p>
+<p>The approximately quarter-scale transition is probably a separate FFT-normalization issue. If the padded dimensions are twice the native dimensions along both axes, a factor close to (1/4) is compatible with common 2-D FFT normalization conventions. The important point is that your global scale fit already removes most of that effect; it cannot remove the remaining frequency-dependent shape error.</p>
+<p>Thus the amplitude factor and the 1.38% residual should be treated as <strong>two different phenomena</strong>:</p>
+<p>[
+\text{normalization mismatch}
++
+\text{spectral-shape mismatch}.
+]</p>
+<p>Only the first is removable by a scalar.</p>
+<hr />
+<h2 id="2-the-reconstruction-operator-now-matters-just-as-much-as-the-polishing-operator">2. The reconstruction operator now matters just as much as the polishing operator<a class="headerlink" href="#2-the-reconstruction-operator-now-matters-just-as-much-as-the-polishing-operator" title="Permanent link">&para;</a></h2>
+<p>This is the most important consequence of the literature search.</p>
+<p>Modern cryo-EM reconstruction algorithms formulate projection and backprojection as paired linear operators. RELION, for example, performs Fourier-space projection by interpolation from an oversampled 3-D Fourier transform and performs the corresponding backprojection using the transpose of the interpolation matrix. [2]</p>
+<p>Likewise, iterative Fourier reconstruction formulations explicitly use</p>
+<p>[
+A^\ast A,
+]</p>
+<p>where (A) is the forward projector and (A^\ast) is its adjoint/backprojector. [3]</p>
+<p>The wider tomography literature has studied unmatched projector/backprojector pairs directly and shows that their convergence and reconstructed solutions can differ substantially from those obtained with matched operators. [4]</p>
+<p>For your simulator-matched model,</p>
+<p>[
+A(R)=WG_P(R),
+]</p>
+<p>with</p>
+<p>[
+W=F_NCF_P^{-1}.
+]</p>
+<p>Under unitary Fourier-transform notation, the adjoint is</p>
+<p>[
+A^\ast(R)
+=</p>
+<p>G_P^\ast(R)W^\ast
+]</p>
+<p>and</p>
+<p>[
+W^\ast
+=</p>
+<p>F_P C^\ast F_N^{-1},
+]</p>
+<p>where (C^\ast) is the adjoint of cropping: <strong>zero-embedding the native image back into the padded real-space field</strong>.</p>
+<p>Exact prefactors depend on your FFT normalization convention, but the operator structure does not.</p>
+<p>This means a fully matched PCG system should conceptually use</p>
+<p>[
+A^\ast A
+=</p>
+<p>G_P^\ast W^\ast W G_P,
+]</p>
+<p>not</p>
+<p>[
+G_N^\ast G_N.
+]</p>
+<h3 id="why-this-changes-the-interpretation-of-the-46-drift">Why this changes the interpretation of the 4–6° drift<a class="headerlink" href="#why-this-changes-the-interpretation-of-the-46-drift" title="Permanent link">&para;</a></h3>
+<p>Suppose the synthetic measurements satisfy</p>
+<p>[
+y_i = A_{\mathrm{true}}(R_i)V_{\mathrm{true}}
+]</p>
+<p>but the reference reconstruction solves approximately</p>
+<p>[
+V_{\mathrm{rec}}
+=</p>
+<p>\arg\min_V
+\sum_i
+\left|
+y_i-G_N(R_i)V
+\right|^2.
+]</p>
+<p>Then even with perfectly correct (R_i), the reconstruction is being asked to explain data generated by one system using another system.</p>
+<p>The reconstructed volume can compensate for part of that discrepancy:</p>
+<p>[
+V_{\mathrm{rec}}
+\neq V_{\mathrm{true}}.
+]</p>
+<p>Later, if pose polishing minimizes a residual against (V_{\mathrm{rec}}), changing (R_i) can improve agreement with distortions that were introduced into the map by the original reconstruction mismatch.</p>
+<p>That gives a plausible chain:</p>
+<p>[
+\text{forward mismatch}
+\rightarrow
+\text{biased reconstructed reference}
+\rightarrow
+\text{pose drift}.
+]</p>
+<p>This is an inference from your diagnostic plus established matched-operator theory; I did <strong>not</strong> find a paper demonstrating your exact 1.38%-to-4–6° scenario. But mathematically it is sufficiently plausible that it must be excluded experimentally before the drift is labeled an independent reference-bias problem. [2–4]</p>
+<hr />
+<h2 id="3-the-immediate-implementation-decision">3. The immediate implementation decision<a class="headerlink" href="#3-the-immediate-implementation-decision" title="Permanent link">&para;</a></h2>
+<p>The explicit prototype you proposed remains the correct next step:</p>
+<p>[
+\widehat y
+=</p>
+<p>F_NCF_P^{-1}G_P(R)V.
+]</p>
+<p>Likewise,</p>
+<p>[
+J_{\mathrm{matched}}
+=</p>
+<p>F_NCF_P^{-1}J_P.
+]</p>
+<p>Because (W=F_NCF_P^{-1}) is linear and does not depend on pose,</p>
+<p>[
+\frac{\partial}{\partial\theta}
+\left[WG_P(R(\theta))V\right]
+=</p>
+<p>W
+\frac{\partial G_P(R(\theta))V}{\partial\theta}.
+]</p>
+<p>Therefore no new analytical rotation derivative is required. Your already validated padded Jacobian can simply pass through the same (W).</p>
+<h3 id="but-the-prototype-should-have-two-phases">But the prototype should have two phases<a class="headerlink" href="#but-the-prototype-should-have-two-phases" title="Permanent link">&para;</a></h3>
+<p><strong>Phase A — pose-forward validation</strong></p>
+<p>Use the explicit padded inverse FFT → real-space crop → native FFT operation for both prediction and Jacobian.</p>
+<p>Required results:</p>
+<p>[
+r_{\mathrm{matched}}
+\approx
+r_{\mathrm{exactKB}}
+]</p>
+<p>and the exact simulator pose should be stationary.</p>
+<p>This verifies the diagnosis at the particle level.</p>
+<p><strong>Phase B — matched reconstruction</strong></p>
+<p>Add the adjoint</p>
+<p>[
+W^\ast
+]</p>
+<p>to the reconstruction path and rebuild the PCG reference using</p>
+<p>[
+A=WG_P,\qquad
+A^\ast=G_P^\ast W^\ast.
+]</p>
+<p>Only after this reference exists should you perform the decisive reconstructed-reference pose test.</p>
+<hr />
+<h2 id="4-a-mandatory-adjoint-test-should-be-added">4. A mandatory adjoint test should be added<a class="headerlink" href="#4-a-mandatory-adjoint-test-should-be-added" title="Permanent link">&para;</a></h2>
+<p>Before using the new operator inside PCG, I recommend making the adjoint identity a production gate:</p>
+<p>[
+\langle Ax,y\rangle
+=</p>
+<p>\langle x,A^\ast y\rangle.
+]</p>
+<p>Test it with random complex input volumes/images and multiple random orientations.</p>
+<p>Define</p>
+<p>[
+\epsilon_{\mathrm{adj}}
+=</p>
+<p>\frac{
+\left|
+\langle Ax,y\rangle-
+\langle x,A^\ast y\rangle
+\right|
+}{
+\max(
+|\langle Ax,y\rangle|,
+|\langle x,A^\ast y\rangle|,
+\epsilon)
+}.
+]</p>
+<p>For double precision, an error around (10^{-10})–(10^{-12}) should normally be achievable for an explicitly implemented linear operator, subject to the interpolation implementation. Single precision naturally requires a looser criterion.</p>
+<p>This test is more valuable than checking the reconstruction output alone because it tests the actual mathematical condition PCG expects.</p>
+<p>RELION's explicit use of the transpose projection interpolation for backprojection and iterative cryo-EM formulations based on (A^\ast A) make this a well-grounded design choice. [2,3]</p>
+<hr />
+<h2 id="5-the-decisive-reconstructed-reference-experiment">5. The decisive reconstructed-reference experiment<a class="headerlink" href="#5-the-decisive-reconstructed-reference-experiment" title="Permanent link">&para;</a></h2>
+<p>After Phase A succeeds, I recommend the following experiment before implementing any reference-bias mitigation.</p>
+<p>Start from the <strong>known correct particle poses</strong> and the same synthetic observations.</p>
+<p>Construct:</p>
+<p>[
+V_{\mathrm{old}}
+=</p>
+<p>\text{PCG reconstruction using }G_N
+]</p>
+<p>and</p>
+<p>[
+V_{\mathrm{matched}}
+=</p>
+<p>\text{PCG reconstruction using }WG_P
+\text{ and }G_P^\ast W^\ast.
+]</p>
+<p>Then run matched pose polishing from the exact poses against both maps.</p>
+<p>The result has three scientifically distinct interpretations:</p>
+<table>
+<thead>
+<tr>
+<th>Outcome</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Drift disappears or becomes very small with (V_{\mathrm{matched}})</td>
+<td>Most of the apparent reference bias was generated upstream by forward-model mismatch</td>
+</tr>
+<tr>
+<td>Drift decreases substantially but remains</td>
+<td>Mixed problem: operator mismatch plus genuine reference-induced pose bias</td>
+</tr>
+<tr>
+<td>Drift remains near 4–6°</td>
+<td>Reference/reconstruction bias is largely independent of the clipping mismatch</td>
+</tr>
+</tbody>
+</table>
+<p>This experiment is substantially more informative than immediately implementing leave-one-out references.</p>
+<hr />
+<h2 id="6-what-the-cryo-em-literature-says-about-genuine-posereference-bias">6. What the cryo-EM literature says about genuine pose/reference bias<a class="headerlink" href="#6-what-the-cryo-em-literature-says-about-genuine-posereference-bias" title="Permanent link">&para;</a></h2>
+<p>If significant drift survives matched reconstruction, the literature strongly supports the existence of the second phenomenon you originally suspected.</p>
+<h3 id="61-reference-based-orientation-fitting-can-follow-noise-or-map-error">6.1 Reference-based orientation fitting can follow noise or map error<a class="headerlink" href="#61-reference-based-orientation-fitting-can-follow-noise-or-map-error" title="Permanent link">&para;</a></h3>
+<p>Stewart and Grigorieff demonstrated that single-particle orientation refinement can overfit, particularly at spatial frequencies where signal is weak, and showed that resolution-dependent SNR weighting reduces the effect. [5]</p>
+<p>Shaikh and colleagues demonstrated reference dependence in projection matching and used cross-validation to expose it. Their core point is directly relevant: the data used to judge the quality of a fit should not be the same information that produced the reference used for fitting. [6]</p>
+<p>So, once operator mismatch is excluded,</p>
+<p>[
+\arg\min_R |y-A(R)V_{\mathrm{rec}}|^2
+]</p>
+<p>does not have to equal</p>
+<p>[
+R_{\mathrm{true}}
+]</p>
+<p>when</p>
+<p>[
+V_{\mathrm{rec}}\neq V_{\mathrm{true}}.
+]</p>
+<p>That is not an optimizer defect. It is a property of the objective.</p>
+<h3 id="62-high-frequencies-deserve-less-trust-for-orientation-estimation">6.2 High frequencies deserve less trust for orientation estimation<a class="headerlink" href="#62-high-frequencies-deserve-less-trust-for-orientation-estimation" title="Permanent link">&para;</a></h3>
+<p>Scheres and Chen's gold-standard work is particularly relevant. Their simulations showed that excluding unreliable high-frequency terms did not meaningfully degrade orientation determination, because low-to-medium frequencies contain most of the useful orientation information under typical cryo-EM SNR conditions. They therefore advocated independent refinement and/or frequency limitation to control overfitting. [7]</p>
+<p>This agrees remarkably well with your frequency diagnostic: the high-frequency portion is precisely where agreement is currently weakest.</p>
+<p>Even after the forward model is fixed, frequency-dependent weighting should therefore remain part of the methodological design.</p>
+<h3 id="63-a-good-polishing-algorithm-should-use-a-pose-prior">6.3 A good polishing algorithm should use a pose prior<a class="headerlink" href="#63-a-good-polishing-algorithm-should-use-a-pose-prior" title="Permanent link">&para;</a></h3>
+<p>RELION implements local angular searches statistically as orientation priors and uses a truncated Gaussian around the previous optimal orientation. [2,8]</p>
+<p>Current CryoSPARC local refinement likewise provides a Gaussian pose/shift prior specifically to penalize movement far from the input pose and recommends such a prior when iterative recentering might permit particle drift. [9]</p>
+<p>This is directly applicable to your use case because this is <strong>polishing</strong>, not ab-initio orientation determination.</p>
+<p>If the starting poses already contain substantial information, treating every alternative nearby orientation as equally plausible throws that information away.</p>
+<p>A natural objective is therefore</p>
+<p>[
+\Phi(\delta)
+=</p>
+<p>\sum_k
+w_k
+\left|
+y_k-
+a\,A_k(R_0\exp(\delta))V
+\right|^2
++
+\delta^\mathsf{T}\Lambda_R^{-1}\delta,
+]</p>
+<p>where:</p>
+<ul>
+<li>(R_0) is the incoming pose,</li>
+<li>(\delta) is a local rotation vector,</li>
+<li>(w_k) represents frequency/SNR reliability,</li>
+<li>(a) is the nuisance amplitude scale if required,</li>
+<li>(\Lambda_R) represents expected pose uncertainty.</li>
+</ul>
+<p>The LM system then becomes approximately</p>
+<p>[
+\left(
+J^\ast W_fJ+
+\Lambda_R^{-1}
+\right)\Delta
+=</p>
+<p>J^\ast W_fr-
+\Lambda_R^{-1}\delta.
+]</p>
+<p>This is a natural extension of the LM solver you have already validated; it does not require replacing LM.</p>
+<p>Regularizing rotations away from the exact minimizer can actually improve orientation accuracy when the objective is noisy or ill-conditioned. A 2023 SIAM study of cryo-EM orientation regularization found cases where deliberately regularized rotation estimates were closer to ground truth than unrestricted global minimizers. [10]</p>
+<h3 id="64-recent-work-strengthens-the-bayesian-argument">6.4 Recent work strengthens the Bayesian argument<a class="headerlink" href="#64-recent-work-strengthens-the-bayesian-argument" title="Permanent link">&para;</a></h3>
+<p>A 2026 Acta Crystallographica D paper by Xu, Balanov, Singer and Bendory compares conventional maximum-correlation orientation estimation with a Bayesian/MMSE treatment. Their simulations show improved orientation estimates under low SNR and reduced model bias when the Bayesian estimator is incorporated into refinement. [11]</p>
+<p>I would not replace your LM implementation with MMSE estimation immediately, because your current controls show that LM itself works correctly.</p>
+<p>But this recent result reinforces a broader conclusion:</p>
+<blockquote>
+<p>A single unregularized best-fitting orientation is not necessarily the statistically best orientation estimate.</p>
+</blockquote>
+<p>That principle is highly relevant to the 4–6° drift problem.</p>
+<hr />
+<h2 id="7-cross-validation-what-i-recommend-and-what-i-do-not">7. Cross-validation: what I recommend and what I do not<a class="headerlink" href="#7-cross-validation-what-i-recommend-and-what-i-do-not" title="Permanent link">&para;</a></h2>
+<p>Gold-standard independent half-map refinement is now standard because common-reference refinement can propagate correlated noise and inflate apparent agreement. [7]</p>
+<p>However, gold-standard half maps alone do not guarantee that every local region or pose estimate is unbiased. SIDESPLITTER demonstrated that local overfitting may remain even with independently refined halves when local SNR is poor. [12]</p>
+<p>Independent-particle validation has also been proposed explicitly as an additional cross-validation mechanism for cryo-EM reconstruction. [13]</p>
+<h3 id="therefore-i-recommend-cross-fitting-as-a-diagnostic-6713">Therefore I recommend cross-fitting as a diagnostic [6,7,13]<a class="headerlink" href="#therefore-i-recommend-cross-fitting-as-a-diagnostic-6713" title="Permanent link">&para;</a></h3>
+<p>I would <strong>not</strong> start with literal leave-one-particle-out reconstruction. It is computationally expensive and unnecessary for answering the first question.</p>
+<p>Instead perform a <strong>two-fold swapped-reference experiment</strong>:</p>
+<p>[
+V_A=\text{reconstruct particles in A},
+]</p>
+<p>[
+V_B=\text{reconstruct particles in B}.
+]</p>
+<p>Then refine</p>
+<p>[
+A\text{-particles against }V_B
+]</p>
+<p>and</p>
+<p>[
+B\text{-particles against }V_A.
+]</p>
+<p>Every tested particle is therefore absent from the reference against which it is polished.</p>
+<p>If higher map quality is required, move to (K)-fold cross-fitting, for example (K=5) or (10):</p>
+<p>[
+V_{-g}
+=</p>
+<p>\operatorname{Recon}
+\left(
+\text{all groups except }g
+\right),
+]</p>
+<p>and particles in group (g) are refined against (V_{-g}).</p>
+<p>This gives most of the conceptual benefit of leave-one-out without requiring one reconstruction per particle.</p>
+<h3 id="interpretation">Interpretation<a class="headerlink" href="#interpretation" title="Permanent link">&para;</a></h3>
+<p>If drift is large with the particle-containing reference but strongly reduced with the excluded reference, <strong>self-information/reference leakage is important</strong>.</p>
+<p>If essentially the same drift occurs against excluded references, the bias is more likely caused by systematic properties of the reconstructed map: discretization, angular sampling, anisotropic resolution, regularization, structural heterogeneity, or other model mismatch.</p>
+<p>That distinction is scientifically much more useful than calling both phenomena “reference bias.”</p>
+<hr />
+<h2 id="8-frequency-limited-polishing-should-be-the-next-methodological-control-57">8. Frequency-limited polishing should be the next methodological control [5,7]<a class="headerlink" href="#8-frequency-limited-polishing-should-be-the-next-methodological-control-57" title="Permanent link">&para;</a></h2>
+<p>Once the matched reconstruction experiment is complete, I recommend a controlled cutoff sweep.</p>
+<p>For each cutoff (f_c), optimize</p>
+<p>[
+\Phi_{f_c}(R)
+=</p>
+<p>\sum_{|\mathbf k|\le f_c}
+w_{\mathbf k}
+\left|
+y_{\mathbf k}
+-</p>
+<p>A_{\mathbf k}(R)V
+\right|^2.
+]</p>
+<p>Record simultaneously:</p>
+<p>[
+\Delta\theta(f_c),
+]</p>
+<p>[
+r_{\mathrm{fit}}(f_c),
+]</p>
+<p>and, for synthetic experiments,</p>
+<p>[
+e_R(f_c)
+=</p>
+<p>d_{\mathrm{SO(3)}}(
+R_{\mathrm{estimated}},
+R_{\mathrm{true}}
+).
+]</p>
+<p>The most important curve is not simply residual versus cutoff. It is:</p>
+<p>[
+\text{pose error versus residual improvement}.
+]</p>
+<p>If including additional high frequencies lowers fitted residual while increasing ground-truth pose error, you have direct evidence that the optimizer is fitting reference error rather than pose information.</p>
+<p>Stewart and Grigorieff's SNR-weighted alignment work and the gold-standard studies provide strong precedent for frequency-dependent weighting rather than treating all Fourier samples equally. [5,7]</p>
+<p>Longer term, I would prefer continuous reliability weighting over a hard cutoff:</p>
+<p>[
+w_k
+\propto
+\text{estimated signal reliability at }k.
+]</p>
+<p>Half-map FSC/SNR information is a natural source for such weights.</p>
+<hr />
+<h2 id="9-why-i-would-not-implement-joint-reconstruction-and-pose-optimization-yet">9. Why I would not implement joint reconstruction and pose optimization yet<a class="headerlink" href="#9-why-i-would-not-implement-joint-reconstruction-and-pose-optimization-yet" title="Permanent link">&para;</a></h2>
+<p>Joint reconstruction/orientation optimization is scientifically legitimate. Published work formulates cryo-EM reconstruction and angular refinement as a joint optimization problem, and recent work continues to investigate regularized joint formulations. [10,14,16]</p>
+<p>But it is <strong>not the right next fix</strong> here.</p>
+<p>Joint optimization introduces another feedback loop:</p>
+<p>[
+R
+\rightarrow
+V
+\rightarrow
+R
+\rightarrow
+V.
+]</p>
+<p>If the forward operator is not yet correct, joint optimization gives the volume additional freedom to absorb the mismatch.</p>
+<p>Likewise, if pose updates are biased, reconstruction can reinforce those pose errors in the next iteration.</p>
+<p>The literature on overfitting and independent half refinement is essentially a warning about this feedback mechanism. [5–7,12]</p>
+<p>Joint optimization should therefore come only after:</p>
+<p>[
+A
+]</p>
+<p>is validated,</p>
+<p>[
+A^\ast
+]</p>
+<p>is validated,</p>
+<p>and the fixed-reference pose estimator is characterized.</p>
+<hr />
+<h2 id="10-recommended-experimental-sequence">10. Recommended experimental sequence<a class="headerlink" href="#10-recommended-experimental-sequence" title="Permanent link">&para;</a></h2>
+<p>I would now organize the work into five gates.</p>
+<h3 id="gate-1-matched-particle-forward-operator">Gate 1 — matched particle forward operator<a class="headerlink" href="#gate-1-matched-particle-forward-operator" title="Permanent link">&para;</a></h3>
+<p>Implement</p>
+<p>[
+A(R)=F_NCF_P^{-1}G_P(R)
+]</p>
+<p>and</p>
+<p>[
+J(R)=F_NCF_P^{-1}J_P(R).
+]</p>
+<p>Pass conditions:</p>
+<ul>
+<li>simulator residual collapses from (1.38\times10^{-2}) toward the exact-KB/control level;</li>
+<li>exact simulator poses become stationary;</li>
+<li>perturbed-pose recovery still succeeds;</li>
+<li>finite-difference versus analytic Jacobian remains consistent after applying (W).</li>
+</ul>
+<p>If this fails, remain entirely in forward-model debugging.</p>
+<h3 id="gate-2-matched-reconstruction-operator">Gate 2 — matched reconstruction operator<a class="headerlink" href="#gate-2-matched-reconstruction-operator" title="Permanent link">&para;</a></h3>
+<p>Implement</p>
+<p>[
+A^\ast=G_P^\ast W^\ast.
+]</p>
+<p>Add the numerical adjoint test</p>
+<p>[
+\langle Ax,y\rangle
+\approx
+\langle x,A^\ast y\rangle.
+]</p>
+<p>Then reconstruct at known exact poses.</p>
+<p>Compare:</p>
+<p>[
+V_{\mathrm{old}},
+\quad
+V_{\mathrm{matched}},
+\quad
+V_{\mathrm{truth}}.
+]</p>
+<p>Evaluate the map error by frequency as well as globally.</p>
+<h3 id="gate-3-reconstructed-reference-stationarity">Gate 3 — reconstructed-reference stationarity<a class="headerlink" href="#gate-3-reconstructed-reference-stationarity" title="Permanent link">&para;</a></h3>
+<p>Using the newly reconstructed (V_{\mathrm{matched}}), initialize every particle at its exact simulator pose and run matched polishing.</p>
+<p>This is the experiment that should determine the project's next scientific branch.</p>
+<p>If the 4–6° drift essentially disappears, the previous diagnosis should be revised to:</p>
+<blockquote>
+<p><strong>forward-model mismatch propagated through reconstruction and manifested as apparent reference-induced pose drift.</strong></p>
+</blockquote>
+<p>If substantial drift remains:</p>
+<blockquote>
+<p><strong>a genuine reconstruction/reference-induced pose-estimation problem remains after system-model matching.</strong></p>
+</blockquote>
+<p>Only then proceed to Gate 4.</p>
+<h3 id="gate-4-determine-the-source-of-remaining-reference-bias">Gate 4 — determine the source of remaining reference bias<a class="headerlink" href="#gate-4-determine-the-source-of-remaining-reference-bias" title="Permanent link">&para;</a></h3>
+<p>Run, in this order:</p>
+<ol>
+<li>frequency-cutoff/SNR-weight sweep;</li>
+<li>swapped-half-map cross-fitting;</li>
+<li>(K)-fold excluded-group references if necessary;</li>
+<li>pose-prior sweep.</li>
+</ol>
+<p>For every configuration record both residual improvement and ground-truth pose error.</p>
+<p>Because this is synthetic data with known truth, take advantage of that information aggressively. It provides a stronger validation signal than FSC or residual alone.</p>
+<h3 id="gate-5-production-pose-polishing-design">Gate 5 — production pose-polishing design<a class="headerlink" href="#gate-5-production-pose-polishing-design" title="Permanent link">&para;</a></h3>
+<p>If residual reference-induced drift remains, I would make the production estimator approximately:</p>
+<p>[
+\boxed{
+\min_{\delta,a}
+\sum_k
+w_k
+\left|
+y_k-
+a\,WG_P(R_0\exp\delta)V
+\right|^2
++
+\delta^\mathsf T\Lambda_R^{-1}\delta
+}
+]</p>
+<p>with:</p>
+<ul>
+<li>the matched finite-FOV forward operator;</li>
+<li>matched Jacobian;</li>
+<li>frequency/SNR weights;</li>
+<li>a local pose prior;</li>
+<li>independent/cross-fitted reference construction wherever practical;</li>
+<li>strict half-set independence for validation.</li>
+</ul>
+<p>This combines the main lessons of the mature cryo-EM literature without replacing your already validated LM machinery. [2,5–10,13]</p>
+<hr />
+<h2 id="11-what-i-would-not-do">11. What I would <em>not</em> do<a class="headerlink" href="#11-what-i-would-not-do" title="Permanent link">&para;</a></h2>
+<p>I would not treat the quarter-scale normalization factor as the solution. Your global amplitude fit already shows that scalar normalization cannot explain the spectral-shape discrepancy.</p>
+<p>I would not loosen the LM tolerances or modify the rotation derivatives. The existing controls argue strongly against that path.</p>
+<p>I would not attempt to “correct” the reconstructed reference empirically while leaving the underlying system matrix inconsistent.</p>
+<p>I would not add a Hann/Tukey/soft window only to the projection model. A soft window can reduce edge-related Fourier artifacts, and soft masks are commonly preferred to hard masks in cryo-EM, but any deliberate window must be applied consistently to the measured particles and modeled projections. [1,15]</p>
+<p>I would not use joint reconstruction/refinement as a way to hide the fixed-reference drift.</p>
+<p>And I would not yet conclude that 4–6° is an unavoidable scientific limit of reconstructed-map polishing.</p>
+<hr />
+<h2 id="12-production-implementation-after-the-explicit-prototype">12. Production implementation after the explicit prototype<a class="headerlink" href="#12-production-implementation-after-the-explicit-prototype" title="Permanent link">&para;</a></h2>
+<p>The explicit</p>
+<p>[
+G_P
+\rightarrow
+F_P^{-1}
+\rightarrow
+C
+\rightarrow
+F_N
+]</p>
+<p>implementation is the right diagnostic because it reproduces the simulator transparently.</p>
+<p>Performance should not influence this first version.</p>
+<p>If it passes, then optimize.</p>
+<p>Because the crop is fixed and separable, (W) has substantial exploitable structure. In Fourier space, central rectangular cropping corresponds to convolution/interpolation with the transform of the rectangular window, and the 2-D operation can be expressed through separable 1-D kernels. That suggests eventual implementations based on precomputed convolution/interpolation operators rather than two FFTs for every pose evaluation. The broader cryo-EM literature already uses gridding, oversampling, Kaiser–Bessel kernels and NUFFT-type methods precisely to obtain accurate Fourier interpolation efficiently. [2,3]</p>
+<p>But I would derive that optimized operator <strong>only after the explicit FFT–clip–FFT version becomes the numerical oracle</strong>.</p>
+<p>Every optimized implementation should be regression-tested against that oracle.</p>
+<hr />
+<h2 id="13-final-scientific-classification">13. Final scientific classification<a class="headerlink" href="#13-final-scientific-classification" title="Permanent link">&para;</a></h2>
+<p>Based on your experiments <strong>plus the literature</strong>, I would now revise the classification slightly.</p>
+<h3 id="established">Established<a class="headerlink" href="#established" title="Permanent link">&para;</a></h3>
+<p>The 1.38% discrepancy is a genuine forward-model mismatch caused by the real-space clipping/native-FFT path.</p>
+<p>It is not explained by LM, Jacobian, KB derivatives, or the Fourier round trip.</p>
+<p>The correct simulator-matched particle operator is</p>
+<p>[
+WG_P.
+]</p>
+<h3 id="very-likely">Very likely<a class="headerlink" href="#very-likely" title="Permanent link">&para;</a></h3>
+<p>The PCG reconstruction should use the same forward physics and its adjoint:</p>
+<p>[
+WG_P
+\quad\text{and}\quad
+G_P^\ast W^\ast.
+]</p>
+<p>Otherwise the reconstructed reference can incorporate compensating distortions.</p>
+<h3 id="not-yet-established">Not yet established<a class="headerlink" href="#not-yet-established" title="Permanent link">&para;</a></h3>
+<p>The 4–6° reconstructed-reference drift is <strong>not yet proven to be an independent methodological reference-bias problem</strong>.</p>
+<p>That was a reasonable earlier interpretation, but the newly localized forward mismatch creates an upstream mechanism that can contaminate the reference itself.</p>
+<h3 id="if-drift-survives-matched-reconstruction">If drift survives matched reconstruction<a class="headerlink" href="#if-drift-survives-matched-reconstruction" title="Permanent link">&para;</a></h3>
+<p>Then the cryo-EM literature strongly supports treating it as a genuine reference/objective-induced pose-estimation problem.</p>
+<p>The preferred remedies would be, in order: [5–13]</p>
+<ol>
+<li>frequency/SNR-aware orientation fitting;</li>
+<li>cross-fitted or otherwise independent references for diagnosis and validation;</li>
+<li>Gaussian/local priors on polishing updates;</li>
+<li>probabilistic/Bayesian orientation estimation if stronger robustness is required;</li>
+<li>joint reconstruction and pose optimization only after the preceding pieces are validated.</li>
+</ol>
+<hr />
+<h2 id="14-final-recommendation">14. Final recommendation<a class="headerlink" href="#14-final-recommendation" title="Permanent link">&para;</a></h2>
+<p><strong>Do not branch into a large reference-bias redesign yet.</strong></p>
+<p>First implement the explicit matched-window forward operator and Jacobian. Assuming that passes, immediately extend the same operator to PCG reconstruction with its true adjoint and rebuild the reference from scratch. [2–4]</p>
+<p>Then repeat the exact-pose polishing experiment.</p>
+<p>That single experiment will tell you whether the project has:</p>
+<p>[
+\boxed{\text{one coupled operator-consistency problem}}
+]</p>
+<p>or</p>
+<p>[
+\boxed{\text{an operator problem plus a genuine pose/reference-bias problem}}.
+]</p>
+<p>If the second case is confirmed, the literature gives a clear design direction: <strong>matched physics + independent references + frequency/SNR weighting + a statistically justified local pose prior</strong>, rather than further changes to LM itself. [2–10,13]</p>
+<h3 id="most-relevant-literature">Most relevant literature<a class="headerlink" href="#most-relevant-literature" title="Permanent link">&para;</a></h3>
+<p><strong>Forward/reconstruction consistency:</strong> RELION's reconstruction formulation explicitly pairs Fourier interpolation with its transpose during backprojection, while iterative reconstruction literature formulates the problem through (A^\ast A). Unmatched projector/backprojector literature provides the broader inverse-problem justification for taking this seriously. [2–4]</p>
+<p><strong>Windowing:</strong> Cryo-EM analyses explicitly state that real-space masking produces Fourier-space convolution and correlations; finite particle boxes also impose implicit spatial boundaries. [1]</p>
+<p><strong>Noise/reference bias:</strong> Stewart &amp; Grigorieff showed orientation-refinement overfitting and the value of SNR-dependent weighting. Shaikh et al. demonstrated reference dependence and cross-validation in projection matching. [5,6]</p>
+<p><strong>Independent refinement/frequency limitation:</strong> Scheres &amp; Chen demonstrated the rationale for independent half-set refinement and showed that withholding unreliable high frequencies need not significantly damage orientation accuracy. [7]</p>
+<p><strong>Regularization:</strong> RELION implements Gaussian-type orientation priors for local searches. Diepeveen et al. provide a modern mathematical treatment showing that regularization can produce rotations closer to ground truth than unrestricted optimization. [2,8,10]</p>
+<p><strong>Independent validation:</strong> Ortiz et al. show the value of a completely independent particle control set for detecting refinement overfitting. [13]</p>
+<p><strong>Current Bayesian direction:</strong> Xu et al. (2026) show that Bayesian/MMSE orientation estimators can outperform standard best-correlation estimates and reduce model bias under difficult SNR conditions. [11]</p>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Sorzano, C. O. S., et al. (2022). “On bias, variance, overfitting, gold standard and consensus in single-particle analysis by cryo-electron microscopy.” <em>Acta Crystallographica Section D: Structural Biology</em>, 78, 410–423. <a href="https://doi.org/10.1107/S2059798322001978">https://doi.org/10.1107/S2059798322001978</a></li>
+<li>Scheres, S. H. W. (2012). “RELION: Implementation of a Bayesian approach to cryo-EM structure determination.” <em>Journal of Structural Biology</em>, 180(3), 519–530. <a href="https://doi.org/10.1016/j.jsb.2012.09.006">https://doi.org/10.1016/j.jsb.2012.09.006</a></li>
+<li>Wang, L., Shkolnisky, Y., &amp; Singer, A. (2013). “A Fourier-based approach for iterative 3D reconstruction from cryo-EM images.” <em>arXiv:1307.5824</em>. <a href="https://arxiv.org/abs/1307.5824">https://arxiv.org/abs/1307.5824</a></li>
+<li>Zeng, G. L., &amp; Gullberg, G. T. (2000). “Unmatched projector/backprojector pairs in an iterative reconstruction algorithm.” <em>IEEE Transactions on Medical Imaging</em>, 19(5), 548–555. <a href="https://doi.org/10.1109/42.870265">https://doi.org/10.1109/42.870265</a></li>
+<li>Stewart, A., &amp; Grigorieff, N. (2004). “Noise bias in the refinement of structures derived from single particles.” <em>Ultramicroscopy</em>, 102(1), 67–84. <a href="https://doi.org/10.1016/j.ultramic.2004.08.008">https://doi.org/10.1016/j.ultramic.2004.08.008</a></li>
+<li>Shaikh, T. R., Hegerl, R., &amp; Frank, J. (2003). “An approach to examining model dependence in EM reconstructions using cross-validation.” <em>Journal of Structural Biology</em>, 142(2), 301–310. <a href="https://doi.org/10.1016/S1047-8477(03)00029-7">https://doi.org/10.1016/S1047-8477(03)00029-7</a></li>
+<li>Scheres, S. H. W., &amp; Chen, S. (2012). “Prevention of overfitting in cryo-EM structure determination.” <em>Nature Methods</em>, 9, 853–854. <a href="https://doi.org/10.1038/nmeth.2115">https://doi.org/10.1038/nmeth.2115</a></li>
+<li>Scheres, S. H. W. (2012). “A Bayesian view on cryo-EM structure determination.” <em>Journal of Molecular Biology</em>, 415(2), 406–418. <a href="https://doi.org/10.1016/j.jmb.2011.11.010">https://doi.org/10.1016/j.jmb.2011.11.010</a></li>
+<li>CryoSPARC Guide. “Job: Local Refinement.” <a href="https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/local-refinement/job-new-local-refinement-beta">https://guide.cryosparc.com/processing-data/all-job-types-in-cryosparc/local-refinement/job-new-local-refinement-beta</a></li>
+<li>Diepeveen, W., Lellmann, J., Öktem, O., &amp; Schönlieb, C.-B. (2023). “Regularizing orientation estimation in cryogenic electron microscopy three-dimensional map refinement through measure-based lifting over Riemannian manifolds.” <em>SIAM Journal on Imaging Sciences</em>, 16(3), 1440–1490. <a href="https://doi.org/10.1137/22M1520773">https://doi.org/10.1137/22M1520773</a></li>
+<li>Xu, S., Balanov, A., Singer, A., &amp; Bendory, T. (2026). “Bayesian perspective for orientation determination in cryo-EM with application to structural heterogeneity analysis.” <em>Acta Crystallographica Section D: Structural Biology</em>, 82, 274–294. <a href="https://doi.org/10.1107/S2059798326001415">https://doi.org/10.1107/S2059798326001415</a></li>
+<li>Ramlaul, K., Palmer, C. M., &amp; Nakane, T. (2020). “Mitigating local over-fitting during single particle reconstruction with SIDESPLITTER.” <em>Journal of Structural Biology</em>, 211(2), 107545. <a href="https://doi.org/10.1016/j.jsb.2020.107545">https://doi.org/10.1016/j.jsb.2020.107545</a></li>
+<li>Ortiz, S., Stanisic, L., Rodriguez, B. A., Rampp, M., Hummer, G., &amp; Cossio, P. (2020). “Validation tests for cryo-EM maps using an independent particle set.” <em>Journal of Structural Biology: X</em>, 4, 100032. <a href="https://doi.org/10.1016/j.yjsbx.2020.100032">https://doi.org/10.1016/j.yjsbx.2020.100032</a></li>
+<li>Zehni, M., Donati, L., Soubies, E., Zhao, Z. J., &amp; Unser, M. (2020). “Joint angular refinement and reconstruction for single-particle cryo-EM.” <em>IEEE Transactions on Image Processing</em>, 29, 6151–6163. <a href="https://doi.org/10.1109/TIP.2020.2984313">https://doi.org/10.1109/TIP.2020.2984313</a></li>
+<li>Afonine, P. V., et al. (2018). “New tools for the analysis and validation of cryo-EM maps and atomic models.” <em>Acta Crystallographica Section D: Structural Biology</em>, 74, 814–840. <a href="https://doi.org/10.1107/S2059798318009324">https://doi.org/10.1107/S2059798318009324</a></li>
+<li>Zehni, M., Donati, L., Soubies, E., Zhao, Z. J., Do, M. N., &amp; Unser, M. (2019). “Joint density map and continuous angular refinement in cryo-electron microscopy.” <em>Proceedings of the IS&amp;T International Symposium on Electronic Imaging: Computational Imaging XVII</em>, 133-1–133-5. <a href="https://doi.org/10.2352/ISSN.2470-1173.2019.13.COIMG-133">https://doi.org/10.2352/ISSN.2470-1173.2019.13.COIMG-133</a></li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

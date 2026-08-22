@@ -1,0 +1,5313 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Documentation for the SIMPLE cryo-EM image processing and reconstruction platform.">
+      
+      
+      
+        <link rel="canonical" href="https://hael.github.io/SIMPLE/implementation_notes/reference_picker_flcf_plan.html">
+      
+      
+        <link rel="prev" href="qsys_scheduler_completion_bug_report.html">
+      
+      
+        <link rel="next" href="reference_picker_flcf_spec.html">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../for_developers/SIMPLE_logo/SIMPLE_favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Reference-picker acceleration implementation plan - SIMPLE</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#reference-picker-acceleration-implementation-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../index.html" title="SIMPLE" class="md-header__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            SIMPLE
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Reference-picker acceleration implementation plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../index.html" title="SIMPLE" class="md-nav__button md-logo" aria-label="SIMPLE" data-md-component="logo">
+      
+  <img src="../for_developers/SIMPLE_logo/SIMPLE_logo.png" alt="logo">
+
+    </a>
+    SIMPLE
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hael/SIMPLE" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hael/SIMPLE
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../memory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE memory estimator and benchmark guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../relocating_project_data.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Relocating project data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Algorithms
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/continuous_inplane_refinement_abinitio2D.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Refinement in abinitio2D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/motion_correction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Correction in SIMPLE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../algorithms/nu_evidence_envelope_mask.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Mask in nu_filt3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code overview
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Code overview
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/code_base_map.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code base map
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fortran indexes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Fortran indexes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/api_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/module_index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_overview/fortran-indexes/modules.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Module Index
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For developers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    For developers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/preserving_legacy_inplane_path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Preserving the Legacy In-Plane Path
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_2" id="__nav_7_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Onboarding
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Onboarding
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/SIMPLE_developer_onboarding_slides.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE Git Repo Onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../for_developers/onboarding/gui_onboarding.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SIMPLE GUI Onboarding Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2s
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How2s
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2debug_fortran.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How to debug Fortran code
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2gdb.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful GDB Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2get_code_inventory.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How2get code inventory
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2git.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Useful Git Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2install_fftw.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install FFTW
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM for beginners
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../how2s/how2slurm_array.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SLURM job arrays
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Implementation notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="Local-linear_diffusion-map_pre-image.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local-linear diffusion-map pre-image — validation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2d_sgd_class_stability_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="abinitio2d_sgd_class_stability_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specification: table-free class stability for abinitio2D_sgd
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_capture_experiment_summary_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D pose-capture experiment summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_Literature%20Review%20and%20Recommended%20Path.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Literature Review and Recommended Path for Forward-Model Matching and Reference-Induced Pose Bias in Cryo-EM Polishing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_handoff.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D PCG pose-polishing scientific handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D PLAN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_end_polishing_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose refinement in refine3D SPEC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_pose_polishing_hans_clarification_2026-08-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3-D pose polishing: Hans clarification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_3D_refinement_on_pcg_operator.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous 3D refinement on the PCG operator: design note
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="continuous_inplane_rotation_polar.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation in the polar representation (objfun=euclid)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="denoise_project_flex3d_generative.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flex-generated 3D particle representatives for denoise_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="diffusion_maps_manifoldem_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Diffusion maps: lessons from a ManifoldEM review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="drop_legacy_box_division.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dropping the legacy box division from reconstruction output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="flex_dominant_basin_bayesian_refinement.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dominant flex-density basin as a robust Bayesian 3D reconstruction estimator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="nu_evidence_envelope_masking.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU-Evidence Envelope Masking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_euclid_crash_investigation.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruct3D → euclid crash: investigation handoff
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_reconstruction_production_readiness.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG reconstruction production-readiness plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="pcg_refine3D_integration_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PCG integration plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project_data_relocation_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project data relocation specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="qsys_scheduler_completion_bug_report.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bug report: qsys job-completion detection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration implementation plan
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="reference_picker_flcf_plan.html" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-delivery-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended delivery shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-coarse-loop-is-in-scope-from-the-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the coarse loop is in scope from the start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Target architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#shared-picker-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shared picker policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batched-real-space-correlation-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batched real-space correlation engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#global-amplitude-precondition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global amplitude precondition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linear-algebra-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear-algebra boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#coordinate-remapping-and-grid-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coordinate remapping and grid representation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-and-batching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory and batching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#thread-topology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Thread topology
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#controls-and-propagation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls and propagation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work phases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Work phases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-exact-structural-removals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: exact structural removals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-exact-local-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: exact local statistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-exact-batched-correlation-kernel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: exact batched correlation kernel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-shadow-integration-at-both-resolutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: shadow integration at both resolutions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-reassess-remaining-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: reassess remaining work
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-stream-rollout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: stream rollout
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test design
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test design">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#structural-removal-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structural-removal tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-statistic-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local-statistic tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batched-score-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batched score tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#correlation-contract-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlation-contract tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#picker-and-stream-fixtures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Picker and stream fixtures
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-output-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison output schema
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#likely-failure-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Likely failure modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-impact-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File impact map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#review-checkpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Review checkpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-constraints-for-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation constraints for implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-a-fourier-coarse-search-not-in-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Appendix A: Fourier coarse search, not in scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference_picker_flcf_spec.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference-picker acceleration specification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_25" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_25" id="__nav_9_25_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_25_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_25">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/abinitio2d_sgd_development_commander_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development abinitio2D_sgd commander plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_refine3D_transfer_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous in-plane rotation transfer plan for refine3D
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="completed/continuous_inplane_rotation_development_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Continuous In-Plane Rotation Refinement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Policies
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Policies
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/KB_Interpolation_Policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Internal Technical Memorandum
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio2D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio2D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_cavgs_reject_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Cavgs Reject Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/abinitio3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/automasking_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Automasking Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/class_average_bootstrap_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class-Average Bootstrap Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/coarray_execution_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Coarray Execution Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/fsc_area_score_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FSC Area Score Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/importance_sampling_fractional_update_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Importance Sampling and Fractional Update Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/microscope_parameters_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Microscope-Dependent Parameter Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/motion_gain_analysis_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Motion Gain Analysis Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/nonuniform_filtering_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nonuniform Filtering Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/particle_cache_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Cache Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/persistent_worker_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Persistent Worker Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/phase_shift_ctf_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/project_stack_indexing_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/reconstruct3D_pcg_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    reconstruct3D PCG backend policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_auto_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Auto Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_multi_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Multi Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/refine3D_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refine3D Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/segdiampick_mics_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    segdiampick_mics Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Separate alignment and reconstruction for multi-state peak-memory reduction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sigma_calculation_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sigma Calculation Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_layer_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Descriptor Layer Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_parameter_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Parameter Instance Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_placeholder_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    UI Placeholder Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/ui_program_visibility_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Program Visibility Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10_29" >
+        
+          
+          <label class="md-nav__link" for="__nav_10_29" id="__nav_10_29_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and rejection
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_10_29_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10_29">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Sieving and rejection
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/index.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sieving and Rejection Policies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/class_compatibility_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Class Compatibility Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/distance_transform_shape_rejection_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Distance-Transform Shape Metrics for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/model_cavgs_rejection.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    model_cavgs_rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../policies/sieving_and_rejection/ptcl_sieve_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle Sieve Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Refactoring notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/abinitio3d_sgd_refinement_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Abinitio3D SGD Refinement Implementation Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/cavg_gabor_feature_expansion_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gabor Features for Class-Average Rejection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_analysis_diffusion_map_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    flex_analysis implementation plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/flex_exact_projection_graph_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Proposal: Exact-Projection Sparse Graphs for FLEX Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/phase_plate_support_reintroduction_plan.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase-shift CTF support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/project_stack_indexing_code_review.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project Stack Indexing Code Review
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/staged_domain_driven_design_refactor.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Staged Domain-Driven Design Refactor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_11_8" id="__nav_11_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Completed
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_11_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Completed
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/cmake_env.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CMake Refactoring Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/euclid_build_new_policy.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Euclid Sigma Refactoring: Builder-Owned Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/multi_microscope_parameters.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Merge Projects With Distinct CTF Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/nu_filter_extension_ft_reuse.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NU filter high-resolution extension FT reuse
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/polar_pft_range_policy_2026-03-19.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Polar PFT Range Policy Refactor (2026-03-19)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/probabilistic_alignment_table_peak_memory_refactoring.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Probabilistic alignment table peak-memory refactoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_build_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remove build_glob
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_params_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring: Remove params_glob Global State
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refactoring_notes/completed/remove_pftc_glob.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refactoring Document: Global pftc_glob Removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/update_project.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    update_project
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../user_guide/user_guide.html" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-delivery-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended delivery shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-coarse-loop-is-in-scope-from-the-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the coarse loop is in scope from the start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance model
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#target-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Target architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#shared-picker-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Shared picker policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batched-real-space-correlation-engine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batched real-space correlation engine
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#global-amplitude-precondition" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global amplitude precondition
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linear-algebra-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear-algebra boundary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#coordinate-remapping-and-grid-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coordinate remapping and grid representation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-and-batching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Memory and batching
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#thread-topology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Thread topology
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#controls-and-propagation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls and propagation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-phases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work phases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Work phases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-0-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0: attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-exact-structural-removals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: exact structural removals
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-exact-local-statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: exact local statistics
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-exact-batched-correlation-kernel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: exact batched correlation kernel
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-shadow-integration-at-both-resolutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: shadow integration at both resolutions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-5-reassess-remaining-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: reassess remaining work
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-6-stream-rollout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6: stream rollout
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test design
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test design">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#structural-removal-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structural-removal tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-statistic-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local-statistic tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#batched-score-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Batched score tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#correlation-contract-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlation-contract tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#picker-and-stream-fixtures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Picker and stream fixtures
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance matrix
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comparison-output-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison output schema
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#likely-failure-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Likely failure modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-impact-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File impact map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#review-checkpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Review checkpoints
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation-constraints-for-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation constraints for implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-a-fourier-coarse-search-not-in-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Appendix A: Fourier coarse search, not in scope
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="reference-picker-acceleration-implementation-plan">Reference-picker acceleration implementation plan<a class="headerlink" href="#reference-picker-acceleration-implementation-plan" title="Permanent link">&para;</a></h1>
+<p>This plan implements the contract in
+<a href="reference_picker_flcf_spec.html">reference_picker_flcf_spec.md</a>. It is a
+planning artifact only; no production code has been changed.</p>
+<h2 id="recommended-delivery-shape">Recommended delivery shape<a class="headerlink" href="#recommended-delivery-shape" title="Permanent link">&para;</a></h2>
+<p>Deliver in two tiers, in this order.</p>
+<p><strong>Tier 1 — exact structural removals.</strong> A group of small, separately provable,
+output-identical changes in <code>simple_pickref</code>. They need no summed-area table,
+no BLAS, no new module, and no opt-in control. The largest deletes a
+per-coarse-position local-standard-deviation calculation whose result no
+shipped code path consumes. Measure after this tier; it may change the whole
+attribution.</p>
+<p><strong>Tier 2 — one exact batched correlation engine, serving both correlation
+loops.</strong> Summed-area local statistics plus bounded dense matrix products, used
+by the coarse <code>match_boximgs</code> loop and the fine <code>refine_upscaled</code> loop. Keep
+the exhaustive <code>13 x 13</code> fine search and all references. Establish a
+scalar-versus-batched shadow mode at each correlation boundary and keep the
+scalar result authoritative.</p>
+<p>After both tiers are measured in the stream, make a new attribution decision:
+if correlation no longer rate-limits, investigate separately specified
+reference pruning or search-space reductions only if warranted; if another
+stage dominates, stop optimizing the picker and address that stage.</p>
+<p>A Fourier replacement of the coarse search is out of scope and is recorded in
+<a href="#appendix-a-fourier-coarse-search-not-in-scope">Appendix A</a> only so the
+reasoning is not lost. No phase below depends on it.</p>
+<p>Do not combine kernel work with reference-generation, rotation, mask,
+threshold, or distance-filter changes.</p>
+<h2 id="why-the-coarse-loop-is-in-scope-from-the-start">Why the coarse loop is in scope from the start<a class="headerlink" href="#why-the-coarse-loop-is-in-scope-from-the-start" title="Permanent link">&para;</a></h2>
+<p><code>match_boximgs</code> (<code>src/main/pick/simple_pickref.f90:285-338</code>) and
+<code>refine_upscaled</code> (<code>src/main/pick/simple_pickref.f90:668-713</code>) have identical
+inner structure: <code>window_slim</code>, then <code>prenorm4real_corr</code>, then a serial loop
+over references, then <code>maxval</code>. One engine serves both with no additional
+mathematics and no Fourier conventions to prove.</p>
+<p>The split between them is workload-dependent. Coarse work is approximately
+<code>n_coarse_positions * R * N_coarse</code> and does not depend on particle count.
+Fine work is approximately <code>npeaks * 169 * R * N_fine</code>. At typical production
+geometry, fine exceeds coarse by roughly six times on a dense micrograph but is
+comparable to coarse on a sparse one.</p>
+<p>Consequently a refinement-only optimization is Amdahl-bounded: a five-times
+refinement speedup gives roughly three times overall on dense micrographs and
+under two times on sparse ones. Sparse micrographs set stream tail latency.
+Pairing the coarse loop exclusively with a deferred FFT rewrite would leave
+that bound in place for no benefit, which is the main reason a Fourier coarse
+search is not on the critical path.</p>
+<h2 id="performance-model">Performance model<a class="headerlink" href="#performance-model" title="Permanent link">&para;</a></h2>
+<p>Let:</p>
+<ul>
+<li><code>K</code> be retained coarse peaks;</li>
+<li><code>C</code> be fine candidates per peak, at most 169 with current settings;</li>
+<li><code>N</code> be pixels per reference box at the relevant resolution;</li>
+<li><code>R</code> be references, normally up to 240 in the stream;</li>
+<li><code>P</code> be coarse positions, approximately <code>(nx/offset) * (ny/offset)</code>;</li>
+<li><code>G</code> be the fine grid cell count, approximately <code>nx * ny</code> at unit stride.</li>
+</ul>
+<p>Current cost is approximately</p>
+<pre><code class="language-text">coarse:     O(P * (window copy + normalization + R*N_coarse))
+          + O(P * N_coarse * (2*offset+1)^2)      &lt;- dead avg_loc_sdev
+fine:       O(K * C * (window copy + normalization + R*N_fine))
+          + O(K * G)                              &lt;- remap
+          + O(K * G)                              &lt;- distance_filter scan
+</code></pre>
+<p>The two <code>O(K * G)</code> terms and the dead local-standard-deviation term are
+removed by tier 1 without touching any score.</p>
+<p>The exact batched route does not change the leading dot-product count, but
+changes its execution:</p>
+<pre><code class="language-text">one-time SAT construction per prepared resolution
++ O(positions) local-statistic queries
++ O(positions*N) bounded window gathering
++ dense matrix products totaling O(positions*R*N)
++ O(positions*R) normalized maximum reduction
+</code></pre>
+<p>This removes repeated mean subtraction and division over window pixels,
+eliminates general image lifecycle overhead in the inner loop, and presents
+the dominant work to optimized cache-aware vector kernels. The expected gain
+increases with <code>R</code> and batch size. Small cases may use the scalar kernel
+through a measured crossover.</p>
+<h2 id="target-architecture">Target architecture<a class="headerlink" href="#target-architecture" title="Permanent link">&para;</a></h2>
+<h3 id="shared-picker-policy">Shared picker policy<a class="headerlink" href="#shared-picker-policy" title="Permanent link">&para;</a></h3>
+<p>Keep these steps in <code>simple_pickref</code>:</p>
+<ol>
+<li>prepare micrograph resolutions and references;</li>
+<li>perform coarse scoring and select candidate peaks;</li>
+<li>invoke a selected fine-refinement score producer;</li>
+<li>update the fine score grid;</li>
+<li>apply shared threshold, distance, and output policy.</li>
+</ol>
+<p>Separate the scalar correlation at each resolution into a named oracle without
+changing its traversal order. Both producers consume the same position list
+and fill the same result contract: best score and position plus the equivalent
+grid updates.</p>
+<h3 id="batched-real-space-correlation-engine">Batched real-space correlation engine<a class="headerlink" href="#batched-real-space-correlation-engine" title="Permanent link">&para;</a></h3>
+<p>Add a small picking-domain type, provisionally in
+<code>src/main/pick/simple_refine_corr_batch.f90</code>, instantiated once per prepared
+resolution. Its responsibilities are:</p>
+<ul>
+<li>prepare double-precision summed-area tables for the prepared micrograph and
+  its square, after the global amplitude precondition below;</li>
+<li>flatten prepared references into a consistent <code>N x R</code> bank and retain each
+  residual reference sum;</li>
+<li>enumerate positions in legacy order, whether strided coarse positions or
+  fine candidates;</li>
+<li>query local mean and variance in constant time;</li>
+<li>gather valid raw windows into a bounded <code>N x Cbatch</code> workspace;</li>
+<li>evaluate <code>transpose(S) * W</code> through the project's linear-algebra boundary;</li>
+<li>apply mean correction and scalar standard-deviation normalization;</li>
+<li>reduce scores in legacy reference/position order;</li>
+<li>expose counters and release owned buffers symmetrically.</li>
+</ul>
+<p>Use existing <code>image</code> lifecycle and sanctioned access. If the general
+<code>window_slim</code> API cannot gather valid 2D windows without allocation and
+clearing, add a narrow image-layer primitive or iterator rather than exposing
+raw representation to commanders.</p>
+<h3 id="global-amplitude-precondition">Global amplitude precondition<a class="headerlink" href="#global-amplitude-precondition" title="Permanent link">&para;</a></h3>
+<p>Before building the summed-area tables, subtract the global mean from the
+prepared micrograph and rescale it to a bounded amplitude. Both operations are
+exactly score-invariant, because Pearson correlation is invariant under a
+global shift and a global positive scale.</p>
+<p>This is required rather than optional. <code>mic_shrink</code> is produced by multiplying
+<code>mic_raw</code> by <code>product(ldim_raw)</code> before the forward transform
+(<code>src/main/pick/simple_pickref.f90:204</code>), clipping in Fourier space, and
+inverse transforming without the matching division; only <code>mic_raw</code> is divided
+back (<code>src/main/pick/simple_pickref.f90:220-221</code>). The subsequent band-pass
+uses <code>hp = 0.</code> and does not remove DC
+(<code>src/main/pick/simple_pickref.f90:229</code>). The batched numerator
+<code>G - mu*sum(S)</code> is then a difference of large single-precision quantities, and
+the SPEC's error gates would be at risk for reasons unrelated to the kernel.</p>
+<p>Phase 0 records the observed mean and range of <code>mic_shrink</code> at both
+resolutions so the rescaling constant is chosen from measurement.</p>
+<h3 id="linear-algebra-boundary">Linear-algebra boundary<a class="headerlink" href="#linear-algebra-boundary" title="Permanent link">&para;</a></h3>
+<p>The library is already present; only the Fortran interface is new work.</p>
+<p>Verified on the current development host: BLAS and LAPACK are required
+dependencies (<code>cmake/Dependencies.cmake:112-148</code>), BLAS resolves to Apple
+Accelerate, and Accelerate is already in the link line of the built
+<code>simple_exec</code>. Its BLAS exports the classic LP64 <code>sgemm_</code> symbol, which is the
+ABI <code>cmake/Dependencies.cmake</code> documents. Adding a dense product therefore
+adds no dependency, no CMake change, and no new link flag.</p>
+<p>What does not exist is a boundary to call it through: the repository contains
+no <code>gemm</code>/<code>sgemm</code> call, and every dense product is <code>matmul</code> (<code>src/main/pca/*</code>,
+<code>src/main/simple_symanalyzer.f90</code>). Write a narrow module with an explicit
+LP64 interface block rather than relying on an implicit interface, so an
+ILP64 build fails to link instead of silently corrupting arguments.
+Accelerate also exports <code>sgemm$NEWLAPACK$ILP64</code> variants, which are opt-in by
+macro and must not be selected.</p>
+<p>The alternative is <code>matmul</code> with a compiler-provided external-BLAS mapping.
+That is not enabled in the current release flags
+(<code>cmake/CompilerConfig.cmake:103</code>), so it would itself be a build change.
+Benchmark <code>sgemm</code> against plain <code>matmul</code> before committing to the wrapper;
+gfortran's <code>matmul</code> is respectable for these shapes and may make the wrapper
+unnecessary.</p>
+<h3 id="coordinate-remapping-and-grid-representation">Coordinate remapping and grid representation<a class="headerlink" href="#coordinate-remapping-and-grid-representation" title="Permanent link">&para;</a></h3>
+<p>The fine score grid uses unit stride. Derive a direct mapping from a valid
+refined origin to its <code>inds_offset</code> element and prove it with edge and
+round-trip tests. This removes the current full-grid distance calculation,
+<code>minloc</code>, array-wide <code>where</code>, and the <code>dists</code> automatic array
+(<code>src/main/pick/simple_pickref.f90:677,723-733</code>).</p>
+<p>Preserve the old loop-order behavior if multiple refined peaks target the same
+grid element. Retain a checked fallback until all supported geometry satisfies
+the mapping invariant.</p>
+<p>Before cutting the scalar seam, decide whether the fine instance should keep a
+full unit-stride grid at all. It currently materializes <code>positions</code>,
+<code>inds_offset</code>, <code>box_scores</code>, <code>box_scores_mem</code>, and <code>loc_sdevs</code> over the whole
+micrograph to hold results for the retained peaks only, which is the shared
+cause of the remap cost, the <code>distance_filter</code> scan, the <code>dists</code> stack array,
+and most of the picker's fine-resolution memory. The only consumers at fine
+resolution are <code>refine_upscaled</code>, <code>distance_filter</code>, <code>get_positions</code>, and
+<code>report_boxfile</code>. A sparse peak list subsumes several tier-1 items rather than
+optimizing them, but it moves the seam, so it is a checkpoint decision and not
+an implementation detail.</p>
+<h3 id="memory-and-batching">Memory and batching<a class="headerlink" href="#memory-and-batching" title="Permanent link">&para;</a></h3>
+<p>For box area <code>N</code>, reference count <code>R</code>, and candidate batch <code>Cb</code>, account
+for at least:</p>
+<pre><code class="language-text">reference bank: N*R reals
+candidate bank: N*Cb reals
+result block:   R*Cb reals
+two SATs:       approximately 2*micrograph pixels in double precision
+</code></pre>
+<p>For example, <code>N=10,000</code>, <code>R=240</code>, and <code>Cb=169</code> imply roughly 9.6 MB of
+references and 6.8 MB of candidates in single precision before results, SATs,
+and thread replication. Do not allocate a maximum batch per OpenMP thread
+without a measured memory budget. Start with a configurable internal batch
+size and reuse buffers.</p>
+<p>Account separately for the existing fine-instance grid allocations and the
+reduction from the <code>nboxes</code> overcount fix, so kernel memory and structural
+memory are not conflated.</p>
+<h3 id="thread-topology">Thread topology<a class="headerlink" href="#thread-topology" title="Permanent link">&para;</a></h3>
+<p>Benchmark two controlled configurations:</p>
+<ol>
+<li>OpenMP across positions with one BLAS thread per worker;</li>
+<li>fewer/larger candidate batches with BLAS owning a bounded thread team.</li>
+</ol>
+<p>Do not allow both layers to consume the full configured thread count. Set the
+vendor thread-count control explicitly rather than assuming the linked
+library's default.</p>
+<p>That control is vendor-specific and the development and deployment hosts do
+not share one. On the current macOS development host BLAS is Apple
+Accelerate, which has no <code>OPENBLAS_NUM_THREADS</code>; its knob is
+<code>VECLIB_MAXIMUM_THREADS</code>. On Apple Silicon, Accelerate also dispatches small
+and medium dense products to AMX units shared across a core cluster, so
+concurrent <code>sgemm</code> calls from many OpenMP threads contend for hardware an x86
+OpenBLAS build does not have. The development host here has 24 logical and 16
+performance cores, which makes that contention easy to hit and easy to
+misread as a batching problem.</p>
+<p>Consequence for this plan: tune batch size and topology on a host
+representative of the deployment target, and label every figure with the host
+and the resolved BLAS. Do not carry a batch size chosen on the Mac into the
+cluster configuration.</p>
+<p>Comparison mode should normally run the backends sequentially. Record the
+effective OpenMP and BLAS thread counts, the resolved BLAS, and the host with
+every timing.</p>
+<h3 id="controls-and-propagation">Controls and propagation<a class="headerlink" href="#controls-and-propagation" title="Permanent link">&para;</a></h3>
+<p>Provisional advanced keys:</p>
+<ul>
+<li><code>refpick_backend=scalar|batched|compare</code>, covering both correlation loops
+  because they share one engine.</li>
+</ul>
+<p>It defaults to legacy behavior. Add it through typed parameters, registry,
+validation, UI metadata, defaults, commander/strategy, distributed child
+commands, and the stream master's explicit <code>pick_extract</code> command. Do not
+read it ad hoc from <code>cmdline</code>.</p>
+<p>Tier-1 changes take no control. Each is either the removal of a dead
+computation or an indexing identity, and each is separately proved
+output-identical.</p>
+<p>Add a shadow cadence for live streams and a bounded diagnostic-output policy.</p>
+<h2 id="work-phases">Work phases<a class="headerlink" href="#work-phases" title="Permanent link">&para;</a></h2>
+<h3 id="phase-0-attribution">Phase 0: attribution<a class="headerlink" href="#phase-0-attribution" title="Permanent link">&para;</a></h3>
+<p>Instrument before changing numerical code, in a <strong>Release build</strong>. The only
+complete build tree on the development host today is Debug
+(<code>-O0 -g -fcheck=do,mem</code>), which distorts tight scalar loops and array
+intrinsics in opposite directions; no attribution number from it is usable.
+Configure and build Release first, and record the build type with every
+figure.</p>
+<p>Measure, separately at coarse and fine resolution:</p>
+<ul>
+<li>positions entering each correlation loop;</li>
+<li>fine candidate count distribution and clipped edge neighborhoods;</li>
+<li>box area and reference count;</li>
+<li>time in <code>avg_loc_sdev</code>, window extraction, normalization/statistics,
+  reference dots, maximum reduction, coordinate remapping, <code>distance_filter</code>,
+  and <code>setup_iterators</code>;</li>
+<li>total coarse, refinement, picker, and stream-stage time, with the coarse and
+  fine shares reported explicitly so the Amdahl bound is visible;</li>
+<li>observed mean and range of <code>mic_shrink</code> at both resolutions;</li>
+<li>thread counts, resolved BLAS, host, build type, and peak RSS, including the
+  fine-instance grid allocations.</li>
+</ul>
+<p>Include the normal 240-reference stream case, smaller reference banks, and
+both a dense and a sparse micrograph. The dense/sparse pair is required, not
+optional: it is what determines whether refinement-only work would have been
+sufficient.</p>
+<p>Gate: the profile confirms the dominant subcosts and records a reproducible
+baseline. The reported refinement dominance, and the expectation that
+<code>avg_loc_sdev</code> is the single largest term, are working hypotheses and not
+substitutes for this measurement.</p>
+<h3 id="phase-1-exact-structural-removals">Phase 1: exact structural removals<a class="headerlink" href="#phase-1-exact-structural-removals" title="Permanent link">&para;</a></h3>
+<p>Each item is a separate change with its own output-identity proof.</p>
+<ol>
+<li>Remove or lazily gate the <code>avg_loc_sdev</code> call at
+   <code>src/main/pick/simple_pickref.f90:306</code> and the <code>loc_sdevs</code> /
+   <code>loc_sdevs_mem</code> state it feeds. Its only consumers are <code>remove_outliers</code>
+   (<code>447-471</code>), which <code>refpick</code> explicitly disables at line 113, and
+   <code>get_loc_sdevs</code> (<code>550-555</code>), which has no caller in <code>src/</code> or
+   <code>production/</code>. Record a decision on whether those two routines are retained
+   as future capability; if retained, gate them so the shipped path does not
+   pay for them.</li>
+<li>Correct the <code>setup_iterators</code> first-pass <code>nboxes</code> overcount
+   (<code>src/main/pick/simple_pickref.f90:246,248</code>), which roughly doubles the
+   <code>positions</code> allocation and the <code>dists</code> loop bound.</li>
+<li>Derive and test direct fine-coordinate remapping; remove the <code>dists</code>
+   automatic array and the array-wide <code>where</code>.</li>
+<li>Replace the <code>distance_filter</code> inner linear search
+   (<code>src/main/pick/simple_pickref.f90:427-441</code>) with a logical selection array
+   indexed through <code>inds_offset</code>.</li>
+<li>Guard the <code>self%t = minval(scores_refined)</code> degenerate case
+   (<code>src/main/pick/simple_pickref.f90:723</code>). If a refined peak leaves
+   <code>box_score = -1.</code>, the threshold becomes <code>-1.</code>, <code>npeaks</code> becomes the whole
+   grid, and <code>distance_filter</code> packs the entire grid into a greedy <code>O(n^2)</code>
+   loop. The failure mode is a stalled stream stage. Fix it rather than
+   preserving it in the parity contract, and update the scalar oracle to
+   match.</li>
+<li>Isolate the existing correlation loops as explicitly named scalar backends
+   and define their result contract without altering loop or tie order.</li>
+<li>Add a specialized valid-window gather that has no per-call allocation,
+   whole-output clear, generic dimensionality branch, or impossible outside
+   path.</li>
+<li>Capture scalar score/position summaries on deterministic fixtures.</li>
+</ol>
+<p>Gate: items 1-4 and 6-7 are byte-identical in output; item 5 changes behavior
+only on an input that triggers the degenerate case, demonstrated on such an
+input. The tier is measured and reported on its own, so its contribution is
+not later attributed to the kernel.</p>
+<h3 id="phase-2-exact-local-statistics">Phase 2: exact local statistics<a class="headerlink" href="#phase-2-exact-local-statistics" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Apply the global amplitude precondition to the prepared micrograph.</li>
+<li>Build summed-area tables of the micrograph and squared values once per
+   prepared resolution, using double precision.</li>
+<li>Query every position's sum and sum of squares with a verified inclusive
+   coordinate convention.</li>
+<li>Reproduce population variance, not sample variance.</li>
+<li>Define behavior for small negative roundoff, materially negative values,
+   zero variance, and near-zero variance.</li>
+<li>Compare each result against a direct double-precision two-pass oracle over
+   random, constant, near-constant, gradient, and large-offset inputs.</li>
+</ol>
+<p>Gate: local-statistic tests pass at every valid boundary and over several box
+sizes before the tables are used for picking scores.</p>
+<h3 id="phase-3-exact-batched-correlation-kernel">Phase 3: exact batched correlation kernel<a class="headerlink" href="#phase-3-exact-batched-correlation-kernel" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Flatten the normalized references and record their residual sums.</li>
+<li>Gather positions in legacy order into bounded columns.</li>
+<li>Calculate dense reference/window dots through the new linear-algebra
+   boundary; benchmark <code>sgemm</code> against <code>matmul</code> before committing.</li>
+<li>Apply residual-mean correction and divide by <code>N*sigma</code>.</li>
+<li>Reduce each score in the same logical order as the scalar backend,
+   explicitly matching strict-greater/tie behavior.</li>
+<li>Add a scalar crossover for batches too small to amortize packing.</li>
+<li>Benchmark batch size and the two permitted thread topologies, with vendor
+   thread counts set explicitly.</li>
+</ol>
+<p>Gate: all exact-kernel gates in the SPEC pass, including adversarial matrix
+layout, ties, variance edges, one thread, and the normal worker thread count.
+If the error gates fail, investigate the amplitude precondition before
+relaxing a tolerance.</p>
+<h3 id="phase-4-shadow-integration-at-both-resolutions">Phase 4: shadow integration at both resolutions<a class="headerlink" href="#phase-4-shadow-integration-at-both-resolutions" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Add <code>batched</code> as an opt-in producer for the coarse and fine loops.</li>
+<li>Add <code>compare</code>: prepare common inputs, run scalar and batched correlation,
+   keep scalar outputs authoritative, and compare per-position results before
+   shared downstream policy.</li>
+<li>Compare best scores, winning coordinates, invalid classifications,
+   duplicate-grid updates, thresholds, and final one-to-one matched picks.</li>
+<li>Write one bounded CSV or JSON-lines record per sampled micrograph. Dense
+   score grids are explicit debug artifacts only.</li>
+<li>Run correctness shadowing in offline replay, then a sparse live cadence.</li>
+<li>Run separate scalar and batched replays for valid performance results, on
+   both a dense and a sparse micrograph.</li>
+</ol>
+<p>Gate: picker, throughput, and memory gates in the SPEC pass. Because the
+batched route is exact, every pick mismatch is triaged individually; there is
+no percentage budget at this tier. Keep scalar as the default until the
+requester explicitly approves a change.</p>
+<h3 id="phase-5-reassess-remaining-work">Phase 5: reassess remaining work<a class="headerlink" href="#phase-5-reassess-remaining-work" title="Permanent link">&para;</a></h3>
+<p>Repeat the stage profile after tiers 1 and 2, on both a dense and a sparse
+micrograph, and decide whether the picker is still the rate-limiting stream
+stage. If it is not, stop here.</p>
+<p>If correlation remains dominant, do not hide an algorithmic change inside the
+batch implementation. Draft a separate SPEC for one or more opt-in
+experiments:</p>
+<ul>
+<li>coarse top-K or score-margin reference retention;</li>
+<li>neighbor-aware reference candidate sets;</li>
+<li>hierarchical or hill-climbing fine positions;</li>
+<li>local quadratic peak fitting.</li>
+</ul>
+<p>Gate each against the exhaustive all-reference/all-position oracle.</p>
+<h3 id="phase-6-stream-rollout">Phase 6: stream rollout<a class="headerlink" href="#phase-6-stream-rollout" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Run deterministic fixtures and offline stream replay with every micrograph
+   shadowed.</li>
+<li>Categorize mismatches as tie order, layout/indexing, local-statistic edge,
+   roundoff, or genuine behavioral change.</li>
+<li>Run sparse live shadowing with bounded diagnostics.</li>
+<li>Compare separate jobs for p50/p95 coarse, refinement, and picker latency,
+   throughput, queue depth, peak RSS, and downstream particle/class-average
+   quality, on the deployment host rather than the development host.</li>
+<li>Keep legacy kernel defaults for at least the evidence-gathering period and
+   record the approved transition separately. Tier-1 removals are not held
+   behind this gate, since they are output-identical.</li>
+</ol>
+<h2 id="test-design">Test design<a class="headerlink" href="#test-design" title="Permanent link">&para;</a></h2>
+<h3 id="structural-removal-tests">Structural-removal tests<a class="headerlink" href="#structural-removal-tests" title="Permanent link">&para;</a></h3>
+<p>For each tier-1 item, compare <code>.box</code> output, pick counts, scores, and the
+final score grid before and after on the deterministic fixtures. For the
+degenerate-threshold guard, construct an input in which every candidate of at
+least one refined peak fails the near-zero-variance test, and assert that the
+picker completes with a sane peak count rather than admitting the whole grid.</p>
+<p>For the direct coordinate mapping, enumerate edge and round-trip cases and
+assert the stride-one and origin invariants, including the fallback path.</p>
+<h3 id="local-statistic-tests">Local-statistic tests<a class="headerlink" href="#local-statistic-tests" title="Permanent link">&para;</a></h3>
+<p>Enumerate every valid window in small random images and compare SAT results
+against a double-precision two-pass oracle. Include:</p>
+<ul>
+<li>rectangular micrographs and several even/odd box sizes;</li>
+<li>all four valid boundaries;</li>
+<li>constant and near-constant data;</li>
+<li>a large DC offset with small variance, both with and without the global
+  amplitude precondition applied, to demonstrate why the precondition is
+  required;</li>
+<li>gradients and isolated impulses.</li>
+</ul>
+<h3 id="batched-score-tests">Batched score tests<a class="headerlink" href="#batched-score-tests" title="Permanent link">&para;</a></h3>
+<p>Construct <code>S</code> and <code>W</code> so expected matrix orientation is unambiguous.
+Compare the complete <code>R x C</code> batched score matrix against scalar Pearson
+scores for:</p>
+<ul>
+<li><code>R</code> and <code>C</code> equal to 1 and non-square combinations;</li>
+<li>non-multiple vector lengths and batch tails;</li>
+<li>positive, negative, and tied scores;</li>
+<li>normalized references with a deliberately retained residual sum;</li>
+<li>invalid/near-zero-variance candidates;</li>
+<li>multiple batch sizes and one/multiple OpenMP workers;</li>
+<li>both coarse and fine box areas.</li>
+</ul>
+<p>The direct oracle should accumulate in double precision where practical.
+Provisional comparison gates are in the SPEC.</p>
+<h3 id="correlation-contract-tests">Correlation-contract tests<a class="headerlink" href="#correlation-contract-tests" title="Permanent link">&para;</a></h3>
+<p>Exercise <code>match_boximgs</code> with controlled micrographs and <code>refine_upscaled</code>
+with controlled coarse peaks:</p>
+<ul>
+<li>an interior peak with all 169 candidates;</li>
+<li>edge peaks and edge coarse positions with clipped neighborhoods;</li>
+<li>known winning references and positions;</li>
+<li>exact ties in position and reference order;</li>
+<li>two peaks mapping to the same fine-grid cell;</li>
+<li>black/white contrast and noisy distractors;</li>
+<li>one, 20, 120, and 240 references.</li>
+</ul>
+<p>Compare every per-position winning score/position and the final score grid
+before downstream filtering.</p>
+<h3 id="picker-and-stream-fixtures">Picker and stream fixtures<a class="headerlink" href="#picker-and-stream-fixtures" title="Permanent link">&para;</a></h3>
+<p>Use Ruben Meana-Paneda's simulated workflow in
+<code>src/main/commanders/test/simple_commanders_test_highlevel.f90</code>. It already
+contains simulated 6VXX/1JYX generation and a retained reference-picking
+branch. Replace the source switch during implementation with a runtime test
+argument and add coordinate truth or one-to-one matching. Its current
+reference stack checks do not establish picking accuracy.</p>
+<p>Include one dense and one sparse simulated micrograph, since the coarse/fine
+cost split differs materially between them.</p>
+<p><code>production/tests/simple_test_gencorrs_fft.f90</code> is a style/timing reference,
+not an oracle for Cartesian local Pearson correlation.
+<code>production/tests/simple_test_phasecorr.f90</code> is not needed by this plan; it
+would only matter under Appendix A.</p>
+<h3 id="performance-matrix">Performance matrix<a class="headerlink" href="#performance-matrix" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Micrograph</td>
+<td>small fixture, typical production, largest supported</td>
+</tr>
+<tr>
+<td>Particle density</td>
+<td>sparse and dense, both required</td>
+</tr>
+<tr>
+<td>Picking box</td>
+<td>small, typical, large</td>
+</tr>
+<tr>
+<td>References</td>
+<td>1, 20, 120, 240</td>
+</tr>
+<tr>
+<td>Refined peaks</td>
+<td>low, typical, high</td>
+</tr>
+<tr>
+<td>Fine candidates</td>
+<td>clipped edge, partial, full 169</td>
+</tr>
+<tr>
+<td>Threads</td>
+<td>1, normal worker, topology study</td>
+</tr>
+<tr>
+<td>Tier</td>
+<td>baseline, tier 1 only, tier 1 + batched</td>
+</tr>
+<tr>
+<td>Backend</td>
+<td>scalar, batched, compare</td>
+</tr>
+<tr>
+<td>Host</td>
+<td>development (Accelerate) and deployment (cluster BLAS)</td>
+</tr>
+<tr>
+<td>Build</td>
+<td>Release only</td>
+</tr>
+<tr>
+<td>Scope</td>
+<td>kernel, coarse loop, refinement, picker, stream</td>
+</tr>
+</tbody>
+</table>
+<p>Report cold and warm runs separately and repeat/randomize backend order.
+Report tier 1 on its own so its contribution is not attributed to the kernel.</p>
+<h2 id="comparison-output-schema">Comparison output schema<a class="headerlink" href="#comparison-output-schema" title="Permanent link">&para;</a></h2>
+<p>Suggested per-micrograph fields:</p>
+<pre><code class="language-text">micrograph_id, dims, box_coarse, box_fine, smpd, nrefs, nthr_omp, nthr_blas,
+n_coarse_positions, n_refine_peaks, n_candidates_total, candidate_batch,
+scalar_coarse_ms, batched_coarse_ms,
+scalar_refine_ms, batched_refine_ms,
+locsdev_ms, gather_ms, stats_ms, gemm_ms, reduction_ms, remap_ms,
+distfilt_ms, iterator_setup_ms,
+mic_mean, mic_absmax,
+scalar_peak_rss, batched_peak_rss,
+score_max_abs, score_rms,
+n_same_winner, n_tied_winner, n_displaced,
+displacement_p50, displacement_p95,
+n_picks_scalar, n_picks_batched, n_matched,
+n_unmatched_scalar, n_unmatched_batched,
+result
+</code></pre>
+<p>The job summary aggregates counts/quantiles and identifies worst cases.
+Comparison timing is diagnostic only.</p>
+<h2 id="likely-failure-modes">Likely failure modes<a class="headerlink" href="#likely-failure-modes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Symptom</th>
+<th>Primary test</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dead statistic silently retained</td>
+<td>tier 1 shows no gain</td>
+<td>separate <code>avg_loc_sdev</code> timer</td>
+</tr>
+<tr>
+<td><code>loc_sdevs</code> consumer revived later</td>
+<td>removed state needed again</td>
+<td>recorded capability decision</td>
+</tr>
+<tr>
+<td>SAT off-by-one</td>
+<td>errors only at edges or every window shifted</td>
+<td>enumerated boundary windows</td>
+</tr>
+<tr>
+<td>SAT cancellation</td>
+<td>negative/zero variance after large DC offset</td>
+<td>offset plus small variance</td>
+</tr>
+<tr>
+<td>Amplitude precondition skipped</td>
+<td>error gates fail on production data but pass on fixtures</td>
+<td>large-offset test with and without it</td>
+</tr>
+<tr>
+<td>Sample vs population variance</td>
+<td>box-size-dependent score scale</td>
+<td>multiple box sizes</td>
+</tr>
+<tr>
+<td>Reference residual mean ignored</td>
+<td>small systematic score error</td>
+<td>deliberately nonzero <code>sum(S)</code></td>
+</tr>
+<tr>
+<td>Matrix transposed/flattened wrongly</td>
+<td>wrong references or shifted candidates</td>
+<td>asymmetric <code>R x C</code> fixture</td>
+</tr>
+<tr>
+<td>Batch tail skipped</td>
+<td>final positions differ</td>
+<td>non-divisible batch sizes</td>
+</tr>
+<tr>
+<td>Tie reduction reordered</td>
+<td>equal maxima choose another cell</td>
+<td>exact tie fixture</td>
+</tr>
+<tr>
+<td>Direct grid mapping off by one</td>
+<td>all refined picks displaced</td>
+<td>edge and round-trip mapping</td>
+</tr>
+<tr>
+<td>Duplicate update changed</td>
+<td>crowded peaks differ</td>
+<td>same-cell fixture</td>
+</tr>
+<tr>
+<td>Degenerate threshold blowup</td>
+<td>picker stalls, <code>npeaks</code> equals grid size</td>
+<td>all-invalid refined peak fixture</td>
+</tr>
+<tr>
+<td><code>dists</code> stack overflow</td>
+<td>crash on hosts without raised <code>ulimit -s</code></td>
+<td>large-geometry run at default stack</td>
+</tr>
+<tr>
+<td>BLAS oversubscription</td>
+<td>high CPU but worse wall time</td>
+<td>topology study</td>
+</tr>
+<tr>
+<td>Vendor thread default assumed</td>
+<td>timings differ between hosts</td>
+<td>explicit thread-count control in harness</td>
+</tr>
+<tr>
+<td>Accelerate AMX contention</td>
+<td>GEMM slows as OpenMP threads rise, only on macOS</td>
+<td>topology study on both hosts</td>
+</tr>
+<tr>
+<td>Tuned on the wrong host</td>
+<td>batch size regresses on the cluster</td>
+<td>deployment-host performance run</td>
+</tr>
+<tr>
+<td>Profiled in a Debug build</td>
+<td>attribution ranks the wrong subcost</td>
+<td>Release build asserted in the harness</td>
+</tr>
+<tr>
+<td>Per-thread batch too large</td>
+<td>RSS grows with thread count</td>
+<td>memory matrix</td>
+</tr>
+<tr>
+<td>Scalar crossover unstable</td>
+<td>discontinuity near cutoff</td>
+<td>sweep <code>R*C*N</code></td>
+</tr>
+<tr>
+<td>Coarse loop left scalar</td>
+<td>speedup collapses on sparse micrographs</td>
+<td>sparse/dense performance pair</td>
+</tr>
+<tr>
+<td>Threshold amplification</td>
+<td>tiny score drift changes picks</td>
+<td>upper-tail and final matching</td>
+</tr>
+</tbody>
+</table>
+<h2 id="file-impact-map">File impact map<a class="headerlink" href="#file-impact-map" title="Permanent link">&para;</a></h2>
+<p>Tier-1 production files:</p>
+<ul>
+<li><code>src/main/pick/simple_pickref.f90</code>: <code>avg_loc_sdev</code> removal/gating,
+  <code>nboxes</code> overcount, direct remapping, <code>distance_filter</code> selection array,
+  degenerate-threshold guard, scalar seams;</li>
+<li><code>src/main/image/simple_image*.f90</code>: only if <code>avg_loc_sdev</code> or its
+  declaration in <code>simple_image.f90</code> is retired.</li>
+</ul>
+<p>Tier-2 production files:</p>
+<ul>
+<li><code>src/main/pick/simple_pickref.f90</code>: batched dispatch at both correlation
+  loops, compare orchestration;</li>
+<li>new picking-domain batched-correlation module;</li>
+<li><code>src/main/image/simple_image*.f90</code>: only a narrow valid-window/SAT access
+  primitive if the picking module cannot use an existing sanctioned API;</li>
+<li>a new narrow linear-algebra wrapper with an explicit LP64 <code>sgemm</code> interface;
+  none exists today, though the library is already linked;</li>
+<li><code>src/main/pick/simple_picker_utils.f90</code>: pass the backend mode;</li>
+<li><code>src/main/params/simple_parameters*.f90</code>, UI metadata, pick strategy,
+  distributed child command, and stream master: typed opt-in propagation;</li>
+<li><code>production/tests/</code> and high-level test commander/UI: kernel, correlation,
+  picker, and simulated-workflow validation.</li>
+</ul>
+<p>No correlation mathematics belongs in stream modules, UI metadata, parameter
+parsing, or commanders.</p>
+<h2 id="review-checkpoints">Review checkpoints<a class="headerlink" href="#review-checkpoints" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Approve the two-tier SPEC, provisional control name, and numerical parity
+   gates.</li>
+<li>Review Phase 0 attribution, including the dense/sparse split and the
+   <code>avg_loc_sdev</code> share, and confirm the tier ordering against measurement.</li>
+<li>Decide whether the fine instance keeps a full unit-stride grid or moves to a
+   sparse peak list, before the scalar seam is cut.</li>
+<li>Review tier-1 output-identity evidence and its measured contribution on its
+   own.</li>
+<li>Review local-statistic and batched-kernel parity before picker integration.</li>
+<li>Review offline shadow accuracy and separate-run performance, on both dense
+   and sparse micrographs, before any live stream trial.</li>
+<li>Review the post-optimization profile before authorizing any
+   behavior-changing pruning or search-space proposal.</li>
+<li>Review stream throughput, memory, and downstream-quality evidence from the
+   deployment host before considering a kernel default change.</li>
+</ol>
+<h2 id="validation-constraints-for-implementation">Validation constraints for implementation<a class="headerlink" href="#validation-constraints-for-implementation" title="Permanent link">&para;</a></h2>
+<p>Repository policy prohibits agents from compiling, linking, running CMake
+builds, or executing test binaries unless the user explicitly requests it.
+During implementation, use non-compiling source checks and language-server
+diagnostics, then provide the exact build, unit, integration, stream replay,
+Linux, and BOX commands for the user. Record only observed results as passed.</p>
+<h2 id="appendix-a-fourier-coarse-search-not-in-scope">Appendix A: Fourier coarse search, not in scope<a class="headerlink" href="#appendix-a-fourier-coarse-search-not-in-scope" title="Permanent link">&para;</a></h2>
+<p>Recorded so the reasoning is not lost. No phase, gate, control, or file in
+this plan depends on anything below, and no work here is authorized.</p>
+<p>Roseman's fast local correlation function would replace the strided
+real-space coarse search with FFT-based score maps, sharing local sum and
+sum-of-squares maps across references. The formulation and the conditions
+under which it matches SIMPLE's complete-square Pearson contract are in
+Appendix A of the SPEC.</p>
+<p>It is off the critical path for two reasons. It addresses only the coarse
+loop, which the tier-2 engine already covers at far lower risk and with an
+exact scalar oracle. And it requires proving SIMPLE's transform scale,
+template placement, conjugation, lag indexing, and valid-origin conventions
+against direct computation before a single score can be trusted, which is a
+larger verification burden than the entire batched kernel.</p>
+<p>If a future profile shows coarse scoring dominating even after both tiers, the
+starting points would be <code>production/tests/simple_test_phasecorr.f90</code>,
+refactored from a printed demonstration into a self-checking Fourier
+convention assertion, and a separate SPEC with its own opt-in control and a
+percentage-agreement gate rather than the exact-parity gate used here.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
