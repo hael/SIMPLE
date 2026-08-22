@@ -1955,15 +1955,25 @@ contains
     end subroutine gen_corr_grad_only_for_rot_8
 
     !> Evaluation of sigma2 noise particle contribution
-    module subroutine gen_sigma_contrib( self, iref, iptcl, shvec, irot, sigma_contrib)
+    !> Optional scale diagnostics at the SAME orientation (see
+    !> doc/implementation_notes/drop_legacy_box_division.md, plan step 1):
+    !>   ref_pow(k)  mean |CTF*ref|^2 per polar component in shell k
+    !>   ptcl_pow(k) mean |ptcl|^2    per polar component in shell k
+    !>   v           the euclid objective value at this orientation,
+    !>               sum_k (k/sigma2_k) sum_p |ptcl - CTF*ref|^2 / sum_k (k/sigma2_k) sum_p |ptcl|^2,
+    !>               algebraically identical to 1 + crvec/norm in euclid_dist_from_crvec
+    module subroutine gen_sigma_contrib( self, iref, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl
         real(sp),                    intent(in)    :: shvec(2)
         integer,                     intent(in)    :: irot
         real(sp),  optional,         intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real(sp),  optional,         intent(out)   :: ref_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),  optional,         intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
+        real(sp),  optional,         intent(out)   :: v
         complex(dp), pointer :: pft_ref_8(:,:), shmat_8(:,:), pft_ref_tmp_8(:,:)
-        real(dp)    :: norm_factor
-        integer     :: i, ithr, ieo
+        real(dp)    :: norm_factor, wk, vnum, vden, ppow
+        integer     :: i, ithr, ieo, k
         i    = self%pinds(iptcl)
         ithr = omp_get_thread_num() + 1
         pft_ref_8     => self%heap_vars(ithr)%pft_ref_8
@@ -1978,8 +1988,33 @@ contains
         call self%rotate_ref_8(pft_ref_8, irot, pft_ref_tmp_8)
         ! ctf
         pft_ref_tmp_8 = pft_ref_tmp_8 * real(self%ctfmats(:,:self%kfromto(2),i), dp)
+        ! scale diagnostics: per-shell reference and particle power at the assigned orientation
+        if( present(ref_pow) )then
+            ref_pow = real(sum(real(pft_ref_tmp_8 * conjg(pft_ref_tmp_8), dp), dim=1) / real(self%pftsz, dp))
+        endif
+        if( present(ptcl_pow) )then
+            ptcl_pow = real(sum(real(self%pfts_ptcls(:,:self%kfromto(2),i) * &
+                &conjg(self%pfts_ptcls(:,:self%kfromto(2),i)), dp), dim=1) / real(self%pftsz, dp))
+        endif
         ! difference
         pft_ref_tmp_8 = pft_ref_tmp_8 - self%pfts_ptcls(:,:self%kfromto(2),i)
+        ! scale diagnostics: euclid objective value at the assigned orientation
+        if( present(v) )then
+            vnum = 0.d0
+            vden = 0.d0
+            do k = self%kfromto(1), self%kfromto(2)
+                if( self%sigma2_noise(k,iptcl) <= 0. ) cycle
+                wk   = real(k, dp) / real(self%sigma2_noise(k,iptcl), dp)
+                ppow = sum(real(self%pfts_ptcls(:,k,i) * conjg(self%pfts_ptcls(:,k,i)), dp))
+                vnum = vnum + wk * sum(real(pft_ref_tmp_8(:,k) * conjg(pft_ref_tmp_8(:,k)), dp))
+                vden = vden + wk * ppow
+            enddo
+            if( vden > 0.d0 )then
+                v = real(vnum / vden, sp)
+            else
+                v = -1.
+            endif
+        endif
         ! sigma2 - pre-compute normalization factor
         norm_factor = 2.d0 * real(self%pftsz, dp)
         if (present(sigma_contrib)) then

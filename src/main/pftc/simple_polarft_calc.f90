@@ -964,11 +964,14 @@ interface
         real(dp),                    intent(out)   :: grad(2)
     end subroutine gen_corr_grad_only_for_rot_8
 
-    module subroutine gen_sigma_contrib(self, iref, iptcl, shvec, irot, sigma_contrib)
+    module subroutine gen_sigma_contrib(self, iref, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v)
         class(polarft_calc), target, intent(inout) :: self
         integer,                     intent(in)    :: iref, iptcl, irot
         real(sp),                    intent(in)    :: shvec(2)
         real(sp), optional,          intent(out)   :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real(sp), optional,          intent(out)   :: ref_pow(self%kfromto(1):self%kfromto(2))
+        real(sp), optional,          intent(out)   :: ptcl_pow(self%kfromto(1):self%kfromto(2))
+        real(sp), optional,          intent(out)   :: v
     end subroutine gen_sigma_contrib
 
     module subroutine gen_many_objfun_vals( self, nr, irefs, iptcl, shift )

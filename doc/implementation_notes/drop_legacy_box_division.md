@@ -1,8 +1,10 @@
 # Dropping the legacy box division from reconstruction output
 
-**Status:** proposal / plan (2026-08-21). Not started. Until it lands, the PCG
-backend mirrors the convention (`pcg_mag_correction` in
-`simple_rec3D_pcg_strategy.f90`) so the two backends are interchangeable.
+**Status:** in progress on branch `drop_legacy_box_division` (started
+2026-08-22). Step 1 (instrumentation, §5.1) is implemented; steps 2–6 are
+not started. Until step 3 lands, the PCG backend mirrors the convention
+(`pcg_mag_correction` in `simple_rec3D_pcg_strategy.f90`) so the two backends
+are interchangeable.
 
 ## 1. What the convention is
 
@@ -182,9 +184,15 @@ The verifiable consequence, and the acceptance test: for a converged
 refinement, the polar reference reprojections must have amplitudes of the
 order of the signal fraction of the noise-normalized particle polar
 transforms (ref/ptcl ~ 0.1–0.5 per shell inside the matching band, falling
-with resolution), and the euclid `v` values must populate a healthy range
-(typically 1–3; never ≈1.000 across the table, never near the 23.03
-invalidation threshold).
+with resolution), and the euclid `v` values must sit clearly below 1. Since
+`v = Σ_k (k/σ²_k) Σ_p |ptcl − CTF·ref|² / Σ_k (k/σ²_k) Σ_p |ptcl|²` (§5.1), a
+reference that explains particle variance gives `v < 1` (`v = 0` for a perfect
+noise-free match, `v = 1` for a zero reference, `v = 2` for an uncorrelated
+reference of equal power); `v ≈ 1.000 across the table` is the refs ≪ particles
+regime, `v > 1` means the reference adds more power than it explains, and the
+23.03 invalidation threshold is >20 particle powers of residual. (An earlier
+version of this section said "typically 1–3"; that was written before the
+identity above was established and is wrong.)
 
 ## 4. Consumers of absolute map amplitude — audit
 
@@ -213,6 +221,56 @@ invalidation threshold).
    band) and the quantiles of euclid `v` — the same quantities the temporary
    `EUCLID DIAG` reported during the investigation, made permanent and
    compact. Record the baseline on gridding as it is today.
+
+   *Implemented (2026-08-22).* `gen_sigma_contrib` (`simple_polarft_corr.f90`)
+   takes optional outputs `ref_pow(k)` (mean |CTF·ref|² per polar component),
+   `ptcl_pow(k)` (mean |ptcl|²) and `v`, all at the assigned orientation it
+   already builds for the sigma2 residual. `v` is computed directly as
+   `Σ_k (k/σ²_k) Σ_p |ptcl − CTF·ref|² / Σ_k (k/σ²_k) Σ_p |ptcl|²`, which is
+   algebraically what `euclid_dist_from_crvec` returns as `1 + crvec/norm`
+   (the `2·nrots` in `norm` cancels the unnormalized FFT round trip and the
+   conjugate-symmetric half), so it is valid in prob-align mode too, where the
+   memoized FFT tables are not populated. `euclid_sigma2%calc_sigma2` stores,
+   per particle, the amplitude ratio `sqrt(Σ_band ref_pow / Σ_band ptcl_pow)`
+   in `NDIAG_BANDS = 4` equal bands of the search range `params%kfromto`, and
+   `v`; `write_sigma2` (end of every 2D and 3D iteration) calls
+   `report_euclid_diag`, which prints two lines on part 1 only:
+
+   ```
+   >>> EUCLID DIAG ITER 12 NPTCLS 4321 KFROMTO 1-29 REF/PTCL AMP (q50) k[1-7]: 3.1E-01 k[8-14]: ... k[22-29]: ...
+   >>> EUCLID DIAG ITER 12 V q05: 1.0210 q50: 1.1503 q95: 1.6400 max: 2.31 THRES: 23.03 NINVALID: 0
+   ```
+
+   `NINVALID` counts particles whose `v` exceeds the `-log(TINY)` threshold at
+   which `euclid_dist_from_crvec` returns `huge`. Only particles visited by
+   `calc_sigma2` in the iteration (i.e. updated, state ≠ 0) enter the
+   quantiles. The 2D report is the control: class averages are already at the
+   data-quotient scale (§1), so `cluster2D` shows the regime the 3D path
+   should reach after step 3. Cost: one extra per-shell sum per particle per
+   iteration, negligible.
+
+   First reading (synthetic check, 2026-08-22; 400 particles simulated from
+   the streptavidin `rec_final_state01.mrc` at SNR 0.1 with CTF, `refine3D`
+   gridding backend, `lp=10`, 3 iterations): ref/ptcl amplitude ratio
+   ≈ 0.08 and flat over shells 2–14; `v` q05/q50/q95 ≈ 0.85/0.87/0.89, max
+   0.92, no invalid particles. This is a self-consistent synthetic case (the
+   particles were simulated from the reference), not the gridding baseline
+   on real data; that baseline is still to be recorded. The 2D control on
+   the same particles (`abinitio2D`, `ncls=10`, 24 iterations) shows the
+   regime the plan expects of correctly scaled references: ratio ≈ 1.1 in
+   the lowest band falling to ≈ 0.05–0.1 at the matching limit, `v`
+   q05/q50/q95 ≈ 0.4–0.8/0.55–0.98/0.7–1.2 with a real spread across
+   particles (iteration 1, random classes: ratio 0.008, `v` 0.986). The 3D
+   gridding case's flat ratio 0.08 with `v` compressed to 0.84–0.89 is the
+   refs ≪ particles regime of §2: `v ≈ 1 − 2·0.08·corr + 0.08²`.
+
+   Testing on this branch: the distributed workers are launched from
+   `$SIMPLE_PATH/bin/simple_private_exec`, and `build/bin` is only refreshed
+   by `make install` (install prefix = build dir). For this branch's build to
+   be the one that runs, do `cd build && make -j && make install` and point
+   `SIMPLE_PATH` at `pcg_integration_bug/SIMPLE/build` in the shell that
+   launches the run; the shell-memory master relays the worker's report into
+   its own log, so the lines appear in the main output with `nparts=1`.
 2. **Same-inputs dual-backend test.** A test commander that reconstructs one
    fixed set of particles/orientations with both backends and compares shell
    profiles (`shellspec`-style). With `mag_correction` removed and the
