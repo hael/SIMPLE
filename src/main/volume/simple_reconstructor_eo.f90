@@ -27,7 +27,6 @@ type :: reconstructor_eo
     real                :: res_fsc0143        !< target resolution at FSC=0.143
     real                :: cfar=0.
     real                :: smpd, msk, fny
-    real                :: mag_correction=1.  !< scaling factor to correct for slice insertion, cropping & padding
     integer             :: ldim(3), box=0, boxpd=0
     integer             :: nstates=1, numlen=2, filtsz=0
     logical             :: exists     = .false.
@@ -118,8 +117,6 @@ contains
         self%numlen  = self%p_ptr %numlen
         self%filtsz  = fdim(self%box) - 1
         self%msk     = real(self%box / 2) - COSMSKHALFWIDTH - 1.
-        ! oversampled Fourier interpolation, so construct this at native size
-        self%mag_correction = real(self%p_ptr %box) ! consistent with the current scheme
         self%ldim           = [self%box,self%box,self%box]
         ! deapodization: inverse envelope of the normalized KB stencil on the native lattice
         call kb_stencil_inv_envelope_1d(self%box, self%invenv1d)
@@ -524,7 +521,6 @@ contains
             deallocate(cmat)
             call even%ifft()
             call even%clip_inplace([self%box,self%box,self%box])
-            call even%div(self%mag_correction)
             call self%deapodize(even)
             call even%write(add2fbody(fname_even,MRC_EXT,'_unfil'))
             ! odd
@@ -535,7 +531,6 @@ contains
             deallocate(cmat)
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
-            call odd%div(self%mag_correction)
             call self%deapodize(odd)
             call odd%write(add2fbody(fname_odd,MRC_EXT,'_unfil'))
             ! Regularization
@@ -575,7 +570,6 @@ contains
             call self%even%ifft
             call even%zero_and_unflag_ft
             call self%even%clip(even)
-            call even%div(self%mag_correction)
             call self%deapodize(even)
             call even%write(fname_even, del_if_exists=.true.)
             call self%even%set_cmat(cmat)
@@ -587,7 +581,6 @@ contains
             call self%odd%ifft
             call odd%zero_and_unflag_ft
             call self%odd%clip(odd)
-            call odd%div(self%mag_correction)
             call self%deapodize(odd)
             call odd%write(fname_odd, del_if_exists=.true.)
             call self%odd%set_cmat(cmat)
@@ -606,9 +599,6 @@ contains
             ! clip
             call self%even%clip(even)
             call self%odd%clip(odd)
-            ! FFTW padding correction
-            call even%div(self%mag_correction)
-            call odd%div(self%mag_correction)
             ! deapodization
             call self%deapodize(even)
             call self%deapodize(odd)
@@ -779,7 +769,6 @@ contains
         call reference%set_ft(.false.)
         call self%eosum%sampl_dens_correct
         call self%eosum%ifft()
-        call self%eosum%div(self%mag_correction)
         call self%deapodize(self%eosum)
         call self%eosum%clip(reference)
     end subroutine sampl_dens_correct_sum

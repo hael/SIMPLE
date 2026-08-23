@@ -108,10 +108,10 @@ contains
         ! prepare for fast interpolation
         call self%vol_ref%fft()
         ldim = self%vol_ref%get_ldim()
-        call self%vol_ref%expand_cmat(ldim(1))
+        call self%vol_ref%expand_cmat()
         if( present(vol_target) )then
             call self%vol_target%fft()
-            call self%vol_target%expand_cmat(ldim(1))
+            call self%vol_target%expand_cmat()
         endif
         ! extract the reference lines
         call self%extract_ref

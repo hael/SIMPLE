@@ -1240,7 +1240,6 @@ contains
         call mean_rec%compress_exp
         call mean_rec%sampl_dens_correct
         call mean_rec%ifft
-        call mean_rec%div(real(params%box))
         gridcorr_img = prep3D_inv_kbenvelope4mul([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         call mean_rec%mul(gridcorr_img)
         call gridcorr_img%kill
@@ -2049,7 +2048,6 @@ contains
         ! operation, so out-of-band shells never enter the masking or the Gram products downstream.
         if( params%lp > 2.0*params%smpd_crop + TINY ) call work%bp(0., params%lp)
         call work%ifft
-        call work%div(real(params%box))
         if( params%msk_crop > TINY ) call work%mask3D_soft(params%msk_crop, backgr=0.)
         if( work%is_ft() ) call work%ifft
         call work%get_rmat_ptr(rmat)
@@ -3683,13 +3681,11 @@ contains
                 ! even half -> band-limited real image (UNmasked, for an unbiased FSC)
                 Yeven(q)%rho_exp = 1.0
                 call Yeven(q)%compress_exp; call Yeven(q)%ifft
-                call Yeven(q)%div(real(params%box))
                 call realvols(q)%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call Yeven(q)%get_rmat_ptr(rmatp); call realvols(q)%set_rmat(rmatp, .false.)
                 ! odd half
                 Yodd(q)%rho_exp = 1.0
                 call Yodd(q)%compress_exp; call Yodd(q)%ifft
-                call Yodd(q)%div(real(params%box))
                 call img_o%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call Yodd(q)%get_rmat_ptr(rmatp); call img_o%set_rmat(rmatp, .false.)
                 ! half-set FSC -> Wiener filter 2F/(1+F)

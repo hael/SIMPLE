@@ -118,7 +118,7 @@ subroutine build_forward_path_observations(sampler,orientations,volume,stage_pla
     call padded_projector%new(OSMPL_PAD_FAC*[BOX,BOX,BOX],HALFSET_SMPD,wthreads=.false.)
     call source_volume%pad(padded_projector)
     call padded_projector%fft()
-    call padded_projector%expand_cmat(BOX)
+    call padded_projector%expand_cmat()
     call padded_projection%new([OSMPL_PAD_FAC*BOX,OSMPL_PAD_FAC*BOX,1], &
         &HALFSET_SMPD,wthreads=.false.)
     call native_projection%new([BOX,BOX,1],HALFSET_SMPD,wthreads=.false.)

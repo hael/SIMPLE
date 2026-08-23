@@ -225,7 +225,7 @@ subroutine run_fixture(vol_file, mskdiam, smpd, lp, truth_angle, shift_truth, ha
         call b%vol%mask3D_soft(p%msk)
     endif
     call b%vol%fft()
-    call b%vol%expand_cmat(p%box)
+    call b%vol%expand_cmat()
 
     call b%eulspace%get_ori(1, o_ref)
     call o_ref%e3set(0.0)

@@ -602,7 +602,6 @@ contains
         call noisevol%new([params%box,params%box,params%box], params%smpd)
         if( cline%defined('nspace') )then
             call noisevol%ran()
-            call noisevol%div(real(params%box))
             call noisevol%write(string('noisevol.mrc'))
             params%refs      = 'start2Drefs.mrc'
             params%refs_even = 'start2Drefs_even.mrc'

@@ -339,6 +339,14 @@ contains
         write(logfhandle,'(A,I0,A,F0.4,A,F0.4,A,F0.4,A,F0.4,A,F0.2,A,I0)') '>>> EUCLID DIAG ITER ', &
             &self%p_ptr%which_iter, ' V q05: ', vq(1), ' q50: ', vq(2), ' q95: ', vq(3), ' max: ', vmax, &
             &' THRES: ', vthres, ' NINVALID: ', ninvalid
+        ! maps written before 2026-08 carry a 1/box amplitude convention; such a starting
+        ! reference reprojects ~box times below the particle signal (v ~ 1.000 throughout)
+        if( q(1) >= 0. .and. q(1) < 0.02 .and. vq(2) > 0.99 )then
+            str = 'EUCLID DIAG: reference amplitudes ~'//real2str_diag(q(1))//' of the particle signal; '//&
+                &'an old-convention (1/box) starting volume? The first sigma2 update recovers, but consider '//&
+                &'scaling the input volume by the box size'
+            THROW_WARN(str)
+        endif
         if( allocated(vals) ) deallocate(vals)
 
         contains

@@ -2209,7 +2209,7 @@ subroutine exec_test_rec3D_backends( self, cline )
         ! with a non-zero solvent level (gridding; PCG's support-masked map has none)
         ! acquires a sphere-shaped term from the mask whose spectrum sits in shells 1-3.
         call truth%get_rmat_ptr(rmat)
-        bg = background_mean(rmat); rmat = rmat - bg
+        bg = background_mean(rmat); rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = rmat(1:ldim(1),1:ldim(2),1:ldim(3)) - bg
         nullify(rmat)
         call truth%mask3D_soft(mskrad)
         call truth%fft
@@ -2217,7 +2217,7 @@ subroutine exec_test_rec3D_backends( self, cline )
         allocate(tcorr(size(tspec),2), tspec_b(size(tspec),2), source=0.)
         do it = 1, 2
             call tvols(it)%get_rmat_ptr(rmat)
-            bg = background_mean(rmat); rmat = rmat - bg
+            bg = background_mean(rmat); rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = rmat(1:ldim(1),1:ldim(2),1:ldim(3)) - bg
             nullify(rmat)
             write(logfhandle,'(A,A,A,ES11.4)') '>>> REC3D BACKENDS: TRUTH background level ', trim(BACKENDS(it)), ': ', bg
             call tvols(it)%mask3D_soft(mskrad)
@@ -2247,12 +2247,12 @@ subroutine exec_test_rec3D_backends( self, cline )
         ! per-shell least-squares scale <recon*truth>/<truth*truth> is immune to additive offsets
         call truth%get_rmat_ptr(rmat)
         bg = background_mean(rmat)
-        rmat = rmat - bg
+        rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = rmat(1:ldim(1),1:ldim(2),1:ldim(3)) - bg
         allocate(tprof(NRBINS,4), source=0.)
         do it = 1, 3
             call tvols(it)%get_rmat_ptr(rmat)
             bg   = background_mean(rmat)
-            rmat = rmat - bg
+            rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = rmat(1:ldim(1),1:ldim(2),1:ldim(3)) - bg
             nullify(rmat)
         enddo
         call truth%get_rmat_ptr(rmat)
@@ -2277,7 +2277,7 @@ subroutine exec_test_rec3D_backends( self, cline )
     ! solution is support-masked by the solver, the gridding map is not)
     do ib = 1, 2
         call vols(ib)%get_rmat_ptr(rmat)
-        bg = background_mean(rmat); rmat = rmat - bg
+        bg = background_mean(rmat); rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = rmat(1:ldim(1),1:ldim(2),1:ldim(3)) - bg
         nullify(rmat)
         call vols(ib)%mask3D_soft(mskrad)
         call vols(ib)%fft

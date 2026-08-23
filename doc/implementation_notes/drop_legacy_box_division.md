@@ -5,8 +5,7 @@
 are implemented. **The premise of §2 is refuted by the step-1 baseline and by
 the projector code (§0 below); step 3 is revised. Decision 2026-08-22: do
 the deapodization fix (§5.3) first; retiring the ÷box/×box pair together
-(§5.3a) is deferred but still wanted. The deapodization fix is done and
-verified (§5.3).**
+(§5.3a) was then done on 2026-08-22 as well; both verified (§5.3).**
 
 ## 0. Revision (2026-08-22): the division is one half of a matched pair
 
@@ -428,6 +427,39 @@ identity above was established and is wrong.)
    ratio 0.083 → 0.081, `v` 0.86 → 0.86) — expected, since the envelope
    enters reprojections only through the map's radial profile.
 
+   **§5.3a — the pair retired (implemented 2026-08-22).** `expand_cmat` no
+   longer takes a box argument and no longer scales (`cmat_exp` holds the
+   volume's own coefficients); `reconstructor_eo%mag_correction` and its
+   seven `div` sites are gone; the PCG strategy's `pcg_mag_correction`,
+   `apply_output_convention` and the two warm-start multiplications are gone;
+   the five flex divisions and `volops`' `noisevol` division are gone; all
+   `expand_cmat(box)` callers in `src` and `production/tests` updated.
+   `report_euclid_diag` now warns when the low-band reference/particle ratio
+   is < 0.02 with `v` ≈ 1 (an old-convention starting volume). Acceptance
+   (equality) on the synthetic project: pre-change build on an old-convention
+   map vs post-change build on the same map × 128, 2 euclid iterations —
+   EUCLID DIAG 1.190/1.070/0.970/0.903 `v` 0.2088 vs 1.190/1.070/0.972/0.905
+   `v` 0.2088 (iteration 2 likewise); `test=rec3D_backends` on the neutral
+   phantom: every ratio and FSC identical, amplitudes × 128; `pcg_recon`,
+   unit tests and the refine3D recovery suite pass.
+
+   Release notes for the convention change:
+   - Reconstructed maps (gridding and PCG, merged and halves, flex) are now
+     `box` × larger in absolute value than before; isosurface thresholds
+     scale accordingly.
+   - A starting volume from an older run reprojects `box` × too weak; the
+     first sigma2 update absorbs it, but the first iteration aligns against
+     near-zero references and, if the resulting FSC collapses, the
+     FSC-filtered references stay near zero thereafter (observed on the
+     synthetic project: overlap 0.1, cFAR 3e-4, refs 6e-4 for all
+     iterations). Scale old volumes by the box size before use; the EUCLID
+     DIAG warning flags the condition.
+   - `rotvol`/`symmetrize_map`/`reproject`/`simulate_particles` outputs were
+     `box` × the input volume's scale (nothing compensated; harmless in
+     `abinitio3D` because the symmetrized map is only used to map
+     orientations before re-reconstruction); they are now scale-preserving.
+     Verified: `reproject` gain 22.7 (old build, = 128 × 0.177) → 0.177.
+
    *Original text, kept for the record:* **Remove the division and fix the gridding deapodization.**
    `mag_correction` → 1 (or delete the member and its six `div` sites); delete
    `pcg_mag_correction`/`apply_output_convention` and the two warm-start
@@ -494,6 +526,16 @@ identity above was established and is wrong.)
    second suspect: the two ML regularizations (gridding's FSC-tau in rho vs
    PCG's `KIND=ml` prior). Next real-data runs: `maxits_pcg=20 rtol=1e-3`
    and `ml_reg=no`, one at a time.
+
+   *Stage-4 results (2026-08-22, real data, same run dir, deapodization fix
+   in, convention pair still present; `stage4_test1.txt`, `stage4_test2.txt`):*
+   `maxits_pcg=8 rtol=1e-3` → PCG `RESID` 0.46 → 0.18, in-band median
+   pcg/gridding **0.835 → 1.11**: the in-band deficit was PCG's 2-iteration
+   budget. `ml_reg=no` (2 iterations) → pcg/gridding 0.55 in band, FSC
+   between backends negative at k ≤ 3 and < 0.85 below k = 9: without its ML
+   prior the 2-iteration PCG solve is badly under-converged; the prior was
+   compensating. The PCG-side action (§6) is therefore convergence control
+   in refinement (iterations/tolerance), not the amplitude convention.
 
 6. **Compatibility.** Release note on the ×box change of map values; a
    warning when a starting reference reprojects ≪ the particle scale.

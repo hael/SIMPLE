@@ -261,7 +261,6 @@ contains
                 if( l_floor_rho ) call cur(state)%floor_rho_shellwise
                 call cur(state)%sampl_dens_correct
                 call cur(state)%ifft
-                call cur(state)%div(real(params%box))
                 call cur(state)%mul(gridcorr_img)
                 call state_img%copy(cur(state))
                 if( has_lowpass_filter(state) )then
