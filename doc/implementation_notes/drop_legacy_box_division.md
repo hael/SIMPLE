@@ -573,3 +573,64 @@ identity above was established and is wrong.)
   reference preparation) place "expected signal" exactly at the data-quotient
   scale, or at a fixed multiple of it, should be confirmed with the §5.1
   instrumentation before reading the §3 ratios as absolute.
+
+## 7. For later consideration: PCG convergence control in refinement
+
+Decisions (2026-08-23): no back-compatibility for old (÷box) starting
+volumes is required — the EUCLID DIAG warning is the only support.
+Eight PCG iterations per refinement iteration (the stage-4 setting that
+moved the in-band pcg/gridding ratio from 0.835 to 1.11) is not
+affordable; `maxits_pcg=4` is being timed.
+
+### 7.1 Warm-starting the solve from the previous iteration's half maps
+
+The cheaper lever is to start each solve from the previous iteration's
+map instead of `x = 0` (`simple_rec3D_pcg_strategy.f90`, the
+`allocate(x, source=0.0)` branch of `reduce_solve_state_half`). The
+within-iteration warm start (unregularized → ML solve) already exists;
+the cross-iteration one does not.
+
+**Box changes.** SIMPLE changes the degree of down-sampling only at
+constant field of view (`box*smpd == box_crop*smpd_crop`, enforced at
+the PCG entry). The previous map and the new one therefore sample the
+same continuous density on different lattices, and the transform between
+them is a Fourier-space zero-pad (box grows) or clip (box shrinks) with
+**no amplitude factor**: under `fft = (1/N)Σ` the Fourier coefficients
+are per-voxel means, invariant to resampling at constant FOV, and the
+particle data are at the same scale for the same reason. This holds only
+now that the ÷box convention is gone — under the old convention a box
+change would additionally have required ×(box_new/box_old). The
+operation exists as `image%read_and_crop` (`fft → pad_inplace/clip_inplace
+→ ifft`, no scaling), already used by the PCG trailing bootstrap on the
+previous `_even`/`_odd` half maps.
+
+Grown shells start at zero, which is the cold start they would have had
+anyway (the previous iteration carried no information beyond its Nyquist
+and the FSC/ML prior is zero there). CG then spends its iterations where
+the residual is — the new band and whatever moved — so the warm start is
+never worse than cold and is best exactly where stage 4 found the
+deficit (in-band amplitude).
+
+Implementation rules:
+
+1. Per half from its own half: even from previous `_even`, odd from
+   `_odd`, never from the merged map (FSC independence).
+2. Re-apply the support mask after padding: the solver solves inside
+   `msk_crop`; Fourier padding rings slightly outside it, so zero the
+   outside again (`msk_crop` scales with the box at constant FOV, same
+   physical sphere).
+3. The warm start must be at the data-quotient scale; a user-supplied
+   first-iteration volume from an old build is caught by the EUCLID DIAG
+   warning, no extra machinery.
+
+Caveat: CG restarts its Krylov space at every solve, so a warm start buys
+a smaller initial error, not continued convergence. The gain is largest
+late in refinement (small orientation changes) and smallest at
+abinitio3D stage handoffs. Expectation: with warm start, the residual
+reached at `maxits_pcg=4` cold should be reachable at 2–3 iterations.
+
+Acceptance: `RESID` at the final iteration and the in-band pcg/gridding
+ratio from `test=rec3D_backends` at equal `maxits_pcg`, cold vs warm;
+EUCLID DIAG and final resolution unchanged or better; FSC between
+halves not inflated (compare half-map FSC cold vs warm at the same
+iteration).
