@@ -634,3 +634,122 @@ ratio from `test=rec3D_backends` at equal `maxits_pcg`, cold vs warm;
 EUCLID DIAG and final resolution unchanged or better; FSC between
 halves not inflated (compare half-map FSC cold vs warm at the same
 iteration).
+
+## 8. Post-release regression: stage-1 starting volumes were calibrated for the retired factor
+
+Found 2026-08-23 from the first 10-run benchmark of the committed
+convention change (gridding 8/10 correct maps, PCG(maxits_pcg=4) 9/10 —
+both below the expected 10/10 on streptavidin). The EUCLID DIAG warning
+fired on every stage-1 iteration of every run: low-band ref/ptcl
+1.4-1.8E-3 (healthy: 0.25-0.55), v = 0.999, for ALL of stage 1
+(iterations 1-20), snapping to healthy at the first stage-2 iteration.
+Direct low-k amplitude measurement of the run volumes showed
+`startvol_state01.mrc` at the SAME absolute scale in the old and new
+builds (~5E-5 at k=1-6), while all reconstructed stage maps carry the
+expected ×box in the new build.
+
+Cause: three code sites fabricate or normalize starting volumes to an
+ABSOLUTE scale that was calibrated for the era when `expand_cmat`
+multiplied references by the original box:
+
+1. `generate_random_volumes` (`simple_abinitio_utils.f90`) — noise
+   startvol N(0, 5/box), with the comment "scaled to suit the
+   euclid/sigma2 alignment scheme". Old effective reference scale:
+   (5/box_crop)*box_orig. New code projected it as-is → references
+   ~box_orig too small → stage-1 alignment effectively reference-free
+   (v=0.999) → reduced abinitio3D reliability. (Stage 1 holds its
+   references at the startvol scale throughout — pre-existing behavior,
+   identical in the control run, where the DIAG ratio is flat 0.25 for
+   iterations 1-20.)
+2. `normalize_input_volumes` (`simple_abinitio_utils.f90`) — user-input
+   volumes normalized to foreground stdev 1/box.
+3. `prepare_external_init_vol` (`simple_commanders_refine3D.f90`) —
+   e/o input volumes, same 1/box normalization (3 sites).
+
+Fix (same day): all three now target the data-quotient reference scale —
+the legacy value times the retired projection factor `params%box`:
+noise b = 5*box_orig/box_crop; input normalization foreground stdev =
+box_orig/ldim (=1 for native-box inputs).
+
+Note the acceptance tests of §5.3a could not catch this: they exercised
+reconstruction-produced volumes (which carry the new scale) and
+externally ×box-scaled inputs, not the fabricated/normalized startvol
+paths. The EUCLID DIAG warning caught it in the first real benchmark —
+exactly the failure mode it was written for, though its text
+("the first sigma2 update recovers") understated the impact: sigma2
+adapts, but the reference amplitudes stay wrong for the whole lp-set
+stage, degrading stage-1 alignment.
+
+Validation required: rerun the 10x abinitio3D benchmark (both backends);
+acceptance = no EUCLID DIAG warning, stage-1 low-band ref/ptcl ~0.25
+(control level), 10/10 correct maps at control-level execution time.
+
+## 9. Review response (2026-08-23)
+
+Responses to the static branch review (all six findings addressed in code):
+
+- **4.1 (P1, old maps collapse refinement)** — resolved by AUTOMATIC
+  RESCALING at reference preparation (user's choice): a data-quotient
+  reference has foreground sigma of order 1, an old-convention map sits
+  ~box lower; `read_mask_filter_refvols` now measures the foreground
+  sigma of every reference volume it reads and multiplies by the box
+  size when sigma < 10/box (an order of magnitude of margin each way;
+  idempotent by construction), logging loudly. External inputs were
+  already normalized to the data-quotient scale by S8's fix. The EUCLID
+  DIAG warning remains as a should-never-fire backstop and no longer
+  claims that sigma2 recovery makes the condition benign.
+- **4.2 (P2, Flex deapodization)** — `realize_hermitian_volume` now
+  consumes its correction image (it was a dummy), and the coupled
+  M-step deapodizes both half-volumes on the native lattice before FSC,
+  Wiener merge, filtering and masking. Also fixed a padded-pointer
+  whole-array energy sum (rmat sliced to ldim).
+- **4.3 (P2, conventional-gridding helper)** — the helper now finalizes
+  like production: no /BOX, native-lattice KB deapodization via
+  `kb_stencil_inv_envelope_1d` + `deapodize3D_inplace`.
+- **4.4 (P2, ungated test)** — `test=rec3D_backends` is now gated:
+  agreement-band width >= 10 shells, >= 5 valid shells, median in-band
+  amplitude ratio in [0.67, 1.5], median in-band FSC >= 0.9, >= 3 radial
+  bins with normalised ratio range within [0.5, 2.0]; ground-truth mode
+  additionally gates the gridding LS profile flatness in [0.92, 1.08]
+  (legacy deapodization fades to ~0.90 and must fail) and median
+  FSC(truth, gridding) >= 0.8. Violations print FAIL lines and end in
+  THROW_HARD. Thresholds derive from the neutral-phantom fixture and the
+  streptavidin reference runs recorded above; the loose in-band ratio
+  bound intentionally passes the known PCG convergence dependence
+  (0.835 at 2 iterations, 1.16 at 4) while failing any box-factor
+  (x88) or deapodization mutation.
+- **4.5 (P2, hot-path cost)** — new parameter `euclid_diag` (yes|no,
+  default no; registered for refine3D, reconstruct3D, abinitio3D). With
+  it off, `calc_sigma2` allocates only the sigma contribution and calls
+  `gen_sigma_contrib` without the optional power/objective arguments, so
+  the particle path executes the pre-branch calculation shape. Diag
+  arrays are not allocated. Enable with `euclid_diag=yes` for transition
+  validation runs.
+- **4.6 (P3, part-1-only report)** — the report now appends
+  "[PART 1/N ONLY]" when nparts > 1; aggregation across parts is
+  deliberately not implemented.
+
+Outstanding from the review's validation sequence: run the corrected
+halfset/matrix production tests, the gated rec3D_backends fixture with
+its two intentional-failure mutations, an old-map restart control
+against a box-scaled control, the Flex fixtures, and the refine3D
+recovery suite. Benchmarks should add `euclid_diag=yes`.
+
+### 9.1 Gate verification (2026-08-23, local, neutral-phantom fixture)
+
+- Base run: PASS. Gated band k=2-14 (agreement band capped at lp=10),
+  median in-band pcg/gridding 0.935, radial and truth-flatness gates met.
+- One gate-design correction was needed on the first run: the agreement
+  band (backend-vs-backend FSC > 0.5) extends to Nyquist because the two
+  backends correlate on shared noise far beyond the data band, where
+  PCG's beyond-band excess (S6, tracked separately) dominates (median
+  ratio 1.70 over k=2-64). The gates therefore act on the agreement band
+  CAPPED AT THE DATA BAND (lp when given).
+- Mutation 1 (restore /box on reconstructor output): FAIL as required —
+  median gated-band ratio 119.7.
+- Mutation 2 (omit gridding deapodization): FAIL as required — the
+  gridding/truth LS profile hits 0.9 at radial bin 5, outside
+  [0.92, 1.08], while the shell ratio stays 1.01 (radial gate carries
+  the detection, as designed).
+- Clean rebuild afterwards: PASS again; the mutations were reverted and
+  the working tree verified clean of them.

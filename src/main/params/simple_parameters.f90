@@ -137,6 +137,7 @@ type :: parameters
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projrec='no'         !< reconstruct from projection-direction Fourier sums(yes|no){no}
+    character(len=3)          :: euclid_diag='no'     !< per-iteration euclid reference/particle scale diagnostics(yes|no){no}
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
@@ -673,6 +674,7 @@ type :: parameters
     logical :: l_lpset           = .false.
     logical :: l_ml_reg          = .true.
     logical :: l_noise_reg       = .false.
+    logical :: l_euclid_diag     = .false.
     logical :: l_neigh           = .false.
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.

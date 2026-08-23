@@ -887,6 +887,7 @@ contains
         endif
         self%l_lam_anneal = trim(self%lam_anneal).eq.'yes'
         self%l_ml_reg     = trim(self%ml_reg).eq.'yes'
+        self%l_euclid_diag = trim(self%euclid_diag).eq.'yes'
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')

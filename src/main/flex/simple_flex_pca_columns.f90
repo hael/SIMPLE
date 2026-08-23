@@ -2040,6 +2040,7 @@ contains
         type(image),         intent(inout) :: gridcorr_img
         real,                intent(out)   :: energy
         real, pointer :: rmat(:,:,:)
+        integer       :: ldim_work(3)
         call work%reset
         call work%reset_exp
         work%cmat_exp = vherm
@@ -2048,10 +2049,13 @@ contains
         ! operation, so out-of-band shells never enter the masking or the Gram products downstream.
         if( params%lp > 2.0*params%smpd_crop + TINY ) call work%bp(0., params%lp)
         call work%ifft
+        ! deapodize on the native lattice (same correction as production gridding)
+        call work%mul(gridcorr_img)
         if( params%msk_crop > TINY ) call work%mask3D_soft(params%msk_crop, backgr=0.)
         if( work%is_ft() ) call work%ifft
         call work%get_rmat_ptr(rmat)
-        energy = sum(rmat*rmat)
+        ldim_work = work%get_ldim()
+        energy = sum(rmat(1:ldim_work(1),1:ldim_work(2),1:ldim_work(3))**2)
     end subroutine realize_hermitian_volume
 
     !> Orthonormalize the real column representatives into the column subspace Utilde by Gram
@@ -3434,7 +3438,7 @@ contains
         type(ori),           allocatable :: orientations(:)
         type(reconstructor), allocatable :: Yeven(:), Yodd(:), utilde(:)
         type(image),         allocatable :: realvols(:), utilde_real(:)
-        type(image) :: img_o
+        type(image) :: img_o, mstep_gridcorr
         real,                allocatable :: rho_e(:,:,:,:), rho_o(:,:,:,:), filt(:), corrs(:)
         real(dp),            allocatable :: zbatch(:,:), dens(:,:,:), z(:,:), prior(:)
         real(dp),            allocatable :: Gth(:,:,:), Ath(:,:,:), bth(:,:), cth(:,:), zth(:,:)
@@ -3677,17 +3681,21 @@ contains
             allocate(realvols(ncomp))
             filtsz = max(1, fdim(params%box_crop) - 1)
             allocate(filt(filtsz), corrs(filtsz))
+            ! native-lattice inverse KB envelope, applied to each half before FSC/merge/mask
+            mstep_gridcorr = prep3D_inv_kbenvelope4mul([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             do q = 1, ncomp
                 ! even half -> band-limited real image (UNmasked, for an unbiased FSC)
                 Yeven(q)%rho_exp = 1.0
                 call Yeven(q)%compress_exp; call Yeven(q)%ifft
                 call realvols(q)%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call Yeven(q)%get_rmat_ptr(rmatp); call realvols(q)%set_rmat(rmatp, .false.)
+                call realvols(q)%mul(mstep_gridcorr)
                 ! odd half
                 Yodd(q)%rho_exp = 1.0
                 call Yodd(q)%compress_exp; call Yodd(q)%ifft
                 call img_o%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
                 call Yodd(q)%get_rmat_ptr(rmatp); call img_o%set_rmat(rmatp, .false.)
+                call img_o%mul(mstep_gridcorr)
                 ! half-set FSC -> Wiener filter 2F/(1+F)
                 call realvols(q)%fft; call img_o%fft
                 call realvols(q)%fsc(img_o, corrs)
@@ -3703,6 +3711,7 @@ contains
                 if( params%msk_crop > TINY ) call realvols(q)%mask3D_soft(params%msk_crop, backgr=0.)
                 call img_o%kill
             end do
+            call mstep_gridcorr%kill
             deallocate(filt, corrs)
             ! orthonormalize the probe volumes -> refined basis
             call orthonormalize_representatives(params, build, realvols, ncomp, utilde, utilde_real, d_new)

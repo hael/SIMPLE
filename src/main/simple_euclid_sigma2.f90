@@ -89,8 +89,10 @@ contains
         self%fromp        =  self%p_ptr%fromp
         self%top          =  self%p_ptr%top
         self%sigma2_noise =  0.
-        ! scale diagnostics, filled by calc_sigma2, reported & reset by write_sigma2
-        allocate(self%diag_ratio(NDIAG_BANDS,self%fromp:self%top), self%diag_v(self%fromp:self%top), source=-1.)
+        ! scale diagnostics, filled by calc_sigma2, reported & reset by write_sigma2 (euclid_diag=yes)
+        if( self%p_ptr%l_euclid_diag )then
+            allocate(self%diag_ratio(NDIAG_BANDS,self%fromp:self%top), self%diag_v(self%fromp:self%top), source=-1.)
+        endif
         self%exists       =  .true.
     end subroutine new
 
@@ -260,12 +262,16 @@ contains
         endif
         if ( o%isstatezero() ) return
         kfromto = self%p_ptr%kfromto
-        allocate(sigma_contrib(kfromto(1):kfromto(2)), ref_pow(kfromto(1):kfromto(2)),&
-            &ptcl_pow(kfromto(1):kfromto(2)), source=0.)
+        allocate(sigma_contrib(kfromto(1):kfromto(2)), source=0.)
         shvec = o%get_2Dshift()
         iref  = nint(o%get(trim(refkind)))
         irot  = pftc%get_roind(360. - o%e3get())
-        call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v)
+        if( allocated(self%diag_v) )then
+            allocate(ref_pow(kfromto(1):kfromto(2)), ptcl_pow(kfromto(1):kfromto(2)), source=0.)
+            call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib, ref_pow, ptcl_pow, v)
+        else
+            call pftc%gen_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+        endif
         self%sigma2_part(kfromto(1):kfromto(2),iptcl) = sigma_contrib
         ! scale diagnostics
         if( allocated(self%diag_v) )then
@@ -281,7 +287,9 @@ contains
                 if( psum > 0. ) self%diag_ratio(ib,iptcl) = sqrt(rsum / psum)
             enddo
         endif
-        deallocate(sigma_contrib, ref_pow, ptcl_pow)
+        deallocate(sigma_contrib)
+        if( allocated(ref_pow)  ) deallocate(ref_pow)
+        if( allocated(ptcl_pow) ) deallocate(ptcl_pow)
     end subroutine calc_sigma2
 
     subroutine write_sigma2( self )
@@ -334,6 +342,7 @@ contains
         vq(3)    = quantile(vals, n, 0.95)
         vmax     = vals(n)
         ninvalid = count(vals(1:n) > vthres)
+        if( self%p_ptr%nparts > 1 ) str = str//' [PART 1/'//int2str(self%p_ptr%nparts)//' ONLY]'
         write(logfhandle,'(A,I0,A,I0,A,I0,A,I0,A)') '>>> EUCLID DIAG ITER ', self%p_ptr%which_iter, &
             &' NPTCLS ', n, ' KFROMTO ', kfromto(1), '-', kfromto(2), ' REF/PTCL AMP (q50)'//str
         write(logfhandle,'(A,I0,A,F0.4,A,F0.4,A,F0.4,A,F0.4,A,F0.2,A,I0)') '>>> EUCLID DIAG ITER ', &
@@ -343,8 +352,9 @@ contains
         ! reference reprojects ~box times below the particle signal (v ~ 1.000 throughout)
         if( q(1) >= 0. .and. q(1) < 0.02 .and. vq(2) > 0.99 )then
             str = 'EUCLID DIAG: reference amplitudes ~'//real2str_diag(q(1))//' of the particle signal; '//&
-                &'an old-convention (1/box) starting volume? The first sigma2 update recovers, but consider '//&
-                &'scaling the input volume by the box size'
+                &'an old-convention (1/box) or otherwise mis-scaled reference volume escaped the automatic '//&
+                &'rescaling in reference preparation; alignment against it is unreliable -- scale the input '//&
+                &'volume by the box size and restart'
             THROW_WARN(str)
         endif
         if( allocated(vals) ) deallocate(vals)

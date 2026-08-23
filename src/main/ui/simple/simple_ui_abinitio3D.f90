@@ -49,6 +49,9 @@ contains
         call abinitio3D%add_input(UI_PARM, 'cavg_ini_ext', 'binary', 'External class-average 3D initialization', &
             &'Use existing ptcl3D orientations and state assignments from a prior abinitio3D_cavgs run; skips the symmetry-search stage(yes|no){no}','', .false., 'no', group="model", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+        call abinitio3D%add_input(UI_PARM, 'euclid_diag', 'binary', 'Euclid scale diagnostics', &
+        &'Per-iteration report of the reference/particle amplitude ratio per band and the euclid objective quantiles(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call abinitio3D%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction', &
             &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))

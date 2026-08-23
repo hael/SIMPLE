@@ -2079,7 +2079,11 @@ end subroutine exec_test_pcg_frac_update
 !> Expectation while the ÷box convention is mirrored by PCG (today): shell ratio
 !> ≈ 1 across the band and a radial ratio rising toward the box edge (gridding's
 !> under-deapodization, §2.1). After plan step 3: ≈ 1 across the band AND flat in
-!> radius. No thresholds are enforced; this is the measurement.
+!> radius. GATED: the summary properties are asserted (agreement-band width, median
+!> in-band amplitude ratio and FSC, radial-ratio range; in ground-truth mode also
+!> the gridding LS-profile flatness and the median truth FSC) and any violation is
+!> a hard failure. Thresholds derive from the validated neutral-phantom fixture and
+!> the streptavidin reference runs recorded in the plan document.
 subroutine exec_test_rec3D_backends( self, cline )
     use simple_commanders_rec,  only: commander_rec3D
     use simple_image,           only: image
@@ -2096,7 +2100,9 @@ subroutine exec_test_rec3D_backends( self, cline )
     type(image)           :: vols(2)
     type(string)          :: projfile, vol_fname, out_fnames(2)
     real,    allocatable  :: spec(:,:), spec_tmp(:), corrs(:), radprof(:,:), ratios(:)
-    real,    allocatable  :: env_nat(:), env_leg(:), tprof(:,:)
+    real,    allocatable  :: env_nat(:), env_leg(:), tprof(:,:), fscs(:)
+    integer               :: nfail, nfsc, kgate
+    real                  :: med_fsc, tg
     integer, allocatable  :: radcnt(:)
     real,    pointer      :: rmat(:,:,:) => null()
     type(image)           :: truth, tvols(3)
@@ -2343,6 +2349,62 @@ subroutine exec_test_rec3D_backends( self, cline )
         &' max ', rmax, ' (', nrb_used, ' bins)'
     write(logfhandle,'(A)') '>>> REC3D BACKENDS: EXPECTATION with the box division mirrored by PCG: shell ratio ~1, radial ratio rising toward the edge (gridding under-deapodized, S2.1)'
     write(logfhandle,'(A)') '>>> REC3D BACKENDS: EXPECTATION after dropping the division and fixing gridding deapodization: shell ratio ~1 AND radial ratio flat (~1)'
+    ! GATES: violations are hard failures (review S4.4); thresholds from the validated
+    ! neutral-phantom fixture and the streptavidin reference runs in the plan document.
+    ! The gated band is the agreement band capped at the data band (lp, when given):
+    ! beyond the data band the backends correlate with each other on shared noise and
+    ! PCG's beyond-band behaviour is a known, separately tracked solver item (S6).
+    kgate = kagree
+    if( cline%defined('lp') ) kgate = min(kagree, calc_fourier_index(cline%get_rarg('lp'), ldim(1), smpd_out))
+    ! median amplitude ratio and FSC over the gated band
+    allocate(fscs(lfny), source=0.)
+    n = 0
+    do k = 2, kgate
+        if( spec(k,1) > 0. .and. spec(k,2) > 0. )then
+            n = n + 1
+            ratios(n) = spec(k,2) / spec(k,1)
+        endif
+    enddo
+    med = -1.
+    if( n > 0 )then
+        call hpsort(ratios(1:n))
+        med = ratios(max(1, (n+1)/2))
+    endif
+    write(logfhandle,'(A,I0,A,F0.4)') '>>> REC3D BACKENDS: GATED BAND k=2-', kgate, &
+        &'; median shell amplitude ratio pcg/gridding in gated band: ', med
+    nfail = 0
+    if( kgate < 10 ) call gate_fail('gated band (agreement band capped at lp) ends at k='//int2str(kgate)//' (need >= 10)')
+    if( n < 5 )      call gate_fail('only '//int2str(n)//' valid shells in the gated band (need >= 5)')
+    if( med < 0.67 .or. med > 1.5 ) &
+        &call gate_fail('median gated-band amplitude ratio pcg/gridding '//real2str_trim(med)//' outside [0.67,1.5]')
+    nfsc = max(0, kgate - 1)
+    if( nfsc > 0 )then
+        fscs(1:nfsc) = corrs(2:kgate)
+        call hpsort(fscs(1:nfsc))
+        med_fsc = fscs(max(1,(nfsc+1)/2))
+        if( med_fsc < 0.9 ) call gate_fail('median gated-band FSC(gridding,pcg) '//real2str_trim(med_fsc)//' below 0.9')
+    endif
+    if( nrb_used < 3 ) call gate_fail('only '//int2str(nrb_used)//' usable radial bins inside 0.85 x mask radius (need >= 3)')
+    if( nrb_used >= 3 .and. (rmin < 0.5 .or. rmax > 2.0) ) &
+        &call gate_fail('normalised radial ratio range ['//real2str_trim(rmin)//','//real2str_trim(rmax)//'] outside [0.5,2.0]')
+    if( l_truth )then
+        ! gridding LS profile vs truth must be flat inside the mask: the legacy
+        ! deapodization fades to ~0.90 by r=24 px and must fail this gate
+        do irb = 2, nrb_msk
+            if( real(irb)*rbin_width > 0.85*mskrad ) exit
+            tg = safe_ratio(tprof(irb,1), tprof(2,1))
+            if( tg < 0.92 .or. tg > 1.08 ) &
+                &call gate_fail('gridding/truth LS profile '//real2str_trim(tg)//' at radial bin '//int2str(irb)//' outside [0.92,1.08]')
+        enddo
+        nfsc = max(0, kgate - 1)
+        if( nfsc > 0 )then
+            fscs(1:nfsc) = tcorr(2:kgate,1)
+            call hpsort(fscs(1:nfsc))
+            med_fsc = fscs(max(1,(nfsc+1)/2))
+            if( med_fsc < 0.8 ) call gate_fail('median FSC(truth,gridding) over the gated band '//real2str_trim(med_fsc)//' below 0.8')
+        endif
+    endif
+    if( nfail == 0 ) write(logfhandle,'(A)') '>>> REC3D BACKENDS: PASS (all gates)'
     do ib = 1, 2
         call vols(ib)%kill
     enddo
@@ -2352,9 +2414,17 @@ subroutine exec_test_rec3D_backends( self, cline )
     if( allocated(radprof)  ) deallocate(radprof)
     if( allocated(radcnt)   ) deallocate(radcnt)
     if( allocated(ratios)   ) deallocate(ratios)
+    if( allocated(fscs)     ) deallocate(fscs)
+    if( nfail > 0 ) THROW_HARD('TEST_REC3D_BACKENDS FAILED: '//int2str(nfail)//' gate(s) violated (see >>> REC3D BACKENDS: FAIL lines)')
     call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
 
     contains
+
+        subroutine gate_fail( msg )
+            character(len=*), intent(in) :: msg
+            nfail = nfail + 1
+            write(logfhandle,'(A)') '>>> REC3D BACKENDS: FAIL -- '//trim(msg)
+        end subroutine gate_fail
 
         pure real function safe_ratio( a, b )
             real, intent(in) :: a, b

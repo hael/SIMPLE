@@ -1010,10 +1010,14 @@ contains
         real         :: b
         integer      :: s
         ! The starting volume is noisy sphere whose values are scaled
-        ! to suit the euclid/sigma2 alignment scheme
-        ! random normal sphere N(0,5/box) + normal background N(0,5/box)
+        ! to suit the euclid/sigma2 alignment scheme. References are no
+        ! longer multiplied by the original box on projection (the legacy
+        ! division/multiplication pair is retired), so the volume itself
+        ! must carry the data-quotient scale: the legacy N(0,5/box) noise
+        ! times the retired projection factor (the original box size)
+        ! random normal sphere + normal background, N(0, 5*box_orig/box)
         call noisevol%new([box,box,box], smpd)
-        b = 5.0/real(box)
+        b = 5.0*real(params%box)/real(box)
         call signal%new([box,box,box], smpd)
         call signal%gauran(0.0, b)
         call signal%mask3D_soft(0.25*real(box), backgr=0.)
@@ -1057,9 +1061,10 @@ contains
             msk  = 0.5 * params%mskdiam / smpd
             call vol%new(ldim, smpd)
             call vol%read(params%vols(s))
-            ! normalization of inner mask region to 1/box
+            ! normalization of inner mask region to the data-quotient
+            ! reference scale (was 1/box when projection multiplied by box)
             call vol%stats('foreground', ave, stdev, maxv, minv, msk=msk)
-            v = stdev*real(ldim(1))
+            v = stdev*real(ldim(1))/real(params%box)
             call vol%norm_ext(ave, v)
             vol_name = refine3D_startvol_fname(s)
             call vol%write(vol_name)

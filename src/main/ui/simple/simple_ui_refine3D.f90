@@ -138,6 +138,9 @@ subroutine new_automask( prgtab )
         call reconstruct3D%add_input(UI_PARM, 'box_crop', 'num', 'Reconstruction box', &
         &'Even Fourier-cropped reconstruction box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0, visibility=UI_VIS_ADVANCED)
+        call reconstruct3D%add_input(UI_PARM, 'euclid_diag', 'binary', 'Euclid scale diagnostics', &
+        &'Per-iteration report of the reference/particle amplitude ratio per band and the euclid objective quantiles(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call reconstruct3D%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction',&
         &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
@@ -254,6 +257,9 @@ subroutine new_automask( prgtab )
         call refine3D%add_input(UI_PARM, 'box_crop', 'num', 'Refinement box', &
         &'Even Fourier-cropped refinement box; native project geometry remains authoritative', &
         &'pixels{native box}', .false., 0.0, group="search", visibility=UI_VIS_ADVANCED)
+        call refine3D%add_input(UI_PARM, 'euclid_diag', 'binary', 'Euclid scale diagnostics', &
+        &'Per-iteration report of the reference/particle amplitude ratio per band and the euclid objective quantiles(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']))
         call refine3D%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction',&
         &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))

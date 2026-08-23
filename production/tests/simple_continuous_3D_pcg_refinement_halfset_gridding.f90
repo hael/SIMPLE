@@ -2,6 +2,7 @@ module continuous_3D_pcg_refinement_halfset_gridding
 use continuous_3D_pcg_refinement_halfset_support, only: HALFSET_SMPD
 use continuous_3D_pcg_refinement_test_helpers, only: BOX => TRUTH_VOLUME_BOX
 use simple_defs, only: OSMPL_PAD_FAC
+use simple_gridding, only: kb_stencil_inv_envelope_1d, deapodize3D_inplace
 use simple_image, only: image
 use simple_memoize_ft_maps, only: forget_ft_maps, memoize_ft_maps
 use simple_ori, only: ori
@@ -31,6 +32,7 @@ subroutine reconstruct_half_conventionally(orientations, observations, reconstru
     type(reconstructor) :: gridder
     type(sp_project) :: project
     type(sym) :: c1sym
+    real, allocatable :: inv1d(:)
     integer :: i
 
     params%box        = BOX
@@ -68,7 +70,11 @@ subroutine reconstruct_half_conventionally(orientations, observations, reconstru
     call gridder%compress_exp()
     call gridder%sampl_dens_correct()
     call gridder%ifft()
-    reconstruction = gridder%get_rmat() / real(BOX)
+    ! Production convention: no box division, native-lattice KB deapodization
+    ! (matches reconstructor_eo finalization after drop_legacy_box_division)
+    call kb_stencil_inv_envelope_1d(BOX, inv1d)
+    call deapodize3D_inplace(gridder, inv1d)
+    reconstruction = gridder%get_rmat()
 
     if( allocated(fplane%cmplx_plane) ) deallocate(fplane%cmplx_plane)
     if( allocated(fplane%ctfsq_plane) ) deallocate(fplane%ctfsq_plane)

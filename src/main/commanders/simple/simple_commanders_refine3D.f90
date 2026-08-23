@@ -471,13 +471,13 @@ contains
             ! normalization of volumes
             msk = 0.5 * params%mskdiam / params%smpd
             call vol_even%stats('foreground', ave, stdev, maxv, minv, msk=msk)
-            v = stdev * real(init_box)
+            v = stdev * real(init_box) / real(params%box) ! foreground stdev to the data-quotient reference scale
             call vol_even%norm_ext(ave, v)
             call vol_odd%stats('foreground', ave, stdev, maxv, minv, msk=msk)
-            v = stdev * real(init_box)
+            v = stdev * real(init_box) / real(params%box) ! foreground stdev to the data-quotient reference scale
             call vol_odd%norm_ext(ave, v)
             call vol%stats('foreground', ave, stdev, maxv, minv, msk=msk)
-            v = stdev * real(init_box)
+            v = stdev * real(init_box) / real(params%box) ! foreground stdev to the data-quotient reference scale
             call vol%norm_ext(ave, v)
             call vol_even%write(new_even)
             call vol_odd%write(new_odd)
