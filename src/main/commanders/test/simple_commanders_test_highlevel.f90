@@ -2204,12 +2204,22 @@ subroutine exec_test_rec3D_backends( self, cline )
             enddo
         enddo
         nullify(rmat)
-        ! Fourier-shell comparison against the truth (all soft-masked, unfiltered)
+        ! Fourier-shell comparison against the truth: background (mean outside the mask)
+        ! removed, then soft-masked, unfiltered. Without the background removal a map
+        ! with a non-zero solvent level (gridding; PCG's support-masked map has none)
+        ! acquires a sphere-shaped term from the mask whose spectrum sits in shells 1-3.
+        call truth%get_rmat_ptr(rmat)
+        bg = background_mean(rmat); rmat = rmat - bg
+        nullify(rmat)
         call truth%mask3D_soft(mskrad)
         call truth%fft
         call truth%spectrum('sqrt', tspec)
         allocate(tcorr(size(tspec),2), tspec_b(size(tspec),2), source=0.)
         do it = 1, 2
+            call tvols(it)%get_rmat_ptr(rmat)
+            bg = background_mean(rmat); rmat = rmat - bg
+            nullify(rmat)
+            write(logfhandle,'(A,A,A,ES11.4)') '>>> REC3D BACKENDS: TRUTH background level ', trim(BACKENDS(it)), ': ', bg
             call tvols(it)%mask3D_soft(mskrad)
             call tvols(it)%fft
             call tvols(it)%spectrum('sqrt', spec_tmp)
@@ -2266,6 +2276,9 @@ subroutine exec_test_rec3D_backends( self, cline )
     ! Fourier shell amplitudes and FSC between the backends (both soft-masked: the PCG
     ! solution is support-masked by the solver, the gridding map is not)
     do ib = 1, 2
+        call vols(ib)%get_rmat_ptr(rmat)
+        bg = background_mean(rmat); rmat = rmat - bg
+        nullify(rmat)
         call vols(ib)%mask3D_soft(mskrad)
         call vols(ib)%fft
         call vols(ib)%spectrum('sqrt', spec_tmp)

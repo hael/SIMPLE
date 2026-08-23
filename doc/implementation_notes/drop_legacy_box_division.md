@@ -477,17 +477,53 @@ identity above was established and is wrong.)
      centre bin 0.50 (gridding's central blob). To be rerun with the fixed
      build.
 
+   *Stage-3 result (2026-08-22, same run dir, commit `11838829` = with the
+   deapodization fix; `stage3_gridding_vs_pcg.txt`):* PCG map identical to
+   stage 2 (s3/s2 = 1.00 ± 0.01 at every shell, as it must be). Gridding
+   amplitudes vs stage 2: ×1.66 / 1.25 / 0.97 at k = 1–3, ×1.09–1.19 at
+   k = 4–15, ×1.00 at k = 20–30 — the envelope's gain inside the 37 px mask,
+   as predicted. Consequently pcg/gridding in band moved from 0.83–0.87 to
+   0.75–0.86 (median 0.835 → 0.835 over the agreement band, which now
+   extends to k = 48); FSC(gridding,pcg) 0.97–0.996 for k ≥ 5; shells 1–3
+   still pcg/gridding 1.10 / 1.60 / 1.76. On the neutral synthetic truth the
+   two backends agree within ±5 % in band, so the real-data 20–25 % in-band
+   deficit of PCG relative to gridding is data/settings-dependent, not a
+   convention or envelope effect. Prime suspect: convergence — the PCG
+   solves report `ITS=2 RESID=4.6E-01` (46 % residual after the 2-iteration
+   budget on N = 2905 particles), whereas the synthetic solves converge;
+   second suspect: the two ML regularizations (gridding's FSC-tau in rho vs
+   PCG's `KIND=ml` prior). Next real-data runs: `maxits_pcg=20 rtol=1e-3`
+   and `ml_reg=no`, one at a time.
+
 6. **Compatibility.** Release note on the ×box change of map values; a
    warning when a starting reference reprojects ≪ the particle scale.
 
 ## 6. Open items it does not settle
 
-- Gridding low-shell amplitude excess: the merged gridding map's Fourier
-  shells k = 1–2 are ~25 % too strong relative to the truth (§5.3 (ii)),
-  while PCG's are not. Candidates: the CTF²-weighted quotient at shells where
-  ctf ≈ fraca (noise amplification that PCG's Tikhonov term and support mask
-  regularize), the ML tau at FSC ≈ 1, or `floor_rho_shellwise`. To be
-  localized with `test=rec3D_backends ... vol1=` on synthetic data.
+- ~~Gridding low-shell amplitude excess~~ — RESOLVED 2026-08-22, not a
+  gridding defect. The "+25 % at k = 1–2" of §5.3 (ii) was an artifact of
+  the truth volume's provenance: `rec_final_state01.mrc` of the first
+  successful run is a PCG product (stages ≥ 3 and the final reconstruction
+  ran `rec_backend=pcg`), so its lowest shells carry PCG's own low-k
+  treatment and PCG "reproducing" it exactly proved nothing. With a neutral
+  truth (asymmetric atom-cluster phantom via `pdb2mrc`, 400 particles
+  simulated from it at SNR 0.1 with CTF, reconstructed at the exact
+  simulated orientations with `objfun=cc`, `mskdiam=60`), both backends
+  have FSC ≈ 1.000 to the truth and an amplitude ratio to the truth that is
+  uniform in k (gridding 0.0159–0.0176, PCG 0.0156–0.0182 over k = 1–16);
+  the residual backend difference at k ≤ 3 is ≈ −8 % (gridding) / +5 %
+  (PCG) relative to their mid-band levels. The same run gives the cleanest
+  confirmation of the deapodization fix: radial LS scale recon/truth with
+  no high-pass, r = 0–24 px: gridding new envelope 1.01/1.00/0.99/0.99/
+  0.98/0.97, legacy 1.01/1.00/0.97/0.94/0.92/0.90, PCG 0.99–1.02. Along
+  the way two measurement pitfalls were found and fixed in the tool: the
+  Fourier-shell comparison now removes each map's outside-mask background
+  before masking (a constant solvent level masked by a sphere lands in
+  shells 1–3), and `ml_reg=no` was shown NOT to change the low shells.
+  Still open on real data: the pre-fix `rec3D_backends` in
+  `stage2_tests` showed pcg/gridding 1.7–2.0 at k = 1–3 with the gridding
+  map unmasked; to be re-measured with the current tool (masked, background
+  removed) and the fixed build before drawing conclusions.
 - The PCG solver's beyond-band behaviour under near-flat bootstrap sigma2
   (`pcg_euclid_crash_investigation.md` §13, `PCG BEYOND-BAND EXCESS`
   diagnostic) is a separate solver-level question.
