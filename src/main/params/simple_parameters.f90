@@ -138,6 +138,7 @@ type :: parameters
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projrec='no'         !< reconstruct from projection-direction Fourier sums(yes|no){no}
     character(len=3)          :: euclid_diag='no'     !< per-iteration euclid reference/particle scale diagnostics(yes|no){no}
+    character(len=3)          :: ref_taper='no'       !< KB-envelope radial taper on matching references (legacy weighting)(yes|no){no}
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}

@@ -176,6 +176,7 @@ contains
         call reg%add_char('proj_is_class', self%proj_is_class)
         call reg%add_char('projrec', self%projrec)
         call reg%add_char('euclid_diag', self%euclid_diag)
+        call reg%add_char('ref_taper', self%ref_taper)
         call reg%add_char('projfile_merged', self%projfile_merged)
         call reg%add_char('projfile_optics', self%projfile_optics)
         call reg%add_char('projfile_out', self%projfile_out)
