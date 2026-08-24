@@ -834,3 +834,30 @@ wall-time cost).
 Note for the test tool: pcg-only keys (pcg_lambda_lap, pcg_lambda_rel)
 are deleted from the gridding leg's command line — they hard-error under
 rec_backend/=pcg by parameter validation.
+
+### 11.1 First real-data Laplacian reading (bgal, box 256) and gate refinements
+
+bgal (d2, mskdiam 180, maxits_pcg=2, pcg_lambda_lap=0.3, no lp):
+
+- The prior behaves as the Wiener term it is: attenuation rho/(rho+
+  lambda*nu^4*S) — ratio ~1.0 to k~35, crossing the falling shell SNR at
+  k~70-90 (-25% at 5.4 A, -50% at 4.2 A), beyond-band tail crushed
+  (0.03-0.10 at k>=105). On the fixture the crossing sat beyond the
+  band edge; on real data 0.3 puts it mid-band. Sweep DOWN:
+  0.01/0.03/0.1; target = crossing at/past the FSC band edge. Pass lp=
+  so the gate acts in-band.
+- bgal exposes the PCG centre-bin deficit dramatically (0.31 vs
+  streptavidin's 0.83 at 2 iterations; k=1-2 excess 2.0/1.6) — the S6
+  low-shell item scales with box. Gate changes: the radial-flatness
+  ratio is now normalised to the IN-MASK MEDIAN (normalising to the
+  deficient centre bin inflated all bins ~3x -> false FAIL), the centre
+  bin is excluded from the range and printed as its own diagnostic
+  line, and the range gate applies to bins 2+.
+- Post-mortem of a self-inflicted test bug: while making these edits
+  the mskrad computation was moved after the ground-truth block that
+  uses it, so truth comparisons and backend spectra ran with an
+  uninitialised mask radius (truth FSC appeared to collapse to
+  0.87-0.97; reconstruction was fine). Fixed by restoring the early
+  computation; the fixture PASSes with the same 0.84 in-band ratio as
+  the pre-edit baseline. Lesson recorded: any reordering inside the
+  test must respect mskrad/nrb_msk being consumed by the truth block.

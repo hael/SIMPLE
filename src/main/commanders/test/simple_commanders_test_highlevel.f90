@@ -2310,8 +2310,24 @@ subroutine exec_test_rec3D_backends( self, cline )
         write(logfhandle,'(A,I4,F9.2,2ES14.4,F12.4,F10.4)') '>>> REC3D BACKENDS: SHELL ', k, vols(1)%get_lp(k), &
             &spec(k,1), spec(k,2), safe_ratio(spec(k,2), spec(k,1)), corrs(k)
     enddo
-    write(logfhandle,'(A)') '>>> REC3D BACKENDS: RADIAL TABLE  bin  r_lo-r_hi(px)  |rho|_gridding  |rho|_pcg  pcg/gridding  norm_to_bin1'
-    rnorm = safe_ratio(radprof(1,2), radprof(1,1))
+    ! normalise the radial ratio to the MEDIAN over the in-mask bins: the centre
+    ! bin has few voxels and carries the known PCG centre deficit (S6), so
+    ! normalising to it inflates every other bin and falsifies the flatness gate
+    allocate(ratios(max(size(spec,dim=1),NRBINS)), source=0.)
+    n = 0
+    do irb = 1, nrb_msk
+        rr = safe_ratio(radprof(irb,2), radprof(irb,1))
+        if( rr > 0. )then
+            n = n + 1
+            ratios(n) = rr
+        endif
+    enddo
+    rnorm = 1.
+    if( n > 0 )then
+        call hpsort(ratios(1:n))
+        rnorm = ratios(max(1,(n+1)/2))
+    endif
+    write(logfhandle,'(A)') '>>> REC3D BACKENDS: RADIAL TABLE  bin  r_lo-r_hi(px)  |rho|_gridding  |rho|_pcg  pcg/gridding  norm_to_med'
     do irb = 1, NRBINS
         rr = safe_ratio(radprof(irb,2), radprof(irb,1))
         write(logfhandle,'(A,I4,F7.1,A,F6.1,2ES14.4,2F12.4,A)') '>>> REC3D BACKENDS: RADIAL ', irb, &
@@ -2325,7 +2341,7 @@ subroutine exec_test_rec3D_backends( self, cline )
         if( corrs(k) <= 0.5 ) exit
         kagree = k
     enddo
-    allocate(ratios(lfny), source=0.)
+    ratios = 0.
     n = 0
     do k = 2, kagree
         if( spec(k,1) > 0. .and. spec(k,2) > 0. )then
@@ -2338,9 +2354,13 @@ subroutine exec_test_rec3D_backends( self, cline )
         call hpsort(ratios(1:n))
         med = ratios(max(1, (n+1)/2))
     endif
-    ! radial flatness: bins lying fully inside 0.85 x mask radius (clear of the PCG soft support edge)
+    ! radial flatness: bins lying fully inside 0.85 x mask radius (clear of the PCG
+    ! soft support edge); the centre bin is excluded from the range and reported
+    ! separately (known PCG centre deficit, S6)
+    write(logfhandle,'(A,F0.4)') '>>> REC3D BACKENDS: PCG CENTRE-BIN RATIO (diagnostic, not gated): ', &
+        &safe_ratio(safe_ratio(radprof(1,2), radprof(1,1)), rnorm)
     rmin = huge(rmin); rmax = -huge(rmax); nrb_used = 0
-    do irb = 1, nrb_msk
+    do irb = 2, nrb_msk
         if( real(irb)*rbin_width > 0.85*mskrad ) exit
         if( radprof(irb,1) < 1.e-3*radprof(1,1) .or. radprof(irb,2) < 1.e-3*radprof(1,2) ) cycle
         rr = safe_ratio(safe_ratio(radprof(irb,2), radprof(irb,1)), rnorm)
@@ -2350,7 +2370,7 @@ subroutine exec_test_rec3D_backends( self, cline )
     enddo
     write(logfhandle,'(A,I0,A,F0.2,A,F0.4)') '>>> REC3D BACKENDS: SUMMARY agreement band (FSC gridding/pcg > 0.5) k=2-', kagree, &
         &' (', vols(1)%get_lp(kagree), ' A); median shell amplitude ratio pcg/gridding in band: ', med
-    write(logfhandle,'(A,F0.4,A,F0.4,A,I0,A)') '>>> REC3D BACKENDS: SUMMARY radial ratio inside 0.85 x mask radius, normalised to the centre bin: min ', rmin, &
+    write(logfhandle,'(A,F0.4,A,F0.4,A,I0,A)') '>>> REC3D BACKENDS: SUMMARY radial ratio inside 0.85 x mask radius (centre bin excluded), normalised to the in-mask median: min ', rmin, &
         &' max ', rmax, ' (', nrb_used, ' bins)'
     write(logfhandle,'(A)') '>>> REC3D BACKENDS: EXPECTATION with the box division mirrored by PCG: shell ratio ~1, radial ratio rising toward the edge (gridding under-deapodized, S2.1)'
     write(logfhandle,'(A)') '>>> REC3D BACKENDS: EXPECTATION after dropping the division and fixing gridding deapodization: shell ratio ~1 AND radial ratio flat (~1)'
