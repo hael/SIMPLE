@@ -2132,6 +2132,11 @@ subroutine exec_test_rec3D_backends( self, cline )
         cline_rec = cline
         call cline_rec%set('prg',         'reconstruct3D')
         call cline_rec%set('rec_backend', trim(BACKENDS(ib)))
+        if( trim(BACKENDS(ib)) /= 'pcg' )then
+            ! pcg-only keys hard-error under other backends
+            call cline_rec%delete('pcg_lambda_lap')
+            call cline_rec%delete('pcg_lambda_rel')
+        endif
         call cline_rec%delete('vol1')   ! ground-truth volume is for the comparison only
         call cline_rec%delete('lp')
         call cline_rec%delete('hp')

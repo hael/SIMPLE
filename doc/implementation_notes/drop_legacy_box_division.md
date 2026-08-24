@@ -788,3 +788,49 @@ rate.
 Aside from round 2: the PCG ml-replay RESID printed 0.72 without rtol
 vs 0.31 with rtol=1e-3 at the same 4 iterations (STOP=fixed_iterations
 vs maxits) — worth a look when tuning the §6 convergence-control item.
+
+S10 validation (2026-08-23, user): with the FSC-order fix, gridding is
+back at 3.191 A (RESOLUTION @ FSC=0.143 AVG/MIN/MAX 3.191) — the
+pre-refactor control value. Reliability over a full batch to be
+confirmed with the ongoing runs.
+
+## 11. Opt-in PCG Laplacian (biharmonic) prior
+
+Implemented 2026-08-23 as the first quadratic prior from the
+"free, no algorithm change" family. R(x) = lambda ||nabla^2 x||^2 is a
+Fourier multiplier ~ |k|^4, i.e. a diagonal on the same lattice as
+Khat/ml_prior, so it enters BOTH the kernel operator and the
+preconditioner (same padsc^2 conventions as the ML prior; disabled
+during kernel-scale calibration like the other regularizers; kernel op
+mode required, matrix-free throws).
+
+Parameterization: `pcg_lambda_lap` (default 0 = off; UI: reconstruct3D,
+refine3D, test=rec3D_backends). The added diagonal is
+lambda_lap * data_scale * (k/k_nyq_native)^4 — lambda_lap is the
+prior-to-data ratio at the native Nyquist shell; at nu = 0.5 the prior
+is 6% of nominal, so the data band is essentially untouched by design.
+
+First measurement (neutral fixture, objfun=cc, DEFAULT maxits_pcg=2,
+lambda_lap = 1.0 vs off):
+
+- Beyond-band excess ELIMINATED: pcg amplitude at k=44..64 falls from a
+  rising noise floor (1.6E-3..2.5E-3, tracking 1.7-2.7x gridding) to a
+  smooth roll-off (2.0E-4..3.1E-5, 0.23..0.03x gridding) — 10-80x
+  suppression, while shells k<=16 change < 2%.
+- UNEXPECTED WIN: the in-band deficit at 2 iterations largely
+  disappears — gated-band median pcg/gridding 0.840 (off) -> 0.9986
+  (on). The prior in the preconditioner improves conditioning enough
+  that the 2-iteration solve is nearly converged in band; this is the
+  same deficit that previously needed maxits_pcg=4-8.
+- All rec3D_backends gates PASS with the prior on and off.
+
+Suggested real-data protocol (reconstruct3D on streptavidin, opt-in):
+sweep pcg_lambda_lap = 0.3 / 1.0 / 3.0 at maxits_pcg = 2 AND 4; read
+the shell table beyond-band rows, the gated-band ratio, RESID, and
+FSC=0.143. If in-band convergence at 2 iterations holds on real data,
+the prior may remove the need for maxits_pcg=4 entirely (its +23%
+wall-time cost).
+
+Note for the test tool: pcg-only keys (pcg_lambda_lap, pcg_lambda_rel)
+are deleted from the gridding leg's command line — they hard-error under
+rec_backend/=pcg by parameter validation.

@@ -253,6 +253,7 @@ contains
             crop_factor = real(params%box_crop) / real(params%box)
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
+            if( params%pcg_lambda_lap > 0.0  ) call pcgop%set_lambda_lap(params%pcg_lambda_lap)
             call pcgop%set_sym(build%pgrpsyms)
             call pcgop%set_mask(params%msk_crop)
             lims2 = pcgop%get_lims2()
@@ -368,6 +369,7 @@ contains
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
+            if( params%pcg_lambda_lap > 0.0  ) call pcgop%set_lambda_lap(params%pcg_lambda_lap)
             call pcgop%set_mask(params%msk_crop)
             call pcgop%begin_reduction
             fname = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
@@ -850,6 +852,7 @@ contains
             real :: shift(2), crop_factor, sdev_noise, edge_mean
             call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             if( params%pcg_lambda_rel >= 0.0 ) call op%set_lambda_relative(params%pcg_lambda_rel)
+            if( params%pcg_lambda_lap > 0.0  ) call op%set_lambda_lap(params%pcg_lambda_lap)
             call op%set_sym(build%pgrpsyms)
             call op%set_mask(params%msk_crop)
             lims2 = op%get_lims2()
@@ -906,6 +909,7 @@ contains
             type(reconstructor_pcg), intent(inout) :: op
             call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             if( params%pcg_lambda_rel >= 0.0 ) call op%set_lambda_relative(params%pcg_lambda_rel)
+            if( params%pcg_lambda_lap > 0.0  ) call op%set_lambda_lap(params%pcg_lambda_lap)
             call op%set_mask(params%msk_crop)
             call op%begin_reduction
         end subroutine new_reduction
@@ -1438,6 +1442,7 @@ contains
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
+            if( params%pcg_lambda_lap > 0.0  ) call pcgop%set_lambda_lap(params%pcg_lambda_lap)
             call pcgop%set_mask(params%msk_crop)
             call pcgop%begin_reduction
             nptcls = 0

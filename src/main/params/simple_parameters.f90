@@ -615,6 +615,7 @@ type :: parameters
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: pcg_lambda_rel=-1.  !< relative PCG Tikhonov strength; negative keeps legacy absolute lambda{-1}
+    real    :: pcg_lambda_lap=0.   !< relative PCG biharmonic (Laplacian) prior strength at native Nyquist; 0 disables{0}
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)

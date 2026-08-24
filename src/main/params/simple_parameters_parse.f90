@@ -561,6 +561,7 @@ contains
         call reg%add_real('phshift_step', self%phshift_step)
         call reg%add_real('prob_athres', self%prob_athres)
         call reg%add_real('pcg_lambda_rel', self%pcg_lambda_rel)
+        call reg%add_real('pcg_lambda_lap', self%pcg_lambda_lap)
         call reg%add_real('rec_athres', self%rec_athres)
         call reg%add_real('res_target', self%res_target)
         call reg%add_real('res_threshold', self%res_threshold)

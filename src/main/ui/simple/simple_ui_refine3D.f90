@@ -175,6 +175,10 @@ subroutine new_automask( prgtab )
         &'Scale lambda against the reduced data operator; -1 keeps the legacy absolute 1e-3 coefficient', &
         &'relative strength{-1}', .false., -1.0, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call reconstruct3D%add_input(UI_FILT, 'pcg_lambda_lap', 'num', 'Relative PCG Laplacian prior strength', &
+        &'Biharmonic smoothness prior; strength relative to the data scale at the native Nyquist, falling as nu^4 toward low resolution; 0 disables{0}', &
+        &'relative strength at Nyquist{0}', .false., 0.0, visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         ! mask controls
         call reconstruct3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)
@@ -356,6 +360,10 @@ subroutine new_automask( prgtab )
         call refine3D%add_input(UI_FILT, 'pcg_lambda_rel', 'num', 'Relative PCG Tikhonov strength', &
         &'Scale lambda against the reduced data operator; -1 keeps the legacy absolute 1e-3 coefficient', &
         &'relative strength{-1}', .false., -1.0, group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call refine3D%add_input(UI_FILT, 'pcg_lambda_lap', 'num', 'Relative PCG Laplacian prior strength', &
+        &'Biharmonic smoothness prior; strength relative to the data scale at the native Nyquist, falling as nu^4 toward low resolution; 0 disables{0}', &
+        &'relative strength at Nyquist{0}', .false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, nu_refine, group="filter", &

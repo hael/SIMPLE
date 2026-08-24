@@ -764,6 +764,12 @@ contains
         if( self%pcg_lambda_rel >= 0.0 .and. trim(self%rec_backend) /= 'pcg' )then
             THROW_HARD('pcg_lambda_rel requires rec_backend=pcg')
         endif
+        if( .not. ieee_is_finite(self%pcg_lambda_lap) .or. self%pcg_lambda_lap < 0.0 )then
+            THROW_HARD('pcg_lambda_lap must be finite and non-negative')
+        endif
+        if( self%pcg_lambda_lap > 0.0 .and. trim(self%rec_backend) /= 'pcg' )then
+            THROW_HARD('pcg_lambda_lap requires rec_backend=pcg')
+        endif
         if( trim(self%prg%to_char()) == 'reconstruct3D' )then
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
             if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')
