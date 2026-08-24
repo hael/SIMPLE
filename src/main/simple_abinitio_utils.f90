@@ -177,7 +177,6 @@ contains
         ! symmetrization
         call cline_symmap%set('prg',                'symmetrize_map')
         call cline_symmap%delete('rec_backend')
-        call cline_symmap%delete('pcg_lambda_rel')
         call cline_symmap%set('pgrp',                    params%pgrp)
         call cline_symmap%set('projfile',                   projfile)
         call cline_symmap%set('center',                        'yes')
@@ -202,7 +201,6 @@ contains
         ! re-project volume, only with cavgs
         call cline_reproject%set('prg',                  'reproject')
         call cline_reproject%delete('rec_backend')
-        call cline_reproject%delete('pcg_lambda_rel')
         call cline_reproject%set('pgrp',                 params%pgrp)
         call cline_reproject%set('outstk',        'reprojs'//MRC_EXT)
         call cline_reproject%set('smpd',                 params%smpd)
@@ -237,11 +235,6 @@ contains
         class(cmdline), intent(inout) :: child_cline
         if( cline_refine3D%defined('rec_backend') )then
             call child_cline%set('rec_backend', cline_refine3D%get_carg('rec_backend'))
-        endif
-        if( cline_refine3D%defined('pcg_lambda_rel') )then
-            call child_cline%set('pcg_lambda_rel', cline_refine3D%get_rarg('pcg_lambda_rel'))
-        else
-            call child_cline%delete('pcg_lambda_rel')
         endif
         if( cline_refine3D%defined('maxits_pcg') )then
             call child_cline%set('maxits_pcg', cline_refine3D%get_iarg('maxits_pcg'))
@@ -746,7 +739,6 @@ contains
             cline_calc_group_sigmas = cline_refine3D
             call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
             call cline_calc_group_sigmas%delete('rec_backend')
-            call cline_calc_group_sigmas%delete('pcg_lambda_rel')
             call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
             call cline_calc_group_sigmas%kill
         endif

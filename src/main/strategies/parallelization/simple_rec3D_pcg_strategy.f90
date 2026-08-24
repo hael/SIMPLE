@@ -252,8 +252,6 @@ contains
             t_phase = tic()
             crop_factor = real(params%box_crop) / real(params%box)
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
-            if( params%pcg_lambda_lap > 0.0  ) call pcgop%set_lambda_lap(params%pcg_lambda_lap)
             call pcgop%set_sym(build%pgrpsyms)
             call pcgop%set_mask(params%msk_crop)
             lims2 = pcgop%get_lims2()
@@ -368,8 +366,6 @@ contains
 
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
-            if( params%pcg_lambda_lap > 0.0  ) call pcgop%set_lambda_lap(params%pcg_lambda_lap)
             call pcgop%set_mask(params%msk_crop)
             call pcgop%begin_reduction
             fname = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
@@ -511,13 +507,7 @@ contains
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',   result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_update=',     result%final_rel_update
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',       data_scale
-            write(funit,'(A,ES14.6)') 'pcg_lambda_relative=',  params%pcg_lambda_rel
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=', lambda_eff
-            if( params%pcg_lambda_rel >= 0.0 )then
-                write(funit,'(A)') 'pcg_lambda_mode=relative'
-            else
-                write(funit,'(A)') 'pcg_lambda_mode=legacy_absolute'
-            endif
             if( present(prior_npositive) )then
                 if( .not. present(prior_positive_min) .or. .not. present(prior_positive_max) .or. &
                     &.not. present(prior_to_khat_l1) .or. .not. present(prior_to_khat_rms) )then
@@ -851,8 +841,6 @@ contains
             integer :: i, ii, iptcl, ibatch
             real :: shift(2), crop_factor, sdev_noise, edge_mean
             call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call op%set_lambda_relative(params%pcg_lambda_rel)
-            if( params%pcg_lambda_lap > 0.0  ) call op%set_lambda_lap(params%pcg_lambda_lap)
             call op%set_sym(build%pgrpsyms)
             call op%set_mask(params%msk_crop)
             lims2 = op%get_lims2()
@@ -908,8 +896,6 @@ contains
         subroutine new_reduction( op )
             type(reconstructor_pcg), intent(inout) :: op
             call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call op%set_lambda_relative(params%pcg_lambda_rel)
-            if( params%pcg_lambda_lap > 0.0  ) call op%set_lambda_lap(params%pcg_lambda_lap)
             call op%set_mask(params%msk_crop)
             call op%begin_reduction
         end subroutine new_reduction
@@ -1441,8 +1427,6 @@ contains
             endif
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
-            if( params%pcg_lambda_lap > 0.0  ) call pcgop%set_lambda_lap(params%pcg_lambda_lap)
             call pcgop%set_mask(params%msk_crop)
             call pcgop%begin_reduction
             nptcls = 0
@@ -1642,13 +1626,7 @@ contains
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',    result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_update=',      result%final_rel_update
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',        data_scale
-            write(funit,'(A,ES14.6)') 'pcg_lambda_relative=',   params%pcg_lambda_rel
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=',  lambda_eff
-            if( params%pcg_lambda_rel >= 0.0 )then
-                write(funit,'(A)') 'pcg_lambda_mode=relative'
-            else
-                write(funit,'(A)') 'pcg_lambda_mode=legacy_absolute'
-            endif
             if( present(prior_npositive) )then
                 if( .not. present(prior_positive_min) .or. .not. present(prior_positive_max) .or. &
                     &.not. present(prior_to_khat_l1) .or. .not. present(prior_to_khat_rms) )then

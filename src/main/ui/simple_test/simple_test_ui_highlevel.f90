@@ -207,9 +207,6 @@ contains
         &'Iterations used for the continuation replay comparison', 'iterations{2}', .false., 2.)
         call pcg_frac_update%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Tolerance used for the continuation replay comparison', 'tolerance{0}', .false., 0.0)
-        call pcg_frac_update%add_input(UI_FILT, 'pcg_lambda_rel', 'num', 'Relative PCG Tikhonov strength', &
-        &'Scale lambda against the raw data operator; -1 keeps legacy absolute 1e-3', &
-        &'relative strength{-1}', .false., -1.0)
         call pcg_frac_update%add_input(UI_MASK, mskdiam)
         call pcg_frac_update%add_input(UI_COMP, nparts, required_override=.false.)
         call pcg_frac_update%add_input(UI_COMP, nthr)
@@ -236,9 +233,6 @@ contains
         call rec3D_backends%add_input(UI_SRCH, pgrp)
         call rec3D_backends%add_input(UI_SRCH, objfun)
         call rec3D_backends%add_input(UI_FILT, ml_reg)
-        call rec3D_backends%add_input(UI_FILT, 'pcg_lambda_lap', 'num', 'Relative PCG Laplacian prior strength', &
-        &'Biharmonic smoothness prior; strength relative to the data scale at the native Nyquist; 0 disables{0}', &
-        &'relative strength at Nyquist{0}', .false., 0.0)
         call rec3D_backends%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
         &'PCG iterations for the comparison', 'iterations{2}', .false., 2.)
         call rec3D_backends%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &

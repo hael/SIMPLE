@@ -175,19 +175,6 @@ type :: reconstructor_pcg
     real              :: ml_hp  = 100.0               !< low-frequency no-prior limit in Angstrom
     logical           :: l_ml_prior_requested = .false.
     logical           :: l_ml_prior = .false.
-    ! ---- biharmonic (Laplacian-squared) smoothness prior ----
-    ! R(x) = lambda_lap * ||nabla^2 x||^2 is a Fourier multiplier ~ |k|^4, so it
-    ! is a diagonal on the same lattice as Khat/ml_prior and enters both the
-    ! operator and the preconditioner for free. Parameterized RELATIVE to the
-    ! calibrated data scale: the added diagonal equals
-    ! lambda_lap_rel * data_scale * (k/k_nyquist_native)^4 -- i.e. lambda_lap_rel
-    ! is the prior-to-data ratio at the native Nyquist shell, falling as nu^4
-    ! toward low resolution (6% of nominal at nu=0.5). Its purpose is to roll
-    ! off the unconstrained beyond-band modes (S6 beyond-band excess).
-    real, allocatable :: lap_prior(:,:,:)             !< calibrated biharmonic Fourier diagonal
-    real              :: lambda_lap_rel = 0.0         !< relative strength at native Nyquist; 0 = off
-    logical           :: l_lap_prior_requested = .false.
-    logical           :: l_lap_prior = .false.
     ! ---- per-phase profiling, accumulated over a solve. Exists to answer one
     !      question before any further optimization: of the seconds an iteration
     !      costs, how many are the particle loop (which the kernelized operator
@@ -238,7 +225,6 @@ type :: reconstructor_pcg
     procedure :: set_mask
     procedure :: set_lambda_relative
     procedure :: set_ml_prior
-    procedure :: set_lambda_lap
     procedure, private :: build_env
     procedure, private :: build_kb_envelope_1d
     procedure, private :: build_hk_luts
@@ -643,20 +629,6 @@ contains
         self%l_lambda_relative = .true.
     end subroutine set_lambda_relative
 
-    !> Opt-in biharmonic smoothness prior; strength relative to the data scale
-    !! at the native Nyquist shell (see the field comment). The diagonal itself
-    !! is built in finalize_density_accum once the data scale exists.
-    subroutine set_lambda_lap( self, lambda_lap )
-        class(reconstructor_pcg), intent(inout) :: self
-        real,                       intent(in)    :: lambda_lap
-        if( .not. ieee_is_finite(lambda_lap) .or. lambda_lap < 0.0 )then
-            THROW_HARD('relative PCG Laplacian-prior strength must be finite and non-negative')
-        endif
-        self%lambda_lap_rel = lambda_lap
-        self%l_lap_prior_requested = lambda_lap > 0.0
-        self%l_lap_prior = .false.
-    end subroutine set_lambda_lap
-
     !> Request the established isotropic FSC/SSNR prior. The FSC determines
     !! only the shell-wise relative strength here; its absolute scale is built
     !! later from the finalized raw data density D on the master.
@@ -808,7 +780,6 @@ contains
         if( allocated(self%Khat)     ) deallocate(self%Khat)
         if( allocated(self%ml_fsc)   ) deallocate(self%ml_fsc)
         if( allocated(self%ml_prior) ) deallocate(self%ml_prior)
-        if( allocated(self%lap_prior)) deallocate(self%lap_prior)
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
@@ -833,9 +804,6 @@ contains
         self%ml_hp       = 100.0
         self%l_ml_prior_requested = .false.
         self%l_ml_prior  = .false.
-        self%lambda_lap_rel = 0.0
-        self%l_lap_prior_requested = .false.
-        self%l_lap_prior = .false.
         self%wimg_exists = .false.
         self%op_mode     = PCG_OP_MATRIXFREE
         call self%reset_profile(.false.)
@@ -1928,9 +1896,6 @@ contains
         class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: p(self%box,self%box,self%box)
         real, allocatable :: hp(:,:,:), pm(:,:,:)
-        if( self%l_lap_prior .and. self%op_mode /= PCG_OP_KERNEL )then
-            THROW_HARD('the Laplacian prior requires the kernelized operator (pcgop=kernel)')
-        endif
         if( self%l_mask )then
             allocate(pm(self%box,self%box,self%box), source=p)
             call self%mask_mul(pm)
@@ -2091,7 +2056,6 @@ contains
                 do i = 1, cdim(1)
                     kv = self%Khat(i,j,k)
                     if( self%l_ml_prior  .and. self%l_deapod ) kv = kv + self%ml_prior(i,j,k)
-                    if( self%l_lap_prior .and. self%l_deapod ) kv = kv + self%lap_prior(i,j,k)
                     cmat(i,j,k) = cmat(i,j,k) * kv
                 end do
             end do
@@ -2106,9 +2070,6 @@ contains
         if( .not. self%l_deapod ) hp = hp * self%env
         if( self%l_ml_prior .and. .not. self%l_deapod )then
             hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
-        endif
-        if( self%l_lap_prior .and. .not. self%l_deapod )then
-            hp = hp + self%apply_fourier_diagonal(p, self%lap_prior)
         endif
         hp = hp + self%lambda * p
     end function apply_normal_kernel
@@ -2962,13 +2923,6 @@ contains
         call self%update_lambda_from_density(rho_accum)
         cdim = self%wimg%get_array_shape()
         call self%build_ml_prior_from_density(rho_accum)
-        if( self%l_lap_prior_requested )then
-            if( allocated(self%lap_prior) ) deallocate(self%lap_prior)
-            allocate(self%lap_prior(cdim(1),cdim(2),cdim(3)), source=0.0)
-            self%l_lap_prior = .true.
-            write(logfhandle,'(A,ES11.4,A)') '>>> PCG LAPLACIAN PRIOR: RELATIVE STRENGTH ', &
-                &self%lambda_lap_rel, ' AT THE NATIVE NYQUIST, FALLING AS NU^4'
-        endif
         ! Data only ever reaches |loc| <= padf*Rnat, so beyond that radius rho is
         ! identically zero: those modes are completely unconstrained. Zero them,
         ! exactly as reconstructor%sampl_dens_correct does for sh > sh_lim. A
@@ -3047,11 +3001,6 @@ contains
                     if( sh > work_lim ) cycle
                     hh    = self%wrap(h)
                     phys  = self%wimg%comp_addr_phys(h,k,m)
-                    if( self%l_lap_prior )then
-                        ! nu = padded shell / (padf*Rnat) = native shell / native Nyquist
-                        self%lap_prior(phys(1),phys(2),phys(3)) = self%lambda_lap_rel * self%data_scale * &
-                            &(real(sh) / real(rho_lim))**4
-                    endif
                     if( l_kernel .and. sh <= khat_lim )then
                         self%Khat(phys(1),phys(2),phys(3)) = rho_accum(hh,k,m)
                     endif
@@ -3060,9 +3009,6 @@ contains
                             denom = max(rho_accum(hh,k,m), 0.0) + shfloor(sh)
                             if( self%l_ml_prior )then
                                 denom = denom + self%ml_prior(phys(1),phys(2),phys(3)) / self%padsc**2
-                            endif
-                            if( self%l_lap_prior )then
-                                denom = denom + self%lap_prior(phys(1),phys(2),phys(3)) / self%padsc**2
                             endif
                             if( denom > 0.0 )then
                                 self%precond(phys(1),phys(2),phys(3)) = 1.0 / denom
@@ -3254,14 +3200,12 @@ contains
         real(dp) :: num, den
         real     :: lam_save, ctr, sig, dx, dy, dz, scale
         integer  :: i, j, k
-        logical  :: l_ml_save, l_lap_save
+        logical  :: l_ml_save
         if( .not. self%l_kernel ) THROW_HARD('build_kernel has not been called; measure_kernel_scale')
         lam_save    = self%lambda
         l_ml_save   = self%l_ml_prior
-        l_lap_save  = self%l_lap_prior
         self%lambda = 0.0   ! compare the DATA term only
-        self%l_ml_prior  = .false.
-        self%l_lap_prior = .false.
+        self%l_ml_prior = .false.
         allocate(probe(self%box,self%box,self%box))
         ctr = real(self%box)/2.0 + 0.5
         sig = 0.15 * real(self%box)
@@ -3280,8 +3224,7 @@ contains
         scale = 1.0
         if( den > 0.0_dp ) scale = real(num/den)
         self%lambda = lam_save
-        self%l_ml_prior  = l_ml_save
-        self%l_lap_prior = l_lap_save
+        self%l_ml_prior = l_ml_save
     end function measure_kernel_scale
 
     ! PRIVATE HELPERS

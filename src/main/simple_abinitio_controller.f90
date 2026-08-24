@@ -532,11 +532,6 @@ contains
         call cline_refine3D%set('pgrp',                   cfg%pgrp)
         call cline_refine3D%set('refine',                 cfg%refine)
         call cline_refine3D%set('rec_backend',            cfg%rec_backend)
-        if( cfg%rec_backend.eq.'pcg' )then
-            if( params%pcg_lambda_rel >= 0. ) call cline_refine3D%set('pcg_lambda_rel', params%pcg_lambda_rel)
-        else
-            call cline_refine3D%delete('pcg_lambda_rel')
-        endif
         if( cfg%refine.eq.'prob_neigh' )then
             call cline_refine3D%set('prob_neigh_mode',    cfg%prob_neigh_mode)
         else

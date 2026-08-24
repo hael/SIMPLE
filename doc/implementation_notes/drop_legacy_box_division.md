@@ -861,3 +861,60 @@ bgal (d2, mskdiam 180, maxits_pcg=2, pcg_lambda_lap=0.3, no lp):
   computation; the fixture PASSes with the same 0.84 in-band ratio as
   the pre-edit baseline. Lesson recorded: any reordering inside the
   test must respect mskrad/nrb_msk being consumed by the truth block.
+
+### 11.2 bgal sweep verdict: the Laplacian is a convergence aid, not a spectral tool
+
+Sweep (box 256, maxits_pcg=2, lp=3.6, lambda_lap = 0 / 0.01 / 0.03 / 0.1,
+plus 0.1 at maxits 4). Key numbers:
+
+- ML-replay RESID at 2 its: 6.53 (lambda=0!) -> 1.88 (0.01) -> 1.13
+  (0.03) -> 0.86 (0.1); at 4 its with 0.1: 0.25. Base solves: 0.20 at
+  2 its, 0.048 at 4. The production output IS the ML replay, so at
+  lambda=0 and 2 iterations bgal ships a barely-updated warm start.
+- The centre-bin deficit tracks ML convergence, not lambda: 0.73
+  (lambda=0, map ~ base warm start), 0.34 (lambda>0, transitional),
+  0.50 (4 its). The S6 "centre/low-shell" item IS under-convergence of
+  the ML replay, amplified by box size (streptavidin box 128: 0.83).
+- k=1-2 excess likewise: worsens at 2 its with lambda (3.0/2.1),
+  recovers at 4 its (1.6/1.6).
+- In-band spectral cost: even lambda=0.01 attenuates k>=80 (0.58 vs
+  0.77 at k=80 for lambda=0), and at 4 its/0.1 the converged
+  over-regularized solution emerges (0.30 at k=85). The nu^4 prior
+  anchored to the low-band data scale cannot separate "in band" from
+  "beyond band": rho falls ~3 orders across the band while nu^4 spans
+  ~1.5 from half-band to edge — the usable lambda window is empty on
+  real data. Band-selective suppression is the ML/FSC prior's job.
+
+Verdict: keep pcg_lambda_lap opt-in as a solver/conditioning tool; do
+NOT adopt for production spectral shaping. The production PCG path
+forward is ML-replay convergence: cross-iteration warm start from the
+PREVIOUS ML map (S7) so the solve starts near the regularized solution
+instead of the unregularized base (the RESID 6.5 gap), plus a
+box-scaled iteration budget. Discriminating experiment: maxits_pcg=4
+and 8 at lambda=0 on bgal — if RESID and the centre bin recover with
+iterations alone, convergence control closes both S6 items without any
+new prior.
+
+### 11.3 Both experimental lambda paths removed (2026-08-24)
+
+Decision (user): too many paths — `pcg_lambda_lap` and the user-facing
+`pcg_lambda_rel` are REMOVED. What they established is recorded here so
+the experiments need not be repeated:
+
+- `pcg_lambda_lap` (biharmonic smoothness, S11-11.2): a nu^4 prior
+  anchored to the data scale cannot separate in-band from beyond-band
+  on real data (rho falls ~3 orders across the band, nu^4 spans ~1.5);
+  its real benefit was CONDITIONING the ML replay (RESID 6.5 -> 0.86 at
+  2 its on bgal). That benefit should be captured instead by the S7
+  warm start from the previous ML map and a box-scaled iteration
+  budget, not by a spectral prior.
+- `pcg_lambda_rel` (relative Tikhonov CLI): never used in production.
+  The INTERNAL mechanism `reconstructor_pcg%set_lambda_relative`
+  remains (used by the pcg mass/reduction test commanders with
+  MASS_LAMBDA_REL); only the CLI parameter, its parsing/validation, the
+  strategy and abinitio3D forwarding, and the UI registrations were
+  removed. The plain absolute lambda (PCG_LAMBDA) is unchanged.
+
+Removal verified: full sweep clean (only the internal setter and the
+'pcg_lambda_effective' diagnostic label remain), build clean, gated
+neutral fixture PASS at the baseline in-band ratio (0.843).
