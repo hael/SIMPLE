@@ -753,3 +753,38 @@ recovery suite. Benchmarks should add `euclid_diag=yes`.
   the detection, as designed).
 - Clean rebuild afterwards: PASS again; the mutations were reverted and
   the working tree verified clean of them.
+
+## 10. Second benchmark round and the FSC/deapodization order fix
+
+Benchmark round 2 (2026-08-23, commit 03844c75, euclid_diag=yes):
+
+- Stage-1 startvol fix confirmed on real data: stage-1 ref/ptcl 0.25
+  (gridding) / 0.21 (pcg) from iteration 1, matching the pre-refactor
+  control; no DIAG warnings; no auto-rescales triggered.
+- PCG (maxits_pcg=4): 5/5 correct maps, best 3.19 A, +23% wall time
+  (1465 vs 1192 s); maps judged better than gridding by the user.
+- Gridding: 7/8 correct, best 3.43 A — but the pre-refactor control
+  reached 3.19 A: a gridding-only resolution regression.
+- The gated rec3D_backends PASSes on real data (gated band k=2-45,
+  in-band ratio 1.15).
+
+Cause of the gridding regression: `sampl_dens_correct_eos` applied the
+new deapodization to the half maps BEFORE computing the half-map FSC.
+Legacy computed the FSC on uncorrected halves (the old grid correction
+lived in the commander, after assembly). The inverse envelope's gain
+rises toward the volume edge, so rim noise inside the FSC mask is
+up-weighted (~1.4x at the mask radius for box 128), which pushes the
+FSC crossing down ~3 shells (3.19 -> 3.43) and — because this FSC also
+drives ml_reg and the reference filter — degrades the refinement itself.
+PCG was unaffected (its envelope lives inside the solver).
+
+Fix: the halves written to disk (final and _unfil) are deapodized
+copies, while the in-memory halves used for the FSC/cFAR stay
+undeapodized — restoring the legacy FSC estimate exactly. Verified: the
+gated neutral fixture still PASSes. Validation: rerun the gridding
+benchmark; acceptance is 3.19 A best resolution at the control failure
+rate.
+
+Aside from round 2: the PCG ml-replay RESID printed 0.72 without rtol
+vs 0.31 with rtol=1e-3 at the same 4 iterations (STOP=fixed_iterations
+vs maxits) — worth a look when tuning the §6 convergence-control item.

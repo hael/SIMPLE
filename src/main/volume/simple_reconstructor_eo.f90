@@ -521,8 +521,10 @@ contains
             deallocate(cmat)
             call even%ifft()
             call even%clip_inplace([self%box,self%box,self%box])
-            call self%deapodize(even)
-            call even%write(add2fbody(fname_even,MRC_EXT,'_unfil'))
+            ! write a deapodized copy; the in-memory half stays undeapodized so the
+            ! FSC below matches the legacy estimate (the inverse envelope's edge
+            ! gain up-weights rim noise and shifts the FSC crossing)
+            call write_deapodized(even, add2fbody(fname_even,MRC_EXT,'_unfil'))
             ! odd
             cmat = self%odd%get_cmat()
             call self%odd%sampl_dens_correct
@@ -531,8 +533,7 @@ contains
             deallocate(cmat)
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
-            call self%deapodize(odd)
-            call odd%write(add2fbody(fname_odd,MRC_EXT,'_unfil'))
+            call write_deapodized(odd, add2fbody(fname_odd,MRC_EXT,'_unfil'))
             ! Regularization
             if( l_have_fsc )then
                 if( (self%p_ptr%conical_fsc == 'yes') )then
@@ -599,12 +600,10 @@ contains
             ! clip
             call self%even%clip(even)
             call self%odd%clip(odd)
-            ! deapodization
-            call self%deapodize(even)
-            call self%deapodize(odd)
-            ! write un-normalised unmasked even/odd volumes
-            call even%write(fname_even, del_if_exists=.true.)
-            call odd%write(fname_odd,   del_if_exists=.true.)
+            ! write un-normalised unmasked DEAPODIZED even/odd volumes; the in-memory
+            ! halves stay undeapodized so the FSC below matches the legacy estimate
+            call write_deapodized(even, fname_even)
+            call write_deapodized(odd,  fname_odd)
             if( .not. l_have_fsc )then
                 if( self%p_ptr%l_envfsc )then
                     call calc_env_fsc_optlp(self%p_ptr, even, odd, state, self%fsc, envmsk=volmsk)
@@ -631,6 +630,19 @@ contains
         call odd%kill
         call cones_fsc%kill
         call volmsk%kill
+
+        contains
+
+            subroutine write_deapodized( vol, fname )
+                class(image),  intent(in) :: vol
+                class(string), intent(in) :: fname
+                type(image) :: tmp
+                call tmp%copy(vol)
+                call self%deapodize(tmp)
+                call tmp%write(fname, del_if_exists=.true.)
+                call tmp%kill
+            end subroutine write_deapodized
+
     end subroutine sampl_dens_correct_eos
 
     subroutine calc_env_fsc_optlp( params, even, odd, state, fsc_corrected, envmsk )
