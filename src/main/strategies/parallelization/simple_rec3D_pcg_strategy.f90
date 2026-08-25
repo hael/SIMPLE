@@ -28,6 +28,49 @@ real,    parameter :: PCG_LAMBDA = 1.0e-3
 
 contains
 
+    !> Cross-iteration ML warm start (drop_legacy_box_division.md S7/S11.2).
+    !! The ML replay used to start from the unregularized base solution, which
+    !! carries full-amplitude beyond-band noise the ML prior drives toward
+    !! zero; on large boxes a 2-4 iteration budget cannot close that gap
+    !! (bgal, box 256: relative residual 6.5 after 2 iterations). The previous
+    !! refinement iteration's ML half map is close to the current ML solution
+    !! (small per-iteration orientation change), and under the data-quotient
+    !! convention a constant-FOV box change is a factor-free Fourier pad/clip,
+    !! so read_and_crop makes the warm start valid across crop changes. Rules:
+    !! each half warm-starts strictly from its own previous half (gold-standard
+    !! FSC independence), the soft support mask is re-applied after resampling
+    !! (Fourier padding rings slightly outside it), and the noise starting
+    !! volume of the first iteration is excluded by its workflow-contract name
+    !! (warm-starting the ML system from noise is worse than the base
+    !! solution). When no usable previous half exists, x keeps the base
+    !! solution it already holds.
+    subroutine override_ml_warm_start_from_previous( params, state_here, half, x, context )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: state_here
+        character(len=*),  intent(in)    :: half, context
+        real,              intent(inout) :: x(:,:,:)
+        type(string) :: prev_fname
+        type(image)  :: prev
+        if( state_here < 1 .or. state_here > size(params%vols) ) return
+        if( len_trim(params%vols(state_here)%to_char()) == 0 ) return
+        prev_fname = add2fbody(params%vols(state_here), MRC_EXT, '_'//trim(half))
+        if( index(prev_fname%to_char(), 'startvol') > 0 )then
+            call prev_fname%kill
+            return
+        endif
+        if( .not. file_exists(prev_fname) )then
+            call prev_fname%kill
+            return
+        endif
+        call prev%read_and_crop(prev_fname, params%smpd, params%box_crop, params%smpd_crop)
+        call prev%mask3D_soft(params%msk_crop, backgr=0.)
+        x = prev%get_rmat()
+        call prev%kill
+        write(logfhandle,'(A)') '>>> PCG ML WARM START ('//trim(context)//'/'//trim(half)//&
+            &'): previous-iteration ML half map '//prev_fname%to_char()
+        call prev_fname%kill
+    end subroutine override_ml_warm_start_from_previous
+
     subroutine execute_rec3D_pcg_shared( params, build, cline )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -381,6 +424,7 @@ contains
             call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
                 &prior_to_khat_l1, prior_to_khat_rms)
             x = base_volume%get_rmat()
+            call override_ml_warm_start_from_previous(params, state_here, half, x, 'shared')
             t_phase = tic()
             call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
@@ -1498,6 +1542,7 @@ contains
             endif
             if( l_ml_solve )then
                 x = warm_start%get_rmat()
+                call override_ml_warm_start_from_previous(params, state_here, half, x, 'distributed')
             else
                 allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             endif

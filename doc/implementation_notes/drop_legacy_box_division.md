@@ -968,3 +968,29 @@ indistinguishable from the intrinsic stochastic ab initio failure rate
 - Remaining open items are PCG-only: the S7 ML-replay warm start
   (RESID 6.5 at 2 its on box 256 is the real S6 root cause) and a
   box-scaled iteration budget.
+
+## 13. Cross-iteration ML warm start (branch pcg_ml_warm_start)
+
+Implemented 2026-08-25 per S7/S11.2: both ML-replay solve sites in
+simple_rec3D_pcg_strategy.f90 (shared and distributed) now warm-start
+from the PREVIOUS refinement iteration's ML half map when one exists on
+disk (params%vols(state) + '_even'/'_odd'), via read_and_crop
+(factor-free constant-FOV pad/clip under the data-quotient convention)
+with the soft support mask re-applied after resampling. Each half uses
+strictly its own previous half (FSC independence). The first-iteration
+noise starting volume is excluded by its 'startvol' workflow-contract
+name; with no usable previous half the solve keeps the base-solution
+warm start (previous behavior, e.g. reconstruct3D standalone — so
+test=rec3D_backends is unaffected by design and cannot exercise this).
+
+Expected effect: closes the warm-start gap measured on bgal (ML RESID
+6.5 at 2 iterations from the base solution) because the previous ML map
+already carries the regularized beyond-band roll-off; the centre-bin
+and k=1-2 anomalies (S6) should shrink with it.
+
+Acceptance: a refine3D continuation with rec_backend=pcg maxits_pcg=2 on
+bgal — '>>> PCG ML WARM START' lines present from iteration 1, ML RESID
+per iteration well below the cold 6.5 and decreasing, centre-bin
+diagnostic (post-run rec3D_backends) toward 1, resolution not degraded
+vs maxits_pcg=4 cold. Compare against master (no warm start) at
+identical settings.
