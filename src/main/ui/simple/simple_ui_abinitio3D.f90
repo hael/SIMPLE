@@ -43,6 +43,12 @@ contains
         &'Maximum kernel PCG iterations from stage 3 onward; independent of stage refinement iterations', &
         &'iterations{2}', .false., 2., group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call abinitio3D%add_input(UI_PARM, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
+        &'Graded solvent-flatness prior strength relative to the PCG data scale, forwarded to the refine3D '//&
+        &'stages; live only where the state-specific NU evidence envelope exists (automsk=yes in the late '//&
+        &'stages makes it exist lag-one from there); 0 = off', 'strength{0}', &
+        &.false., 0.0, group="search", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)

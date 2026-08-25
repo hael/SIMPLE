@@ -255,6 +255,9 @@ contains
         &'PCG iterations for the comparison', 'iterations{2}', .false., 2.)
         call rec3D_backends%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Tolerance for the comparison', 'tolerance{0}', .false., 0.0)
+        call rec3D_backends%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
+        &'Solvent-flatness prior strength relative to the PCG data scale, applied on the pcg leg; requires '//&
+        &'ml_reg (objfun=euclid) and the NU evidence envelope; 0 = off', 'strength{0}', .false., 0.0)
         call rec3D_backends%add_input(UI_IMG, 'vol1', 'file', 'Ground-truth volume', &
         &'Known volume the particles were simulated from; enables the radial recon/truth table', &
         &'e.g. truth.mrc', .false., '')

@@ -2097,12 +2097,15 @@ end subroutine exec_test_pcg_recon
 !    7. finite-difference gradient   -- grad of R_s(x) = (1/2) x^T Q_s x is Q_s x
 !    8. composition                  -- P (H_data + lambda_s Q_s + lambda) P
 !                                       stays symmetric positive-definite
+!    9. priored solve parity         -- monolithic streaming vs two-part raw
+!                                       reduction at a positive strength: the
+!                                       exact shared-vs-nparts execution seam
 !
 !  Mutation contract (R4, verified manually and recorded in pcg_priors.md S10):
 !  replacing L^T L by L (outer weight sqrt(s) instead of s) must fail stage 2;
 !  dropping the rank-one mean term (Q x = s.*x) must fail stage 4.
 subroutine exec_test_pcg_priors( self, cline )
-    use simple_reconstructor_pcg, only: reconstructor_pcg
+    use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL
     class(commander_test_pcg_priors), intent(inout) :: self
     class(cmdline),                   intent(inout) :: cline
     integer, parameter :: BOX = 24, NPROJS = 12, NCTF = 3
@@ -2118,18 +2121,24 @@ subroutine exec_test_pcg_priors( self, cline )
     real,    parameter :: OP_RELTOL   = 1.0e-4   ! matches pcg_recon's NORMAL_OP_RELTOL
     real,    parameter :: KV = 300., CS = 2.7, FRACA = 0.1
     real,    parameter :: DFX_VALS(NCTF) = [1.0, 1.8, 2.6]
-    type(reconstructor_pcg) :: pcgop
+    real,    parameter :: PARITY_RELTOL = 5.0e-4  ! matches pcg_recon's STREAM_SOLVE_RELTOL
+    integer, parameter :: PARITY_ITS    = 20
+    type(reconstructor_pcg) :: pcgop, pcg_parts, pcg_reduce
     type(oris)              :: projdirs
     type(ori)               :: e
     type(ctfparams)         :: ctfparms
+    type(string)            :: raw1, raw2
     real,    allocatable    :: m_env(:,:,:), m_pert(:,:,:), s_diag(:,:,:)
     real,    allocatable    :: x(:,:,:), y(:,:,:), d(:,:,:), ones_vol(:,:,:)
     real,    allocatable    :: qx(:,:,:), qy(:,:,:), qc(:,:,:), qx_pert(:,:,:)
     real,    allocatable    :: hp(:,:,:), hq(:,:,:), sig2arr(:), sig2_2d(:,:)
+    real,    allocatable    :: xa(:,:,:), xb(:,:,:)
+    complex, allocatable    :: gx_plane(:,:), Ti(:,:), y_planes(:,:,:)
     integer, allocatable    :: iseed(:)
     real(dp) :: dp_x_qy, dp_qx_y, dp_x_qx, r_plus, r_minus, g_fd, g_an
     real     :: ctr, rr, adj_err, null_err, cont_err, fd_err, s_mean
-    integer  :: i, j, k, g, n_eff, n_plateau, n_bad, iseed_n, R, lims2(2,2)
+    real     :: parity_err, lam_a, lam_b
+    integer  :: i, j, k, g, n_eff, n_plateau, n_bad, iseed_n, R, lims2(2,2), nraw, niters
     logical  :: all_ok
     all_ok = .true.
 
@@ -2308,6 +2317,78 @@ subroutine exec_test_pcg_priors( self, cline )
         all_ok = .false.
     else
         write(logfhandle,'(a)') '    PASS: priored masked operator remains symmetric positive-definite'
+    endif
+
+    ! ============ STAGE 9: priored solve parity, monolithic vs raw reduction ============
+    ! The exact seam that separates shared-memory from nparts=2 execution is
+    ! the raw (B,D) artifact reduction; everything downstream (finalization,
+    ! data scale, effective solvent strength, kernel solve) is master-local.
+    ! Solve the same synthetic problem WITH the prior at a positive strength
+    ! through both routes and require the solutions to agree.
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> STAGE 9: priored solve parity, monolithic vs two-part raw reduction'
+        allocate(gx_plane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
+        allocate(Ti(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
+        allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
+        call pcgop%set_volume(m_env)   ! any in-support structure serves
+        do i = 1, NPROJS
+            call projdirs%get_ori(i, e)
+            call pcgop%forward_plane(e, gx_plane)
+            Ti = pcgop%build_transfer(e%get_ctfvars(), e%get_2Dshift(), sig2arr)
+            y_planes(:,:,i) = Ti * gx_plane
+        end do
+        ! route A: monolithic streaming accumulation on the priored operator
+        call pcgop%begin_accum
+        call pcgop%accumulate_batch(y_planes, NPROJS, 1)
+        call pcgop%end_accum(.true.)
+        call pcgop%set_op_mode(PCG_OP_KERNEL)
+        lam_a = pcgop%get_effective_solvent_lambda()
+        allocate(xa(BOX,BOX,BOX), source=0.0)
+        call pcgop%solve_accum(xa, maxits=PARITY_ITS, rtol=0.0, niters=niters)
+        ! route B: two raw artifacts, fixed-order reduction, same prior
+        raw1 = 'test_pcg_priors_raw1.dat'
+        raw2 = 'test_pcg_priors_raw2.dat'
+        call pcg_parts%new(BOX, SMPD, LAMBDA)
+        call pcg_parts%set_deapod(.false.)
+        call pcg_parts%set_mask(MSKRAD)
+        call pcg_parts%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+        call pcg_parts%begin_accum
+        call pcg_parts%accumulate_batch(y_planes(:,:,1:NPROJS/2), NPROJS/2, 1)
+        call pcg_parts%write_raw_accum(raw1, 1, 0, 1, 2, NPROJS/2, 'pcg_priors_test_v1')
+        call pcg_parts%begin_accum
+        call pcg_parts%accumulate_batch(y_planes(:,:,NPROJS/2+1:NPROJS), NPROJS/2, NPROJS/2+1)
+        call pcg_parts%write_raw_accum(raw2, 1, 0, 2, 2, NPROJS/2, 'pcg_priors_test_v1')
+        call pcg_parts%end_accum(.false.)
+        call pcg_reduce%new(BOX, SMPD, LAMBDA)
+        call pcg_reduce%set_deapod(.false.)
+        call pcg_reduce%set_mask(MSKRAD)
+        call pcg_reduce%set_solvent_prior(m_env, 1.0)
+        call pcg_reduce%begin_reduction
+        call pcg_reduce%add_raw_accum(raw1, 1, 0, 1, 2, 'pcg_priors_test_v1', nraw)
+        call pcg_reduce%add_raw_accum(raw2, 1, 0, 2, 2, 'pcg_priors_test_v1', nraw)
+        call pcg_reduce%end_accum(.true.)
+        call pcg_reduce%set_op_mode(PCG_OP_KERNEL)
+        lam_b = pcg_reduce%get_effective_solvent_lambda()
+        allocate(xb(BOX,BOX,BOX), source=0.0)
+        call pcg_reduce%solve_accum(xb, maxits=PARITY_ITS, rtol=0.0, niters=niters)
+        parity_err = sqrt(sum((xa-xb)**2)) / max(1.0, sqrt(sum(xa*xa)))
+        write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    lambda_eff A=', lam_a, ' B=', lam_b, &
+            &' rel_err(x)=', parity_err
+        if( lam_a <= 0.0 .or. lam_b <= 0.0 .or. &
+            &abs(lam_a-lam_b) > 1.0e-6*max(lam_a,lam_b) .or. parity_err > PARITY_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: priored solve differs between monolithic and raw-reduction routes'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: priored solve is route-independent (shared vs nparts seam)'
+        endif
+        call pcg_parts%kill
+        call pcg_reduce%kill
+        call del_file(raw1)
+        call del_file(raw2)
+        call raw1%kill
+        call raw2%kill
+    else
+        write(logfhandle,'(a)') '>>> STAGE 9 SKIPPED: an earlier stage failed'
     endif
 
     call pcgop%kill

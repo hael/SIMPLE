@@ -355,6 +355,11 @@ subroutine new_automask( prgtab )
         &'Maximum kernel PCG iterations; independent of refine3D outer maxits', 'iterations{2}', &
         &.false., 2., group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call refine3D%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
+        &'Graded solvent-flatness prior strength relative to the PCG data scale; ML replays only, requires '//&
+        &'the state-specific NU evidence envelope (automsk=yes); 0 = off', 'strength{0}', &
+        &.false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, nu_refine, group="filter", &
         &visibility=UI_VIS_ADVANCED)

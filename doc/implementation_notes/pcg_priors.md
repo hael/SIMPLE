@@ -572,23 +572,29 @@ usable envelope.
 
 ### Stage 3 — workflow integration incl. abinitio3D, Gate B (invariants)
 
-- Live prior in the ML replays; skip/resample paths active; diagnostics
-  final. Register the strength on `test=rec3D_backends` (pcg-only key
-  handling as before) so the standing harness measures prior effects.
-- **abinitio3D forwarding is part of this stage, not a later one**: register
-  the strengths for `abinitio3D` and forward them to the refine3D stages
-  exactly as `maxits_pcg`/`rec_backend` are forwarded (R10). The
-  envelope-dependent priors become live in whatever stages have a compatible
-  NU envelope: with `automsk=yes` in the late abinitio3D stages the envelope
-  exists lag-one from that point, and the skip logic keeps earlier stages
-  cleanly unpriored — no stage-gating code beyond the existing envelope
-  validation.
-- Gate: R5 strength-zero bit-identity end-to-end; envelope-absent skip;
-  shared vs `nparts=2` parity on the fixture at a positive strength; one
-  full abinitio3D run with `rec_backend=pcg automsk=yes` and a positive
-  strength completes, shows the prior activating exactly when the envelope
-  first exists, exercises the stage-handoff resample, and the gated
-  `rec3D_backends` passes at a small positive strength.
+**Implementation DONE (2026-08-25); real-data gate items pending.**
+`pcg_solvent_lambda_rel` is registered on `refine3D` and `abinitio3D`
+(activation-gated on `rec_backend=pcg`, like `maxits_pcg`) and on
+`test=rec3D_backends`; abinitio3D forwards it through the inherited
+`cline_refine3D` plus `apply_refine3D_reconstruction_controls` (R10, exactly
+the `maxits_pcg`/`rtol` route). No further forwarding was needed: the PCG
+master always runs inside the process whose own command line carries the key
+(`simple_refine3D_strategy` and `simple_rec3D_strategy` both pass `params`),
+and workers only accumulate raw statistics.
+
+- Gate results so far: `test=pcg_priors` Stage 9 solves the same priored
+  synthetic problem through monolithic streaming AND two-part raw reduction
+  — the exact seam separating shared from `nparts=2` execution — with
+  identical effective strengths and rel_err(x) = 4.2e-5 (PASS); the fixture
+  `rec3D_backends` with `pcg_solvent_lambda_rel=0` explicit on the command
+  line is bit-identical (.8428) — R5 strength-zero identity end-to-end.
+- **Pending on real data** (user-side runs): envelope-absent skip lines in a
+  production refine3D log; one full abinitio3D run with
+  `rec_backend=pcg automsk=yes` and a positive strength completing, showing
+  the prior activating exactly when the envelope first exists lag-one and
+  exercising the stage-handoff resample; gated `rec3D_backends` at a small
+  positive strength (needs `objfun=euclid` + envelope, i.e. a refine3D run
+  directory).
 
 ### Stage 4 — Gate C science, synthetic (converged settings, R3)
 
