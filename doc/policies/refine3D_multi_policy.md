@@ -10,6 +10,7 @@ Related workflow policies:
 
 - [refine3D_policy.md](refine3D_policy.md)
 - [refine3D_auto_policy.md](refine3D_auto_policy.md)
+- [refine3D_het_policy.md](refine3D_het_policy.md)
 - [automasking_policy.md](automasking_policy.md)
 - [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
 - [sigma_calculation_policy.md](sigma_calculation_policy.md)

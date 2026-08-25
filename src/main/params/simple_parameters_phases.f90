@@ -9,8 +9,8 @@ implicit none
 ! envelope, and which therefore require a nonuniform filt_mode when automsk is on.
 ! prepare_matching_reference_mask is the authoritative runtime check; this list
 ! exists only so the failure is reported at parameter-parse time instead.
-character(len=14), parameter :: NU_ENVMASK_REF_PRGS(4) = &
-    &[character(len=14) :: 'refine3D', 'refine3D_auto', 'refine3D_multi', 'abinitio3D']
+character(len=14), parameter :: NU_ENVMASK_REF_PRGS(5) = &
+    &[character(len=14) :: 'refine3D', 'refine3D_auto', 'refine3D_multi', 'refine3D_het', 'abinitio3D']
 
 contains
 

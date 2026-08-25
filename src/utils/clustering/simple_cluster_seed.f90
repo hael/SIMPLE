@@ -226,47 +226,70 @@ contains
     subroutine draw_squared_uniform_projdir(os, power)
         type(oris), intent(inout) :: os
         real,       intent(in)    :: power
-        integer, allocatable      :: order(:), config(:), projs(:), inds(:)
+        integer, allocatable      :: order(:), config(:), projs(:), fen(:)
+        integer, allocatable      :: bucket(:), bcount(:), boffset(:), cursor(:)
         real,    allocatable      :: corrs(:), projcorrs(:)
-        real           :: rnincl
-        integer        :: iptcl, s, i, n95, ninproj, iproj, nprojs
-        logical        :: mask(nptcls)
+        integer        :: iptcl, s, i, n95, ninproj, iproj, nprojs, ofs, navail
         write(logfhandle,'(A)') '>>> MIXED SQUARED & UNIFORM PROJECTION DIRECTION SAMPLING'
-        allocate(order(nptcls), config(nptcls), corrs(nptcls), projs(nptcls))
+        allocate(order(nptcls), config(nptcls), corrs(nptcls), projs(nptcls), projcorrs(nptcls), fen(nptcls))
         config = 0
-        mask   = (states > 0) .and. (states <= nlabels)
         corrs  = os%get_all('corr')
         projs  = int(os%get_all('proj'))
-        order  = (/(iptcl,iptcl=1,nptcls)/)
-        where( .not.mask )
+        ! particles not eligible for relabelling are excluded from every proj bucket and sort
+        where( .not.((states > 0) .and. (states <= nlabels)) )
             corrs = -1.
             projs = 0
         end where
         nprojs = maxval(projs)
+        ! bucket particles by proj id once (counting sort), replacing the per-projection
+        ! pack() that made the original loop O(nptcls * nprojs)
+        allocate(bucket(nptcls), bcount(nprojs), boffset(0:nprojs), cursor(nprojs))
+        bcount = 0
+        do iptcl = 1,nptcls
+            if( projs(iptcl) > 0 ) bcount(projs(iptcl)) = bcount(projs(iptcl)) + 1
+        enddo
+        boffset(0) = 0
         do iproj = 1,nprojs
-            inds = pack((/(iptcl,iptcl=1,nptcls)/), projs(:)==iproj)
-            if( .not. allocated(inds) ) cycle
-            ninproj = size(inds)
+            boffset(iproj) = boffset(iproj-1) + bcount(iproj)
+        enddo
+        cursor = boffset(0:nprojs-1)
+        do iptcl = 1,nptcls
+            iproj = projs(iptcl)
+            if( iproj == 0 ) cycle
+            cursor(iproj) = cursor(iproj) + 1
+            bucket(cursor(iproj)) = iptcl
+        enddo
+        do iproj = 1,nprojs
+            ninproj = bcount(iproj)
             if( ninproj == 0 ) cycle
-
+            ofs = boffset(iproj-1)
             if( ninproj <= 2*nlabels )then
                 ! random uniform
                 s = irnd_uni(nlabels)
                 do i = 1, ninproj
-                    iptcl = inds(i)
+                    iptcl = bucket(ofs+i)
                     s = s + 1
                     if( s > nlabels ) s = 1
                     config(iptcl) = s
-                    mask(iptcl)   = .false.
                 enddo
             else
-                order     = inds
-                projcorrs = corrs(order)
-                call hpsort(projcorrs, order)
-                call reverse(order)
+                ! order/projcorrs are preallocated once above and reused per iproj via slicing,
+                ! avoiding the per-iteration allocate/deallocate the original incurred
+                order(1:ninproj)     = bucket(ofs+1:ofs+ninproj)
+                projcorrs(1:ninproj) = corrs(order(1:ninproj))
+                call hpsort(projcorrs(1:ninproj), order(1:ninproj))
+                call reverse(order(1:ninproj))
+                ! Fenwick (BIT) tree over ranks 1..ninproj tracks which ranks are still
+                ! available, so draw() can pick-and-remove the k-th available rank in
+                ! O(log ninproj) instead of the original rejection loop, whose cost blows
+                ! up (up to O(ninproj) per draw) once most low ranks have been consumed
+                fen(1:ninproj) = 1
+                do i = 1,ninproj
+                    if( i + iand(i,-i) <= ninproj ) fen(i+iand(i,-i)) = fen(i+iand(i,-i)) + fen(i)
+                enddo
+                navail = ninproj
                 ! First 95%, stochastic rank-powered for first partition
                 n95    = min(ninproj-1, nint(0.95*real(ninproj)) + nlabels)
-                rnincl = real(ninproj-1)
                 iptcl  = 0
                 do i = 1, n95, nlabels
                     if( i > ninproj )exit
@@ -281,35 +304,63 @@ contains
                 ! Leftovers: random uniform
                 s = irnd_uni(nlabels)
                 do i = 1, ninproj
-                    iptcl = inds(i)
-                    if( mask(iptcl) )then
+                    iptcl = bucket(ofs+i)
+                    if( config(iptcl) == 0 )then
                         s = s + 1
                         if( s > nlabels ) s = 1
                         config(iptcl) = s
-                        mask(iptcl)   = .false.
                     endif
                 enddo
-                deallocate(projcorrs,order,inds)
             endif
         enddo
         where((states > 0) .and. (states <= nlabels)) states = config
         ! cleanup
-        deallocate(config,corrs,projs)
+        deallocate(config,corrs,projs,order,projcorrs,fen,bucket,bcount,boffset,cursor)
     contains
 
         subroutine draw( p, s )
             real,    intent(in) :: p
             integer, intent(in) :: s
-            integer :: ind, j
-            j   = ceiling(ran3()**p * rnincl) + 1
-            ind = order(j)
-            do while(.not.mask(ind))
-                j   = ceiling(ran3()**p * rnincl) + 1
-                ind = order(j)
-            enddo
-            config(ind) = s
-            mask(ind)   = .false.
+            integer :: k, rank
+            k    = ceiling(ran3()**p * real(navail-1)) + 1
+            rank = bit_select(k)
+            config(order(rank)) = s
+            call bit_remove(rank)
+            navail = navail - 1
         end subroutine draw
+
+        ! finds the position of the k-th rank still flagged available in fen(1:ninproj)
+        integer function bit_select(k)
+            integer, intent(in) :: k
+            integer :: remaining, pw, idx
+            remaining = k
+            idx       = 0
+            pw        = 1
+            do while( pw*2 <= ninproj )
+                pw = pw*2
+            enddo
+            do while( pw > 0 )
+                if( idx+pw <= ninproj )then
+                    if( fen(idx+pw) < remaining )then
+                        idx       = idx + pw
+                        remaining = remaining - fen(idx)
+                    endif
+                endif
+                pw = pw/2
+            enddo
+            bit_select = idx + 1
+        end function bit_select
+
+        ! marks rank as no longer available in the Fenwick tree
+        subroutine bit_remove(rank)
+            integer, intent(in) :: rank
+            integer :: pos
+            pos = rank
+            do while( pos <= ninproj )
+                fen(pos) = fen(pos) - 1
+                pos = pos + iand(pos,-pos)
+            enddo
+        end subroutine bit_remove
 
     end subroutine draw_squared_uniform_projdir
 

@@ -115,8 +115,7 @@ contains
     module subroutine map_cavgs_selection( self, states )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: states(:)
-        integer, allocatable :: pinds(:)
-        integer :: icls, sz_cls2D, sz_cls3D, sz_states, ncls, i, s
+        integer :: icls, sz_cls2D, sz_cls3D, sz_states, nptcls2D, nptcls3D, iptcl, s
         sz_states = size(states)       
         sz_cls2D  = self%os_cls2D%get_noris()
         if( sz_cls2D /= sz_states )then
@@ -136,19 +135,24 @@ contains
             call self%os_cls3D%set(icls, 'state', states(icls))
         end do
         ! map selection to self%os_ptcl2D & os_ptcl3D
-        ncls = sz_states
-        if( self%os_ptcl2D%get_noris() > 0 .and. self%os_ptcl3D%get_noris() > 0)then
-            do icls=1,ncls
-                call self%os_ptcl2D%get_pinds(icls, 'class', pinds)
-                if( allocated(pinds) )then
-                    s = states(icls)
-                    do i=1,size(pinds)
-                        call self%os_ptcl2D%set(pinds(i), 'state', s)
-                        call self%os_ptcl3D%set(pinds(i), 'state', s)
-                    end do
-                    deallocate(pinds)
-                endif
+        nptcls2D = self%os_ptcl2D%get_noris()
+        nptcls3D = self%os_ptcl3D%get_noris()
+        if( nptcls2D /= nptcls3D )then
+            write(logfhandle,*) 'nptcls2D: ', nptcls2D
+            write(logfhandle,*) 'nptcls3D: ', nptcls3D
+            THROW_HARD('inconsistent number of particles in ptcl2D & ptcl3D fields')
+        else if( nptcls2D > 0 )then
+            !$omp parallel do private(iptcl,icls,s) default(shared) schedule(static) proc_bind(close)
+            do iptcl = 1,nptcls2D
+                if( self%os_ptcl2D%get_state(iptcl) == 0 ) cycle
+                icls = self%os_ptcl2D%get_class(iptcl)
+                ! preserve get_pinds behavior: invalid/unclassified particles remain unchanged
+                if( icls < 1 .or. icls > sz_states ) cycle
+                s = states(icls)
+                call self%os_ptcl2D%set_state(iptcl, s)
+                call self%os_ptcl3D%set_state(iptcl, s)
             end do
+            !$omp end parallel do
         endif
     end subroutine map_cavgs_selection
 
@@ -428,12 +432,13 @@ contains
     module subroutine prune_particles( self )
         class(sp_project), target, intent(inout) :: self
         type(oris)                :: os_ptcl2d, os_ptcl3d, os_stk, os_mic
-        type(string)              :: stkname
         logical,      allocatable :: stks_mask(:), ptcls_mask(:)
-        integer,      allocatable :: stkinds(:), stk2mic_inds(:), mic2stk_inds(:)
-        integer                   :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt, ldim(3)
+        integer,      allocatable :: stkinds(:), stk2mic_inds(:), mic2stk_inds(:), stk_pop(:)
+        integer,      allocatable :: stk_new_ind(:), stk_offset(:)
+        integer                   :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt
         integer                   :: nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
         integer                   :: stkind, ptcl_glob, nptcls_eff, indstk, nptcls_stk
+        logical                   :: l_has_nptcls_stk
         nstks_tot  = self%get_nstks()
         if( nstks_tot == 0 ) THROW_HARD('No particles to operate on!')
         ! particles reverse indexing
@@ -450,11 +455,15 @@ contains
             endif
         enddo
         !$omp end parallel do
+        ! per-stack surviving particle counts, single pass instead of O(nstks*nptcls) count()
+        allocate(stk_pop(nstks_tot), source=0)
+        do iptcl = 1,nptcls_tot
+            if( ptcls_mask(iptcl) ) stk_pop(stkinds(iptcl)) = stk_pop(stkinds(iptcl)) + 1
+        enddo
         ! stacks
         allocate(stks_mask(nstks_tot))
         do istk = 1,nstks_tot
-            stks_mask(istk) = self%os_stk%get_state(istk) > 0
-            if( count(stkinds==istk) == 0 ) stks_mask(istk) = .false.
+            stks_mask(istk) = self%os_stk%get_state(istk) > 0 .and. stk_pop(istk) > 0
         enddo
         nstks = count(stks_mask)
         call os_stk%new(nstks, is_ptcl=.false.)
@@ -467,26 +476,36 @@ contains
         ! removing deselected particles
         call os_ptcl2d%new(nptcls_eff, is_ptcl=.true.)
         call os_ptcl3d%new(nptcls_eff, is_ptcl=.true.)
-        stkind     = 0
-        stk_cnt    = 0
-        top_glob   = 0
-        ptcl_glob  = 0
+        ! precompute the destination stack index & particle offset of each surviving stack,
+        ! so that the loop below can fill disjoint index ranges independently per stack
+        allocate(stk_new_ind(nstks_tot), stk_offset(nstks_tot), source=0)
+        stk_cnt  = 0
+        top_glob = 0
         do istk = 1,nstks_tot
             if( .not.stks_mask(istk) ) cycle
-            stk_cnt    = stk_cnt + 1
-            stkind     = stkind  + 1
+            stk_cnt           = stk_cnt + 1
+            stk_new_ind(istk) = stk_cnt
+            stk_offset(istk)  = top_glob
+            top_glob          = top_glob + stk_pop(istk)
+        enddo
+        !$omp parallel do proc_bind(close) default(shared) schedule(dynamic) &
+        !$omp private(istk,iptcl,stkind,fromp,top,fromp_glob,ptcl_glob,ptcl_cnt,indstk,l_has_nptcls_stk,nptcls_stk)
+        do istk = 1,nstks_tot
+            if( .not.stks_mask(istk) ) cycle
+            stkind     = stk_new_ind(istk)
             fromp      = self%os_stk%get_fromp(istk)
             top        = self%os_stk%get_top(istk)
-            fromp_glob = top_glob+1
+            fromp_glob = stk_offset(istk) + 1
             ptcl_cnt   = 0
+            ! hoisted out of the per-particle loop below, depends only on istk
+            l_has_nptcls_stk = self%os_stk%isthere(istk, 'nptcls_stk')
+            if( l_has_nptcls_stk ) nptcls_stk = self%os_stk%get_int(istk, 'nptcls_stk')
             do iptcl = fromp,top
                 if( .not.ptcls_mask(iptcl) )cycle
-                ptcl_glob = ptcl_glob + 1
-                top_glob  = top_glob+1
                 ptcl_cnt  = ptcl_cnt+1
+                ptcl_glob = fromp_glob + ptcl_cnt - 1
                 indstk = iptcl - fromp + 1
-                if( self%os_stk%isthere(istk, 'nptcls_stk') )then
-                    nptcls_stk = self%os_stk%get_int(istk, 'nptcls_stk')
+                if( l_has_nptcls_stk )then
                     if( self%os_ptcl2D%isthere(iptcl, 'indstk') )then
                         indstk = self%os_ptcl2D%get_int(iptcl, 'indstk')
                     endif
@@ -504,22 +523,28 @@ contains
                 call os_ptcl3D%set(ptcl_glob,'indstk',indstk)
             enddo
             ! update stack
-            call os_stk%transfer_ori(stk_cnt, self%os_stk, istk)
-            call os_stk%set(stk_cnt, 'fromp',  fromp_glob)
-            call os_stk%set(stk_cnt, 'top',    top_glob)
-            call os_stk%set(stk_cnt, 'nptcls', ptcl_cnt)
-            if( .not.os_stk%isthere(stk_cnt, 'nptcls_stk') )then
-                ! backwards compatibility
-                stkname = os_stk%get_str(stk_cnt, 'stk')
-                call find_ldim_nptcls(stkname, ldim, nptcls_stk)
-                call os_stk%set(stk_cnt, 'nptcls_stk', nptcls_stk)
+            call os_stk%transfer_ori(stkind, self%os_stk, istk)
+            call os_stk%set(stkind, 'fromp',  fromp_glob)
+            call os_stk%set(stkind, 'top',    fromp_glob + ptcl_cnt - 1)
+            call os_stk%set(stkind, 'nptcls', ptcl_cnt)
+            if( .not.os_stk%isthere(stkind, 'nptcls_stk') )then
+                block
+                    ! backwards compatibility, local to keep block private across threads
+                    type(string) :: stkname_local
+                    integer      :: ldim_local(3), nptcls_stk_local
+                    stkname_local = os_stk%get_str(stkind, 'stk')
+                    call find_ldim_nptcls(stkname_local, ldim_local, nptcls_stk_local)
+                    call os_stk%set(stkind, 'nptcls_stk', nptcls_stk_local)
+                    call stkname_local%kill
+                end block
             endif
             ! update micrograph
             if( nmics_tot > 0 ) then
-                call os_mic%transfer_ori(stk_cnt, self%os_mic, stk2mic_inds(istk))
-                call os_mic%set(stk_cnt,'nptcls', ptcl_cnt)
+                call os_mic%transfer_ori(stkind, self%os_mic, stk2mic_inds(istk))
+                call os_mic%set(stkind,'nptcls', ptcl_cnt)
             endif
         enddo
+        !$omp end parallel do
         self%os_stk    = os_stk
         self%os_mic    = os_mic
         self%os_ptcl2d = os_ptcl2D
@@ -529,7 +554,6 @@ contains
         call os_mic%kill
         call os_ptcl2d%kill
         call os_ptcl3d%kill
-        call stkname%kill
     end subroutine prune_particles
 
     module subroutine scale_projfile( self, smpd_target, new_projfile, cline, cline_scale, dir )

@@ -14,119 +14,115 @@ interface calc_cartesian_corrmat
     module procedure calc_cartesian_corrmat_2
 end interface calc_cartesian_corrmat
 
-type(image)          :: mskimg
-integer, allocatable :: pairs(:,:)
-integer              :: nptcls, ntot, npix, norig, nsel
-
 contains
     
     subroutine calc_cartesian_corrmat_1( imgs, corrmat, msk, lp )
         type(image),       intent(inout) :: imgs(:)
         real, allocatable, intent(out)   :: corrmat(:,:)
         real, optional,    intent(in)    :: msk, lp
-        integer :: iptcl, jptcl, ipair, cnt
+        integer, allocatable :: pairs(:,:)
+        real    :: rmsk
+        integer :: iptcl, jptcl, ipair, cnt, nptcls, ntot
         nptcls = size(imgs)
-        ! prep imgs for corrcalc
-        call imgs(1)%memoize_mask_coords
-        do iptcl=1,nptcls
-            if( present(lp) )then
-                ! if( .not. present(msk) ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
-                ! apply a soft-edged mask
-                call imgs(iptcl)%mask2D_soft(msk)
-                ! Fourier transform
-                call imgs(iptcl)%fft()
-            endif
-        end do
+        rmsk   = 0.9 * real(imgs(1)%get_box()) / 2.0
+        if( present(msk) ) rmsk = msk
         if( allocated(corrmat) ) deallocate(corrmat)
-        allocate(corrmat(nptcls,nptcls))
-        corrmat = 1.
+        allocate(corrmat(nptcls,nptcls), source=1.0)
         ntot = (nptcls*(nptcls-1))/2
-        if( present(lp) )then ! Fourier correlation
-            cnt = 0
-            do iptcl=1,nptcls-1
-                do jptcl=iptcl+1,nptcls
-                    cnt = cnt+1
-                    call progress(cnt, ntot)
-                    corrmat(iptcl,jptcl) = imgs(iptcl)%corr(imgs(jptcl), lp_dyn=lp)
-                    corrmat(jptcl,iptcl) = corrmat(iptcl,jptcl)
-                end do
+        allocate(pairs(ntot,2))
+        cnt = 0
+        do iptcl = 1, nptcls-1
+            do jptcl = iptcl+1, nptcls
+                cnt = cnt + 1
+                pairs(cnt,1) = iptcl
+                pairs(cnt,2) = jptcl
             end do
-        else ! Real-space correlation
-            ! first make the pairs to balance the parallel section
-            allocate(pairs(ntot,2))
-            cnt = 0
-            do iptcl=1,nptcls-1
-                do jptcl=iptcl+1,nptcls
-                    cnt = cnt+1
-                    pairs(cnt,1) = iptcl
-                    pairs(cnt,2) = jptcl
-                end do
-            end do
-            !$omp parallel do default(shared) private(ipair) schedule(static) proc_bind(close)
-            do ipair=1,ntot
-                corrmat(pairs(ipair,1),pairs(ipair,2))=&
-                imgs(pairs(ipair,1))%real_corr(imgs(pairs(ipair,2)))
-                corrmat(pairs(ipair,2),pairs(ipair,1)) = corrmat(pairs(ipair,1),pairs(ipair,2))
+        end do
+        if( present(lp) )then
+            ! Fourier correlation
+            ! apply a soft-edged mask & fwd FT
+            call imgs(1)%memoize_mask_coords
+            !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
+            do iptcl=1,nptcls
+                call imgs(iptcl)%mask2D_soft(rmsk)
+                call imgs(iptcl)%fft()
             end do
             !$omp end parallel do
-            deallocate(pairs)
-            call mskimg%kill
+            !$omp parallel do default(shared) private(ipair) schedule(static) proc_bind(close)
+            do ipair = 1,ntot
+                corrmat(pairs(ipair,1),pairs(ipair,2)) = imgs(pairs(ipair,1))%corr(imgs(pairs(ipair,2)), lp_dyn=lp)
+            end do
+            !$omp end parallel do
+        else
+            ! Real-space correlation
+            !$omp parallel do default(shared) private(ipair) schedule(static) proc_bind(close)
+            do ipair=1,ntot
+                corrmat(pairs(ipair,1),pairs(ipair,2)) = imgs(pairs(ipair,1))%real_corr(imgs(pairs(ipair,2)))
+            end do
+            !$omp end parallel do
         endif
+        ! symmetrize matrix
+        do ipair = 1,ntot
+            corrmat(pairs(ipair,2),pairs(ipair,1)) = corrmat(pairs(ipair,1),pairs(ipair,2))
+        end do
+        ! cleanup
+        deallocate(pairs)
     end subroutine calc_cartesian_corrmat_1
 
     subroutine calc_cartesian_corrmat_2( imgs_sel, imgs_orig, corrmat, msk, lp )
         type(image),       intent(inout) :: imgs_sel(:), imgs_orig(:)
         real, allocatable, intent(out)   :: corrmat(:,:)
         real, optional,    intent(in)    :: msk, lp
-        integer :: iptcl, isel
-        logical :: doftcalc, domsk
+        real    :: rmsk
+        integer :: iptcl, isel, norig, nsel
+        logical :: err
         ! set const
-        norig    = size(imgs_orig)
-        nsel     = size(imgs_sel)
-        ! set operation modes
-        domsk    = present(msk)
-        doftcalc = present(lp)
-        ! prep sel imgs for corrcalc
-        call imgs_sel(1)%memoize_mask_coords
-        do iptcl=1,nsel
-            if( doftcalc )then
-                ! if( .not. domsk ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
-                ! apply a soft-edged mask
-                call imgs_sel(iptcl)%mask2D_soft(msk)
-                ! Fourier transform
-                call imgs_sel(iptcl)%fft()
-            endif
-        end do
-        ! prep orig imgs for corrcalc
-        do iptcl=1,norig
-            if( doftcalc )then
-                ! apply a soft-edged mask
-                call imgs_orig(iptcl)%mask2D_soft(msk)
-                ! Fourier transform
-                call imgs_orig(iptcl)%fft()
-            endif
-        end do
+        norig = size(imgs_orig)
+        nsel  = size(imgs_sel)
+        rmsk  = 0.9 * real(imgs_sel(1)%get_box()) / 2.0
+        if( present(msk) ) rmsk = msk
         if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(nsel,norig))
-        if( doftcalc )then ! Fourier correlation
+        ! Correlation marix calculation
+        if( present(lp) )then
+            ! prep imgs for Fourier corrcalc
+            ! apply a soft-edged mask & fwd FT
+            call imgs_sel(1)%memoize_mask_coords
+            do iptcl=1,nsel
+                call imgs_sel(iptcl)%mask2D_soft(rmsk)
+                call imgs_sel(iptcl)%fft()
+            end do
+            do iptcl=1,norig
+                call imgs_orig(iptcl)%mask2D_soft(rmsk)
+                call imgs_orig(iptcl)%fft()
+            end do
+            ! Fourier correlation
             do isel=1,nsel
-                call progress(isel,nsel)
                 do iptcl=1,norig
                     corrmat(isel,iptcl) = imgs_sel(isel)%corr(imgs_orig(iptcl),lp_dyn=lp)
                 end do
             end do
-        else ! Real-space correlation
-            if( domsk)then
-                call mskimg%disc(imgs_sel(1)%get_ldim(), imgs_sel(1)%get_smpd(), msk, npix)
-            endif
+        else
+            ! Real space correlations
+            ! prenormalization to zero mean and unit variance
+            !$omp parallel do default(shared) private(isel,err) schedule(static) proc_bind(close)
+            do isel=1,nsel
+                call imgs_sel(isel)%prenorm4real_corr(err)
+            end do
+            !$omp end parallel do
+            !$omp parallel do default(shared) private(iptcl,err) schedule(static) proc_bind(close)
+            do iptcl=1,norig
+                call imgs_orig(iptcl)%prenorm4real_corr(err)
+            end do
+            !$omp end parallel do
+            ! compute correlations
             !$omp parallel do collapse(2) default(shared) private(isel,iptcl) schedule(static) proc_bind(close)
             do isel=1,nsel
                 do iptcl=1,norig
-                    corrmat(isel,iptcl) = imgs_sel(isel)%real_corr(imgs_orig(iptcl))
+                    corrmat(isel,iptcl) = imgs_sel(isel)%real_corr_prenorm(imgs_orig(iptcl))
                 end do
             end do
             !$omp end parallel do
-            call mskimg%kill
         endif
     end subroutine calc_cartesian_corrmat_2
 

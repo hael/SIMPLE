@@ -7,7 +7,7 @@ implicit none
 #include "simple_local_flags.inc"
 
 integer, parameter :: BOX = 16, NIMGS = 5, BUFSZ = 2
-integer, parameter :: BENCH_BOX = 256, BENCH_NIMGS = 128, BENCH_BUFSZ = 16, BENCH_REPEATS = 3
+integer, parameter :: BENCH_BOX = 256, BENCH_NIMGS = 128, BENCH_BUFSZ = 16, BENCH_REPEATS = 20
 integer, parameter :: CHUNK_BOX = 1025, CHUNK_NIMGS = 2
 real,    parameter :: SMPD = 1.3
 character(len=*), parameter :: SOURCE_STACK  = 'simple_test_stack_io_source.mrc'
@@ -172,15 +172,51 @@ contains
         output_mib_float16 = total_mvox * 1.0e6_dp * 2.0_dp / real(1024**2,kind=dp)
         write(logfhandle,'(a)') '=== WRITE-ONLY FLOAT32 VS FLOAT16 MRC BENCHMARK ==='
         write(logfhandle,'(a,i0,a,i0,a,i0)') 'box=', BENCH_BOX, ', images=', BENCH_NIMGS, ', repeats=', BENCH_REPEATS
-        write(logfhandle,'(a,f10.4,a,f10.2,a,f10.2)') 'float32: ', time_float32, ' s, ', &
+        write(logfhandle,'(a,f10.4,a,f10.2,a,f10.2,a)') 'float32: ', time_float32, ' s, ', &
             &total_mvox/time_float32, ' Mvox/s, ', output_mib_float32/time_float32, ' MiB/s'
-        write(logfhandle,'(a,f10.4,a,f10.2,a,f10.2)') 'float16: ', time_float16, ' s, ', &
+        write(logfhandle,'(a,f10.4,a,f10.2,a,f10.2,a)') 'float16: ', time_float16, ' s, ', &
             &total_mvox/time_float16, ' Mvox/s, ', output_mib_float16/time_float16, ' MiB/s'
         write(logfhandle,'(a,f10.3)') 'float16 write speedup (float32 time / float16 time): ', time_float32/time_float16
+        call benchmark_float_reads(string(FLOAT32_FILE),string(FLOAT16_FILE))
         call bench_img%kill
         call del_file(string(FLOAT32_FILE))
         call del_file(string(FLOAT16_FILE))
     end subroutine benchmark_float_writes
+
+    subroutine benchmark_float_reads(float32_file,float16_file)
+        class(string), intent(in) :: float32_file, float16_file
+        real(timer_int_kind) :: elapsed_float32, elapsed_float16
+        real(dp) :: input_mib_float32, input_mib_float16, total_mvox, time_float32, time_float16
+        integer :: irepeat
+        ! Warm the filesystem cache and initialize the float16 converter dispatch before timing.
+        elapsed_float32 = time_stack_read(float32_file)
+        elapsed_float16 = time_stack_read(float16_file)
+        elapsed_float32 = 0.0_timer_int_kind
+        elapsed_float16 = 0.0_timer_int_kind
+        do irepeat = 1,BENCH_REPEATS
+            if( is_odd(irepeat) )then
+                elapsed_float32 = elapsed_float32 + time_stack_read(float32_file)
+                elapsed_float16 = elapsed_float16 + time_stack_read(float16_file)
+            else
+                elapsed_float16 = elapsed_float16 + time_stack_read(float16_file)
+                elapsed_float32 = elapsed_float32 + time_stack_read(float32_file)
+            endif
+        enddo
+        elapsed_float32 = elapsed_float32 / real(BENCH_REPEATS,kind=timer_int_kind)
+        elapsed_float16 = elapsed_float16 / real(BENCH_REPEATS,kind=timer_int_kind)
+        time_float32 = max(real(elapsed_float32,kind=dp),DTINY)
+        time_float16 = max(real(elapsed_float16,kind=dp),DTINY)
+        total_mvox = real(BENCH_BOX*BENCH_BOX,kind=dp) * real(BENCH_NIMGS,kind=dp) / 1.0e6_dp
+        input_mib_float32 = total_mvox * 1.0e6_dp * 4.0_dp / real(1024**2,kind=dp)
+        input_mib_float16 = total_mvox * 1.0e6_dp * 2.0_dp / real(1024**2,kind=dp)
+        write(logfhandle,'(a)') '=== CACHE-WARMED READ-ONLY FLOAT32 VS FLOAT16 MRC BENCHMARK ==='
+        write(logfhandle,'(a,i0,a,i0,a,i0)') 'box=', BENCH_BOX, ', images=', BENCH_NIMGS, ', repeats=', BENCH_REPEATS
+        write(logfhandle,'(a,f10.4,a,f10.2,a,f10.2,a)') 'float32: ', time_float32, ' s, ', &
+            &total_mvox/time_float32, ' Mvox/s, ', input_mib_float32/time_float32, ' MiB/s'
+        write(logfhandle,'(a,f10.4,a,f10.2,a,f10.2,a)') 'float16: ', time_float16, ' s, ', &
+            &total_mvox/time_float16, ' Mvox/s, ', input_mib_float16/time_float16, ' MiB/s'
+        write(logfhandle,'(a,f10.3)') 'float16 read speedup (float32 time / float16 time): ', time_float32/time_float16
+    end subroutine benchmark_float_reads
 
     function time_stack_write(fname,bench_img,wfloat16) result( elapsed )
         class(string), intent(in)    :: fname
@@ -198,6 +234,27 @@ contains
         call writer%close
         elapsed = toc(start_time)
     end function time_stack_write
+
+    function time_stack_read(fname) result( elapsed )
+        class(string), intent(in) :: fname
+        real(timer_int_kind) :: elapsed
+        integer(timer_int_kind) :: start_time
+        type(stack_io) :: reader
+        type(image)    :: bench_img
+        real(kind=c_float), pointer :: pixels(:,:,:) => null()
+        integer :: iimg
+        call reader%open(fname,SMPD,'read',bufsz=BENCH_BUFSZ)
+        call bench_img%new([BENCH_BOX,BENCH_BOX,1],SMPD,wthreads=.false.)
+        start_time = tic()
+        do iimg = 1,BENCH_NIMGS
+            call reader%read(iimg,bench_img)
+        enddo
+        elapsed = toc(start_time)
+        call reader%close
+        call bench_img%get_rmat_ptr(pixels)
+        if( any(pixels(1:BENCH_BOX,1:BENCH_BOX,1) /= 1.25_c_float) ) THROW_HARD('float read benchmark data mismatch')
+        call bench_img%kill
+    end function time_stack_read
 
     subroutine verify_stack(fname)
         class(string), intent(in) :: fname

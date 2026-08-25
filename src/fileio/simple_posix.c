@@ -607,6 +607,7 @@ int list_dirs(char * path, int*len, char * fout, int*len_fout, int* count, size_
             struct dirent *dir;
             while((dir = readdir(d)) != NULL) {
                 int is_directory = dir->d_type == DT_DIR;
+#ifndef _WIN32
                 // NFS and other network filesystems may not populate d_type.
                 if(!is_directory && dir->d_type == DT_UNKNOWN) {
                     struct stat entry_stat;
@@ -614,6 +615,7 @@ int list_dirs(char * path, int*len, char * fout, int*len_fout, int* count, size_
                         is_directory = S_ISDIR(entry_stat.st_mode);
                     }
                 }
+#endif
                 if(is_directory && strcmp(dir->d_name, ".") != 0 && strcmp(dir->d_name, "..") != 0) {
                     fprintf(f, "%s\n", dir->d_name);
                     fcount++;
