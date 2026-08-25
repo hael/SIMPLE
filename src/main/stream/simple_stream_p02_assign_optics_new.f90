@@ -186,6 +186,10 @@ contains
                 call meta_optics_assignment%serialise(meta_buffer)
                 call send_to_assign_optics_in_pipe(meta_buffer)
             endif
+            if( params%nmics > 0 .and. spproj%os_mic%get_noris() >= params%nmics )then
+                write(logfhandle,'(A,I8)')'>>> TERMINATING PROCESS: requested number of micrographs reached: ', params%nmics
+                l_terminate = .true.
+            endif
             call flush(logfhandle)
         end do
         ! termination

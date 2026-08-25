@@ -34,15 +34,17 @@ contains
 
     subroutine new_assign_optics( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call assign_optics%new('assign_optics', 'assign_optics', &
-            &'is a test program for assign_optics', 'simple_test_exec', .false.)
+        call assign_optics%new('assign_optics', 'Streaming optics assignment', &
+            &'creates two controlled beam-shift groups and validates streaming optics assignment outputs', &
+            &'simple_test_exec', .false.)
         call add_ui_program('assign_optics', assign_optics, tsttab, UI_CATEGORY)
     end subroutine new_assign_optics
 
     subroutine new_gen_pickrefs( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call gen_pickrefs%new('gen_pickrefs', 'gen_pickrefs', &
-            &'is a test program for gen_pickrefs', 'simple_test_exec', .false.)
+        call gen_pickrefs%new('gen_pickrefs', 'Picking-reference generation', &
+            &'creates asymmetric source averages and validates normalized rotation and mirror outputs', &
+            &'simple_test_exec', .false.)
         call add_ui_program('gen_pickrefs', gen_pickrefs, tsttab, UI_CATEGORY)
     end subroutine new_gen_pickrefs
 
@@ -61,7 +63,9 @@ contains
 
     subroutine new_preproc( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call preproc%new('preproc', 'preproc', 'is a test program for preproc', 'simple_test_exec', .false.)
+        call preproc%new('preproc', 'Streaming preprocessing', &
+            &'generates five synthetic movies and validates streaming motion-correction and CTF outputs', &
+            &'simple_test_exec', .false.)
         call add_ui_program('preproc', preproc, tsttab, UI_CATEGORY)
     end subroutine new_preproc
 

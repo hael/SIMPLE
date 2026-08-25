@@ -672,24 +672,24 @@ contains
     end subroutine check
 
     !> \brief  for writing the command line
-    subroutine printline( self, tag )
+    subroutine printline( self, tag, unit )
         class(cmdline),             intent(inout) :: self
-        character(len=*), optional, intent(in)    :: tag
-        integer :: i
-        if( present(tag) )then
+        character(len=*), optional, intent(in)    :: tag; integer, optional, intent(in) :: unit
+        integer :: i, funit
+        funit = logfhandle; if( present(unit) ) funit = unit; if( present(tag) )then
             do i=1,self%argcnt
                 if( self%cmds(i)%defined .and. self%cmds(i)%carg%is_allocated() )then
-                    write(logfhandle,*) self%cmds(i)%key%to_char(), ' ', self%cmds(i)%carg%to_char(), ' ', trim(tag)
+                    write(funit,'(A,1X,A,1X,A,1X,A)') '>>>', self%cmds(i)%key%to_char(), self%cmds(i)%carg%to_char(), trim(tag)
                 else if( self%cmds(i)%defined )then
-                    write(logfhandle,*) self%cmds(i)%key%to_char(), ' ', self%cmds(i)%rarg, ' ',trim(tag)
+                    write(funit,'(A,1X,A,1X,G0,1X,A)') '>>>', self%cmds(i)%key%to_char(), self%cmds(i)%rarg, trim(tag)
                 endif
             end do
         else
             do i=1,self%argcnt
                 if( self%cmds(i)%defined .and. self%cmds(i)%carg%is_allocated() )then
-                    write(logfhandle,*) self%cmds(i)%key%to_char(), ' ', self%cmds(i)%carg%to_char()
+                    write(funit,'(A,1X,A,1X,A)') '>>>', self%cmds(i)%key%to_char(), self%cmds(i)%carg%to_char()
                 else if( self%cmds(i)%defined )then
-                    write(logfhandle,*) self%cmds(i)%key%to_char(), ' ', self%cmds(i)%rarg
+                    write(funit,'(A,1X,A,1X,G0)') '>>>', self%cmds(i)%key%to_char(), self%cmds(i)%rarg
                 endif
             end do
         endif

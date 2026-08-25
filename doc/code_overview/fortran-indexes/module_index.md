@@ -6767,8 +6767,14 @@ Files:
 
 Uses:
 - `simple_commanders_api`
+- `simple_commanders_pick`
+- `simple_commanders_sim`
+- `simple_stream_p01_preprocess_new`
+- `simple_stream_p02_assign_optics_new`
+- `simple_ui`
 
 Public symbols:
+- `assert_output_file` — subroutine
 - `commander_test_abinitio2D_stream` — type
 - `commander_test_assign_optics` — type
 - `commander_test_gen_pickrefs` — type

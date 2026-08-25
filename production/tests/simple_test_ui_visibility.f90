@@ -238,7 +238,7 @@ contains
                 &trim(name)//' test category display name')
             call assert_int(expected_order, registered_prg%category_order, trim(name)//' test category order')
             call assert_char('simple_test_exec', registered_prg%executable%to_char(), trim(name)//' test executable')
-            call assert_int(0, registered_prg%get_nrequired_keys(), trim(name)//' dummy test has no required inputs')
+            call assert_int(0, registered_prg%get_nrequired_keys(), trim(name)//' test has no required inputs')
         endif
     end subroutine assert_registered_test_category
 

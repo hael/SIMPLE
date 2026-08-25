@@ -411,7 +411,7 @@ contains
         class(sp_project),         intent(inout) :: spproj
         class(string),             intent(in)    :: outdir
         integer :: ioptics
-       ! if(self%p_ptr%beamtilt .eq. 'yes') then
+        self%params = params
         if(self%params%beamtilt .eq. 'yes') then
             self%use_beamtilt = .true.
         else
