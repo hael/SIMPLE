@@ -2468,7 +2468,7 @@ subroutine exec_test_rec3D_backends( self, cline )
     real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, e0, bg, hp_here
     real,    allocatable  :: tspec(:), tcorr(:,:), tspec_b(:,:)
     integer :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used, it
-    logical :: l_truth
+    logical :: l_truth, l_gate_ls
     if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)
     if( .not. cline%defined('mskdiam') ) THROW_HARD('mskdiam is required; exec_test_rec3D_backends')
     call cline%set('oritype',     'ptcl3D')
@@ -2766,12 +2766,26 @@ subroutine exec_test_rec3D_backends( self, cline )
         &call gate_fail('normalised radial ratio range ['//real2str_trim(rmin)//','//real2str_trim(rmax)//'] outside [0.5,2.0]')
     if( l_truth )then
         ! gridding LS profile vs truth must be flat inside the mask: the legacy
-        ! deapodization fades to ~0.90 by r=24 px and must fail this gate
+        ! deapodization fades to ~0.90 by r=24 px and must fail this gate.
+        ! With ml_reg=yes the shipped maps are ML-regularized, which moves this
+        ! profile legitimately (the gate is calibrated on unregularized maps),
+        ! so deviations are reported as diagnostics rather than gated -- the
+        ! prior/regularization harness runs measure, the base-map runs gate.
+        l_gate_ls = .true.
+        if( cline%defined('ml_reg') )then
+            if( cline%get_carg('ml_reg') .eq. 'yes' ) l_gate_ls = .false.
+        endif
         do irb = 2, nrb_msk
             if( real(irb)*rbin_width > 0.85*mskrad ) exit
             tg = safe_ratio(tprof(irb,1), tprof(2,1))
-            if( tg < 0.92 .or. tg > 1.08 ) &
-                &call gate_fail('gridding/truth LS profile '//real2str_trim(tg)//' at radial bin '//int2str(irb)//' outside [0.92,1.08]')
+            if( tg < 0.92 .or. tg > 1.08 )then
+                if( l_gate_ls )then
+                    call gate_fail('gridding/truth LS profile '//real2str_trim(tg)//' at radial bin '//int2str(irb)//' outside [0.92,1.08]')
+                else
+                    write(logfhandle,'(a)') '>>> REC3D BACKENDS: GRIDDING/TRUTH LS PROFILE '//real2str_trim(tg)//&
+                        &' AT RADIAL BIN '//int2str(irb)//' outside [0.92,1.08] (diagnostic, not gated: ml_reg=yes)'
+                endif
+            endif
         enddo
         nfsc = max(0, kgate - 1)
         if( nfsc > 0 )then

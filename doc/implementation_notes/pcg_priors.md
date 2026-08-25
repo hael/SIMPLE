@@ -588,13 +588,55 @@ and workers only accumulate raw statistics.
   identical effective strengths and rel_err(x) = 4.2e-5 (PASS); the fixture
   `rec3D_backends` with `pcg_solvent_lambda_rel=0` explicit on the command
   line is bit-identical (.8428) — R5 strength-zero identity end-to-end.
-- **Pending on real data** (user-side runs): envelope-absent skip lines in a
-  production refine3D log; one full abinitio3D run with
+- **Harness-validated (2026-08-25, neutral fixture, see the alignment-free
+  loop below):** prior-on at strength 1e-3 — `prior_enabled=T`,
+  `skip_reason=none`, per-half `lambda_eff`/`mean`/`rms`/`penalty` lines,
+  gates PASS (in-band .9904 vs .9927 unpriored; centre-bin ratio 1.16);
+  strength-zero control — `skip_reason=strength_zero`, .9927 identical to
+  the no-envelope run (R5); envelope-absent at positive strength —
+  THROW_WARN with `skip_reason=envelope_absent`, run completes and PASSES.
+- **Pending on real data** (user-side run): one full abinitio3D with
   `rec_backend=pcg automsk=yes` and a positive strength completing, showing
   the prior activating exactly when the envelope first exists lag-one and
-  exercising the stage-handoff resample; gated `rec3D_backends` at a small
-  positive strength (needs `objfun=euclid` + envelope, i.e. a refine3D run
-  directory).
+  exercising the stage-handoff resample.
+
+### Alignment-free prior validation harness (no new abinitio3D runs)
+
+Prior validation and strength sweeps need only a project file with a previous
+abinitio3D registration (poses in `ptcl3D`), the last iteration's half maps,
+and that run's `sigma2_it_*.star` files — no new alignments. `nu_filt3D` is
+the envelope generator: with `nu_envmsk=yes` it builds the identical NU
+evidence envelope object volassemble publishes
+(`envmask3D_from_lmask` on the NU evidence margin), just under a different
+name. The loop, run in a scratch dir containing the sigma2 star files (or in
+the final refine3D stage dir of the abinitio3D run):
+
+```text
+simple_exec prg=nu_filt3D vol1=<prev_odd.mrc> vol2=<prev_even.mrc> \
+    smpd=<smpd> mskdiam=<D> nu_envmsk=yes mkdir=no nthr=<N>
+cp outvol_nu_envmask.mrc nu_envmask3D_state01.mrc
+simple_test_exec test=rec3D_backends projfile=<proj.simple> pgrp=<pgrp> \
+    mskdiam=<D> objfun=euclid ml_reg=yes pcg_solvent_lambda_rel=<X> nthr=<N> \
+    [vol1=<truth.mrc> lp=<lp>]
+```
+
+Notes: `vol1` to nu_filt3D is the ODD half, `vol2` the EVEN half (nu_filt3D
+convention); the envelope is written as `<outvol-basename>_nu_envmask.mrc`
+(default `outvol_nu_envmask.mrc`); `mkdir=no` keeps it in the cwd; a
+native-box envelope against a cropped reconstruction is handled by the
+loader's constant-FOV resample (and demonstrates that path); `X=0` is the R5
+control and must be bit-identical; with `ml_reg=yes` the truth LS-profile
+check is reported as a diagnostic rather than gated (the shipped maps are
+ML-regularized; the gate is calibrated on unregularized maps). The
+envelope-tuning knobs (`nu_msk_sig/beta/dens`, `amsklp`) let the same loop
+drive the Gate C eroded/dilated envelope variants without touching the
+reconstruction inputs. Every S8.2 sweep value of `pcg_solvent_lambda_rel`
+reuses the same envelope file — one `nu_filt3D` call per envelope variant,
+one `rec3D_backends` call per strength. **Validated on the neutral fixture
+(2026-08-25):** a 20-second single-iteration refine3D seeds
+`sigma2_it_1.star` and the half pair when a project has poses but no sigma2
+files; the loop then activates the prior end-to-end
+(`pcg_solvent_prior_enabled=T`, per-half lambda_eff/mean/rms/penalty lines).
 
 ### Stage 4 — Gate C science, synthetic (converged settings, R3)
 
