@@ -31,6 +31,26 @@ integer,       parameter :: TIFF_SAMPLEFORMAT_COMPLEXINT    = 5
 integer,       parameter :: TIFF_SAMPLEFORMAT_COMPLEXIEEEFP = 6
 integer,       parameter :: FLOAT16_WRITE_BUFFER_ELEMS      = 1024 * 1024
 
+interface
+
+    subroutine simple_float16_to_float32(input, output, count) bind(C,name='simple_float16_to_float32')
+        import :: c_ptr, c_size_t
+        type(c_ptr),       value :: input
+        type(c_ptr),       value :: output
+        integer(c_size_t), value :: count
+    end subroutine simple_float16_to_float32
+
+    function simple_float32_to_float16_f16c(input, output, count) result(nconverted) &
+        &bind(C,name='simple_float32_to_float16_f16c')
+        import :: c_int16_t, c_ptr, c_size_t
+        type(c_ptr),             value       :: input
+        integer(c_int16_t),      intent(out) :: output(*)
+        integer(c_size_t),       value       :: count
+        integer(c_size_t)                    :: nconverted
+    end function simple_float32_to_float16_f16c
+    
+end interface
+
 type imgfile
     private
     class(ImgHead),  allocatable :: overall_head              !< Overall image head object
@@ -52,6 +72,7 @@ contains
     procedure, private :: rTiffSlices
     procedure          :: wSlices
     procedure          :: wmrcSlices
+    procedure, private :: write_float16_slices
     procedure          :: update_MRC_stats
     procedure          :: getDims
     procedure          :: getDim
@@ -298,7 +319,7 @@ contains
             first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
                 &*int(product(dims(1:2)),kind=8)*byteperpix
             read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:,:)
-            rarr(:dims(1),:,:) = real16_to_real32(tmp_16bit_int_array(:dims(1),:,:))
+            call real16_array_to_real32(tmp_16bit_int_array, rarr(:dims(1),:,:))
         else
             ! slower, polymorphic read with more checkpoints
             ! set pointer to overall header
@@ -350,7 +371,7 @@ contains
                         &tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
                     if( self%overall_head%getMode() == MRC_MODE_FLOAT16 )then
                         ! mode 12: 16-bit real, not supported by all compilers, read as 16-bit integer and convert manually
-                        rarr(1:dims(1),:,:) = real16_to_real32(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
+                        call real16_array_to_real32(tmp_16bit_int_array, rarr(1:dims(1),:,:))
                     else
                         if( self%overall_head%pixIsSigned() )then
                             rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
@@ -647,12 +668,12 @@ contains
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
-        real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
+        real,           target, intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
         integer,                intent(in)    :: ldim(3)      !< Logical size of the array
         logical,                intent(in)    :: is_ft        !< to indicate FT status of image
         integer         :: io_stat,dims(3),mode,nslices
-        integer         :: islice,irow,icol,ipixel,ncopy,nbuffered,error_slice,error_row
-        integer(kind=8) :: first_byte,byteperpix,write_pos
+        integer         :: error_slice,error_row
+        integer(kind=8) :: first_byte,byteperpix
         real            :: min_val,max_val
         if( first_slice < 1 .or. last_slice < first_slice ) THROW_HARD('invalid MRC slice range')
         nslices = last_slice - first_slice + 1
@@ -697,40 +718,8 @@ contains
         io_stat = 0
         select case(mode)
             case(MRC_MODE_FLOAT16)
-                if( .not. allocated(self%float16_write_buffer) ) THROW_HARD('float16 write buffer is not initialized')
-                write_pos   = first_byte
-                nbuffered   = 0
-                error_slice = first_slice
-                error_row   = 1
-                float16_slices: do islice = 1,nslices
-                    do irow = 1,dims(2)
-                        icol = 1
-                        do while( icol <= dims(1) )
-                            ncopy = min(dims(1)-icol+1,size(self%float16_write_buffer)-nbuffered)
-                            do ipixel = 1,ncopy
-                                self%float16_write_buffer(nbuffered+ipixel) = &
-                                    &real32_to_real16(real(rarr(icol+ipixel-1,irow,islice),kind=real32))
-                            enddo
-                            nbuffered = nbuffered + ncopy
-                            icol      = icol + ncopy
-                            if( nbuffered == size(self%float16_write_buffer) )then
-                                write(unit=self%funit,pos=write_pos,iostat=io_stat) self%float16_write_buffer
-                                if( io_stat /= 0 )then
-                                    error_slice = first_slice + islice - 1
-                                    error_row   = irow
-                                    exit float16_slices
-                                endif
-                                write_pos = write_pos + int(nbuffered,kind=8)*byteperpix
-                                nbuffered = 0
-                            endif
-                        enddo
-                    enddo
-                enddo float16_slices
-                if( io_stat == 0 .and. nbuffered > 0 )then
-                    error_slice = last_slice
-                    error_row   = dims(2)
-                    write(unit=self%funit,pos=write_pos,iostat=io_stat) self%float16_write_buffer(1:nbuffered)
-                endif
+                call self%write_float16_slices(first_slice,rarr,dims,first_byte,byteperpix, &
+                    &io_stat,error_slice,error_row)
             case DEFAULT
                 write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),1:dims(2),:)
         end select
@@ -751,6 +740,56 @@ contains
         ! Remember that we wrote to the file
         self%was_written_to = .true.
     end subroutine wmrcSlices
+
+    subroutine write_float16_slices( self, first_slice, rarr, dims, first_byte, byteperpix, &
+        &io_stat, error_slice, error_row )
+        class(imgfile),         intent(inout) :: self
+        integer,                intent(in)    :: first_slice
+        real,           target, intent(in)    :: rarr(:,:,:)
+        integer,                intent(in)    :: dims(3)
+        integer(kind=8),        intent(in)    :: first_byte,byteperpix
+        integer,                intent(out)   :: io_stat,error_slice,error_row
+        integer :: islice,irow,icol,ipixel,ncopy,nbuffered
+        integer(kind=8) :: write_pos
+        integer(c_size_t) :: nconverted
+        if( .not. allocated(self%float16_write_buffer) ) THROW_HARD('float16 write buffer is not initialized')
+        io_stat      = 0
+        write_pos    = first_byte
+        nbuffered    = 0
+        error_slice  = first_slice
+        error_row    = 1
+        float16_slices: do islice = 1,size(rarr,3)
+            do irow = 1,dims(2)
+                icol = 1
+                do while( icol <= dims(1) )
+                    ncopy = min(dims(1)-icol+1,size(self%float16_write_buffer)-nbuffered)
+                    nconverted = simple_float32_to_float16_f16c(c_loc(rarr(icol,irow,islice)), &
+                        &self%float16_write_buffer(nbuffered+1:nbuffered+ncopy),int(ncopy,c_size_t))
+                    do ipixel = int(nconverted)+1,ncopy
+                        self%float16_write_buffer(nbuffered+ipixel) = &
+                            &real32_to_real16(real(rarr(icol+ipixel-1,irow,islice),kind=real32))
+                    enddo
+                    nbuffered = nbuffered + ncopy
+                    icol      = icol + ncopy
+                    if( nbuffered == size(self%float16_write_buffer) )then
+                        write(unit=self%funit,pos=write_pos,iostat=io_stat) self%float16_write_buffer
+                        if( io_stat /= 0 )then
+                            error_slice = first_slice + islice - 1
+                            error_row   = irow
+                            exit float16_slices
+                        endif
+                        write_pos = write_pos + int(nbuffered,kind=8)*byteperpix
+                        nbuffered = 0
+                    endif
+                enddo
+            enddo
+        enddo float16_slices
+        if( io_stat == 0 .and. nbuffered > 0 )then
+            error_slice = first_slice + size(rarr,3) - 1
+            error_row   = dims(2)
+            write(unit=self%funit,pos=write_pos,iostat=io_stat) self%float16_write_buffer(1:nbuffered)
+        endif
+    end subroutine write_float16_slices
 
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
@@ -859,27 +898,19 @@ contains
 
     ! Private module conversion routines
 
-    ! int16 stored as real16 to real32
-    pure elemental real(real32) function real16_to_real32( i16 )
-        ! Branchless IEEE 754 half-precision to single-precision conversion.
-        ! Handles: zero, normal, infinity, NaN.  Subnormal halfs map to f32 subnormals
-        ! with incorrect magnitude.
-        use iso_fortran_env, only : int16, int32, real32
-        integer(int16), intent(in) :: i16  ! half-precision bits as a 16-bit integer
-        integer(int32) :: raw, sign, exp16, mant, exp32
-        ! Fast field remap used for comparison with the exact module helper.
-        ! This preserves sign, signed zero, normals, Inf and NaN classes, but it
-        ! does not renormalize half subnormals and therefore gives them wrong values.
-        raw   = int(i16, int32)
-        sign  = ishft(iand(raw, 32768_int32), 16)   ! bit 15 → bit 31
-        exp16 = iand(ishft(raw, -10), 31_int32)     ! bits 14:10 → 0..31
-        mant  = iand(raw, 1023_int32)               ! bits  9: 0
-        ! Remap exponent: half bias 15 → single bias 127 (add 112)
-        exp32 = exp16 + 112_int32                           ! normal numbers
-        exp32 = merge(0_int32,   exp32, exp16 == 0_int32)   ! zero/subnormal: exp=0
-        exp32 = merge(255_int32, exp32, exp16 == 31_int32)  ! inf/NaN: exp=255
-        real16_to_real32 = transfer(ior(sign, ior(ishft(exp32, 23), ishft(mant, 13))), 0.0_real32)
-    end function real16_to_real32
+    subroutine real16_array_to_real32( i16, r32 )
+        integer(c_int16_t), contiguous, target, intent(in) :: i16(:,:,:)
+        real(c_float), target, intent(out) :: r32(:,:,:)
+        integer(c_size_t) :: ncols
+        integer :: irow, islice
+        ncols = int(size(i16,1),c_size_t)
+        do islice = 1,size(i16,3)
+            do irow = 1,size(i16,2)
+                call simple_float16_to_float32(c_loc(i16(1,irow,islice)), &
+                    &c_loc(r32(1,irow,islice)), ncols)
+            enddo
+        enddo
+    end subroutine real16_array_to_real32
 
     ! real32 to int16 that can be writen to disk as real16
     pure elemental integer(int16) function real32_to_real16( r32 )

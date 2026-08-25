@@ -220,11 +220,12 @@ contains
     end subroutine test_float16_image_roundtrip
 
     subroutine test_float16_encoder_boundaries
-        type(image)  :: source
+        type(image)  :: source, actual
         type(string) :: fname
-        real(kind=c_float), pointer :: pixels(:,:,:) => null()
+        real(kind=c_float), pointer :: pixels(:,:,:) => null(), actual_pixels(:,:,:) => null()
         fname = 'simple_test_image_io_float16_boundaries.mrc'
         call source%new([BOX,BOX,1],SMPD,wthreads=.false.)
+        call actual%new([BOX,BOX,1],SMPD,wthreads=.false.)
         call source%get_rmat_ptr(pixels)
         pixels = 1.0_c_float
         pixels(1,1,1) = 2.0_c_float**(-24)
@@ -237,8 +238,21 @@ contains
         pixels(8,1,1) = -3.0_c_float*2.0_c_float**(-25)
         call source%write(fname,1,del_if_exists=.true.,wfloat16=.true.)
         call assert_float16_boundary_payload(fname)
-        call report_pass('float16 zero/subnormal round-to-nearest-even encoding')
+        call actual%read(fname,1)
+        call actual%get_rmat_ptr(actual_pixels)
+        pixels(5,1,1) = 0.0_c_float
+        pixels(6,1,1) = -0.0_c_float
+        pixels(7,1,1) = 2.0_c_float**(-23)
+        pixels(8,1,1) = -2.0_c_float**(-23)
+        if( any(actual_pixels(1:BOX,1:BOX,1) /= pixels(1:BOX,1:BOX,1)) )then
+            THROW_HARD('float16 zero/subnormal read back failed')
+        endif
+        if( transfer(actual_pixels(6,1,1),0_int32) /= not(huge(0_int32)) )then
+            THROW_HARD('float16 negative zero sign was not preserved')
+        endif
+        call report_pass('float16 zero/subnormal exact encoding and decoding')
         call source%kill
+        call actual%kill
         call del_file(fname)
         call fname%kill
     end subroutine test_float16_encoder_boundaries

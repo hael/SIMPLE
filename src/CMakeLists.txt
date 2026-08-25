@@ -85,10 +85,12 @@ file(GLOB JPG_src "extlibs/jpg/*.[Ff][90][08]")
 list(APPEND JPG_src "extlibs/jpg/stb_image_write.c")
 list(APPEND JPG_src "extlibs/tiff/libtiff_funs.c")
 
-# FILEIO C sources
+# FILEIO C/C++ sources
 
 
-list(APPEND FILEIO_src "fileio/simple_posix.c")
+list(APPEND FILEIO_src
+    "fileio/simple_float16.cpp"
+    "fileio/simple_posix.c")
 
 # Keep warnings from bundled third-party sources out of SIMPLE's warning
 # budget. Project-owned wrappers (for example fileio/simple_tifflib.f90) retain
