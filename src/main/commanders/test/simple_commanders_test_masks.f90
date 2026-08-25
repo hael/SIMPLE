@@ -426,7 +426,7 @@ subroutine exec_test_ptcl_center( self, cline )
     call ptcl_pad%new([p%boxpd, p%boxpd, 1],       p%smpd)
     call vol%pad(vol_pad)
     call vol_pad%fft
-    call vol_pad%expand_cmat(p%box)
+    call vol_pad%expand_cmat()
     call spiral%get_ori(ORI_IND, o1)
     call vol_pad%fproject(o1,ptcl_pad)
     call ptcl_pad%ifft

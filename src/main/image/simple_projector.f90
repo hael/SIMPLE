@@ -38,11 +38,16 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor of the expanded Fourier matrix
-    subroutine expand_cmat( self, orig_box )
+    !> Expands the Fourier volume into the cyclic halo needed by the KB gather.
+    !! The expanded coefficients are the volume's own (1/N)-convention Fourier
+    !! coefficients, unscaled: reconstructed maps are stored at the particle
+    !! coefficient scale (the data quotient), so a gathered central slice IS a
+    !! reprojection. (Until 2026-08 this multiplied by the original box size and
+    !! the reconstructors divided by it -- a matched pair retired together; see
+    !! doc/implementation_notes/drop_legacy_box_division.md S0/S5.3a.)
+    subroutine expand_cmat( self )
         class(projector), intent(inout) :: self
-        integer,          intent(in)    :: orig_box
         integer, allocatable :: cyck(:), cycm(:), cych(:)
-        real    :: factor
         integer :: h, k, m, phys(3), logi(3), lims(2,3), ldim(3)
         call self%kill_expanded
         ldim = self%get_ldim()
@@ -54,7 +59,6 @@ contains
         lims               = transpose(self%loop_lims(3))
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%kbwin%get_winsz())
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
-        factor = real(orig_box)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
@@ -83,7 +87,7 @@ contains
                 do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
                     logi = [cych(h),cyck(k),cycm(m)]
                     phys = self%comp_addr_phys(logi(1),logi(2),logi(3))
-                    self%cmat_exp(h,k,m) = factor * self%get_fcomp(logi, phys)
+                    self%cmat_exp(h,k,m) = self%get_fcomp(logi, phys)
                 enddo
             enddo
         enddo

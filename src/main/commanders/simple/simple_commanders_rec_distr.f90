@@ -31,7 +31,7 @@ contains
     !> optional vol_nu_aux_even/odd contain the static-bank nonuniform-filter
     !> auxiliary inputs before even/odd low-resolution insertion.
     subroutine restore_state_from_parts( params, build, cline, eorecvol_read, state, numlen_part, &
-        &update_frac_trail_rec, realized_update_frac, gridcorr_img, vol_prev_even, vol_prev_odd, vol_merged, &
+        &update_frac_trail_rec, realized_update_frac, vol_prev_even, vol_prev_odd, vol_merged, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
         &volname, eonames, res05, res0143, timings )
         use simple_reconstructor_eo, only: reconstructor_eo
@@ -42,7 +42,6 @@ contains
         integer,                intent(in)    :: state, numlen_part
         real,                   intent(in)    :: update_frac_trail_rec !< applied map-update weight u (ufrac_trec override or realized)
         real,                   intent(in)    :: realized_update_frac  !< realized fraction f that produced the current partials
-        type(image),            intent(inout) :: gridcorr_img
         type(image),            intent(inout) :: vol_prev_even, vol_prev_odd, vol_merged
         type(image),            intent(inout) :: vol_nu_base_even, vol_nu_base_odd
         type(image),            intent(inout) :: vol_nu_aux_even, vol_nu_aux_odd
@@ -402,15 +401,12 @@ contains
                     call vol_nu_aux_odd%new( ldim, params%smpd_crop)
                     call vol_nu_aux_even%read(eonames(1))
                     call vol_nu_aux_odd%read( eonames(2))
-                    call vol_nu_aux_even%mul(gridcorr_img)
-                    call vol_nu_aux_odd%mul( gridcorr_img)
                 endif
             else
                 call vol_nu_base_even%read(eonames(1))
                 call vol_nu_base_odd%read( eonames(2))
             endif
-            call vol_nu_base_even%mul(gridcorr_img)
-            call vol_nu_base_odd%mul( gridcorr_img)
+            ! the half-maps on disk are deapodized by reconstructor_eo; nothing to apply here
         end subroutine capture_nonuniform_source_halves
 
         subroutine restore_merged_volume()
@@ -419,7 +415,6 @@ contains
             call build%eorecvol%sampl_dens_correct_sum(build%vol)
             call build%vol%fft
             call build%vol%ifft
-            call build%vol%mul(gridcorr_img)
             call build%vol%write(volname, del_if_exists=.true.)
             call wait_for_closure(volname)
             if( L_BENCH_GLOB ) timings%restore_merged_volume = &
@@ -671,7 +666,6 @@ contains
 
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
-        use simple_gridding,         only: prep3D_inv_instrfun4mul
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &set_nu_filter_report, NU_DEV_OUTPUT, &
@@ -688,7 +682,7 @@ contains
         type(parameters)              :: params
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
-        type(image)                   :: vol_prev_even, vol_prev_odd, gridcorr_img, vol_merged
+        type(image)                   :: vol_prev_even, vol_prev_odd, vol_merged
         type(image)                   :: vol_even_nu, vol_odd_nu
         type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
@@ -718,9 +712,7 @@ contains
         if( L_BENCH_GLOB ) t_trail_frac = tic()
         call determine_trailing_update_fraction()
         if( L_BENCH_GLOB ) rt_trail_frac = toc(t_trail_frac)
-        if( L_BENCH_GLOB ) t_gridcorr = tic()
-        call prepare_grid_correction()
-        if( L_BENCH_GLOB ) rt_gridcorr = toc(t_gridcorr)
+        rt_gridcorr = 0.  ! deapodization now lives in reconstructor_eo (sampl_dens_correct_eos/_sum)
         call determine_dropped_states()
         do state = 1, params%nstates
             if( l_state_dropped(state) )then
@@ -864,15 +856,9 @@ contains
             endif
         end subroutine determine_trailing_update_fraction
 
-        subroutine prepare_grid_correction()
-            ldim         = build%vol%get_ldim()
-            ldim_pd      = OSMPL_PAD_FAC * ldim
-            gridcorr_img = prep3D_inv_instrfun4mul(ldim, ldim_pd, params%smpd_crop)
-        end subroutine prepare_grid_correction
-
         subroutine assemble_state()
             call restore_state_from_parts(params, build, cline, eorecvol_read, state, numlen_part, &
-                &update_frac_trail_recs(state), realized_update_fracs(state), gridcorr_img, &
+                &update_frac_trail_recs(state), realized_update_fracs(state), &
                 &vol_prev_even, vol_prev_odd, vol_merged, &
                 &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
                 &volname, eonames, res05, res0143s(state), restore_timings)
@@ -1214,7 +1200,6 @@ contains
         end subroutine log_nu_alignment_lowpass_summary
 
         subroutine cleanup_context()
-            call gridcorr_img%kill
             call build%kill_general_tbox
             call build%eorecvol%kill_exp
             call build%kill_rec_eo_tbox

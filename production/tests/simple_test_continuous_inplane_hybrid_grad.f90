@@ -59,7 +59,7 @@ call b%pftc%new(p, 1, [1,1], p%kfromto)
 call b%vol%read(p%vols(1))
 call b%vol%mask3D_soft(p%msk)
 call b%vol%fft()
-call b%vol%expand_cmat(p%box)
+call b%vol%expand_cmat()
 call b%eulspace%get_ori(1, o_ref)
 call o_ref%e3set(0.0)
 o_particle = o_ref

@@ -51,7 +51,7 @@ call build%pftc%new(params, 1, [1,1], params%kfromto)
 call build%vol%read(params%vols(1))
 call build%vol%mask3D_soft(params%msk)
 call build%vol%fft()
-call build%vol%expand_cmat(params%box)
+call build%vol%expand_cmat()
 
 ! Hold the 3D state and projection direction fixed. Only the two image-plane
 ! shifts and the in-plane Euler angle differ between reference and particle.

@@ -252,7 +252,6 @@ contains
             t_phase = tic()
             crop_factor = real(params%box_crop) / real(params%box)
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
             call pcgop%set_sym(build%pgrpsyms)
             call pcgop%set_mask(params%msk_crop)
             lims2 = pcgop%get_lims2()
@@ -331,7 +330,6 @@ contains
             call validate_solved_map(x, 'shared', state_here, half, 'base')
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
-            call apply_output_convention(volume, params)
             call report_beyond_band_excess(volume, params, state_here, half, 'base')
             time_total = real(toc(t_half),dp)
             call write_half_diagnostics(state_here, half, 'base', size(pinds), result, rel_res_hist, &
@@ -368,7 +366,6 @@ contains
 
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
             call pcgop%set_mask(params%msk_crop)
             call pcgop%begin_reduction
             fname = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
@@ -383,9 +380,7 @@ contains
             time_finalize = real(toc(t_phase),dp)
             call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
                 &prior_to_khat_l1, prior_to_khat_rms)
-            ! the base map is stored in the output convention; the solve runs in
-            ! the solver's native convention
-            x = base_volume%get_rmat() * pcg_mag_correction(params)
+            x = base_volume%get_rmat()
             t_phase = tic()
             call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
@@ -394,7 +389,6 @@ contains
             time_total = time_reduce + time_finalize + time_solve
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
-            call apply_output_convention(volume, params)
             call report_beyond_band_excess(volume, params, state_here, half, 'ml')
             call write_half_diagnostics(state_here, half, 'ml', nptcls, result, rel_res_hist, &
                 &0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, time_finalize, time_solve, time_total, &
@@ -513,13 +507,7 @@ contains
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',   result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_update=',     result%final_rel_update
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',       data_scale
-            write(funit,'(A,ES14.6)') 'pcg_lambda_relative=',  params%pcg_lambda_rel
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=', lambda_eff
-            if( params%pcg_lambda_rel >= 0.0 )then
-                write(funit,'(A)') 'pcg_lambda_mode=relative'
-            else
-                write(funit,'(A)') 'pcg_lambda_mode=legacy_absolute'
-            endif
             if( present(prior_npositive) )then
                 if( .not. present(prior_positive_min) .or. .not. present(prior_positive_max) .or. &
                     &.not. present(prior_to_khat_l1) .or. .not. present(prior_to_khat_rms) )then
@@ -853,7 +841,6 @@ contains
             integer :: i, ii, iptcl, ibatch
             real :: shift(2), crop_factor, sdev_noise, edge_mean
             call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call op%set_lambda_relative(params%pcg_lambda_rel)
             call op%set_sym(build%pgrpsyms)
             call op%set_mask(params%msk_crop)
             lims2 = op%get_lims2()
@@ -909,7 +896,6 @@ contains
         subroutine new_reduction( op )
             type(reconstructor_pcg), intent(inout) :: op
             call op%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call op%set_lambda_relative(params%pcg_lambda_rel)
             call op%set_mask(params%msk_crop)
             call op%begin_reduction
         end subroutine new_reduction
@@ -1441,7 +1427,6 @@ contains
             endif
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            if( params%pcg_lambda_rel >= 0.0 ) call pcgop%set_lambda_relative(params%pcg_lambda_rel)
             call pcgop%set_mask(params%msk_crop)
             call pcgop%begin_reduction
             nptcls = 0
@@ -1512,9 +1497,7 @@ contains
                     &prior_to_khat_l1, prior_to_khat_rms)
             endif
             if( l_ml_solve )then
-                ! the base map is stored in the output convention; the solve
-                ! runs in the solver's native convention
-                x = warm_start%get_rmat() * pcg_mag_correction(params)
+                x = warm_start%get_rmat()
             else
                 allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             endif
@@ -1525,7 +1508,6 @@ contains
             call validate_solved_map(x, 'distributed', state_here, half, solve_kind)
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
-            call apply_output_convention(volume, params)
             call report_beyond_band_excess(volume, params, state_here, half, solve_kind)
             if( l_ml_solve )then
                 call write_distributed_diagnostics(state_here, half, solve_kind, nptcls, result, rel_res_hist, &
@@ -1644,13 +1626,7 @@ contains
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',    result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_update=',      result%final_rel_update
             write(funit,'(A,ES14.6)') 'pcg_data_scale=',        data_scale
-            write(funit,'(A,ES14.6)') 'pcg_lambda_relative=',   params%pcg_lambda_rel
             write(funit,'(A,ES14.6)') 'pcg_lambda_effective=',  lambda_eff
-            if( params%pcg_lambda_rel >= 0.0 )then
-                write(funit,'(A)') 'pcg_lambda_mode=relative'
-            else
-                write(funit,'(A)') 'pcg_lambda_mode=legacy_absolute'
-            endif
             if( present(prior_npositive) )then
                 if( .not. present(prior_positive_min) .or. .not. present(prior_positive_max) .or. &
                     &.not. present(prior_to_khat_l1) .or. .not. present(prior_to_khat_rms) )then
@@ -1701,27 +1677,12 @@ contains
         endif
     end subroutine validate_solved_map
 
-    !> Amplitude convention of the maps this backend writes, shared with the
-    !! gridding backend: reconstructor_eo divides its real-space maps by the
-    !! original box size (mag_correction, "consistent with the current
-    !! scheme") and every downstream consumer -- reference reprojection and
-    !! the euclid objective first of all -- expects maps at that scale. The
-    !! PCG solve itself runs in the solver's native convention, in which the
-    !! solution is the plain data quotient (one box-size factor above
-    !! gridding's output); the factor is applied to the solved maps on output
-    !! and removed again from a stored base map that seeds an ML solve. See
-    !! doc/implementation_notes/drop_legacy_box_division.md for retiring the
-    !! convention itself.
-    real function pcg_mag_correction( params ) result( f )
-        type(parameters), intent(in) :: params
-        f = real(params%box)
-    end function pcg_mag_correction
+    !> Amplitude convention: maps are stored at the particle coefficient scale
+    !! (the plain data quotient, the solver's native convention), identical to
+    !! the gridding backend since the matched box-size pair (reconstructor
+    !! division, projector multiplication) was retired; see
+    !! doc/implementation_notes/drop_legacy_box_division.md S0/S5.3a.
 
-    subroutine apply_output_convention( volume, params )
-        type(image),      intent(inout) :: volume
-        type(parameters), intent(in)    :: params
-        call volume%div(pcg_mag_correction(params))
-    end subroutine apply_output_convention
 
     !> The current matching band in native crop-box shells (params%kfromto(2)),
     !! or 0 when it does not describe a usable band of this volume.

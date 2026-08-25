@@ -757,13 +757,6 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
-        if( .not. ieee_is_finite(self%pcg_lambda_rel) ) THROW_HARD('pcg_lambda_rel must be finite')
-        if( self%pcg_lambda_rel < 0.0 .and. self%pcg_lambda_rel /= -1.0 )then
-            THROW_HARD('pcg_lambda_rel must be non-negative or -1')
-        endif
-        if( self%pcg_lambda_rel >= 0.0 .and. trim(self%rec_backend) /= 'pcg' )then
-            THROW_HARD('pcg_lambda_rel requires rec_backend=pcg')
-        endif
         if( trim(self%prg%to_char()) == 'reconstruct3D' )then
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
             if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')
@@ -887,6 +880,7 @@ contains
         endif
         self%l_lam_anneal = trim(self%lam_anneal).eq.'yes'
         self%l_ml_reg     = trim(self%ml_reg).eq.'yes'
+        self%l_euclid_diag = trim(self%euclid_diag).eq.'yes'
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')

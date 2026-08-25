@@ -280,6 +280,11 @@ contains
             call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
             call build%vol_odd%copy_fast(build%vol)
         endif
+        ! legacy-convention detection: maps written under the retired 1/box output
+        ! convention reproject ~box below the particle signal; rescale them here,
+        ! before any alignment, rather than warning after the damage (EUCLID DIAG)
+        call autorescale_old_convention(build%vol,     'even')
+        call autorescale_old_convention(build%vol_odd, 'odd')
         ! noise regularization
         if( params%l_noise_reg )then
             call regularize_ref_with_noise(build%vol,     s, 'even')
@@ -305,6 +310,7 @@ contains
                 THROW_HARD('Missing average reference for state='//int2str(s)//' : '//vol_avg%to_char())
             endif
             call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
+            call autorescale_old_convention(build%vol, 'avg')
             ! noise regularization
             if( params%l_noise_reg )then
                 call regularize_ref_with_noise(build%vol, s, 'avg')
@@ -400,6 +406,24 @@ contains
                 call refvol%mask3D_soft(params%msk_crop, backgr=0.0)
             endif
         end subroutine mask_matching_reference
+
+        !>  A data-quotient reference has foreground sigma of order 1; a map written
+        !!  under the retired 1/box convention sits ~box lower. The threshold 10/box
+        !!  leaves > an order of magnitude of margin on either side. Rescaling is
+        !!  idempotent: a rescaled map no longer satisfies the condition.
+        subroutine autorescale_old_convention( refvol, label )
+            class(image),     intent(inout) :: refvol
+            character(len=*), intent(in)    :: label
+            real :: ave, sdev, maxv, minv
+            if( refvol%is_ft() ) return
+            call refvol%stats('foreground', ave, sdev, maxv, minv, msk=params%msk_crop)
+            if( sdev > TINY .and. sdev < 10.0/real(params%box) )then
+                call refvol%mul(real(params%box))
+                write(logfhandle,'(A,A,A,I0,A,ES11.4,A)') '>>> AUTO-RESCALED OLD-CONVENTION (1/box) ', &
+                    &trim(label), ' REFERENCE VOLUME BY THE BOX SIZE (', params%box, &
+                    &'); FOREGROUND SIGMA WAS ', sdev, ' -- re-reconstruct to silence this'
+            endif
+        end subroutine autorescale_old_convention
 
         subroutine regularize_ref_with_noise( refvol, state, label )
             class(image),     intent(inout) :: refvol
@@ -521,7 +545,7 @@ contains
             endif
             call build%vol%ifft()
             call build%vol%pad_fft(build%vol_pad)
-            call build%vol_pad%expand_cmat(params%box)
+            call build%vol_pad%expand_cmat()
             call vol_pad2ref_pfts_opt(build%pftc, build%vol_pad, build%eulspace, s, .true.)
             call build%vol_pad%kill
             call build%vol_pad%kill_expanded
@@ -533,7 +557,7 @@ contains
             endif
             call build%vol_odd%ifft()
             call build%vol_odd%pad_fft(build%vol_odd_pad)
-            call build%vol_odd_pad%expand_cmat(params%box)
+            call build%vol_odd_pad%expand_cmat()
             call vol_pad2ref_pfts_opt(build%pftc, build%vol_odd_pad, build%eulspace, s, .false.)
             call build%vol_odd_pad%kill
             call build%vol_odd_pad%kill_expanded

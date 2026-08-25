@@ -177,7 +177,6 @@ contains
         ! symmetrization
         call cline_symmap%set('prg',                'symmetrize_map')
         call cline_symmap%delete('rec_backend')
-        call cline_symmap%delete('pcg_lambda_rel')
         call cline_symmap%set('pgrp',                    params%pgrp)
         call cline_symmap%set('projfile',                   projfile)
         call cline_symmap%set('center',                        'yes')
@@ -202,7 +201,6 @@ contains
         ! re-project volume, only with cavgs
         call cline_reproject%set('prg',                  'reproject')
         call cline_reproject%delete('rec_backend')
-        call cline_reproject%delete('pcg_lambda_rel')
         call cline_reproject%set('pgrp',                 params%pgrp)
         call cline_reproject%set('outstk',        'reprojs'//MRC_EXT)
         call cline_reproject%set('smpd',                 params%smpd)
@@ -237,11 +235,6 @@ contains
         class(cmdline), intent(inout) :: child_cline
         if( cline_refine3D%defined('rec_backend') )then
             call child_cline%set('rec_backend', cline_refine3D%get_carg('rec_backend'))
-        endif
-        if( cline_refine3D%defined('pcg_lambda_rel') )then
-            call child_cline%set('pcg_lambda_rel', cline_refine3D%get_rarg('pcg_lambda_rel'))
-        else
-            call child_cline%delete('pcg_lambda_rel')
         endif
         if( cline_refine3D%defined('maxits_pcg') )then
             call child_cline%set('maxits_pcg', cline_refine3D%get_iarg('maxits_pcg'))
@@ -746,7 +739,6 @@ contains
             cline_calc_group_sigmas = cline_refine3D
             call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
             call cline_calc_group_sigmas%delete('rec_backend')
-            call cline_calc_group_sigmas%delete('pcg_lambda_rel')
             call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
             call cline_calc_group_sigmas%kill
         endif
@@ -1010,10 +1002,14 @@ contains
         real         :: b
         integer      :: s
         ! The starting volume is noisy sphere whose values are scaled
-        ! to suit the euclid/sigma2 alignment scheme
-        ! random normal sphere N(0,5/box) + normal background N(0,5/box)
+        ! to suit the euclid/sigma2 alignment scheme. References are no
+        ! longer multiplied by the original box on projection (the legacy
+        ! division/multiplication pair is retired), so the volume itself
+        ! must carry the data-quotient scale: the legacy N(0,5/box) noise
+        ! times the retired projection factor (the original box size)
+        ! random normal sphere + normal background, N(0, 5*box_orig/box)
         call noisevol%new([box,box,box], smpd)
-        b = 5.0/real(box)
+        b = 5.0*real(params%box)/real(box)
         call signal%new([box,box,box], smpd)
         call signal%gauran(0.0, b)
         call signal%mask3D_soft(0.25*real(box), backgr=0.)
@@ -1057,9 +1053,10 @@ contains
             msk  = 0.5 * params%mskdiam / smpd
             call vol%new(ldim, smpd)
             call vol%read(params%vols(s))
-            ! normalization of inner mask region to 1/box
+            ! normalization of inner mask region to the data-quotient
+            ! reference scale (was 1/box when projection multiplied by box)
             call vol%stats('foreground', ave, stdev, maxv, minv, msk=msk)
-            v = stdev*real(ldim(1))
+            v = stdev*real(ldim(1))/real(params%box)
             call vol%norm_ext(ave, v)
             vol_name = refine3D_startvol_fname(s)
             call vol%write(vol_name)

@@ -137,6 +137,7 @@ type :: parameters
     character(len=3)          :: print_states='no'     !< exporting states during the refinement(yes|no){no}
     character(len=3)          :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)          :: projrec='no'         !< reconstruct from projection-direction Fourier sums(yes|no){no}
+    character(len=3)          :: euclid_diag='no'     !< per-iteration euclid reference/particle scale diagnostics(yes|no){no}
     character(len=3)          :: projstats='no'
     character(len=3)          :: prune='no'
     character(len=3)          :: prob_inpl='no'       !< probabilistic in-plane search in refine=neigh mode(yes|no){no}
@@ -613,7 +614,6 @@ type :: parameters
     real    :: phshift_min=0.      !< minimum fitted phase shift(in degrees){0}
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
-    real    :: pcg_lambda_rel=-1.  !< relative PCG Tikhonov strength; negative keeps legacy absolute lambda{-1}
     real    :: rec_athres=10.      !< angle threshold for reconstruction
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
@@ -673,6 +673,7 @@ type :: parameters
     logical :: l_lpset           = .false.
     logical :: l_ml_reg          = .true.
     logical :: l_noise_reg       = .false.
+    logical :: l_euclid_diag     = .false.
     logical :: l_neigh           = .false.
     logical :: l_nonuniform      = .false.
     logical :: l_nonuniform_lpset = .false.
