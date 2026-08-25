@@ -117,7 +117,7 @@ convention; all its internal factors (`padsc` in `b`, `padsc²` in `Khat`, the
 padded-lattice interpolation, the normalized KB weights, the deapodization
 bracket on both `H` and `b`) cancel, and its solution is the plain data
 quotient — without the `/box`. Measured on the streptavidin run
-(`pcg_euclid_crash_investigation.md` §15): gridding stage-1 lp map L2 0.99 vs
+(`pcg_euclid_crash_investigation.md` (consolidated into `pcg_priors.md`) §15): gridding stage-1 lp map L2 0.99 vs
 PCG iteration-41 lp map L2 194; per-shell ratios 160–260 over the shared band,
 i.e. 128 × ~1.5, the remainder being the different alignment state of the two
 maps (the ratio rises with resolution) and second-order KB-deconvolution
@@ -178,7 +178,7 @@ non-`lpset` reference path (`read_mask_filter_refvols` reads the halves when
 
 Measured on same-alignment maps (gridding stage-2 snapshot, iteration 40, vs
 PCG iteration 41; `envelopes.py`/`compare2.py` in the investigation
-scratchpad, recorded in `pcg_euclid_crash_investigation.md` §15.4): L2 ratio
+scratchpad, recorded in `pcg_euclid_crash_investigation.md` (consolidated into `pcg_priors.md`) §15.4): L2 ratio
 inside the molecule (r < 24) 175–177; the box convention alone predicts 128;
 box convention × gridding's envelope deficit predicts 140–156; the remaining
 ×1.2–1.26 rises with spatial frequency (shell ratio 136 at shell 2 → 184 at
@@ -567,7 +567,7 @@ identity above was established and is wrong.)
   map unmasked; to be re-measured with the current tool (masked, background
   removed) and the fixed build before drawing conclusions.
 - The PCG solver's beyond-band behaviour under near-flat bootstrap sigma2
-  (`pcg_euclid_crash_investigation.md` §13, `PCG BEYOND-BAND EXCESS`
+  (`pcg_euclid_crash_investigation.md` (consolidated into `pcg_priors.md`) §13, `PCG BEYOND-BAND EXCESS`
   diagnostic) is a separate solver-level question.
 - Whether the 2D polar pipeline's own normalizations (`pftc` particle and
   reference preparation) place "expected signal" exactly at the data-quotient

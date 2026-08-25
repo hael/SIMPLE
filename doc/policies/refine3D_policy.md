@@ -15,6 +15,7 @@ Related workflow policies:
 - [automasking_policy.md](automasking_policy.md)
 - [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
 - [sigma_calculation_policy.md](sigma_calculation_policy.md)
+- [reconstruct3D_pcg_policy.md](reconstruct3D_pcg_policy.md)
 - [particle_cache_policy.md](particle_cache_policy.md)
 - [separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md](separate_alignment_and_reconstruction_for_multistate_peak_mem_reduction.md)
 
@@ -415,6 +416,48 @@ through that shared helper rather than duplicated assembly branches.
 FSCs and FSC-derived diagnostics are calculated from dense Cartesian
 half-volumes, not from sparse, intermediate, or low-resolution-blended
 registration-reference representations.
+
+### 9.1 PCG reconstruction backend
+
+`rec_backend=gridding|pcg` selects the reconstruction backend; `gridding` is
+the unchanged default and protects all existing workflows. The PCG solver
+contract, output convention, ML two-map behavior, warm starts, and
+diagnostics are owned by
+[reconstruct3D_pcg_policy.md](reconstruct3D_pcg_policy.md); this section
+records only the refine3D-side integration contract:
+
+- **Solver controls are distinct from refinement controls.** `maxits` counts
+  refinement iterations; the PCG solve budget is `maxits_pcg` (default 2,
+  capped at 8 in production) and `rtol` is PCG-specific (`rtol <= 0` demands
+  exactly `maxits_pcg` iterations).
+- **The backend seam is dense even/odd half maps.** `volassemble` dispatches
+  to a backend-specific state restorer: gridding reduces `(cmat,rho)` and
+  sampling-density-corrects; PCG reduces raw `(B,D)`, finalizes the kernel
+  and solves. After the seam, FSC/cFAR, merged maps, automask, nonuniform
+  filtering, filenames, project updates, and next-iteration handoffs are
+  common. PCG maps never receive gridding correction or a second
+  sampling-density correction.
+- **Raw statistics boundary.** Workers accumulate and atomically publish raw,
+  unregularized `(B,D)` per `(state,half,part)`; only the master folds,
+  finalizes, regularizes, and solves, reducing parts in ascending order.
+- **Sigma ordering.** For `objfun=euclid`, iteration `n` commits poses, then
+  updates and persists iteration-`n` sigma estimates, then accumulates
+  `(B,D)` with those estimates, then reduces and solves. The matcher path
+  must not reload a previous sigma generation; `objfun=cc` is unweighted.
+- **Weights versus priors.** Particle/data weights (including `1/sigma2`)
+  multiply both `B` and `D`. The zero-mean ML prior adds precision to the
+  normal operator and preconditioner only; it never weights `B`, and nothing
+  prior-related is persisted in raw statistics.
+- **FSC ownership.** The FSC comes from the unregularized `_unfil` base pair
+  and remains the resolution authority; the ML replay consumes it and
+  produces the standard maps. Both output pairs feed the unchanged NU
+  orchestration exactly as in the gridding path.
+- **Current exclusions** (hard-errored, not approximated): fractional/
+  trailing reconstruction, `projrec=yes`, `conical_fsc=yes`, matrix-free
+  workflow execution.
+- New regularization is research, tracked in
+  `doc/implementation_notes/pcg_priors.md`; it cannot be used to close
+  integration gates.
 
 ## 10. Trailing and Combined Even/Odd
 

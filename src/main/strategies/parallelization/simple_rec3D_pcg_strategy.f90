@@ -1745,7 +1745,7 @@ contains
     !! validation that the map is right), but the fixed-iteration PCG solve has
     !! been observed to leave beyond-band content orders of magnitude above the
     !! band edge under bootstrap-scale sigma2 (see
-    !! doc/implementation_notes/pcg_euclid_crash_investigation.md §13). Such
+    !! doc/implementation_notes/pcg_priors.md §2, beyond-band excess). Such
     !! content is invisible to the matcher until a stage transition extends the
     !! band into it, so this line is the regression signal for that solver
     !! defect. Silent when no matching band is known.

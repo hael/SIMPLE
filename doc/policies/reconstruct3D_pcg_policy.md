@@ -1,9 +1,9 @@
 # `reconstruct3D` PCG backend policy
 
 Contract of the code that runs today: the opt-in CTF- and sigma-weighted
-preconditioned-conjugate-gradient (PCG) reconstruction path. Work not yet
-implemented is specified in
-`doc/implementation_notes/pcg_reconstruction_production_readiness.md`.
+preconditioned-conjugate-gradient (PCG) reconstruction path. Regularization
+research (solvent-flatness/Wilson priors) and the record of removed prior
+experiments live in `doc/implementation_notes/pcg_priors.md`.
 
 The production `reconstruct3D` command accepts the selector
 `rec_backend=gridding|pcg`, with `gridding` unchanged as the default. Its `pcg`
@@ -31,10 +31,14 @@ state/half reduction does it fold the RHS, calculate rho floors, finalize
 `Khat`, or solve. Empty partitions publish a valid header-only artifact so the
 association order and completeness check do not depend on particle balance.
 
-It deliberately rejects `projrec=yes`, box cropping, fractional/trailing
-reconstruction, and `conical_fsc=yes` regularization. Those cases require
-additional equivalence tests and must not silently fall back to gridding or
-matrix-free PCG.
+Box cropping is supported under the constant-field-of-view contract
+(`box*smpd == box_crop*smpd_crop`, enforced at entry). It deliberately rejects
+`projrec=yes`, fractional/trailing reconstruction, and `conical_fsc=yes`
+regularization. Those cases require additional equivalence tests and must not
+silently fall back to gridding or matrix-free PCG. (The designed
+fractional/trailing algebra — raw `(B,D)` chains blended as
+`(u/f) current + (1-u) previous` at full mass, priors applied only after the
+blend — is recorded here for when that guard lifts.)
 
 ## 1. Production scope and fixed inputs
 
@@ -104,11 +108,12 @@ noise covariance from the particle's `sigma2`. With
 H x = b,    H = sum_i K_i^dagger K_i + Lambda,    b = sum_i K_i^dagger N_i^{-1/2} y_i
 ```
 
-`Lambda = lambda_eff*I` is a fixed positive prior, constant for one solve. The
-legacy default is the absolute coefficient `1e-3`. The opt-in
-`pcg_lambda_rel>=0` path instead derives
-`lambda_eff=pcg_lambda_rel*s_data(D)` after raw `D` has been reduced, using a
-linear fixed-band scale. No current-volume-dependent mask, FSC, filter or
+`Lambda = lambda*I` is a fixed positive prior, constant for one solve, with
+the absolute coefficient `1e-3` (`PCG_LAMBDA`). The relative-lambda CLI
+(`pcg_lambda_rel`) was removed as unused; the internal `set_lambda_relative`
+mechanism and the deterministic linear fixed-band data scale `s_data(D)`
+remain for tests, diagnostics, and future prior anchoring
+(`pcg_priors.md`). No current-volume-dependent mask, FSC, filter or
 nonlinear clipping appears inside the operator — that linearity is what PCG
 relies on.
 
@@ -117,6 +122,55 @@ The shift phase is unit-modulus and cancels between the forward and adjoint
 passes of `K_i^dagger K_i`. The full complex `T_i = C_i S_i / sqrt(sigma2_i)` is
 needed only for `b`, whose adjoint uses `conjg(T_i)` — required for shifted
 particles and phase shifts even when the CTF itself is real.
+
+### Output amplitude convention and scale continuity
+
+Solved maps are written at the **data-quotient convention** — the plain
+weighted least-squares solution, with no box-size scaling — identical to the
+gridding backend after the legacy division/multiplication pair was retired
+(`doc/implementation_notes/drop_legacy_box_division.md`). Deapodization is
+applied inside the solver; PCG maps must never receive the gridding
+correction or a second sampling-density correction. Scale continuity is a
+contract: the euclid/sigma2 equilibrium survives any *stable* reference
+amplitude but not an abrupt scale change between consecutive refinement
+iterations, so any backend handoff, prior, or convention change must
+preserve the amplitude scale seen by matching (the historical
+gridding-to-PCG handoff crash was exactly such a jump).
+
+### ML two-map contract and warm starts
+
+Refinement solves are two phases from one particle accumulation. The *base*
+solve (`H_data + lambda I`, cold start) produces the `_unfil` half pair;
+FSC/cFAR and resolution metadata come from that pair. The *ML replay*
+(`H_data + P_tau + lambda I`, where `P_tau` is the FSC/SSNR shell-diagonal
+precision applied in both the operator and the preconditioner) deterministically
+replays kernel finalization from the persisted raw `(B,D)` and produces the
+standard maps. The ML replay warm-starts from the previous refinement
+iteration's ML half map when one exists on disk — strictly the same half
+(gold-standard independence), constant-FOV `read_and_crop` across crop
+changes, support re-masked after resampling, the first-iteration noise
+`startvol` excluded by name — and otherwise from the base solution. Neither
+`P_tau` nor lambda is ever accumulated into raw `B` or `D`.
+
+### Beyond-band diagnostic
+
+`report_beyond_band_excess` (module-level in the strategy, both execution
+paths) compares the RMS of shells beyond the matching band with the band-edge
+shell and logs `>>> PCG BEYOND-BAND EXCESS` at ratio >= 10. It is the
+regression signal for solver defects that park energy above the matched band,
+where a later stage transition would expose them to euclid matching. The
+structural mitigation is ML-replay convergence (warm start plus adequate
+iterations), not spectral smoothing (see the removed-experiment record in
+`pcg_priors.md`).
+
+### Backend regression gate
+
+`test=rec3D_backends` reconstructs one fixed particle set with both backends
+and hard-fails on gated shell-amplitude, FSC, and radial-flatness criteria
+(band capped at `lp`); its ground-truth mode adds map-to-truth FSC and radial
+LS-profile flatness. Mutations restoring the legacy box factor or omitting
+deapodization must fail it; it is the standing acceptance harness for
+convention and deapodization changes.
 
 ## 4. Numerical invariants
 
@@ -376,3 +430,31 @@ implemented and tested here rather than repurposed from production gridding.
 - **The adjoint is written fresh**, not derived from
   `reconstructor%compress_exp` or `insert_plane_oversamp`: those are production
   gridding/storage conversions, not established linear adjoints.
+
+## 12. Execution-path identity and performance rules
+
+**Shared-memory and distributed execution are two parallelizations of one
+algorithm.** Output conventions, warm starts, and diagnostics are implemented
+once at module level and invoked identically from both entry points; nothing
+may depend on which path produced a map.
+
+Durable performance rules (from the retired production-readiness note):
+
+- one logical particle read per accumulation phase (direct source reads for
+  standalone `reconstruct3D`; the validated downscaled cache for cache-enabled
+  refinement); particle residency bounded by `MAXIMGBATCHSZ`; no particle
+  plane cache — kernel iterations are data-free after `(B,D)`;
+- the preconditioner uses the padded Toeplitz lattice; do not trade the
+  pad/crop geometry for a native-grid FFT optimization;
+- process one state/half at a time; do not overlap the largest accumulation
+  and solve scratch allocations; keep `D` real; keep the fused
+  reciprocal/`Khat` packing over the reachable Fourier sphere and the exact
+  separable discrete KB-envelope construction;
+- kernel failure never retries with matrix-free (too slow, hides defects,
+  impossible after distributed reduction); fail structurally instead;
+- symmetry cost scales with group order (coordinate replication); validate
+  C1/C2/D2 and treat high-order groups as a measured-budget contract; the
+  lattice-exact permutation path for signed-permutation groups is the
+  eventual optimization and is not implemented;
+- use the per-phase timing diagnostics, not total wall time, to choose the
+  next optimization.

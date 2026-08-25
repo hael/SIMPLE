@@ -662,7 +662,8 @@ either way.
 - `doc/policies/reconstruct3D_pcg_policy.md` -- contract of the code that runs
   today; especially section 5 (preconditioner and kernelized operator). It
   supersedes the deleted `ctf_sigma_weighted_pcg_reconstruction.md`.
-- `doc/implementation_notes/pcg_reconstruction_production_readiness.md` --
-  production workflow integration; section 6 records that the kernel PCG
-  *solve* is data-free, which does NOT hold for the pose objective specified
-  here.
+- `doc/policies/reconstruct3D_pcg_policy.md` and
+  `doc/implementation_notes/pcg_priors.md` -- the production workflow and
+  regularization contracts. Note the production performance rule that the
+  kernel PCG *solve* is data-free after `(B,D)` accumulation, which does NOT
+  hold for the pose objective specified here.
