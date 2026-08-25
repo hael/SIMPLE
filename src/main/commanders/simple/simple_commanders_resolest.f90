@@ -263,9 +263,15 @@ contains
             edge_px = max(1, nint(NU_ENVMASK_EDGE_A / even%get_smpd()))
             call nu_envelope%envmask3D_from_lmask(l_env, even%get_smpd(), grow_px, edge_px, &
                 &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
-            envmsk_out = add2fbody(avg_out, params%ext, NUENVMSK_SUFFIX)
-            call nu_envelope%write(envmsk_out, del_if_exists=.true.)
-            call wait_for_closure(envmsk_out)
+            ! an empty evidence field returns without constructing the mask
+            ! image; writing it would abort on invalid MRC dimensions
+            if( n_ccs_kept < 1 )then
+                THROW_WARN('NU evidence envelope is empty at these settings; no envelope mask written. Feed the _unfil half pair when the inputs come from an ml_reg run (regularized maps flatten the evidence margin), or loosen nu_msk_sig / set nu_msk_rel=yes')
+            else
+                envmsk_out = add2fbody(avg_out, params%ext, NUENVMSK_SUFFIX)
+                call nu_envelope%write(envmsk_out, del_if_exists=.true.)
+                call wait_for_closure(envmsk_out)
+            endif
         endif
         call nu_filter_vols(even_nu, odd_nu)
         call print_nu_filtmap_lowpass_stats()

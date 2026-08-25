@@ -581,8 +581,15 @@ contains
                 call nu_envmask%kill_bimg
                 call nu_envmask%envmask3D_from_lmask(l_env, params%smpd_crop, grow_px, edge_px, &
                     &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
-                call nu_envmask%write(pp_plan%nu_envmask_file, del_if_exists=.true.)
-                call wait_for_closure(pp_plan%nu_envmask_file)
+                ! an empty evidence field returns without constructing the mask
+                ! image; writing it would abort on invalid MRC dimensions. Skip
+                ! the write -- every envelope consumer handles absence.
+                if( n_ccs_kept < 1 )then
+                    THROW_WARN('NU evidence envelope is empty; no envelope mask written this iteration')
+                else
+                    call nu_envmask%write(pp_plan%nu_envmask_file, del_if_exists=.true.)
+                    call wait_for_closure(pp_plan%nu_envmask_file)
+                endif
                 write(logfhandle,'(A,I0,A,F8.3,A,I0,A,I0)') &
                     &'>>> NU ENVELOPE OCCUPANCY: STATE ', state, ', SUPPORT FRACTION ', &
                     &envstats%pct_signal, ' %, COMPONENTS KEPT ', n_ccs_kept, ' OF ', n_ccs
@@ -917,10 +924,17 @@ contains
             call nu_envmask%kill_bimg
             call nu_envmask%envmask3D_from_lmask(l_env, vol_nu_base_even%get_smpd(), grow_px, edge_px, &
                 &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
-            call nu_envmask%write(pp_plan%nu_envmask_file, del_if_exists=.true.)
-            call wait_for_closure(pp_plan%nu_envmask_file)
-            write(logfhandle,'(A,I0,A,1X,A)') &
-                &'>>> NU EVIDENCE ENVELOPE: STATE ', state, ', MASK', pp_plan%nu_envmask_file%to_char()
+            ! an empty evidence field returns without constructing the mask
+            ! image; writing it would abort on invalid MRC dimensions. Skip the
+            ! write -- every envelope consumer handles absence.
+            if( n_ccs_kept < 1 )then
+                THROW_WARN('NU evidence envelope is empty; no envelope mask written this iteration')
+            else
+                call nu_envmask%write(pp_plan%nu_envmask_file, del_if_exists=.true.)
+                call wait_for_closure(pp_plan%nu_envmask_file)
+                write(logfhandle,'(A,I0,A,1X,A)') &
+                    &'>>> NU EVIDENCE ENVELOPE: STATE ', state, ', MASK', pp_plan%nu_envmask_file%to_char()
+            endif
             ! One greppable line per state per cycle. The envelope is allowed to
             ! shrink as resolution improves, but reference masking suppresses
             ! whatever it excludes, so a monotonically falling occupancy is the
