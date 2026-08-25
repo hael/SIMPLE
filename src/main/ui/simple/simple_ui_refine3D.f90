@@ -173,6 +173,11 @@ subroutine new_automask( prgtab )
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits_pcg iterations', 'tolerance{0}', &
         &.false., 0.0, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call reconstruct3D%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
+        &'Graded solvent-flatness prior strength relative to the PCG data scale; ML replays only, requires the '//&
+        &'state-specific NU evidence envelope; 0 = off', 'strength{0}', &
+        &.false., 0.0, visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)
         ! computer controls

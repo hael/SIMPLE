@@ -58,6 +58,11 @@ type, extends(commander_base) :: commander_test_pcg_frac_update
     procedure :: execute      => exec_test_pcg_frac_update
 end type commander_test_pcg_frac_update
 
+type, extends(commander_base) :: commander_test_pcg_priors
+  contains
+    procedure :: execute      => exec_test_pcg_priors
+end type commander_test_pcg_priors
+
 type, extends(commander_base) :: commander_test_rec3D_backends
   contains
     procedure :: execute      => exec_test_rec3D_backends
@@ -2078,6 +2083,244 @@ subroutine exec_test_pcg_recon( self, cline )
     end function corr_of
 
 end subroutine exec_test_pcg_recon
+
+!  Unit gate for the PCG prior operators (pcg_priors.md S10 Stage 2), in-memory
+!  and project-free like test=pcg_recon. Currently covers the graded
+!  solvent-flatness precision Q_s = D_s - s s^T/S (S4):
+!
+!    1. normalization contract       -- unit mean diagonal on effective support
+!    2. adjoint identity             -- <x,Q y> = <Q x,y>
+!    3. positive semidefiniteness    -- <x,Q x> >= 0, > 0 for a random probe
+!    4. null space                   -- Q (c 1) = 0: variation, not offset
+!    5. zero action at zero solvent confidence (m = 1 plateau voxels)
+!    6. graded-edge continuity       -- O(eps) response to an eps envelope change
+!    7. finite-difference gradient   -- grad of R_s(x) = (1/2) x^T Q_s x is Q_s x
+!    8. composition                  -- P (H_data + lambda_s Q_s + lambda) P
+!                                       stays symmetric positive-definite
+!
+!  Mutation contract (R4, verified manually and recorded in pcg_priors.md S10):
+!  replacing L^T L by L (outer weight sqrt(s) instead of s) must fail stage 2;
+!  dropping the rank-one mean term (Q x = s.*x) must fail stage 4.
+subroutine exec_test_pcg_priors( self, cline )
+    use simple_reconstructor_pcg, only: reconstructor_pcg
+    class(commander_test_pcg_priors), intent(inout) :: self
+    class(cmdline),                   intent(inout) :: cline
+    integer, parameter :: BOX = 24, NPROJS = 12, NCTF = 3
+    real,    parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
+    real,    parameter :: MSKRAD = real(BOX)/3.0
+    real,    parameter :: ADJ_RELTOL  = 1.0e-5   ! pure diagonal+rank-one algebra, dp reductions
+    real,    parameter :: NORM_TOL    = 1.0e-5
+    real,    parameter :: NULL_RELTOL = 1.0e-5
+    real,    parameter :: FD_H        = 1.0e-2
+    real,    parameter :: FD_RELTOL   = 1.0e-3
+    real,    parameter :: ENV_EPS     = 1.0e-3
+    real,    parameter :: CONT_RELTOL = 5.0e-2   ! O(eps) with a generous Lipschitz factor
+    real,    parameter :: OP_RELTOL   = 1.0e-4   ! matches pcg_recon's NORMAL_OP_RELTOL
+    real,    parameter :: KV = 300., CS = 2.7, FRACA = 0.1
+    real,    parameter :: DFX_VALS(NCTF) = [1.0, 1.8, 2.6]
+    type(reconstructor_pcg) :: pcgop
+    type(oris)              :: projdirs
+    type(ori)               :: e
+    type(ctfparams)         :: ctfparms
+    real,    allocatable    :: m_env(:,:,:), m_pert(:,:,:), s_diag(:,:,:)
+    real,    allocatable    :: x(:,:,:), y(:,:,:), d(:,:,:), ones_vol(:,:,:)
+    real,    allocatable    :: qx(:,:,:), qy(:,:,:), qc(:,:,:), qx_pert(:,:,:)
+    real,    allocatable    :: hp(:,:,:), hq(:,:,:), sig2arr(:), sig2_2d(:,:)
+    integer, allocatable    :: iseed(:)
+    real(dp) :: dp_x_qy, dp_qx_y, dp_x_qx, r_plus, r_minus, g_fd, g_an
+    real     :: ctr, rr, adj_err, null_err, cont_err, fd_err, s_mean
+    integer  :: i, j, k, g, n_eff, n_plateau, n_bad, iseed_n, R, lims2(2,2)
+    logical  :: all_ok
+    all_ok = .true.
+
+    call random_seed(size=iseed_n)
+    allocate(iseed(iseed_n), source=42)
+    call random_seed(put=iseed)
+
+    ! graded molecular envelope: radial profile with an exact m=1 plateau in
+    ! the core, a smooth falloff, and exact 0 outside -- exercises both hard
+    ! plateaus and the graded transition zone
+    allocate(m_env(BOX,BOX,BOX), source=0.0)
+    ctr = real(BOX)/2.0 + 0.5
+    do k = 1,BOX
+        do j = 1,BOX
+            do i = 1,BOX
+                rr = sqrt((real(i)-ctr)**2 + (real(j)-ctr)**2 + (real(k)-ctr)**2)
+                m_env(i,j,k) = min(1.0, max(0.0, (6.0 - rr)/3.0 + 1.0))  ! 1 for rr<=3, 0 for rr>=9
+            end do
+        end do
+    end do
+
+    call pcgop%new(BOX, SMPD, LAMBDA)
+    call pcgop%set_mask(MSKRAD)
+    call pcgop%set_solvent_prior(m_env, 1.0)
+
+    ! ============ STAGE 1: normalization contract ============
+    write(logfhandle,'(a)') '>>> TEST_PCG_PRIORS'
+    write(logfhandle,'(a)') '>>> STAGE 1: unit mean diagonal on the effective support'
+    s_diag = pcgop%get_solvent_precision_diag()
+    n_eff  = count(s_diag > 0.0)
+    s_mean = real(sum(real(s_diag,dp)) / real(n_eff,dp))
+    write(logfhandle,'(a,i0,a,es14.6)') '    n_eff=', n_eff, ' mean_diag=', s_mean
+    if( n_eff < 1 .or. abs(s_mean - 1.0) > NORM_TOL )then
+        write(logfhandle,'(a)') '    FAIL: solvent precision is not normalized to unit mean diagonal'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: normalization contract holds'
+    endif
+
+    ! ============ STAGE 2: adjoint identity ============
+    write(logfhandle,'(a)') '>>> STAGE 2: adjoint identity <x,Qy> = <Qx,y>'
+    allocate(x(BOX,BOX,BOX), y(BOX,BOX,BOX))
+    call random_number(x); call random_number(y)
+    x = x - 0.5; y = y - 0.5
+    qx = pcgop%apply_solvent_precision(x)
+    qy = pcgop%apply_solvent_precision(y)
+    dp_x_qy = pcgop%dot_real_volume(x, qy)
+    dp_qx_y = pcgop%dot_real_volume(qx, y)
+    adj_err = real(abs(dp_x_qy-dp_qx_y) / max(1.0_dp, abs(dp_x_qy), abs(dp_qx_y)))
+    write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <x,Qy>=', real(dp_x_qy), &
+        &' <Qx,y>=', real(dp_qx_y), ' rel_err=', adj_err
+    if( adj_err > ADJ_RELTOL )then
+        write(logfhandle,'(a)') '    FAIL: solvent precision is not symmetric (L instead of L^T L?)'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: solvent precision is symmetric'
+    endif
+
+    ! ============ STAGE 3: positive semidefiniteness ============
+    write(logfhandle,'(a)') '>>> STAGE 3: positive semidefiniteness'
+    dp_x_qx = pcgop%dot_real_volume(x, qx)
+    write(logfhandle,'(a,es14.6)') '    <x,Qx>=', real(dp_x_qx)
+    if( dp_x_qx <= 0.0_dp )then
+        write(logfhandle,'(a)') '    FAIL: quadratic form not positive for a random probe'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: quadratic form positive for a random probe'
+    endif
+
+    ! ============ STAGE 4: null space Q (c 1) = 0 ============
+    write(logfhandle,'(a)') '>>> STAGE 4: constant maps are unpenalized'
+    allocate(ones_vol(BOX,BOX,BOX), source=3.7)
+    qc = pcgop%apply_solvent_precision(ones_vol)
+    null_err = maxval(abs(qc)) / (3.7 * max(1.0, maxval(s_diag)))
+    write(logfhandle,'(a,es14.6)') '    max|Q(c*1)| / (c*max_s) =', null_err
+    if( null_err > NULL_RELTOL )then
+        write(logfhandle,'(a)') '    FAIL: constant mode is penalized (mean term dropped?)'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: constant mode is in the null space'
+    endif
+
+    ! ============ STAGE 5: zero action at zero solvent confidence ============
+    write(logfhandle,'(a)') '>>> STAGE 5: zero action on the confident molecular plateau'
+    n_plateau = 0; n_bad = 0
+    do k = 1,BOX
+        do j = 1,BOX
+            do i = 1,BOX
+                if( m_env(i,j,k) >= 1.0 )then
+                    n_plateau = n_plateau + 1
+                    if( abs(qx(i,j,k)) > 0.0 ) n_bad = n_bad + 1
+                endif
+            end do
+        end do
+    end do
+    write(logfhandle,'(a,i0,a,i0)') '    plateau voxels=', n_plateau, ' with nonzero action=', n_bad
+    if( n_plateau < 1 .or. n_bad > 0 )then
+        write(logfhandle,'(a)') '    FAIL: prior acts inside the confident molecular region'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: prior is inert where solvent confidence is zero'
+    endif
+
+    ! ============ STAGE 6: graded-edge continuity ============
+    write(logfhandle,'(a)') '>>> STAGE 6: O(eps) response to an eps envelope perturbation'
+    allocate(m_pert(BOX,BOX,BOX))
+    m_pert = min(1.0, max(0.0, m_env + ENV_EPS))
+    call pcgop%set_solvent_prior(m_pert, 1.0)
+    qx_pert = pcgop%apply_solvent_precision(x)
+    cont_err = real(sqrt(sum(real(qx_pert-qx,dp)**2) / max(1.0_dp, sum(real(qx,dp)**2))))
+    write(logfhandle,'(a,es14.6,a,es14.6)') '    eps=', ENV_EPS, ' rel_response=', cont_err
+    if( cont_err > CONT_RELTOL )then
+        write(logfhandle,'(a)') '    FAIL: prior responds discontinuously to a graded envelope change'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: graded-edge response is O(eps)'
+    endif
+    call pcgop%set_solvent_prior(m_env, 1.0)  ! restore
+
+    ! ============ STAGE 7: finite-difference gradient of R_s ============
+    write(logfhandle,'(a)') '>>> STAGE 7: gradient of R_s(x) = (1/2) x^T Q_s x is Q_s x'
+    allocate(d(BOX,BOX,BOX))
+    call random_number(d)
+    d = d - 0.5
+    qy      = pcgop%apply_solvent_precision(x + FD_H*d)
+    r_plus  = 0.5_dp * pcgop%dot_real_volume(x + FD_H*d, qy)
+    qy      = pcgop%apply_solvent_precision(x - FD_H*d)
+    r_minus = 0.5_dp * pcgop%dot_real_volume(x - FD_H*d, qy)
+    g_fd    = (r_plus - r_minus) / real(2.0*FD_H,dp)
+    g_an    = pcgop%dot_real_volume(d, qx)
+    fd_err  = real(abs(g_fd-g_an) / max(1.0_dp, abs(g_fd), abs(g_an)))
+    write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    fd=', real(g_fd), ' analytic=', real(g_an), &
+        &' rel_err=', fd_err
+    if( fd_err > FD_RELTOL )then
+        write(logfhandle,'(a)') '    FAIL: finite-difference gradient disagrees with Q_s x'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: finite-difference gradient matches'
+    endif
+
+    ! ============ STAGE 8: composition with the masked normal operator ============
+    write(logfhandle,'(a)') '>>> STAGE 8: P (H_data + lambda_s Q_s + lambda) P symmetry and positivity'
+    call pcgop%set_deapod(.false.)   ! inverse-crime domain, algebra gate only
+    call projdirs%new(NPROJS, .false.)
+    call projdirs%spiral
+    lims2 = pcgop%get_lims2()
+    R     = lims2(1,2)
+    allocate(sig2arr(0:R))
+    do i = 0, R
+        sig2arr(i) = 1.0 + 0.15*real(i)
+    end do
+    allocate(sig2_2d(0:R,NPROJS))
+    call e%new(.false.)
+    do i = 1, NPROJS
+        call projdirs%get_ori(i, e)
+        g = mod(i-1, NCTF) + 1
+        ctfparms%smpd = SMPD; ctfparms%kv = KV; ctfparms%cs = CS; ctfparms%fraca = FRACA
+        ctfparms%dfx = DFX_VALS(g); ctfparms%dfy = DFX_VALS(g)+0.15
+        ctfparms%angast = 20.*real(g); ctfparms%phshift = 0.
+        call e%set_ctfvars(ctfparms)
+        call e%set_shift([1.1, -0.7])
+        call projdirs%set_ori(i, e)
+        sig2_2d(:,i) = sig2arr
+    end do
+    call pcgop%prep_particles(projdirs, use_ctf=.true., sig2=sig2_2d)
+    hp = pcgop%apply_normal(x)
+    hq = pcgop%apply_normal(y)
+    dp_x_qy = pcgop%dot_real_volume(x, hq)
+    dp_qx_y = pcgop%dot_real_volume(hp, y)
+    dp_x_qx = pcgop%dot_real_volume(x, hp)
+    adj_err = real(abs(dp_x_qy-dp_qx_y) / max(1.0_dp, abs(dp_x_qy), abs(dp_qx_y)))
+    write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    dot(p,Hq)=', real(dp_x_qy), &
+        &' dot(Hp,q)=', real(dp_qx_y), ' rel_err=', adj_err
+    if( adj_err > OP_RELTOL .or. dp_x_qx <= 0.0_dp )then
+        write(logfhandle,'(a)') '    FAIL: solvent term breaks the masked normal operator contract'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: priored masked operator remains symmetric positive-definite'
+    endif
+
+    call pcgop%kill
+    call projdirs%kill
+    call e%kill
+
+    if( all_ok )then
+        write(logfhandle,'(a)') '>>> TEST_PCG_PRIORS: ALL STAGES PASS'
+        call simple_end('**** SIMPLE_TEST_PCG_PRIORS NORMAL STOP ****')
+    else
+        THROW_HARD('TEST_PCG_PRIORS FAILED')
+    endif
+end subroutine exec_test_pcg_priors
 
 subroutine exec_test_pcg_frac_update( self, cline )
     use simple_builder,            only: builder

@@ -175,6 +175,22 @@ type :: reconstructor_pcg
     real              :: ml_hp  = 100.0               !< low-frequency no-prior limit in Angstrom
     logical           :: l_ml_prior_requested = .false.
     logical           :: l_ml_prior = .false.
+    ! ---- optional graded solvent-flatness prior (pcg_priors.md S4) ----
+    ! Q_s = D_s - s s^T/S with s = [p(1-m)]^2 built from the NU molecular
+    ! envelope m and the broad support p; applied matrix-free in the
+    ! deapodized real-space domain. s is normalized to unit mean diagonal on
+    ! its effective support (S4.4) so pcg_solvent_lambda_rel and the shell
+    ! priors' relative strengths have comparable meaning; the absolute scale
+    ! is then lambda_solvent = rel * data_scale, derived alongside the ridge
+    ! lambda in update_lambda_from_density. Deliberately NOT in the
+    ! preconditioner: a real-space diagonal cannot be fused with the
+    ! Fourier-shell preconditioner, and at validated strengths it perturbs
+    ! conditioning, not correctness.
+    real, allocatable :: solvent_s(:,:,:)             !< normalized solvent precision diagonal s, box^3
+    real(dp)          :: solvent_S_sum = 0.0_dp       !< sum(s) after normalization
+    real              :: solvent_lambda_rel = 0.0     !< strength relative to the data scale
+    real              :: lambda_solvent = 0.0         !< effective absolute strength
+    logical           :: l_solvent_prior = .false.
     ! ---- per-phase profiling, accumulated over a solve. Exists to answer one
     !      question before any further optimization: of the seconds an iteration
     !      costs, how many are the particle loop (which the kernelized operator
@@ -250,6 +266,10 @@ type :: reconstructor_pcg
     procedure :: apply_normal_kernel
     procedure :: apply_adjoint_all
     procedure :: assert_prior_attachment_mode
+    procedure :: set_solvent_prior
+    procedure :: apply_solvent_precision
+    procedure :: get_solvent_stats
+    procedure :: get_solvent_precision_diag
     ! GETTERS
     procedure :: get_lims2
     procedure :: get_lims3
@@ -262,6 +282,7 @@ type :: reconstructor_pcg
     procedure :: get_ml_prior_stats
     procedure :: get_data_scale
     procedure :: get_effective_lambda
+    procedure :: get_effective_solvent_lambda
     ! SOLVER
     procedure :: solve
     procedure :: solve_accum
@@ -669,6 +690,87 @@ contains
         endif
     end subroutine assert_prior_attachment_mode
 
+    !>  \brief  Install the graded solvent-flatness precision from the NU
+    !!          molecular envelope m (pcg_priors.md S4.2-S4.4). Requires the
+    !!          broad support to be set first: the solvent weight is
+    !!          w = p(1-m), which both grades the prior smoothly at the two
+    !!          boundaries and stops the fixed zero voxels outside the support
+    !!          from dominating the solvent mean. s = w^2 is normalized to
+    !!          unit mean diagonal over its effective support (w > 0), the
+    !!          declared normalization contract; mu_s is invariant under that
+    !!          scaling. The effective absolute strength starts at the
+    !!          relative value (unit data scale, for direct operator tests)
+    !!          and is rescaled by data_scale when the raw density is
+    !!          finalized, exactly like the relative ridge lambda.
+    subroutine set_solvent_prior( self, m, lambda_rel )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                       intent(in)    :: m(self%box,self%box,self%box)
+        real,                       intent(in)    :: lambda_rel
+        real(dp) :: s_sum
+        integer  :: n_eff
+        if( .not. self%l_mask ) THROW_HARD('solvent prior requires the support mask; call set_mask first')
+        if( .not. ieee_is_finite(lambda_rel) .or. lambda_rel < 0.0 )then
+            THROW_HARD('relative solvent prior strength must be finite and non-negative')
+        endif
+        if( .not. all(ieee_is_finite(m)) ) THROW_HARD('solvent envelope contains non-finite values')
+        if( minval(m) < 0.0 .or. maxval(m) > 1.0 ) THROW_HARD('solvent envelope outside [0,1]; clip before installing')
+        if( allocated(self%solvent_s) ) deallocate(self%solvent_s)
+        allocate(self%solvent_s(self%box,self%box,self%box))
+        self%solvent_s = (self%mask * (1.0 - m))**2
+        n_eff = count(self%solvent_s > 0.0)
+        s_sum = sum(real(self%solvent_s,dp))
+        if( n_eff < 1 .or. s_sum <= 0.0_dp )then
+            THROW_HARD('solvent prior has empty effective support (no solvent evidence)')
+        endif
+        self%solvent_s      = self%solvent_s * real(real(n_eff,dp) / s_sum)
+        self%solvent_S_sum  = sum(real(self%solvent_s,dp))
+        self%solvent_lambda_rel = lambda_rel
+        self%lambda_solvent     = lambda_rel
+        self%l_solvent_prior    = .true.
+    end subroutine set_solvent_prior
+
+    !>  \brief  Q_s x = s .* [x - mu_s(x)] with mu_s(x) = (s.x)/S -- one
+    !!          weighted reduction and two volume passes, no stored matrix.
+    !!          Q_s = L^T L for L = W C_s (W = diag(w), C_s the weighted
+    !!          centering), hence symmetric PSD with null space span{1} --
+    !!          it penalizes solvent VARIATION, never the offset the data do
+    !!          not determine. Unit strength: callers scale by their lambda.
+    function apply_solvent_precision( self, x ) result( qx )
+        class(reconstructor_pcg), intent(in) :: self
+        real,                       intent(in) :: x(self%box,self%box,self%box)
+        real, allocatable :: qx(:,:,:)
+        real(dp) :: mu_s
+        if( .not. self%l_solvent_prior ) THROW_HARD('set_solvent_prior has not been called; apply_solvent_precision')
+        mu_s = sum(real(self%solvent_s,dp) * real(x,dp)) / self%solvent_S_sum
+        allocate(qx(self%box,self%box,self%box))
+        qx = self%solvent_s * (x - real(mu_s))
+    end function apply_solvent_precision
+
+    !>  \brief  Solvent diagnostics of a final map for the pcg_solvent_*
+    !!          block: weighted solvent mean, weighted RMS deviation about it,
+    !!          and the penalty R_s = (lambda_s/2) x^T Q_s x.
+    subroutine get_solvent_stats( self, x, mean_s, rms_s, penalty )
+        class(reconstructor_pcg), intent(in)  :: self
+        real,                       intent(in)  :: x(self%box,self%box,self%box)
+        real,                       intent(out) :: mean_s, rms_s, penalty
+        real(dp) :: mu_s, var_s
+        if( .not. self%l_solvent_prior ) THROW_HARD('set_solvent_prior has not been called; get_solvent_stats')
+        mu_s   = sum(real(self%solvent_s,dp) * real(x,dp)) / self%solvent_S_sum
+        var_s  = sum(real(self%solvent_s,dp) * (real(x,dp) - mu_s)**2) / self%solvent_S_sum
+        mean_s  = real(mu_s)
+        rms_s   = real(sqrt(max(0.0_dp, var_s)))
+        penalty = real(0.5_dp * real(self%lambda_solvent,dp) * var_s * self%solvent_S_sum)
+    end subroutine get_solvent_stats
+
+    !>  \brief  Copy of the normalized precision diagonal s, for the
+    !!          normalization-contract assertion in test=pcg_priors.
+    function get_solvent_precision_diag( self ) result( s )
+        class(reconstructor_pcg), intent(in) :: self
+        real, allocatable :: s(:,:,:)
+        if( .not. self%l_solvent_prior ) THROW_HARD('set_solvent_prior has not been called; get_solvent_precision_diag')
+        allocate(s(self%box,self%box,self%box), source=self%solvent_s)
+    end function get_solvent_precision_diag
+
     !>  \brief  Multiplies a real volume by E^-1, the inverse KB instrument
     !!          envelope -- the deapodization / roll-off correction.
     !!
@@ -802,6 +904,7 @@ contains
         if( allocated(self%Khat)     ) deallocate(self%Khat)
         if( allocated(self%ml_fsc)   ) deallocate(self%ml_fsc)
         if( allocated(self%ml_prior) ) deallocate(self%ml_prior)
+        if( allocated(self%solvent_s)) deallocate(self%solvent_s)
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
@@ -826,6 +929,10 @@ contains
         self%ml_hp       = 100.0
         self%l_ml_prior_requested = .false.
         self%l_ml_prior  = .false.
+        self%solvent_S_sum      = 0.0_dp
+        self%solvent_lambda_rel = 0.0
+        self%lambda_solvent     = 0.0
+        self%l_solvent_prior    = .false.
         self%wimg_exists = .false.
         self%op_mode     = PCG_OP_MATRIXFREE
         call self%reset_profile(.false.)
@@ -2038,6 +2145,7 @@ contains
         hp = self%fold_and_ifft(vol_accum)
         call self%deapod_mul(hp)
         if( self%l_ml_prior ) hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
+        if( self%l_solvent_prior ) hp = hp + self%lambda_solvent * self%apply_solvent_precision(p)
         hp = hp + self%lambda * p
     end function apply_normal_matrixfree
 
@@ -2093,6 +2201,9 @@ contains
         if( self%l_ml_prior .and. .not. self%l_deapod )then
             hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
         endif
+        ! real-space precision on the same (deapodized) domain as the iterate;
+        ! attachment mode is enforced upstream, see assert_prior_attachment_mode
+        if( self%l_solvent_prior ) hp = hp + self%lambda_solvent * self%apply_solvent_precision(p)
         hp = hp + self%lambda * p
     end function apply_normal_kernel
 
@@ -2841,6 +2952,7 @@ contains
             THROW_HARD('invalid PCG data scale derived from D')
         endif
         if( self%l_lambda_relative ) self%lambda = self%lambda_rel * self%data_scale
+        if( self%l_solvent_prior   ) self%lambda_solvent = self%solvent_lambda_rel * self%data_scale
     end subroutine update_lambda_from_density
 
     !> Build P_tau from the independent-half FSC and raw data-only D.
@@ -3848,6 +3960,11 @@ contains
         class(reconstructor_pcg), intent(in) :: self
         get_data_scale = self%data_scale
     end function get_data_scale
+
+    pure real function get_effective_solvent_lambda( self )
+        class(reconstructor_pcg), intent(in) :: self
+        get_effective_solvent_lambda = self%lambda_solvent
+    end function get_effective_solvent_lambda
 
     pure real function get_effective_lambda( self )
         class(reconstructor_pcg), intent(in) :: self

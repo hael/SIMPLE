@@ -523,6 +523,7 @@ contains
         call reg%add_real('lambda', self%lambda)
         call reg%add_real('lp', self%lp)
         call reg%add_real('pcrot', self%pcrot)
+        call reg%add_real('pcg_solvent_lambda_rel', self%pcg_solvent_lambda_rel)
         call reg%add_real('lp2D', self%lp2D)
         call reg%add_real('lp_backgr', self%lp_backgr)
         call reg%add_real('lp_ctf_estimate', self%lp_ctf_estimate)

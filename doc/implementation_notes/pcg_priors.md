@@ -542,14 +542,33 @@ the baselines (R2).
 
 ### Stage 2 — solvent `Q_s` operator, Gate A (algebra), default off
 
-- Implement `Q_s` and `pcg_solvent_lambda_rel` (ML-replay placement, §3).
-- New unit gate (`test=pcg_priors` alongside `test=pcg_recon`): adjoint
-  identity `<x,Q_s y> = <Q_s x,y>`; PSD; `Q_s 1 = 0`; zero action at zero
-  solvent confidence; graded-edge continuity; finite-difference gradient of
-  `R_s`; normalization contract.
-- Mutation tests (R4): add `L` instead of `L^T L` -> symmetry assertion must
-  fail; drop the mean (rank-one) term -> null-space assertion must fail.
-- Gate: unit gate green, both mutations red, R5 bit-identity on the fixture.
+**DONE (2026-08-25).** `Q_s` lives in `simple_reconstructor_pcg`
+(`set_solvent_prior` / `apply_solvent_precision` / `get_solvent_stats`):
+matrix-free `s.*(x - mu_s(x))` with `s = [p(1-m)]^2` normalized to unit mean
+diagonal on its effective support; effective strength
+`lambda_solvent = pcg_solvent_lambda_rel * s_data(D)` derived alongside the
+relative ridge lambda in `update_lambda_from_density`; attached in both
+concrete operators (deliberately NOT in the Fourier-shell preconditioner — a
+real-space diagonal cannot be fused there; conditioning, not correctness).
+`pcg_solvent_lambda_rel` (default 0.0) is registered and exposed on
+`reconstruct3D`; the strategy attaches the prior to both halves' ML replays
+when the envelope loader (`resolve_solvent_envelope`, the Stage-1.3 loader
+gone live) validates it AND the strength is positive, with a per-half
+`PCG SOLVENT PRIOR` line (`lambda_eff`, `mean/rms/penalty_final`) after each
+priored solve, and a loud THROW_WARN skip when a positive strength has no
+usable envelope.
+
+- Gate results: `test=pcg_priors` (8 stages: normalization contract, adjoint,
+  PSD, `Q_s 1 = 0`, zero action on the `m=1` plateau, graded-edge continuity
+  at eps=1e-3, FD gradient of `R_s`, composition with the masked normal
+  operator) ALL PASS; mutation `L` instead of `L^T L` (outer weight
+  `sqrt(s)`) fails the adjoint, gradient, and composition stages; mutation
+  dropping the rank-one mean term fails exactly the null-space stage (and
+  only it — `s.*x` is still symmetric PSD, the correct signature);
+  `test=pcg_recon` full suite unchanged; R5 fixture bit-identity holds
+  (gated median .8428, identical to baseline, strength defaulting to 0).
+- Remaining for Stage 3: shared vs `nparts=2` parity at a positive strength,
+  abinitio3D/refine3D forwarding, `rec3D_backends` strength registration.
 
 ### Stage 3 — workflow integration incl. abinitio3D, Gate B (invariants)
 

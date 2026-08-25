@@ -12,6 +12,7 @@ type(ui_program), target :: subproject_distr
 type(ui_program), target :: ptcls_ppca_subproject_distr
 type(ui_program), target :: pcg_recon
 type(ui_program), target :: pcg_frac_update
+type(ui_program), target :: pcg_priors
 type(ui_program), target :: rec3D_backends
 
 contains
@@ -26,6 +27,7 @@ contains
         call new_ptcls_ppca_subproject_distr(tsttab)
         call new_pcg_recon(tsttab)
         call new_pcg_frac_update(tsttab)
+        call new_pcg_priors(tsttab)
         call new_rec3D_backends(tsttab)
     end subroutine construct_test_highlevel_programs
 
@@ -40,6 +42,7 @@ contains
         write(logfhandle,'(A)') ptcls_ppca_subproject_distr%name%to_char()
         write(logfhandle,'(A)') pcg_recon%name%to_char()
         write(logfhandle,'(A)') pcg_frac_update%name%to_char()
+        write(logfhandle,'(A)') pcg_priors%name%to_char()
         write(logfhandle,'(A)') rec3D_backends%name%to_char()
         write(logfhandle,'(A)') ''
     end subroutine print_test_highlevel_programs
@@ -212,6 +215,21 @@ contains
         call pcg_frac_update%add_input(UI_COMP, nthr)
         call add_ui_program('pcg_frac_update', pcg_frac_update, tsttab, UI_CATEGORY)
     end subroutine new_pcg_frac_update
+
+    subroutine new_pcg_priors( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call pcg_priors%new(&
+        &'pcg_priors',&
+        &'PCG prior-operator unit gate',&
+        &'In-memory, project-free unit gate for the PCG prior operators (pcg_priors.md). Currently '//&
+        &'validates the graded solvent-flatness precision Q_s: normalization contract (unit mean '//&
+        &'diagonal on the effective support), adjoint identity, positive semidefiniteness, constant '//&
+        &'null space, zero action at zero solvent confidence, graded-edge continuity, the '//&
+        &'finite-difference gradient of the penalty, and composition with the masked normal operator.',&
+        &'simple_test_exec',&
+        &.false.)
+        call add_ui_program('pcg_priors', pcg_priors, tsttab, UI_CATEGORY)
+    end subroutine new_pcg_priors
 
     subroutine new_rec3D_backends( tsttab )
         class(ui_hash), intent(inout) :: tsttab

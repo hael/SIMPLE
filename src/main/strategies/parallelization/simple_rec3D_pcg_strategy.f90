@@ -71,21 +71,24 @@ contains
         call prev_fname%kill
     end subroutine override_ml_warm_start_from_previous
 
-    !> Inert solvent-envelope plumbing (pcg_priors.md S10 Stage 1.3, rule R8).
-    !! Resolves the state-specific NU evidence envelope the future solvent
-    !! prior will consume, runs the full S6.2 validation contract -- presence,
-    !! cubic lattice, physical-extent identity, constant-FOV resample when the
+    !> Solvent-envelope loader for the graded solvent-flatness prior
+    !! (pcg_priors.md S4, S6.2). Resolves the state-specific NU evidence
+    !! envelope, runs the full S6.2 validation contract -- presence, cubic
+    !! lattice, physical-extent identity, constant-FOV resample when the
     !! lattice differs, finiteness, [0,1] range with re-clip after resampling,
     !! nonzero solvent evidence -- and emits the pcg_solvent_* diagnostic
-    !! block. NO OPERATOR CHANGE: the prior does not exist yet, so
-    !! prior_enabled is always F and the envelope is discarded after the
-    !! statistics. Called once per state before either half's ML replay, which
-    !! is where the prior will attach; the same call becomes the live loader
-    !! when Stage 2 lands.
-    subroutine report_solvent_envelope_status( params, state_here, context )
-        class(parameters), intent(in) :: params
-        integer,           intent(in) :: state_here
-        character(len=*),  intent(in) :: context
+    !! block. When the envelope validates AND pcg_solvent_lambda_rel > 0 the
+    !! clipped envelope is returned with l_ready true, and the caller attaches
+    !! it to BOTH halves' ML replays (one fixed mask identity per state and
+    !! iteration, S6.2). In every other case l_ready is false with a clear
+    !! skip reason and the solve path is untouched (R5: strength zero is
+    !! bit-identical). Never substitutes a density or spherical mask.
+    subroutine resolve_solvent_envelope( params, state_here, context, m_env, l_ready )
+        class(parameters), intent(in)  :: params
+        integer,           intent(in)  :: state_here
+        character(len=*),  intent(in)  :: context
+        real, allocatable, intent(out) :: m_env(:,:,:)
+        logical,           intent(out) :: l_ready
         real, parameter :: EXTENT_RELTOL = 1.0e-3 !< constant-FOV identity tolerance
         real, parameter :: VALUE_SLACK   = 1.0e-2 !< clip-vs-reject boundary around [0,1]
         type(string) :: env_fname
@@ -95,7 +98,9 @@ contains
         real     :: smpd_env, extent_env, extent_rec, mask_min, mask_max
         real(dp) :: weight_sum, weight_fraction
         integer  :: ldim_env(3), nimgs
-        logical  :: l_resampled
+        logical  :: l_resampled, l_env_valid
+        l_ready     = .false.
+        l_env_valid = .false.
         l_resampled = .false.
         mask_min    = 0.0
         mask_max    = 0.0
@@ -135,17 +140,36 @@ contains
                             if( weight_sum <= 0.0_dp )then
                                 skip_reason = 'no_solvent_evidence'
                             else
-                                skip_reason = 'prior_not_implemented_stage1_inert'
+                                l_env_valid = .true.
+                                if( params%pcg_solvent_lambda_rel > 0.0 )then
+                                    skip_reason = 'none'
+                                else
+                                    skip_reason = 'strength_zero'
+                                endif
                             endif
                         endif
                     endif
                 endif
             endif
         endif
+        l_ready = l_env_valid .and. params%pcg_solvent_lambda_rel > 0.0
+        if( l_ready )then
+            call move_alloc(m, m_env)
+        else if( params%pcg_solvent_lambda_rel > 0.0 )then
+            ! positive user setting with no usable envelope: skip THIS
+            ! iteration's prior loudly, never substitute another mask type
+            THROW_WARN('pcg_solvent_lambda_rel > 0 but the NU evidence envelope is unusable ('//skip_reason//'); solvent prior skipped for this iteration')
+        endif
         weight_fraction = weight_sum / real(params%box_crop,dp)**3
         write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT ENVELOPE ('//trim(context)//'/state ', &
-            &state_here, '): inert diagnostics, no operator change'
-        write(logfhandle,'(A)')      '    pcg_solvent_prior_enabled=F pcg_solvent_lambda_rel=0.0 pcg_solvent_lambda_eff=0.0'
+            &state_here, ')'
+        if( l_ready )then
+            write(logfhandle,'(A,ES11.4)') '    pcg_solvent_prior_enabled=T pcg_solvent_lambda_rel=', &
+                &params%pcg_solvent_lambda_rel
+        else
+            write(logfhandle,'(A,ES11.4)') '    pcg_solvent_prior_enabled=F pcg_solvent_lambda_rel=', &
+                &params%pcg_solvent_lambda_rel
+        endif
         write(logfhandle,'(A)')      '    pcg_solvent_mask_file='//env_fname%to_char()
         if( l_resampled )then
             write(logfhandle,'(A,I0,A,I0,A)') '    pcg_solvent_mask_resampled=T (box ', ldim_env(1), &
@@ -157,10 +181,26 @@ contains
             &' pcg_solvent_mask_max=', mask_max
         write(logfhandle,'(A,ES11.4,A,ES11.4)') '    pcg_solvent_weight_sum=', real(weight_sum), &
             &' pcg_solvent_weight_fraction=', real(weight_fraction)
-        write(logfhandle,'(A)')      '    pcg_solvent_mean_final=0.0 pcg_solvent_rms_final=0.0 pcg_solvent_penalty_final=0.0'
+        ! lambda_eff and the mean/rms/penalty_final values are per-half solve
+        ! outputs; written by the PCG SOLVENT PRIOR line after each ML replay
         write(logfhandle,'(A)')      '    pcg_solvent_skip_reason='//skip_reason
         call env_fname%kill
-    end subroutine report_solvent_envelope_status
+    end subroutine resolve_solvent_envelope
+
+    !> The solve-output half of the pcg_solvent_* diagnostic block (S6.2):
+    !! effective absolute strength and the final map's weighted solvent mean,
+    !! RMS deviation and penalty, written after each priored ML replay.
+    subroutine report_solvent_solve_stats( pcgop, x, context, half )
+        type(reconstructor_pcg), intent(in) :: pcgop
+        real,                    intent(in) :: x(:,:,:)
+        character(len=*),        intent(in) :: context, half
+        real :: mean_s, rms_s, penalty
+        call pcgop%get_solvent_stats(x, mean_s, rms_s, penalty)
+        write(logfhandle,'(A,ES11.4,A,ES11.4,A,ES11.4,A,ES11.4)') &
+            &'>>> PCG SOLVENT PRIOR ('//trim(context)//'/'//trim(half)//'): pcg_solvent_lambda_eff=', &
+            &pcgop%get_effective_solvent_lambda(), ' pcg_solvent_mean_final=', mean_s, &
+            &' pcg_solvent_rms_final=', rms_s, ' pcg_solvent_penalty_final=', penalty
+    end subroutine report_solvent_solve_stats
 
     subroutine execute_rec3D_pcg_shared( params, build, cline )
         type(parameters), intent(inout) :: params
@@ -169,10 +209,11 @@ contains
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         integer, allocatable :: selected_pinds(:), half_pinds(:)
-        real, allocatable :: fsc(:), res0143s(:)
+        real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:)
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         real :: res05, cfar
+        logical :: l_solvent_ready
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
         logical :: l_sigma_loaded
@@ -192,6 +233,7 @@ contains
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
 
         do state = 1, params%nstates
+            l_solvent_ready = .false.
             n_state = count_state(state)
             n_even = count_state_half(state, 0)
             n_odd  = count_state_half(state, 1)
@@ -233,9 +275,10 @@ contains
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
-                call report_solvent_envelope_status(params, state, 'shared')
+                call resolve_solvent_envelope(params, state, 'shared', solvent_env, l_solvent_ready)
                 call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
                 call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
+                if( allocated(solvent_env) ) deallocate(solvent_env)
                 call merged%kill
                 call merged%copy(ml_even)
                 call merged%add(ml_odd)
@@ -510,6 +553,9 @@ contains
             if( nptcls < 1 ) THROW_HARD('PCG ML replay requires a populated raw half accumulator')
             t_phase = tic()
             call pcgop%set_ml_prior(fsc_here, params%tau, params%hp)
+            ! before end_accum: the effective solvent strength is derived from
+            ! the data scale alongside the relative ridge lambda
+            if( l_solvent_ready ) call pcgop%set_solvent_prior(solvent_env, params%pcg_solvent_lambda_rel)
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
             call pcgop%assert_prior_attachment_mode
@@ -523,6 +569,7 @@ contains
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
             time_solve = real(toc(t_phase),dp)
             call validate_solved_map(x, 'shared', state_here, half, 'ml')
+            if( l_solvent_ready ) call report_solvent_solve_stats(pcgop, x, 'shared', half)
             time_total = time_reduce + time_finalize + time_solve
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
@@ -1278,14 +1325,14 @@ contains
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(image) :: previous_even, previous_odd, previous_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
-        real, allocatable :: fsc(:), res0143s(:)
+        real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:)
         real, allocatable :: realized_fractions(:), update_weights(:)
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
         integer :: n_active_state, n_sampled_state
         real :: res05, cfar
-        logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain
+        logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_solvent_ready
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
 
@@ -1320,6 +1367,7 @@ contains
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         do state = 1, params%nstates
+            l_solvent_ready = .false.
             l_bootstrap = .false.
             if( params%l_trail_rec )then
                 raw_fname = refine3D_pcg_trail_accum_fname(state, 'even')
@@ -1381,9 +1429,10 @@ contains
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
-                call report_solvent_envelope_status(params, state, 'distributed')
+                call resolve_solvent_envelope(params, state, 'distributed', solvent_env, l_solvent_ready)
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
                 call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
+                if( allocated(solvent_env) ) deallocate(solvent_env)
                 call merged%kill
                 call merged%copy(ml_even)
                 call merged%add(ml_odd)
@@ -1626,7 +1675,11 @@ contains
                 call fname%kill
             endif
             t_phase = tic()
-            if( l_ml_solve ) call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
+            if( l_ml_solve )then
+                call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
+                ! before end_accum: effective strength derives from the data scale
+                if( l_solvent_ready ) call pcgop%set_solvent_prior(solvent_env, params%pcg_solvent_lambda_rel)
+            endif
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
             if( l_ml_solve ) call pcgop%assert_prior_attachment_mode
@@ -1646,6 +1699,7 @@ contains
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
             time_solve = real(toc(t_phase),dp)
             call validate_solved_map(x, 'distributed', state_here, half, solve_kind)
+            if( l_ml_solve .and. l_solvent_ready ) call report_solvent_solve_stats(pcgop, x, 'distributed', half)
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
             call report_beyond_band_excess(volume, params, state_here, half, solve_kind)

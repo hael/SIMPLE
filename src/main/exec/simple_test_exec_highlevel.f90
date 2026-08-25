@@ -5,7 +5,7 @@ use simple_commanders_test_highlevel, only: commander_test_mini_stream, commande
                                             commander_test_reproject, &
                                             commander_test_simulated_workflow, commander_test_subproject_distr, &
                                             commander_test_ptcls_ppca_subproject_distr, commander_test_pcg_recon, &
-                                            commander_test_pcg_frac_update, commander_test_rec3D_backends
+                                            commander_test_pcg_frac_update, commander_test_pcg_priors, commander_test_rec3D_backends
 implicit none
 
 public :: exec_test_highlevel_commander
@@ -19,6 +19,7 @@ type(commander_test_subproject_distr)            :: xsubproject_distr
 type(commander_test_ptcls_ppca_subproject_distr) :: xptcls_ppca_subproject_distr
 type(commander_test_pcg_recon)                   :: xpcg_recon
 type(commander_test_pcg_frac_update)             :: xpcg_frac_update
+type(commander_test_pcg_priors)                  :: xpcg_priors
 type(commander_test_rec3D_backends)              :: xrec3D_backends
 
 contains
@@ -48,6 +49,8 @@ contains
                 call xpcg_recon%execute(cline)
             case( 'pcg_frac_update' )
                 call xpcg_frac_update%execute(cline)
+            case( 'pcg_priors' )
+                call xpcg_priors%execute(cline)
             case( 'rec3D_backends' )
                 call xrec3D_backends%execute(cline)
             case default
