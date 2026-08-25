@@ -465,22 +465,216 @@ positive production default from one specimen.
 | Envelope grid mismatch at stage handoffs | Prior silently off for a stage. | Constant-FOV resample + `[0,1]` re-clip (§3 item 8). |
 | Silent mask fallback | Uninterpretable experiment. | No fallback in the first implementation. |
 
-## 10. Implementation staging
+## 10. Staged development plan
 
-1. Verify the two §3 prerequisites (`P H P` contract; deapodized-domain
-   restriction).
-2. Implement and Gate-A/B validate solvent `Q_s`, both strengths zero by
-   default, ML-replay placement.
-3. Add the Wilson spectrum source to the existing `P_tau` mechanism,
-   default-zero strength.
-4. Run the Gate C sweep and four-way ablation with fixed poses and incoming
-   envelope, at converged solver settings.
-5. If the combination is useful, revisit preconditioning of `lambda_s D_s`
-   and only then Singer/Gilles off-diagonal covariance structure.
-6. Treat a local LocScale-style lagged surrogate as a separate research
-   feature with half-specific targets and a measured local-FFT cost.
+Each stage ends at a gate; a later stage does not begin until the preceding
+gate passes and the stage's changes are committed (trunk development;
+everything default-off, so master is protected throughout). "Fixture" means
+the neutral-phantom project with ground truth plus the gated
+`test=rec3D_backends`.
 
-## 11. Recommended reading order
+### Cross-cutting rules (the distilled foot-gun list)
+
+- **R1 — one variable per experiment.** Never change solver behavior and a
+  baseline in the same measurement.
+- **R2 — no moving baselines.** Re-record every reference number after any
+  solver change lands (the warm start moves the centre-bin, k=1–3, and RESID
+  numbers the priors will be judged by).
+- **R3 — converged-settings science, production-budget cost.** Scientific
+  claims at high `maxits_pcg`/tight `rtol`; iteration-budget impact measured
+  separately (the nu^4 lesson: 2-iteration results inverted conclusions).
+- **R4 — every gate gets a mutation test where feasible.** A gate that has
+  never failed on a deliberate defect is not known to gate anything
+  (the box-factor/deapodization mutations are the model).
+- **R5 — strength-zero bit-identity at every stage boundary.** Raw `(B,D)`
+  checksums, `_unfil` maps, and FSC unchanged with the feature off.
+- **R6 — never tune from half-map FSC**; truth/model comparisons or held-out
+  evidence decide.
+- **R7 — reliability changes require a measured control** at matched n (the
+  `ref_taper` lesson: master's own failure rate was 1/10).
+- **R8 — plumbing before math.** Ship inert loaders/diagnostics first so mask
+  handling and operator algebra are never debugged simultaneously.
+- **R9 — record acceptance thresholds in this document before running the
+  experiment that is judged by them.**
+- **R10 — every prior is an independent toggle.** One strength control per
+  prior, default `0.0` = off, forwarded intact through `abinitio3D` ->
+  `refine3D` -> the solver, with any combination selectable. This is both the
+  experimental design (factorial ablation by command line) and the
+  application path: refine3D is the work-horse everything else depends on,
+  so a validated prior is deployed by turning its flag on — no new
+  integration step.
+
+### Stage 0 — close out in-flight work (blocking)
+
+The cross-iteration ML warm start is implemented and unvalidated; it changes
+the baselines (R2).
+
+- 0.1 **VALIDATED (2026-08-25):** the cross-iteration warm start produces a
+  clean bgal map with a sensible resolution estimate at production settings.
+- 0.2 Re-baseline and record here: fixture, streptavidin, and bgal
+  `rec3D_backends` numbers (in-band ratio, k=1–3, centre-bin, RESID) at both
+  2 and converged iterations.
+- 0.3 Commit the consolidation + warm start.
+
+### Stage 1 — verification prerequisites (no behavior change)
+
+- 1.1 **DONE (2026-08-25).** Audit confirmed: `apply_normal` applies the
+  support on both sides and the RHS carries exactly one `P` in both
+  `end_accum` and `solve`. `test=pcg_recon` Stage 3b now asserts the masked
+  operator's dot-product symmetry and strict positivity (the soft edge makes
+  `P` non-idempotent, so a one-sided mask application fails this gate where
+  the unmasked check cannot see it). Full suite green.
+- 1.2 **DONE (2026-08-25).** Production never calls `set_deapod` (default on)
+  and always sets `PCG_OP_KERNEL`. `assert_prior_attachment_mode` (hard error
+  unless kernel + deapodized) is called at both ML-replay attach sites —
+  shared `regularize_state_half` and distributed `reduce_solve_state_half`.
+- 1.3 **DONE, refine3D diagnostics check pending (2026-08-25).** Inert
+  `report_solvent_envelope_status` in the strategy runs the S6.2 contract
+  (presence, cubic lattice, physical-extent identity, constant-FOV
+  `read_and_crop` resample on lattice mismatch, finiteness, `[0,1]` re-clip,
+  nonzero solvent evidence) and emits the `pcg_solvent_*` block with
+  `prior_enabled=F`, once per state before either half's ML replay, both
+  execution paths. Fixture gate PASS unchanged (median ratio .8428, identical
+  to the pre-change runs). NOTE: the fixture runs `objfun=cc`, and
+  `l_ml_reg` requires `objfun=euclid`, so the diagnostic block cannot fire
+  there — the envelope-absent skip and the resample demo must be read from
+  the next production refine3D/abinitio3D run.
+
+### Stage 2 — solvent `Q_s` operator, Gate A (algebra), default off
+
+- Implement `Q_s` and `pcg_solvent_lambda_rel` (ML-replay placement, §3).
+- New unit gate (`test=pcg_priors` alongside `test=pcg_recon`): adjoint
+  identity `<x,Q_s y> = <Q_s x,y>`; PSD; `Q_s 1 = 0`; zero action at zero
+  solvent confidence; graded-edge continuity; finite-difference gradient of
+  `R_s`; normalization contract.
+- Mutation tests (R4): add `L` instead of `L^T L` -> symmetry assertion must
+  fail; drop the mean (rank-one) term -> null-space assertion must fail.
+- Gate: unit gate green, both mutations red, R5 bit-identity on the fixture.
+
+### Stage 3 — workflow integration incl. abinitio3D, Gate B (invariants)
+
+- Live prior in the ML replays; skip/resample paths active; diagnostics
+  final. Register the strength on `test=rec3D_backends` (pcg-only key
+  handling as before) so the standing harness measures prior effects.
+- **abinitio3D forwarding is part of this stage, not a later one**: register
+  the strengths for `abinitio3D` and forward them to the refine3D stages
+  exactly as `maxits_pcg`/`rec_backend` are forwarded (R10). The
+  envelope-dependent priors become live in whatever stages have a compatible
+  NU envelope: with `automsk=yes` in the late abinitio3D stages the envelope
+  exists lag-one from that point, and the skip logic keeps earlier stages
+  cleanly unpriored — no stage-gating code beyond the existing envelope
+  validation.
+- Gate: R5 strength-zero bit-identity end-to-end; envelope-absent skip;
+  shared vs `nparts=2` parity on the fixture at a positive strength; one
+  full abinitio3D run with `rec_backend=pcg automsk=yes` and a positive
+  strength completes, shows the prior activating exactly when the envelope
+  first exists, exercises the stage-handoff resample, and the gated
+  `rec3D_backends` passes at a small positive strength.
+
+### Stage 4 — Gate C science, synthetic (converged settings, R3)
+
+- Record thresholds first (R9): "material molecular loss", acceptable
+  weighted-solvent-RMS reduction, omitted-domain damage bound.
+- Fixture sweep at converged settings; envelope variants: true, eroded,
+  dilated, omitted-domain (the bias test); measure H1/H3/H6 + map-to-truth
+  FSC + boundary ringing + residual histories; the cheap locres-diagonal
+  control (§11.3) runs in the same sweep.
+- Abort criterion: if omitted-domain damage exceeds its bound at every
+  useful strength, stop; the §11.2 aux-competition validator becomes a
+  prerequisite, not an option.
+
+### Stage 5 — Gate C science, real data + cost
+
+- **Primary real-scenario harness: abinitio3D with `automsk=yes` in the late
+  stages, prior flags on vs off, everything else identical.** Because the
+  toggles ride the existing refine3D plumbing (R10), the A/B is two command
+  lines differing only in prior strengths — a direct comparison in the exact
+  configuration applications will use. Read: final map quality and
+  resolution, the DIAG trajectory, the H6 low-shell/centre diagnostics from
+  a post-run `rec3D_backends`, and the solvent RMS diagnostics.
+- Standalone sweeps on bgal and streptavidin at converged settings against
+  matched strength-zero runs (fixed poses, isolates the estimator); then H4
+  at the production budget, including the warm-start interplay (the prior
+  changes the map the next iteration warm starts from).
+- Reliability control (R7): a 10x abinitio3D batch at the chosen strength vs
+  the recorded intrinsic ~1/10 rate; treat small-n differences as noise
+  unless they replicate.
+
+### Stage 6 — Wilson spectrum source
+
+Sequential after solvent (one variable, R1), reusing the `P_tau` mechanism
+(§5.2):
+
+- Gate A addition: swapping spectrum *source* with an identical spectrum is
+  bit-identical (mechanism/spectrum separation proven); PSD and curvature of
+  the summed prior action; synthetic nonzero-mean RHS correctness.
+- Gate B as stage 3; then the four-way ablation (A/B/C/D) at converged
+  settings with fixed poses, envelope, spectrum, and band; Gate D criteria
+  from §8 decide experimental-release status.
+
+### Stage 7 — explicitly out of first scope
+
+Each item gated behind a successful D run: the NU aux-competitor validator
+slot (§11.2, promoted earlier only by the Stage-4 abort); the locres
+nonstationary spectral prior (§11.3, judged against post-hoc NU filtering);
+`dmats` graded confidence (§11.4); preconditioning of `lambda_s D_s`
+(rank-one term stays exact; own parity study); Singer/Gilles off-diagonal
+covariance; the lagged LocScale surrogate.
+
+## 11. The NU machinery as the prior infrastructure
+
+The nonuniform-regularization machinery
+(`doc/policies/nonuniform_filtering_policy.md`, `src/main/nu_filt/`) is the
+mature evidence engine this proposal should build on — the LocScale analogy
+made concrete, with better provenance: LocScale-2.0 derives local confidence
+from a pseudoatomic reference (model bias), while NU derives it from
+cross-validated half-map evidence with a null model. All feeds below are
+lag-one by construction (NU runs after the solves inside `volassemble`), the
+same discipline as the envelope. Ranked:
+
+1. **Envelope -> solvent weights** (this proposal, §4): the established "in".
+2. **Aux-competition -> per-voxel prior validator.** Feed the *priored* ML
+   pair through the auxiliary-replacement mechanism (as a distinct
+   "competitor" slot, respecting the resolution gate and the `nu_refine`
+   exclusion) so the cross-validated NU selection decides per voxel whether
+   the priored reconstruction beats the base. The prior then survives only
+   where half-map evidence supports it — converting the "envelope misses weak
+   density" risk from a hand-designed mask-perturbation test into an
+   automatic runtime guard built from trusted machinery. Recommended as a
+   design principle for Gate C/D.
+3. **Local-resolution field -> nonstationary spectral prior.** The
+   Potts-smoothed label field `k_c(v)` (`_nu_locres`) defines the §5
+   local-covariance prior with NU label regions in place of LocScale
+   windows: `Q_locres = sum_j M_j^T Hp_j^T Hp_j M_j` (soft label-region
+   selectors, high-pass above each region's cutoff; every summand PSD, fixed
+   during the solve). Cost ~one FFT pair per retained label per matvec
+   (8-16 labels); the honest question is the increment over post-hoc NU
+   filtering — in-solve, the prior participates in the deconvolution and
+   conditions the ML replay rather than masking output — and the A-vs-D
+   ablation answers it. A cheap degenerate control belongs in the sweep:
+   locres-modulated real-space diagonal Tikhonov (damp voxels with coarse
+   evidenced resolution), free per matvec.
+4. **Unary Huber evidence (`dmats`) -> graded confidence.** Second-generation
+   solvent weights `w^2 = p^2 (1 - c(v))` generalize flatness to "proportional
+   to lack of evidence"; the pull-to-common-mean coupling stays restricted to
+   genuine solvent (weak in-particle voxels get variance damping without the
+   mean term). After the binary envelope form validates.
+5. **Potts machinery -> smooth every prior field.** Any per-voxel weight the
+   solver consumes should pass through the existing beta-estimated
+   ordered-label smoothing so prior fields are spatially coherent. Direct
+   reuse, nearly free.
+6. **Later:** the `nu_refine` frontier-challenge ratchet as evidence for how
+   hard `P_tau` clamps individual beyond-band shells; and the NU §6
+   null-estimation discipline reused verbatim for the prior's solvent
+   mean/RMS diagnostics.
+
+Caution: with envelope, locres, and evidence all derived from priored maps
+and fed back, the §9 support-shrinkage risk generalizes to
+**resolution-field drift**. Extend occupancy/overlap tracking to the locres
+field, and extend the omitted-domain test to confirm a domain absent from the
+locres field can still recover.
+
+## 12. Recommended reading order
 
 Wilson 1942 [3]; Wilson 1949 [4]; Singer 2021 [5]; Gilles and Singer 2022
 [6]; Wang 1985 [7]; Terwilliger 1999 [9]; Terwilliger et al. 2020 [10];

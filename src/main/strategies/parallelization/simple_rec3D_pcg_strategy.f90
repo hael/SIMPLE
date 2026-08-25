@@ -71,6 +71,97 @@ contains
         call prev_fname%kill
     end subroutine override_ml_warm_start_from_previous
 
+    !> Inert solvent-envelope plumbing (pcg_priors.md S10 Stage 1.3, rule R8).
+    !! Resolves the state-specific NU evidence envelope the future solvent
+    !! prior will consume, runs the full S6.2 validation contract -- presence,
+    !! cubic lattice, physical-extent identity, constant-FOV resample when the
+    !! lattice differs, finiteness, [0,1] range with re-clip after resampling,
+    !! nonzero solvent evidence -- and emits the pcg_solvent_* diagnostic
+    !! block. NO OPERATOR CHANGE: the prior does not exist yet, so
+    !! prior_enabled is always F and the envelope is discarded after the
+    !! statistics. Called once per state before either half's ML replay, which
+    !! is where the prior will attach; the same call becomes the live loader
+    !! when Stage 2 lands.
+    subroutine report_solvent_envelope_status( params, state_here, context )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: state_here
+        character(len=*),  intent(in) :: context
+        real, parameter :: EXTENT_RELTOL = 1.0e-3 !< constant-FOV identity tolerance
+        real, parameter :: VALUE_SLACK   = 1.0e-2 !< clip-vs-reject boundary around [0,1]
+        type(string) :: env_fname
+        type(image)  :: env
+        real,    allocatable :: m(:,:,:)
+        character(len=:), allocatable :: skip_reason
+        real     :: smpd_env, extent_env, extent_rec, mask_min, mask_max
+        real(dp) :: weight_sum, weight_fraction
+        integer  :: ldim_env(3), nimgs
+        logical  :: l_resampled
+        l_resampled = .false.
+        mask_min    = 0.0
+        mask_max    = 0.0
+        weight_sum  = 0.0_dp
+        env_fname   = string(NU_ENVMASK_FBODY)//int2str_pad(state_here,2)//string(MRC_EXT)
+        if( .not. file_exists(env_fname) )then
+            skip_reason = 'envelope_absent'
+        else
+            call find_ldim_nptcls(env_fname, ldim_env, nimgs)
+            smpd_env = find_img_smpd(env_fname)
+            if( ldim_env(1) /= ldim_env(2) .or. ldim_env(1) /= ldim_env(3) )then
+                skip_reason = 'envelope_not_cubic'
+            else
+                extent_env = real(ldim_env(1))     * smpd_env
+                extent_rec = real(params%box_crop) * params%smpd_crop
+                if( abs(extent_env - extent_rec) > EXTENT_RELTOL * extent_rec )then
+                    skip_reason = 'physical_extent_mismatch'
+                else
+                    ! constant-FOV lattice change: factor-free Fourier pad/clip
+                    ! under the data-quotient convention (S3 item 8)
+                    l_resampled = ldim_env(1) /= params%box_crop
+                    call env%read_and_crop(env_fname, smpd_env, params%box_crop, params%smpd_crop)
+                    m = env%get_rmat()
+                    call env%kill
+                    if( .not. all(ieee_is_finite(m)) )then
+                        skip_reason = 'envelope_not_finite'
+                    else
+                        mask_min = minval(m)
+                        mask_max = maxval(m)
+                        if( mask_min < -VALUE_SLACK .or. mask_max > 1.0 + VALUE_SLACK )then
+                            skip_reason = 'values_outside_unit_range'
+                        else
+                            ! S3: re-clip to [0,1]; resampling rings slightly
+                            m = min(1.0, max(0.0, m))
+                            ! solvent confidence is the molecular-envelope complement
+                            weight_sum = sum(1.0_dp - real(m,dp))
+                            if( weight_sum <= 0.0_dp )then
+                                skip_reason = 'no_solvent_evidence'
+                            else
+                                skip_reason = 'prior_not_implemented_stage1_inert'
+                            endif
+                        endif
+                    endif
+                endif
+            endif
+        endif
+        weight_fraction = weight_sum / real(params%box_crop,dp)**3
+        write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT ENVELOPE ('//trim(context)//'/state ', &
+            &state_here, '): inert diagnostics, no operator change'
+        write(logfhandle,'(A)')      '    pcg_solvent_prior_enabled=F pcg_solvent_lambda_rel=0.0 pcg_solvent_lambda_eff=0.0'
+        write(logfhandle,'(A)')      '    pcg_solvent_mask_file='//env_fname%to_char()
+        if( l_resampled )then
+            write(logfhandle,'(A,I0,A,I0,A)') '    pcg_solvent_mask_resampled=T (box ', ldim_env(1), &
+                &' -> ', params%box_crop, ', constant FOV)'
+        else
+            write(logfhandle,'(A)') '    pcg_solvent_mask_resampled=F'
+        endif
+        write(logfhandle,'(A,ES11.4,A,ES11.4)') '    pcg_solvent_mask_min=', mask_min, &
+            &' pcg_solvent_mask_max=', mask_max
+        write(logfhandle,'(A,ES11.4,A,ES11.4)') '    pcg_solvent_weight_sum=', real(weight_sum), &
+            &' pcg_solvent_weight_fraction=', real(weight_fraction)
+        write(logfhandle,'(A)')      '    pcg_solvent_mean_final=0.0 pcg_solvent_rms_final=0.0 pcg_solvent_penalty_final=0.0'
+        write(logfhandle,'(A)')      '    pcg_solvent_skip_reason='//skip_reason
+        call env_fname%kill
+    end subroutine report_solvent_envelope_status
+
     subroutine execute_rec3D_pcg_shared( params, build, cline )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -142,6 +233,7 @@ contains
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
+                call report_solvent_envelope_status(params, state, 'shared')
                 call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
                 call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
                 call merged%kill
@@ -420,6 +512,7 @@ contains
             call pcgop%set_ml_prior(fsc_here, params%tau, params%hp)
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
+            call pcgop%assert_prior_attachment_mode
             time_finalize = real(toc(t_phase),dp)
             call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
                 &prior_to_khat_l1, prior_to_khat_rms)
@@ -1288,6 +1381,7 @@ contains
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
+                call report_solvent_envelope_status(params, state, 'distributed')
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
                 call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
                 call merged%kill
@@ -1535,6 +1629,7 @@ contains
             if( l_ml_solve ) call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
+            if( l_ml_solve ) call pcgop%assert_prior_attachment_mode
             time_finalize = real(toc(t_phase),dp)
             if( l_ml_solve )then
                 call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &

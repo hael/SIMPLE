@@ -249,6 +249,7 @@ type :: reconstructor_pcg
     procedure :: apply_normal_matrixfree
     procedure :: apply_normal_kernel
     procedure :: apply_adjoint_all
+    procedure :: assert_prior_attachment_mode
     ! GETTERS
     procedure :: get_lims2
     procedure :: get_lims3
@@ -646,6 +647,27 @@ contains
         self%l_ml_prior_requested = .true.
         self%l_ml_prior = .false.
     end subroutine set_ml_prior
+
+    !>  \brief  Hard contract on the operating mode priors attach in. All
+    !!          regularizers beyond the plain lambda ridge -- the ML shell
+    !!          diagonal today, the planned real-space priors (see
+    !!          doc/implementation_notes/pcg_priors.md S3) -- are derived and
+    !!          validated in exactly one operator configuration: the kernelized
+    !!          normal operator with deapodization ON, where the iterate lives
+    !!          in the deapodized (physical-density) domain and the Fourier
+    !!          diagonal can be fused with Khat. The other configurations exist
+    !!          only as test oracles; attaching a prior there would change its
+    !!          meaning silently (the iterate would carry the KB envelope).
+    !!          Call this at the solve site whenever a prior is attached.
+    subroutine assert_prior_attachment_mode( self )
+        class(reconstructor_pcg), intent(in) :: self
+        if( self%op_mode /= PCG_OP_KERNEL )then
+            THROW_HARD('PCG priors attach in kernel operator mode only')
+        endif
+        if( .not. self%l_deapod )then
+            THROW_HARD('PCG priors attach in deapodized mode only')
+        endif
+    end subroutine assert_prior_attachment_mode
 
     !>  \brief  Multiplies a real volume by E^-1, the inverse KB instrument
     !!          envelope -- the deapodization / roll-off correction.

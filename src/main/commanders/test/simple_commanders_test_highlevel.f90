@@ -1036,7 +1036,8 @@ end subroutine exec_test_ptcls_ppca_subproject_distr
 !
 !    1. adjoint identity, T = 1              -- gather/scatter pair alone
 !    2. adjoint identity, T = C*S/sqrt(s2)   -- adds build_transfer
-!    3. normal operator: symmetry + PSD      -- the two properties CG requires
+!    3. normal operator: symmetry + PSD      -- the two properties CG requires,
+!                                               unmasked and masked (P H P)
 !    4. synthetic recovery                   -- end-to-end solve
 !    5. kernel vs matrix-free equivalence    -- the approximation's error budget
 !    6. kernel invariants + preconditioner   -- |T|^2 drops the shift, keeps CTF
@@ -1293,6 +1294,38 @@ subroutine exec_test_pcg_recon( self, cline )
         else
             write(logfhandle,'(a)') '    PASS: normal operator is positive-definite'
         endif
+        ! P H P with the support mask ACTIVE -- the operator production solves
+        ! with (see set_mask: x = P u gives (P H P) u = P b). The soft edge
+        ! makes P non-idempotent, so a one-sided or asymmetric mask application
+        ! breaks the dot-product identity where the unmasked check cannot see
+        ! it. Priors will attach inside this contract (pcg_priors.md S10
+        ! Stage 1.1), so it is asserted here before any of them exist.
+        write(logfhandle,'(a)') '>>> STAGE 3b: masked-operator (P H P) symmetry and positive-definiteness'
+        call pcgop%set_mask(real(BOX)/3.0)
+        hp = pcgop%apply_normal(p_probe)
+        hq = pcgop%apply_normal(q_probe)
+        dp_p_hq = pcgop%dot_real_volume(p_probe, hq)
+        dp_hp_q = pcgop%dot_real_volume(hp, q_probe)
+        dp_p_hp = pcgop%dot_real_volume(p_probe, hp)
+        adjoint_err = real(abs(dp_p_hq-dp_hp_q) / max(1.0_dp, abs(dp_p_hq), abs(dp_hp_q)))
+        write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    dot(p,PHPq)=', real(dp_p_hq), &
+            &' dot(PHPp,q)=', real(dp_hp_q), ' rel_err=', adjoint_err
+        if( adjoint_err > NORMAL_OP_RELTOL )then
+            write(logfhandle,'(a)') '    FAIL: masked normal operator is not symmetric'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: masked normal operator is symmetric'
+        endif
+        ! strict positivity holds because H carries the lambda ridge:
+        ! p.(PHP)p = (Pp).H(Pp) >= lambda*|Pp|^2 > 0 for a random probe
+        write(logfhandle,'(a,es14.6)') '    dot(p,PHPp)=', real(dp_p_hp)
+        if( dp_p_hp <= 0.0_dp )then
+            write(logfhandle,'(a)') '    FAIL: masked normal operator is not positive-definite'
+            all_ok = .false.
+        else
+            write(logfhandle,'(a)') '    PASS: masked normal operator is positive-definite'
+        endif
+        call pcgop%set_mask(0.0)   ! stages 4+ assert on the unmasked operator
     else
         write(logfhandle,'(a)') '>>> STAGE 3 SKIPPED: an earlier stage failed'
     endif
