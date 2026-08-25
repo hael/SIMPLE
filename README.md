@@ -33,6 +33,11 @@ distributed HPC environments.
 
 ------------------------------------------------------------------------
 
+## 🧪  Test Status
+[![Run SIMPLE Test Suite](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/test_suite.yml/badge.svg)](https://github.com/rmeanapa/SIMPLE_data_testing/actions/workflows/test_suite.yml)
+
+------------------------------------------------------------------------
+
 ## 🚀 Release
 
 Stable release (v3.0.0):
