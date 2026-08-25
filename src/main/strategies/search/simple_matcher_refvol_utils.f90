@@ -285,17 +285,6 @@ contains
         ! before any alignment, rather than warning after the damage (EUCLID DIAG)
         call autorescale_old_convention(build%vol,     'even')
         call autorescale_old_convention(build%vol_odd, 'odd')
-        ! optional legacy matching weight: until 2026-08 the reference half maps
-        ! were never grid-corrected, so matching references carried the KB
-        ! envelope taper (~0.6-0.7x at the mask edge) -- an implicit radial
-        ! down-weighting of the particle periphery during alignment. The maps
-        ! are now stored deapodized (correct density); ref_taper=yes reapplies
-        ! the taper to the MATCHING references only, restoring the legacy
-        ! alignment weighting for both backends without touching the maps.
-        if( trim(params%ref_taper).eq.'yes' )then
-            call apply_matching_taper(build%vol)
-            call apply_matching_taper(build%vol_odd)
-        endif
         ! noise regularization
         if( params%l_noise_reg )then
             call regularize_ref_with_noise(build%vol,     s, 'even')
@@ -322,7 +311,6 @@ contains
             endif
             call build%vol%read_and_crop(vol_avg, params%smpd, params%box_crop, params%smpd_crop)
             call autorescale_old_convention(build%vol, 'avg')
-            if( trim(params%ref_taper).eq.'yes' ) call apply_matching_taper(build%vol)
             ! noise regularization
             if( params%l_noise_reg )then
                 call regularize_ref_with_noise(build%vol, s, 'avg')
@@ -423,29 +411,6 @@ contains
         !!  under the retired 1/box convention sits ~box lower. The threshold 10/box
         !!  leaves > an order of magnitude of margin on either side. Rescaling is
         !!  idempotent: a rescaled map no longer satisfies the condition.
-        subroutine apply_matching_taper( refvol )
-            use simple_gridding, only: kb_stencil_envelope_1d
-            use simple_kbinterpol, only: kbinterpol
-            class(image), intent(inout) :: refvol
-            type(kbinterpol)  :: kbwin
-            real, allocatable :: env1d(:)
-            real, pointer     :: rmat(:,:,:)
-            integer :: ldim(3), i, j, k
-            if( refvol%is_ft() ) THROW_HARD('matching taper requires a real-space volume')
-            kbwin = kbinterpol(KBWINSZ, KBALPHA)
-            ldim  = refvol%get_ldim()
-            call kb_stencil_envelope_1d(kbwin, ldim(1), env1d)
-            call refvol%get_rmat_ptr(rmat)
-            do k = 1, ldim(3)
-                do j = 1, ldim(2)
-                    do i = 1, ldim(1)
-                        rmat(i,j,k) = rmat(i,j,k) * env1d(i) * env1d(j) * env1d(k)
-                    end do
-                end do
-            end do
-            nullify(rmat)
-        end subroutine apply_matching_taper
-
         subroutine autorescale_old_convention( refvol, label )
             class(image),     intent(inout) :: refvol
             character(len=*), intent(in)    :: label

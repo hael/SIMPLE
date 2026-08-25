@@ -918,3 +918,53 @@ the experiments need not be repeated:
 Removal verified: full sweep clean (only the internal setter and the
 'pcg_lambda_effective' diagnostic label remain), build clean, gated
 neutral fixture PASS at the baseline in-band ratio (0.843).
+
+## 12. Failed-run forensics (streptavidin, ref_taper batch)
+
+Two failed gridding runs (RESTART5/6) analyzed against healthy references:
+
+- Both ran with ref_taper=yes (stage-1 ref/ptcl 0.127/0.167 = 0.25 x the
+  volume-averaged KB envelope — the taper's measurement footprint; DIAG
+  levels are not comparable to untapered runs).
+- The taper reached ALL alignment paths (matcher AND the prob_tab/
+  prob_align reprojection model, which is materialized through
+  read_mask_filter_reproject_refvols) — and did not prevent these
+  failures.
+- Failure mode: a self-consistent WRONG C1 fold locked in before/around
+  symmetrization; the D2 axis itself is essentially correct (C1-vs-
+  symmetrized correlation 0.85/0.86 vs 0.88-0.93 in healthy runs); runs
+  then refine to plausible statistics (3.4-3.6 A, v 0.963) on the wrong
+  structure. No warnings, no scale anomalies, no late-stage collapse.
+- This is the classic stochastic ab initio failure (bad early
+  trajectory), not a detectable defect of the new convention.
+
+MISSING CONTROL: the true master baseline failure rate on the same data
+was never measured in this investigation (the "should never fail" prior
+is experiential). Current evidence: 2/10 + 1/9 + 1/10 across three
+datasets on the branch. Decisive experiment: 10x abinitio3D on MASTER
+(same data, box, seed policy) — if master also drops ~1/10, the branch
+is exonerated on reliability and the remaining delta is the cosmetic
+periphery brightness of correctly-deapodized maps; if master is 0/10,
+the residual suspect list is the early-stage trajectory sensitivity
+(stage 1-3) and needs a successful-vs-failed trajectory comparison
+within one batch.
+
+### 12.1 Reliability question CLOSED (2026-08-25)
+
+The missing control was run: MASTER gives 1/10 failures on the same
+streptavidin data. The branch rates (2/10, 1/9, 1/10) are statistically
+indistinguishable from the intrinsic stochastic ab initio failure rate
+— the branch has NO reliability regression. Consequences:
+
+- `ref_taper` is REMOVED (hypothesis dead: the legacy KB reference
+  taper is not what kept master reliable; master fails at the same rate
+  without any of the branch changes). Findings preserved in S12.
+- The "overfitted look" of exports stands as what S10-12 measured it to
+  be: correctly-deapodized flat density showing rim/periphery content
+  the legacy KB fade used to suppress at any given display threshold —
+  cosmetic, with FSC, DIAG, and failure rate all at baseline. If the
+  display preference matters, it belongs in postprocessing policy, not
+  in the density convention.
+- Remaining open items are PCG-only: the S7 ML-replay warm start
+  (RESID 6.5 at 2 its on box 256 is the real S6 root cause) and a
+  box-scaled iteration budget.
