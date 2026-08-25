@@ -1,255 +1,213 @@
-# Continuous 3-D pose refinement in `refine3D` PLAN
+# Continuous five-parameter pose refinement numerical-validation PLAN
 
-**Status:** DECOMMISSIONED (2026-08-19)
-
-> This PFTC-based integration plan is no longer authoritative. No phase in this
-> document authorizes implementation. The current work is limited to the
-> isolated experiment in
-> [continuous_3D_pose_polishing_hans_clarification_2026-08-19.md](continuous_3D_pose_polishing_hans_clarification_2026-08-19.md).
-
-**Former SPEC:** [continuous_3D_pose_end_polishing_spec.md](continuous_3D_pose_end_polishing_spec.md) (`DECOMMISSIONED`)
-**Frozen research proposal:** [continuous_3D_refinement_on_pcg_operator.md](continuous_3D_refinement_on_pcg_operator.md)
+**Status:** DRAFT — NON-AUTHORITATIVE
+**Date:** 2026-08-25
+**SPEC:** [continuous_3D_pose_end_polishing_spec.md](continuous_3D_pose_end_polishing_spec.md) (`DRAFT`)
+**Completed history:** [completed/continuous_3D_pose_end_polishing_history_and_handoff.md](completed/continuous_3D_pose_end_polishing_history_and_handoff.md)
+**Completed evidence:** [completed/continuous_3D_pose_end_polishing_validation_evidence.md](completed/continuous_3D_pose_end_polishing_validation_evidence.md)
 
 ## Plan gate
 
-This PLAN records the agreed technical design. It does not authorize
-implementation while the SPEC is IN REVIEW. After Hans and the requester
-confirm the review decisions, mark the SPEC `FINAL` or `FINAL (FROZEN)`,
-reconcile this PLAN with that contract, and only then start Phase 1.
-
-The former `reconstruct3D` activation is retired. Commit `1d32b830a` removed
-its UI, parameter, validation, commander, and distributed-job activation. The
-low-level research diagnostics can remain until the PFTC replacements pass,
-but the new feature must not depend on the PCG reconstruction objective.
+This PLAN may be reviewed while the SPEC is DRAFT, but it does not authorize code changes. Resolve the SPEC blockers, mark the SPEC FINAL, reconcile this PLAN with that contract, and mark the PLAN FINAL before implementation.
 
 ## Implementation goal
 
-Add default-off five-parameter local pose refinement to `refine3D` using its
-exact PFTC Euclidean objective and frequency range. Support:
+Independently validate the shell-weighted Cartesian five-parameter pose evaluator and LM driver already present in the research code. The work ends with numerical evidence and a handoff. It does not add a production caller.
 
-- a normal SHC route after candidate selection; and
-- a pure one-pass `refine=pose_cont` route from stored poses.
+## Existing components
 
-When `inpl_cont=yes` and `pose_cont=yes` are both active in SHC, run the
-existing in-plane solve first and use its accepted pose as the seed for the
-five-parameter solve.
+- `src/main/volume/simple_reconstructor_pcg.f90:1188` — fused pose normal terms.
+- `src/main/volume/simple_reconstructor_pcg.f90:1244` — objective and gradient.
+- `src/main/volume/simple_reconstructor_pcg.f90:1418` — bounded five-parameter LM.
+- `src/main/volume/simple_reconstructor_pcg.f90:1679` — Cartesian forward plane.
+- `src/main/volume/simple_reconstructor_pcg.f90:1766` — CTF/sigma transfer.
+- `src/main/volume/simple_reconstructor_pcg.f90:1835` — observation whitening.
+- `production/tests/simple_continuous_3D_pcg_refinement_rotation_test.f90` — componentwise derivative checks.
+- `production/tests/simple_continuous_3D_pcg_refinement_pose_capture_test.f90` — capture matrix.
+- `production/tests/simple_continuous_3D_pcg_refinement_pose_mechanism_test.f90` — route and objective-path diagnostics.
+- `production/tests/continuous_3D_pcg_pose_capture/` — Oracle evidence package.
 
-## Phase 0 — finalize the contract
+Refresh all line anchors against the implementation commit before changing code.
 
-**Status:** IN REVIEW
+## Phase 0 — documentation consolidation
 
-1. Review the concise SPEC with Hans and the requester.
-2. Resolve only changes that affect scope, interfaces, numerical policy, or
-   acceptance criteria.
-3. Mark the SPEC `FINAL` or `FINAL (FROZEN)` after approval.
-4. Reconcile this PLAN and mark it `FINAL` before implementation.
+**Status:** COMPLETE
 
-**Gate:** the SPEC contains no unresolved blocking decision and both documents
-describe the same two routes and acceptance criteria.
+- Consolidated the completed experiment, handoff, literature review, clarifications, and retired contract under `doc/implementation_notes/completed/`.
+- Replaced the decommissioned top-level SPEC and PLAN with this linked DRAFT pair.
+- Updated historical validation runners so deleted note paths no longer break evidence packaging.
 
-## Phase 1 — policy and scaffold
+**Gate:** every predecessor is recoverable from Git at `95e083817`, active documents link to the archive, and repository searches find no broken predecessor path.
 
-**Status:** NOT STARTED
+## Phase 1 — finalize the numerical contract
 
-Add the user-visible and typed policy without adding pose numerics.
+**Status:** BLOCKED BY DRAFT SPEC
 
-- Add `pose_cont=yes|no`, default `no`, to `refine3D` only.
-- Add `pose_cont` to the `refine` choices for the pure route.
-- Accept only:
-  - `refine=shc pose_cont=yes objfun=euclid nstates=1`; or
-  - `refine=pose_cont pose_cont=yes objfun=euclid nstates=1 maxits=1`.
-- Require `volrec=yes` and the normal even/odd particle partition.
-- Do not expose the option through automatic, multi-state, probabilistic,
-  neighborhood, or ab-initio workflows.
-- Keep `pose_cont=no` free of new allocations, files, calls, and metadata.
+1. Fix the objective, normal-term, and LM-step tolerance policy before results are generated.
+2. Define the independent forward oracle's model, Fourier normalization, interpolation, CTF, sigma, shell range, and fixed-cell boundary.
+3. Confirm that the current slice ends before standalone `refine3D` integration.
+4. Mark the SPEC FINAL, reconcile this PLAN, and mark it FINAL.
 
-Create a mother test with separate policy, numerical, route, recovery, and
-metadata children. Put only shared fixtures and assertions in helpers.
+**Gate:** no SPEC blocker remains and the acceptance criteria are testable without post-result decisions.
 
-**Gate:** source checks pass; Oracle compilation passes; default-off and every
-supported or rejected command shape behave as declared.
-
-## Phase 2 — immutable refine3D reference workspace
+## Phase 2 — independent weighted-objective oracle
 
 **Status:** NOT STARTED
 
-Extend the reprojection-model materialization path so the full-pose evaluator
-uses the same reference source as the PFTC reference bank.
+Create a test-only objective accumulation that does not call the fused objective routine. For every selected Fourier sample, explicitly form the prediction, residual, shell variance, and scalar contribution.
 
-1. Capture each single-state even/odd reference after existing masking,
-   filtering, centering, low-resolution parity blending, and padding
-   preparation.
-2. Write a versioned immutable reference artifact with parity, state,
-   dimensions, sampling, symmetry, and `kfromto` provenance.
-3. Load the artifact once per matcher worker when `pose_cont=yes`.
-4. Build read-only padded Fourier projectors shared by the worker's OpenMP
-   particle threads.
-5. Reject a stale or incompatible artifact before processing particles.
+Cover:
 
-The pure and SHC routes use the same workspace. The workspace does not depend
-on `rec_backend`.
+- constant variance;
+- smoothly increasing variance by shell;
+- strongly varying finite positive variance; and
+- more than one nonstationary rotation/shift pose.
 
-**Gate:** shared and distributed workers report identical artifact provenance;
-the discrete reference sampled from the workspace matches the stored PFTC
-reference within `1e-4`.
+Record the independent and fused objective, absolute difference, relative difference, accumulated sample count, and worst shell contribution.
 
-## Phase 3 — exact five-parameter PFTC evaluator
+**Gate:** every valid case satisfies the finalized tolerance and no comparison is hidden behind an aggregate pass.
+
+## Phase 3 — independent normal-equation and LM oracle
 
 **Status:** NOT STARTED
 
-Add a single-pose projector API beside the executed optimized polar projector.
-For each polar sample, evaluate the normalized fast-KB gather and its spatial
-gradient from the immutable Fourier volume.
-
-For
+Independently materialize the residual and five Jacobian columns, then accumulate
 
 $$
-R(\omega)=R_0\exp([\omega]_\times),
+g=J^H r,
+\qquad
+H=J^H J.
 $$
 
-form the three rotation columns through the derivative of the rotated sample
-coordinate. Form the two shift columns through the existing Fourier shift
-phase. Apply the same CTF, sigma weighting, shell weights, normalization, and
-operation order as the PFTC raw-Euclidean objective.
+Compare every gradient component and symmetric Hessian entry with the fused implementation. Reproduce scaling, diagonal flooring, damping, the five-by-five solve, predicted reduction, recomputed objective, gain ratio, and accept/reject decision in a separate dense reference calculation.
 
-The evaluator returns:
+Include at least:
 
-- the fully recomputed scalar objective;
-- the five-component gradient;
-- the symmetric Gauss--Newton matrix;
-- minimum stencil margin and stencil-switch telemetry; and
-- a finite/identifiable status.
+- one accepted step;
+- one finite no-improvement step;
+- one rejected trial; and
+- one weak or singular system.
 
-**Gate:** fixed-cell finite differences pass at multiple poses and orientations
-with relative error at most `1e-2`; the discrete-pose objective identity is at
-most `1e-4`; switch-crossing measurements are reported separately.
+**Gate:** all components and the proposed step satisfy the finalized tolerance; every rejected outcome preserves the complete seed pose.
 
-## Phase 4 — bounded local LM
+## Phase 4 — CTF and sigma matrix
 
 **Status:** NOT STARTED
 
-Implement a neutral per-particle five-parameter LM driver. Do not call the PCG
-Fourier workspace.
+Repeat the objective, derivative, and normal-equation checks with:
 
-- Use right rotation increments and pixel shifts.
-- Use at most eight iterations.
-- Scale and bound each rotation step by `1/msk_crop` radians.
-- Bound each shift step by one pixel.
-- Bound total rotation from the seed by the current angular grid spacing.
-- Bound total shift from the seed by `trs`.
-- Use initial damping `1e-3` and a diagonal floor based on the executed
-  Gauss--Newton matrix.
-- Accept only a positive recomputed reduction with gain ratio at least `0.25`.
-- Decrease damping after a strong accepted step and increase it after a
-  rejected or invalid step.
-- Restore the complete seed after no improvement, weak identifiability,
-  invalid numerics, or bound failure.
+- ordinary nonzero CTF;
+- attenuated shells;
+- exact CTF zeros;
+- constant sigma;
+- smoothly and strongly varying positive sigma; and
+- zero, negative, NaN, infinity, or structurally invalid sigma inputs.
 
-Use explicit terminal states: improved, unchanged, unreliable, bound-rejected,
-invalid, and iteration-limit.
+The test must distinguish a physically zero CTF contribution from an invalid variance.
 
-**Gate:** exact poses remain stationary; known joint perturbations recover;
-weak and singular cases remain unchanged; accepted objectives are monotone;
-serial and threaded results agree.
+**Gate:** valid cases remain finite and match the independent oracles; invalid variance inputs fail through the declared contract.
 
-## Phase 5 — normal SHC route
+## Phase 5 — structurally separate forward oracle
 
 **Status:** NOT STARTED
 
-Insert the local solve after SHC has selected its final state, projection,
-in-plane cell, and shift.
+Implement a deliberately slow test-only Cartesian central-section generator that does not call `forward_plane`, `pose_normal_terms`, or their interpolation helper. State its exact normalization and coordinate conventions.
 
-- With `inpl_cont=no`, seed the five-parameter solve from the discrete result.
-- With `inpl_cont=yes`, run the existing in-plane solve first and seed from its
-  accepted result.
-- Commit all three Euler angles and two shifts only after full-pose acceptance.
-- Preserve state and parity.
-- Refresh `proj` to the closest current projection for restart metadata.
-- Let the existing partial-reconstruction path consume the final pose.
+Compare:
 
-**Gate:** all four `inpl_cont`/`pose_cont` combinations follow their declared
-routes; terminal totals balance active particles; default-off output retains
-the established metadata contract.
+- complex forward values;
+- each of the five local derivative columns;
+- fixed-cell finite differences; and
+- explicitly identified stencil-switch cases.
 
-## Phase 6 — pure one-pass route
+If both the direct Cartesian and finite-box simulator models are retained, report them as different named models. Do not average or silently convert one into the other.
+
+**Gate:** agreement passes away from stencil boundaries, switch cases are reported separately, and no oracle observation is generated by the evaluator under test.
+
+## Phase 6 — configuration robustness
 
 **Status:** NOT STARTED
 
-Add a `strategy3D_pose_cont` route that seeds directly from each stored
-particle pose.
+Run the essential Phase 2--5 checks for at least:
 
-- Do not run discrete, probabilistic, neighborhood, or in-plane-grid search.
-- Do not run a separate `inpl_cont` solve.
-- Keep state and parity fixed.
-- Perform one local pose pass and one normal reconstruction.
-- Reject `maxits` values other than `1` in this initial mode.
-- Persist accepted poses and verify that reconstruction consumes them.
+- two box sizes;
+- two Fourier shell ranges;
+- three deterministic asymmetric volumes;
+- multiple rotation axes and shift signs; and
+- exact and nonstationary poses.
 
-**Gate:** route telemetry proves zero discrete candidates were evaluated;
-exact stored poses remain stationary; injected perturbations recover; the
-reconstructed project passes metadata and restart validation.
+Reuse the existing capture volumes where appropriate, but keep the independent oracle structurally separate.
 
-## Phase 7 — Oracle and scientific validation
+**Gate:** the same finalized tolerance policy passes every supported configuration without result-driven adjustment.
+
+## Phase 7 — Oracle Linux verification and evidence package
 
 **Status:** NOT STARTED
 
-Run compilation and tests on Oracle Linux only after all source checks pass.
+After source review and static checks:
 
-### Numerical and regression package
+1. the user compiles on Oracle Linux;
+2. run each focused numerical case;
+3. run the complete `simple_test_continuous_3D_pcg_refinement` mother suite;
+4. package logs, machine-readable comparisons, source snapshots, configuration, and checksums in one timestamped directory; and
+5. analyze every required comparison rather than accepting process exit alone.
 
-Run the focused projector, objective, LM, SHC-route, pure-route, metadata, and
-parallel-equivalence cases. Then run the complete mother suite.
+**Gate:** the SPEC acceptance criteria pass, the mother suite has no failure, package integrity passes, and no production activation exists.
 
-### Frozen simulated beta-gal matrix
+## Phase 8 — handoff only
 
-Fork every arm from one immutable project and fixed random state:
+**Status:** NOT STARTED
 
-| Arm | `inpl_cont` | `pose_cont` | Route |
-|---|---:|---:|---|
-| Baseline | no | no | discrete SHC only |
-| Existing | yes | no | SHC plus in-plane polish |
-| New | no | yes | SHC plus five-parameter polish |
-| Combined | yes | yes | SHC, in-plane, then five-parameter polish |
+Update this PLAN with observed commands, package path, metrics, decisions, and residual limitations. If the numerical gate passes, open a new SPEC for a standalone continuous `refine3D` validation mode.
 
-Also run pure-mode exact-pose and perturbed-pose controls from the same
-completed checkpoint.
+Do not add standalone mode code under this PLAN.
 
-Collect:
+## Files expected to change after approval
 
-- rotation and shift error after symmetry minimization and global-gauge
-  correction;
-- exact-pose drift and perturbed-pose recovery;
-- objective before and after;
-- FSC area, cFAR, FSC resolutions, and shell curves;
-- terminal outcome totals and step bounds;
-- shared/distributed pose agreement;
-- metadata and reconstruction-consumption checks; and
-- runtime and active OpenMP worker count.
+The exact file set must be confirmed during Phase 1. Expected candidates are:
 
-**Scientific gate:** exact-pose and recovery thresholds from the SPEC pass,
-accepted objectives remain monotone, FSC-area decline is not greater than
-`0.01`, and no metadata, ownership, or shared/distributed discrepancy occurs.
+- `production/tests/simple_continuous_3D_pcg_refinement_rotation_test.f90` or a new dedicated oracle child;
+- `production/tests/simple_continuous_3D_pcg_refinement_helpers.f90` for genuinely shared fixtures only;
+- `production/tests/simple_test_continuous_3D_pcg_refinement.f90` for case registration;
+- `production/CMakeLists.txt` if a new child source is added;
+- `production/tests/continuous_3D_pcg_pose_capture/` or a new validation-only evidence runner; and
+- this PLAN for phase evidence.
 
-Passing this gate validates the first `refine3D` research slice. It does not
-authorize production recommendation or propagation to other workflows.
+Production UI, parameters, commanders, strategies, and project persistence are not expected to change.
 
-## Deferred propagation
+## Test strategy
 
-After Phase 7, prepare a separate SPEC/PLAN amendment before adding any of:
+| SPEC criterion | Verification |
+| --- | --- |
+| Weighted objective | Independent scalar accumulation across sigma profiles |
+| $J^H r$ and $J^H J$ | Componentwise independent matrix/vector comparison |
+| LM proposal | Separate dense five-by-five solve and gain-ratio calculation |
+| Rollback | Exact before/after pose comparison for every rejection class |
+| CTF/sigma | Valid and invalid matrix with explicit terminal outcomes |
+| Forward model | Structurally separate generator and fixed-cell finite differences |
+| Robustness | Multi-box, multi-range, multi-volume matrix |
+| Regression | Existing focused cases plus complete mother suite |
+| No integration | Source search for user-facing keys and production callers |
 
-- CC or hybrid objectives;
-- probabilistic, neighborhood, or greedy search modes;
-- repeated pure pose/reconstruction alternation;
-- multiple states;
-- `refine3D_auto`, `refine3D_multi`, or `abinitio3D`; or
-- a dataset-level acceptance or rollback policy.
+## Review roles
 
-## Verification and commit policy
+- **Planning:** reconcile the final SPEC with current source ownership and identify the smallest test-only file set.
+- **Implementation:** add independent oracle code without changing the fused implementation merely to make comparisons pass.
+- **Review:** independently inspect objective signs, units, conjugation, CTF/sigma order, matrix symmetry, damping, rollback, and oracle independence.
+- **Verification:** perform static checks locally and authoritative compile/runtime validation on Oracle Linux after explicit user direction.
 
-- Keep source inspection, compilation, runtime, and scientific acceptance as
-  separate evidence levels.
-- Do not weaken a threshold to make a failing experiment pass.
-- Record each completed phase, important file and current line references,
-  commands, results, and outstanding gates in this PLAN.
-- Use focused commits only after the phase's declared Oracle gate passes.
-- Preserve unrelated dirty worktree changes.
+## Risks
+
+- The oracle can accidentally reuse the implementation and recreate the inverse crime.
+- A test can compare scaled terms while missing an error in the unscaled normal equations.
+- Complex conjugation or factor-of-two conventions can make a numerically consistent but incorrectly interpreted gradient.
+- CTF zeros can be confused with invalid sigma values.
+- A tolerance derived after seeing results can make the gate meaningless.
+- Stencil-switch cases can be misreported as derivative failures or silently excluded.
+- Historical `pcg` names can cause the LM to be described as a PCG algorithm.
+
+## Completion gate
+
+This PLAN is complete only when every finalized SPEC criterion has retained Oracle evidence, review findings are resolved, the worktree contains no production activation, and the handoff clearly states what remains unproven.
+
+Passing this PLAN validates an implementation component. It does not establish scientific benefit or authorize production pose polishing.

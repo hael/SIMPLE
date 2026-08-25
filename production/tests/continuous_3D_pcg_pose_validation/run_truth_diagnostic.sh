@@ -104,12 +104,12 @@ cp "$SCRIPT_DIR/analyze_truth_matrix.py" "$RESULT_ROOT/input/validation_source/"
 cp "$SCRIPT_DIR/analyze_pose_ab.py" "$RESULT_ROOT/input/validation_source/"
 cp "$SCRIPT_DIR/prepare_truth_oritab.py" "$RESULT_ROOT/input/validation_source/"
 cp "$SCRIPT_DIR/README.md" "$RESULT_ROOT/input/validation_source/"
-# Freeze the scientific contract and handoff with the executable evidence.
+# Capture the current draft contract and consolidated historical handoff with the evidence.
 cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_end_polishing_spec.md" \
     "$RESULT_ROOT/input/"
 cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_end_polishing_plan.md" \
     "$RESULT_ROOT/input/"
-cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_end_polishing_handoff.md" \
+cp "$SOURCE_ROOT/doc/implementation_notes/completed/continuous_3D_pose_end_polishing_history_and_handoff.md" \
     "$RESULT_ROOT/input/"
 cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md" \
     "$RESULT_ROOT/input/"
@@ -183,7 +183,7 @@ production/tests/continuous_3D_pcg_pose_validation/analyze_pose_ab.py
 production/tests/continuous_3D_pcg_pose_validation/prepare_truth_oritab.py
 doc/implementation_notes/continuous_3D_pose_end_polishing_spec.md
 doc/implementation_notes/continuous_3D_pose_end_polishing_plan.md
-doc/implementation_notes/continuous_3D_pose_end_polishing_handoff.md
+doc/implementation_notes/completed/continuous_3D_pose_end_polishing_history_and_handoff.md
 doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md
 doc/policies/reconstruct3D_pcg_policy.md
 EOF

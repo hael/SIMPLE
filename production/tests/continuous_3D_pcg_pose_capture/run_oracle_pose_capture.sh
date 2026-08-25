@@ -57,7 +57,7 @@ cp "$SOURCE_ROOT/production/tests/simple_continuous_3D_pcg_refinement_pose_mecha
     "$RESULT_ROOT/input/"
 cp "$SOURCE_ROOT/production/tests/simple_test_continuous_3D_pcg_refinement.f90" \
     "$RESULT_ROOT/input/"
-cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_polishing_hans_clarification_2026-08-19.md" \
+cp "$SOURCE_ROOT/doc/implementation_notes/completed/continuous_3D_pose_end_polishing_validation_evidence.md" \
     "$RESULT_ROOT/input/"
 cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md" \
     "$RESULT_ROOT/input/"
@@ -150,7 +150,7 @@ production/tests/simple_continuous_3D_pcg_refinement_pose_capture_test.f90
 production/tests/simple_continuous_3D_pcg_refinement_pose_mechanism_test.f90
 production/tests/simple_test_continuous_3D_pcg_refinement.f90
 src/main/volume/simple_reconstructor_pcg.f90
-doc/implementation_notes/continuous_3D_pose_polishing_hans_clarification_2026-08-19.md
+doc/implementation_notes/completed/continuous_3D_pose_end_polishing_validation_evidence.md
 doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md
 EOF
 while IFS= read -r relative; do

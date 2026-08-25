@@ -436,7 +436,7 @@ for an earlier numerical contract.
    rerun `run_truth_diagnostic.sh` for clean/noisy, exact/perturbed, and
    full/FSC-limited production arms.
 3. **Scientific handoff:** retain the complete truth-matrix directory and use
-   `doc/implementation_notes/continuous_3D_pose_end_polishing_handoff.md` to
+   `doc/implementation_notes/completed/continuous_3D_pose_end_polishing_history_and_handoff.md` to
    review the result with the refinement owners.
 4. **Deferred component comparisons:** `run_oracle_validation.sh` and
    `.codex/hpc_betagal_prepare.sh` end in an explicit top-level
