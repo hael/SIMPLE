@@ -6,10 +6,10 @@ and reconstruction platform.
 It transforms raw electron microscopy data --- movies, micrographs, and
 particle images --- into scientifically meaningful outputs including:
 
--   2D class averages
--   High-resolution 3D reconstructions
--   Symmetry analysis
--   Atomic-level structural models
+- 2D class averages
+- High-resolution 3D reconstructions
+- Symmetry analysis
+- Atomic-level structural models
 
 SIMPLE supports interactive batch workflows and fully automated
 streaming pipelines, scaling seamlessly from single workstations to
@@ -17,12 +17,12 @@ distributed HPC environments.
 
 ## Features
 
--   End-to-end cryo‑EM workflow
--   Streaming data processing
--   HPC scalability
--   Modular architecture
--   Test-driven development
--   Production-ready scientific computing environment
+- End-to-end cryo‑EM workflow
+- Streaming data processing
+- HPC scalability
+- Modular architecture
+- Test-driven development
+- Production-ready scientific computing environment
 
 ## Start Here
 
@@ -57,4 +57,3 @@ This section indexes the existing release-note files.
 
 - [SIMPLE 2.1 Release Note](release_notes/2.1_release_note.txt)
 - [SIMPLE 2.5 Release Note](release_notes/2.5_release_note.txt)
-

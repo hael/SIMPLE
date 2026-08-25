@@ -1,3 +1,4 @@
+!@descr: high-level particle matching and partial-reconstruction orchestration for refine3D workers
 module simple_strategy3D_matcher
 use, intrinsic :: iso_fortran_env, only: int64, real64
 use simple_pftc_srch_api

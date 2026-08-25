@@ -29,7 +29,9 @@
       - `simple_continuous_3D_pcg_refinement_noise_volume_test.f90`
       - `simple_continuous_3D_pcg_refinement_operator_contract_support.f90`
       - `simple_continuous_3D_pcg_refinement_operator_contract_test.f90`
+      - `simple_continuous_3D_pcg_refinement_pose_capture_test.f90`
       - `simple_continuous_3D_pcg_refinement_pose_contract_test.f90`
+      - `simple_continuous_3D_pcg_refinement_pose_mechanism_test.f90`
       - `simple_continuous_3D_pcg_refinement_recovery_test.f90`
       - `simple_continuous_3D_pcg_refinement_reference_bias_test.f90`
       - `simple_continuous_3D_pcg_refinement_rotation_test.f90`
@@ -69,6 +71,7 @@
       - `simple_test_coarrays.f90`
       - `simple_test_continuous_3D_pcg_refinement.f90`
       - `simple_test_continuous_inplane_cc_grad.f90`
+      - `simple_test_continuous_inplane_hybrid_grad.f90`
       - `simple_test_continuous_inplane_refine3D.f90`
       - `simple_test_continuous_inplane_rotation2D.f90`
       - `simple_test_continuous_inplane_rotation2D_metadata.f90`
@@ -158,6 +161,7 @@
       - `simple_test_uniform_rot.f90` — from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361
       - `simple_test_units.f90` — runs all implemented unit tests
       - `test_socket_comm_distr.f90`
+      - **continuous_3D_pcg_pose_capture/**
       - **continuous_3D_pcg_pose_validation/**
   - **scripts/** — home of scripts and code generators
     - **memory/**
@@ -562,7 +566,7 @@
           - `simple_strategy3D_greedy_inpl.f90` — 3D strategy for exhaustive in-plane matching of a single re-projection
           - `simple_strategy3D_greedy_smpl.f90` — 3D strategy for exhaustive projection matching with probabilistic in-plane search
           - `simple_strategy3D_greedy_sub.f90` — 3D strategy for neighborhood projection matching with exhaustive subspace initialization
-          - `simple_strategy3D_matcher.f90`
+          - `simple_strategy3D_matcher.f90` — high-level particle matching and partial-reconstruction orchestration for refine3D workers
           - `simple_strategy3D_prob.f90` — 3D strategy for probabilistic projection matching
           - `simple_strategy3D_shc.f90` — 3D strategy for projection matching by stochastic hill climbing
           - `simple_strategy3D_shc_smpl.f90` — 3D strategy for stochastic neighborhood hill climbing with probabilistic in-plane search
@@ -572,7 +576,7 @@
       - **stream/** — home of the stream task commanders in the pipelined stream application and their utilities
         - `simple_mini_stream_utils.f90` — utilities for running the mini batch version of the stream
         - `simple_stream2D_state.f90` — singleton for common state variables across the stream modules
-        - `simple_stream_abinitio2D_chunks.f90` — split a project into independent abinitio2D subset jobs
+        - `simple_stream_abinitio2D_chunks.f90` — splits a project into stack-bound, particle-balanced subsets and runs independent abinitio2D jobs
         - `simple_stream_chunk.f90` — abstract data type for the stream_chunk, defining a chunk of data processed in parallel
         - `simple_stream_chunk2D_utils.f90` — utilities for chunk-based 2D clustering in stream
         - `simple_stream_cluster2D_utils.f90` — utilities for running 2D clustering in the stream

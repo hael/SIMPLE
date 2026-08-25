@@ -1,4 +1,4 @@
-!@descr: split a project into independent abinitio2D subset jobs
+!@descr: splits a project into stack-bound, particle-balanced subsets and runs independent abinitio2D jobs
 !
 ! This module implements a bounded manual-selection workflow:
 !
