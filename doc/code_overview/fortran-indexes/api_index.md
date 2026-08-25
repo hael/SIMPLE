@@ -3655,6 +3655,13 @@
 | `exec_test_pca_imgvar` | subroutine | `simple_commanders_test_stats` | main/commanders/test/simple_commanders_test_stats.f90 | 309 | public |
 | `exec_test_sp_project` | subroutine | `simple_commanders_test_stats` | main/commanders/test/simple_commanders_test_stats.f90 | 394 | public |
 | `make_cs` | subroutine | `simple_commanders_test_stats` | main/commanders/test/simple_commanders_test_stats.f90 | 73 | public |
+| `exec_test_abinitio2D_stream` | subroutine | `simple_commanders_test_stream` | main/commanders/test/simple_commanders_test_stream.f90 | 44 | public |
+| `exec_test_assign_optics` | subroutine | `simple_commanders_test_stream` | main/commanders/test/simple_commanders_test_stream.f90 | 50 | public |
+| `exec_test_gen_pickrefs` | subroutine | `simple_commanders_test_stream` | main/commanders/test/simple_commanders_test_stream.f90 | 56 | public |
+| `exec_test_master` | subroutine | `simple_commanders_test_stream` | main/commanders/test/simple_commanders_test_stream.f90 | 62 | public |
+| `exec_test_pick_extract` | subroutine | `simple_commanders_test_stream` | main/commanders/test/simple_commanders_test_stream.f90 | 68 | public |
+| `exec_test_preproc` | subroutine | `simple_commanders_test_stream` | main/commanders/test/simple_commanders_test_stream.f90 | 74 | public |
+| `exec_test_sieve_cavgs` | subroutine | `simple_commanders_test_stream` | main/commanders/test/simple_commanders_test_stream.f90 | 80 | public |
 | `exec_test_ansi_colors` | subroutine | `simple_commanders_test_utils` | main/commanders/test/simple_commanders_test_utils.f90 | 69 | public |
 | `exec_test_binoris_io_test` | subroutine | `simple_commanders_test_utils` | main/commanders/test/simple_commanders_test_utils.f90 | 91 | public |
 | `exec_test_binoris_test` | subroutine | `simple_commanders_test_utils` | main/commanders/test/simple_commanders_test_utils.f90 | 85 | public |
@@ -7112,6 +7119,7 @@
 | `exec_test_parallel_commander` | subroutine | `simple_test_exec_parallel` | main/exec/simple_test_exec_parallel.f90 | 18 | public |
 | `exec_test_single_commander` | subroutine | `simple_test_exec_single` | main/exec/simple_test_exec_single.f90 | 17 | public |
 | `exec_test_stats_commander` | subroutine | `simple_test_exec_stats` | main/exec/simple_test_exec_stats.f90 | 26 | public |
+| `exec_test_stream_commander` | subroutine | `simple_test_exec_stream` | main/exec/simple_test_exec_stream.f90 | 22 | public |
 | `exec_test_utils_commander` | subroutine | `simple_test_exec_utils` | main/exec/simple_test_exec_utils.f90 | 31 | public |
 | `construct_test_class_programs` | subroutine | `simple_test_ui_class` | main/ui/simple_test/simple_test_ui_class.f90 | 13 | public |
 | `new_strategy2D` | subroutine | `simple_test_ui_class` | main/ui/simple_test/simple_test_ui_class.f90 | 20 | public |
@@ -7200,6 +7208,14 @@
 | `new_pca_all` | subroutine | `simple_test_ui_stats` | main/ui/simple_test/simple_test_ui_stats.f90 | 200 | public |
 | `new_pca_imgvar` | subroutine | `simple_test_ui_stats` | main/ui/simple_test/simple_test_ui_stats.f90 | 228 | public |
 | `new_sp_project` | subroutine | `simple_test_ui_stats` | main/ui/simple_test/simple_test_ui_stats.f90 | 256 | public |
+| `construct_test_stream_programs` | subroutine | `simple_test_ui_stream` | main/ui/simple_test/simple_test_ui_stream.f90 | 17 | public |
+| `new_abinitio2D_stream` | subroutine | `simple_test_ui_stream` | main/ui/simple_test/simple_test_ui_stream.f90 | 28 | public |
+| `new_assign_optics` | subroutine | `simple_test_ui_stream` | main/ui/simple_test/simple_test_ui_stream.f90 | 35 | public |
+| `new_gen_pickrefs` | subroutine | `simple_test_ui_stream` | main/ui/simple_test/simple_test_ui_stream.f90 | 42 | public |
+| `new_master` | subroutine | `simple_test_ui_stream` | main/ui/simple_test/simple_test_ui_stream.f90 | 49 | public |
+| `new_pick_extract` | subroutine | `simple_test_ui_stream` | main/ui/simple_test/simple_test_ui_stream.f90 | 55 | public |
+| `new_preproc` | subroutine | `simple_test_ui_stream` | main/ui/simple_test/simple_test_ui_stream.f90 | 62 | public |
+| `new_sieve_cavgs` | subroutine | `simple_test_ui_stream` | main/ui/simple_test/simple_test_ui_stream.f90 | 68 | public |
 | `construct_test_utils_programs` | subroutine | `simple_test_ui_utils` | main/ui/simple_test/simple_test_ui_utils.f90 | 22 | public |
 | `new_ansi_colors` | subroutine | `simple_test_ui_utils` | main/ui/simple_test/simple_test_ui_utils.f90 | 38 | public |
 | `new_binoris_io_test` | subroutine | `simple_test_ui_utils` | main/ui/simple_test/simple_test_ui_utils.f90 | 94 | public |

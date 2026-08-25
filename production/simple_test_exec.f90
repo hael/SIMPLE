@@ -57,6 +57,7 @@ call exec_test_optimize_commander( trim(prg), cline, l_silent, l_did_execute)
 call exec_test_parallel_commander( trim(prg), cline, l_silent, l_did_execute)
 call exec_test_single_commander(   trim(prg), cline, l_silent, l_did_execute)
 call exec_test_stats_commander(    trim(prg), cline, l_silent, l_did_execute)
+call exec_test_stream_commander(   trim(prg), cline, l_silent, l_did_execute)
 call exec_test_utils_commander(    trim(prg), cline, l_silent, l_did_execute)
 if( .not. l_did_execute )then
     THROW_HARD('Program test "'//trim(prg)//'" not recognized. Use test=list to see available programs.')

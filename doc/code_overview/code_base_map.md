@@ -305,6 +305,7 @@
           - `simple_commanders_test_parallel.f90` — for all parallel tests
           - `simple_commanders_test_single.f90` — tests for single
           - `simple_commanders_test_stats.f90` — for all stats tests
+          - `simple_commanders_test_stream.f90` — tests for SIMPLE_stream workflows
           - `simple_commanders_test_utils.f90` — for all utils tests
           - `simple_test_mod_phasecorr.f90`
       - **ctf/** — home of the modules for estimation and application of the contrast transfer function
@@ -345,6 +346,7 @@
         - `simple_test_exec_parallel.f90` — execution of test parallel processing commanders
         - `simple_test_exec_single.f90` — execution of test single processing commanders
         - `simple_test_exec_stats.f90` — execution of test stats processing commanders
+        - `simple_test_exec_stream.f90` — execution of stream test programs
         - `simple_test_exec_utils.f90` — execution of test utils processing commanders
         - `single_exec_atom.f90`
         - `single_exec_map.f90`
@@ -633,6 +635,7 @@
           - `simple_test_ui_parallel.f90` — module defining the user interfaces for parallel test programs in the simple_test_exec suite
           - `simple_test_ui_single.f90` — module defining the user interfaces for single test programs in the simple_test_exec suite
           - `simple_test_ui_stats.f90` — module defining the user interfaces for statistics test programs in the simple_test_exec suite
+          - `simple_test_ui_stream.f90` — module defining the user interfaces for stream test programs in the simple_test_exec suite
           - `simple_test_ui_utils.f90` — module defining the user interfaces for utils programs in the simple_test_exec suite
         - **single/**
           - `single_ui_atom.f90` — module defining the user interfaces for atom-related programs in the single_exec suite

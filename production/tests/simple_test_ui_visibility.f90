@@ -191,6 +191,13 @@ call assert_true(associated(registered_prg), 'test program is registered')
 if( associated(registered_prg) )then
     call assert_char('class', registered_prg%category%to_char(), 'test program category')
 endif
+call assert_registered_test_category('abinitio2D_stream', 'stream', 'Stream', 130)
+call assert_registered_test_category('assign_optics',     'stream', 'Stream', 130)
+call assert_registered_test_category('gen_pickrefs',      'stream', 'Stream', 130)
+call assert_registered_test_category('master',            'stream', 'Stream', 130)
+call assert_registered_test_category('pick_extract',      'stream', 'Stream', 130)
+call assert_registered_test_category('preproc',           'stream', 'Stream', 130)
+call assert_registered_test_category('sieve_cavgs',       'stream', 'Stream', 130)
 
 call report_summary()
 if( tests_failed /= 0 ) error stop 1
@@ -218,6 +225,22 @@ contains
             call assert_int(expected_order, registered_prg%category_order, trim(name)//' category order')
         endif
     end subroutine assert_registered_category
+
+    subroutine assert_registered_test_category( name, expected_category, expected_display_name, expected_order )
+        character(len=*), intent(in) :: name, expected_category, expected_display_name
+        integer,          intent(in) :: expected_order
+        program_name = name
+        call get_test_prg_ptr(program_name, registered_prg)
+        call assert_true(associated(registered_prg), trim(name)//' test is registered')
+        if( associated(registered_prg) )then
+            call assert_char(expected_category, registered_prg%category%to_char(), trim(name)//' test category')
+            call assert_char(expected_display_name, registered_prg%category_display_name%to_char(), &
+                &trim(name)//' test category display name')
+            call assert_int(expected_order, registered_prg%category_order, trim(name)//' test category order')
+            call assert_char('simple_test_exec', registered_prg%executable%to_char(), trim(name)//' test executable')
+            call assert_int(0, registered_prg%get_nrequired_keys(), trim(name)//' dummy test has no required inputs')
+        endif
+    end subroutine assert_registered_test_category
 
     subroutine assert_registered_requirement(name, expected_id, expected_minimum, expected_maximum)
         character(len=*), intent(in) :: name, expected_id

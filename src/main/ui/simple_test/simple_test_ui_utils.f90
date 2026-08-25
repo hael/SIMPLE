@@ -3,7 +3,7 @@ module simple_test_ui_utils
 use simple_ui_modules
 implicit none
 
-type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('utils', 'Utilities', 130)
+type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('utils', 'Utilities', 140)
 type(ui_program), target :: ansi_colors
 type(ui_program), target :: binoris_test
 type(ui_program), target :: binoris_io_test

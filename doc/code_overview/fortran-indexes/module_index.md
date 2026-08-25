@@ -6760,6 +6760,31 @@ Public symbols:
 - `make_cs` — subroutine
 
 ---
+## Module: simple_commanders_test_stream
+
+Files:
+- `main/commanders/test/simple_commanders_test_stream.f90`
+
+Uses:
+- `simple_commanders_api`
+
+Public symbols:
+- `commander_test_abinitio2D_stream` — type
+- `commander_test_assign_optics` — type
+- `commander_test_gen_pickrefs` — type
+- `commander_test_master` — type
+- `commander_test_pick_extract` — type
+- `commander_test_preproc` — type
+- `commander_test_sieve_cavgs` — type
+- `exec_test_abinitio2D_stream` — subroutine
+- `exec_test_assign_optics` — subroutine
+- `exec_test_gen_pickrefs` — subroutine
+- `exec_test_master` — subroutine
+- `exec_test_pick_extract` — subroutine
+- `exec_test_preproc` — subroutine
+- `exec_test_sieve_cavgs` — subroutine
+
+---
 ## Module: simple_commanders_test_utils
 
 Files:
@@ -16165,6 +16190,7 @@ Uses:
 - `simple_test_exec_parallel`
 - `simple_test_exec_single`
 - `simple_test_exec_stats`
+- `simple_test_exec_stream`
 - `simple_test_exec_utils`
 - `simple_ui`
 - `simple_ui_program`
@@ -16324,6 +16350,19 @@ Uses:
 
 Public symbols:
 - `exec_test_stats_commander` — subroutine
+
+---
+## Module: simple_test_exec_stream
+
+Files:
+- `main/exec/simple_test_exec_stream.f90`
+
+Uses:
+- `simple_cmdline`
+- `simple_commanders_test_stream`
+
+Public symbols:
+- `exec_test_stream_commander` — subroutine
 
 ---
 ## Module: simple_test_exec_utils
@@ -16556,6 +16595,25 @@ Public symbols:
 - `new_pca_all` — subroutine
 - `new_pca_imgvar` — subroutine
 - `new_sp_project` — subroutine
+
+---
+## Module: simple_test_ui_stream
+
+Files:
+- `main/ui/simple_test/simple_test_ui_stream.f90`
+
+Uses:
+- `simple_ui_modules`
+
+Public symbols:
+- `construct_test_stream_programs` — subroutine
+- `new_abinitio2D_stream` — subroutine
+- `new_assign_optics` — subroutine
+- `new_gen_pickrefs` — subroutine
+- `new_master` — subroutine
+- `new_pick_extract` — subroutine
+- `new_preproc` — subroutine
+- `new_sieve_cavgs` — subroutine
 
 ---
 ## Module: simple_test_ui_utils
@@ -17369,6 +17427,7 @@ Uses:
 - `simple_test_ui_parallel`
 - `simple_test_ui_single`
 - `simple_test_ui_stats`
+- `simple_test_ui_stream`
 - `simple_test_ui_utils`
 - `simple_ui_hash`
 
