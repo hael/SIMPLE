@@ -11,6 +11,7 @@ type(ui_program), target :: bootstrap_rec3D
 type(ui_program), target :: refine3D
 type(ui_program), target :: refine3D_auto
 type(ui_program), target :: refine3D_multi
+type(ui_program), target :: refine3D_het
 
 contains
 
@@ -23,6 +24,7 @@ contains
         call new_refine3D(prgtab)
         call new_refine3D_auto(prgtab)
         call new_refine3D_multi(prgtab)
+        call new_refine3D_het(prgtab)
     end subroutine construct_refine3D_programs
 
 subroutine new_automask( prgtab )
@@ -561,5 +563,78 @@ subroutine new_automask( prgtab )
         ! add to ui_hash
         call add_ui_program('refine3D_multi', refine3D_multi, prgtab, UI_CATEGORY)
     end subroutine new_refine3D_multi
+
+    subroutine new_refine3D_het( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call refine3D_het%new(&
+        &'refine3D_het',&                                                                           ! name
+        &'Refine multiple 3D states from particle images or project state labels',&                 ! summary
+        &'is an automated workflow for multi-state 3D refinement from project state labels or command-line nstates',& ! help
+        &'simple_exec',&                                                                            ! executable
+        &.true.,&                                                                                   ! requires sp_project
+        &visibility=UI_VIS_STANDARD, display_name='Heterogeneous 3D Refinement')
+        ! parameter input/output
+        call refine3D_het%add_input(UI_PARM, 'cache', 'binary', 'Cache downscaled particles', &
+         &'Write Fourier-cropped particles once and read those for alignment instead of the originals on every iteration, &
+         &trading disk space for I/O(yes|no){no}', '', &
+         &.false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
+         &visibility=UI_VIS_DEVELOPER)
+        call refine3D_het%add_input(UI_PARM, 'cache_dir', 'dir', 'Particle cache directory', &
+         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
+         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
+         &.false., '', visibility=UI_VIS_DEVELOPER)
+        ! search controls
+        call refine3D_het%add_input(UI_SRCH, maxits, required_override=.false., group="search", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_SRCH, nstates, required_override=.false., group="search", &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_SRCH, 'nsample', 'num', 'Particle sample target', &
+        &'Particles sampled per iteration', 'particles{10000}', .false., 0., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call refine3D_het%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
+        &'Prob-neigh neighborhood mode(state|geom){state}','', .false., 'state', &
+        &group="search", choices=ui_choices([character(len=5) :: 'state', 'geom']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_SRCH, 'inpl_cont', 'binary', &
+        &'Continuous in-plane refinement', &
+        &'Joint continuous Euclidean in-plane and shift refinement(yes|no){yes}', '', &
+        &.false., 'yes', group="search", choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_SRCH, pgrp, group="search", visibility=UI_VIS_STANDARD)
+        call refine3D_het%add_input(UI_SRCH, ptcl_src, group="search", visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_SRCH, 'center', 'binary', 'Center reference volume(s)', &
+        &'Center reference volume(s) by their center of gravity and map shifts back to the particles(yes|no){no}', '', .false., 'no', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_SRCH, 'overlap', 'num', 'State-overlap convergence target', &
+        &'Required overlap of state assignments for convergence in the probabilistic-neighborhood stage', &
+        &'overlap fraction', .false., .99, group="search", visibility=UI_VIS_DEVELOPER)
+        ! filter controls
+        call refine3D_het%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
+        &'Filtering mode(nonuniform_lpset|none){nonuniform_lpset}','', .false., 'nonuniform_lpset', group="filter", &
+        &choices=ui_choices([character(len=16) :: 'nonuniform_lpset', 'none']), &
+        &visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_FILT, 'lpstart', 'num', 'Starting low-pass limit', &
+        &'Starting low-pass limit for frequency-marched refinement', 'low-pass limit in Angstroms', .false., 10., &
+        &group="filter", visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_FILT, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', &
+        &'Low-pass limit used to limit the resolution during refinement', 'low-pass limit in Angstroms', .false., 6., &
+        &group="filter", visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_FILT, ml_reg, group="filter", visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_FILT, envfsc, group="filter", visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_FILT, envmsklp, group="filter", visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call refine3D_het%add_input(UI_MASK, mskdiam, group="mask", visibility=UI_VIS_STANDARD)
+        call refine3D_het%add_input(UI_MASK, 'automsk', 'binary', 'Perform envelope masking', &
+        &'Generate/apply the NU-evidence envelope; requires filt_mode=nonuniform_lpset(yes|no){no}','', .false., 'no', group="mask", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
+        call refine3D_het%add_input(UI_MASK, nu_msk_sig, group="mask", visibility=UI_VIS_ADVANCED)
+        ! computer controls
+        call refine3D_het%add_input(UI_COMP, nparts, group="compute", visibility=UI_VIS_STANDARD)
+        call refine3D_het%add_input(UI_COMP, nthr, group="compute", visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('refine3D_het', refine3D_het, prgtab, UI_CATEGORY)
+    end subroutine new_refine3D_het
 
 end module simple_ui_refine3D
