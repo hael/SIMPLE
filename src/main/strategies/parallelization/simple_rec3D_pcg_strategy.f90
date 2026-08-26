@@ -118,6 +118,13 @@ contains
                 extent_rec = real(params%box_crop) * params%smpd_crop
                 if( abs(extent_env - extent_rec) > EXTENT_RELTOL * extent_rec )then
                     skip_reason = 'physical_extent_mismatch'
+                    ! the numbers make a wrong-smpd envelope immediately
+                    ! visible: a header smpd typo shifts extent_env off the
+                    ! reconstruction FOV by exactly the smpd error
+                    write(logfhandle,'(A,I0,A,F8.4,A,F10.3,A,I0,A,F8.4,A,F10.3,A)') &
+                        &'>>> PCG SOLVENT ENVELOPE EXTENT MISMATCH: envelope box ', ldim_env(1), &
+                        &' x smpd ', smpd_env, ' = ', extent_env, ' A vs reconstruction box ', &
+                        &params%box_crop, ' x smpd ', params%smpd_crop, ' = ', extent_rec, ' A'
                 else
                     ! constant-FOV lattice change: factor-free Fourier pad/clip
                     ! under the data-quotient convention (S3 item 8)
@@ -346,7 +353,14 @@ contains
                 THROW_HARD('shared PCG entry received distributed parameters')
             endif
             if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
-            if( params%maxits_pcg > 8 ) THROW_HARD('production rec_backend=pcg requires maxits_pcg<=8')
+            ! refinement stays within the small-iteration budget the warm start
+            ! makes sufficient; offline harness/benchmark runs legitimately ask
+            ! for rtol-terminated converged solves (pcg_priors.md R3), so above
+            ! the production budget we warn rather than refuse
+            if( params%maxits_pcg > 100 ) THROW_HARD('maxits_pcg > 100 is not supported')
+            if( params%maxits_pcg > 8 )then
+                THROW_WARN('maxits_pcg exceeds the production refinement budget (8); appropriate for offline converged solves only')
+            endif
             if( trim(params%projrec) /= 'no' ) THROW_HARD('rec_backend=pcg does not yet support projrec=yes')
             if( abs(real(params%box)*params%smpd - real(params%box_crop)*params%smpd_crop) > &
                 &1.0e-5*real(params%box)*params%smpd )then
@@ -1997,8 +2011,11 @@ contains
         if( present(check_solver) ) l_check_solver = check_solver
         if( trim(params%pcgop) /= 'kernel' ) THROW_HARD('production rec_backend=pcg requires pcgop=kernel')
         if( l_check_solver )then
-            if( params%maxits_pcg < 1 .or. params%maxits_pcg > 8 ) &
-                &THROW_HARD('production PCG requires 1<=maxits_pcg<=8')
+            if( params%maxits_pcg < 1 .or. params%maxits_pcg > 100 ) &
+                &THROW_HARD('PCG requires 1<=maxits_pcg<=100')
+            if( params%maxits_pcg > 8 )then
+                THROW_WARN('maxits_pcg exceeds the production refinement budget (8); appropriate for offline converged solves only')
+            endif
         endif
         if( trim(params%projrec) /= 'no' ) THROW_HARD('rec_backend=pcg does not yet support projrec=yes')
         if( abs(real(params%box)*params%smpd - real(params%box_crop)*params%smpd_crop) > &

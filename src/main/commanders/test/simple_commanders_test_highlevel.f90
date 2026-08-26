@@ -2464,19 +2464,65 @@ subroutine exec_test_rec3D_backends( self, cline )
     real,    pointer      :: rmat(:,:,:) => null()
     type(image)           :: truth, tvols(3)
     type(kbinterpol)      :: kbwin
-    type(string)          :: truth_fname
+    type(string)          :: truth_fname, exec_dir, dirbody
+    type(string), allocatable :: link_list(:)
     real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, e0, bg, hp_here
     real,    allocatable  :: tspec(:), tcorr(:,:), tspec_b(:,:)
     integer :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used, it
-    logical :: l_truth, l_gate_ls
+    logical :: l_truth, l_gate_ls, l_mkdir
     if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)
     if( .not. cline%defined('mskdiam') ) THROW_HARD('mskdiam is required; exec_test_rec3D_backends')
+    l_mkdir = .true.
+    if( cline%defined('mkdir') ) l_mkdir = cline%get_carg('mkdir') .ne. 'no'
     call cline%set('oritype',     'ptcl3D')
-    call cline%set('mkdir',       'no')
+    call cline%set('mkdir',       'no')   ! the children run in THIS process's cwd
     call cline%set('postprocess', 'no')
     call cline%delete('nparts')   ! shared-memory execution of both backends
     call cline%delete('part')
     call cline%delete('rec_backend')
+    if( l_mkdir )then
+        ! numbered execution directory like production commanders, with the
+        ! settings that define the measurement in the name so a sweep reads as
+        ! a directory listing. Run-directory inputs discovered by name in the
+        ! cwd (sigma2 star files, the NU evidence envelope) are symlinked in;
+        ! the project file is addressed absolutely so its updates land in the
+        ! caller's project, as with any ../-style execution directory.
+        dirbody = string('rec3D_backends')
+        if( cline%defined('pgrp')       ) dirbody = dirbody//('_'//cline_tok('pgrp'))
+        if( cline%defined('objfun')     ) dirbody = dirbody//('_'//cline_tok('objfun'))
+        if( cline%defined('ml_reg') )then
+            if( cline%get_carg('ml_reg') .eq. 'yes' ) dirbody = dirbody//'_mlreg'
+        endif
+        if( cline%defined('maxits_pcg') ) dirbody = dirbody//('_its'//int2str(cline%get_iarg('maxits_pcg')))
+        if( cline%defined('rtol')       ) dirbody = dirbody//('_rtol'//real_tok(cline%get_rarg('rtol')))
+        if( cline%defined('pcg_solvent_lambda_rel') )then
+            dirbody = dirbody//('_sol'//real_tok(cline%get_rarg('pcg_solvent_lambda_rel')))
+        endif
+        if( cline%defined('lp')         ) dirbody = dirbody//('_lp'//real_tok(cline%get_rarg('lp')))
+        do i = 1, 9999
+            exec_dir = string(int2str(i)//'_')//dirbody
+            if( .not. dir_exists(exec_dir) ) exit
+        end do
+        call simple_mkdir(exec_dir)
+        call cline%set('projfile', simple_abspath(cline%get_carg('projfile')))
+        if( cline%defined('vol1') ) call cline%set('vol1', simple_abspath(cline%get_carg('vol1')))
+        call simple_list_files('sigma2_it_*.star', link_list)
+        if( allocated(link_list) )then
+            do i = 1, size(link_list)
+                call syslib_symlink(simple_abspath(link_list(i)), exec_dir//('/'//link_list(i)%to_char()))
+            end do
+            deallocate(link_list)
+        endif
+        call simple_list_files(NU_ENVMASK_FBODY//'*'//MRC_EXT, link_list)
+        if( allocated(link_list) )then
+            do i = 1, size(link_list)
+                call syslib_symlink(simple_abspath(link_list(i)), exec_dir//('/'//link_list(i)%to_char()))
+            end do
+            deallocate(link_list)
+        endif
+        call simple_chdir(exec_dir)
+        write(logfhandle,'(a)') '>>> REC3D BACKENDS: EXECUTION DIRECTORY '//exec_dir%to_char()
+    endif
     projfile = cline%get_carg('projfile')
     call spproj%read(projfile)
     smpd = spproj%get_smpd()
@@ -2897,6 +2943,39 @@ subroutine exec_test_rec3D_backends( self, cline )
             write(buf,'(F0.1)') x
             str = trim(adjustl(buf))
         end function real2str_trim
+
+        !> trimmed character token of a cline string argument, for the
+        !! execution-directory name (get_carg's string carries padding)
+        function cline_tok( key ) result( tok )
+            character(len=*), intent(in)  :: key
+            character(len=:), allocatable :: tok
+            type(string) :: sval
+            sval = cline%get_carg(key)
+            tok  = trim(adjustl(sval%to_char()))
+            call sval%kill
+        end function cline_tok
+
+        !> compact real token for the execution-directory name: plain decimal
+        !! with trailing zeros stripped in the human range, scientific outside
+        !! it (real2str_trim's F0.1 renders 1e-3 as '.0')
+        function real_tok( x ) result( tok )
+            real, intent(in) :: x
+            character(len=:), allocatable :: tok
+            character(len=32) :: buf
+            if( x == 0.0 )then
+                tok = '0'
+            else if( abs(x) >= 0.01 .and. abs(x) < 1000.0 )then
+                write(buf,'(F0.3)') x
+                tok = trim(adjustl(buf))
+                do while( len(tok) > 1 .and. tok(len(tok):len(tok)) == '0' )
+                    tok = tok(1:len(tok)-1)
+                end do
+                if( tok(len(tok):len(tok)) == '.' ) tok = tok(1:len(tok)-1)
+            else
+                write(buf,'(ES9.1)') x
+                tok = trim(adjustl(buf))
+            endif
+        end function real_tok
 
 end subroutine exec_test_rec3D_backends
 

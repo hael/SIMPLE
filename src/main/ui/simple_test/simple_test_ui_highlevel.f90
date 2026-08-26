@@ -237,8 +237,10 @@ contains
         &'rec3D_backends',&
         &'Same-inputs gridding vs PCG reconstruction comparison',&
         &'Reconstructs one fixed set of particles/orientations/sigma2 with reconstruct3D using the gridding '//&
-        &'and the PCG backend, in the current directory (run it inside a refine3D run directory so the sigma2 '//&
-        &'group files are found), and compares the merged maps: per-shell amplitude ratio and FSC between '//&
+        &'and the PCG backend, in a numbered execution directory named after the run settings (run it inside '//&
+        &'a refine3D run directory; the sigma2 group files and any NU evidence envelope are symlinked in; '//&
+        &'mkdir=no runs in the current directory instead), and compares the merged maps: per-shell amplitude '//&
+        &'ratio and FSC between '//&
         &'backends, and the radial real-space profile ratio that exposes a deapodization mismatch. Writes '//&
         &'recvol_stateXX_gridding.mrc and recvol_stateXX_pcg.mrc. Measurement only, no thresholds '//&
         &'(doc/implementation_notes/drop_legacy_box_division.md, plan step 2).',&
