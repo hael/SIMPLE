@@ -1347,13 +1347,11 @@ contains
         integer, parameter :: NSPACE_FIRST_PASS              = 2500
         integer, parameter :: NSPACE                         = 5000
         integer, parameter :: NSPACE_SUB                     = 500
-        integer, parameter :: INIT_MAXITS_REFINE3D_HET       = 5
         integer, parameter :: MINITS_REFINE3D_HET            = 10
-        integer, parameter :: MAXITS_REFINE3D_HET_CAP        = 50
+        integer, parameter :: MAXITS_REFINE3D_HET            = 50
         real,    parameter :: TARGET_UPDATES_PER_PARTICLE    = 4.0
         real,    parameter :: LPSTART_REFINE3D_HET           = 10.0
         real,    parameter :: LPSTOP_REFINE3D_HET            = 6.0
-        real,    parameter :: STATE_OVERLAP_NEIGH_REFINE3D_HET = 0.99
         character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_HET'
         type(commander_rec3D)     :: xrec3D
         type(commander_refine3D)  :: xrefine3D
@@ -1363,12 +1361,11 @@ contains
         type(lp_crop_inf)         :: lpinfo_master(1)
         type(string), allocatable :: init_vols(:)
         integer,      allocatable :: state_pops(:)
-        integer :: nptcls_eff, total_iter, maxits_glob_het
-        real    :: update_frac_auto, state_overlap
+        integer :: nptcls_eff, iter_glob
         logical :: l_input_vols_required
         call cline%set('prg', 'refine3D_het')
         ! hard defaults
-        call cline%set('balance',        'yes')
+        call cline%set('balance',         'yes')
         call cline%set('greedy_sampling', 'no')
         call cline%set('frac_best',       1.0)
         call cline%set('trail_rec',       'yes')
@@ -1392,7 +1389,6 @@ contains
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart', LPSTART_REFINE3D_HET)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',  LPSTOP_REFINE3D_HET)
         if( .not. cline%defined('automsk')         ) call cline%set('automsk',         'no')
-        if( .not. cline%defined('overlap')         ) call cline%set('overlap', STATE_OVERLAP_NEIGH_REFINE3D_HET)
         if( .not. cline%defined('nsample')         ) call cline%set('nsample', NSAMPLE_PER_STATE_REFINE3D_HET)
         if( .not. cline%defined('keepvol')         ) call cline%set('keepvol',         'no')
         if( .not. cline%defined('nspace')          ) call cline%set('nspace',          NSPACE)
@@ -1402,6 +1398,8 @@ contains
         call cline%set('mkdir', 'no')
         call spproj%read( params%projfile )
         ! Search planning
+        iter_glob = 0
+        l_input_vols_required = .false.
         call set_refine3D_het_nstates(nptcls_eff, state_pops)
         call set_refine3D_het_nsample
         call validate_refine3D_het_filtering
@@ -1426,7 +1424,6 @@ contains
         call reconstruct_all_particles_volumes
         call spproj%kill
         call simple_end('**** SIMPLE_REFINE3D_HET NORMAL STOP ****')
-
     contains
 
         subroutine set_refine3D_het_nstates( nptcls_eff, state_pops )
@@ -1434,7 +1431,6 @@ contains
             integer,              intent(inout) :: nptcls_eff
             integer, allocatable, intent(inout) :: state_pops(:)
             integer :: state, nstates_labels
-            l_input_vols_required = .false.
             nptcls_eff = spproj%os_ptcl3D%count_state_gt_zero()
             if( nptcls_eff < 1 ) THROW_HARD('no active particles available for '//WORKFLOW_LABEL)
             nstates_labels = spproj%os_ptcl3D%get_n('state')
@@ -1501,6 +1497,7 @@ contains
         end subroutine validate_refine3D_het_search_mode
 
         subroutine set_refine3D_het_sampling()
+            real    :: update_frac_auto
             integer :: maxits_auto, nptcls_per_iter, stage_cap
             if( nptcls_eff < 1 ) THROW_HARD('no active particles available for '//WORKFLOW_LABEL)
             nptcls_per_iter = min(nptcls_eff, params%nsample)
@@ -1535,7 +1532,7 @@ contains
                     &'>>> '//WORKFLOW_LABEL//' STAGE MAXITS COMMAND-LINE OVERRIDE: ', params%maxits
             else
                 maxits_auto   = ceiling((TARGET_UPDATES_PER_PARTICLE * real(nptcls_eff)) / real(nptcls_per_iter))
-                stage_cap     = max(MINITS_REFINE3D_HET, min(MAXITS_REFINE3D_HET_CAP, maxits_auto))
+                stage_cap     = max(MINITS_REFINE3D_HET, min(MAXITS_REFINE3D_HET, maxits_auto))
                 params%maxits = stage_cap
                 call cline%set('maxits', params%maxits)
                 write(logfhandle,'(A,I0,A,F5.1,A)') '>>> '//WORKFLOW_LABEL//' STAGE MAXITS: ', &
@@ -1584,7 +1581,7 @@ contains
         end subroutine prepare_refine3D_het_class_sampling
 
         subroutine set_refine3D_het_downscaling()
-            lpinfo_master(1)%trslim      = 5.
+            lpinfo_master(1)%trslim      = min(8.,max(2.0, AHELIX_WIDTH/params%smpd))
             lpinfo_master(1)%box_crop    = params%box
             lpinfo_master(1)%smpd_crop   = params%smpd
             lpinfo_master(1)%l_autoscale = .false.
@@ -1633,6 +1630,9 @@ contains
                     write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' USING INPUT REFERENCE VOLUMES'
                 endif
             else
+                if( l_input_vols_required )then
+                    THROW_HARD(WORKFLOW_LABEL//' requires input volumes')
+                endif
                 if( project_state_volumes_compatible() )then
                     ! Taking from project
                     params%vols(1:params%nstates) = init_vols(1:params%nstates)
@@ -1653,8 +1653,9 @@ contains
             integer :: state, nsample
             write(logfhandle,'(A)')&
                 &'>>> '//WORKFLOW_LABEL//' INITIATED INITIAL MAPPING OF PARTICLES TO INPUT VOLUMES'
-            nsample = min(nptcls_eff, NSAMPLE_REFINE3D_HET_CAP)
-            ufrac   = real(nsample) / real(nptcls_eff)
+            nsample   = min(nptcls_eff, NSAMPLE_REFINE3D_HET_CAP)
+            ufrac     = real(nsample) / real(nptcls_eff)
+            iter_glob = 1
             cline_mapping = cline
             call cline_mapping%set('prg',            'refine3D')
             call cline_mapping%set('mkdir',          'no')
@@ -1665,13 +1666,14 @@ contains
             call cline_mapping%set('trail_rec',      'yes')
             call cline_mapping%set('volrec',         'yes')
             call cline_mapping%set('maxits',         1)
-            call cline_mapping%set('startit',        1)
-            call cline_mapping%set('which_iter',     1)
-            call cline_mapping%set('extr_iter',      1)
+            call cline_mapping%set('startit',        iter_glob)
+            call cline_mapping%set('which_iter',     iter_glob)
+            call cline_mapping%set('extr_iter',      iter_glob)
             call cline_mapping%set('refine',         'greedy')
             call cline_mapping%set('trs',            lpinfo_master(1)%trslim)
             call cline_mapping%set('greedy_sampling','yes')
             call cline_mapping%set('update_missing', 'no')
+            call cline_mapping%set('filt_mode',      'none')
             call cline_mapping%set('nsample',        nsample)
             call cline_mapping%set('lp',             params%lpstart)
             call cline_mapping%set('nspace',         NSPACE_FIRST_PASS)
@@ -1755,9 +1757,9 @@ contains
         subroutine run_refine3D_het()
             integer, parameter  :: STEP_IT = 3
             type(lp_crop_inf), allocatable :: lpinfos(:)
-            real    :: rfind, rfind_incr, lp
-            integer :: startit, lastit, nits
-            integer :: stage_start, stage_limit, find_start, find_stop, stage, nstages
+            real    :: rfind, rfind_incr
+            integer :: startit, lastit, nits, maxits
+            integer :: find_start, find_stop, stage, nstages
             ! Frequency marching plan
             find_start = max(5,              calc_fourier_index(params%lpstart, params%box, params%smpd))
             find_stop  = min(params%box/2-2, calc_fourier_index(params%lpstop,  params%box, params%smpd))
@@ -1783,31 +1785,32 @@ contains
                     & stage, ' / ', lpinfos(stage)%lp
             enddo
             ! March
+            maxits = params%maxits + iter_glob
             rfind  = real(find_start) - rfind_incr
             stage  = 0
             lastit = 0
             do stage = 1,nstages
-                startit = lastit + 1
-                lastit  = min(startit+STEP_IT-1, params%maxits)
+                startit = iter_glob + 1
+                lastit  = min(startit+STEP_IT-1, maxits)
                 nits    = lastit - startit + 1
-                call cline%set('minits', nits-1)
+                call cline%set('minits',     1)
                 call cline%set('maxits',     nits)
                 call cline%set('startit',    startit)
                 call cline%set('which_iter', startit)
                 call cline%set('extr_iter',  startit)
                 call cline%set('trs',        lpinfos(stage)%trslim)
                 call cline%set('lp',         lpinfos(stage)%lp)
-                write(logfhandle,'(A,I0,A,I0,A,F7.2)')'>>> '//WORKFLOW_LABEL//' ENTERING STAGE ', stage,&
-                    &' LP: ', lpinfos(stage)%lp
+                write(logfhandle,'(A,I0,A,F7.2)')'>>> '//WORKFLOW_LABEL//' ENTERING STAGE ',stage,' LP: ',lpinfos(stage)%lp
                 call xrefine3D%execute(cline)
-                lastit = cline%get_iarg('endit')
+                lastit    = cline%get_iarg('endit')
+                iter_glob = lastit
                 call cline%delete('endit')
             enddo
             call del_files(DIST_FBODY,       params%nparts, ext='.dat')
             call del_files(ASSIGNMENT_FBODY, params%nparts, ext='.dat')
             call del_file(DIST_FBODY//'.dat')
             call del_file(ASSIGNMENT_FBODY//'.dat')
-            write(logfhandle,'(A,I0)') '>>> '//WORKFLOW_LABEL//' EXITING FREQUENCY MARCHING AT ITERATION ', lastit
+            write(logfhandle,'(A,I0)') '>>> '//WORKFLOW_LABEL//' EXITING FREQUENCY MARCHING AT ITERATION ', iter_glob
             deallocate(lpinfos)
         end subroutine run_refine3D_het
 
@@ -1851,11 +1854,10 @@ contains
         subroutine run_refine3D_het_missing_update( nmissing, nactive )
             integer, intent(in) :: nmissing, nactive
             type(cmdline) :: cline_missing
-            integer       :: iter_missing
-            iter_missing = next_refine3D_het_iteration()
+            iter_glob = iter_glob + 1
             write(logfhandle,'(A,A,I0,A,I0,A,I0)') &
                 &'>>> '//WORKFLOW_LABEL//' FINAL MISSING-UPDATE ASSIGNMENT', &
-                &' MISSING/ACTIVE/ITER: ', nmissing, '/', nactive, '/', iter_missing
+                &' MISSING/ACTIVE/ITER: ', nmissing, '/', nactive, '/', iter_glob
             call flush(logfhandle)
             cline_missing = cline
             call cline_missing%set('prg',           'refine3D')
@@ -1867,9 +1869,9 @@ contains
             call cline_missing%set('trail_rec',          'no')
             call cline_missing%set('volrec',             'no')
             call cline_missing%set('maxits',                1)
-            call cline_missing%set('startit',    iter_missing)
-            call cline_missing%set('which_iter', iter_missing)
-            call cline_missing%set('extr_iter',  iter_missing)
+            call cline_missing%set('startit',       iter_glob)
+            call cline_missing%set('which_iter',    iter_glob)
+            call cline_missing%set('extr_iter',     iter_glob)
             call cline_missing%set('refine',         'greedy')
             call cline_missing%set('greedy_sampling',   'yes')
             call cline_missing%set('update_missing',    'yes')
@@ -1878,16 +1880,6 @@ contains
             call xrefine3D%execute(cline_missing)
             call cline_missing%kill
         end subroutine run_refine3D_het_missing_update
-
-        integer function next_refine3D_het_iteration() result(iter)
-            iter = 1
-            if( cline%defined('endit') )then
-                iter = cline%get_iarg('endit') + 1
-            else if( cline%defined('which_iter') )then
-                iter = cline%get_iarg('which_iter') + 1
-            endif
-            iter = max(1, iter)
-        end function next_refine3D_het_iteration
 
         subroutine reconstruct_all_particles_volumes
             cline_rec3D = cline

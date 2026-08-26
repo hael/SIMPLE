@@ -581,6 +581,9 @@ subroutine new_automask( prgtab )
         &'simple_exec',&                                                                            ! executable
         &.true.,&                                                                                   ! requires sp_project
         &visibility=UI_VIS_STANDARD, display_name='Heterogeneous 3D Refinement')
+        ! image input/output
+        call refine3D_het%add_input(UI_IMG, 'vol1', 'file', 'Reference volume', 'Alignment reference volume', &
+        & 'input volume e.g. vol.mrc', .false., 'vol1.mrc', visibility=UI_VIS_STANDARD)
         ! parameter input/output
         call refine3D_het%add_input(UI_PARM, 'cache', 'binary', 'Cache downscaled particles', &
          &'Write Fourier-cropped particles once and read those for alignment instead of the originals on every iteration, &
@@ -592,12 +595,13 @@ subroutine new_automask( prgtab )
          &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
          &.false., '', visibility=UI_VIS_DEVELOPER)
         ! search controls
-        call refine3D_het%add_input(UI_SRCH, maxits, required_override=.false., group="search", &
-        &visibility=UI_VIS_ADVANCED)
-        call refine3D_het%add_input(UI_SRCH, nstates, required_override=.false., group="search", &
-        &visibility=UI_VIS_ADVANCED)
-        call refine3D_het%add_input(UI_SRCH, 'nsample', 'num', 'Particle sample target', &
-        &'Particles sampled per iteration', 'particles{10000}', .false., 0., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
+        call refine3D_het%add_input(UI_SRCH, 'maxits', 'num', 'Maximum iterations', &
+        &'Total number of frequency-marched iterations; must be >= 1', 'iterations{50}', &
+        &.false., 50., group="search", visibility=UI_VIS_ADVANCED, preserve_default=.true.)
+        call refine3D_het%add_input(UI_SRCH, nstates, required_override=.true., group="search", &
+        &visibility=UI_VIS_STANDARD)
+        call refine3D_het%add_input(UI_SRCH, 'nsample', 'num', 'Particle sample target per state', &
+        &'Particles sampled per iteration per state', 'particles{10000}', .false., 10000., group="search", visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call refine3D_het%add_input(UI_SRCH, 'prob_neigh_mode', 'multi', 'Prob-neigh neighborhood mode', &
         &'Prob-neigh neighborhood mode(state|geom){state}','', .false., 'state', &
         &group="search", choices=ui_choices([character(len=5) :: 'state', 'geom']), &
@@ -614,9 +618,6 @@ subroutine new_automask( prgtab )
         call refine3D_het%add_input(UI_SRCH, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated computation(yes|no){yes}','', .false., 'yes', group="search", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED)
-        call refine3D_het%add_input(UI_SRCH, 'overlap', 'num', 'State-overlap convergence target', &
-        &'Required overlap of state assignments for convergence in the probabilistic-neighborhood stage', &
-        &'overlap fraction', .false., .99, group="search", visibility=UI_VIS_DEVELOPER)
         ! filter controls
         call refine3D_het%add_input(UI_FILT, 'filt_mode', 'multi', 'Filtering mode', &
         &'Filtering mode(nonuniform_lpset|none){nonuniform_lpset}','', .false., 'nonuniform_lpset', group="filter", &

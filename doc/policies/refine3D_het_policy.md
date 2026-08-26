@@ -84,7 +84,7 @@ requires an `sp_project` and is registered with `simple_exec`.
 
 - hard and overridable workflow defaults
 - state-label validation and initialization
-- sampling and iteration-budget derivation
+- sampling and automatic or explicit iteration-budget selection
 - class/cluster sampling-sidecar preparation
 - autoscaling and frequency-marching plans
 - starting-volume selection
@@ -114,16 +114,13 @@ only their command-line policy and the choice of when they run.
 
 The current UI exposes these options directly:
 
+- image input: `vol1..volN`
 - parameter and I/O: `cache`, `cache_dir`
 - search: `maxits`, `nstates`, `nsample`, `prob_neigh_mode`, `inpl_cont`,
-  `pgrp`, `ptcl_src`, `center`, `autoscale`, `overlap`
+  `pgrp`, `ptcl_src`, `center`, `autoscale`
 - filter: `filt_mode`, `lpstart`, `lpstop`, `ml_reg`, `envfsc`, `envmsklp`
 - mask: `mskdiam`, `automsk`, `nu_msk_sig`
 - compute: `nparts`, `nthr`
-
-The cache controls are developer-visible. `nsample` and `overlap` are also
-developer controls. `nstates`, search-neighborhood, downscaling, filter, and
-mask controls are advanced or standard according to the UI definition.
 
 The commander forces these hard workflow values even if a caller supplies a
 different value:
@@ -157,7 +154,6 @@ The commander supplies these values only when the user did not define them:
 - `lpstart=10.0`
 - `lpstop=6.0`
 - `automsk=no`
-- `overlap=0.99`
 - `nsample=10000` before state multiplication
 - `keepvol=no`
 - `nspace=5000`
@@ -214,8 +210,7 @@ nsample_total = min(active_particles,
 
 Consequently, an explicitly supplied positive `nsample` is also currently
 treated as a per-state value before the `100000` and active-particle caps are
-applied. The UI currently describes `nsample` as particles sampled per
-iteration.
+applied. The UI describes it as particles sampled per iteration per state.
 
 The resulting total target must be at least one.
 
@@ -271,37 +266,11 @@ The sidecar format and the matcher behavior that consumes it are shared
 infrastructure. `refine3D_het` owns only the choice of class or cluster bins and
 the timing of sidecar generation.
 
-## 7. Automatic Iteration Budget
-
-If the user does not define `maxits`, the wrapper targets approximately four
-updates per active particle:
-
-```text
-particles_per_iteration = min(active_particles, nsample_total)
-maxits_auto = ceiling(4.0 * active_particles / particles_per_iteration)
-maxits = max(10, min(50, maxits_auto))
-```
-
-The automatic total therefore has a minimum of `10` iterations and a maximum of
-`50` iterations. Full updates still receive at least ten iterations.
-
-In the current implementation, `maxits` is the total number of
-frequency-marched iterations, divided into blocks of at most three. Although a
-log message calls it a stage override, it is not a separate per-stage cap as it
-is in `refine3D_multi`.
-
-A user-defined `maxits` bypasses the automatic clamp and is used as supplied.
-
-The wrapper currently forwards parsed `maxits_glob` to base `refine3D`, with a
-lower bound of one. It does not derive `maxits_glob` from the HET stage plan.
-Annealing or regularization consumers of the global horizon therefore see the
-inherited value rather than a wrapper-computed total.
-
 ## 8. Autoscaling and Translation Limits
 
 The master low-pass/crop record starts at native project box and sampling with:
 
-- translation limit `5.0`
+- translation limit `min(8.0, max(2.0, AHELIX_WIDTH / smpd))`
 - autoscaling disabled in the record
 - native `box_crop`
 - native `smpd_crop`
@@ -340,8 +309,13 @@ If every `vol1..volN` is supplied:
 If some, but not all, state-volume keys are supplied, the wrapper fails. Partial
 multi-state input is ambiguous and must not be accepted.
 
-If no command-line volumes are supplied, the wrapper first checks project
-output volumes:
+If state labels were expanded from a single state, or an existing multi-state
+project had virgin orientations, explicit input volumes are required. The
+wrapper fails when no complete command-line volume set is present; it does not
+use project volumes or reconstruct starting volumes in these branches.
+
+Otherwise, if no command-line volumes are supplied, the wrapper first checks
+project output volumes:
 
 - `os_out` must contain a `vol` entry for every requested state
 - every referenced file must exist
@@ -388,11 +362,18 @@ The initial mapping pass:
 - sets `fillin=no`
 - sets `trail_rec=yes`
 - sets `volrec=yes`
+- sets `filt_mode=none`
 - runs exactly one iteration at iteration number `1`
 - uses `refine=greedy` and `greedy_sampling=yes`
 - uses `nspace=2500`
 - uses `lp=lpstart`
 - removes `partition` and stale `endit`
+
+The mapping command currently inherits `automsk` from the parent. Therefore an
+explicit `automsk=yes` is incompatible with its forced `filt_mode=none` and is
+rejected by base refine3D parameter validation. The bootstrap command must also
+disable `automsk`, or retain a compatible nonuniform filtering mode, before the
+public HET automasking option works with this path.
 
 After this pass, the ordinary `vol_stateNN.mrc` products replace the supplied
 paths as the references for staged refinement.
@@ -400,9 +381,10 @@ paths as the references for staged refinement.
 If the effective run is a full update, trailing reconstruction is disabled and
 the supplied volumes are used directly; this extra mapping pass does not run.
 
-The initial pass is preparation and uses iteration number one. Independently,
-the frequency march currently initializes its last completed iteration to zero
-and begins its first block at iteration one.
+The initial pass is preparation and uses iteration number one. It also sets the
+wrapper's global iteration counter to one, so the frequency march begins at
+iteration two. When the initial mapping pass does not run, the global counter
+remains zero and frequency marching begins at iteration one.
 
 ## 11. Search Modes
 
@@ -443,8 +425,10 @@ nstages = ceiling(maxits / 3)
 ```
 
 The final block contains the remainder when `maxits` is not divisible by three.
-For example, an iteration range beginning at one with `maxits=10` produces
-blocks of `3, 3, 3, 1` iterations when no block converges early.
+For example, with no initial mapping pass, `maxits=10` produces planned ranges
+`1..3`, `4..6`, `7..9`, and `10`. With an initial mapping at iteration one,
+the same frequency-march budget produces `2..4`, `5..7`, `8..10`, and `11`.
+These ranges assume no block converges early.
 
 The native Fourier-index limits are derived as:
 
@@ -461,22 +445,20 @@ stop. With one stage, it remains at the start.
 Each block receives:
 
 - `maxits` equal to the number of iterations in that block
-- `minits` equal to one less than that block length
-- `startit`, `which_iter`, and `extr_iter` equal to one more than the previous
-  block's returned `endit`
+- `minits=1`
+- `startit`, `which_iter`, and `extr_iter` equal to the wrapper's last completed
+  global iteration plus one
 - `trs` from the master autoscaling plan
 - `lp` from the block's frequency plan, never numerically below `lpstop`
 - the parent `refine`, `nspace`, `nspace_sub`, sampling, filter, and mask policy
 
 Each block is an ordinary base-`refine3D` execution. The base commander writes
-`endit`; the HET wrapper uses it to derive the next block's start, reads it for
-the final-stage log, and deletes it after each call.
-
-Setting `minits=maxits-1` allows a block to finish at most one iteration before
-its cap when base `refine3D` reports convergence. The exposed `overlap` value is
-forwarded, but HET forces `multivol_mode=independent`; base multi-state
-convergence therefore uses the minimum per-state joint-orientation overlap and
-searched-space fraction rather than `mi_state > overlap`.
+`endit`; the HET wrapper stores it as the global iteration counter, derives the
+next block's start from it, and deletes it after each call. With `minits=1`, a
+block may finish before its planned cap when base `refine3D` reports
+convergence; `maxits` is therefore a planning horizon rather than a guarantee
+that every planned iteration executes. HET forces
+`multivol_mode=independent` and does not expose or supply an `overlap` control.
 
 After all blocks, the wrapper deletes ordinary distance and assignment
 temporary files for both partitioned and non-partitioned naming forms.
