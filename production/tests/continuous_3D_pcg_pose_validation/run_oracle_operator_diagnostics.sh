@@ -36,9 +36,7 @@ SOURCE_ROOT=$(readlink -f "$SCRIPT_DIR/../../..")
 mkdir -p "$RESULT_ROOT"/{logs,input}
 cp "$SCRIPT_DIR/run_oracle_operator_diagnostics.sh" "$RESULT_ROOT/input/"
 cp "$SCRIPT_DIR/README.md" "$RESULT_ROOT/input/"
-cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_end_polishing_spec.md" \
-    "$RESULT_ROOT/input/"
-cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_end_polishing_plan.md" \
+cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_pose_end_polishing.md" \
     "$RESULT_ROOT/input/"
 cp "$SOURCE_ROOT/doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md" \
     "$RESULT_ROOT/input/"
@@ -102,8 +100,7 @@ src/main/strategies/search/simple_pcg_pose_polisher.f90
 src/main/volume/simple_reconstructor_pcg.f90
 src/main/image/simple_projector.f90
 src/main/commanders/test/simple_commanders_test_highlevel.f90
-doc/implementation_notes/continuous_3D_pose_end_polishing_spec.md
-doc/implementation_notes/continuous_3D_pose_end_polishing_plan.md
+doc/implementation_notes/continuous_3D_pose_end_polishing.md
 doc/implementation_notes/continuous_3D_refinement_on_pcg_operator.md
 doc/policies/reconstruct3D_pcg_policy.md
 EOF

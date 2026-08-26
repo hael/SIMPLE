@@ -3,8 +3,7 @@
 **Status:** COMPLETED HISTORICAL RECORD
 **Consolidated:** 2026-08-25
 **Pre-consolidation snapshot:** `95e083817`
-**Current draft SPEC:** [continuous_3D_pose_end_polishing_spec.md](../continuous_3D_pose_end_polishing_spec.md)
-**Current draft PLAN:** [continuous_3D_pose_end_polishing_plan.md](../continuous_3D_pose_end_polishing_plan.md)
+**Current living development record:** [continuous_3D_pose_end_polishing.md](../continuous_3D_pose_end_polishing.md)
 **Validation evidence:** [continuous_3D_pose_end_polishing_validation_evidence.md](continuous_3D_pose_end_polishing_validation_evidence.md)
 **Scientific review:** [continuous_3D_pose_end_polishing_scientific_review.md](continuous_3D_pose_end_polishing_scientific_review.md)
 
