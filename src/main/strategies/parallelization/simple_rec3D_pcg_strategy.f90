@@ -226,10 +226,12 @@ contains
         l_ready = l_env_valid .and. params%pcg_solvent_lambda_rel > 0.0
         if( l_ready )then
             call move_alloc(m, m_env)
-        else if( params%pcg_solvent_lambda_rel > 0.0 )then
-            ! positive user setting with no usable envelope: skip THIS
-            ! iteration's prior loudly, never substitute another mask type
-            THROW_WARN('pcg_solvent_lambda_rel > 0 but the NU evidence envelope is unusable ('//skip_reason//'); solvent prior skipped for this iteration')
+        else if( params%pcg_solvent_lambda_rel > 0.0 .and. skip_reason /= 'envelope_absent' )then
+            ! the prior is on by default, so an ABSENT envelope is the normal
+            ! lag-one state (early iterations, gridding-era projects) and only
+            ! rates the diagnostic block below; a PRESENT-but-unusable envelope
+            ! is a broken input and warns loudly. Never substitute a mask type.
+            THROW_WARN('NU evidence envelope is unusable ('//skip_reason//'); solvent prior skipped for this iteration')
         endif
         weight_fraction = weight_sum / real(params%box_crop,dp)**3
         write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT ENVELOPE ('//trim(context)//'/state ', &

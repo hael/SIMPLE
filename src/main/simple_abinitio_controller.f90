@@ -396,6 +396,20 @@ contains
         cfg%automsk = 'no'
         if( l_cavgs ) return
         if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
+        ! rec_backend=pcg: the solvent-flatness prior (on by default) consumes
+        ! the state-specific NU evidence envelope lag-one, so envelope
+        ! generation turns on as soon as NU filtering is active -- the first
+        ! NU stage generates the envelope and every later stage's ML replays
+        ! are solvent-priored. An explicit automsk=no vetoes this; a
+        ! user-supplied automsk mode (e.g. tight) is respected.
+        if( trim(params%rec_backend) == 'pcg' .and. istage >= NU_FILTER_STAGE .and. &
+            &l_nonuniform .and. .not. l_automsk_off )then
+            if( l_automsk )then
+                cfg%automsk = trim(params%automsk)
+            else
+                cfg%automsk = 'yes'
+            endif
+        endif
     end subroutine set_refine3D_automsk_policy
 
     subroutine set_refine3D_envfsc_policy( cfg, params, istage, l_cavgs )

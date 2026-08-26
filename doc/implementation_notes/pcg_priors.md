@@ -600,6 +600,65 @@ and workers only accumulate raw statistics.
   the prior activating exactly when the envelope first exists lag-one and
   exercising the stage-handoff resample.
 
+### DECISION (2026-08-26): automasking auto-enabled for pcg in abinitio3D
+
+With the prior on by default, abinitio3D closes the loop itself: when
+`rec_backend=pcg` and NU filtering is active (the default), the stage policy
+forces `automsk=yes` from the first NU stage (`NU_FILTER_STAGE`) onward — the
+first NU stage's assembly generates the state-specific evidence envelope and
+every later stage's ML replays are solvent-priored lag-one, with no user
+flags. An explicit `automsk=no` vetoes; a user-supplied mode (`tight`) is
+respected; gridding runs keep the last-stage-only automasking behavior.
+Verification (pending, user-side): one abinitio3D run with `rec_backend=pcg`
+showing NU ENVELOPE OCCUPANCY at stage 6 and `pcg_solvent_prior_enabled=T`
+from stage 7 — this now doubles as the outstanding Gate B lag-one activation
+item.
+
+### DECISION (2026-08-26): solvent prior on by default at the calibrated strength
+
+Following the bgal calibration the solvent prior graduated from experimental
+toggle to default behavior: `pcg_solvent_lambda_rel` now defaults to **0.1**
+(the calibrated operating strength), so whenever `rec_backend=pcg` runs an ML
+replay and a valid state-specific NU evidence envelope exists, the prior is
+applied — no flag required. `0` remains the explicit off-switch, preserving
+the A/B capability R10 requires for the remaining Gate C envelope-variant
+tests and for calibration on new dataset classes. With default-on, an ABSENT
+envelope is the normal lag-one state (early iterations, gridding-era
+projects) and produces only the diagnostic block; a PRESENT-but-unusable
+envelope (extent mismatch, invalid values) still warns loudly. The S6.2
+never-substitute-a-mask rule is unchanged.
+
+### Stage 5 record: bgal solvent-prior strength calibration (2026-08-26)
+
+Full dose-response on beta-gal (box 256, smpd 1.275, d2, ~4.6k ptcls,
+`maxits_pcg=5` with the regularized ML initialization; every run's base-pair
+FSC pinned at 4.132/3.709 A -- the negative control across the 1000x sweep):
+
+| lambda_rel | solvent RMS | rim ratio (64-72 px) | shipped FSC 0.5/0.143 | verdict |
+|---|---|---|---|---|
+| 1e-3 | 0.7156 | 0.862 | 4.132/3.709 | inert |
+| 1e-2 | 0.7117 | 0.861 | 4.132/3.709 | inert |
+| 3e-2 | 0.7032 | 0.859 | 4.132/3.709 | whisper |
+| 1e-1 | 0.6752 | 0.851 | 4.132/3.709 | active, clean |
+| 3e-1 | 0.6075 | 0.827 | 4.080/3.709 | first inflation + mild rim loss |
+| 1    | 0.4616 | 0.741 | 4.030/3.667 | over-flattening |
+
+Findings: (1) the active regime on real data starts ~1e-1, roughly 30x above
+the neutral fixture's (noise-dependent, as the aliasing argument predicts);
+(2) the two over-regularization diagnostics -- envelope-boundary rim erosion
+in the radial table and shipped-pair FSC inflation -- fire TOGETHER at 3e-1
+and grow monotonically, while the base-pair FSC never moves; (3) backend
+agreement (gridding vs pcg) improves monotonically with lambda through the
+whole range (band k=2-103 -> 104, high-shell excess shrinking), evidence the
+prior removes error rather than adding structure (independent algorithms,
+shared data). **Recommended default `pcg_solvent_lambda_rel=1e-1`; 3e-1 is
+the aggressive bound.** In refinement, prefer the conservative default: the
+shipped map feeds next-iteration alignment and the lag-one envelope, so rim
+erosion is the entry point of the self-reinforcing support-shrinkage feedback
+(S9) that the standalone harness cannot observe. Earlier note: the first
+its=5 sweep (pre-initialization) was transient-dominated and inconclusive --
+strength conclusions require the regularized init or converged solves (R3).
+
 ### Alignment-free prior validation harness (no new abinitio3D runs)
 
 Prior validation and strength sweeps need only a project file with a previous

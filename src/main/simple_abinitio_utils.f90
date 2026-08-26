@@ -20,6 +20,7 @@ type(lp_crop_inf), allocatable :: lpinfo(:)
 logical          :: l_srch4symaxis    = .false., l_symran = .false.
 logical          :: l_ini3D           = .false.
 logical          :: l_automsk         = .false.
+logical          :: l_automsk_off     = .false.
 logical          :: l_nonuniform      = .false.
 logical          :: l_state_continue_mode = .false.
 logical          :: l_refine3D_mode_override = .false.

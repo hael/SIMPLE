@@ -696,7 +696,9 @@ contains
         endif
         l_run_final_rec = nstages_refine3D == abinitio_nstages() .or. trim(params%multivol_mode).eq.'independent'
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
-        l_automsk = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
+        l_automsk     = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
+        ! an EXPLICIT automsk=no vetoes the pcg-backend automasking default below
+        l_automsk_off = (cline%defined('automsk') .and. trim(params%automsk).eq.'no')
         ! prepare class command lines
         call prep_class_command_lines(params, cline, params%projfile)
         ! set symmetry class variables

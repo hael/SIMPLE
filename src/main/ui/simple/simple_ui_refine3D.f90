@@ -174,9 +174,9 @@ subroutine new_automask( prgtab )
         &.false., 0.0, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
-        &'Graded solvent-flatness prior strength relative to the PCG data scale; ML replays only, requires the '//&
-        &'state-specific NU evidence envelope; 0 = off', 'strength{0}', &
-        &.false., 0.0, visibility=UI_VIS_ADVANCED, &
+        &'Graded solvent-flatness prior strength relative to the PCG data scale; applied to the ML replays '//&
+        &'whenever the state-specific NU evidence envelope is available; 0 disables', 'strength{0.1}', &
+        &.false., 0.1, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)
@@ -356,9 +356,9 @@ subroutine new_automask( prgtab )
         &.false., 2., group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
-        &'Graded solvent-flatness prior strength relative to the PCG data scale; ML replays only, requires '//&
-        &'the state-specific NU evidence envelope (automsk=yes); 0 = off', 'strength{0}', &
-        &.false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
+        &'Graded solvent-flatness prior strength relative to the PCG data scale; applied to the ML replays '//&
+        &'whenever the state-specific NU evidence envelope is available (automsk=yes); 0 disables', 'strength{0.1}', &
+        &.false., 0.1, group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, nu_refine, group="filter", &
