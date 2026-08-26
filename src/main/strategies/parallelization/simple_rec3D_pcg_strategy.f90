@@ -44,13 +44,15 @@ contains
     !! (warm-starting the ML system from noise is worse than the base
     !! solution). When no usable previous half exists, x keeps the base
     !! solution it already holds.
-    subroutine override_ml_warm_start_from_previous( params, state_here, half, x, context )
+    subroutine override_ml_warm_start_from_previous( params, state_here, half, x, context, l_found )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: state_here
         character(len=*),  intent(in)    :: half, context
         real,              intent(inout) :: x(:,:,:)
+        logical,           intent(out)   :: l_found
         type(string) :: prev_fname
         type(image)  :: prev
+        l_found = .false.
         if( state_here < 1 .or. state_here > size(params%vols) ) return
         if( len_trim(params%vols(state_here)%to_char()) == 0 ) return
         prev_fname = add2fbody(params%vols(state_here), MRC_EXT, '_'//trim(half))
@@ -66,10 +68,72 @@ contains
         call prev%mask3D_soft(params%msk_crop, backgr=0.)
         x = prev%get_rmat()
         call prev%kill
+        l_found = .true.
         write(logfhandle,'(A)') '>>> PCG ML WARM START ('//trim(context)//'/'//trim(half)//&
             &'): previous-iteration ML half map '//prev_fname%to_char()
         call prev_fname%kill
     end subroutine override_ml_warm_start_from_previous
+
+    !> Regularized initial guess for a COLD ML replay (no previous ML half
+    !! map to warm-start from: the standalone harness, the first refinement
+    !! iteration, abinitio3D stage handoffs). The documented cold-start gap
+    !! is that the regularized optimum differs from ANY unregularized map in
+    !! slowly-converging directions -- beyond-band/high-shell noise the ML
+    !! prior shrinks, solvent texture the solvent prior flattens -- so a
+    !! small iteration budget leaves the solve transient-dominated. Apply
+    !! the regularizers' expected effect to the base solution in closed form
+    !! instead: shrink each shell's amplitude by the FSC (the Wiener
+    !! shrinkage the ML prior's optimum implies; no shrinkage below the hp
+    !! no-prior limit, zero beyond the measured band), then, when a
+    !! validated solvent envelope is attached, blend the solvent domain
+    !! toward its weighted mean -- Q_s's fixed point. CG then corrects an
+    !! approximate optimum rather than constructing it. Pure initialization:
+    !! the quadratic objective has a unique optimum, so this changes the
+    !! convergence path, never the converged solution.
+    subroutine regularized_ml_initial_guess( params, fsc, m_env, l_env, x, context, half )
+        class(parameters), intent(in)    :: params
+        real,              intent(in)    :: fsc(:)
+        real, allocatable, intent(in)    :: m_env(:,:,:)
+        logical,           intent(in)    :: l_env
+        real,              intent(inout) :: x(:,:,:)
+        character(len=*),  intent(in)    :: context, half
+        type(image) :: img
+        real, allocatable :: filt(:)
+        real(dp) :: wsum, xsum
+        real     :: mu
+        integer  :: nyq, k, k_hp
+        call img%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
+        call img%set_rmat(x, .false.)
+        nyq  = img%get_filtsz()
+        k_hp = max(1, calc_fourier_index(params%hp, params%box_crop, params%smpd_crop))
+        allocate(filt(nyq), source=0.)
+        do k = 1, nyq
+            if( k <= k_hp )then
+                filt(k) = 1.0
+            else if( k <= size(fsc) )then
+                filt(k) = min(1.0, max(fsc(k), 0.0))
+            endif
+        end do
+        call img%fft()
+        call img%apply_filter(filt)
+        call img%ifft()
+        x = img%get_rmat()
+        call img%kill
+        deallocate(filt)
+        if( l_env )then
+            wsum = sum(1.0_dp - real(m_env,dp))
+            if( wsum > 0.0_dp )then
+                xsum = sum((1.0_dp - real(m_env,dp)) * real(x,dp))
+                mu   = real(xsum / wsum)
+                x    = m_env * x + (1.0 - m_env) * mu
+            endif
+            write(logfhandle,'(A)') '>>> PCG ML REGULARIZED INIT ('//trim(context)//'/'//trim(half)//&
+                &'): shell-shrunk base + envelope-flattened solvent'
+        else
+            write(logfhandle,'(A)') '>>> PCG ML REGULARIZED INIT ('//trim(context)//'/'//trim(half)//&
+                &'): shell-shrunk base'
+        endif
+    end subroutine regularized_ml_initial_guess
 
     !> Solvent-envelope loader for the graded solvent-flatness prior
     !! (pcg_priors.md S4, S6.2). Resolves the state-specific NU evidence
@@ -555,6 +619,7 @@ contains
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve, time_total
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
+            logical :: l_warm
 
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
@@ -577,7 +642,9 @@ contains
             call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
                 &prior_to_khat_l1, prior_to_khat_rms)
             x = base_volume%get_rmat()
-            call override_ml_warm_start_from_previous(params, state_here, half, x, 'shared')
+            call override_ml_warm_start_from_previous(params, state_here, half, x, 'shared', l_warm)
+            if( .not. l_warm ) call regularized_ml_initial_guess(params, fsc_here, solvent_env, &
+                &l_solvent_ready, x, 'shared', half)
             t_phase = tic()
             call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
@@ -1620,7 +1687,7 @@ contains
             real(dp) :: time_reduce, time_finalize, time_solve
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
             real :: realized_fraction, update_weight, current_scale
-            logical :: l_ml_solve, l_chain_exists, l_seed_chain
+            logical :: l_ml_solve, l_chain_exists, l_seed_chain, l_warm
 
             l_ml_solve = present(fsc_prior)
             if( l_ml_solve .neqv. present(warm_start) )then
@@ -1704,7 +1771,9 @@ contains
             endif
             if( l_ml_solve )then
                 x = warm_start%get_rmat()
-                call override_ml_warm_start_from_previous(params, state_here, half, x, 'distributed')
+                call override_ml_warm_start_from_previous(params, state_here, half, x, 'distributed', l_warm)
+                if( .not. l_warm ) call regularized_ml_initial_guess(params, fsc_prior, solvent_env, &
+                    &l_solvent_ready, x, 'distributed', half)
             else
                 allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             endif
