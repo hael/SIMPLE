@@ -117,6 +117,12 @@ contains
         call simulated_workflow%add_input(UI_PARM, 'system', 'multi', 'Embedded molecular system', &
             &'Embedded coordinates used to generate the simulated data(6vxx|1jxy)','', .true., '', &
         &choices=ui_choices([character(len=4) :: '6vxx', '1jxy']))
+        call simulated_workflow%add_input(UI_PARM, 'picker', 'multi', 'Picker under test', &
+            &'Particle picker used by the simulated workflow(segdiam|new){segdiam}','', .false., 'segdiam', &
+        &choices=ui_choices([character(len=7) :: 'segdiam', 'new']))
+        call simulated_workflow%add_input(UI_PARM, 'refpick_backend', 'multi', 'Reference-picker backend', &
+            &'Reference-picker implementation used when picker=new(legacy|optimized|compare){legacy}','', .false., 'legacy', &
+        &choices=ui_choices([character(len=9) :: 'legacy', 'optimized', 'compare']))
         ! <no additional inputs>
         !call simulated_workflow%add_input(UI_PARM, )
         ! search controls

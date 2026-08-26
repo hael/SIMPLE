@@ -13,6 +13,7 @@ public :: svd_solve, normal_solve, qr_solve, svdvar, test_eigh
 public :: trace, vabs, vector_angle_norm, vox2ang, ang2vox
 public :: sparse_eigh
 public :: hermitian_eigh, hermitian_invert, hermitian_solve
+public :: gemm_tn
 
 abstract interface
     subroutine sparse_matvec_sp_proc(ctx, x, y)
@@ -109,6 +110,14 @@ interface vabs
 end interface vabs
 
 interface
+    subroutine sgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
+        character(len=1), intent(in) :: transa, transb
+        integer(kind=4), intent(in) :: m, n, k, lda, ldb, ldc
+        real(kind=4), intent(in) :: alpha, beta
+        real(kind=4), intent(in) :: a(lda,*), b(ldb,*)
+        real(kind=4), intent(inout) :: c(ldc,*)
+    end subroutine sgemm
+
     function snrm2(n, x, incx) result(res)
         integer(kind=4), intent(in) :: n, incx
         real(kind=4), intent(in) :: x(*)
@@ -262,6 +271,18 @@ interface
 end interface
 
 contains
+
+subroutine gemm_tn(a, b, c)
+    real(kind=4), contiguous, intent(in)  :: a(:,:), b(:,:)
+    real(kind=4), contiguous, intent(out) :: c(:,:)
+    integer(kind=4) :: m, n, k
+    if( size(a,1) /= size(b,1) ) error stop 'gemm_tn: inner dimensions differ'
+    if( size(c,1) /= size(a,2) .or. size(c,2) /= size(b,2) ) error stop 'gemm_tn: output dimensions differ'
+    m = int(size(a,2), kind=4)
+    n = int(size(b,2), kind=4)
+    k = int(size(a,1), kind=4)
+    call sgemm('T', 'N', m, n, k, 1.0, a, k, b, k, 0.0, c, m)
+end subroutine gemm_tn
 
 pure function arg(vec) result(length)
     real(kind=4), intent(in) :: vec(:)

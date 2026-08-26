@@ -26,6 +26,16 @@ Branch-context files are local development memory and may describe work that is 
 - Reuse `parameters`, `cmdline`, `builder`, and existing lifecycle methods.
 - Keep workflow changes aligned with the owning UI, execution, commander, strategy, and domain layers.
 
+## Development Notes
+
+- When work needs a pre-implementation design record, create one concise,
+  living note that contains the contract, implementation plan, review findings,
+  and validation criteria.
+- Do not create parallel specification and plan documents for the same
+  development unless the user explicitly requests separate documents.
+- Update the single note as the design is reviewed and implemented; rely on Git
+  history instead of retaining redundant companion notes.
+
 ## Git and Validation
 
 - Preserve unrelated user changes.

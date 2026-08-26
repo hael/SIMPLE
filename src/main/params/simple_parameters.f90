@@ -322,6 +322,7 @@ type :: parameters
     character(len=STDLEN)     :: pickkind='gau'       !< Picking quasi-template(gau|ring|disc){gau}
     character(len=STDLEN)     :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN)     :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
+    character(len=STDLEN)     :: refpick_backend='legacy' !< reference-picker backend(legacy|optimized|compare){legacy}
     character(len=STDLEN)     :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}

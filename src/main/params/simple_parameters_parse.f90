@@ -157,6 +157,7 @@ contains
         call reg%add_char('pickkind', self%pickkind)
         call reg%add_char('pgrp', self%pgrp)
         call reg%add_char('pgrp_start', self%pgrp_start)
+        call reg%add_char('refpick_backend', self%refpick_backend)
         call reg%add_char('pca_img_ori', self%pca_img_ori)
         call reg%add_char('pca_ori_stk', self%pca_ori_stk)
         call reg%add_char('fit_phshift', self%fit_phshift)

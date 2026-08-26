@@ -455,9 +455,6 @@ subroutine exec_test_simulated_workflow( self, cline )
     character(len=*), parameter :: SUBSET_FILE     = 'random_reprojections.mrcs'
     character(len=*), parameter :: OPTIMAL_FILE    = 'optimal_movie_average.mrc'
     character(len=*), parameter :: PARAMS_FILE     = 'simulate_movie_params.txt'
-    character(len=*), parameter :: WORKFLOW_PICKER = 'segdiam'
-    ! Reference-picker alternative: comment the line above and uncomment the line below.
-    ! character(len=*), parameter :: WORKFLOW_PICKER = 'new'
     character(len=*), parameter :: PICKREFS_FILE  = 'pickrefs.mrc'
     character(len=*), parameter :: FILETAB_FILE   = 'simulated_movies.txt'
     character(len=*), parameter :: VOL_DIR        = '0_pdb2mrc'
@@ -498,7 +495,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     type(image)                         :: projection
     type(sp_project)                    :: spproj
     type(string)                        :: cwd_root, workflow_root, project_path, reproj_path, subset_path, filetab_path
-    type(string)                        :: system_name, pgrp, test_workdir, vol_file, reproj_file
+    type(string)                        :: system_name, workflow_picker, refpick_backend, pgrp, test_workdir, vol_file, reproj_file
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname
     type(string)                        :: movie_files(NMOVIES)
     character(len=XLONGSTRLEN)          :: workflow_root_path
@@ -513,6 +510,22 @@ subroutine exec_test_simulated_workflow( self, cline )
     if( .not. cline%defined('system') ) THROW_HARD('The system keyword is required; expected 6vxx or 1jxy')
     system_name = cline%get_carg('system')
     system_name = lowercase(system_name%to_char())
+    workflow_picker = 'segdiam'
+    if( cline%defined('picker') ) workflow_picker = cline%get_carg('picker')
+    workflow_picker = lowercase(workflow_picker%to_char())
+    refpick_backend = 'legacy'
+    if( cline%defined('refpick_backend') ) refpick_backend = cline%get_carg('refpick_backend')
+    refpick_backend = lowercase(refpick_backend%to_char())
+    select case(workflow_picker%to_char())
+        case('segdiam','new')
+        case default
+            THROW_HARD('Simulated workflow picker must be segdiam or new')
+    end select
+    select case(refpick_backend%to_char())
+        case('legacy','optimized','compare')
+        case default
+            THROW_HARD('Invalid simulated workflow refpick_backend')
+    end select
     select case(system_name%to_char())
         case('6vxx')
             vol_file    = '6VXX.mrc'
@@ -677,12 +690,12 @@ subroutine exec_test_simulated_workflow( self, cline )
     call update_project_path
     call return_to_stage_root('ctf_estimate')
 
-    write(logfhandle,'(a,a)') '>>> Step 7: particle picking with ', WORKFLOW_PICKER
+    write(logfhandle,'(a,a)') '>>> Step 7: particle picking with ', workflow_picker%to_char()
     call cline_pick%set('prg',                            'pick')
     call cline_pick%set('projfile',                 project_path)
     call cline_pick%set('mkdir',                           'yes')
     call cline_pick%set('pcontrast',                     'black')
-    select case(WORKFLOW_PICKER)
+    select case(workflow_picker%to_char())
         case('segdiam')
             call cline_pick%set('picker',              'segdiam')
             call cline_pick%set('moldiam_max',           MSKDIAM)
@@ -691,14 +704,15 @@ subroutine exec_test_simulated_workflow( self, cline )
             call cline_pick%set('pickrefs',          reproj_path)
             call cline_pick%set('moldiam',               MSKDIAM)
             call cline_pick%set('pick_roi',                 'no')
+            call cline_pick%set('refpick_backend', refpick_backend)
         case default
-            THROW_HARD('Unsupported simulated-workflow picker: '//WORKFLOW_PICKER)
+            THROW_HARD('Unsupported simulated-workflow picker')
     end select
     call cline_pick%set('nparts',                              1)
     call cline_pick%set('nthr',                             NTHR)
     call xpick%execute(cline_pick)
     call cline_pick%kill()
-    if( WORKFLOW_PICKER == 'new' )then
+    if( workflow_picker%to_char() == 'new' )then
         if( .not. file_exists(PICKREFS_FILE) ) THROW_HARD('Picking references were not generated')
         call find_ldim_nptcls(string(PICKREFS_FILE), ldim, npickrefs)
         pickref_smpd = find_img_smpd(string(PICKREFS_FILE))

@@ -1142,6 +1142,7 @@ contains
             call cline_reference_picking%set('nthr',                                    8)
             call cline_reference_picking%set('mkdir',                               'yes')
             call cline_reference_picking%set('nparts',                                  8)
+            call cline_reference_picking%set('refpick_backend',    params%refpick_backend)
             if( l_existing_pickrefs ) then
                 call cline_reference_picking%set('pickrefs',              params%pickrefs)
             else
