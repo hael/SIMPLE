@@ -2450,7 +2450,8 @@ subroutine exec_test_rec3D_backends( self, cline )
     use simple_commanders_rec,  only: commander_rec3D
     use simple_image,           only: image
     use simple_sp_project,      only: sp_project
-    use simple_refine3D_fnames, only: refine3D_state_vol_fname, refine3D_state_vol_fbody
+    use simple_refine3D_fnames, only: refine3D_state_vol_fname, refine3D_state_vol_fbody, &
+        &refine3D_state_halfvol_fname
     use simple_gridding,        only: kb_stencil_envelope_1d
     class(commander_test_rec3D_backends), intent(inout) :: self
     class(cmdline),                       intent(inout) :: cline
@@ -2548,6 +2549,20 @@ subroutine exec_test_rec3D_backends( self, cline )
         vol_fname = refine3D_state_vol_fname(state)
         if( .not. file_exists(vol_fname) )then
             THROW_HARD('reconstruct3D ('//trim(BACKENDS(ib))//') did not produce '//vol_fname%to_char())
+        endif
+        ! Diagnostic half-pair FSCs, per backend. The base (_unfil) pair
+        ! carries the workflow's resolution meaning; the shipped pair is
+        ! regularized (ML, and any priors on the pcg leg) with the SAME
+        ! regularizers on both halves, so its FSC is inflated by shared
+        ! regularization -- reported to SEE that effect, never as a
+        ! resolution claim.
+        if( cline%defined('ml_reg') )then
+            if( cline%get_carg('ml_reg') .eq. 'yes' )then
+                call report_pair_fsc(BACKENDS(ib), .true.,  'base (_unfil)  ')
+                call report_pair_fsc(BACKENDS(ib), .false., 'shipped (regul)')
+                if( ib == 2 ) write(logfhandle,'(a)') &
+                    &'    (shipped-pair FSC shares regularization between halves; diagnostic only)'
+            endif
         endif
         out_fnames(ib) = refine3D_state_vol_fbody(state)//'_'//trim(BACKENDS(ib))//MRC_EXT
         call simple_rename(vol_fname, out_fnames(ib), overwrite=.true.)
@@ -2963,6 +2978,52 @@ subroutine exec_test_rec3D_backends( self, cline )
         !> compact real token for the execution-directory name: plain decimal
         !! with trailing zeros stripped in the human range, scientific outside
         !! it (real2str_trim's F0.1 renders 1e-3 as '.0')
+        !> Diagnostic FSC of a written half pair (soft spherical mask, same
+        !! resolution readout as the production FSC path)
+        subroutine report_pair_fsc( backend, l_unfil, label )
+            character(len=*), intent(in) :: backend, label
+            logical,          intent(in) :: l_unfil
+            type(image)  :: he, ho
+            type(string) :: fe, fo
+            real, allocatable :: corrs(:), res_h(:)
+            integer :: ldim_h(3), nvols, nyq
+            real    :: smpd_h, r05, r0143, mskrad_h
+            fe = refine3D_state_halfvol_fname(state, 'even', unfil=l_unfil)
+            fo = refine3D_state_halfvol_fname(state, 'odd',  unfil=l_unfil)
+            if( .not. (file_exists(fe) .and. file_exists(fo)) )then
+                call fe%kill
+                call fo%kill
+                return
+            endif
+            call find_ldim_nptcls(fe, ldim_h, nvols)
+            smpd_h = smpd * real(box) / real(ldim_h(1))
+            call he%new(ldim_h, smpd_h)
+            call he%read(fe)
+            call ho%new(ldim_h, smpd_h)
+            call ho%read(fo)
+            mskrad_h = 0.5 * cline%get_rarg('mskdiam') / smpd_h
+            call he%mask3D_soft(mskrad_h, backgr=0.0)
+            call ho%mask3D_soft(mskrad_h, backgr=0.0)
+            ! fsc reads cmat: transform explicitly (the production path gets
+            ! this implicitly from the preceding cFAR computation)
+            call he%fft()
+            call ho%fft()
+            nyq = he%get_filtsz()
+            allocate(corrs(nyq), source=0.0)
+            call he%fsc(ho, corrs)
+            res_h = he%get_res()
+            call get_resolution(corrs, res_h, r05, r0143)
+            r05   = max(r05,   2.0*smpd_h)
+            r0143 = max(r0143, 2.0*smpd_h)
+            write(logfhandle,'(a,F8.3,a,F8.3)') '>>> REC3D BACKENDS: '//trim(backend)//' '//label//&
+                &' half-pair FSC=0.500 at ', r05, '  FSC=0.143 at ', r0143
+            call he%kill
+            call ho%kill
+            call fe%kill
+            call fo%kill
+            deallocate(corrs, res_h)
+        end subroutine report_pair_fsc
+
         function real_tok( x ) result( tok )
             real, intent(in) :: x
             character(len=:), allocatable :: tok
