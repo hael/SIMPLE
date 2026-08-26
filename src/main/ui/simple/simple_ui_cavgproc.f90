@@ -84,6 +84,8 @@ subroutine new_cluster_cavgs( prgtab )
         ! parameter input/output
         call model_cavgs_rejection%add_input(UI_PARM, quality_mode, &
         &visibility=UI_VIS_ADVANCED)
+        call model_cavgs_rejection%add_input(UI_PARM, score_states, &
+        &visibility=UI_VIS_ADVANCED)
         call model_cavgs_rejection%add_input(UI_PARM, quality_model, &
             activation=ui_activation_equals_any('quality_mode', &
             &[character(len=8) :: 'apply', 'analyze', 'evaluate']), &

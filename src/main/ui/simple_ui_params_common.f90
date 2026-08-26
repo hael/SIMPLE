@@ -149,6 +149,7 @@ type(ui_param) :: ptcl_src
 type(ui_param) :: remap_cls
 type(ui_param) :: remove_chunks
 type(ui_param) :: script
+type(ui_param) :: score_states
 type(ui_param) :: skip_rejection
 type(ui_param) :: sherr
 type(ui_param) :: sigma
@@ -765,6 +766,11 @@ subroutine set_ui_params
 
     call script%set_param(         'script',          'binary', 'Generate script for shared-mem exec on cluster', &
                                    'Generate script for shared-mem exec on cluster(yes|no){no}','', .false., 'no', &
+    &choices=ui_choices([character(len=3) :: 'yes', 'no']))
+
+    call score_states%set_param(   'score_states',    'binary', 'Score cls3D state groups', &
+                                   'Report quality-score statistics by cls3D state for every built-in model'//&
+                                   '(yes|no){no}','', .false., 'no', &
     &choices=ui_choices([character(len=3) :: 'yes', 'no']))
 
     call skip_rejection%set_param( 'skip_rejection',  'binary', 'Skip class-average rejection', &

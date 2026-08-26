@@ -21,6 +21,7 @@ private
 public :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT
 public :: CAVG_QUALITY_MODEL_SIEVE_DEFAULT
 public :: CAVG_QUALITY_MODEL_POOL_DEFAULT
+public :: CAVG_QUALITY_BUILTIN_MODELS
 public :: cavg_quality_model
 public :: cavg_quality_model_spec
 ! Internal compatibility cache for the retired score-and-cluster code path.
@@ -58,10 +59,13 @@ type :: cavg_quality_cached_decision
 end type cavg_quality_cached_decision
 
 ! Built-in presets are complete model specifications. To promote a learned
-! model into the code, add a named preset and include it in builtin_names.
+! model into the code, add a named preset and include it in both public and
+! printable built-in model inventories below.
 character(len=*), parameter :: CAVG_QUALITY_MODEL_CHUNK_DEFAULT = 'chunk100mics'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_SIEVE_DEFAULT = 'sieve'
 character(len=*), parameter :: CAVG_QUALITY_MODEL_POOL_DEFAULT  = 'pool'
+character(len=64), parameter :: CAVG_QUALITY_BUILTIN_MODELS(3) = [character(len=64) :: &
+    CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_MODEL_SIEVE_DEFAULT, CAVG_QUALITY_MODEL_POOL_DEFAULT]
 character(len=*), parameter :: BUILTIN_MODEL_NAMES = CAVG_QUALITY_MODEL_CHUNK_DEFAULT // '|' // &
     CAVG_QUALITY_MODEL_SIEVE_DEFAULT // '|' // CAVG_QUALITY_MODEL_POOL_DEFAULT
 
@@ -824,7 +828,7 @@ contains
         write(funit,'(A,A,A,A,A)') 'character(len=*), parameter :: ', trim(const_name), ' = ', &
             trim(fortran_quote(model%name)), ''
         write(funit,'(A)') ''
-        write(funit,'(A)') '! 2. Append this name to BUILTIN_MODEL_NAMES:'
+        write(funit,'(A)') '! 2. Append this name to CAVG_QUALITY_BUILTIN_MODELS and BUILTIN_MODEL_NAMES:'
         write(funit,'(A,A)') '!     //''|''//', trim(const_name)
         write(funit,'(A)') ''
         write(funit,'(A)') '! 3. Add this case in builtin_spec:'

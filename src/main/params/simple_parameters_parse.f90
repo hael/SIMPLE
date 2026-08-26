@@ -207,6 +207,7 @@ contains
         call reg%add_char('ring', self%ring)
         call reg%add_char('roavg', self%roavg)
         call reg%add_char('script', self%script)
+        call reg%add_char('score_states', self%score_states)
         call reg%add_char('sgd', self%sgd)
         call reg%add_char('sgd_diagnostic', self%sgd_diagnostic_mode)
         call reg%add_char('sgd_path', self%sgd_path)

@@ -4,8 +4,8 @@ use simple_commanders_api
 use simple_cavg_quality_analysis, only: evaluate_cavg_quality, evaluate_cavg_quality_for_analysis, &
     write_cavg_quality_training_table, write_cavg_quality_feature_table
 use simple_cavg_quality_learn,    only: evaluate_cavg_quality_model, evaluate_cavg_quality_result, learn_cavg_quality_model
-use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, cavg_quality_model, &
-    write_cavg_quality_model_builtin_code
+use simple_cavg_quality_model,    only: CAVG_QUALITY_MODEL_CHUNK_DEFAULT, CAVG_QUALITY_BUILTIN_MODELS, &
+    cavg_quality_model, write_cavg_quality_model_builtin_code
 use simple_cavg_quality_relations, only: cavg_quality_relation_analysis
 use simple_cavg_quality_types,    only: CAVG_RELATIONAL_DEFAULT_KNN, CAVG_RELATIONAL_DEFAULT_CORR_HP, &
     CAVG_RELATIONAL_DEFAULT_CORR_LP, CAVG_RELATIONAL_DEFAULT_CORR_TRS, cavg_quality_result
@@ -512,6 +512,10 @@ contains
             case default
                 THROW_HARD('model_cavgs_rejection: quality_mode must be apply, analyze, learn, evaluate or promote')
         end select
+        if( trim(params%score_states) == 'yes' )then
+            call score_cls3d_state_groups()
+            return
+        endif
         if( quality_mode == QUALITY_MODE_LEARN )then
             if( .not. cline%defined('filetab') ) THROW_HARD('model_cavgs_rejection quality_mode=learn requires filetab')
             if( cline%defined('infile') ) &
@@ -642,6 +646,113 @@ contains
             verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
 
     contains
+
+        subroutine score_cls3d_state_groups()
+            type(cavg_quality_model)             :: state_model
+            type(cavg_quality_result)            :: state_quality
+            type(cavg_quality_relation_analysis) :: state_relation
+            type(stats_struct)                   :: score_stats
+            integer, allocatable :: cls3d_states(:)
+            real,    allocatable :: state_scores(:)
+            integer :: imodel, istate, icls, ncls3d, nstates, nstate_cls, nscored, nhard_rejected, funit
+            character(len=*), parameter :: STATE_SCORE_FNAME = 'cavgs_quality_state_scores.txt'
+
+            if( trim(params%projfile%to_char()) == '' ) &
+                THROW_HARD('model_cavgs_rejection score_states=yes requires projfile')
+            if( .not. cline%defined('mskdiam') ) &
+                THROW_HARD('model_cavgs_rejection score_states=yes requires mskdiam')
+            call spproj%read(params%projfile)
+            ncls = spproj%os_cls2D%get_noris()
+            if( ncls == 0 ) THROW_HARD('model_cavgs_rejection score_states=yes: project has no cls2D entries')
+            ncls3d = spproj%os_cls3D%get_noris()
+            if( ncls3d /= ncls ) &
+                THROW_HARD('model_cavgs_rejection score_states=yes requires matching cls2D and cls3D counts')
+            do icls = 1, ncls3d
+                if( .not. spproj%os_cls3D%isthere(icls, 'state') ) &
+                    THROW_HARD('model_cavgs_rejection score_states=yes requires cls3D state for every class')
+            enddo
+            cls3d_states = spproj%os_cls3D%get_all_asint('state')
+            if( any(cls3d_states < 0) ) &
+                THROW_HARD('model_cavgs_rejection score_states=yes requires nonnegative cls3D states')
+            nstates = maxval(cls3d_states)
+            if( nstates < 1 ) &
+                THROW_HARD('model_cavgs_rejection score_states=yes requires at least one positive cls3D state')
+            call spproj%get_cavgs_stk(stkname, ncls, smpd)
+            cavg_imgs = read_cavgs_into_imgarr(spproj)
+            if( size(cavg_imgs) /= ncls ) &
+                THROW_HARD('model_cavgs_rejection score_states=yes: # cavgs /= # cls2D entries')
+
+            open(newunit=funit, file=STATE_SCORE_FNAME, status='replace', action='write')
+            write(funit,'(A)') '# model_cavgs_rejection cls3D state score summary'
+            write(funit,'(A,A)') '# project=', trim(params%projfile%to_char())
+            write(funit,'(A,I0)') '# n_classes=', ncls
+            write(funit,'(A,I0)') '# nstates=', nstates
+            write(funit,'(A)') 'model,context,state,nclasses,nscored,nhard_rejected,mean,median,sdev,min,max'
+            do imodel = 1, size(CAVG_QUALITY_BUILTIN_MODELS)
+                call state_model%init_preset(CAVG_QUALITY_BUILTIN_MODELS(imodel))
+                call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, state_quality, &
+                    state_model, params, state_relation)
+                if( .not. allocated(state_quality%hard_reject) ) &
+                    THROW_HARD('model_cavgs_rejection score_states=yes: model returned no hard-reject mask')
+                if( size(state_quality%hard_reject) /= ncls ) &
+                    THROW_HARD('model_cavgs_rejection score_states=yes: hard-reject mask size mismatch')
+                write(logfhandle,'(A)') ''
+                write(logfhandle,'(A,A,A,A,A)') '>>> CAVG QUALITY STATE SCORE SUMMARY: ', trim(state_model%name), &
+                    ' (', trim(state_model%context), ')'
+                if( count(.not. state_quality%hard_reject) == 0 ) &
+                    write(logfhandle,'(A)') '    No class averages passed this model context''s hard gates; score statistics are NA'
+                write(logfhandle,'(A)') &
+                    '    State  Classes   Scored  Hard-rej      Mean    Median      Sdev       Min       Max'
+                do istate = 0, nstates
+                    nstate_cls = count(cls3d_states == istate)
+                    nhard_rejected = count(cls3d_states == istate .and. state_quality%hard_reject)
+                    nscored = nstate_cls - nhard_rejected
+                    if( nstate_cls == 0 )then
+                        write(funit,'(A,A,A,A,I0,A)') trim(state_model%name), ',', trim(state_model%context), &
+                            ',', istate, ',0,0,0,NA,NA,NA,NA,NA'
+                        write(logfhandle,'(I9,I9,A)') istate, nstate_cls, '        no class averages'
+                        cycle
+                    endif
+                    if( nscored == 0 )then
+                        write(funit,'(A,A,A,A,I0,A,I0,A,I0,A,I0,A)') trim(state_model%name), ',', &
+                            trim(state_model%context), ',', istate, ',', nstate_cls, ',', nscored, ',', &
+                            nhard_rejected, ',NA,NA,NA,NA,NA'
+                        write(logfhandle,'(4I9,A)') istate, nstate_cls, nscored, nhard_rejected, &
+                            '        all class averages hard rejected'
+                        cycle
+                    endif
+                    state_scores = pack(state_quality%scores, &
+                        cls3d_states == istate .and. .not. state_quality%hard_reject)
+                    if( nscored == 1 )then
+                        score_stats%avg  = state_scores(1)
+                        score_stats%med  = state_scores(1)
+                        score_stats%sdev = 0.0
+                        score_stats%minv = state_scores(1)
+                        score_stats%maxv = state_scores(1)
+                    else
+                        call calc_stats(state_scores, score_stats)
+                    endif
+                    write(funit,'(A,A,A,A,I0,A,I0,A,I0,A,I0,5(A,ES14.6))') trim(state_model%name), ',', &
+                        trim(state_model%context), ',', istate, ',', nstate_cls, ',', nscored, ',', &
+                        nhard_rejected, ',', score_stats%avg, ',', score_stats%med, ',', score_stats%sdev, ',', &
+                        score_stats%minv, ',', score_stats%maxv
+                    write(logfhandle,'(4I9,5F10.4)') istate, nstate_cls, nscored, nhard_rejected, &
+                        score_stats%avg, score_stats%med, score_stats%sdev, score_stats%minv, score_stats%maxv
+                    deallocate(state_scores)
+                enddo
+                call state_relation%kill()
+                call state_quality%kill()
+                call state_model%kill()
+            enddo
+            close(funit)
+            write(logfhandle,'(A,A)') '>>> WROTE ', STATE_SCORE_FNAME
+            write(logfhandle,'(A)') '>>> SCORE_STATES MODE: project and class-average selections left unchanged'
+            call spproj%kill()
+            call dealloc_imgarr(cavg_imgs)
+            if( allocated(cls3d_states) ) deallocate(cls3d_states)
+            call simple_end('**** SIMPLE_MODEL_CAVGS_REJECTION SCORE STATES NORMAL STOP ****', &
+                verbose_exit=trim(params%verbose_exit) == 'yes', verbose_exit_fname=params%verbose_exit_fname)
+        end subroutine score_cls3d_state_groups
 
         subroutine annotate_project()
             integer :: icls, ncls3d

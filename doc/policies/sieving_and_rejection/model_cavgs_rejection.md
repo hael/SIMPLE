@@ -135,6 +135,18 @@ Learn mode reports feature signal, feature-drop diagnostics, and leave-one-datas
 
 `quality_mode=promote` reads a model file from `infile=`, preserves its context, and writes a Fortran promotion snippet controlled by `fname=`.
 
+`score_states=yes` is a default-off diagnostic path for project-backed runs. It requires the default
+`quality_mode=apply`, `projfile`, `mskdiam`, matching `cls2D` and `cls3D` class counts, and a nonnegative
+`state` assignment on every `cls3D` row with at least one positive state ID. It evaluates every built-in
+quality model in the model's own hard-gate context and groups the surviving model scores by `cls3D`
+state ID from zero through the maximum assigned state. The command writes
+`cavgs_quality_state_scores.txt` with the total, scored, and hard-rejected class counts plus mean,
+median, sample standard deviation, minimum, and maximum score for each model/state pair. Empty state
+groups and groups for which no class average passes the model's hard gates are retained in the report
+with `NA` score statistics. This path does not write class-average stacks, map selections into particles,
+annotate or write the project, or prune particles. It rejects model overrides because its purpose is to
+compare all built-in models on the same state assignment.
+
 `apply` and `analyze` require `projfile` and `mskdiam`. `learn` requires `filetab`. `evaluate` requires either `filetab` or `projfile` plus `mskdiam`. `promote` requires `infile`. The commander sets `oritype=cls2D`, defaults `mkdir=yes`, and defaults `prune=no`.
 
 For `apply`, `analyze`, and project-backed `evaluate`, the command uses `chunk100mics` unless `quality_model` or `infile` is supplied. `infile` is the external model input; `fname` is output-only and is rejected in apply or analyze mode. Apply and evaluate do not accept `quality_context`: the complete internal or external model artifact supplies its context, that context selects the hard gates, and surviving rows are scored by the same model. Analyze is the only mode that accepts an explicit context because it owns generation of a context-tagged training table. Runtime output reports the model name, built-in or external source, model context, effective hard-gate context, and context source. Saved-analysis `evaluate filetab=...` runs do not write image stacks because they do not load a project or class-average stack; they reuse the saved gate masks while preserving the evaluated model's artifact context.

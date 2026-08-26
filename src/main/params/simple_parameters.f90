@@ -155,6 +155,7 @@ type :: parameters
     character(len=3)          :: transp_pca='no'
     character(len=3)          :: trust_header='no'    !< whether to trust the header information in the input files(yes|no){no}
     character(len=3)          :: script='no'          !< do not execute but generate a script for submission to the queue
+    character(len=3)          :: score_states='no'    !< report quality-model scores grouped by cls3D state(yes|no){no}
     character(len=3)          :: sgd='no'             !< internal stream child flag(yes|no){no}
     character(len=3)          :: sgd_diagnostic_mode='no' !< emit SGD diagnostic and safety logs(yes|no){no}
     character(len=3)          :: single_pass='no'     !< only run coarse pass of sieving(yes|no){no}

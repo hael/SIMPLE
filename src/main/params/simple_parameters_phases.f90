@@ -950,6 +950,20 @@ contains
                 THROW_HARD('Unsupported ptcl_src='//trim(self%ptcl_src)//'; expected raw|den')
         end select
         if( trim(self%prg%to_char()) == 'model_cavgs_rejection' )then
+            select case(trim(self%score_states))
+                case('yes','no')
+                case DEFAULT
+                    THROW_HARD('model_cavgs_rejection score_states must be yes or no')
+            end select
+            if( trim(self%score_states) == 'yes' )then
+                if( trim(self%quality_mode) /= 'apply' ) &
+                    THROW_HARD('model_cavgs_rejection score_states=yes requires quality_mode=apply')
+                if( cline%defined('quality_model') .or. cline%defined('infile') .or. &
+                    cline%defined('quality_context') .or. cline%defined('filetab') .or. cline%defined('fname') ) &
+                    THROW_HARD('model_cavgs_rejection score_states=yes scores all built-in models and accepts no model overrides')
+                if( trim(self%prune) == 'yes' ) &
+                    THROW_HARD('model_cavgs_rejection score_states=yes does not support prune=yes')
+            endif
             select case(trim(self%quality_mode))
                 case('apply')
                     if( cline%defined('fname') ) &
