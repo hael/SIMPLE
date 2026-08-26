@@ -58,8 +58,6 @@ subroutine new_check_refpick( prgtab )
         &visibility=UI_VIS_DEVELOPER)
         call check_refpick%add_input(UI_SRCH, particle_density, &
         &visibility=UI_VIS_DEVELOPER)
-        call check_refpick%add_input(UI_SRCH, refpick_backend, &
-        &visibility=UI_VIS_DEVELOPER)
         call check_refpick%add_input(UI_SRCH, dfmin, &
         &visibility=UI_VIS_DEVELOPER)
         call check_refpick%add_input(UI_SRCH, dfmax, &

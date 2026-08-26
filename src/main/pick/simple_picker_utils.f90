@@ -47,14 +47,14 @@ contains
         call read_mic_raw_pickref(micname, smpd, subtr_backgr=l_backgr_subtr)
         if( present(nboxes_max) )then
             call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, &
-                &offset=OFFSET, roi=l_roi, nboxes_max=nboxes_max, thres=params%thres, backend=params%refpick_backend)
+                &offset=OFFSET, roi=l_roi, nboxes_max=nboxes_max, thres=params%thres)
             call refp_refine%new(params%pcontrast, params%particle_density, SMPD_SHRINK2, pickrefs, &
-                &offset=1, nboxes_max=nboxes_max, thres=params%thres, backend=params%refpick_backend)
+                &offset=1, nboxes_max=nboxes_max, thres=params%thres)
         else
             call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, &
-                &offset=OFFSET, roi=l_roi, thres=params%thres, backend=params%refpick_backend)
+                &offset=OFFSET, roi=l_roi, thres=params%thres)
             call refp_refine%new(params%pcontrast, params%particle_density, SMPD_SHRINK2, pickrefs, &
-                &offset=1, thres=params%thres, backend=params%refpick_backend)
+                &offset=1, thres=params%thres)
         endif
         call refp%refpick(refp_refine)
         ! write
@@ -235,11 +235,12 @@ contains
                 call pickrefs(1)%gauimg2D(sig, sig)
                 ! pick
                 if( present(nboxes_max) )then
-                    call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, nboxes_max=params%nboxes_max, backend=params%refpick_backend)
+                    call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, &
+                        &offset=OFFSET, roi=l_roi, nboxes_max=params%nboxes_max)
                 else
-                    call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, backend=params%refpick_backend)
+                    call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi)
                 endif
-                call comprefp_refine(i)%new(params%pcontrast, params%particle_density, SMPD_SHRINK2, pickrefs, offset=1, backend=params%refpick_backend)
+                call comprefp_refine(i)%new(params%pcontrast, params%particle_density, SMPD_SHRINK2, pickrefs, offset=1)
                 call refp%refpick(comprefp_refine(i))
             enddo
             ! merge
@@ -255,11 +256,12 @@ contains
         else
             ! Standard picking
             if( present(nboxes_max) )then
-                call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, nboxes_max=params%nboxes_max, backend=params%refpick_backend)
+                call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, &
+                    &offset=OFFSET, roi=l_roi, nboxes_max=params%nboxes_max)
             else
-                call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi, backend=params%refpick_backend)
+                call refp%new(params%pcontrast, params%particle_density, SMPD_SHRINK1, pickrefs, offset=OFFSET, roi=l_roi)
             endif
-            call refp_refine%new(params%pcontrast, params%particle_density, SMPD_SHRINK2, pickrefs, offset=1, backend=params%refpick_backend)
+            call refp_refine%new(params%pcontrast, params%particle_density, SMPD_SHRINK2, pickrefs, offset=1)
             call refp%refpick(refp_refine)
             ! Output
             maxdiam = (1.0 + BOX_EXP_FAC ) * refp%get_maxdiam()

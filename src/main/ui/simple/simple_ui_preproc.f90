@@ -375,8 +375,6 @@ subroutine new_assign_optics_groups( prgtab )
         &visibility=UI_VIS_ADVANCED)
         call pick%add_input(UI_SRCH, particle_density, group="picking", &
         &visibility=UI_VIS_ADVANCED)
-        call pick%add_input(UI_SRCH, refpick_backend, group="picking", &
-        &visibility=UI_VIS_DEVELOPER)
         call pick%add_input(UI_SRCH, 'winsz', 'num', 'Window size for sauvola', 'Window size for local sauvola binarisation', 'winsz in pixels ', .false., 32., &
         &visibility=UI_VIS_ADVANCED)
         call pick%add_input(UI_SRCH, nboxes_max, group="picking", &

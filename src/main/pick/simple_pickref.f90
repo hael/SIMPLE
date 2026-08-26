@@ -4,7 +4,6 @@ use simple_core_module_api
 use simple_image,      only: image
 use simple_segmentation
 use simple_pickref_corr_batch, only: pickref_corr_batch
-use simple_timer_omp, only: tic_omp, toc_omp
 implicit none
 
 public :: read_mic_raw_pickref, pickref, multiref_merge
@@ -12,11 +11,8 @@ private
 #include "simple_local_flags.inc"
 
 ! class constants
-real,    parameter :: NDEV_DEFAULT = 2.5
 real,    parameter :: MSKDIAM2LP = 0.15, LP_LB = 30., LP_UB = 15.
 integer, parameter :: OFFSET_DEFAULT = 3
-logical, parameter :: L_WRITE  = .false.
-logical, parameter :: L_DEBUG  = .false.
 
 ! class variables
 integer     :: ldim_raw(3)
@@ -27,13 +23,11 @@ type(image) :: mic_raw
 type pickref
     private
     ! control parameters
-    real                     :: smpd_shrink = 0., maxdiam = 0., sxx = 0., t = 0., ndev = 0.
+    real                     :: smpd_shrink = 0., maxdiam = 0., t = 0.
     real                     :: dist_thres  = 0.
-    real(dp)                 :: benchmark_legacy_seconds = 0.0_dp, benchmark_optimized_seconds = 0.0_dp
     integer                  :: ldim(3), ldim_box(3), ldim_raw_box(3), nboxes = 0, nboxes_ub = 0, nx = 0, ny = 0
     integer                  :: nx_offset = 0, ny_offset = 0, npeaks = 0, nrefs = 0, offset = 0, offset_ub = 0
     integer                  :: peak_thres_level = 2, nboxes_max = 0
-    character(len=16)        :: backend = 'legacy'
     ! peak stats
     real                     :: smd_corr = 0., ksstat_corr = 0., prob_corr = 0.
     real                     :: a_corr_peak = 0., s_corr_peak = 0., a_corr_nonpeak = 0., s_corr_nonpeak = 0.
@@ -44,8 +38,8 @@ type pickref
     logical,     allocatable :: l_mic_mask(:,:), l_err_refs(:)
     ! indices
     integer,     allocatable :: positions(:,:), inds_offset(:,:)
-    ! scores & local standard deviations
-    real,        allocatable :: box_scores(:,:), box_scores_mem(:,:), loc_sdevs(:,:), loc_sdevs_mem(:,:)
+    ! scores
+    real,        allocatable :: box_scores(:,:), box_scores_mem(:,:)
     ! flags
     logical                  :: l_black_ptcls_input = .true.
     logical                  :: l_roi               = .false.
@@ -55,17 +49,11 @@ contains
     procedure          :: refpick
     procedure, private :: setup_iterators
     procedure, private :: match_boximgs
-    procedure, private :: match_boximgs_legacy
-    procedure, private :: match_boximgs_optimized
     procedure, private :: detect_peaks
     procedure, private :: limit_nboxes
     procedure, private :: distance_filter
-    procedure, private :: distance_filter_legacy
-    procedure, private :: distance_filter_optimized
-    procedure, private :: remove_outliers
     procedure, private :: peak_vs_nonpeak_stats
     procedure          :: get_positions
-    procedure          :: get_loc_sdevs
     procedure          :: get_scores
     procedure          :: get_nboxes
     procedure          :: get_box
@@ -74,9 +62,6 @@ contains
     procedure          :: report_thumb_den
     procedure          :: report_boxfile
     procedure, private :: refine_upscaled
-    procedure, private :: refine_upscaled_legacy
-    procedure, private :: refine_upscaled_optimized
-    procedure, private :: report_compare_benchmark
     procedure          :: kill
 end type
 
@@ -120,11 +105,8 @@ contains
         call self%detect_peaks
         if( self%npeaks == 0 )then
             if( present(self_refine) ) self_refine%npeaks = 0
-            call self%report_compare_benchmark
             return
         endif
-        ! disabled for now. This needs to be done in a more global fashion, not per-micrograph
-        ! call self%remove_outliers
         call self%peak_vs_nonpeak_stats
         if( present(self_refine) )then
             call self%get_positions(pos, self_refine%smpd_shrink)
@@ -133,35 +115,21 @@ contains
             call self_refine%distance_filter
             call self_refine%limit_nboxes
             deallocate(pos)
-            call self%report_compare_benchmark(self_refine)
-        else
-            call self%report_compare_benchmark
         endif
     end subroutine refpick
 
-    subroutine new( self, pcontrast, pdensity, smpd_shrink, imgs, offset, ndev, roi, nboxes_max, thres, backend )
+    subroutine new( self, pcontrast, pdensity, smpd_shrink, imgs, offset, roi, nboxes_max, thres )
         class(pickref),    intent(inout) :: self
         character(len=*),  intent(in)    :: pcontrast, pdensity
         real,              intent(in)    :: smpd_shrink
         class(image),      intent(inout) :: imgs(:)
         integer, optional, intent(in)    :: offset
-        real,    optional, intent(in)    :: ndev    !< # std devs for outlier detection
         real,    optional, intent(in)    :: thres   !< distance threshold in A for peak separation
         logical, optional, intent(in)    :: roi
         integer, optional, intent(in)    :: nboxes_max
-        character(len=*), optional, intent(in) :: backend
         real    :: scale, lp, threshold
         integer :: iref, box
         if( self%exists ) call self%kill
-        self%benchmark_legacy_seconds = 0.0_dp
-        self%benchmark_optimized_seconds = 0.0_dp
-        self%backend = 'legacy'
-        if( present(backend) ) self%backend = lowercase(trim(backend))
-        select case(trim(self%backend))
-            case('legacy','optimized','compare')
-            case DEFAULT
-                THROW_HARD('Unsupported reference-picker backend')
-        end select
         self%l_roi = .false.
         if( present(roi) ) self%l_roi = roi
         threshold = 0.0
@@ -218,9 +186,6 @@ contains
             case DEFAULT
                 THROW_HARD('Unsupported particle density level')
         end select
-        ! set ndev
-        self%ndev = NDEV_DEFAULT
-        if( present(ndev) ) self%ndev = ndev
         ! set offset
         self%offset = OFFSET_DEFAULT
         if( present(offset) ) self%offset = offset
@@ -271,12 +236,7 @@ contains
             self%ny_offset = 0
             do yind = 0,self%ny,self%offset
                 self%ny_offset = self%ny_offset + 1
-                if( trim(self%backend) == 'optimized' )then
-                    if( self%l_mic_mask(xind+1,yind+1) ) self%nboxes = self%nboxes + 1
-                else
-                    self%nboxes = self%nboxes + 1
-                    if( self%l_mic_mask(xind+1,yind+1) ) self%nboxes = self%nboxes + 1
-                endif
+                if( self%l_mic_mask(xind+1,yind+1) ) self%nboxes = self%nboxes + 1
             end do
         end do
         ! count # boxes, upper bound
@@ -308,111 +268,9 @@ contains
         ! allocate box_scores
         if( allocated(self%box_scores) ) deallocate(self%box_scores)
         allocate(self%box_scores(self%nx_offset,self%ny_offset), source = -1.)
-        ! allocate loc_sdevs
-        if( allocated(self%loc_sdevs) ) deallocate(self%loc_sdevs)
-        if( trim(self%backend) /= 'optimized' ) allocate(self%loc_sdevs(self%nx_offset,self%ny_offset), source=-1.)
     end subroutine setup_iterators
 
     subroutine match_boximgs( self )
-        class(pickref), intent(inout) :: self
-        real, allocatable :: legacy_scores(:,:), legacy_scores_mem(:,:)
-        real :: maxerr, rmserr
-        real(dp) :: t0, legacy_seconds, optimized_seconds
-        logical, allocatable :: mask(:,:)
-        integer :: ndiff, ncmp
-        select case(trim(self%backend))
-            case('legacy')
-                call self%match_boximgs_legacy
-            case('optimized')
-                call self%match_boximgs_optimized
-            case('compare')
-                t0 = tic_omp()
-                call self%match_boximgs_legacy
-                legacy_seconds = toc_omp(t0)
-                legacy_scores = self%box_scores
-                legacy_scores_mem = self%box_scores_mem
-                t0 = tic_omp()
-                call self%match_boximgs_optimized
-                optimized_seconds = toc_omp(t0)
-                self%benchmark_legacy_seconds = self%benchmark_legacy_seconds + legacy_seconds
-                self%benchmark_optimized_seconds = self%benchmark_optimized_seconds + optimized_seconds
-                call report_stage_benchmark('coarse correlation', legacy_seconds, optimized_seconds)
-                allocate(mask(self%nx_offset,self%ny_offset), source=self%inds_offset > 0)
-                ncmp = count(mask)
-                if( ncmp > 0 )then
-                    maxerr = maxval(abs(self%box_scores-legacy_scores), mask=mask)
-                    rmserr = sqrt(sum((self%box_scores-legacy_scores)**2, mask=mask)/real(ncmp))
-                    ndiff = count((abs(self%box_scores-legacy_scores) > 2.e-4) .and. mask)
-                else
-                    maxerr = 0.
-                    rmserr = 0.
-                    ndiff = 0
-                endif
-                write(logfhandle,'(a,1x,es10.3,1x,es10.3,1x,i0)') 'refpick compare coarse max/rms/diff:', maxerr, rmserr, ndiff
-                self%box_scores = legacy_scores
-                self%box_scores_mem = legacy_scores_mem
-                deallocate(mask)
-            case DEFAULT
-                THROW_HARD('Unsupported reference-picker backend')
-        end select
-    end subroutine match_boximgs
-
-    subroutine match_boximgs_legacy( self )
-        class(pickref), intent(inout) :: self
-        logical     :: outside, l_err
-        integer     :: pos(2), ioff, joff, ithr, iref
-        real        :: scores(self%nrefs)
-        type(image) :: boximgs_heap(nthr_glob)
-        ! construct heap
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
-        end do
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,outside,iref,scores,pos,l_err) proc_bind(close)
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                if( self%inds_offset(ioff,joff) == 0 )then
-                    self%box_scores(ioff,joff) = -1.
-                    self%loc_sdevs(ioff,joff)  = -1.
-                else
-                    pos = self%positions(self%inds_offset(ioff,joff),:)
-                    if( self%l_mic_mask(pos(1)+1,pos(2)+1) )then
-                        ithr = omp_get_thread_num() + 1
-                        call self%mic_shrink%window_slim(pos, self%ldim_box(1), boximgs_heap(ithr), outside)
-                        self%loc_sdevs(ioff,joff) = boximgs_heap(ithr)%avg_loc_sdev(self%offset)
-                        call boximgs_heap(ithr)%prenorm4real_corr(l_err)
-                        if( l_err )then
-                            self%box_scores(ioff,joff) = -1.
-                        else
-                            do iref = 1,self%nrefs
-                                if( self%l_err_refs(iref) )then
-                                    scores(iref) = -1.
-                                else
-                                    scores(iref) = self%boxrefs(iref)%real_corr_prenorm(boximgs_heap(ithr))
-                                endif
-                            end do
-                            self%box_scores(ioff,joff) = maxval(scores)
-                        endif
-                    else
-                        self%box_scores(ioff,joff) = -1.
-                        self%loc_sdevs(ioff,joff)  = -1.
-                    endif
-                endif
-            end do
-        end do
-        !$omp end parallel do
-        ! save a box_scores copy in memory
-        if( allocated(self%box_scores_mem) ) deallocate(self%box_scores_mem)
-        allocate(self%box_scores_mem(self%nx_offset,self%ny_offset), source=self%box_scores)
-        ! save a loc_sdevs copy in memory
-        if( allocated(self%loc_sdevs_mem) ) deallocate(self%loc_sdevs_mem)
-        allocate(self%loc_sdevs_mem(self%nx_offset,self%ny_offset), source=self%loc_sdevs)
-        ! destruct heap
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%kill
-        end do
-    end subroutine match_boximgs_legacy
-
-    subroutine match_boximgs_optimized( self )
         class(pickref), intent(inout) :: self
         type(pickref_corr_batch) :: corr
         real, allocatable :: scores(:)
@@ -432,7 +290,7 @@ contains
         allocate(self%box_scores_mem(self%nx_offset,self%ny_offset), source=self%box_scores)
         deallocate(scores)
         call corr%kill
-    end subroutine match_boximgs_optimized
+    end subroutine match_boximgs
 
     subroutine detect_peaks( self )
         class(pickref), intent(inout) :: self
@@ -502,110 +360,10 @@ contains
 
     subroutine distance_filter( self )
         class(pickref), intent(inout) :: self
-        real, allocatable :: input_scores(:,:), legacy_scores(:,:)
-        real(dp) :: t0, legacy_seconds, optimized_seconds
-        integer :: legacy_npeaks, optimized_npeaks, ndiff
-        character(len=6) :: stage
-        select case(trim(self%backend))
-            case('optimized')
-                call self%distance_filter_optimized
-            case('legacy')
-                call self%distance_filter_legacy
-            case('compare')
-                if( self%offset == 1 )then
-                    stage = 'fine'
-                else
-                    stage = 'coarse'
-                endif
-                input_scores = self%box_scores
-                t0 = tic_omp()
-                call self%distance_filter_legacy
-                legacy_seconds = toc_omp(t0)
-                legacy_scores = self%box_scores
-                legacy_npeaks = self%npeaks
-                self%box_scores = input_scores
-                t0 = tic_omp()
-                call self%distance_filter_optimized
-                optimized_seconds = toc_omp(t0)
-                optimized_npeaks = self%npeaks
-                ndiff = count(((legacy_scores >= self%t) .neqv. (self%box_scores >= self%t)) .and. &
-                    (self%inds_offset > 0))
-                self%benchmark_legacy_seconds = self%benchmark_legacy_seconds + legacy_seconds
-                self%benchmark_optimized_seconds = self%benchmark_optimized_seconds + optimized_seconds
-                call report_stage_benchmark(trim(stage)//' distance', legacy_seconds, optimized_seconds)
-                write(logfhandle,'(a,1x,a,3(1x,i0))') 'refpick compare distance legacy/optimized/diff:', &
-                    trim(stage), legacy_npeaks, optimized_npeaks, ndiff
-                self%box_scores = legacy_scores
-                self%npeaks = legacy_npeaks
-            case DEFAULT
-                THROW_HARD('Unsupported reference-picker backend')
-        end select
+        call distance_filter_grid(self)
     end subroutine distance_filter
 
-    subroutine distance_filter_legacy( self )
-        class(pickref), intent(inout) :: self
-        integer, allocatable :: pos_inds(:), order(:)
-        real,    allocatable :: pos_scores(:), tmp(:)
-        logical, allocatable :: mask(:), selected_pos(:)
-        integer :: nbox, npeaks, ibox, jbox, loc, ioff, joff, ithr, ipeak, i
-        real    :: dist
-        logical :: is_corr_peak
-        pos_inds   = pack(self%inds_offset(:,:), mask=self%box_scores(:,:) >= self%t)
-        pos_scores = pack(self%box_scores(:,:),  mask=self%box_scores(:,:) >= self%t)
-        nbox       = size(pos_inds)
-        allocate(mask(nbox),         source=.false.)
-        allocate(selected_pos(nbox), source=.true. )
-        ! This is a greedy algorithm for distance thresholding. Hence, the order in which the peaks are considered
-        ! matters. Create an order from highest to lowest peak and traverse them in that order. In this way, the highest
-        ! peaks are selected and their neighbors are stripped off first
-        order = (/(i,i=1,nbox)/)
-        tmp   = pack(self%box_scores, mask=self%box_scores(:,:) >= self%t)
-        call hpsort(tmp, order)
-        deallocate(tmp)
-        do i = nbox, 1, -1 ! because highest peaks are last
-            ibox = order(i)
-            if( selected_pos(ibox) )then
-                mask = .false.
-                !$omp parallel do schedule(static) default(shared) private(jbox,dist) proc_bind(close)
-                do jbox = 1,nbox
-                    dist = euclid(real(self%positions(pos_inds(ibox),:)),real(self%positions(pos_inds(jbox),:)))
-                    if( dist <= self%dist_thres ) mask(jbox) = .true.
-                end do
-                !$omp end parallel do
-                ! find best match in the neigh
-                loc = maxloc(pos_scores, mask=mask, dim=1)
-                ! eliminate all but the best
-                mask(loc) = .false.
-                where( mask ) selected_pos = .false.
-            endif
-        end do
-        npeaks = count(selected_pos)
-        write(logfhandle,'(a,1x,I5)') '# positions before distance filtering: ', nbox
-        write(logfhandle,'(a,1x,I5)') '# positions after  distance filtering: ', npeaks
-        ! update packed arrays
-        pos_inds   = pack(pos_inds,   mask=selected_pos)
-        pos_scores = pack(pos_scores, mask=selected_pos)
-        ! update box_scores
-        !$omp parallel do schedule(static) collapse(2) default(shared) private(ioff,joff,ithr,is_corr_peak,ipeak) proc_bind(close)
-        do ioff = 1,self%nx_offset
-            do joff = 1,self%ny_offset
-                ithr = omp_get_thread_num() + 1
-                is_corr_peak = .false.
-                do ipeak = 1,npeaks
-                    if( pos_inds(ipeak) == self%inds_offset(ioff,joff) )then
-                        is_corr_peak = .true.
-                        exit
-                    endif
-                end do
-                if( .not. is_corr_peak ) self%box_scores(ioff,joff) = -1.
-            end do
-        end do
-        !$omp end parallel do
-        self%npeaks = count(self%box_scores >= self%t)
-        if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
-    end subroutine distance_filter_legacy
-
-    subroutine distance_filter_optimized( self )
+    subroutine distance_filter_grid( self )
         class(pickref), intent(inout) :: self
         integer, allocatable :: pos_inds(:), order(:)
         real, allocatable :: pos_scores(:), tmp(:)
@@ -664,33 +422,7 @@ contains
         !$omp end parallel do
         self%npeaks = count(self%box_scores >= self%t .and. self%inds_offset > 0)
         deallocate(mask, selected_pos, keep_position, valid_grid)
-    end subroutine distance_filter_optimized
-
-    subroutine remove_outliers( self )
-        class(pickref), intent(inout) :: self
-        real, allocatable :: tmp(:)
-        integer     :: npeaks
-        real        :: avg, sdev, t
-        tmp = pack(self%loc_sdevs, mask=self%box_scores >= self%t .and. self%loc_sdevs > 0.)
-        call avg_sdev(tmp, avg, sdev)
-        t = avg + self%ndev * sdev
-        npeaks = count(tmp < t)
-        write(logfhandle,'(a,1x,I5)') '# positions after  outlier    removal: ', npeaks
-        ! update box_scores
-        !$omp parallel workshare proc_bind(close)
-        where( self%loc_sdevs >= t )
-            ! not a peak, update box_scores
-            self%box_scores = -1.
-        end where
-        !$omp end parallel workshare
-        if( self%nboxes_max > 0 .and. count(self%box_scores >= self%t) > self%nboxes_max )then
-            tmp = pack(self%box_scores, mask=(self%box_scores > -1. + TINY))
-            call detect_peak_thres_for_npeaks(size(tmp), self%nboxes_max, tmp, self%t)
-            deallocate(tmp)
-        endif
-        self%npeaks = count(self%box_scores >= self%t)
-        if( L_DEBUG ) write(logfhandle,'(a,1x,I5)') '# positions after updating box_scores: ', self%npeaks
-    end subroutine remove_outliers
+    end subroutine distance_filter_grid
 
     subroutine peak_vs_nonpeak_stats( self )
         class(pickref), intent(inout) :: self
@@ -768,17 +500,6 @@ contains
             pos(ibox,:) = nint(scale * real(self%positions(pos_inds(ibox),:)))
         end do
     end subroutine get_positions
-
-    subroutine get_loc_sdevs( self, loc_sdevs )
-        class(pickref),       intent(in)    :: self
-        real,    allocatable, intent(inout) :: loc_sdevs(:)
-        if( allocated(loc_sdevs) ) deallocate(loc_sdevs)
-        if( allocated(self%loc_sdevs) )then
-            loc_sdevs = pack(self%loc_sdevs(:,:), mask=self%box_scores(:,:) >= self%t)
-        else
-            allocate(loc_sdevs(0))
-        endif
-    end subroutine get_loc_sdevs
 
     subroutine get_scores( self, scores )
         class(pickref),       intent(in)    :: self
@@ -896,127 +617,10 @@ contains
         integer,        intent(in)    :: pos(:,:)
         real,           intent(in)    :: smpd_old
         integer,        intent(in)    :: offset_old
-        real, allocatable :: legacy_scores(:,:), optimized_scores(:,:)
-        real :: legacy_t, maxerr, rmserr
-        real(dp) :: t0, legacy_seconds, optimized_seconds
-        integer :: legacy_npeaks, ncmp, ndiff
-        logical, allocatable :: mask(:,:)
-        select case(trim(self%backend))
-            case('legacy')
-                call self%refine_upscaled_legacy(pos, smpd_old, offset_old)
-            case('optimized')
-                call self%refine_upscaled_optimized(pos, smpd_old, offset_old)
-            case('compare')
-                t0 = tic_omp()
-                call self%refine_upscaled_legacy(pos, smpd_old, offset_old)
-                legacy_seconds = toc_omp(t0)
-                legacy_scores = self%box_scores
-                legacy_t = self%t
-                legacy_npeaks = self%npeaks
-                t0 = tic_omp()
-                call self%refine_upscaled_optimized(pos, smpd_old, offset_old)
-                optimized_seconds = toc_omp(t0)
-                self%benchmark_legacy_seconds = self%benchmark_legacy_seconds + legacy_seconds
-                self%benchmark_optimized_seconds = self%benchmark_optimized_seconds + optimized_seconds
-                call report_stage_benchmark('fine correlation', legacy_seconds, optimized_seconds)
-                optimized_scores = self%box_scores
-                allocate(mask(self%nx_offset,self%ny_offset), &
-                    source=(legacy_scores > -1.+TINY) .or. (optimized_scores > -1.+TINY))
-                ncmp = count(mask)
-                if( ncmp > 0 )then
-                    maxerr = maxval(abs(optimized_scores-legacy_scores), mask=mask)
-                    rmserr = sqrt(sum((optimized_scores-legacy_scores)**2, mask=mask)/real(ncmp))
-                    ndiff = count((abs(optimized_scores-legacy_scores) > 2.e-4) .and. mask)
-                else
-                    maxerr = 0.
-                    rmserr = 0.
-                    ndiff = 0
-                endif
-                write(logfhandle,'(a,1x,es10.3,1x,es10.3,1x,i0)') 'refpick compare fine max/rms/diff:', maxerr, rmserr, ndiff
-                self%box_scores = legacy_scores
-                self%t = legacy_t
-                self%npeaks = legacy_npeaks
-                deallocate(mask)
-            case DEFAULT
-                THROW_HARD('Unsupported reference-picker backend')
-        end select
+        call refine_upscaled_batch(self, pos, smpd_old, offset_old)
     end subroutine refine_upscaled
 
-    subroutine refine_upscaled_legacy( self, pos, smpd_old, offset_old )
-        class(pickref), intent(inout) :: self
-        integer,        intent(in)    :: pos(:,:)
-        real,           intent(in)    :: smpd_old
-        integer,        intent(in)    :: offset_old
-        integer, allocatable :: pos_refined(:,:)
-        real,    allocatable :: scores_refined(:)
-        type(image) :: boximgs_heap(nthr_glob)
-        integer     :: nbox, ibox, jbox, ithr, xrange(2), yrange(2), xind, yind, iref, loc(1)
-        real        :: factor, rpos(2), box_score, box_score_trial, scores(self%nrefs), dists(self%nboxes)
-        logical     :: outside, l_err
-        if( self%offset /= 1 ) THROW_HARD('Pixel offset in pickref instance subjected to refinement must be 1')
-        nbox = size(pos, dim=1)
-        allocate(pos_refined(nbox,2),  source= 0 )
-        allocate(scores_refined(nbox), source=-1.)
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%new(self%ldim_box, self%smpd_shrink)
-        end do
-        factor = real(offset_old) * (smpd_old / self%smpd_shrink)
-        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-        !$omp private(ibox,rpos,xrange,yrange,box_score,xind,yind,ithr,outside,iref,scores,box_score_trial,l_err)
-        do ibox = 1,nbox
-            rpos      = real(pos(ibox,:))
-            xrange(1) = max(0,       nint(rpos(1) - factor))
-            xrange(2) = min(self%nx, nint(rpos(1) + factor))
-            yrange(1) = max(0,       nint(rpos(2) - factor))
-            yrange(2) = min(self%ny, nint(rpos(2) + factor))
-            box_score = -1.
-            do xind = xrange(1),xrange(2)
-                do yind = yrange(1),yrange(2)
-                    ithr = omp_get_thread_num() + 1
-                    call self%mic_shrink%window_slim([xind,yind], self%ldim_box(1), boximgs_heap(ithr), outside)
-                    call boximgs_heap(ithr)%prenorm4real_corr(l_err)
-                    if( l_err )then
-                        box_score_trial = -1.
-                    else
-                        do iref = 1,self%nrefs
-                            if( self%l_err_refs(iref) )then
-                                scores(iref) = -1.
-                            else
-                                scores(iref) = self%boxrefs(iref)%real_corr_prenorm(boximgs_heap(ithr))
-                            endif
-                        end do
-                        box_score_trial = maxval(scores)
-                    endif
-                    if( box_score_trial > box_score )then
-                        pos_refined(ibox,:) = [xind,yind]
-                        box_score = box_score_trial
-                    endif
-                end do
-            end do
-            scores_refined(ibox) = box_score
-        end do
-        !$omp end parallel do
-        ! translate refined positions into instance
-        self%t = minval(scores_refined)
-        self%box_scores(:,:) = -1.
-        do ibox = 1,nbox
-            !$omp parallel do schedule(static) default(shared) private(jbox) proc_bind(close)
-            do jbox = 1,self%nboxes
-                dists(jbox) = euclid(real(pos_refined(ibox,:)),real(self%positions(jbox,:)))
-            end do
-            !$omp end parallel do
-            loc = minloc(dists)
-            where(self%inds_offset(:,:) == loc(1)) self%box_scores(:,:) = scores_refined(ibox)
-        end do
-        self%npeaks = count(self%box_scores >= self%t)
-        write(logfhandle,'(a,1x,I5)') '# positions after refining upscaled:   ', self%npeaks
-        ! destruct
-        do ithr = 1,nthr_glob
-            call boximgs_heap(ithr)%kill
-        end do
-    end subroutine refine_upscaled_legacy
-
-    subroutine refine_upscaled_optimized( self, pos, smpd_old, offset_old )
+    subroutine refine_upscaled_batch( self, pos, smpd_old, offset_old )
         class(pickref), intent(inout) :: self
         integer,        intent(in)    :: pos(:,:)
         real,           intent(in)    :: smpd_old
@@ -1027,7 +631,7 @@ contains
         logical, allocatable :: valid_refined(:)
         real :: factor, rpos(2), best_score
         integer :: nbox, ibox, icand, ind, xrange(2), yrange(2), xind, yind, ioff, joff, nx_cand, ny_cand
-        if( self%offset /= 1 ) THROW_HARD('Pixel offset in optimized refinement must be 1')
+        if( self%offset /= 1 ) THROW_HARD('Pixel offset in reference refinement must be 1')
         nbox = size(pos,dim=1)
         self%box_scores = -1.
         if( nbox == 0 )then
@@ -1097,34 +701,7 @@ contains
         write(logfhandle,'(a,1x,I5)') '# positions after refining upscaled:   ', self%npeaks
         call corr%kill
         deallocate(candidates, candidate_scores, starts, ends, pos_refined, scores_refined, valid_refined)
-    end subroutine refine_upscaled_optimized
-
-    subroutine report_compare_benchmark( self, self_refine )
-        class(pickref),           intent(in) :: self
-        class(pickref), optional, intent(in) :: self_refine
-        real(dp) :: legacy_seconds, optimized_seconds
-        if( trim(self%backend) /= 'compare' ) return
-        legacy_seconds = self%benchmark_legacy_seconds
-        optimized_seconds = self%benchmark_optimized_seconds
-        if( present(self_refine) )then
-            legacy_seconds = legacy_seconds + self_refine%benchmark_legacy_seconds
-            optimized_seconds = optimized_seconds + self_refine%benchmark_optimized_seconds
-        endif
-        call report_stage_benchmark('combined divergent stages', legacy_seconds, optimized_seconds)
-    end subroutine report_compare_benchmark
-
-    subroutine report_stage_benchmark( stage, legacy_seconds, optimized_seconds )
-        character(len=*), intent(in) :: stage
-        real(dp),         intent(in) :: legacy_seconds, optimized_seconds
-        real(dp) :: speedup
-        if( optimized_seconds > 0.0_dp )then
-            speedup = legacy_seconds / optimized_seconds
-        else
-            speedup = 0.0_dp
-        endif
-        write(logfhandle,'(a,1x,a,3(1x,a,f10.4))') 'refpick benchmark', trim(stage), &
-            'legacy=', legacy_seconds, 'optimized=', optimized_seconds, 'speedup=', speedup
-    end subroutine report_stage_benchmark
+    end subroutine refine_upscaled_batch
 
     subroutine kill( self )
         class(pickref), intent(inout) :: self
@@ -1139,8 +716,6 @@ contains
             if( allocated(self%inds_offset)    ) deallocate(self%inds_offset)
             if( allocated(self%box_scores)     ) deallocate(self%box_scores)
             if( allocated(self%box_scores_mem) ) deallocate(self%box_scores_mem)
-            if( allocated(self%loc_sdevs)      ) deallocate(self%loc_sdevs)
-            if( allocated(self%loc_sdevs_mem)  ) deallocate(self%loc_sdevs_mem)
             if( allocated(self%boxrefs) )then
                 do iimg = 1,size(self%boxrefs)
                     call self%boxrefs(iimg)%kill
@@ -1149,9 +724,6 @@ contains
             endif
             self%l_roi  = .false.
             self%exists = .false.
-            self%backend = 'legacy'
-            self%benchmark_legacy_seconds = 0.0_dp
-            self%benchmark_optimized_seconds = 0.0_dp
         endif
     end subroutine kill
 

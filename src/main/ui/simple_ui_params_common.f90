@@ -127,7 +127,6 @@ type(ui_param) :: phshift_step
 type(ui_param) :: pick_roi
 type(ui_param) :: picker
 type(ui_param) :: pickrefs
-type(ui_param) :: refpick_backend
 type(ui_param) :: projfile
 type(ui_param) :: projfile_den
 type(ui_param) :: projfile_merged
@@ -675,10 +674,6 @@ subroutine set_ui_params
     call picker%set_param(         'picker',          'multi',  'Which picker to use', &
                                    'Which picker to use(old|new|segdiam){new}','', .false., 'new', &
     &choices=ui_choices([character(len=7) :: 'old', 'new', 'segdiam']))
-
-    call refpick_backend%set_param('refpick_backend', 'multi',  'Reference-picker backend', &
-                                   'Reference-picker implementation(legacy|optimized|compare){legacy}','', .false., 'legacy', &
-    &choices=ui_choices([character(len=9) :: 'legacy', 'optimized', 'compare']))
 
     call pickrefs%set_param(       'pickrefs',        'file',   'Stack of class-averages/reprojections for picking', &
                                    'Stack of class-averages/reprojections for picking', &

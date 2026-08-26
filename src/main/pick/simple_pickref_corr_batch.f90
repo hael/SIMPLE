@@ -173,10 +173,10 @@ contains
         if( .not. self%exists ) return
         memory_bytes = real(size(self%mic)+size(self%refs)+size(self%ref_sums)+size(self%windows)+size(self%dots),dp) * 4.0_dp &
             + real(size(self%sat)+size(self%sat2),dp) * 8.0_dp + real(size(self%ref_valid),dp)
-        write(logfhandle,'(a,1x,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,f8.2)') 'refpick optimized', trim(label), &
+        write(logfhandle,'(a,1x,a,1x,a,i0,1x,a,i0,1x,a,i0,1x,a,f8.2)') 'refpick correlation', trim(label), &
             'candidates=', self%candidates_scored, 'refs=', self%nrefs, 'batch=', self%batch_size, &
             'workspace_mb=', memory_bytes/(1024.0_dp*1024.0_dp)
-        write(logfhandle,'(a,1x,a,4(1x,a,es10.3))') 'refpick optimized', trim(label), &
+        write(logfhandle,'(a,1x,a,4(1x,a,es10.3))') 'refpick correlation', trim(label), &
             'prepare=', self%prepare_seconds, 'gather=', self%gather_seconds, &
             'gemm=', self%gemm_seconds, 'reduce=', self%reduce_seconds
     end subroutine report_stats

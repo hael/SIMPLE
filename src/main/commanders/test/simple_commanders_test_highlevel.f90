@@ -495,7 +495,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     type(image)                         :: projection
     type(sp_project)                    :: spproj
     type(string)                        :: cwd_root, workflow_root, project_path, reproj_path, subset_path, filetab_path
-    type(string)                        :: system_name, workflow_picker, refpick_backend, pgrp, test_workdir, vol_file, reproj_file
+    type(string)                        :: system_name, workflow_picker, pgrp, test_workdir, vol_file, reproj_file
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname
     type(string)                        :: movie_files(NMOVIES)
     character(len=XLONGSTRLEN)          :: workflow_root_path
@@ -513,18 +513,10 @@ subroutine exec_test_simulated_workflow( self, cline )
     workflow_picker = 'segdiam'
     if( cline%defined('picker') ) workflow_picker = cline%get_carg('picker')
     workflow_picker = lowercase(workflow_picker%to_char())
-    refpick_backend = 'legacy'
-    if( cline%defined('refpick_backend') ) refpick_backend = cline%get_carg('refpick_backend')
-    refpick_backend = lowercase(refpick_backend%to_char())
     select case(workflow_picker%to_char())
         case('segdiam','new')
         case default
             THROW_HARD('Simulated workflow picker must be segdiam or new')
-    end select
-    select case(refpick_backend%to_char())
-        case('legacy','optimized','compare')
-        case default
-            THROW_HARD('Invalid simulated workflow refpick_backend')
     end select
     select case(system_name%to_char())
         case('6vxx')
@@ -704,7 +696,6 @@ subroutine exec_test_simulated_workflow( self, cline )
             call cline_pick%set('pickrefs',          reproj_path)
             call cline_pick%set('moldiam',               MSKDIAM)
             call cline_pick%set('pick_roi',                 'no')
-            call cline_pick%set('refpick_backend', refpick_backend)
         case default
             THROW_HARD('Unsupported simulated-workflow picker')
     end select

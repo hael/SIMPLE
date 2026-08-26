@@ -191,7 +191,6 @@ subroutine new_abinitio2D_stream( prgtab )
         &visibility=UI_VIS_DEVELOPER, preserve_default=.true.)
         call master%add_input(UI_PARM, 'total_dose',     'float',         'Total exposure dose (e/A2)', 'Total exposure dose (e/A2)', '', .true., '', visibility=UI_VIS_STANDARD)
         call master%add_input(UI_FILE, 'pickrefs',       'file',          '2D averages for use as picking references (optional)', '2D averages for use as picking references (optional)', '', .false., '', visibility=UI_VIS_STANDARD)
-        call master%add_input(UI_PARM, refpick_backend, visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, 'box_extract',    'int',           'Force box size (px, optional)', 'force a box size (px) eg. to match an existing dataset"', '', .false., '', visibility=UI_VIS_STANDARD)
         call master%add_input(UI_FILE, 'dir_preprocess', 'dir',           'Pre-existing preprocessing directory', 'Pre-existing preprocessing directory', '', .false., '', visibility=UI_VIS_DEVELOPER)
         call master%add_input(UI_PARM, 'nicedispid',     'int',           'Optics group offset delta multiplier', 'Optics group offset delta multiplier', '0', .false., '', visibility=UI_VIS_DEVELOPER)
@@ -244,8 +243,6 @@ subroutine new_abinitio2D_stream( prgtab )
         ! search controls
         call pick_extract%add_input(UI_SRCH, pgrp, required_override=.false., group="picking", visibility=UI_VIS_STANDARD)
         call pick_extract%add_input(UI_SRCH, pick_roi, group="picking", &
-        &visibility=UI_VIS_DEVELOPER)
-        call pick_extract%add_input(UI_SRCH, refpick_backend, group="picking", &
         &visibility=UI_VIS_DEVELOPER)
         call pick_extract%add_input(UI_SRCH, 'thres', 'num', 'Peak-picking distance threshold', &
         &'Distance threshold in Angstroms for peak picking; 0 uses the picker default', 'distance threshold{0}', .false., 0., group="picking", &

@@ -757,11 +757,6 @@ contains
             case DEFAULT
                 THROW_HARD('rec_backend must be gridding or pcg')
         end select
-        select case(trim(self%refpick_backend))
-            case('legacy','optimized','compare')
-            case DEFAULT
-                THROW_HARD('refpick_backend must be legacy, optimized, or compare')
-        end select
         if( trim(self%prg%to_char()) == 'reconstruct3D' )then
             if( self%box_crop > self%box ) THROW_HARD('reconstruct3D box_crop cannot exceed the native box')
             if( mod(self%box_crop,2) /= 0 ) THROW_HARD('reconstruct3D box_crop must be even')
