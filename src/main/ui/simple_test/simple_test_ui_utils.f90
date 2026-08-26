@@ -7,6 +7,7 @@ type(category_descriptor), parameter :: UI_CATEGORY = category_descriptor('utils
 type(ui_program), target :: ansi_colors
 type(ui_program), target :: binoris_test
 type(ui_program), target :: binoris_io_test
+type(ui_program), target :: cavg_registration
 type(ui_program), target :: cif2mrc
 type(ui_program), target :: cif2pdb
 type(ui_program), target :: cmdline
@@ -24,6 +25,7 @@ contains
         call new_ansi_colors(tsttab)
         call new_binoris_test(tsttab)
         call new_binoris_io_test(tsttab)
+        call new_cavg_registration(tsttab)
         call new_cif2mrc(tsttab)
         call new_cif2pdb(tsttab)
         call new_cmdline(tsttab)
@@ -118,6 +120,17 @@ subroutine new_ansi_colors( tsttab )
         ! add to ui_hash
         call add_ui_program('binoris_io_test', binoris_io_test, tsttab, UI_CATEGORY)
     end subroutine new_binoris_io_test
+
+    subroutine new_cavg_registration( tsttab )
+        class(ui_hash), intent(inout) :: tsttab
+        call cavg_registration%new(&
+        &'cavg_registration',&
+        &'cavg_registration ',&
+        &'Tests 2D class-average rotation and translation registration',&
+        &'simple_test_exec',&
+        &.false.)
+        call add_ui_program('cavg_registration', cavg_registration, tsttab, UI_CATEGORY)
+    end subroutine new_cavg_registration
 
     subroutine new_cif2mrc( tsttab )
         class(ui_hash), intent(inout) :: tsttab

@@ -1,7 +1,7 @@
 !@descr: execution of test class processing commanders
 module simple_test_exec_class
 use simple_cmdline,               only: cmdline
-use simple_commanders_test_class, only: commander_test_units, commander_test_strategy2D, commander_test_ui_hash_test
+use simple_commanders_test_class, only: commander_test_units, commander_test_ui_hash_test
 implicit none
 
 public :: exec_test_class_commander
@@ -9,7 +9,6 @@ private
 
 type(commander_test_units)        :: xunits
 type(commander_test_ui_hash_test) :: xui_hash_test
-type(commander_test_strategy2D)   :: xstrategy2D
 
 contains
 
@@ -26,8 +25,6 @@ contains
                 call xunits%execute(cline)
             case( 'ui_hash_test' )
                 call xui_hash_test%execute(cline)
-            case( 'strategy2D' )
-                call xstrategy2D%execute(cline)
             case default
                 l_did_execute = .false.
         end select

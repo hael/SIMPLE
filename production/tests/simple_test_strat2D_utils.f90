@@ -1,5 +1,0 @@
-program simple_test_strategy2D_utils
-use simple_core_module_api
-use simple_strategy2D_utils, only: test_strategy2D_utils
-call test_strategy2D_utils
-end program simple_test_strategy2D_utils

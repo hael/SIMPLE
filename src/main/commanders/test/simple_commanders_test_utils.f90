@@ -19,6 +19,11 @@ type, extends(commander_base) :: commander_test_binoris_io_test
     procedure :: execute      => exec_test_binoris_io_test
 end type commander_test_binoris_io_test
 
+type, extends(commander_base) :: commander_test_cavg_registration
+  contains
+    procedure :: execute      => exec_test_cavg_registration
+end type commander_test_cavg_registration
+
 type, extends(commander_base) :: commander_test_cif2mrc
   contains
     procedure :: execute      => exec_test_cif2mrc
@@ -93,6 +98,14 @@ subroutine exec_test_binoris_io_test( self, cline )
     class(cmdline),                     intent(inout) :: cline
     call simple_end('**** SIMPLE_TEST_BINORIS_IO_TEST_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_binoris_io_test
+
+subroutine exec_test_cavg_registration( self, cline )
+    use simple_strategy2D_utils, only: test_cavg_registration
+    class(commander_test_cavg_registration), intent(inout) :: self
+    class(cmdline),                           intent(inout) :: cline
+    call test_cavg_registration
+    call simple_end('**** SIMPLE_TEST_CAVG_REGISTRATION NORMAL STOP ****')
+end subroutine exec_test_cavg_registration
 
 subroutine exec_test_cif2mrc( self, cline )
     use simple_image,         only : image

@@ -14,7 +14,8 @@ use simple_builder,           only: builder
 implicit none
 
 public :: id_junk_and_prep_cavgs4clust, prep_cavgs4clust, id_junk, flag_non_junk_cavgs, calc_cluster_cavgs_dmat
-public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset, test_strategy2D_utils
+public :: calc_match_cavgs_dmat, align_and_score_cavg_clusters, write_aligned_cavgs, calc_cavg_offset
+public :: test_cavg_registration
 public :: calc_cavg_pairwise_algninfo, calc_cavg_sigstats_components
 private
 #include "simple_local_flags.inc"
@@ -1078,17 +1079,17 @@ contains
         if( allocated(ccsz) ) deallocate(ccsz)
     end subroutine calc_cavg_offset
 
-    subroutine test_strategy2D_utils
+    subroutine test_cavg_registration
         use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
         type(inpl_struct), allocatable :: alg_info1(:), alg_info2(:,:)
         type(image),       allocatable :: imgs_ref(:), imgs_targ(:)
         type(parameters)    :: params
         type(cmdline)       :: cline
-        real, pointer        :: rmat(:,:,:)
-        integer              :: i, j, x, y
-        real                 :: rx, ry
-        integer, parameter   :: NIMGS = 5, BOX = 64
-        real,    parameter   :: SMPD = 1.5, CORR_TOL = 0.95
+        real, pointer       :: rmat(:,:,:)
+        integer             :: i, j, x, y
+        real                :: rx, ry
+        integer, parameter  :: NIMGS = 5, BOX = 64
+        real,    parameter  :: SMPD = 1.5, CORR_TOL = 0.95
         call cline%set('smpd',  SMPD)
         call cline%set('lp',      6.)
         call cline%set('hp',     20.)
@@ -1132,7 +1133,7 @@ contains
         enddo
         alg_info1 = match_imgs2ref(params, params%hp, params%lp, params%trs, imgs_ref(1), imgs_targ)
         do i = 1, NIMGS
-            write(logfhandle,'(A,I0,A,F8.4,A,2F8.3)') 'strategy2D match_imgs2ref image ',i, &
+            write(logfhandle,'(A,I0,A,F8.4,A,2F8.3)') 'cavg_registration image ',i, &
                 &' corr=',alg_info1(i)%corr,' shift=',alg_info1(i)%x,alg_info1(i)%y
             if( .not.ieee_is_finite(alg_info1(i)%corr) .or. alg_info1(i)%corr < CORR_TOL )then
                 THROW_HARD('MATCH_IMGS2REF FAILED')
@@ -1142,6 +1143,6 @@ contains
         call dealloc_imgarr(imgs_targ)
         deallocate(alg_info1, alg_info2)
         call cline%kill
-    end subroutine test_strategy2D_utils
-    
+    end subroutine test_cavg_registration
+
 end module simple_strategy2D_utils

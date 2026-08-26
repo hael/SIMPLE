@@ -185,11 +185,11 @@ call assert_registered_cli_summary('extract_subproj', 'subprojname', 'Subproject
 call assert_registered_search_cli_summary('ctf_estimate', 'dfmin', 'Expected minimum defocus; e.g. 0.2 microns')
 call assert_registered_search_cli_summary('ctf_estimate', 'dfmax', 'Expected maximum defocus; e.g. 5.0 microns')
 call make_test_ui
-program_name = 'strategy2D'
+program_name = 'cavg_registration'
 call get_test_prg_ptr(program_name, registered_prg)
-call assert_true(associated(registered_prg), 'test program is registered')
+call assert_true(associated(registered_prg), 'cavg_registration test is registered')
 if( associated(registered_prg) )then
-    call assert_char('class', registered_prg%category%to_char(), 'test program category')
+    call assert_char('utils', registered_prg%category%to_char(), 'cavg_registration test category')
 endif
 call assert_registered_test_category('abinitio2D_stream', 'stream', 'Stream', 130)
 call assert_registered_test_category('assign_optics',     'stream', 'Stream', 130)

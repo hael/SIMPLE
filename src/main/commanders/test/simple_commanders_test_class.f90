@@ -5,11 +5,6 @@ use simple_stream_api
 implicit none
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: commander_test_strategy2D
-  contains
-    procedure :: execute      => exec_test_strategy2D
-end type commander_test_strategy2D
-
 type, extends(commander_base) :: commander_test_ui_hash_test
   contains
     procedure :: execute      => exec_test_ui_hash_test
@@ -29,14 +24,6 @@ subroutine exec_test_ui_hash_test( self, cline )
     call test_ui_hash
     call simple_end('**** SIMPLE_TEST_UI_HASH_TEST NORMAL STOP ****')
 end subroutine exec_test_ui_hash_test
-
-subroutine exec_test_strategy2D( self, cline )
-    use simple_strategy2D_utils, only: test_strategy2D_utils
-    class(commander_test_strategy2D),  intent(inout) :: self
-    class(cmdline),                    intent(inout) :: cline
-    call test_strategy2D_utils
-    call simple_end('**** SIMPLE_TEST_STRATEGY2D NORMAL STOP ****')
-end subroutine exec_test_strategy2D
 
 subroutine exec_test_units( self, cline )
     use simple_imghead, only: test_imghead

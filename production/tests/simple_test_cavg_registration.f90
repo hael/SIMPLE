@@ -1,0 +1,5 @@
+program simple_test_cavg_registration
+use simple_core_module_api
+use simple_strategy2D_utils, only: test_cavg_registration
+call test_cavg_registration
+end program simple_test_cavg_registration

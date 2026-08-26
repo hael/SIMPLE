@@ -64,6 +64,7 @@
       - `simple_test_block_tree_io.f90`
       - `simple_test_bounds_from_mask3D.f90`
       - `simple_test_cavg_quality_relations.f90`
+      - `simple_test_cavg_registration.f90`
       - `simple_test_cc_connectivity.f90`
       - `simple_test_class_sample.f90`
       - `simple_test_clustering.f90`
@@ -152,7 +153,6 @@
       - `simple_test_stack_io.f90`
       - `simple_test_star_export.f90`
       - `simple_test_starfile.f90`
-      - `simple_test_strat2D_utils.f90`
       - `simple_test_stream_initial_analysis.f90` — smoke test that invokes stream p03 initial analysis commander
       - `simple_test_stringmatch.f90`
       - `simple_test_sym.f90`
