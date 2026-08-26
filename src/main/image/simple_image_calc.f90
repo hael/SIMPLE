@@ -1713,15 +1713,141 @@ contains
         deallocate(vals)
     end function nu_objective_noise_scale
 
-    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff, l_mask, noise_sigma )
+    !> Radially-resolved raw E/O noise scale: shell-wise Gaussian-scaled MAD of
+    !! the raw even-odd difference over real-space radius within the support.
+    !! This is the whitening profile for the NU Huber unary: reconstruction
+    !! noise is not spatially stationary (deapodization amplifies the
+    !! periphery; solve supports taper it), and a single global scale puts
+    !! peripheral residuals in the wrong Huber regime, which compresses their
+    !! cost-improvement margins and biases both the filter competition and the
+    !! evidence envelope toward the centre. Sparse or degenerate shells inherit
+    !! the nearest valid scale and the profile is smoothed once (1-2-1), so a
+    !! shell never whitens with a noisier estimate than its data supports.
+    module subroutine nu_objective_noise_profile( even_raw, odd_raw, l_mask, sigma_r, rmax )
+        class(image),      intent(in)  :: even_raw, odd_raw
+        logical,           intent(in)  :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+        real, allocatable, intent(out) :: sigma_r(:)
+        real,              intent(out) :: rmax
+        real,    parameter :: SHELL_WIDTH_PX = 4.0
+        integer, parameter :: MIN_SHELL_POP  = 100
+        real,    allocatable :: vals(:), smoothed(:), packed(:)
+        integer, allocatable :: shell_of(:), off(:), fill(:), nxt(:)
+        real    :: cx, cy, cz, rr, med, global_sigma
+        integer :: nx, ny, nz, i, j, k, nsh, is, nmask, imask, jn, dist, best
+        nx = even_raw%ldim(1)
+        ny = even_raw%ldim(2)
+        nz = even_raw%ldim(3)
+        cx = real(nx/2 + 1)
+        cy = real(ny/2 + 1)
+        cz = real(nz/2 + 1)
+        nmask = count(l_mask)
+        if( nmask < 1 ) THROW_HARD('empty mask in nu_objective_noise_profile')
+        rmax = 0.
+        do k = 1, nz
+            do j = 1, ny
+                do i = 1, nx
+                    if( .not.l_mask(i,j,k) ) cycle
+                    rr = sqrt((real(i)-cx)**2 + (real(j)-cy)**2 + (real(k)-cz)**2)
+                    if( rr > rmax ) rmax = rr
+                end do
+            end do
+        end do
+        rmax = max(rmax, 1.0)
+        nsh  = max(4, min(64, ceiling(rmax / SHELL_WIDTH_PX)))
+        allocate(sigma_r(nsh), source=0.)
+        allocate(off(nsh+1),   source=0)
+        allocate(shell_of(nmask), vals(nmask))
+        imask = 0
+        do k = 1, nz
+            do j = 1, ny
+                do i = 1, nx
+                    if( .not.l_mask(i,j,k) ) cycle
+                    imask = imask + 1
+                    rr = sqrt((real(i)-cx)**2 + (real(j)-cy)**2 + (real(k)-cz)**2)
+                    is = min(nsh, max(1, floor(rr / rmax * real(nsh)) + 1))
+                    shell_of(imask) = is
+                    vals(imask)     = even_raw%rmat(i,j,k) - odd_raw%rmat(i,j,k)
+                    off(is+1)       = off(is+1) + 1
+                end do
+            end do
+        end do
+        ! pack values shell-contiguously so each shell's MAD works on a slice
+        off(1) = 0
+        do is = 2, nsh + 1
+            off(is) = off(is) + off(is-1)
+        end do
+        allocate(packed(nmask))
+        allocate(nxt(nsh), source=0)
+        do imask = 1, nmask
+            is = shell_of(imask)
+            nxt(is) = nxt(is) + 1
+            packed(off(is) + nxt(is)) = vals(imask)
+        end do
+        do is = 1, nsh
+            if( nxt(is) >= MIN_SHELL_POP )then
+                med          = median_nocopy(packed(off(is)+1:off(is)+nxt(is)))
+                sigma_r(is)  = mad_gau(packed(off(is)+1:off(is)+nxt(is)), med)
+            endif
+        end do
+        deallocate(packed, nxt)
+        ! fill sparse/degenerate shells from the nearest valid one
+        allocate(fill(nsh), source=0)
+        do is = 1, nsh
+            if( sigma_r(is) > TINY ) fill(is) = is
+        end do
+        if( .not. any(fill > 0) )then
+            ! no shell individually estimable: fall back to the global scale
+            med = median_nocopy(vals)
+            global_sigma = mad_gau(vals, med)
+            if( global_sigma <= TINY ) global_sigma = sqrt(sum(vals*vals)/real(nmask))
+            if( global_sigma <= TINY ) global_sigma = 1.
+            sigma_r = global_sigma
+        else
+            do is = 1, nsh
+                if( fill(is) > 0 ) cycle
+                best = 0
+                dist = huge(dist)
+                do jn = 1, nsh
+                    if( fill(jn) == 0 ) cycle
+                    if( abs(jn-is) < dist )then
+                        dist = abs(jn-is)
+                        best = jn
+                    endif
+                end do
+                sigma_r(is) = sigma_r(best)
+            end do
+            ! one 1-2-1 smoothing pass; ends use their inward neighbor
+            allocate(smoothed(nsh))
+            do is = 1, nsh
+                if( is == 1 )then
+                    smoothed(is) = (2.*sigma_r(1) + sigma_r(2)) / 3.
+                else if( is == nsh )then
+                    smoothed(is) = (sigma_r(nsh-1) + 2.*sigma_r(nsh)) / 3.
+                else
+                    smoothed(is) = 0.25*sigma_r(is-1) + 0.5*sigma_r(is) + 0.25*sigma_r(is+1)
+                endif
+            end do
+            sigma_r = max(smoothed, TINY)
+            deallocate(smoothed)
+        endif
+        deallocate(vals, shell_of, off, fill)
+    end subroutine nu_objective_noise_profile
+
+    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff, l_mask, noise_profile, profile_rmax )
         class(image),  intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
         real,          intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
         logical,       intent(in)  :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
-        real, optional, intent(in) :: noise_sigma
+        real,          intent(in)  :: noise_profile(:)
+        real,          intent(in)  :: profile_rmax
         ! The NU unary is a cross-half prediction error: raw even versus
-        ! filtered odd, plus filtered even versus raw odd. Normalizing by the
-        ! raw E/O noise scale puts this error in approximately comparable noise
-        ! units across maps, iterations, and candidate banks.
+        ! filtered odd, plus filtered even versus raw odd. The residuals are
+        ! WHITENED by the radially-resolved raw E/O noise profile (see
+        ! nu_objective_noise_profile) before the robust loss: reconstruction
+        ! noise is not spatially stationary, and a single global scale puts
+        ! peripheral residuals in the wrong Huber regime. The per-voxel scale
+        ! is linearly interpolated between shell centres so the unary carries
+        ! no shell-boundary steps. A single-element profile is the global
+        ! normalization (profile_rmax then unused).
         !
         ! Huber keeps the desired L2 behavior for residuals at the expected
         ! noise scale, matching the least-squares intuition of the original NU
@@ -1730,18 +1856,38 @@ contains
         ! artifacts from dominating the voxelwise filter choice and pushing the
         ! selection toward overly conservative low-pass candidates.
         real, parameter :: HUBER_DELTA = 1.345
-        real :: sigma, r1, r2
-        integer :: nx, ny, nz, i, j, k
-        nx = even_raw%ldim(1)
-        ny = even_raw%ldim(2)
-        nz = even_raw%ldim(3)
-        sigma = 1.
-        if( present(noise_sigma) ) sigma = max(noise_sigma, TINY)
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,r1,r2) proc_bind(close)
+        real :: sigma, r1, r2, cx, cy, cz, rr, xs, w
+        integer :: nx, ny, nz, i, j, k, nsh, is
+        nx  = even_raw%ldim(1)
+        ny  = even_raw%ldim(2)
+        nz  = even_raw%ldim(3)
+        nsh = size(noise_profile)
+        if( nsh < 1 ) THROW_HARD('empty noise profile; nu_objective')
+        if( nsh > 1 .and. profile_rmax <= 0. ) THROW_HARD('invalid profile_rmax; nu_objective')
+        cx = real(nx/2 + 1)
+        cy = real(ny/2 + 1)
+        cz = real(nz/2 + 1)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,r1,r2,sigma,rr,xs,is,w) proc_bind(close)
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
                     if( l_mask(i,j,k) )then
+                        if( nsh == 1 )then
+                            sigma = max(noise_profile(1), TINY)
+                        else
+                            rr = sqrt((real(i)-cx)**2 + (real(j)-cy)**2 + (real(k)-cz)**2)
+                            xs = rr / profile_rmax * real(nsh) - 0.5
+                            if( xs <= 0. )then
+                                sigma = noise_profile(1)
+                            else if( xs >= real(nsh-1) )then
+                                sigma = noise_profile(nsh)
+                            else
+                                is    = floor(xs)
+                                w     = xs - real(is)
+                                sigma = (1.-w)*noise_profile(is+1) + w*noise_profile(is+2)
+                            endif
+                            sigma = max(sigma, TINY)
+                        endif
                         r1 = (even_raw%rmat(i,j,k)  - odd_filt%rmat(i,j,k)) / sigma
                         r2 = (even_filt%rmat(i,j,k) - odd_raw%rmat(i,j,k))  / sigma
                         diff(i,j,k) = huber_loss(r1) + huber_loss(r2)

@@ -149,10 +149,12 @@ logical :: nu_l_report = .true.
 ! Opt-in diagnostics for NU-filter development. Keep normal runs concise; this
 ! flag restores the detailed candidate, shell-extension, and continuity logs.
 logical :: NU_DEV_OUTPUT = .false.
-! Cache of the raw E/O noise scale used to normalize the Huber unary objective.
-! Computed once per setup_nu_dmats and reused across all shell-extension
-! challenges so the per-shell median/MAD pass is not paid repeatedly.
-real    :: nu_noise_sigma_cached = 0.
+! Cache of the radial raw E/O noise profile that whitens the Huber unary
+! objective (see image::nu_objective_noise_profile). Computed once per
+! setup_nu_dmats and reused across all shell-extension challenges so the
+! per-shell median/MAD pass is not paid repeatedly.
+real, allocatable :: nu_noise_profile_cached(:)
+real    :: nu_noise_rmax_cached = 0.
 integer :: nu_aux_replacement_label = 0
 real    :: nu_aux_replacement_resolution = 0.
 

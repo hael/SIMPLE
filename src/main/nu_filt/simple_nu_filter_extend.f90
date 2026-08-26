@@ -17,7 +17,7 @@ contains
         integer, allocatable :: frontier_vox(:)
         integer           :: new_find, n_finest, n_total, n_extended, sz_old, old_label
         integer           :: old_radius_px, new_radius_px, n_seed_min
-        real              :: accept_pct_eff, pct_finest, x, noise_sigma, old_radius_angstrom, new_radius_angstrom
+        real              :: accept_pct_eff, pct_finest, x, old_radius_angstrom, new_radius_angstrom
         integer(kind=NU_LABEL_KIND), allocatable :: extend_choice(:)
         type(nu_highres_extension_stats) :: local_stats
         integer           :: i, j, k, imask
@@ -110,14 +110,12 @@ contains
         call vol_odd_filt_new%new(ldim, smpd)
         call vol_even_filt_new%read(even_cache_fname)
         call vol_odd_filt_new%read(odd_cache_fname)
-        if( nu_noise_sigma_cached > TINY )then
-            noise_sigma = nu_noise_sigma_cached
-        else
-            noise_sigma = vol_even%nu_objective_noise_scale(vol_odd, nu_lmask)
-            nu_noise_sigma_cached = noise_sigma
+        if( .not. allocated(nu_noise_profile_cached) )then
+            call vol_even%nu_objective_noise_profile(vol_odd, nu_lmask, nu_noise_profile_cached, &
+                &nu_noise_rmax_cached)
         endif
         call vol_even%nu_objective(vol_even_filt_new, vol_odd, vol_odd_filt_new, dmat_new, &
-            &nu_lmask, noise_sigma)
+            &nu_lmask, nu_noise_profile_cached, nu_noise_rmax_cached)
         call vol_even_filt_new%kill
         call vol_odd_filt_new%kill
         allocate(evidence_candidate(n_nu_mask), source=huge(x))

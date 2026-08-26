@@ -198,7 +198,8 @@ contains
         box  = 0
         n_nu_mask = 0
         smpd = 0.
-        nu_noise_sigma_cached = 0.
+        if( allocated(nu_noise_profile_cached) ) deallocate(nu_noise_profile_cached)
+        nu_noise_rmax_cached = 0.
     end subroutine cleanup_nu_filter
 
     module subroutine cleanup_aux_bank

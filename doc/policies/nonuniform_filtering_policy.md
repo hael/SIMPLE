@@ -164,10 +164,26 @@ Envelope generation and compatibility remain separate from NU support.
 Standalone `nu_filt3D` therefore exposes `mskdiam`, not `automsk`, for NU
 support.
 
+The Huber unary is WHITENED by a radially-resolved raw E/O noise profile
+(`image::nu_objective_noise_profile`: shell-wise Gaussian-scaled MAD of the
+raw even-odd difference over real-space radius, gap-filled and smoothed, with
+per-voxel linear interpolation between shell centres). Reconstruction noise is
+not spatially stationary — deapodization amplifies the periphery and solve
+supports taper it — and the earlier single global scale put peripheral
+residuals in the wrong Huber regime, compressing their cost-improvement
+margins and biasing both the filter competition and the evidence envelope
+toward the centre. (That flaw was historically masked by the gridding
+under-deapodization bug, whose radial fade approximately cancelled the true
+sigma(r) rise; fixing deapodization exposed it as over-tight envelopes.
+Measured on the neutral fixture: sigma(r) edge/centre 1.29; whitening raised
+envelope recall of true density from 0.48 to 0.61 at unchanged component
+count.) `>>> NU WHITENING PROFILE` reports shells, min/max and edge/centre
+ratio at every setup.
+
 When standalone NU-evidence envelope generation is enabled, its public shape
 controls are limited to `nu_msk_sig` (robust evidence threshold) and `amsklp`
 (physical evidence scale, in Angstrom). Production fixes the evidence form to
-the absolute noise-normalized Huber-cost margin, density weight to zero, MRF
+the radially-whitened Huber-cost margin, density weight to zero, MRF
 beta to 1, and minimum component fraction to 0.1. It also fixes binary growth
 at 1 A and the cosine edge at 6 A; `nu_filt3D` converts those physical lengths
 to the nearest voxel counts at the input-map sampling, with a one-voxel

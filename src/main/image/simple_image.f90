@@ -288,6 +288,7 @@ contains
     procedure          :: radial_cc
     procedure          :: sqeuclid
     procedure          :: nu_objective_noise_scale
+    procedure          :: nu_objective_noise_profile
     procedure          :: nu_objective
     procedure          :: euclid_norm
     procedure          :: weighted_sqsum, masked_sqsum
@@ -1840,11 +1841,19 @@ interface
         logical,       intent(in) :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
     end function nu_objective_noise_scale
 
-    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff, l_mask, noise_sigma )
+    module subroutine nu_objective_noise_profile( even_raw, odd_raw, l_mask, sigma_r, rmax )
+        class(image),      intent(in)  :: even_raw, odd_raw
+        logical,           intent(in)  :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
+        real, allocatable, intent(out) :: sigma_r(:)
+        real,              intent(out) :: rmax
+    end subroutine nu_objective_noise_profile
+
+    module subroutine nu_objective( even_raw, even_filt, odd_raw, odd_filt, diff, l_mask, noise_profile, profile_rmax )
         class(image),  intent(in)  :: even_raw, even_filt, odd_raw, odd_filt
         real,          intent(out) :: diff(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
         logical,       intent(in)  :: l_mask(even_raw%ldim(1),even_raw%ldim(2),even_raw%ldim(3))
-        real, optional, intent(in) :: noise_sigma
+        real,          intent(in)  :: noise_profile(:)
+        real,          intent(in)  :: profile_rmax
     end subroutine nu_objective
 
     module function euclid_norm( self1, self2 ) result( r )

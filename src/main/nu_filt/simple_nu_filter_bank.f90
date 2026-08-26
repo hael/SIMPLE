@@ -15,7 +15,8 @@ contains
         type(image) :: vol_even_filt, vol_odd_filt, vol_support
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
-        real :: noise_sigma, finest_lp
+        real, allocatable :: noise_profile(:)
+        real :: noise_rmax, finest_lp
         integer :: i, n_candidates, aux_replacement_idx
         real    :: x
         call init_nu_filter(vol_even, vol_odd, n_highres_steps)
@@ -73,13 +74,16 @@ contains
         call vol_even_filt%new(ldim, smpd)
         call vol_odd_filt%new(ldim, smpd)
         call cache_filtered_vols(vol_even, vol_odd)
-        noise_sigma = vol_even%nu_objective_noise_scale(vol_odd, nu_lmask)
+        call vol_even%nu_objective_noise_profile(vol_odd, nu_lmask, noise_profile, noise_rmax)
         ! Cache for reuse during high-resolution shell extension; the raw
-        ! E/O noise scale is candidate-independent so it does not need to be
+        ! E/O noise profile is candidate-independent so it does not need to be
         ! recomputed per shell challenge.
-        nu_noise_sigma_cached = noise_sigma
-        if( NU_DEV_OUTPUT .and. nu_l_report ) &
-            &write(logfhandle,'(A,ES12.4)') '>>> NU normalized Huber objective raw E/O scale: ', noise_sigma
+        if( allocated(nu_noise_profile_cached) ) deallocate(nu_noise_profile_cached)
+        nu_noise_profile_cached = noise_profile
+        nu_noise_rmax_cached    = noise_rmax
+        write(logfhandle,'(A,I0,A,ES11.4,A,ES11.4,A,F6.3)') '>>> NU WHITENING PROFILE: ', &
+            &size(noise_profile), ' shells, sigma(r) min ', minval(noise_profile), ' max ', &
+            &maxval(noise_profile), ' edge/centre ', noise_profile(size(noise_profile))/max(noise_profile(1),TINY)
         if( allocated(dmats_mask) ) deallocate(dmats_mask)
         n_candidates = size(cutoff_finds)
         if( n_candidates > NU_DMAT_CANDIDATE_CAP )then
@@ -98,7 +102,7 @@ contains
             dmat_cand = huge(x)
             if( nu_label_is_aux_replacement(i) )then
                 call vol_even%nu_objective(aux_even_bank(1), vol_odd, aux_odd_bank(1), dmat_cand, &
-                    &nu_lmask, noise_sigma)
+                    &nu_lmask, noise_profile, noise_rmax)
             else
                 even_cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(i))
                 odd_cache_fname  = filtered_vol_fname(string(NU_FILTER_CACHE_ODD),  cutoff_finds(i))
@@ -107,7 +111,7 @@ contains
                 call vol_even_filt%read(even_cache_fname)
                 call vol_odd_filt%read(odd_cache_fname)
                 call vol_even%nu_objective(vol_even_filt, vol_odd, vol_odd_filt, dmat_cand, &
-                    &nu_lmask, noise_sigma)
+                    &nu_lmask, noise_profile, noise_rmax)
             endif
             ! Snapshot the raw cost before candidate-scale smoothing; the envelope
             ! needs terms that were blurred identically, not per-candidate.
