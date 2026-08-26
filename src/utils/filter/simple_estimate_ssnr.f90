@@ -20,6 +20,7 @@ public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
 public :: lpstages, lpstages_fast, lpstages_setlims
 private
 #include "simple_local_flags.inc"
+real, parameter :: LPSTAGES_STAGE1_LP_FLOOR = 20.
 
 contains
 
@@ -278,13 +279,15 @@ contains
         real,    parameter :: LP2SMPD_TARGET   = 1./3.
         real,    parameter :: SMPD_TARGET_MIN  = 2.0
         integer :: findlims(2), istage, box_trial
-        real    :: frclims(2), frc_stepsz, rbox_stepsz
+        real    :: frclims(2), frc_stepsz, lpstart_lb_eff, lpstart_default_eff, rbox_stepsz
         logical :: l_verbose
         l_verbose = .true.
         if( present(verbose) ) l_verbose = verbose
+        lpstart_lb_eff      = max(lpstart_lb,      LPSTAGES_STAGE1_LP_FLOOR)
+        lpstart_default_eff = max(lpstart_default, LPSTAGES_STAGE1_LP_FLOOR)
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages')
         if( nstages == 1 )then
-            lpinfo(1)%lp      = lpfinal
+            lpinfo(1)%lp      = max(lpfinal, lpstart_default_eff)
             lpinfo(1)%l_lpset = .true.
             call calc_scaleinfo(1)
             if( l_verbose )then
@@ -295,7 +298,7 @@ contains
             return
         endif
         ! (1) calculate FRC values at the inputted boundaries
-        findlims(1) = calc_fourier_index(lpstart_lb, box, smpd)
+        findlims(1) = calc_fourier_index(lpstart_lb_eff, box, smpd)
         findlims(2) = calc_fourier_index(lpfinal,    box, smpd)
         ! (2) letting the shape of the FRC influence the limit choice, if needed
         if( l_cavgs )then
@@ -313,6 +316,7 @@ contains
         end do
         lpinfo(nstages)%lp      = lpfinal
         lpinfo(nstages)%l_lpset = .true.
+        lpinfo(1)%lp = max(lpinfo(1)%lp, LPSTAGES_STAGE1_LP_FLOOR)
         if( l_verbose )then
             print *, '########## 1st pass'
             call print_lpinfo
@@ -324,8 +328,8 @@ contains
             if( l_verbose ) print *, 'reverting to linear scheme'
             ! revert to linear scheme
             do istage = 1, nstages
-                lpinfo(istage)%lp      = lpstart_default - &
-                    &real(istage - 1) * (lpstart_default - lpfinal) / real(nstages - 1)
+                lpinfo(istage)%lp      = lpstart_default_eff - &
+                    &real(istage - 1) * (lpstart_default_eff - lpfinal) / real(nstages - 1)
                 lpinfo(istage)%l_lpset = .true.
             end do
             if( l_verbose )then
@@ -398,13 +402,15 @@ contains
         real,    parameter :: LP2SMPD_TARGET   = 0.4
         real,    parameter :: SMPD_TARGET_MIN  = 2.5
         integer :: i
+        real    :: lpstart_eff
         if( nstages < 1 ) THROW_HARD('nstages must be >= 1 in lpstages_fast')
+        lpstart_eff = max(lpstart, LPSTAGES_STAGE1_LP_FLOOR)
         lpinfo(:)%l_lpset = .true.
         do i = 1,nstages
             if( nstages == 1 )then
-                lpinfo(i)%lp = lpstop
+                lpinfo(i)%lp = max(lpstop, lpstart_eff)
             else
-                lpinfo(i)%lp = lpstart - real(i-1)*(lpstart-lpstop)/real(nstages-1)
+                lpinfo(i)%lp = lpstart_eff - real(i-1)*(lpstart_eff-lpstop)/real(nstages-1)
             endif
             call calc_scaleinfo(i)
         enddo
