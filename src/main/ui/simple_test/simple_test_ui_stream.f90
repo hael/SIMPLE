@@ -27,8 +27,9 @@ contains
 
     subroutine new_abinitio2D_stream( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call abinitio2D_stream%new('abinitio2D_stream', 'abinitio2D_stream', &
-            &'is a test program for abinitio2D_stream', 'simple_test_exec', .false.)
+        call abinitio2D_stream%new('abinitio2D_stream', 'Streaming ab initio 2D analysis', &
+            &'creates two controlled particle families and validates class averages and particle assignments', &
+            &'simple_test_exec', .false.)
         call add_ui_program('abinitio2D_stream', abinitio2D_stream, tsttab, UI_CATEGORY)
     end subroutine new_abinitio2D_stream
 
@@ -50,14 +51,17 @@ contains
 
     subroutine new_master( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call master%new('master', 'master', 'is a test program for master', 'simple_test_exec', .false.)
+        call master%new('master', 'Stream master orchestration', &
+            &'launches finite child workers and validates running and finished heartbeat metadata', &
+            &'simple_test_exec', .false.)
         call add_ui_program('master', master, tsttab, UI_CATEGORY)
     end subroutine new_master
 
     subroutine new_pick_extract( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call pick_extract%new('pick_extract', 'pick_extract', &
-            &'is a test program for pick_extract', 'simple_test_exec', .false.)
+        call pick_extract%new('pick_extract', 'Streaming particle picking and extraction', &
+            &'creates a controlled micrograph and validates reference picking and extracted-particle outputs', &
+            &'simple_test_exec', .false.)
         call add_ui_program('pick_extract', pick_extract, tsttab, UI_CATEGORY)
     end subroutine new_pick_extract
 
@@ -71,8 +75,9 @@ contains
 
     subroutine new_sieve_cavgs( tsttab )
         class(ui_hash), intent(inout) :: tsttab
-        call sieve_cavgs%new('sieve_cavgs', 'sieve_cavgs', &
-            &'is a test program for sieve_cavgs', 'simple_test_exec', .false.)
+        call sieve_cavgs%new('sieve_cavgs', 'Streaming class-average sieving', &
+            &'creates controlled good and blank class averages and validates sieve rejection and particle-state mapping', &
+            &'simple_test_exec', .false.)
         call add_ui_program('sieve_cavgs', sieve_cavgs, tsttab, UI_CATEGORY)
     end subroutine new_sieve_cavgs
 

@@ -6766,12 +6766,21 @@ Files:
 - `main/commanders/test/simple_commanders_test_stream.f90`
 
 Uses:
+- `simple_commanders_abinitio2d`
 - `simple_commanders_api`
 - `simple_commanders_pick`
+- `simple_commanders_project_ptcl`
 - `simple_commanders_sim`
+- `simple_defs_fname`
+- `simple_fileio`
+- `simple_forked_process`
+- `simple_gui_assembler`
+- `simple_gui_metadata_api`
+- `simple_ptcl_sieve`
 - `simple_stream_p01_preprocess_new`
 - `simple_stream_p02_assign_optics_new`
 - `simple_ui`
+- `unix`
 
 Public symbols:
 - `assert_output_file` — subroutine
@@ -6789,6 +6798,7 @@ Public symbols:
 - `exec_test_pick_extract` — subroutine
 - `exec_test_preproc` — subroutine
 - `exec_test_sieve_cavgs` — subroutine
+- `heartbeat_matches` — function
 
 ---
 ## Module: simple_commanders_test_utils
@@ -12515,18 +12525,27 @@ Public symbols:
 Private symbols:
 - `detect_peaks` — subroutine
 - `distance_filter` — subroutine
+- `distance_filter_legacy` — subroutine
+- `distance_filter_optimized` — subroutine
 - `get_loc_sdevs` — subroutine
 - `get_nboxes` — function
 - `get_positions` — subroutine
 - `get_scores` — subroutine
 - `kill` — subroutine
+- `limit_nboxes` — subroutine
 - `match_boximgs` — subroutine
+- `match_boximgs_legacy` — subroutine
+- `match_boximgs_optimized` — subroutine
 - `new` — subroutine
 - `peak_vs_nonpeak_stats` — subroutine
 - `refine_upscaled` — subroutine
+- `refine_upscaled_legacy` — subroutine
+- `refine_upscaled_optimized` — subroutine
 - `refpick` — subroutine
 - `remove_outliers` — subroutine
 - `report_boxfile` — subroutine
+- `report_compare_benchmark` — subroutine
+- `report_stage_benchmark` — subroutine
 - `report_thumb_den` — subroutine
 - `setup_iterators` — subroutine
 - `write_boxfile` — subroutine

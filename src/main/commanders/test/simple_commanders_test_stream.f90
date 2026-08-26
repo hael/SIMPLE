@@ -43,9 +43,137 @@ end type commander_test_sieve_cavgs
 contains
 
 subroutine exec_test_abinitio2D_stream( self, cline )
+    use simple_commanders_abinitio2D,   only: commander_abinitio2D
+    use simple_commanders_project_ptcl, only: commander_import_particles
+    use simple_defs_fname,              only: ABINITIO2D_FINISHED, METADATA_EXT, MRC_EXT
+    use simple_ui,                      only: make_ui
     class(commander_test_abinitio2D_stream), intent(inout) :: self
     class(cmdline),                         intent(inout) :: cline
-    write(logfhandle,'(a)') '>>> TEST_ABINITIO2D_STREAM: DUMMY'
+    character(len=*), parameter :: PROJNAME       = 'stream_abinitio2D_chunk'
+    character(len=*), parameter :: PROJFILE       = PROJNAME//METADATA_EXT
+    character(len=*), parameter :: PARTICLE_STACK = 'stream_particles'//MRC_EXT
+    real,             parameter :: SMPD            = 2.0
+    real,             parameter :: MSKDIAM         = 32.0
+    integer,          parameter :: BOX             = 32
+    integer,          parameter :: NCLASSES        = 2
+    integer,          parameter :: NPARTICLES      = 24
+    integer,          parameter :: NPER_CLASS      = NPARTICLES / NCLASSES
+    type(commander_import_particles) :: ximport_particles
+    type(commander_abinitio2D)       :: xabinitio2D
+    type(cmdline)                     :: cline_import, cline_abinitio2D
+    type(image)                       :: particle, feature
+    type(sp_project)                  :: project, result
+    type(string)                      :: cwd_root, fixture_root, project_path, stack_path, cavgs_path
+    integer                           :: i, icls, status, ldim(3), nclasses_out, nimages
+    real                              :: cavgs_smpd
+
+    call make_ui
+    call simple_getcwd(cwd_root)
+    fixture_root = 'test_abinitio2D_stream_'//int2str(get_process_id())
+    if( dir_exists(fixture_root) ) THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: fixture directory already exists')
+    call simple_mkdir(fixture_root)
+    call simple_chdir(fixture_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: could not enter fixture directory')
+    call simple_getcwd(fixture_root)
+
+    ! Build two asymmetric particle families representative of one completed
+    ! stream-extraction chunk.  Each family contains a centered component and
+    ! a different off-axis feature so that the images contain real 2D signal.
+    do i = 1, NPARTICLES
+        icls = 1 + (i - 1) / NPER_CLASS
+        call particle%new([BOX, BOX, 1], SMPD, wthreads=.false.)
+        call particle%zero()
+        call feature%new([BOX, BOX, 1], SMPD, wthreads=.false.)
+        call feature%square(5)
+        call feature%mul(2.)
+        call particle%add(feature)
+        call feature%kill()
+        call feature%new([BOX, BOX, 1], SMPD, wthreads=.false.)
+        if( icls == 1 )then
+            call feature%square(2)
+            call feature%shift([7., -4., 0.])
+        else
+            call feature%square(3)
+            call feature%shift([-6., 5., 0.])
+        endif
+        call particle%add(feature)
+        call particle%write(string(PARTICLE_STACK), i, del_if_exists=(i == 1))
+        call feature%kill()
+        call particle%kill()
+    enddo
+    stack_path   = simple_abspath(string(PARTICLE_STACK))
+    project_path = filepath(fixture_root, PROJFILE)
+    call project%update_projinfo(project_path)
+    call project%write(project_path)
+    call project%kill()
+
+    ! Import exactly as a stream chunk project presents extracted particles to
+    ! its finite abinitio2D child command.
+    call cline_import%set('prg',      'import_particles')
+    call cline_import%set('projfile', project_path)
+    call cline_import%set('stk',      stack_path)
+    call cline_import%set('smpd',     SMPD)
+    call cline_import%set('ctf',      'no')
+    call cline_import%set('mkdir',    'no')
+    call cline_import%printline(unit=6)
+    call ximport_particles%execute(cline_import)
+
+    ! The top-level stream commander is a watcher and cannot terminate inside
+    ! a unit test.  Its chunk analysis dispatches this production commander.
+    ! One stage and one iteration keep the behavioral test compact.
+    call cline_abinitio2D%set('prg',            'abinitio2D')
+    call cline_abinitio2D%set('projfile',       project_path)
+    call cline_abinitio2D%set('ncls',           NCLASSES)
+    call cline_abinitio2D%set('mskdiam',        MSKDIAM)
+    call cline_abinitio2D%set('nthr',           1)
+    call cline_abinitio2D%set('mkdir',          'no')
+    call cline_abinitio2D%set('autoscale',      'no')
+    call cline_abinitio2D%set('center',         'no')
+    call cline_abinitio2D%set('cls_init',       'ptcl')
+    call cline_abinitio2D%set('refine',         'snhc_smpl')
+    call cline_abinitio2D%set('inpl_cont',      'no')
+    call cline_abinitio2D%set('sigma_est',      'global')
+    call cline_abinitio2D%set('ml_reg',         'no')
+    call cline_abinitio2D%set('lp',             20.0)
+    call cline_abinitio2D%set('extr_lim',       4)
+    call cline_abinitio2D%set('nits_per_stage', 1)
+    call cline_abinitio2D%set('nstages',        1)
+    call cline_abinitio2D%set('rank_cavgs',     'no')
+    call cline_abinitio2D%printline(unit=6)
+    call xabinitio2D%execute(cline_abinitio2D)
+
+    if( .not. file_exists(filepath(fixture_root, ABINITIO2D_FINISHED)) )&
+        &THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: completion marker was not created')
+    call result%read(project_path)
+    if( result%get_nptcls() /= NPARTICLES )&
+        &THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: particle count changed during classification')
+    if( result%os_cls2D%get_noris() /= NCLASSES )&
+        &THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: expected two output classes')
+    do i = 1, NPARTICLES
+        icls = result%os_ptcl2D%get_class(i)
+        if( icls < 1 .or. icls > NCLASSES )&
+            &THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: particle lacks a valid class assignment')
+    enddo
+    if( nint(sum(result%os_cls2D%get_all('pop'))) /= NPARTICLES )&
+        &THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: class populations do not cover all particles')
+    call result%get_cavgs_stk(cavgs_path, nclasses_out, cavgs_smpd, imgkind='cavg')
+    if( nclasses_out /= NCLASSES .or. abs(cavgs_smpd - SMPD) > 0.01 )&
+        &THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: class-average metadata is incorrect')
+    if( .not. file_exists(cavgs_path) )&
+        &THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: final class-average stack was not created')
+    call find_ldim_nptcls(cavgs_path, ldim, nimages)
+    if( nimages /= NCLASSES .or. any(ldim(1:2) /= [BOX, BOX]) )&
+        &THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: final class-average stack is invalid')
+    call result%kill()
+
+    call cline_import%kill()
+    call cline_abinitio2D%kill()
+    call simple_chdir(cwd_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_ABINITIO2D_STREAM FAILED: could not restore the original directory')
+    write(*,'(a,a)') '>>> TEST_ABINITIO2D_STREAM: validated two class averages and all particle assignments in ', &
+        &fixture_root%to_char()
+    call flush(6)
+    call simple_end('**** SIMPLE_TEST_ABINITIO2D_STREAM NORMAL STOP ****')
 end subroutine exec_test_abinitio2D_stream
 
 subroutine exec_test_assign_optics( self, cline )
@@ -272,15 +400,248 @@ subroutine exec_test_gen_pickrefs( self, cline )
 end subroutine exec_test_gen_pickrefs
 
 subroutine exec_test_master( self, cline )
+    use unix,                  only: c_usleep
+    use simple_forked_process, only: forked_process, FORK_POLL_TIME
+    use simple_gui_assembler,  only: gui_assembler
+    use simple_gui_metadata_api, only: CK, json_core, json_value
     class(commander_test_master), intent(inout) :: self
     class(cmdline),                intent(inout) :: cline
-    write(logfhandle,'(a)') '>>> TEST_MASTER: DUMMY'
+    integer,          parameter :: TEST_JOB_ID = 42
+    integer,          parameter :: NSTAGES     = 8
+    character(len=24), parameter :: STAGE_NAMES(NSTAGES) = [character(len=24) :: &
+        &'preprocessing', 'assign_optics', 'initial_picking', 'opening2D', &
+        &'reference_picking', 'particle_sieving', 'pool2D', 'master']
+    type(forked_process) :: fork_preprocess, fork_assign_optics, fork_opening2D
+    type(forked_process) :: fork_reference_picking, fork_particle_sieving, fork_pool2D
+    type(gui_assembler)  :: assembler
+    type(string)         :: running_heartbeat, finished_heartbeat
+    integer              :: rc
+
+#if defined(_WIN32)
+    write(*,'(a)') '>>> TEST_MASTER: skipped because forked processes are unavailable on Windows'
+#else
+    write(*,'(a,i0)') '>>> TEST_MASTER JOB ID: ', TEST_JOB_ID
+    write(*,'(a,i0)') '>>> TEST_MASTER HEARTBEAT ENTRIES: ', NSTAGES
+
+    ! The production master reports six forked workers as seven GUI stages:
+    ! initial_picking and opening2D deliberately share the opening2D process.
+    ! Use the finite default fork worker so the orchestration lifecycle can be
+    ! exercised without starting the persistent Stream pipeline or NICE.
+    call assembler%new(TEST_JOB_ID)
+    call fork_preprocess%start(        name=string('TEST_MASTER_PREPROCESS'))
+    call fork_assign_optics%start(      name=string('TEST_MASTER_ASSIGN_OPTICS'))
+    call fork_opening2D%start(           name=string('TEST_MASTER_OPENING2D'))
+    call fork_reference_picking%start(   name=string('TEST_MASTER_REFERENCE_PICKING'))
+    call fork_particle_sieving%start(    name=string('TEST_MASTER_PARTICLE_SIEVING'))
+    call fork_pool2D%start(               name=string('TEST_MASTER_POOL2D'))
+    rc = c_usleep(FORK_POLL_TIME * 5)
+
+    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
+        &fork_reference_picking, fork_particle_sieving, fork_pool2D)
+    running_heartbeat = assembler%to_string()
+
+    call fork_preprocess%terminate()
+    call fork_assign_optics%terminate()
+    call fork_opening2D%terminate()
+    call fork_reference_picking%terminate()
+    call fork_particle_sieving%terminate()
+    call fork_pool2D%terminate()
+    call fork_preprocess%await_final_status()
+    call fork_assign_optics%await_final_status()
+    call fork_opening2D%await_final_status()
+    call fork_reference_picking%await_final_status()
+    call fork_particle_sieving%await_final_status()
+    call fork_pool2D%await_final_status()
+
+    call assembler%set_stoptime()
+    call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_opening2D, &
+        &fork_reference_picking, fork_particle_sieving, fork_pool2D)
+    finished_heartbeat = assembler%to_string()
+    call assembler%kill()
+
+    if( .not. heartbeat_matches(running_heartbeat, 'running') )&
+        &THROW_HARD('TEST_MASTER FAILED: running heartbeat is incomplete or incorrect')
+    if( .not. heartbeat_matches(finished_heartbeat, 'finished') )&
+        &THROW_HARD('TEST_MASTER FAILED: finished heartbeat is incomplete or incorrect')
+
+    write(*,'(a)') '>>> TEST_MASTER: validated running and finished lifecycle heartbeats for all Stream stages'
+#endif
+    call flush(6)
+    call simple_end('**** SIMPLE_TEST_MASTER NORMAL STOP ****')
+
+contains
+
+    function heartbeat_matches( payload, expected_status ) result( matches )
+        type(string),     intent(in) :: payload
+        character(len=*), intent(in) :: expected_status
+        type(json_core)              :: json
+        type(json_value), pointer    :: root
+        character(kind=CK,len=:), allocatable :: actual_status
+        character(len=:),         allocatable :: path
+        integer :: i, job_id, pid, starttime, stoptime
+        logical :: found, matches
+
+        matches = .false.
+        nullify(root)
+        call json%initialize()
+        call json%parse(root, payload%to_char())
+        if( json%failed() .or. .not. associated(root) ) goto 100
+        call json%get(root, 'jobid', job_id, found)
+        if( .not. found ) goto 100
+        if( job_id /= TEST_JOB_ID ) goto 100
+
+        do i = 1, NSTAGES
+            path = 'stream_heartbeat.'//trim(STAGE_NAMES(i))
+            call json%get(root, path//'.status', actual_status, found)
+            if( .not. found ) goto 100
+            if( actual_status /= expected_status ) goto 100
+            call json%get(root, path//'.pid', pid, found)
+            if( .not. found ) goto 100
+            if( pid <= 0 ) goto 100
+            call json%get(root, path//'.starttime', starttime, found)
+            if( .not. found ) goto 100
+            if( starttime <= 0 ) goto 100
+            call json%get(root, path//'.stoptime', stoptime, found)
+            if( .not. found ) goto 100
+            if( expected_status == 'running' .and. stoptime /= 0 ) goto 100
+            if( expected_status == 'finished' .and. stoptime <= 0 ) goto 100
+        enddo
+        matches = .true.
+
+100     if( associated(root) ) call json%destroy(root)
+    end function heartbeat_matches
 end subroutine exec_test_master
 
 subroutine exec_test_pick_extract( self, cline )
+    use simple_commanders_pick, only: commander_pick_extract
+    use simple_ui,              only: make_ui
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
     class(commander_test_pick_extract), intent(inout) :: self
     class(cmdline),                     intent(inout) :: cline
-    write(logfhandle,'(a)') '>>> TEST_PICK_EXTRACT: DUMMY'
+    character(len=*), parameter :: MICROGRAPH_FILE = 'synthetic_micrograph.mrc'
+    character(len=*), parameter :: PICKREFS_FILE   = 'synthetic_pickrefs.mrcs'
+    character(len=*), parameter :: TEST_PROJFILE   = 'test_pick_extract.simple'
+    real,             parameter :: SMPD             = 2.0
+    integer,          parameter :: MICROGRAPH_BOX   = 256
+    integer,          parameter :: PICKREF_BOX      = 64
+    integer,          parameter :: EXTRACT_BOX      = 64
+    integer,          parameter :: NPARTICLES       = 3
+    integer,          parameter :: PARTICLE_COORDS(2, NPARTICLES) = reshape(&
+        &[32, 32, 160, 40, 96, 152], [2, NPARTICLES])
+    type(commander_pick_extract) :: xpick_extract
+    type(cmdline)                :: cline_pick_extract
+    type(image)                  :: micrograph, reference, feature, extracted
+    type(sp_project)             :: fixture, result
+    type(string)                 :: cwd_root, fixture_root, micrograph_path, pickrefs_path
+    type(string)                 :: project_path, boxfile_path, thumbnail_path, stack_path
+    integer                      :: i, status, npicked, nimages, ldim(3)
+    real                         :: output_smpd, extracted_variance
+
+    call make_ui
+    call simple_getcwd(cwd_root)
+    fixture_root = 'test_pick_extract_'//int2str(get_process_id())
+    if( dir_exists(fixture_root) ) THROW_HARD('TEST_PICK_EXTRACT FAILED: fixture directory already exists')
+    call simple_mkdir(fixture_root)
+    call simple_chdir(fixture_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_PICK_EXTRACT FAILED: could not enter fixture directory')
+    call simple_getcwd(fixture_root)
+
+    ! Build an asymmetric reference and place three exact copies on a weak-noise
+    ! micrograph.  This gives the reference picker controlled, unambiguous peaks.
+    call reference%new([PICKREF_BOX, PICKREF_BOX, 1], SMPD, wthreads=.false.)
+    call reference%square(7)
+    call feature%new([PICKREF_BOX, PICKREF_BOX, 1], SMPD, wthreads=.false.)
+    call feature%square(3)
+    call feature%shift([11., -7., 0.])
+    call reference%add(feature)
+    call reference%mul(5.)
+    call reference%write(string(PICKREFS_FILE), 1, del_if_exists=.true.)
+    call micrograph%new([MICROGRAPH_BOX, MICROGRAPH_BOX, 1], SMPD, wthreads=.false.)
+    call micrograph%gauran(0., 0.02)
+    do i = 1, NPARTICLES
+        call micrograph%add_window(reference, PARTICLE_COORDS(:, i))
+    enddo
+    call micrograph%write(string(MICROGRAPH_FILE), 1, del_if_exists=.true.)
+    call feature%kill
+    call reference%kill
+    call micrograph%kill
+    micrograph_path = simple_abspath(string(MICROGRAPH_FILE))
+    pickrefs_path   = simple_abspath(string(PICKREFS_FILE))
+
+    ! Reproduce the single-micrograph project handed to a Stream pick_extract job.
+    project_path = filepath(fixture_root, TEST_PROJFILE)
+    call fixture%os_mic%new(1, is_ptcl=.false.)
+    call fixture%os_mic%set(1, 'movie',     micrograph_path)
+    call fixture%os_mic%set(1, 'intg',      micrograph_path)
+    call fixture%os_mic%set(1, 'imgkind',   'mic')
+    call fixture%os_mic%set(1, 'state',     1.0)
+    call fixture%os_mic%set(1, 'importind', 1.0)
+    call fixture%os_mic%set(1, 'xdim',      real(MICROGRAPH_BOX))
+    call fixture%os_mic%set(1, 'ydim',      real(MICROGRAPH_BOX))
+    call fixture%os_mic%set(1, 'nframes',   1.0)
+    call fixture%os_mic%set(1, 'smpd',      SMPD)
+    call fixture%update_projinfo(project_path)
+    call fixture%write(project_path)
+    call fixture%kill
+
+    call cline_pick_extract%set('prg',             'pick_extract')
+    call cline_pick_extract%set('projfile',         project_path)
+    call cline_pick_extract%set('pickrefs',         pickrefs_path)
+    call cline_pick_extract%set('dir',              fixture_root)
+    call cline_pick_extract%set('stream',           'yes')
+    call cline_pick_extract%set('extract',          'yes')
+    call cline_pick_extract%set('picker',           'new')
+    call cline_pick_extract%set('pcontrast',        'white')
+    call cline_pick_extract%set('pick_roi',         'no')
+    call cline_pick_extract%set('backgr_subtr',     'no')
+    call cline_pick_extract%set('refpick_backend',  'legacy')
+    call cline_pick_extract%set('nboxes_max',       NPARTICLES)
+    call cline_pick_extract%set('box_extract',      EXTRACT_BOX)
+    call cline_pick_extract%set('fromp',            1)
+    call cline_pick_extract%set('top',              1)
+    call cline_pick_extract%set('nthr',             1)
+    call cline_pick_extract%set('mkdir',            'no')
+    call cline_pick_extract%printline(unit=6)
+    call xpick_extract%execute(cline_pick_extract)
+
+    if( .not. file_exists(project_path) ) THROW_HARD('TEST_PICK_EXTRACT FAILED: output project was not created')
+    call result%read(project_path)
+    if( result%os_mic%get_noris() /= 1 )&
+        &THROW_HARD('TEST_PICK_EXTRACT FAILED: output project does not contain one micrograph')
+    if( result%os_mic%get_state(1) /= 1 )&
+        &THROW_HARD('TEST_PICK_EXTRACT FAILED: controlled micrograph was rejected')
+    npicked = result%os_mic%get_int(1, 'nptcls')
+    if( npicked /= NPARTICLES )&
+        &THROW_HARD('TEST_PICK_EXTRACT FAILED: expected three picked particles')
+    boxfile_path  = result%os_mic%get_str(1, 'boxfile')
+    thumbnail_path = result%os_mic%get_str(1, 'thumb_den')
+    if( .not. file_exists(boxfile_path) ) THROW_HARD('TEST_PICK_EXTRACT FAILED: box file was not created')
+    if( .not. file_exists(thumbnail_path) ) THROW_HARD('TEST_PICK_EXTRACT FAILED: density thumbnail was not created')
+    if( result%os_ptcl2D%get_noris() /= npicked .or. result%os_ptcl3D%get_noris() /= npicked )&
+        &THROW_HARD('TEST_PICK_EXTRACT FAILED: particle metadata count does not match picking output')
+    if( result%os_stk%get_noris() /= 1 ) THROW_HARD('TEST_PICK_EXTRACT FAILED: extraction stack metadata is missing')
+    stack_path = result%os_stk%get_str(1, 'stk')
+    if( .not. file_exists(stack_path) ) THROW_HARD('TEST_PICK_EXTRACT FAILED: extracted particle stack was not created')
+    call find_ldim_nptcls(stack_path, ldim, nimages)
+    if( nimages /= npicked ) THROW_HARD('TEST_PICK_EXTRACT FAILED: extracted image count does not match picking output')
+    if( any(ldim(1:2) /= [EXTRACT_BOX, EXTRACT_BOX]) )&
+        &THROW_HARD('TEST_PICK_EXTRACT FAILED: extracted particle dimensions are incorrect')
+    output_smpd = find_img_smpd(stack_path)
+    if( abs(output_smpd - SMPD) > 0.01 ) THROW_HARD('TEST_PICK_EXTRACT FAILED: extraction sampling distance changed')
+    call extracted%new([EXTRACT_BOX, EXTRACT_BOX, 1], SMPD, wthreads=.false.)
+    call extracted%read(stack_path, 1)
+    extracted_variance = extracted%variance()
+    if( .not. ieee_is_finite(extracted_variance) .or. extracted_variance <= TINY )&
+        &THROW_HARD('TEST_PICK_EXTRACT FAILED: extracted particle data are invalid')
+    call extracted%kill
+    call result%kill
+
+    call cline_pick_extract%kill
+    call simple_chdir(cwd_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_PICK_EXTRACT FAILED: could not restore the original directory')
+    write(*,'(a,i0,a,a)') '>>> TEST_PICK_EXTRACT: validated ', npicked, ' extracted particles in ', fixture_root%to_char()
+    call flush(6)
+    call simple_end('**** SIMPLE_TEST_PICK_EXTRACT NORMAL STOP ****')
 end subroutine exec_test_pick_extract
 
 subroutine exec_test_preproc( self, cline )
@@ -453,9 +814,196 @@ subroutine exec_test_preproc( self, cline )
 end subroutine exec_test_preproc
 
 subroutine exec_test_sieve_cavgs( self, cline )
+    use simple_defs_fname, only: ABINITIO2D_FINISHED, JPG_EXT, METADATA_EXT, MRC_EXT
+    use simple_fileio,     only: simple_touch
+    use simple_ptcl_sieve, only: ptcl_sieve
+    use simple_ui,         only: make_ui
     class(commander_test_sieve_cavgs), intent(inout) :: self
     class(cmdline),                    intent(inout) :: cline
-    write(logfhandle,'(a)') '>>> TEST_SIEVE_CAVGS: DUMMY'
+    character(len=*), parameter :: CHUNK_TIER_DIR = 'chunks_coarse'
+    character(len=*), parameter :: CHUNK_STEM     = 'chunk_coarse_1'
+    character(len=*), parameter :: CAVG_STACK     = 'cavgs_iter001'//MRC_EXT
+    character(len=*), parameter :: COMPLETED_DIR  = 'completed'
+    real,             parameter :: SMPD            = 2.0
+    integer,          parameter :: CAVG_BOX        = 64
+    integer,          parameter :: NCLASSES        = 2
+    integer,          parameter :: NPARTICLES      = 8
+    integer,          parameter :: NPARTICLES_PER_CLASS = NPARTICLES / NCLASSES
+    type(ptcl_sieve)              :: sieve
+    type(parameters)              :: params_sieve
+    type(cmdline)                 :: cline_sieve
+    type(image)                   :: cavg_good, cavg_bad, feature
+    type(sp_project)              :: chunk_project, result
+    type(string)                  :: cwd_root, fixture_root, chunk_dir, completed_path
+    type(string)                  :: chunk_projfile, cavg_path, completed_projfile
+    type(string)                  :: latest_jpeg, latest_stk, rejection_reason
+    type(string)                  :: selected_jpeg, rejected_jpeg, reasons_jpeg, reasons_key
+    integer,          allocatable :: latest_inds(:), latest_pops(:), latest_selection(:)
+    real,             allocatable :: latest_res(:)
+    integer                       :: i, icls, status, ldim(3), nimages, xtiles, ytiles
+    logical                       :: has_latest
+
+    call make_ui
+    call simple_getcwd(cwd_root)
+    fixture_root = 'test_sieve_cavgs_'//int2str(get_process_id())
+    if( dir_exists(fixture_root) ) THROW_HARD('TEST_SIEVE_CAVGS FAILED: fixture directory already exists')
+    call simple_mkdir(fixture_root)
+    call simple_chdir(fixture_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_SIEVE_CAVGS FAILED: could not enter fixture directory')
+    call simple_getcwd(fixture_root)
+
+    chunk_dir = filepath(fixture_root, CHUNK_TIER_DIR)
+    call simple_mkdir(chunk_dir)
+    chunk_dir = filepath(chunk_dir, CHUNK_STEM)
+    call simple_mkdir(chunk_dir)
+    completed_path = filepath(fixture_root, COMPLETED_DIR)
+    call simple_mkdir(completed_path)
+    chunk_projfile = filepath(chunk_dir, CHUNK_STEM//METADATA_EXT)
+    cavg_path       = filepath(chunk_dir, CAVG_STACK)
+
+    ! Class 1 contains a strong centered component and should survive the
+    ! hard gates.  Class 2 is blank and must be rejected as NO_COMPONENT.
+    call cavg_good%new([CAVG_BOX, CAVG_BOX, 1], SMPD, wthreads=.false.)
+    call cavg_good%gauran(0., 0.02)
+    call feature%new([CAVG_BOX, CAVG_BOX, 1], SMPD, wthreads=.false.)
+    call feature%square(8)
+    call feature%mul(5.)
+    call cavg_good%add(feature)
+    call cavg_good%write(cavg_path, 1, del_if_exists=.true.)
+    call cavg_bad%new([CAVG_BOX, CAVG_BOX, 1], SMPD, wthreads=.false.)
+    call cavg_bad%zero()
+    call cavg_bad%write(cavg_path, 2)
+    call feature%kill()
+    call cavg_good%kill()
+    call cavg_bad%kill()
+
+    ! Reproduce a completed coarse abinitio2D chunk awaiting sieve rejection.
+    call chunk_project%os_mic%new(1, is_ptcl=.false.)
+    call chunk_project%os_mic%set_state(1, 1)
+    call chunk_project%os_mic%set(1, 'imgkind', 'mic')
+    call chunk_project%os_mic%set(1, 'nptcls', NPARTICLES)
+    call chunk_project%os_mic%set(1, 'smpd', SMPD)
+    call chunk_project%os_ptcl2D%new(NPARTICLES, is_ptcl=.true.)
+    do i = 1, NPARTICLES
+        icls = 1 + (i - 1) / NPARTICLES_PER_CLASS
+        call chunk_project%os_ptcl2D%set_class(i, icls)
+        call chunk_project%os_ptcl2D%set_state(i, 1)
+        call chunk_project%os_ptcl2D%set_stkind(i, 1)
+        call chunk_project%os_ptcl2D%set(i, 'indstk', i)
+    enddo
+    chunk_project%os_ptcl3D = chunk_project%os_ptcl2D
+    call chunk_project%add_cavgs2os_out(cavg_path, SMPD, imgkind='cavg')
+    do icls = 1, NCLASSES
+        call chunk_project%os_cls2D%set_class(icls, icls)
+        call chunk_project%os_cls2D%set_state(icls, 1)
+        call chunk_project%os_cls2D%set(icls, 'pop', NPARTICLES_PER_CLASS)
+        call chunk_project%os_cls2D%set(icls, 'res', 10.0)
+        call chunk_project%os_cls2D%set(icls, 'corr', 0.9)
+    enddo
+    chunk_project%os_cls3D = chunk_project%os_cls2D
+    call chunk_project%update_projinfo(chunk_projfile)
+
+    ! Use the production ptcl_sieve collector in coarse-only mode.  Disabling
+    ! the learned model isolates the deterministic sieve hard-gate contract.
+    call cline_sieve%set('prg',               'sieve_cavgs')
+    call cline_sieve%set('projfile',          chunk_projfile)
+    call cline_sieve%set('dir_target',        fixture_root)
+    call cline_sieve%set('ncls',              NCLASSES)
+    call cline_sieve%set('nptcls_per_cls',    NPARTICLES_PER_CLASS)
+    call cline_sieve%set('nchunksperset',     1)
+    call cline_sieve%set('nchunks',           1)
+    call cline_sieve%set('nparts',            1)
+    call cline_sieve%set('nthr',              1)
+    call cline_sieve%set('nptcls_coarse',     NPARTICLES)
+    call cline_sieve%set('ncls_coarse',       NCLASSES)
+    call cline_sieve%set('box_coarse',        CAVG_BOX)
+    call cline_sieve%set('nsample_coarse',    NPARTICLES)
+    call cline_sieve%set('lpstart',           20.0)
+    call cline_sieve%set('lpstop_coarse',     15.0)
+    call cline_sieve%set('mskdiam',           80.0)
+    call cline_sieve%set('single_pass',       'yes')
+    call cline_sieve%set('use_model',         'no')
+    call cline_sieve%set('qsys_name',         'local')
+    call cline_sieve%set('walltime',          60)
+    call cline_sieve%set('mkdir',             'no')
+    call cline_sieve%printline(unit=6)
+    call chunk_project%update_compenv(cline_sieve)
+    call chunk_project%write(chunk_projfile)
+    call chunk_project%kill()
+    call simple_touch(filepath(chunk_dir, ABINITIO2D_FINISHED))
+    call params_sieve%new(cline_sieve)
+    call sieve%new(params_sieve, completed_path)
+    call sieve%collect_and_reject()
+
+    if( sieve%get_n_chunks_coarse() /= 1 ) THROW_HARD('TEST_SIEVE_CAVGS FAILED: coarse chunk was not imported')
+    if( sieve%get_n_coarse_accepted_ptcls() /= NPARTICLES_PER_CLASS )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: accepted-particle count is incorrect')
+    if( sieve%get_n_coarse_rejected_ptcls() /= NPARTICLES_PER_CLASS )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: rejected-particle count is incorrect')
+    if( sieve%get_n_accepted_ptcls() /= NPARTICLES_PER_CLASS .or. &
+        &sieve%get_n_rejected_ptcls() /= NPARTICLES_PER_CLASS .or. &
+        &sieve%get_n_total_particles() /= NPARTICLES )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: final sieve counters are inconsistent')
+    if( sieve%get_n_accepted_micrographs() /= 1 )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: accepted-micrograph count is incorrect')
+    if( .not. sieve%get_finished() ) THROW_HARD('TEST_SIEVE_CAVGS FAILED: coarse-only sieve did not finish')
+    if( .not. file_exists(filepath(chunk_dir, 'REJECTION_FINISHED')) )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: rejection sentinel was not created')
+    if( .not. file_exists(filepath(chunk_dir, 'COMPLETE')) )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: completion sentinel was not created')
+
+    call result%read(chunk_projfile)
+    if( any(result%os_cls2D%get_all_asint('state') /= [1, 0]) )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: class-average selection is incorrect')
+    if( result%os_ptcl2D%count_state_gt_zero() /= NPARTICLES_PER_CLASS .or. &
+        &result%os_ptcl3D%count_state_gt_zero() /= NPARTICLES_PER_CLASS )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: class selection was not mapped to particles')
+    ! The persisted orientation reader tokenizes character values at blanks,
+    ! so the stable round-tripped portion of the full reason is its tier prefix.
+    rejection_reason = result%os_cls2D%get_str(2, 'rejection_reason')
+    write(*,'(a,a)') '>>> TEST_SIEVE_CAVGS REJECTION REASON: ', rejection_reason%to_char()
+    if( .not. rejection_reason%has_substr('coarse_reject') )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: rejected class does not record coarse rejection')
+    call result%kill()
+
+    completed_projfile = filepath(completed_path, CHUNK_STEM//METADATA_EXT)
+    if( .not. file_exists(completed_projfile) )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: completed project was not exported')
+    selected_jpeg = filepath(chunk_dir, CHUNK_STEM//'_selected'//JPG_EXT)
+    rejected_jpeg = filepath(chunk_dir, CHUNK_STEM//'_rejected'//JPG_EXT)
+    reasons_jpeg  = filepath(chunk_dir, CHUNK_STEM//'_all_reasons'//JPG_EXT)
+    reasons_key   = reasons_jpeg//'.key.txt'
+    if( .not. file_exists(selected_jpeg) .or. .not. file_exists(rejected_jpeg) )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: selected/rejected previews were not created')
+    if( .not. file_exists(reasons_jpeg) .or. .not. file_exists(reasons_key) )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: rejection-reason report was not created')
+
+    has_latest = sieve%get_latest(latest_inds, latest_pops, latest_res, latest_jpeg, latest_stk, &
+        &xtiles, ytiles, latest_selection)
+    if( .not. has_latest ) THROW_HARD('TEST_SIEVE_CAVGS FAILED: latest class-average metadata is missing')
+    if( size(latest_inds) /= NCLASSES .or. any(latest_inds /= [1, 2]) .or. &
+        &any(latest_pops /= [NPARTICLES_PER_CLASS, NPARTICLES_PER_CLASS]) .or. &
+        &any(latest_selection /= [1, 0]) )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: latest class-average metadata is incorrect')
+    if( any(abs(latest_res - 10.0) > 0.01) .or. xtiles * ytiles < NCLASSES )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: latest preview geometry or resolution is incorrect')
+    if( .not. file_exists(latest_jpeg) .or. .not. file_exists(latest_stk) )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: latest preview files are missing')
+    call find_ldim_nptcls(latest_stk, ldim, nimages)
+    if( nimages /= NCLASSES .or. any(ldim(1:2) /= [CAVG_BOX, CAVG_BOX]) )&
+        &THROW_HARD('TEST_SIEVE_CAVGS FAILED: retained class-average stack is invalid')
+
+    if( allocated(latest_inds)      ) deallocate(latest_inds)
+    if( allocated(latest_pops)      ) deallocate(latest_pops)
+    if( allocated(latest_res)       ) deallocate(latest_res)
+    if( allocated(latest_selection) ) deallocate(latest_selection)
+    call sieve%kill()
+    call cline_sieve%kill()
+    call simple_chdir(cwd_root, status)
+    if( status /= 0 ) THROW_HARD('TEST_SIEVE_CAVGS FAILED: could not restore the original directory')
+    write(*,'(a,a)') '>>> TEST_SIEVE_CAVGS: validated one selected and one rejected class in ', fixture_root%to_char()
+    call flush(6)
+    call simple_end('**** SIMPLE_TEST_SIEVE_CAVGS NORMAL STOP ****')
 end subroutine exec_test_sieve_cavgs
 
 end module simple_commanders_test_stream

@@ -58,6 +58,7 @@ contains
     procedure, private :: match_boximgs_legacy
     procedure, private :: match_boximgs_optimized
     procedure, private :: detect_peaks
+    procedure, private :: limit_nboxes
     procedure, private :: distance_filter
     procedure, private :: distance_filter_legacy
     procedure, private :: distance_filter_optimized
@@ -130,6 +131,7 @@ contains
             call self_refine%setup_iterators
             call self_refine%refine_upscaled(pos, self%smpd_shrink, self%offset)
             call self_refine%distance_filter
+            call self_refine%limit_nboxes
             deallocate(pos)
             call self%report_compare_benchmark(self_refine)
         else
@@ -471,10 +473,32 @@ contains
             self%box_scores = -1.
         end where
         self%npeaks = count(self%box_scores >= self%t)
+        call self%limit_nboxes
         write(logfhandle,'(a,1x,f5.2)') 'peak threshold identified:             ', self%t
         write(logfhandle,'(a,1x,I5)'  ) '# peaks detected:                      ', self%npeaks
         deallocate(tmp)
     end subroutine detect_peaks
+
+    subroutine limit_nboxes( self )
+        class(pickref), intent(inout) :: self
+        real, allocatable :: scores(:)
+        integer, allocatable :: order(:)
+        logical, allocatable :: candidate_mask(:,:), keep_mask(:,:), selected(:)
+        integer :: i, npeaks
+        if( self%nboxes_max <= 0 .or. self%npeaks <= self%nboxes_max ) return
+        candidate_mask = self%box_scores >= self%t
+        scores          = pack(self%box_scores, mask=candidate_mask)
+        npeaks          = size(scores)
+        order           = [(i, i=1,npeaks)]
+        allocate(selected(npeaks), source=.false.)
+        call hpsort(scores, order)
+        selected(order(npeaks-self%nboxes_max+1:npeaks)) = .true.
+        keep_mask = unpack(selected, candidate_mask, .false.)
+        where( .not. keep_mask ) self%box_scores = -1.
+        self%t      = minval(self%box_scores, mask=keep_mask)
+        self%npeaks = count(keep_mask)
+        write(logfhandle,'(a,1x,I5)') '# peaks retained by nboxes_max:         ', self%npeaks
+    end subroutine limit_nboxes
 
     subroutine distance_filter( self )
         class(pickref), intent(inout) :: self
