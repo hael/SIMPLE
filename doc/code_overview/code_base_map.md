@@ -35,6 +35,8 @@
       - `simple_continuous_inplane_refine3D_recovery.f90`
       - `simple_continuous_inplane_refine3D_state.f90`
       - `simple_pose_cont_refinement_batch_helpers.f90`
+      - `simple_pose_cont_refinement_calibration_helpers.f90`
+      - `simple_pose_cont_refinement_calibration_test.f90`
       - `simple_pose_cont_refinement_fixed_reference_test.f90`
       - `simple_pose_cont_refinement_forward_path_test.f90`
       - `simple_pose_cont_refinement_matched_window_test.f90`

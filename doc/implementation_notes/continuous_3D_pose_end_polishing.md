@@ -2,7 +2,7 @@
 
 **Contract status:** FINAL (FROZEN)  
 **Execution plan status:** FINAL
-**Execution status:** IMPLEMENTATION IN PROGRESS — PHASE 3 COMPLETE
+**Execution status:** IMPLEMENTATION IN PROGRESS — PHASE 4 COMPLETE
 **Updated:** 2026-08-27
 **Rebased two-document checkpoint:** `f78d9dff3`  
 **Completed history:** [completed/continuous_3D_pose_end_polishing_history_and_handoff.md](completed/continuous_3D_pose_end_polishing_history_and_handoff.md)  
@@ -712,7 +712,215 @@ The current inventory contains no orphaned Fortran test source under the old pre
 
 ### Phase 4 — implement and freeze calibration infrastructure
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
+
+**Prepare evidence — 2026-08-27:**
+
+- Added the seven-family tolerance registry, predeclared absolute, relative, and relative-scale floors,
+  safety factor `8`, loose-result stops, componentwise combined real/complex metric, raw observation
+  retention, derived-tolerance calculation, and immutable pre-acceptance marker in
+  `production/tests/simple_pose_cont_refinement_calibration_helpers.f90:9,27,179,223,246,277`.
+- Added disjoint deterministic calibration fixtures for boxes `8` and `12` and reserved acceptance
+  fixtures for boxes `10` and `16` in
+  `production/tests/simple_pose_cont_refinement_calibration_helpers.f90:80,129`. Each set has different
+  asymmetric volumes, exact and nonstationary poses, constant and varying positive shell variances,
+  and ordinary and attenuated CTF profiles. The calibration entry point cannot construct an acceptance
+  fixture.
+- Added `case=tolerance_calibration` in
+  `production/tests/simple_pose_cont_refinement_calibration_test.f90:14` and
+  `production/tests/simple_test_pose_cont_refinement.f90:200`. The case repeats the complete calibration
+  in memory and requires bitwise-identical fixtures, raw error tables, maxima, and derived tolerances.
+  It writes `calibration_raw_errors.tsv`, `frozen_tolerances.tsv`, `fixture_manifest.tsv`, and
+  `PRE_ACCEPTANCE_TOLERANCES.FROZEN` to the caller's explicit `evidence_dir`.
+- Calibration probes include the executed physical-volume/deapodized Cartesian gather, normalized
+  brute-force DFT, independent slow normalized-KB traversal, closed-form unequal-point DFT, centered
+  finite differences, scaled five-variable system, and identity line-sum projection at
+  `production/tests/simple_pose_cont_refinement_calibration_test.f90:60,142,237,259`.
+- Applicable policies are `doc/policies/KB_Interpolation_Policy.md` for padded-grid KB coordinates and
+  normalization, `doc/policies/reconstruct3D_pcg_policy.md` for the unchanged reconstruction boundary,
+  `doc/policies/refine3D_policy.md` for particle-pose versus volume ownership, and
+  `doc/policies/sigma_calculation_policy.md` for positive shell-variance meaning and native-shell
+  indexing. No UI policy applies because Phase 4 adds no option or production caller.
+- Lightweight source checks are `PASS`. `git diff --check` exited `0`. The three Phase 4 Fortran files
+  have zero lines longer than 132 columns, zero conflict markers, and filenames that match the existing
+  `simple_pose_cont_refinement_*.[fF]90` dependency glob. Static call inspection finds no call to
+  `build_acceptance_fixture` from the calibration case. `production/CMakeLists.txt` remains unchanged
+  at SHA-256 `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- The first restricted MSYS2 Perl attempts for both navigation generators failed before script execution
+  with Win32 signal-pipe error 5 and status `-1073741502`. Each exact elevated retry exited `0`.
+  `doc/code_overview/code_base_map.md:38` lists both new modules; the source-only Fortran indexes had no
+  content change.
+- Oracle must create a timestamped evidence directory directly below `~/Projects`, then run
+  `simple_test_pose_cont_refinement case=tolerance_calibration evidence_dir=<absolute-phase4-directory>`
+  from `~/Projects`. The hypothesis is that both calibration boxes repeat exactly, all seven derived
+  tolerances remain below their predeclared loose-result stops, the marker freezes them before any
+  acceptance fixture runs, and boxes `10` and `16` remain unsampled. The complete
+  `simple_test_pose_cont_refinement` mother suite then tests that the new keyed case does not change the
+  five scheduled pose regressions.
+- Local controller evidence is
+  `codex_logs/pose_cont_20260826_144540_289/phase04/prepare_20260827_131802_557.events.jsonl` and its
+  sibling prompt and stderr files. The exact approved rsync dry run is the final operation of this turn;
+  its complete output and exit status remain in that JSONL record. No source or controller-input change
+  is permitted after the dry run. No real synchronization, normalization, compilation, runtime test,
+  scientific acceptance test, or commit occurs in this prepare turn.
+
+**Failed validation evidence — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 3 `COMPLETE` and Phase 4
+  `READY FOR ORACLE VALIDATION`. The prepared local source remained at
+  `HEAD=264248c732bca0e5e7a1af256e3b7a85245105f1`, and `production/CMakeLists.txt` remained unchanged at
+  SHA-256 `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- The exact approved `rsync -av --delete --info=progress2`, with the documented exclusions, exited `0`.
+  It transferred 92 files and reported no deletion. Direct-SSH line-ending normalization exited `0` in
+  `~/Projects/hael_SIMPLE-rsync-test`.
+- The default incremental logged command `module load gcc/15.2.0 && cd
+  ~/Projects/hael_SIMPLE-rsync-test && mkdir -p build && set -o pipefail && .codex/compile_debug.sh 2>&1 |
+  tee build/build_debug.log` exited `2`. GNU Fortran 15.2.0 reported two argument-list syntax errors in
+  `production/tests/simple_pose_cont_refinement_calibration_test.f90`, at the transferred-source lines 51
+  and 302. The compiler log is `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`.
+- The smallest local correction separates each diagnostic string from the preceding continuation marker
+  at `production/tests/simple_pose_cont_refinement_calibration_test.f90:50` and
+  `production/tests/simple_pose_cont_refinement_calibration_test.f90:302`. The conditional clean retry was
+  not used because a clean build cannot correct source syntax. No runtime or scientific test ran.
+- Local controller evidence is
+  `codex_logs/pose_cont_20260826_144540_289/phase04/validate_20260827_133607_261.events.jsonl` and its
+  sibling prompt and stderr files. The safe next action is a new Phase 4 prepare turn with lightweight
+  checks and a new exact rsync dry run. No second real synchronization is permitted in this turn.
+
+**Rework prepare evidence — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 3 `COMPLETE` and Phase 4 `REWORK REQUIRED`.
+  The source remains at `HEAD=264248c732bca0e5e7a1af256e3b7a85245105f1`, and
+  `production/CMakeLists.txt` remains unchanged at SHA-256
+  `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- The two compile diagnostics required only Fortran continuation corrections. The diagnostic strings
+  now start on separate continued lines at
+  `production/tests/simple_pose_cont_refinement_calibration_test.f90:50` and
+  `production/tests/simple_pose_cont_refinement_calibration_test.f90:302`. No numerical expression,
+  tolerance, fixture, artifact, production source, or build-system file changed.
+- Lightweight source checks are `PASS`. `git diff --check` exited `0`. The three Phase 4 Fortran files
+  have zero trailing-whitespace findings, zero lines longer than 132 columns, zero conflict markers,
+  zero multiline-macro hazards, and zero remaining diagnostic-string continuation hazards. Both new
+  filenames match the existing `simple_${test_id}_*.[fF]90` dependency glob at
+  `production/CMakeLists.txt:201`.
+- Static fixture inspection confirms that `run_tolerance_calibration` constructs only calibration boxes
+  `8` and `12` at `production/tests/simple_pose_cont_refinement_calibration_test.f90:23`. The acceptance
+  fixture builder remains isolated at
+  `production/tests/simple_pose_cont_refinement_calibration_helpers.f90:129`; boxes `10` and `16` are
+  recorded only as reserved and unsampled.
+- The Oracle hypotheses are unchanged. The focused calibration case must compile, repeat both calibration
+  fixtures bitwise, populate all seven tolerance families, remain below all loose-result stops, write the
+  four declared artifacts, and freeze the tolerances before any acceptance fixture runs. The mother suite
+  must then preserve all five scheduled pose regressions.
+- Local controller evidence is
+  `codex_logs/pose_cont_20260826_144540_289/phase04/prepare_20260827_135122_394.events.jsonl` and its
+  sibling prompt and stderr files. The exact approved rsync dry run is the final operation of this turn;
+  its complete output and exit status remain in that JSONL record. No source or controller-input change
+  is permitted after the dry run. No real synchronization, normalization, compilation, runtime test,
+  scientific acceptance test, or commit occurs in this prepare turn.
+
+**Validation approval-boundary evidence — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 3 `COMPLETE` and Phase 4
+  `READY FOR ORACLE VALIDATION`. The prepared source remained at
+  `HEAD=264248c732bca0e5e7a1af256e3b7a85245105f1`, and `production/CMakeLists.txt` remained unchanged at
+  SHA-256 `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- The exact approved real `rsync -av --delete --info=progress2` request was rejected by the tool approval
+  reviewer before process creation. The reviewer did not accept the controller-injected authorization
+  for repository transfer to
+  `hossainm7@fwl-c143206.ncifcrf.gov:~/Projects/hael_SIMPLE-rsync-test`. No rsync process ran, and no
+  local or remote file changed.
+- Validation stopped at the approval boundary. Remote normalization, compilation, runtime tests,
+  numerical artifact checks, scientific checks, and post-test source-checkout evidence checks did not
+  run. No compiler or runtime evidence exists for this attempt.
+- This required execution-plan evidence update changes a tracked controller-input file and invalidates
+  the prepared source fingerprint. The safe next action is a new Phase 4 prepare turn and exact dry run
+  after the controller or approval policy permits the declared source, host, destination, exclusions,
+  and `--delete` operation.
+- Local controller evidence is
+  `codex_logs/pose_cont_20260826_144540_289/phase04/validate_20260827_135554_641.events.jsonl` and its
+  sibling prompt and stderr files. No focused commit was made because Phase 4 did not reach
+  synchronization, compilation, or runtime validation.
+
+**Approval-boundary reprepare evidence — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 3 `COMPLETE` and Phase 4 `REWORK REQUIRED`.
+  The source remains at `HEAD=264248c732bca0e5e7a1af256e3b7a85245105f1`, and
+  `production/CMakeLists.txt` remains unchanged at SHA-256
+  `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- No numerical source changed after the prior safe dry run. The corrected diagnostic continuations
+  remain at `production/tests/simple_pose_cont_refinement_calibration_test.f90:50` and
+  `production/tests/simple_pose_cont_refinement_calibration_test.f90:302`. The tolerance registry,
+  fixtures, artifacts, dispatch, generated navigation, and frozen contract are unchanged.
+- Lightweight source checks are `PASS`. `git diff --check` exited `0`. The three Phase 4 Fortran files
+  have zero trailing-whitespace findings, zero lines longer than 132 columns, zero conflict markers,
+  zero multiline-macro hazards, and zero diagnostic-string continuation hazards. Static inspection
+  finds no acceptance-fixture call from the calibration entry point.
+- Applicable policies remain `doc/policies/KB_Interpolation_Policy.md` for padded-grid normalization,
+  `doc/policies/reconstruct3D_pcg_policy.md` for the unchanged reconstruction boundary,
+  `doc/policies/refine3D_policy.md` for pose-versus-volume ownership, and
+  `doc/policies/sigma_calculation_policy.md` for positive native-shell variance semantics. No UI policy
+  applies.
+- The focused and mother-suite Oracle hypotheses remain unchanged. The exact approved rsync dry run is
+  the final operation of this turn; its complete output and exit status remain in
+  `codex_logs/pose_cont_20260826_144540_289/phase04/prepare_20260827_140741_144.events.jsonl` and its
+  sibling prompt and stderr files. No source or controller-input change is permitted after that dry
+  run. No real synchronization, normalization, compilation, runtime test, scientific acceptance test,
+  or commit occurs in this prepare turn.
+
+**Oracle validation evidence — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 3 `COMPLETE` and Phase 4
+  `READY FOR ORACLE VALIDATION`. The prepared source remained at
+  `HEAD=264248c732bca0e5e7a1af256e3b7a85245105f1`. `git diff --check` exited `0`, and
+  `production/CMakeLists.txt` remained unchanged at SHA-256
+  `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- The reviewed `rsync -av --delete --info=progress2` with the documented exclusions exited `0`,
+  transferred 91 files, and deleted no path. The four transfers beyond the 87-file dry run were the
+  completed prepare report and the active validate prompt, JSONL, and stderr files. The explicit
+  MSYS2 SSH line-ending normalization command exited `0` and changed only copied `*.pl` and `*.sh`
+  files below `~/Projects/hael_SIMPLE-rsync-test`.
+- The default incremental logged command loaded `gcc/15.2.0`, ran
+  `.codex/compile_debug.sh` through `tee build/build_debug.log` with `pipefail`, and exited `0`.
+  The Debug build installed `simple_test_pose_cont_refinement`. The conditional
+  `SIMPLE_CLEAN_BUILD=yes` retry was not used. The compiler log is
+  `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`.
+- With the documented SIMPLE environment and `/home/hossainm7/Projects` as the working directory,
+  `simple_test_pose_cont_refinement case=tolerance_calibration
+  evidence_dir=/home/hossainm7/Projects/continuous_3D_phase4_calibration_20260827_141348` exited `0`.
+  It sampled only boxes `8` and `12`, reported boxes `10` and `16` as reserved and unsampled, repeated
+  the calibration exactly, populated all seven families, wrote all four declared artifacts, and
+  reported `POSE_CONT_REFINEMENT_TOLERANCE_CALIBRATION: PASS`.
+- The frozen table records safety factor `8`. The largest derived absolute tolerance is
+  `4.9353318740941177E-04` for algebraic accumulation. The largest derived relative tolerance is
+  `5.0000000000000003E-02` for finite projection. The slow-gather absolute tolerance is
+  `1.1541020711748716E-04`; the scaled LM absolute tolerance is `2.0599365235796085E-07`.
+  Every family remained within its predeclared loose-result stop. The marker records
+  `status=FROZEN_PRE_ACCEPTANCE`, calibration boxes `8,12`, and unsampled acceptance boxes `10,16`.
+- The complete `simple_test_pose_cont_refinement` mother suite ran from `/home/hossainm7/Projects`,
+  exited `0`, and passed all five scheduled groups with zero skip and zero failure. Its evidence is
+  `~/Projects/continuous_3D_phase4_mother_20260827_141401/mother_suite.log`.
+- Calibration evidence is
+  `~/Projects/continuous_3D_phase4_calibration_20260827_141348/`, including
+  `calibration_raw_errors.tsv`, `frozen_tolerances.tsv`, `fixture_manifest.tsv`,
+  `PRE_ACCEPTANCE_TOLERANCES.FROZEN`, and `tolerance_calibration.log`. SHA-256 values are
+  `9e30522ec5ff5225674a98cbee0f14d2cf9cd5e1074b211b4888d5c99948d48b`,
+  `bb1b0bf09797b03b68c8d49a09c54678a292cc29d8bf243241f3f081cb8efd64`,
+  `753fe24ea4daf01dcfbc8edd97058cee63e53ad32be1005bc394db69da2f7384`,
+  `7e292419a7779edc805cf9c341d09036eedd9af47e9ea4830801b3c2b501c9b8`, and
+  `732c5b6fcf02031ff859986e1fb21c86b68d37c604512f3142eae0413f1deb5a`, respectively. The mother log
+  SHA-256 is `729e68b16ecb336d82113367d6bcc6903cb4ed389161bd3c904a698bd1f35d81`.
+- The first read-only artifact-inspection command exited `1` because its helper path files contained a
+  literal trailing `n`; no test or evidence artifact changed. Direct inspection of the known
+  timestamped roots exited `0`. Post-test checks found no top-level `validation/` or
+  `continuous_3D_matrix_volumes_*` directory in either `~/Projects/hael_SIMPLE-rsync-test` or the
+  unchanged Phase 2 control checkout `~/Projects/SIMPLE`. No runtime evidence was created below a
+  source checkout.
+- Phase 4 satisfies its calibration-infrastructure gate. This phase freezes validation tolerances; it
+  does not apply acceptance fixtures or establish the Phase 5 through Phase 10 numerical claims.
+  Local controller evidence is
+  `codex_logs/pose_cont_20260826_144540_289/phase04/validate_20260827_141110_192.events.jsonl` and its
+  sibling prompt and stderr files.
 
 Implement the disjoint calibration and acceptance fixtures, combined error metric, tolerance families, raw error tables, safety factor, and freeze marker defined under **Tolerance-calibration protocol**. Implement reusable oracle helpers, but do not run formal acceptance fixtures before tolerances are frozen.
 

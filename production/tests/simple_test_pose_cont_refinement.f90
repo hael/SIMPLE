@@ -12,6 +12,7 @@ use pose_cont_refinement_reference_bias_test, only: run_reference_bias_diagnosti
 use pose_cont_refinement_operator_contract_test, only: run_operator_contract_diagnostic
 use pose_cont_refinement_pose_capture_test, only: run_pose_capture_range
 use pose_cont_refinement_pose_mechanism_test, only: run_pose_capture_mechanism
+use pose_cont_refinement_calibration_test, only: run_tolerance_calibration
 implicit none
 
 character(len=256) :: selected_case
@@ -196,6 +197,8 @@ subroutine run_case(label)
         call run_pose_capture_range()
     case('pose_capture_mechanism')
         call run_pose_capture_mechanism()
+    case('tolerance_calibration')
+        call run_tolerance_calibration()
     case default
         error stop 'unknown continuous 3D pose refinement case: '//trim(label)
     end select
