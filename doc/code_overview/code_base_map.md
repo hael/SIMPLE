@@ -165,6 +165,7 @@
       - **continuous_3D_pcg_pose_validation/**
   - **scripts/** — home of scripts and code generators
     - **memory/**
+    - **ui/**
   - **src/** — main source code folder
     - **defs/** — home of singleton modules with parameter and type definitions
       - `simple_ansi_ctrls.f90` — ANSI C control parameters for text formatting
@@ -491,6 +492,7 @@
         - `simple_picker_iter.f90` — particle picker iterator
         - `simple_picker_utils.f90` — routines for executing reference-based, segmentation-based, and Gaussian picking
         - `simple_pickref.f90` — the abstract data type implementing particle picking using templates
+        - `simple_pickref_corr_batch.f90` — bounded BLAS-backed Pearson correlation for reference picking
         - `simple_pickseg.f90` — the abstract data type implementing the original version of segmentation-based picking
         - `simple_picksegdiam.f90` — the abstract data type implementing the version of segmentation-based picking used in the stream
       - **project/** — home of the submodules of the single-particle project class for managing project information in memory and on disk

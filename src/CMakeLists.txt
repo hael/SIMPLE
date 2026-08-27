@@ -169,13 +169,17 @@ set(SIMPLE_FOX_IMPORT_SOURCES
 set_property(SOURCE ${SIMPLE_FOX_IMPORT_SOURCES} APPEND
     PROPERTY COMPILE_OPTIONS "-Wno-surprising")
 
-# GNU 16 emits descriptor-flow false positives around allocatable assignment
+# GNU 15/16 emit descriptor-flow false positives around allocatable assignment
 # and move_alloc in these routines. The descriptors are initialized by the
 # language runtime before the reported statements execute.
 set(SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_fileio.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/fileio/simple_imghead.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/pick/simple_pickref.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/simple_cmdline.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/star/simple_starproject_stream.f90"
     "${CMAKE_CURRENT_SOURCE_DIR}/main/stream/simple_stream_watcher.f90"
+    "${CMAKE_CURRENT_SOURCE_DIR}/main/volume/simple_reconstructor_pcg.f90"
 )
 set_property(SOURCE ${SIMPLE_ALLOCATABLE_DESCRIPTOR_SOURCES} APPEND
     PROPERTY COMPILE_OPTIONS "-Wno-maybe-uninitialized")

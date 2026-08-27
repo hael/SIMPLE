@@ -171,9 +171,9 @@ contains
     !! and advises on pcg_solvent_lambda_rel). The file is rewritten on every
     !! ML volassemble and deleted first, so an iteration in which the prior is
     !! skipped never leaves stale values behind.
-    subroutine write_solvent_convergence_stats( params, supps, cnts )
+    subroutine write_solvent_convergence_stats( params, supps, rmss, cnts )
         class(parameters), intent(in) :: params
-        real,              intent(in) :: supps(:)
+        real,              intent(in) :: supps(:), rmss(:)
         integer,           intent(in) :: cnts(:)
         type(oris)   :: os
         type(string) :: key
@@ -186,6 +186,8 @@ contains
             if( cnts(state) < 1 ) cycle
             key = 'PCG_SOLVENT_SUPP_STATE'//int2str_pad(state,2)
             call os%set(1, key%to_char(), supps(state) / real(cnts(state)))
+            key = 'PCG_SOLVENT_RMS_STATE'//int2str_pad(state,2)
+            call os%set(1, key%to_char(), rmss(state) / real(cnts(state)))
         end do
         call os%write(string(PCG_SOLVENT_STATS_FILE))
         call os%kill
@@ -320,12 +322,12 @@ contains
     !> The solve-output half of the pcg_solvent_* diagnostic block (S6.2):
     !! effective absolute strength and the final map's weighted solvent mean,
     !! RMS deviation and penalty, written after each priored ML replay.
-    subroutine report_solvent_solve_stats( pcgop, x, rms_ref, context, half, supp_pct )
+    subroutine report_solvent_solve_stats( pcgop, x, rms_ref, context, half, supp_pct, rms_out )
         type(reconstructor_pcg), intent(in)  :: pcgop
         real,                    intent(in)  :: x(:,:,:)
         real,                    intent(in)  :: rms_ref
         character(len=*),        intent(in)  :: context, half
-        real,                    intent(out) :: supp_pct
+        real,                    intent(out) :: supp_pct, rms_out
         real :: mean_s, rms_s, penalty
         call pcgop%get_solvent_stats(x, mean_s, rms_s, penalty)
         ! suppression is measured against the shell-shrunk base reference
@@ -333,6 +335,7 @@ contains
         ! of the replay but no solvent prior: ~0% means the prior is inert
         supp_pct = 0.0
         if( rms_ref > 1.0e-12 ) supp_pct = 100.0 * (1.0 - rms_s / rms_ref)
+        rms_out = rms_s
         write(logfhandle,'(A,ES11.4,A,ES11.4,A,ES11.4,A,ES11.4)') &
             &'>>> PCG SOLVENT PRIOR ('//trim(context)//'/'//trim(half)//'): pcg_solvent_lambda_eff=', &
             &pcgop%get_effective_solvent_lambda(), ' pcg_solvent_mean_final=', mean_s, &
@@ -348,7 +351,7 @@ contains
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         integer, allocatable :: selected_pinds(:), half_pinds(:)
-        real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:)
+        real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:), solvent_rmss(:)
         integer, allocatable :: solvent_supp_cnts(:)
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
@@ -370,7 +373,7 @@ contains
 
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
-        allocate(solvent_supps(params%nstates), source=0.0)
+        allocate(solvent_supps(params%nstates), solvent_rmss(params%nstates), source=0.0)
         allocate(solvent_supp_cnts(params%nstates), source=0)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
 
@@ -465,7 +468,7 @@ contains
         enddo
 
         call killimgbatch(build)
-        if( params%l_ml_reg ) call write_solvent_convergence_stats(params, solvent_supps, solvent_supp_cnts)
+        if( params%l_ml_reg ) call write_solvent_convergence_stats(params, solvent_supps, solvent_rmss, solvent_supp_cnts)
         if( .not. any(state_written) ) THROW_HARD('PCG reconstruct3D produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
@@ -480,7 +483,7 @@ contains
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call register_project_outputs()
 
-        deallocate(selected_pinds, res0143s, state_written, solvent_supps, solvent_supp_cnts)
+        deallocate(selected_pinds, res0143s, state_written, solvent_supps, solvent_rmss, solvent_supp_cnts)
 
     contains
 
@@ -691,7 +694,7 @@ contains
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve, time_total
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
-            real :: rms_supp_ref, supp_pct
+            real :: rms_supp_ref, supp_pct, rms_half
             logical :: l_warm
 
             t_phase = tic()
@@ -725,8 +728,9 @@ contains
             call validate_solved_map(x, 'shared', state_here, half, 'ml')
             if( l_solvent_ready )then
                 rms_supp_ref = solvent_suppression_reference(pcgop, params, fsc_here, base_volume)
-                call report_solvent_solve_stats(pcgop, x, rms_supp_ref, 'shared', half, supp_pct)
+                call report_solvent_solve_stats(pcgop, x, rms_supp_ref, 'shared', half, supp_pct, rms_half)
                 solvent_supps(state_here)     = solvent_supps(state_here) + supp_pct
+                solvent_rmss(state_here)      = solvent_rmss(state_here)  + rms_half
                 solvent_supp_cnts(state_here) = solvent_supp_cnts(state_here) + 1
             endif
             time_total = time_reduce + time_finalize + time_solve
@@ -1484,7 +1488,7 @@ contains
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(image) :: previous_even, previous_odd, previous_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
-        real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:)
+        real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:), solvent_rmss(:)
         real, allocatable :: realized_fractions(:), update_weights(:)
         integer, allocatable :: solvent_supp_cnts(:)
         logical, allocatable :: state_written(:)
@@ -1526,7 +1530,7 @@ contains
         endif
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
-        allocate(solvent_supps(params%nstates), source=0.0)
+        allocate(solvent_supps(params%nstates), solvent_rmss(params%nstates), source=0.0)
         allocate(solvent_supp_cnts(params%nstates), source=0)
         do state = 1, params%nstates
             l_solvent_ready = .false.
@@ -1656,7 +1660,7 @@ contains
             call fname_fsc%kill
             if( allocated(fsc) ) deallocate(fsc)
         enddo
-        if( params%l_ml_reg ) call write_solvent_convergence_stats(params, solvent_supps, solvent_supp_cnts)
+        if( params%l_ml_reg ) call write_solvent_convergence_stats(params, solvent_supps, solvent_rmss, solvent_supp_cnts)
         if( .not. any(state_written) ) THROW_HARD('distributed PCG produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
@@ -1689,7 +1693,8 @@ contains
             enddo
         endif
         call raw_fname%kill
-        deallocate(res0143s, state_written, realized_fractions, update_weights, solvent_supps, solvent_supp_cnts)
+        deallocate(res0143s, state_written, realized_fractions, update_weights, solvent_supps, solvent_rmss, &
+            &solvent_supp_cnts)
 
     contains
 
@@ -1768,7 +1773,7 @@ contains
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
-            real :: realized_fraction, update_weight, current_scale, rms_supp_ref, supp_pct
+            real :: realized_fraction, update_weight, current_scale, rms_supp_ref, supp_pct, rms_half
             logical :: l_ml_solve, l_chain_exists, l_seed_chain, l_warm
 
             l_ml_solve = present(fsc_prior)
@@ -1867,8 +1872,9 @@ contains
             if( l_ml_solve .and. l_solvent_ready )then
                 ! warm_start is the base half solution at both ML call sites
                 rms_supp_ref = solvent_suppression_reference(pcgop, params, fsc_prior, warm_start)
-                call report_solvent_solve_stats(pcgop, x, rms_supp_ref, 'distributed', half, supp_pct)
+                call report_solvent_solve_stats(pcgop, x, rms_supp_ref, 'distributed', half, supp_pct, rms_half)
                 solvent_supps(state_here)     = solvent_supps(state_here) + supp_pct
+                solvent_rmss(state_here)      = solvent_rmss(state_here)  + rms_half
                 solvent_supp_cnts(state_here) = solvent_supp_cnts(state_here) + 1
             endif
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)

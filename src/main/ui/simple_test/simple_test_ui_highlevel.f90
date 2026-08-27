@@ -239,6 +239,10 @@ contains
         call rec3D_backends%new(&
         &'rec3D_backends',&
         &'Same-inputs gridding vs PCG reconstruction comparison',&
+        &'Minimal invocation is projfile+pgrp+mskdiam+nthr: defaults to objfun=euclid ml_reg=yes '//&
+        &'maxits_pcg=5 rtol=1e-3 and sweeps the default solvent-prior strength ladder, requiring the NU '//&
+        &'evidence envelope in the invocation directory (fails early with the nu_filt3D remedy if absent); '//&
+        &'an explicit pcg_solvent_lambda_rel runs a single comparison. '//&
         &'Reconstructs one fixed set of particles/orientations/sigma2 with reconstruct3D using the gridding '//&
         &'and the PCG backend, in a numbered execution directory named after the run settings (run it inside '//&
         &'a refine3D run directory; the sigma2 group files and any NU evidence envelope are symlinked in; '//&
@@ -257,9 +261,9 @@ contains
         call rec3D_backends%add_input(UI_SRCH, objfun)
         call rec3D_backends%add_input(UI_FILT, ml_reg)
         call rec3D_backends%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
-        &'PCG iterations for the comparison', 'iterations{2}', .false., 2.)
+        &'PCG iterations for the comparison', 'iterations{5}', .false., 5.)
         call rec3D_backends%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
-        &'Tolerance for the comparison', 'tolerance{0}', .false., 0.0)
+        &'Tolerance for the comparison', 'tolerance{1e-3}', .false., 1.e-3)
         call rec3D_backends%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
         &'Solvent-flatness prior strength relative to the PCG data scale, applied on the pcg leg whenever '//&
         &'ml_reg (objfun=euclid) and a valid NU evidence envelope are available; 0 disables', 'strength{0.1}', .false., 0.1)

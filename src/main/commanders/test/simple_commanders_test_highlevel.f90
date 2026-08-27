@@ -68,6 +68,28 @@ type, extends(commander_base) :: commander_test_rec3D_backends
     procedure :: execute      => exec_test_rec3D_backends
 end type commander_test_rec3D_backends
 
+!> Collated per-run observables of one rec3D_backends comparison, for the
+!! solvent-prior sweep table (Stage 5 observables + the suppression readout)
+type backends_run_summary
+    real    :: lambda_rel  = -1.   !< solvent prior strength of the run
+    real    :: g_base05    = 0.    !< gridding base half-pair FSC=0.5 (A)
+    real    :: g_base0143  = 0.    !< gridding base half-pair FSC=0.143 (A)
+    real    :: p_base05    = 0.    !< pcg base (_unfil) half-pair FSC=0.5 -- the negative control
+    real    :: p_base0143  = 0.    !< pcg base (_unfil) half-pair FSC=0.143
+    real    :: p_ship05    = 0.    !< pcg shipped (regularized) half-pair FSC=0.5 -- inflation diagnostic
+    real    :: p_ship0143  = 0.    !< pcg shipped (regularized) half-pair FSC=0.143
+    real    :: supp_pct    = -999. !< solvent suppression %, from the strategy's stats file
+    real    :: solvent_rms = -1.   !< weighted solvent RMS of the shipped pcg map
+    real    :: band_ratio  = -1.   !< median gated-band amplitude ratio pcg/gridding
+    real    :: band_fsc    = -1.   !< median gated-band FSC(gridding,pcg) -- backend agreement
+    real    :: rad_min     = -1.   !< min normalised in-mask radial ratio -- erosion indicator
+    real    :: rad_max     = -1.   !< max normalised in-mask radial ratio
+    real    :: centre_bin  = -1.   !< pcg centre-bin ratio (diagnostic)
+    real    :: truth_fsc_g = -1.   !< median gated-band FSC(truth,gridding), when vol1 given
+    real    :: truth_fsc_p = -1.   !< median gated-band FSC(truth,pcg), when vol1 given
+    integer :: nfail       = 0     !< gate violations in the run
+end type backends_run_summary
+
 contains
 
 subroutine exec_test_mini_stream( self, cline )
@@ -2447,14 +2469,146 @@ end subroutine exec_test_pcg_frac_update
 !> a hard failure. Thresholds derive from the validated neutral-phantom fixture and
 !> the streptavidin reference runs recorded in the plan document.
 subroutine exec_test_rec3D_backends( self, cline )
+    use simple_sp_project, only: sp_project
+    class(commander_test_rec3D_backends), intent(inout) :: self
+    class(cmdline),                       intent(inout) :: cline
+    ! default strength ladder swept when a prior-capable invocation (ml_reg
+    ! with an NU evidence envelope in the cwd) leaves pcg_solvent_lambda_rel
+    ! unset: the bgal calibration grid incl. the zero-strength negative
+    ! control. An explicit strength runs a single comparison -- the follow-up
+    ! mechanism for extra data points.
+    real, parameter :: SOLVENT_LADDER(7) = [0.0, 1.0e-3, 1.0e-2, 3.0e-2, 1.0e-1, 3.0e-1, 1.0]
+    character(len=*), parameter :: SWEEP_SUMMARY_FILE = 'rec3D_backends_sweep_summary.txt'
+    type(backends_run_summary) :: summaries(size(SOLVENT_LADDER)), summary
+    type(cmdline) :: cline_run
+    character(len=256) :: line
+    logical :: l_sweep, l_mlreg, l_mkdir_ok, l_control_ok, l_prior_active
+    integer :: i, fnr
+    real    :: spread
+    ! prior-capable defaults: a bare invocation (projfile, pgrp, mskdiam,
+    ! nthr) runs the euclid+ml_reg solvent strength sweep at the
+    ! production-representative budget; every default is overridable
+    if( .not. cline%defined('objfun')     ) call cline%set('objfun',     'euclid')
+    if( .not. cline%defined('ml_reg')     ) call cline%set('ml_reg',        'yes')
+    if( .not. cline%defined('maxits_pcg') ) call cline%set('maxits_pcg',       5.)
+    if( .not. cline%defined('rtol')       ) call cline%set('rtol',         1.e-3)
+    l_mlreg = cline%get_carg('ml_reg') .eq. 'yes'
+    l_mkdir_ok = .true.
+    if( cline%defined('mkdir') ) l_mkdir_ok = cline%get_carg('mkdir') .ne. 'no'
+    ! any prior-active run needs the state-specific NU evidence envelope in
+    ! the invocation directory -- fall over early with the remedy rather
+    ! than reconstructing for nothing
+    l_prior_active = l_mlreg
+    if( cline%defined('pcg_solvent_lambda_rel') )then
+        if( cline%get_rarg('pcg_solvent_lambda_rel') == 0.0 ) l_prior_active = .false.
+    endif
+    if( l_prior_active ) call require_solvent_envelope
+    l_sweep = l_mlreg .and. l_mkdir_ok .and. .not. cline%defined('pcg_solvent_lambda_rel')
+    if( .not. l_sweep )then
+        call run_rec3D_backends_single(cline, summary, .true.)
+        call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
+        return
+    endif
+    write(logfhandle,'(A,I0,A)') '>>> REC3D BACKENDS SWEEP: solvent-prior default ladder (', &
+        &size(SOLVENT_LADDER), ' strengths incl. the zero control); one execution directory per rung'
+    do i = 1, size(SOLVENT_LADDER)
+        cline_run = cline
+        call cline_run%set('pcg_solvent_lambda_rel', SOLVENT_LADDER(i))
+        call run_rec3D_backends_single(cline_run, summaries(i), .false.)
+        call cline_run%kill
+    enddo
+    ! collated Stage-5 observables, one row per rung; also written to
+    ! SWEEP_SUMMARY_FILE in the invocation directory for machine reading
+    call fopen(fnr, file=string(SWEEP_SUMMARY_FILE), status='replace', action='write')
+    call emit('>>> REC3D BACKENDS SWEEP:   lambda  base0.5  base.143  ship0.5  ship.143    supp%  sol_rms  band_ratio  band_fsc  rad_min  rad_max  truth_fsc_pcg  gates')
+    do i = 1, size(SOLVENT_LADDER)
+        write(line,'(A,ES9.1,4F9.3,F9.2,ES9.1,2F10.4,2F9.4,F15.4,I7)') '>>> REC3D BACKENDS SWEEP: ', &
+            &summaries(i)%lambda_rel, summaries(i)%p_base05, summaries(i)%p_base0143, &
+            &summaries(i)%p_ship05, summaries(i)%p_ship0143, summaries(i)%supp_pct, &
+            &summaries(i)%solvent_rms, summaries(i)%band_ratio, summaries(i)%band_fsc, &
+            &summaries(i)%rad_min, summaries(i)%rad_max, summaries(i)%truth_fsc_p, summaries(i)%nfail
+        call emit(trim(line))
+    enddo
+    ! negative control: the base (_unfil) pair is prior-free by construction,
+    ! so its FSC=0.143 must be identical across the ladder
+    spread = maxval(summaries(:)%p_base0143) - minval(summaries(:)%p_base0143)
+    write(line,'(A,F8.4,A)') '>>> REC3D BACKENDS SWEEP: NEGATIVE CONTROL base-pair FSC=0.143 spread across ladder ', &
+        &spread, ' A (must be ~0: priors are confined to the ML replay)'
+    call emit(trim(line))
+    l_control_ok = spread < 0.01
+    if( .not. l_control_ok ) call emit('>>> REC3D BACKENDS SWEEP: FAIL -- the base pair moved with the prior strength')
+    call emit('>>> REC3D BACKENDS SWEEP: follow-up data points: rerun with an explicit pcg_solvent_lambda_rel=<value>')
+    call fclose(fnr)
+    if( any(summaries(:)%nfail > 0) )then
+        write(logfhandle,'(A,I0,A)') '>>> REC3D BACKENDS SWEEP: ', count(summaries(:)%nfail > 0), &
+            &' rung(s) violated gates (see the per-rung FAIL lines above)'
+    endif
+    if( .not. l_control_ok )     THROW_HARD('TEST_REC3D_BACKENDS SWEEP FAILED: base pair moved with prior strength')
+    if( summaries(1)%nfail > 0 ) THROW_HARD('TEST_REC3D_BACKENDS SWEEP FAILED: the zero-strength control rung violated gates')
+    call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
+
+    contains
+
+        subroutine emit( str )
+            character(len=*), intent(in) :: str
+            write(logfhandle,'(A)') str
+            write(fnr,'(A)') str
+        end subroutine emit
+
+        !> Fail-fast validation of the NU evidence envelope the solvent prior
+        !! consumes: present, cubic, and matching the project's physical
+        !! extent (the constant-FOV invariant), checked BEFORE any
+        !! reconstruction is run
+        subroutine require_solvent_envelope
+            type(sp_project) :: spproj_here
+            type(string)     :: env_fname
+            character(len=:), allocatable :: errmsg
+            integer :: ldim_env(3), nimgs, state_here, box_proj
+            real    :: smpd_env, smpd_proj, ext_env, ext_proj
+            state_here = 1
+            if( cline%defined('state') ) state_here = cline%get_iarg('state')
+            env_fname = string(NU_ENVMASK_FBODY)//int2str_pad(state_here,2)//string(MRC_EXT)
+            if( .not. file_exists(env_fname) )then
+                errmsg = 'solvent-prior run requires the NU evidence envelope '//env_fname%to_char()//&
+                    &' in the invocation directory; generate it with simple_exec prg=nu_filt3D on the '//&
+                    &'_unfil half pair and copy/link outvol_nu_envmask.mrc to that name (or pass '//&
+                    &'pcg_solvent_lambda_rel=0 for a prior-free comparison)'
+                THROW_HARD(errmsg)
+            endif
+            call find_ldim_nptcls(env_fname, ldim_env, nimgs)
+            smpd_env = find_img_smpd(env_fname)
+            if( ldim_env(1) /= ldim_env(2) .or. ldim_env(1) /= ldim_env(3) )then
+                THROW_HARD('NU evidence envelope '//env_fname%to_char()//' is not cubic')
+            endif
+            call spproj_here%read(cline%get_carg('projfile'))
+            box_proj  = spproj_here%get_box()
+            smpd_proj = spproj_here%get_smpd()
+            call spproj_here%kill
+            ext_proj = real(box_proj) * smpd_proj
+            ext_env  = real(ldim_env(1)) * smpd_env
+            if( abs(ext_env - ext_proj) > 1.0e-3 * ext_proj )then
+                write(logfhandle,'(A,I0,A,F0.4,A,F0.2,A,I0,A,F0.4,A,F0.2,A)') &
+                    &'>>> REC3D BACKENDS: envelope extent ', ldim_env(1), ' x ', smpd_env, ' = ', ext_env, &
+                    &' A vs project ', box_proj, ' x ', smpd_proj, ' = ', ext_proj, ' A'
+                errmsg = 'NU evidence envelope '//env_fname%to_char()//' does not match the project physical '//&
+                    &'extent (wrong smpd/box; regenerate with the correct header sampling)'
+                THROW_HARD(errmsg)
+            endif
+            call env_fname%kill
+        end subroutine require_solvent_envelope
+
+end subroutine exec_test_rec3D_backends
+
+subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     use simple_commanders_rec,  only: commander_rec3D
     use simple_image,           only: image
     use simple_sp_project,      only: sp_project
     use simple_refine3D_fnames, only: refine3D_state_vol_fname, refine3D_state_vol_fbody, &
         &refine3D_state_halfvol_fname
     use simple_gridding,        only: kb_stencil_envelope_1d
-    class(commander_test_rec3D_backends), intent(inout) :: self
-    class(cmdline),                       intent(inout) :: cline
+    class(cmdline),              intent(inout) :: cline
+    type(backends_run_summary),  intent(out)   :: summary
+    logical,                     intent(in)    :: l_abort_on_fail
     character(len=8), parameter :: BACKENDS(2) = [character(len=8) :: 'gridding', 'pcg']
     integer,          parameter :: NRBINS = 16
     type(commander_rec3D) :: xrec3D
@@ -2473,7 +2627,10 @@ subroutine exec_test_rec3D_backends( self, cline )
     type(string)          :: truth_fname, exec_dir, dirbody
     type(string), allocatable :: link_list(:)
     real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, e0, bg, hp_here
+    real    :: r05_tmp, r0143_tmp
     real,    allocatable  :: tspec(:), tcorr(:,:), tspec_b(:,:)
+    type(string)          :: cwd_orig, sol_key
+    type(oris)            :: os_sol
     integer :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used, it
     logical :: l_truth, l_gate_ls, l_mkdir
     if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)
@@ -2526,6 +2683,7 @@ subroutine exec_test_rec3D_backends( self, cline )
             end do
             deallocate(link_list)
         endif
+        call simple_getcwd(cwd_orig)   ! the runner returns here, so a sweep can loop rungs
         call simple_chdir(exec_dir)
         write(logfhandle,'(a)') '>>> REC3D BACKENDS: EXECUTION DIRECTORY '//exec_dir%to_char()
     endif
@@ -2558,16 +2716,38 @@ subroutine exec_test_rec3D_backends( self, cline )
         ! resolution claim.
         if( cline%defined('ml_reg') )then
             if( cline%get_carg('ml_reg') .eq. 'yes' )then
-                call report_pair_fsc(BACKENDS(ib), .true.,  'base (_unfil)  ')
-                call report_pair_fsc(BACKENDS(ib), .false., 'shipped (regul)')
-                if( ib == 2 ) write(logfhandle,'(a)') &
-                    &'    (shipped-pair FSC shares regularization between halves; diagnostic only)'
+                call report_pair_fsc(BACKENDS(ib), .true.,  'base (_unfil)  ', r05_tmp, r0143_tmp)
+                if( ib == 1 )then
+                    summary%g_base05 = r05_tmp; summary%g_base0143 = r0143_tmp
+                else
+                    summary%p_base05 = r05_tmp; summary%p_base0143 = r0143_tmp
+                endif
+                call report_pair_fsc(BACKENDS(ib), .false., 'shipped (regul)', r05_tmp, r0143_tmp)
+                if( ib == 2 )then
+                    summary%p_ship05 = r05_tmp; summary%p_ship0143 = r0143_tmp
+                    write(logfhandle,'(a)') &
+                        &'    (shipped-pair FSC shares regularization between halves; diagnostic only)'
+                endif
             endif
         endif
         out_fnames(ib) = refine3D_state_vol_fbody(state)//'_'//trim(BACKENDS(ib))//MRC_EXT
         call simple_rename(vol_fname, out_fnames(ib), overwrite=.true.)
         call cline_rec%kill
     enddo
+    ! collate the solvent-prior readout the pcg leg left behind (present only
+    ! when the prior fired; the strategy deletes stale files)
+    if( cline%defined('pcg_solvent_lambda_rel') ) summary%lambda_rel = cline%get_rarg('pcg_solvent_lambda_rel')
+    if( file_exists(PCG_SOLVENT_STATS_FILE) )then
+        call os_sol%new(1, is_ptcl=.false.)
+        call os_sol%read(string(PCG_SOLVENT_STATS_FILE))
+        if( os_sol%isthere('PCG_SOLVENT_LAMBDA_REL') ) summary%lambda_rel = os_sol%get(1,'PCG_SOLVENT_LAMBDA_REL')
+        sol_key = 'PCG_SOLVENT_SUPP_STATE'//int2str_pad(state,2)
+        if( os_sol%isthere(sol_key%to_char()) ) summary%supp_pct = os_sol%get(1, sol_key%to_char())
+        sol_key = 'PCG_SOLVENT_RMS_STATE'//int2str_pad(state,2)
+        if( os_sol%isthere(sol_key%to_char()) ) summary%solvent_rms = os_sol%get(1, sol_key%to_char())
+        call os_sol%kill
+        call sol_key%kill
+    endif
     ! read the two maps
     call find_ldim_nptcls(out_fnames(1), ldim, nptcls)
     smpd_out = smpd * real(box) / real(ldim(1))
@@ -2775,8 +2955,9 @@ subroutine exec_test_rec3D_backends( self, cline )
     ! radial flatness: bins lying fully inside 0.85 x mask radius (clear of the PCG
     ! soft support edge); the centre bin is excluded from the range and reported
     ! separately (known PCG centre deficit, S6)
+    summary%centre_bin = safe_ratio(safe_ratio(radprof(1,2), radprof(1,1)), rnorm)
     write(logfhandle,'(A,F0.4)') '>>> REC3D BACKENDS: PCG CENTRE-BIN RATIO (diagnostic, not gated): ', &
-        &safe_ratio(safe_ratio(radprof(1,2), radprof(1,1)), rnorm)
+        &summary%centre_bin
     rmin = huge(rmin); rmax = -huge(rmax); nrb_used = 0
     do irb = 2, nrb_msk
         if( real(irb)*rbin_width > 0.85*mskrad ) exit
@@ -2786,6 +2967,10 @@ subroutine exec_test_rec3D_backends( self, cline )
         nrb_used = nrb_used + 1
         rmin = min(rmin, rr); rmax = max(rmax, rr)
     enddo
+    if( nrb_used > 0 )then
+        summary%rad_min = rmin
+        summary%rad_max = rmax
+    endif
     write(logfhandle,'(A,I0,A,F0.2,A,F0.4)') '>>> REC3D BACKENDS: SUMMARY agreement band (FSC gridding/pcg > 0.5) k=2-', kagree, &
         &' (', vols(1)%get_lp(kagree), ' A); median shell amplitude ratio pcg/gridding in band: ', med
     write(logfhandle,'(A,F0.4,A,F0.4,A,I0,A)') '>>> REC3D BACKENDS: SUMMARY radial ratio inside 0.85 x mask radius (centre bin excluded), normalised to the in-mask median: min ', rmin, &
@@ -2798,7 +2983,14 @@ subroutine exec_test_rec3D_backends( self, cline )
     ! beyond the data band the backends correlate with each other on shared noise and
     ! PCG's beyond-band behaviour is a known, separately tracked solver item (S6).
     kgate = kagree
-    if( cline%defined('lp') ) kgate = min(kagree, calc_fourier_index(cline%get_rarg('lp'), ldim(1), smpd_out))
+    if( cline%defined('lp') )then
+        kgate = min(kagree, calc_fourier_index(cline%get_rarg('lp'), ldim(1), smpd_out))
+    else if( summary%p_base0143 > 0. )then
+        ! no lp given: cap the gated band at the base-pair FSC=0.143
+        ! resolution so the agreement gates are never judged on
+        ! beyond-band noise where the backends legitimately decorrelate
+        kgate = min(kagree, calc_fourier_index(summary%p_base0143, ldim(1), smpd_out))
+    endif
     ! median amplitude ratio and FSC over the gated band
     allocate(fscs(lfny), source=0.)
     n = 0
@@ -2813,6 +3005,7 @@ subroutine exec_test_rec3D_backends( self, cline )
         call hpsort(ratios(1:n))
         med = ratios(max(1, (n+1)/2))
     endif
+    summary%band_ratio = med
     write(logfhandle,'(A,I0,A,F0.4)') '>>> REC3D BACKENDS: GATED BAND k=2-', kgate, &
         &'; median shell amplitude ratio pcg/gridding in gated band: ', med
     nfail = 0
@@ -2825,6 +3018,7 @@ subroutine exec_test_rec3D_backends( self, cline )
         fscs(1:nfsc) = corrs(2:kgate)
         call hpsort(fscs(1:nfsc))
         med_fsc = fscs(max(1,(nfsc+1)/2))
+        summary%band_fsc = med_fsc
         if( med_fsc < 0.9 ) call gate_fail('median gated-band FSC(gridding,pcg) '//real2str_trim(med_fsc)//' below 0.9')
     endif
     if( nrb_used < 3 ) call gate_fail('only '//int2str(nrb_used)//' usable radial bins inside 0.85 x mask radius (need >= 3)')
@@ -2858,7 +3052,11 @@ subroutine exec_test_rec3D_backends( self, cline )
             fscs(1:nfsc) = tcorr(2:kgate,1)
             call hpsort(fscs(1:nfsc))
             med_fsc = fscs(max(1,(nfsc+1)/2))
+            summary%truth_fsc_g = med_fsc
             if( med_fsc < 0.8 ) call gate_fail('median FSC(truth,gridding) over the gated band '//real2str_trim(med_fsc)//' below 0.8')
+            fscs(1:nfsc) = tcorr(2:kgate,2)
+            call hpsort(fscs(1:nfsc))
+            summary%truth_fsc_p = fscs(max(1,(nfsc+1)/2))
         endif
     endif
     if( nfail == 0 ) write(logfhandle,'(A)') '>>> REC3D BACKENDS: PASS (all gates)'
@@ -2872,8 +3070,12 @@ subroutine exec_test_rec3D_backends( self, cline )
     if( allocated(radcnt)   ) deallocate(radcnt)
     if( allocated(ratios)   ) deallocate(ratios)
     if( allocated(fscs)     ) deallocate(fscs)
-    if( nfail > 0 ) THROW_HARD('TEST_REC3D_BACKENDS FAILED: '//int2str(nfail)//' gate(s) violated (see >>> REC3D BACKENDS: FAIL lines)')
-    call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
+    summary%nfail = nfail
+    if( l_mkdir ) call simple_chdir(cwd_orig)
+    call cwd_orig%kill
+    if( nfail > 0 .and. l_abort_on_fail )then
+        THROW_HARD('TEST_REC3D_BACKENDS FAILED: '//int2str(nfail)//' gate(s) violated (see >>> REC3D BACKENDS: FAIL lines)')
+    endif
 
     contains
 
@@ -2891,26 +3093,6 @@ subroutine exec_test_rec3D_backends( self, cline )
                 safe_ratio = -1.
             endif
         end function safe_ratio
-
-        subroutine radial_abs_profile( rm, prof )
-            real, intent(in)  :: rm(:,:,:)
-            real, intent(out) :: prof(NRBINS)
-            integer :: cnt(NRBINS), ii, jj, ll, ib_loc
-            real    :: rad
-            prof = 0.; cnt = 0
-            do ll = 1, ldim(3)
-                do jj = 1, ldim(2)
-                    do ii = 1, ldim(1)
-                        rad    = sqrt(real((ii-c(1))**2 + (jj-c(2))**2 + (ll-c(3))**2))
-                        ib_loc = int(rad / rbin_width) + 1
-                        if( ib_loc > NRBINS ) cycle
-                        prof(ib_loc) = prof(ib_loc) + abs(rm(ii,jj,ll))
-                        cnt(ib_loc)  = cnt(ib_loc) + 1
-                    enddo
-                enddo
-            enddo
-            where( cnt > 0 ) prof = prof / real(cnt)
-        end subroutine radial_abs_profile
 
         real function background_mean( rm )
             real, intent(in) :: rm(:,:,:)
@@ -2980,14 +3162,17 @@ subroutine exec_test_rec3D_backends( self, cline )
         !! it (real2str_trim's F0.1 renders 1e-3 as '.0')
         !> Diagnostic FSC of a written half pair (soft spherical mask, same
         !! resolution readout as the production FSC path)
-        subroutine report_pair_fsc( backend, l_unfil, label )
-            character(len=*), intent(in) :: backend, label
-            logical,          intent(in) :: l_unfil
+        subroutine report_pair_fsc( backend, l_unfil, label, r05_out, r0143_out )
+            character(len=*), intent(in)  :: backend, label
+            logical,          intent(in)  :: l_unfil
+            real,             intent(out) :: r05_out, r0143_out
             type(image)  :: he, ho
             type(string) :: fe, fo
             real, allocatable :: corrs(:), res_h(:)
             integer :: ldim_h(3), nvols, nyq
             real    :: smpd_h, r05, r0143, mskrad_h
+            r05_out   = 0.
+            r0143_out = 0.
             fe = refine3D_state_halfvol_fname(state, 'even', unfil=l_unfil)
             fo = refine3D_state_halfvol_fname(state, 'odd',  unfil=l_unfil)
             if( .not. (file_exists(fe) .and. file_exists(fo)) )then
@@ -3015,6 +3200,8 @@ subroutine exec_test_rec3D_backends( self, cline )
             call get_resolution(corrs, res_h, r05, r0143)
             r05   = max(r05,   2.0*smpd_h)
             r0143 = max(r0143, 2.0*smpd_h)
+            r05_out   = r05
+            r0143_out = r0143
             write(logfhandle,'(a,F8.3,a,F8.3)') '>>> REC3D BACKENDS: '//trim(backend)//' '//label//&
                 &' half-pair FSC=0.500 at ', r05, '  FSC=0.143 at ', r0143
             call he%kill
@@ -3043,6 +3230,6 @@ subroutine exec_test_rec3D_backends( self, cline )
             endif
         end function real_tok
 
-end subroutine exec_test_rec3D_backends
+end subroutine run_rec3D_backends_single
 
 end module simple_commanders_test_highlevel

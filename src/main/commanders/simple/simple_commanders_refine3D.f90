@@ -1542,7 +1542,7 @@ contains
 
         subroutine prepare_refine3D_het_class_sampling()
             type(class_sample), allocatable :: clssmp(:)
-            integer, allocatable :: tmpinds(:), clsinds(:), pinds(:), cls_states(:)
+            integer, allocatable :: tmpinds(:), clsinds(:), cls_states(:)
             integer              :: icls
             if( spproj%is_virgin_field('ptcl2D') )then
                 params%balance = 'no'

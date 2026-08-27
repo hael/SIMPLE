@@ -704,9 +704,9 @@ contains
         real, allocatable             :: nu_align_lps(:)
         real, allocatable             :: update_frac_trail_recs(:), realized_update_fracs(:)
         real                          :: res05
-        integer                       :: state, ldim(3), ldim_pd(3), numlen_part
+        integer                       :: state, numlen_part
         integer(timer_int_kind)       :: t_nu_envmask, t_nonuniform_filter, t_tot
-        integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_gridcorr, t_upd_proj, t_cleanup
+        integer(timer_int_kind)       :: t_init_context, t_trail_frac, t_upd_proj, t_cleanup
         real(timer_int_kind)          :: rt_reduce_partials, rt_sum_eos
         real(timer_int_kind)          :: rt_restore_eos_and_write_fsc, rt_restore_merged_volume
         real(timer_int_kind)          :: rt_trail_blend_accums, rt_trail_restored_halves

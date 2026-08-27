@@ -325,7 +325,7 @@ contains
         if( self%p_ptr%part /= 1 ) return   ! one report per iteration in distributed execution
         kfromto = self%p_ptr%kfromto
         nk      = kfromto(2) - kfromto(1) + 1
-        vthres  = -log(real(TINY,dp))
+        vthres  = real(-log(real(TINY,dp)), kind=kind(vthres))
         ! bands
         str = ''
         do ib = 1, NDIAG_BANDS

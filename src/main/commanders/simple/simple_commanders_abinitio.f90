@@ -521,6 +521,10 @@ contains
         if( .not. cline%defined('pgrp')        ) call cline%set('pgrp',                      'c1')
         if( .not. cline%defined('pgrp_start')  ) call cline%set('pgrp_start',                'c1')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode',         'nonuniform')
+        ! the pcg-backend automasking veto must be read BEFORE the default
+        ! below is injected into the cline; after injection every run looks
+        ! like an explicit automsk=no and the stage policy can never engage
+        l_automsk_off = (cline%defined('automsk') .and. cline%get_carg('automsk') .eq. 'no')
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',                   'no')
         if( .not. cline%defined('gauref')      ) call cline%set('gauref',                   'yes')
         if( .not. cline%defined('partition')   ) call cline%set('partition',                 'no')
@@ -697,8 +701,9 @@ contains
         l_run_final_rec = nstages_refine3D == abinitio_nstages() .or. trim(params%multivol_mode).eq.'independent'
         ! set class global automasking flag (now supported for all multivol modes via state-specific masks)
         l_automsk     = (cline%defined('automsk') .and. trim(params%automsk).ne.'no')
-        ! an EXPLICIT automsk=no vetoes the pcg-backend automasking default below
-        l_automsk_off = (cline%defined('automsk') .and. trim(params%automsk).eq.'no')
+        ! l_automsk_off (the EXPLICIT automsk=no veto of the pcg-backend
+        ! automasking default) is set where the workflow defaults are
+        ! injected, BEFORE automsk=no lands on the cline as a default
         ! prepare class command lines
         call prep_class_command_lines(params, cline, params%projfile)
         ! set symmetry class variables

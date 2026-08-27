@@ -129,7 +129,7 @@ subroutine run_fixed_reference_diagnostic()
         &ignored_objective,ignored_residual,ignored_fitted_residual,simulator_raw_scale, &
         &ignored_rotation_gradient,ignored_shift_gradient,ignored_band_residuals, &
         &ignored_band_correlations)
-    simulator_scaled_raw_volume = simulator_raw_scale*truth_volume
+    simulator_scaled_raw_volume = real(simulator_raw_scale*truth_volume, kind=kind(truth_volume))
     call model_operator%set_volume(simulator_scaled_raw_volume)
     call model_operator%begin_fourier_workspace(simulator_scaled_raw_workspace)
     call simulator_scaled_raw_workspace%set_shell_range([2,BOX/2])
@@ -137,7 +137,8 @@ subroutine run_fixed_reference_diagnostic()
         &ignored_objective,ignored_residual,ignored_fitted_residual,simulator_corrected_scale, &
         &ignored_rotation_gradient,ignored_shift_gradient,ignored_band_residuals, &
         &ignored_band_correlations)
-    simulator_scaled_corrected_volume = simulator_corrected_scale*corrected_truth_volume
+    simulator_scaled_corrected_volume = real(simulator_corrected_scale*corrected_truth_volume, &
+        &kind=kind(corrected_truth_volume))
     call model_operator%set_volume(simulator_scaled_corrected_volume)
     call model_operator%begin_fourier_workspace(simulator_scaled_corrected_workspace)
     call simulator_scaled_corrected_workspace%set_shell_range([2,BOX/2])
@@ -145,7 +146,7 @@ subroutine run_fixed_reference_diagnostic()
         &ignored_objective,ignored_residual,ignored_fitted_residual,exact_kb_scale, &
         &ignored_rotation_gradient,ignored_shift_gradient,ignored_band_residuals, &
         &ignored_band_correlations)
-    exact_kb_scaled_volume = exact_kb_scale*corrected_truth_volume
+    exact_kb_scaled_volume = real(exact_kb_scale*corrected_truth_volume, kind=kind(corrected_truth_volume))
     call model_operator%set_volume(exact_kb_scaled_volume)
     call model_operator%begin_fourier_workspace(exact_kb_scaled_workspace)
     call exact_kb_scaled_workspace%set_shell_range([2,BOX/2])

@@ -644,11 +644,37 @@ with the other iteration stats, writes it to `simple_stats.txt`
 Thresholds are provisional constants in `simple_convergence`
 (`PCG_SOLVENT_SUPP_INERT/OVER_PCT`), anchored to the bgal ladder verdicts;
 recalibrate by rereading the ladder now that every run prints the readout.
-First fixture calibration points (its=5, rtol=1e-3, reg-init): lambda_rel
-1e-3 (bgal-inert rung) reads 5.5/4.5% -- right at the inert boundary;
-default 1e-1 reads 52.0/51.4% -- nominal, near the upper bound, consistent
-with the fixture's high noise. Rerun the bgal ladder to place the real-data
-rungs on this scale before hardening the 60% bound.
+**Automatic sweep (2026-08-26):** `test=rec3D_backends` now sweeps the
+default ladder {0, 1e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1} automatically whenever a
+prior-capable invocation (ml_reg + NU envelope in the cwd) leaves
+`pcg_solvent_lambda_rel` unset -- one execution directory per rung, collated
+Stage-5 observables printed and written to `rec3D_backends_sweep_summary.txt`
+(base/shipped pair FSC, suppression %, solvent RMS, gated-band ratio/FSC,
+radial min/max, truth FSC, gates), with the base-pair-spread negative control
+asserted across the ladder. An explicit strength runs a single comparison --
+the follow-up mechanism for extra rungs.
+
+Fixture sweep record (its=5, rtol=1e-3, lp=10, reg-init; base pair pinned
+4.036/3.347 across the ladder, spread 0.0000):
+
+| lambda | supp% | sol_rms | ship 0.5/0.143 | band_ratio | band_fsc | rad_min/max | truth_fsc_pcg |
+|---|---|---|---|---|---|---|---|
+| 0     | --    | --   | 4.036/3.347 | 1.006 | 1.000 | 0.98/1.01 | 0.971 |
+| 1e-3  | 5.0   | 12.2 | 4.036/3.347 | 1.002 | 1.000 | 0.99/1.01 | 0.970 |
+| 1e-2  | 14.7  | 11.  | 3.920/3.347 | 0.987 | 0.999 | 0.97/1.06 | 0.970 |
+| 3e-2  | 29.1  | 8.8  | 3.920/3.347 | 0.950 | 0.997 | 0.92/1.12 | 0.966 |
+| 1e-1  | 51.7  | 6.0  | 3.709/3.267 | 0.872 | 0.981 | 0.86/1.23 | 0.948 |
+| 3e-1  | 71.2  | 3.6  | 3.430/2.744 | 0.798 | 0.930 | 0.81/1.42 | 0.898 |
+| 1     | 86.1  | 1.7  | 2.144/2.144 | 0.759 | 0.848 | 0.75/1.85 | 0.810 (1 gate) |
+
+Fixture read (R6: judged by truth, not half-map FSC): truth agreement is
+flat to 1e-2, mildly down at 1e-1 (-0.023) and clearly damaged from 3e-1;
+first material truth loss coincides with supp ~52% and clear damage with
+~71%, bracketing the provisional 60% over-flattening bound from both sides.
+The fixture's truth-optimal strength (~1e-2) is below bgal's visually-chosen
+1e-1 -- dataset-dependent, which is exactly what the in-run suppression
+readout is for. The 5% inert bound is confirmed: the 1e-3 rung reads 5.0%
+with every other observable at the zero-control value.
 
 ### DECISION (2026-08-26): solvent prior on by default at the calibrated strength
 
@@ -829,6 +855,32 @@ same discipline as the envelope. Ranked:
    hard `P_tau` clamps individual beyond-band shells; and the NU §6
    null-estimation discipline reused verbatim for the prior's solvent
    mean/RMS diagnostics.
+
+### DECISION (2026-08-26): re-ranked priorities for the NU-evidence feeds
+
+After the solvent prior went default-on, the ranking above was revised:
+
+- **Item 3 (locres field -> nonstationary spectral prior) is the priority**
+  after the Wilson spectrum source lands: it is the genuinely novel item —
+  nobody builds the evidenced local band-limit into the reconstruction
+  operator; everybody filters post hoc — and it composes with everything
+  already in place (the locres field exists, the P_tau mechanism exists,
+  the label-region selectors reuse the Potts machinery). The cheap
+  locres-diagonal control stays in the Stage-4 sweep as the first
+  measurement.
+- **Item 4 (dmats -> graded confidence) is the co-priority**: same evidence
+  provenance, generalizes the validated binary-envelope solvent prior to
+  "regularize in proportion to lack of evidence", and shares its
+  calibration protocol (the strength-ladder sweep + suppression readout).
+- **Item 2 (aux-competition validator) is demoted, not dropped**: the
+  auxiliary-replacement slot is OWNED by the high-resolution shell-extension
+  experiment when `nu_refine=yes`, which is precisely the configuration
+  `refine3D_auto` uses for high-resolution refinement and is known to work
+  well. The validator therefore cannot ride the existing slot in the regime
+  where it matters most; it needs a distinct competitor slot engineered to
+  coexist with `nu_refine`, which is only worth building if the Stage-4
+  omitted-domain abort fires (its original promotion trigger) or the graded
+  priors of items 3/4 create a concrete need for a per-voxel runtime guard.
 
 Caution: with envelope, locres, and evidence all derived from priored maps
 and fed back, the §9 support-shrinkage risk generalizes to
