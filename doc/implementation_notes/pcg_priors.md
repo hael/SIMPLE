@@ -614,6 +614,42 @@ showing NU ENVELOPE OCCUPANCY at stage 6 and `pcg_solvent_prior_enabled=T`
 from stage 7 — this now doubles as the outstanding Gate B lag-one activation
 item.
 
+### DECISION (2026-08-26): solvent suppression readout in the convergence report
+
+With the prior default-on and self-bootstrapping, refinement needs an in-run
+answer to "is the prior firing, and is the strength right?" that requires no
+harness and no ground truth. The readout is the **solvent suppression
+percentage**, per half:
+
+    supp% = 100 * (1 - rms_s(x_ML) / rms_s(shrink(x_base)))
+
+where `shrink(x_base)` is the base solution passed through the closed-form
+per-shell FSC/Wiener shrinkage (`fsc2shrink_filter` in `simple_estimate_ssnr`,
+shared with the regularized ML initialization). The shrunk base is the
+reference rather than the raw base because the Wiener component of the ML
+replay reduces solvent variation on its own; referencing it out isolates the
+solvent prior's contribution, so an inert prior reads ~0% regardless of tau.
+Plumbing: `report_solvent_solve_stats` prints `pcg_solvent_rms_ref` and
+`pcg_solvent_suppression_pct` per half; both PCG execution paths average
+even/odd per state and persist `simple_pcg_solvent_stats.txt`
+(delete-then-rewrite each ML volassemble, so a skipped prior leaves no stale
+values); `check_conv3D` prints `% SOLVENT SUPPRESSED (PCG SOLVENT PRIOR)`
+with the other iteration stats, writes it to `simple_stats.txt`
+(`PCG_SOLVENT_SUPPRESSION_PCT` + per-state keys), and advises:
+
+- **< 5%**: prior inert — increase `pcg_solvent_lambda_rel` (~3x)
+- **5-60%**: nominal — keep the strength
+- **> 60%**: over-flattening risk — decrease (~3x)
+
+Thresholds are provisional constants in `simple_convergence`
+(`PCG_SOLVENT_SUPP_INERT/OVER_PCT`), anchored to the bgal ladder verdicts;
+recalibrate by rereading the ladder now that every run prints the readout.
+First fixture calibration points (its=5, rtol=1e-3, reg-init): lambda_rel
+1e-3 (bgal-inert rung) reads 5.5/4.5% -- right at the inert boundary;
+default 1e-1 reads 52.0/51.4% -- nominal, near the upper bound, consistent
+with the fixture's high noise. Rerun the bgal ladder to place the real-data
+rungs on this scale before hardening the 60% bound.
+
 ### DECISION (2026-08-26): solvent prior on by default at the calibrated strength
 
 Following the bgal calibration the solvent prior graduated from experimental

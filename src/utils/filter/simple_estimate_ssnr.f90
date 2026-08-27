@@ -13,7 +13,7 @@ use simple_string_utils
 use simple_fileio
 implicit none
 
-public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp
+public :: fsc2ssnr, fsc2wiener_regularizer, fsc2optlp, fsc2optlp_sub, fsc2shrink_filter, ssnr2fsc, ssnr2optlp
 public :: lowpass_from_klim, gaussian_filter
 public :: mskdiam2lplimits, mskdiam2streamresthreshold
 public :: calc_dose_weights, get_resolution, get_resolution_at_fsc
@@ -62,6 +62,25 @@ contains
         where( corrs > 0. )     filt = 2. * corrs / (corrs + 1.)
         where( filt  > 0.99999 ) filt = 0.99999
     end function fsc2optlp
+
+    !> \brief  per-shell closed-form shrinkage implied by the PCG ML prior:
+    !!         no shrinkage below the high-pass index, FSC-proportional
+    !!         (Wiener) shrinkage within the measured band, zero beyond it
+    subroutine fsc2shrink_filter( corrs, k_hp, nyq, filt )
+        real,              intent(in)  :: corrs(:) !< fsc plot (correlations)
+        integer,           intent(in)  :: k_hp     !< high-pass Fourier index (no-shrinkage limit)
+        integer,           intent(in)  :: nyq      !< sz of filter
+        real, allocatable, intent(out) :: filt(:)  !< output filter coefficients
+        integer :: k
+        allocate(filt(nyq), source=0.)
+        do k = 1, nyq
+            if( k <= k_hp )then
+                filt(k) = 1.0
+            else if( k <= size(corrs) )then
+                filt(k) = min(1.0, max(corrs(k), 0.0))
+            endif
+        end do
+    end subroutine fsc2shrink_filter
 
     !> \brief  converts the FSC to the optimal low-pass filter
     subroutine fsc2optlp_sub( filtsz, corrs, filt, merged )

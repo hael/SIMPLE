@@ -8,6 +8,15 @@ implicit none
 public :: convergence
 private
 
+! PCG solvent prior firing thresholds, in % solvent variation suppressed
+! relative to the shell-shrunk base solution (the reference carries the
+! Wiener component of the ML replay but no solvent prior, so an inert prior
+! reads ~0%). Provisional bounds from the bgal strength ladder (pcg_priors.md
+! Stage 5: lambda_rel 1e-1 nominal, 1 over-flattens); recalibrate via
+! test=rec3D_backends ladders now that the readout is reported per run.
+real, parameter :: PCG_SOLVENT_SUPP_INERT_PCT = 5.0  !< below: prior inert, increase pcg_solvent_lambda_rel
+real, parameter :: PCG_SOLVENT_SUPP_OVER_PCT  = 60.0 !< above: over-flattening risk, decrease pcg_solvent_lambda_rel
+
 type convergence
     private
     type(stats_struct) :: score            !< objective function stats
@@ -267,10 +276,12 @@ contains
         type(string)         :: s_ratio, cont_ratio
         type(stats_struct)   :: res_state
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
-        real,    allocatable :: res_state_avg(:), state_update_fracs(:)
-        logical, allocatable :: mask(:), state_mask(:)
+        real,    allocatable :: res_state_avg(:), state_update_fracs(:), pcg_solvent_supps(:)
+        logical, allocatable :: mask(:), state_mask(:), pcg_solvent_mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
+        real    :: pcg_solvent_supp_avg
+        logical :: l_pcg_solvent
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
@@ -362,6 +373,33 @@ contains
             endif
         end do
         deallocate(state_mask)
+        ! PCG solvent prior firing readout: % solvent variation suppressed by
+        ! the prior, measured against the shell-shrunk base solution (~0% =
+        ! inert). Written by the PCG reconstruction each priored volassemble.
+        l_pcg_solvent        = .false.
+        pcg_solvent_supp_avg = 0.
+        allocate(pcg_solvent_supps(params%nstates), pcg_solvent_mask(params%nstates))
+        if( trim(params%rec_backend) == 'pcg' )then
+            call read_pcg_solvent_stats(params%nstates, pcg_solvent_supps, pcg_solvent_mask, l_pcg_solvent)
+        endif
+        if( l_pcg_solvent )then
+            pcg_solvent_supp_avg = sum(pcg_solvent_supps, mask=pcg_solvent_mask) / real(count(pcg_solvent_mask))
+            write(logfhandle,601) '>>> % SOLVENT SUPPRESSED (PCG SOLVENT PRIOR): ', pcg_solvent_supp_avg
+            if( params%nstates > 1 )then
+                do istate = 1, params%nstates
+                    if( .not. pcg_solvent_mask(istate) ) cycle
+                    write(res_state_label,'(A,I3,A)') '>>>     state ', istate, ':'
+                    write(logfhandle,601) res_state_label, pcg_solvent_supps(istate)
+                end do
+            endif
+            if( pcg_solvent_supp_avg < PCG_SOLVENT_SUPP_INERT_PCT )then
+                write(logfhandle,609) '>>> PCG SOLVENT PRIOR INERT (< 5%); INCREASE PCG_SOLVENT_LAMBDA_REL (~3X)'
+            else if( pcg_solvent_supp_avg > PCG_SOLVENT_SUPP_OVER_PCT )then
+                write(logfhandle,609) '>>> PCG SOLVENT PRIOR OVER-FLATTENING (> 60%); DECREASE PCG_SOLVENT_LAMBDA_REL (~3X)'
+            else
+                write(logfhandle,609) '>>> PCG SOLVENT PRIOR NOMINAL (5-60%); KEEP PCG_SOLVENT_LAMBDA_REL'
+            endif
+        endif
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
@@ -537,6 +575,15 @@ contains
         if( params%l_update_frac )then
             call ostats%set(1,'TRAIL_REC_UPDATE_FRACTION', trail_rec_ufrac)
         endif
+        if( l_pcg_solvent )then
+            call ostats%set(1,'PCG_SOLVENT_SUPPRESSION_PCT', pcg_solvent_supp_avg)
+            call ostats%set(1,'PCG_SOLVENT_LAMBDA_REL',      params%pcg_solvent_lambda_rel)
+            do istate = 1, params%nstates
+                if( .not. pcg_solvent_mask(istate) ) cycle
+                write(res_key,'(A,I2.2)') 'PCG_SOLVENT_SUPP_STATE', istate
+                call ostats%set(1, trim(res_key), pcg_solvent_supps(istate))
+            end do
+        endif
         call ostats%write(string(STATS_FILE))
         call self%append_stats(params, ostats)
         call self%plot_projdirs(params, os, mask)
@@ -545,9 +592,41 @@ contains
         if( allocated(statepops)          ) deallocate(statepops)
         if( allocated(res_state_avg)      ) deallocate(res_state_avg)
         if( allocated(state_update_fracs) ) deallocate(state_update_fracs)
+        if( allocated(pcg_solvent_supps)  ) deallocate(pcg_solvent_supps)
+        if( allocated(pcg_solvent_mask)   ) deallocate(pcg_solvent_mask)
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
     end function check_conv3D
+
+    !> Reads the per-state solvent suppression readout the PCG reconstruction
+    !! strategy leaves behind after each priored ML volassemble. The file is
+    !! rewritten (or removed) every reconstruction, so presence means the
+    !! prior fired this iteration.
+    subroutine read_pcg_solvent_stats( nstates, supps, supp_mask, available )
+        integer, intent(in)  :: nstates
+        real,    intent(out) :: supps(nstates)
+        logical, intent(out) :: supp_mask(nstates)
+        logical, intent(out) :: available
+        type(oris)   :: os
+        type(string) :: key
+        integer :: state
+        supps     = 0.
+        supp_mask = .false.
+        available = .false.
+        if( .not. file_exists(PCG_SOLVENT_STATS_FILE) ) return
+        call os%new(1, is_ptcl=.false.)
+        call os%read(string(PCG_SOLVENT_STATS_FILE))
+        do state = 1, nstates
+            key = 'PCG_SOLVENT_SUPP_STATE'//int2str_pad(state,2)
+            if( os%isthere(key%to_char()) )then
+                supps(state)     = os%get(1, key%to_char())
+                supp_mask(state) = .true.
+            endif
+        enddo
+        available = any(supp_mask)
+        call os%kill
+        call key%kill
+    end subroutine read_pcg_solvent_stats
 
     subroutine calc_continuous_inplane_stats( self, os, mask, available )
         class(convergence), intent(inout) :: self
