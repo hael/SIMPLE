@@ -2482,7 +2482,7 @@ subroutine exec_test_rec3D_backends( self, cline )
     type(backends_run_summary) :: summaries(size(SOLVENT_LADDER)), summary
     type(cmdline) :: cline_run
     character(len=256) :: line
-    logical :: l_sweep, l_mlreg, l_mkdir_ok, l_control_ok, l_prior_active
+    logical :: l_sweep, l_mlreg, l_mkdir_ok, l_control_ok, l_prior_active, l_nu_replay
     integer :: i, fnr
     real    :: spread
     ! prior-capable defaults: a bare invocation (projfile, pgrp, mskdiam,
@@ -2495,9 +2495,25 @@ subroutine exec_test_rec3D_backends( self, cline )
     l_mlreg = cline%get_carg('ml_reg') .eq. 'yes'
     l_mkdir_ok = .true.
     if( cline%defined('mkdir') ) l_mkdir_ok = cline%get_carg('mkdir') .ne. 'no'
-    ! any prior-active run needs the state-specific NU evidence envelope in
-    ! the invocation directory -- fall over early with the remedy rather
-    ! than reconstructing for nothing
+    ! direct NU-evidence replay (pcg_priors.md S5): the pcg leg derives its
+    ! evidence in-run from its own base half pair, so no envelope artifact is
+    ! required and the solvent ladder does not apply; the run is a single
+    ! measurement against the unpriored gridding reference (gates soft)
+    l_nu_replay = .false.
+    if( cline%defined('pcg_nu_lambda_rel') ) l_nu_replay = cline%get_rarg('pcg_nu_lambda_rel') > 0.0
+    if( l_nu_replay )then
+        if( .not. l_mlreg ) &
+            &THROW_HARD('pcg_nu_lambda_rel requires ml_reg=yes: Q_NU replaces P_tau in the regularized replay')
+        ! R10: the strategy never resolves a solvent envelope in NU mode; the
+        ! explicit zero documents the mode exclusivity on the command line
+        call cline%set('pcg_solvent_lambda_rel', 0.)
+        call run_rec3D_backends_single(cline, summary, .false.)
+        call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
+        return
+    endif
+    ! any solvent-prior-active run needs the state-specific NU evidence
+    ! envelope in the invocation directory -- fall over early with the remedy
+    ! rather than reconstructing for nothing
     l_prior_active = l_mlreg
     if( cline%defined('pcg_solvent_lambda_rel') )then
         if( cline%get_rarg('pcg_solvent_lambda_rel') == 0.0 ) l_prior_active = .false.
@@ -2665,6 +2681,9 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         if( cline%defined('pcg_solvent_lambda_rel') )then
             dirbody = dirbody//('_sol'//real_tok(cline%get_rarg('pcg_solvent_lambda_rel')))
         endif
+        if( cline%defined('pcg_nu_lambda_rel') )then
+            dirbody = dirbody//('_nu'//real_tok(cline%get_rarg('pcg_nu_lambda_rel')))
+        endif
         if( cline%defined('lp')         ) dirbody = dirbody//('_lp'//real_tok(cline%get_rarg('lp')))
         do i = 1, 9999
             exec_dir = string(int2str(i)//'_')//dirbody
@@ -2705,6 +2724,8 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         call cline_rec%set('rec_backend', trim(BACKENDS(ib)))
         call cline_rec%delete('vol1')   ! ground-truth volume is for the comparison only
         call cline_rec%delete('lp')
+        ! the NU replay key is pcg-only and hard-errors on other backends
+        if( trim(BACKENDS(ib)) .ne. 'pcg' ) call cline_rec%delete('pcg_nu_lambda_rel')
         call cline_rec%delete('hp')
         write(logfhandle,'(A)') '>>> REC3D BACKENDS: RECONSTRUCTING WITH '//trim(BACKENDS(ib))
         call xrec3D%execute(cline_rec)

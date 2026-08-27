@@ -39,6 +39,7 @@ use simple_image, only: image
 use simple_butterworth
 use simple_tent_smooth, only: tent_smooth_3d
 use simple_neighs,      only: neigh_8_3D
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
 
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, &
@@ -50,7 +51,11 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
           nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, calc_nu_evidence_margin,&
           write_nu_evidence_map, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
-          NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
+          NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
+          nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
+          get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
+          expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
+          NU_EVIDENCE_NBANDS, NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_MIN_NULL_FRAC
 private
 #include "simple_local_flags.inc"
 
@@ -121,6 +126,25 @@ real,             parameter   :: NU_ENVMASK_EDGE_A            = 6.0
 ! Columns are allocated with huge() and compaction can leave stale members behind,
 ! so evidence comparisons must ignore anything at that magnitude.
 real,             parameter   :: NU_EVIDENCE_INVALID         = 0.5 * huge(1.)
+! Four broad support bands are the compact interface between the full NU unary
+! bank and the future replay precision.  Confidence in successive entries means
+! reproducible detail is supported through 20, 12, 8, and 5 A respectively.
+! The sets are nested, so the packed confidences must be monotonically
+! non-increasing from coarse to fine.
+integer,          parameter   :: NU_EVIDENCE_NBANDS = 4
+real,             parameter   :: NU_EVIDENCE_BAND_LIMITS(NU_EVIDENCE_NBANDS) = [20., 12., 8., 5.]
+real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
+real,             parameter   :: NU_EVIDENCE_NULL_NSIGMA = 3.0
+! Replay-readiness contract: the generous spherical support always contains
+! substantial solvent, so a compact state whose explicit null wins less than
+! this fraction of the support is evidence of a failed null calibration (the
+! observed zero-null failure mode), not of a solvent-free box. The replay must
+! hard-error on it rather than attach an uncalibrated precision. Provisional
+! (R9), anchored to the simple_test_nu_envmask fixture; recalibrate against
+! real-data operating points before relaxing.
+real,             parameter   :: NU_EVIDENCE_MIN_NULL_FRAC = 0.01
+character(len=*), parameter   :: NU_EVIDENCE_SOURCE_BASE = 'base_unfil'
+character(len=*), parameter   :: NU_EVIDENCE_ALGORITHM = 'nu_evidence_v1'
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'
 real,             allocatable :: dmats_mask(:,:)
@@ -144,7 +168,7 @@ type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: n_nu_mask = 0
 integer :: nu_smooth_norm_radius = -1
-real    :: smpd
+real    :: smpd, nu_support_mskdiam = 0.
 logical :: nu_l_report = .true.
 ! Opt-in diagnostics for NU-filter development. Keep normal runs concise; this
 ! flag restores the detailed candidate, shell-extension, and continuity logs.
@@ -157,6 +181,9 @@ real, allocatable :: nu_noise_profile_cached(:)
 real    :: nu_noise_rmax_cached = 0.
 integer :: nu_aux_replacement_label = 0
 real    :: nu_aux_replacement_resolution = 0.
+logical :: nu_evidence_requested = .false.
+character(len=32) :: nu_evidence_source = ''
+real(kind=8) :: nu_evidence_source_fingerprint(6) = 0.d0
 
 type :: nu_highres_extension_stats
     logical :: attempted    = .false.
@@ -211,6 +238,41 @@ type :: nu_envmask_stats
     real    :: lp_smooth   = 0.
     logical :: l_relative  = .false.
 end type nu_envmask_stats
+
+! Public scalar metadata for a frozen NU evidence state.  The large packed
+! arrays remain private in nu_evidence_state and can only be copied out through
+! unpack_nu_evidence_state, preventing accidental mutation between half replays.
+type :: nu_evidence_summary
+    logical :: valid = .false.
+    integer :: ldim(3) = 0
+    integer :: n_support = 0
+    integer :: n_candidates = 0
+    integer :: n_bands = NU_EVIDENCE_NBANDS
+    real    :: smpd = 0.
+    real    :: mskdiam = 0.
+    real    :: null_fraction = 0.
+    real    :: uncertain_fraction = 0.
+    real    :: calibration_temperature = 0.
+    real    :: spatial_beta = 0.
+    real    :: null_cost_mean = 0.
+    real    :: null_bias_median = 0.
+    real    :: null_bias_mad = 0.
+    real    :: null_bias_threshold = 0.
+    real    :: supported_fraction(NU_EVIDENCE_NBANDS) = 0.
+    real    :: band_limits(NU_EVIDENCE_NBANDS) = NU_EVIDENCE_BAND_LIMITS
+    character(len=32) :: source = ''
+    character(len=16) :: identity = ''
+    character(len=LONGSTRLEN) :: provenance = ''
+end type nu_evidence_summary
+
+type :: nu_evidence_state
+    private
+    type(nu_evidence_summary) :: summary
+    integer(kind=NU_LABEL_KIND), allocatable :: selected_label(:)
+    real, allocatable :: selected_cutoff(:)
+    real, allocatable :: uncertainty(:)
+    real, allocatable :: band_support(:,:)
+end type nu_evidence_state
 
 interface
 
@@ -321,12 +383,13 @@ interface
 
     ! In submodule: simple_nu_filter_bank.f90
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps )
+            &n_highres_steps, evidence_source )
         class(image),          intent(in) :: vol_even, vol_odd
         real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps
+        character(len=*), optional, intent(in) :: evidence_source
     end subroutine setup_nu_dmats
 
     module subroutine setup_nu_candidate_coords( n_candidates )
@@ -362,6 +425,45 @@ interface
     module integer function nu_effective_base_label_for_candidate( icand, n_base )
         integer, intent(in) :: icand, n_base
     end function nu_effective_base_label_for_candidate
+
+    ! In submodule: simple_nu_filter_evidence.f90
+    module subroutine build_nu_evidence_state( vol_even, vol_odd, state )
+        class(image),            intent(in)  :: vol_even, vol_odd
+        type(nu_evidence_state), intent(out) :: state
+    end subroutine build_nu_evidence_state
+
+    module subroutine calculate_nu_source_fingerprint( vol_even, vol_odd, fingerprint )
+        class(image), intent(in) :: vol_even, vol_odd
+        real(kind=8), intent(out) :: fingerprint(6)
+    end subroutine calculate_nu_source_fingerprint
+
+    module logical function nu_evidence_state_is_valid( state )
+        type(nu_evidence_state), intent(in) :: state
+    end function nu_evidence_state_is_valid
+
+    module subroutine get_nu_evidence_summary( state, summary )
+        type(nu_evidence_state),   intent(in)  :: state
+        type(nu_evidence_summary), intent(out) :: summary
+    end subroutine get_nu_evidence_summary
+
+    module subroutine unpack_nu_evidence_state( state, selected_label, selected_cutoff, uncertainty, band_support )
+        type(nu_evidence_state), intent(in) :: state
+        integer, allocatable, optional, intent(out) :: selected_label(:)
+        real,    allocatable, optional, intent(out) :: selected_cutoff(:), uncertainty(:), band_support(:,:)
+    end subroutine unpack_nu_evidence_state
+
+    module subroutine print_nu_evidence_summary( state )
+        type(nu_evidence_state), intent(in) :: state
+    end subroutine print_nu_evidence_summary
+
+    module subroutine expand_nu_evidence_band_weights( state, band_w )
+        type(nu_evidence_state), intent(in)  :: state
+        real, allocatable,       intent(out) :: band_w(:,:,:,:)
+    end subroutine expand_nu_evidence_band_weights
+
+    module subroutine assert_nu_evidence_replay_ready( state )
+        type(nu_evidence_state), intent(in) :: state
+    end subroutine assert_nu_evidence_replay_ready
 
     ! In submodule: simple_nu_filter_potts.f90
     module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )

@@ -178,6 +178,12 @@ subroutine new_automask( prgtab )
         &'whenever the state-specific NU evidence envelope is available; 0 disables', 'strength{0.1}', &
         &.false., 0.1, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call reconstruct3D%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
+        &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the '//&
+        &'regularized replay derives graded band-support evidence from the current base half pair and '//&
+        &'attaches Q_NU INSTEAD of the FSC/SSNR P_tau (mode-exclusive); 0 keeps the ordinary global-ML replay', &
+        &'strength{0}', .false., 0.0, visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)
         ! computer controls

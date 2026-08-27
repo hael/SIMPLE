@@ -245,6 +245,35 @@ The current filter performs these steps:
 The nominal static bank is `[20, 15, 12, 10, 8, 6, 5, 4]` Angstrom before any
 high-resolution extension. The FSC does not remove candidates from this bank.
 
+An opt-in replay-evidence API can compact this full unary bank before it is
+released. Callers must tag the setup source as `base_unfil`; the API fingerprints
+and rechecks the exact half pair and rejects the ML auxiliary-replacement path.
+It adds a zero cross-half-prediction null to a separate ordered-label model.
+Because raw zero prediction has a systematic Huber-loss offset relative to a
+smoothed predictor even for independent noise, and selecting the best of several
+signal candidates adds a multiple-comparison advantage, the null score
+subtracts the robust median-plus-three-MAD offset of
+`C_zero-min(C_signal bank)` over the generous spherical support. This calibrates
+the actual competing bank while retaining sensitivity to genuinely coarse
+shared signal whenever its candidate wins, rather than treating the 20-A label
+as solvent. The API then freezes selected
+cutoff, normalized label entropy, and nested support confidence through
+20/12/8/5 A plus the spherical-support geometry in
+`nu_evidence_state`. This evidence analysis
+does not alter the NU filtering label map or outputs.
+`expand_nu_evidence_band_weights` expands the frozen state into per-band
+lack-of-evidence weight fields (`1 - a_b` inside the spherical evidence
+support, 1 outside it), recreating the packed lexicographic order from the
+frozen geometry alone so it works after `cleanup_nu_filter`. Before any
+replay use, `assert_nu_evidence_replay_ready` enforces the readiness
+contract: a state whose explicit null wins less than
+`NU_EVIDENCE_MIN_NULL_FRAC` of the generous spherical support marks a failed
+null calibration and hard-errors -- validity alone does not qualify evidence
+to parameterize a precision. The PCG replay consumes the expanded weights as
+the `Q_NU` precision when `pcg_nu_lambda_rel > 0`
+(`doc/implementation_notes/pcg_priors.md` Stage 6); with the key at its
+default of 0 nothing in production touches this path.
+
 Auxiliary replacement is conservative. If supplied, the auxiliary pair replaces
 the finest discrete label only when its effective resolution is finer than that
 label. It is not appended as an extra sidecar candidate.

@@ -15,6 +15,9 @@ use simple_fsc,               only: phase_rand_fsc, fsc_area_score_result
 use simple_estimate_ssnr,     only: fsc2shrink_filter, get_resolution
 use simple_image,             only: image
 use simple_image_msk,         only: image_msk
+use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
+    &build_nu_evidence_state, nu_evidence_state, expand_nu_evidence_band_weights, &
+    &print_nu_evidence_summary, assert_nu_evidence_replay_ready, NU_EVIDENCE_BAND_LIMITS
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname
@@ -246,6 +249,52 @@ contains
     !! iteration, S6.2). In every other case l_ready is false with a clear
     !! skip reason and the solve path is untouched (R5: strength zero is
     !! bit-identical). Never substitutes a density or spherical mask.
+    !> Stage-6 direct NU-evidence replay (pcg_priors.md S5-S6): construct the
+    !! frozen compact evidence state from the CURRENT state's unregularized
+    !! base half pair -- current-iteration empirical Bayes, exactly as the ML
+    !! replay derives P_tau from the current base pair -- and expand it into
+    !! the graded band lack-of-evidence weights the solver consumes. Built
+    !! once per state after both base solves and before either replay; the
+    !! two half replays share the one immutable evidence identity. No
+    !! envelope artifact is read or written and no silent fallback exists:
+    !! evidence-construction failure is a hard error.
+    subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, band_w )
+        class(parameters), intent(in)  :: params
+        integer,           intent(in)  :: state_here
+        character(len=*),  intent(in)  :: context
+        type(image),       intent(in)  :: vol_even, vol_odd
+        real, allocatable, intent(out) :: band_w(:,:,:,:)
+        type(nu_evidence_state) :: evstate
+        write(logfhandle,'(A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): BUILDING EVIDENCE FROM THE '//&
+            &'BASE HALF PAIR OF STATE ', state_here, ' (source=base_unfil)'
+        call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source='base_unfil')
+        call optimize_nu_cutoff_finds()
+        call build_nu_evidence_state(vol_even, vol_odd, evstate)
+        call cleanup_nu_filter()
+        ! readiness contract: a valid state with an inadequate null population
+        ! (the observed zero-null calibration failure) must hard-error before
+        ! either replay, never attach silently
+        call assert_nu_evidence_replay_ready(evstate)
+        call print_nu_evidence_summary(evstate)
+        write(logfhandle,'(A)') '    pcg_replay_prior_mode=nu_evidence'
+        call expand_nu_evidence_band_weights(evstate, band_w)
+    end subroutine build_nu_replay_evidence
+
+    !> Hard activation contract for the direct NU replay (no silent fallback):
+    !! a defined pcg_nu_lambda_rel must be finite and non-negative, and a
+    !! POSITIVE strength is only meaningful when the euclid ML replay actually
+    !! runs -- otherwise the request would be silently ignored, which R10-style
+    !! explicitness forbids. Called from every PCG execution entry.
+    subroutine validate_nu_replay_request( params )
+        class(parameters), intent(in) :: params
+        if( .not. ieee_is_finite(params%pcg_nu_lambda_rel) .or. params%pcg_nu_lambda_rel < 0.0 )then
+            THROW_HARD('pcg_nu_lambda_rel must be finite and non-negative')
+        endif
+        if( params%pcg_nu_lambda_rel > 0.0 .and. .not. params%l_ml_reg )then
+            THROW_HARD('pcg_nu_lambda_rel > 0 requires the regularized replay: objfun=euclid ml_reg=yes')
+        endif
+    end subroutine validate_nu_replay_request
+
     subroutine resolve_solvent_envelope( params, state_here, context, m_env, l_ready )
         class(parameters), intent(in)  :: params
         integer,           intent(in)  :: state_here
@@ -392,17 +441,23 @@ contains
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         integer, allocatable :: selected_pinds(:), half_pinds(:)
         real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:), solvent_rmss(:)
-        real, allocatable :: ship05s(:), ship0143s(:)
+        real, allocatable :: ship05s(:), ship0143s(:), nu_band_w(:,:,:,:)
         integer, allocatable :: solvent_supp_cnts(:)
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         real :: res05, cfar
-        logical :: l_solvent_ready
+        logical :: l_solvent_ready, l_nu_replay
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
         logical :: l_sigma_loaded
 
         call validate_supported_mode()
+        call validate_nu_replay_request(params)
+        ! replay precision mode: pcg_nu_lambda_rel > 0 selects the direct
+        ! NU-evidence replay (Q_NU), replacing P_tau and any solvent prior
+        ! (mode-exclusive, pcg_priors.md R10); validated above, so a positive
+        ! strength here implies the euclid ML replay is active
+        l_nu_replay = params%pcg_nu_lambda_rel > 0.0
         nselected = 0
         call build%spproj_field%sample4rec([params%fromp,params%top], nselected, selected_pinds)
         if( nselected < 1 ) THROW_HARD('no active particles selected for PCG reconstruct3D')
@@ -462,13 +517,20 @@ contains
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
-                call resolve_solvent_envelope(params, state, 'shared', solvent_env, l_solvent_ready)
+                if( l_nu_replay )then
+                    ! evidence from the current base pair; frozen before either
+                    ! replay, no envelope artifact, no solvent precision
+                    call build_nu_replay_evidence(params, state, 'shared', half_even, half_odd, nu_band_w)
+                else
+                    call resolve_solvent_envelope(params, state, 'shared', solvent_env, l_solvent_ready)
+                endif
                 call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
                 call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
                 if( allocated(solvent_env) ) deallocate(solvent_env)
+                if( allocated(nu_band_w)   ) deallocate(nu_band_w)
                 ! shipped-pair crossing for the inflation-based guidance
                 ! (diagnostic only, never a resolution claim)
-                if( solvent_supp_cnts(state) > 0 )then
+                if( solvent_supp_cnts(state) > 0 .or. l_nu_replay )then
                     call shipped_pair_res(params, ml_even, ml_odd, ship05s(state), ship0143s(state))
                 endif
                 call merged%kill
@@ -743,9 +805,9 @@ contains
             real, allocatable :: x(:,:,:), rel_res_hist(:)
             integer :: nptcls, niters, prior_npositive
             integer(timer_int_kind) :: t_phase
-            real(dp) :: time_reduce, time_finalize, time_solve, time_total
+            real(dp) :: time_reduce, time_finalize, time_solve, time_total, time_nu_stats
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
-            real :: rms_supp_ref, supp_pct, rms_half
+            real :: rms_supp_ref, supp_pct, rms_half, nu_penalty
             logical :: l_warm
 
             t_phase = tic()
@@ -758,25 +820,55 @@ contains
             time_reduce = real(toc(t_phase),dp)
             if( nptcls < 1 ) THROW_HARD('PCG ML replay requires a populated raw half accumulator')
             t_phase = tic()
-            call pcgop%set_ml_prior(fsc_here, params%tau, params%hp)
-            ! before end_accum: the effective solvent strength is derived from
-            ! the data scale alongside the relative ridge lambda
-            if( l_solvent_ready ) call pcgop%set_solvent_prior(solvent_env, params%pcg_solvent_lambda_rel)
+            ! mode-exclusive replay precision (R10): Q_NU replaces P_tau; the
+            ! reconstructor hard-errors if both are requested. Effective
+            ! strengths are derived from the data scale in end_accum alongside
+            ! the relative ridge lambda.
+            if( l_nu_replay )then
+                if( .not. allocated(nu_band_w) ) THROW_HARD('NU replay evidence was not constructed before the replay')
+                call pcgop%set_nu_prior(nu_band_w, NU_EVIDENCE_BAND_LIMITS, params%pcg_nu_lambda_rel)
+            else
+                call pcgop%set_ml_prior(fsc_here, params%tau, params%hp)
+                if( l_solvent_ready ) call pcgop%set_solvent_prior(solvent_env, params%pcg_solvent_lambda_rel)
+            endif
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
             call pcgop%assert_prior_attachment_mode
             time_finalize = real(toc(t_phase),dp)
-            call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
-                &prior_to_khat_l1, prior_to_khat_rms)
+            prior_npositive    = 0
+            prior_positive_min = 0.0
+            prior_positive_max = 0.0
+            prior_to_khat_l1   = 0.0
+            prior_to_khat_rms  = 0.0
+            if( .not. l_nu_replay )then
+                call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
+                    &prior_to_khat_l1, prior_to_khat_rms)
+            endif
             x = base_volume%get_rmat()
             call override_ml_warm_start_from_previous(params, state_here, half, x, 'shared', l_warm)
-            if( .not. l_warm ) call regularized_ml_initial_guess(params, fsc_here, solvent_env, &
-                &l_solvent_ready, x, 'shared', half)
+            ! the closed-form shrinkage initial guess encodes the P_tau/Q_s
+            ! optimum; the NU replay has no such closed form yet and cold-starts
+            ! from the base solution
+            if( .not. l_warm .and. .not. l_nu_replay )then
+                call regularized_ml_initial_guess(params, fsc_here, solvent_env, &
+                    &l_solvent_ready, x, 'shared', half)
+            endif
             t_phase = tic()
             call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
             time_solve = real(toc(t_phase),dp)
             call validate_solved_map(x, 'shared', state_here, half, 'ml')
+            time_nu_stats = 0.0_dp
+            if( l_nu_replay )then
+                ! one full Q_NU application (~13 padded FFTs) -- timed as
+                ! diagnostic overhead, material at small iteration budgets
+                t_phase = tic()
+                call pcgop%get_nu_prior_stats(x, nu_penalty)
+                time_nu_stats = real(toc(t_phase),dp)
+                write(logfhandle,'(A,ES12.4,A,ES12.4,A,F9.3)') '>>> PCG NU REPLAY (shared/'//trim(half)//&
+                    &'): lambda_eff=', pcgop%get_effective_nu_lambda(), '  pcg_nu_prior_energy_final=', &
+                    &nu_penalty, '  stats_overhead_s=', real(time_nu_stats)
+            endif
             if( l_solvent_ready )then
                 rms_supp_ref = solvent_suppression_reference(pcgop, params, fsc_here, base_volume)
                 call report_solvent_solve_stats(pcgop, x, rms_supp_ref, 'shared', half, supp_pct, rms_half)
@@ -784,7 +876,7 @@ contains
                 solvent_rmss(state_here)      = solvent_rmss(state_here)  + rms_half
                 solvent_supp_cnts(state_here) = solvent_supp_cnts(state_here) + 1
             endif
-            time_total = time_reduce + time_finalize + time_solve
+            time_total = time_reduce + time_finalize + time_solve + time_nu_stats
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
             call report_beyond_band_excess(volume, params, state_here, half, 'ml')
@@ -1543,17 +1635,28 @@ contains
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:), solvent_rmss(:)
         real, allocatable :: realized_fractions(:), update_weights(:), ship05s(:), ship0143s(:)
+        real, allocatable :: nu_band_w(:,:,:,:)
         integer, allocatable :: solvent_supp_cnts(:)
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
         integer :: n_active_state, n_sampled_state
         real :: res05, cfar
-        logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_solvent_ready
+        logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_solvent_ready, l_nu_replay
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
 
         call validate_pcg_common(params)
+        call validate_nu_replay_request(params)
+        ! replay precision mode: Q_NU replaces P_tau and any solvent prior
+        ! (mode-exclusive, pcg_priors.md R10); same rule as the shared path,
+        ! validated above so a positive strength implies the ML replay is active
+        l_nu_replay = params%pcg_nu_lambda_rel > 0.0
+        if( l_nu_replay .and. params%l_trail_rec )then
+            ! trailing replays blended accumulators whose base pair is not the
+            ! plain current-cohort pair the evidence contract requires
+            THROW_HARD('NU replay does not support trailing reconstruction yet')
+        endif
         if( present(trail_bootstrap_states) )then
             if( size(trail_bootstrap_states) /= params%nstates ) &
                 &THROW_HARD('PCG trailing-bootstrap state output has invalid size')
@@ -1649,13 +1752,22 @@ contains
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
-                call resolve_solvent_envelope(params, state, 'distributed', solvent_env, l_solvent_ready)
+                if( l_nu_replay )then
+                    ! the trailing bootstrap replays previous-cohort halves;
+                    ! evidence must come from the pair the replay reuses, and
+                    ! that interaction is not designed yet
+                    if( l_bootstrap ) THROW_HARD('NU replay does not support the trailing bootstrap path yet')
+                    call build_nu_replay_evidence(params, state, 'distributed', half_even, half_odd, nu_band_w)
+                else
+                    call resolve_solvent_envelope(params, state, 'distributed', solvent_env, l_solvent_ready)
+                endif
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
                 call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
                 if( allocated(solvent_env) ) deallocate(solvent_env)
+                if( allocated(nu_band_w)   ) deallocate(nu_band_w)
                 ! shipped-pair crossing for the inflation-based guidance
                 ! (diagnostic only, never a resolution claim)
-                if( solvent_supp_cnts(state) > 0 )then
+                if( solvent_supp_cnts(state) > 0 .or. l_nu_replay )then
                     call shipped_pair_res(params, ml_even, ml_odd, ship05s(state), ship0143s(state))
                 endif
                 call merged%kill
@@ -1836,6 +1948,7 @@ contains
             real(dp) :: time_reduce, time_finalize, time_solve
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
             real :: realized_fraction, update_weight, current_scale, rms_supp_ref, supp_pct, rms_half
+            real :: nu_penalty
             logical :: l_ml_solve, l_chain_exists, l_seed_chain, l_warm
 
             l_ml_solve = present(fsc_prior)
@@ -1906,23 +2019,40 @@ contains
             endif
             t_phase = tic()
             if( l_ml_solve )then
-                call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
-                ! before end_accum: effective strength derives from the data scale
-                if( l_solvent_ready ) call pcgop%set_solvent_prior(solvent_env, params%pcg_solvent_lambda_rel)
+                ! mode-exclusive replay precision (R10): Q_NU replaces P_tau;
+                ! the reconstructor hard-errors if both are requested. The
+                ! effective strengths derive from the data scale in end_accum.
+                if( l_nu_replay )then
+                    if( .not. allocated(nu_band_w) ) &
+                        &THROW_HARD('NU replay evidence was not constructed before the replay')
+                    call pcgop%set_nu_prior(nu_band_w, NU_EVIDENCE_BAND_LIMITS, params%pcg_nu_lambda_rel)
+                else
+                    call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
+                    if( l_solvent_ready ) call pcgop%set_solvent_prior(solvent_env, params%pcg_solvent_lambda_rel)
+                endif
             endif
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
             if( l_ml_solve ) call pcgop%assert_prior_attachment_mode
             time_finalize = real(toc(t_phase),dp)
-            if( l_ml_solve )then
+            prior_npositive    = 0
+            prior_positive_min = 0.0
+            prior_positive_max = 0.0
+            prior_to_khat_l1   = 0.0
+            prior_to_khat_rms  = 0.0
+            if( l_ml_solve .and. .not. l_nu_replay )then
                 call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
                     &prior_to_khat_l1, prior_to_khat_rms)
             endif
             if( l_ml_solve )then
                 x = warm_start%get_rmat()
                 call override_ml_warm_start_from_previous(params, state_here, half, x, 'distributed', l_warm)
-                if( .not. l_warm ) call regularized_ml_initial_guess(params, fsc_prior, solvent_env, &
-                    &l_solvent_ready, x, 'distributed', half)
+                ! the closed-form shrinkage initial guess encodes the P_tau/Q_s
+                ! optimum; the NU replay cold-starts from the base solution
+                if( .not. l_warm .and. .not. l_nu_replay )then
+                    call regularized_ml_initial_guess(params, fsc_prior, solvent_env, &
+                        &l_solvent_ready, x, 'distributed', half)
+                endif
             else
                 allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             endif
@@ -1931,6 +2061,15 @@ contains
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
             time_solve = real(toc(t_phase),dp)
             call validate_solved_map(x, 'distributed', state_here, half, solve_kind)
+            if( l_ml_solve .and. l_nu_replay )then
+                ! one full Q_NU application (~13 padded FFTs) -- timed as
+                ! diagnostic overhead, material at small iteration budgets
+                t_phase = tic()
+                call pcgop%get_nu_prior_stats(x, nu_penalty)
+                write(logfhandle,'(A,ES12.4,A,ES12.4,A,F9.3)') '>>> PCG NU REPLAY (distributed/'//trim(half)//&
+                    &'): lambda_eff=', pcgop%get_effective_nu_lambda(), '  pcg_nu_prior_energy_final=', &
+                    &nu_penalty, '  stats_overhead_s=', real(real(toc(t_phase),dp))
+            endif
             if( l_ml_solve .and. l_solvent_ready )then
                 ! warm_start is the base half solution at both ML call sites
                 rms_supp_ref = solvent_suppression_reference(pcgop, params, fsc_prior, warm_start)

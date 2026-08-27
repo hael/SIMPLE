@@ -267,6 +267,11 @@ contains
         call rec3D_backends%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
         &'Solvent-flatness prior strength relative to the PCG data scale, applied on the pcg leg whenever '//&
         &'ml_reg (objfun=euclid) and a valid NU evidence envelope are available; 0 disables', 'strength{0.1}', .false., 0.1)
+        call rec3D_backends%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
+        &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the pcg '//&
+        &'leg builds the compact NU evidence state from its own base half pair in-run and attaches Q_NU '//&
+        &'INSTEAD of the FSC/SSNR P_tau (needs no envelope artifact; disables the solvent ladder); '//&
+        &'0 keeps the ordinary global-ML replay', 'strength{0}', .false., 0.0)
         call rec3D_backends%add_input(UI_IMG, 'vol1', 'file', 'Ground-truth volume', &
         &'Known volume the particles were simulated from; enables the radial recon/truth table', &
         &'e.g. truth.mrc', .false., '')

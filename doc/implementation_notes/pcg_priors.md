@@ -1002,14 +1002,69 @@ files; the loop then activates the prior end-to-end
 
 ### Stage 6 — direct NU-evidence replay — active priority 1
 
-6.1 Evidence contract, no solver behavior change:
+6.1 **IMPLEMENTED, build/runtime gate pending (2026-08-27).** Evidence contract,
+no solver behavior change:
 
-- add and validate the no-reproducible-signal/null competitor;
-- derive compact monotone band-support confidence, cutoff, uncertainty, and
-  provenance from the full unary bank before it is released;
-- prove that the state is derived only from the `_unfil` pair and is identical
-  for both replay halves;
-- expose diagnostics and mutation-test candidate ordering/null calibration.
+- `setup_nu_dmats(..., evidence_source='base_unfil')` opts into replay-evidence
+  construction. The tagged path fingerprints the exact spherical-support values
+  of both input halves, rejects auxiliary replacement candidates, and
+  `build_nu_evidence_state` rechecks the fingerprint before compaction. Existing
+  callers omit the tag and are unchanged; the current solvent prior remains in
+  place until Stage 6.3 replaces it in the NU target workflow.
+- The explicit null candidate is zero cross-half prediction: raw even is scored
+  against zero odd prediction and raw odd against zero even prediction with the
+  same radial whitening profile and Huber loss as the signal bank. It is
+  smoothed at the discretized nominal-20-A scale, exactly matching its adjacent
+  coarsest candidate. The raw zero loss has a systematic offset from smoothed
+  predictors even under independent noise, and choosing the best signal label
+  introduces a multiple-comparison advantage. The calibrated null therefore
+  subtracts the robust median-plus-three-MAD offset of
+  `C_zero-min(C_signal bank)` over the generous spherical support. This
+  preserves the explicit cross-half null and lets truly coarse shared signal
+  win whenever the coarse candidate's improvement exceeds the exact-bank null
+  distribution. Null plus
+  the full retained signal bank are regularized by a separate copy of the
+  established ordered-label model, so the production NU filter map is not
+  changed.
+- The frozen `nu_evidence_state` has private packed storage and a copy-out API.
+  It retains four nested coarse-to-fine support confidences (detail supported
+  through 20/12/8/5 A), selected cutoff including cutoff zero for the null,
+  normalized label entropy, spherical-support geometry, and scalar summaries.
+  The geometry is sufficient to recreate the lexicographic packed-voxel order
+  after mutable NU state is released. Confidence is a spatial-model
+  softmax whose temperature is the median final best-versus-next energy gap for
+  the exact bank. Provenance records the bank, ordering, whitening checksum,
+  smoothing, temperature, and Potts scale; a content-derived FNV-1a identity is
+  carried with the state. The null occupies one packed vector and reads the
+  signal bank in place during compaction; it does not duplicate the full unary
+  matrix. Validation enforces finiteness, `[0,1]` bounds, and monotone
+  coarse-to-fine support.
+- `simple_test_nu_envmask` now gates the null competitor on its independent-noise
+  solvent/common-signal molecule: molecular coarse-band support must exceed
+  solvent support, solvent null selection must exceed molecular null selection,
+  all packed fields must satisfy the immutable-state contract, and the state
+  must remain valid after mutable NU unary storage is released. Candidate-order
+  mutation is guarded by a hard strict-order check; null calibration and exact
+  provenance are emitted by `print_nu_evidence_summary`.
+- Lightweight source validation completed: `git diff --check` and the Fortran
+  source-index parser pass. The user-side build succeeded; runtime validation
+  remains open before 6.1 is marked gate-complete.
+
+First user-side execution reached compact-state construction after the NU bank
+and ordered-label passes, then tripped the `[0,1]` immutable-state check. The
+coarse support field sums all signal-label softmax probabilities and can exceed
+one by single-precision accumulation roundoff. The derived support fields and
+their summaries are now clipped at their mathematical probability bounds.
+Softmax terms more than 80 calibrated energy units above the best state are set
+to zero explicitly, avoiding the otherwise harmless IEEE underflow flag. Rerun
+then showed that the uncalibrated zero predictor never won: molecular and
+solvent null fractions were both zero, and coarse support saturated throughout
+the support. This was a scientific null-model failure, not a test tolerance.
+The first bias-calibration rerun still selected no null voxels: calibrating only
+against the coarsest candidate did not account for another signal-bank member
+winning solvent by chance. The calibration now uses the best exact-bank signal
+cost, including that multiple-comparison advantage, without redefining the
+coarsest signal label as solvent. Rerun of `simple_test_nu_envmask` is pending.
 
 6.2 Operator Gate A:
 
@@ -1018,6 +1073,112 @@ files; the loop then activates the prior end-to-end
   gradient, and `P(H+Q_NU)P` composition;
 - add the hard `P_tau`/`Q_NU` mutual-exclusion assertion;
 - implement and identify a nonnegative preconditioner approximation.
+
+6.2 **operator IMPLEMENTED, Gate A algebra tests pending (2026-08-27;
+review-corrected the same day).** `set_nu_prior`/`apply_nu_precision` in
+`simple_reconstructor_pcg`: `Q_NU = C (sum_b B_b^T W_b B_b) C` with
+`B_b = crop o IFFT o M_b o FFT o pad`, `M_b` the disjoint radial 0/1 masks on
+the padded Toeplitz lattice cut at the `NU_EVIDENCE_BAND_LIMITS` boundaries
+(20/12/8/5 A; band 1 also absorbs everything coarser, band 4 everything
+finer, padded DC and physically unaddressed points belong to no band), and
+`C = I - 11^T/N` the native-box mean-centering projector applied on BOTH
+sides. Review corrections to the first cut, recorded so the claims stay
+honest:
+
+- **Constant null mode.** Padded-DC exclusion alone is NOT sufficient: a
+  native constant zero-pads to a box window with substantial non-DC padded
+  content, so the first cut had `Q_NU(c 1) /= 0`. The explicit symmetric
+  centering `C` on both sides now provides the EXACT constant null mode
+  (Gate A must verify `Q_NU(c 1) = 0` to roundoff, not merely small).
+- **Not a tight frame.** The pad/crop sandwich means the `B_b` are not
+  orthogonal projectors and `sum_b B_b^T B_b < I` with cross-band leakage;
+  refining or merging the band partition CHANGES the operator. The
+  invariance claim is retracted. What survives, and is the declared
+  normalization: each `B_b` is a contraction (restriction o projection o
+  extension) and the `M_b` are disjoint, so
+  `sum_b ||B_b x||^2 <= ||x||^2` and with `W in [0,1]`, `||Q_NU|| <= 1`.
+  Gate A gains a partition-change test: uniform weights, two different band
+  partitions, MEASURE the deviation and record it as the bank-refinement
+  sensitivity rather than asserting zero.
+
+`W_b = [p*(1-a_b)]^2` grades the lack-of-evidence weight by the soft support
+exactly as the solvent weight did; each `B_b` is symmetric (restriction
+adjoint to zero-extension, real even diagonal) and `C` is symmetric
+idempotent, so `Q_NU` is symmetric PSD. Per-band results accumulate in real
+space (two padded complex workspaces live). Strength:
+`lambda_nu = pcg_nu_lambda_rel * s_data(D)`, derived in
+`update_lambda_from_density` beside the ridge and solvent lambdas. Mutual
+exclusion (R10) is enforced bidirectionally at set time in ALL pairs:
+`set_ml_prior` rejects an attached `Q_NU` and vice versa, and `set_nu_prior`
+and `set_solvent_prior` each reject the other (both attachment orders must be
+mutated in Gate A). The declared nonnegative preconditioner approximation is
+the support-mean band weight fused as a shell diagonal in
+`finalize_density_accum`, mirroring the ML-prior fusion
+(`nu_precond_shell_diag`). Deapodized-kernel-only attachment rides the
+existing `assert_prior_attachment_mode`. Gate A algebra/mutation tests
+(planned as a `test=pcg_priors` extension) are NOT yet written; the list now
+includes the exact-constant-null check, the partition-change measurement, and
+both mutual-exclusion attachment orders.
+
+6.3 **workflow wiring IMPLEMENTED for both PCG paths, runtime gate pending
+(2026-08-27).** `pcg_nu_lambda_rel` (default 0 = ordinary global-ML replay;
+registered on `reconstruct3D` and `test=rec3D_backends`) selects the NU
+replay: after both base solves and the FSC, `build_nu_replay_evidence` runs
+`setup_nu_dmats(..., evidence_source='base_unfil')` ->
+`optimize_nu_cutoff_finds` -> `build_nu_evidence_state` -> `cleanup_nu_filter`
+on the current base half pair, prints the evidence block
+(`pcg_replay_prior_mode=nu_evidence` + `pcg_nu_*` summary), and
+`expand_nu_evidence_band_weights` (new, recreates the packed lexicographic
+order from the frozen geometry alone; `w_b = 1 - a_b` inside the spherical
+evidence support, 1 outside it) hands the solver its weights. Both half
+replays share the one frozen state; `set_ml_prior`/`set_solvent_prior` are
+never called in NU mode and no envelope is resolved, read, or written.
+Review-added contracts (2026-08-27):
+
+- **Readiness contract.** A valid compact state is necessary but not
+  sufficient: `assert_nu_evidence_replay_ready` hard-errors before either
+  replay when the explicit null wins less than `NU_EVIDENCE_MIN_NULL_FRAC`
+  (provisional 1%, R9) of the generous spherical support -- the observed
+  zero-null calibration failure must never attach silently. The same assert
+  now gates `simple_test_nu_envmask`, and that test must pass before the
+  reconstruction harness results are trusted.
+- **Explicit activation, no silent fallback.** `validate_nu_replay_request`
+  (called from both PCG execution entries) hard-errors on a non-finite or
+  negative strength and on a positive strength without the euclid ML replay
+  (`ml_reg=yes`); `reconstruct3D` hard-errors on a positive strength with any
+  non-pcg `rec_backend`. The harness deletes the key on its gridding leg.
+- **Timing honesty.** The post-solve `get_nu_prior_stats` costs one full
+  `Q_NU` application (~13 padded FFTs, material at small iteration budgets);
+  it is timed separately, printed as `stats_overhead_s` on the
+  `PCG NU REPLAY` line, and included in the shared path's replay total.
+
+The
+replay warm-starts from the previous-iteration shipped half when one exists
+and otherwise cold-starts from the base solution (the closed-form shrinkage
+init encodes the P_tau/Q_s optimum and is skipped). Per-half
+`PCG NU REPLAY` lines report `lambda_eff` and `pcg_nu_prior_energy_final`;
+the shipped-pair inflation crossings are measured in NU mode too. Distributed
+parity: the same attach path runs in `reduce_solve_state_half`; trailing
+reconstruction and the trailing bootstrap are hard-errored with the NU replay
+(the evidence contract requires the plain current-cohort base pair). The
+solvent prior, its envelope bootstrap, and its default remain untouched
+outside NU mode — removal from the target workflow is still owed once the NU
+estimator passes its gates.
+
+**Testable harness invocation (`test=rec3D_backends`).** A NU-replay run is a
+single measurement (gates soft, as for any prior-active run), needs NO
+envelope artifact, and forces `pcg_solvent_lambda_rel=0` explicitly (R10):
+
+```text
+simple_test_exec test=rec3D_backends projfile=<proj.simple> pgrp=<pgrp> \
+    mskdiam=<D> pcg_nu_lambda_rel=<X> nthr=<N> [vol1=<truth.mrc> lp=<lp>]
+```
+
+against the strength-zero control (omit the key and use
+`pcg_solvent_lambda_rel=0` for the pure `P_tau` reference, R5/Gate C run A)
+and the solvent rungs already recorded. The execution directory carries a
+`_nu<X>` token. Numbers not yet recorded: first fixture A/B pending the
+user-side build.
 
 6.3 Workflow Gate B:
 

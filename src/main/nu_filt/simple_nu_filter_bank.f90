@@ -6,12 +6,13 @@ implicit none
 contains
 
     module subroutine setup_nu_dmats( vol_even, vol_odd, mskdiam, aux_resolutions, aux_even, aux_odd, &
-            &n_highres_steps )
+            &n_highres_steps, evidence_source )
         class(image),          intent(in) :: vol_even, vol_odd
         real,                  intent(in) :: mskdiam
         real,                  intent(in) :: aux_resolutions(:)
         type(image), optional, intent(in) :: aux_even(:), aux_odd(:)
         integer,     optional, intent(in) :: n_highres_steps
+        character(len=*), optional, intent(in) :: evidence_source
         type(image) :: vol_even_filt, vol_odd_filt, vol_support
         type(string) :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_tmp(:,:,:), dmat_cand(:,:,:)
@@ -21,11 +22,20 @@ contains
         real    :: x
         call init_nu_filter(vol_even, vol_odd, n_highres_steps)
         if( mskdiam <= TINY ) THROW_HARD('mskdiam must be positive in setup_nu_dmats')
+        nu_support_mskdiam = mskdiam
         if( allocated(nu_lmask) ) deallocate(nu_lmask)
         call vol_support%disc(ldim, smpd, 0.5 * mskdiam / smpd, nu_lmask)
         call vol_support%kill
         if( .not. any(nu_lmask) ) THROW_HARD('spherical support has no true voxels in setup_nu_dmats')
         call setup_nu_mask_voxels
+        nu_evidence_requested = present(evidence_source)
+        nu_evidence_source = ''
+        nu_evidence_source_fingerprint = 0.d0
+        if( nu_evidence_requested )then
+            if( trim(evidence_source) /= NU_EVIDENCE_SOURCE_BASE ) &
+                &THROW_HARD('NU replay evidence source must be base_unfil')
+            nu_evidence_source = trim(evidence_source)
+        endif
         aux_replacement_idx = 0
         if( present(aux_even) ) then
             if( .not. present(aux_odd) ) THROW_HARD('Auxiliary odd bank missing; setup_nu_dmats')
@@ -66,6 +76,10 @@ contains
             if( size(aux_resolutions) /= 0 ) THROW_HARD('Auxiliary resolutions supplied without auxiliary volumes; setup_nu_dmats')
             call cleanup_aux_bank
         end if
+        if( nu_evidence_requested .and. nu_aux_replacement_label > 0 ) &
+            &THROW_HARD('NU replay evidence cannot include an auxiliary replacement pair')
+        if( nu_evidence_requested ) &
+            &call calculate_nu_source_fingerprint(vol_even, vol_odd, nu_evidence_source_fingerprint)
         ! Filter caches are local scratch products. Rebuild the current bank
         ! after setup so a prior interrupted run cannot satisfy existence-only
         ! cache checks with stale volumes.

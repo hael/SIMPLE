@@ -45,6 +45,14 @@ contains
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)     ! to assure that shifts are being used
         if( .not. cline%defined('rec_backend') ) call cline%set('rec_backend', 'gridding')
         rec_backend = cline%get_carg('rec_backend')
+        ! the direct NU-evidence replay exists only on the PCG backend; a
+        ! positive strength anywhere else would be silently ignored, which the
+        ! explicit-activation contract forbids (pcg_priors.md S6.2)
+        if( cline%defined('pcg_nu_lambda_rel') .and. rec_backend .ne. 'pcg' )then
+            if( cline%get_rarg('pcg_nu_lambda_rel') /= 0.0 )then
+                THROW_HARD('pcg_nu_lambda_rel requires rec_backend=pcg')
+            endif
+        endif
         call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         ! Select and run strategy

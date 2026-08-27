@@ -191,6 +191,33 @@ type :: reconstructor_pcg
     real              :: solvent_lambda_rel = 0.0     !< strength relative to the data scale
     real              :: lambda_solvent = 0.0         !< effective absolute strength
     logical           :: l_solvent_prior = .false.
+    ! ---- optional direct NU-evidence replay precision (pcg_priors.md S5) ----
+    ! Q_NU = C (sum_b B_b^T W_b B_b) C, with C the native-box mean-centering
+    ! projector (C = I - 11^T/N, symmetric idempotent -- it makes a constant
+    ! field an EXACT null mode: padded-DC exclusion alone is not enough,
+    ! because a native constant becomes a box window after zero-padding and
+    ! carries non-DC padded content), B_b the disjoint radial Fourier band
+    ! masks on the padded lattice, and W_b = [p(1-a_b)]^2 the graded spatial
+    ! lack-of-evidence weight for band b from the frozen compact NU evidence
+    ! state. Each B_b = crop o proj o pad is a contraction and the M_b are
+    ! disjoint, so sum_b ||B_b x||^2 <= ||x||^2 and with W in [0,1] the
+    ! operator norm is bounded by 1 -- the declared normalization. The bank is
+    ! NOT a tight frame: the pad/crop sandwich makes sum_b B_b^T B_b < I with
+    ! cross-band leakage, so refining/merging the band partition changes the
+    ! operator (measured, not assumed invariant; see the Gate A partition
+    ! test). Applied matrix-free in the deapodized domain; mode-exclusive with
+    ! the FSC/SSNR P_tau (R10) and with the retired solvent Q_s, both
+    ! directions asserted. The absolute scale is lambda_nu = rel * data_scale,
+    ! derived alongside the ridge lambda. The preconditioner uses the declared
+    ! nonnegative approximation: the support-mean band weight fused as a shell
+    ! diagonal, mirroring the ML-prior fusion.
+    real,    allocatable :: nu_band_w(:,:,:,:)        !< graded spatial weights, box^3 x nbands
+    real,    allocatable :: nu_band_limits(:)         !< coarse-to-fine band low-pass limits (A)
+    real,    allocatable :: nu_band_wmean(:)          !< support-mean weight per band (precond approx)
+    integer(kind=1), allocatable :: nu_band_idx(:,:,:) !< padded-lattice band index, 0 = DC/unvisited
+    real              :: nu_lambda_rel = 0.0          !< strength relative to the data scale
+    real              :: lambda_nu = 0.0              !< effective absolute strength
+    logical           :: l_nu_prior = .false.
     ! ---- per-phase profiling, accumulated over a solve. Exists to answer one
     !      question before any further optimization: of the seconds an iteration
     !      costs, how many are the particle loop (which the kernelized operator
@@ -270,6 +297,9 @@ type :: reconstructor_pcg
     procedure :: apply_solvent_precision
     procedure :: get_solvent_stats
     procedure :: get_solvent_precision_diag
+    procedure :: set_nu_prior
+    procedure :: apply_nu_precision
+    procedure :: get_nu_prior_stats
     ! GETTERS
     procedure :: get_lims2
     procedure :: get_lims3
@@ -283,6 +313,7 @@ type :: reconstructor_pcg
     procedure :: get_data_scale
     procedure :: get_effective_lambda
     procedure :: get_effective_solvent_lambda
+    procedure :: get_effective_nu_lambda
     ! SOLVER
     procedure :: solve
     procedure :: solve_accum
@@ -304,6 +335,8 @@ type :: reconstructor_pcg
     procedure, private :: update_lambda_from_density
     procedure, private :: build_ml_prior_from_density
     procedure, private :: apply_fourier_diagonal
+    procedure, private :: ensure_nu_band_index
+    procedure, private :: nu_precond_shell_diag
 end type reconstructor_pcg
 
 contains
@@ -657,6 +690,8 @@ contains
     subroutine set_ml_prior( self, fsc, tau, hp )
         class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: fsc(:), tau, hp
+        ! replay precisions are mode-exclusive (pcg_priors.md R10)
+        if( self%l_nu_prior ) THROW_HARD('P_tau and Q_NU are mutually exclusive; NU replay precision is attached')
         if( size(fsc) < 1 ) THROW_HARD('PCG ML prior requires a non-empty FSC')
         if( .not. ieee_is_finite(tau) .or. tau <= 0.0 ) THROW_HARD('PCG ML tau must be finite and positive')
         if( .not. ieee_is_finite(hp) .or. hp <= 0.0 ) THROW_HARD('PCG ML high-pass limit must be finite and positive')
@@ -708,6 +743,9 @@ contains
         real,                       intent(in)    :: lambda_rel
         real(dp) :: s_sum
         integer  :: n_eff
+        ! the NU replay path carries no solvent precision (pcg_priors.md R10);
+        ! asserted in both attachment orders
+        if( self%l_nu_prior ) THROW_HARD('Q_s and Q_NU are mutually exclusive; NU replay precision is attached')
         if( .not. self%l_mask ) THROW_HARD('solvent prior requires the support mask; call set_mask first')
         if( .not. ieee_is_finite(lambda_rel) .or. lambda_rel < 0.0 )then
             THROW_HARD('relative solvent prior strength must be finite and non-negative')
@@ -770,6 +808,230 @@ contains
         if( .not. self%l_solvent_prior ) THROW_HARD('set_solvent_prior has not been called; get_solvent_precision_diag')
         allocate(s(self%box,self%box,self%box), source=self%solvent_s)
     end function get_solvent_precision_diag
+
+    !>  \brief  Install the direct NU-evidence replay precision
+    !!          Q_NU = C (sum_b B_b^T W_b B_b) C (pcg_priors.md S5.3), with C
+    !!          the native mean-centering projector supplying the exact
+    !!          constant null mode. band_w holds
+    !!          the per-voxel LACK-of-evidence weight for each band (1 - a_b,
+    !!          in [0,1], monotone non-decreasing coarse to fine because band
+    !!          support is nested coarse-to-fine); band_limits are the
+    !!          coarse-to-fine band low-pass boundaries in Angstrom. The stored
+    !!          weight is [p*w]^2, graded at the support boundary exactly like
+    !!          the solvent weight was. Mode exclusion (R10) is enforced here
+    !!          and in set_ml_prior; Q_s is likewise rejected -- there is no
+    !!          solvent precision in the NU target path. The effective strength
+    !!          starts at the relative value (unit data scale, for direct
+    !!          operator tests) and is rescaled by data_scale when raw D is
+    !!          finalized, exactly like the relative ridge and solvent lambdas.
+    subroutine set_nu_prior( self, band_w, band_limits, lambda_rel )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                       intent(in)    :: band_w(:,:,:,:)
+        real,                       intent(in)    :: band_limits(:)
+        real,                       intent(in)    :: lambda_rel
+        integer :: b, nb, n_supp
+        if( self%l_ml_prior_requested ) &
+            &THROW_HARD('P_tau and Q_NU are mutually exclusive; FSC/SSNR ML prior is attached')
+        if( self%l_solvent_prior ) &
+            &THROW_HARD('the NU replay path carries no solvent precision; Q_s is attached')
+        if( .not. self%l_mask ) THROW_HARD('NU replay precision requires the support mask; call set_mask first')
+        if( .not. ieee_is_finite(lambda_rel) .or. lambda_rel < 0.0 )then
+            THROW_HARD('relative NU prior strength must be finite and non-negative')
+        endif
+        nb = size(band_w,4)
+        if( nb < 1 ) THROW_HARD('NU replay precision requires at least one detail band')
+        if( size(band_limits) /= nb ) THROW_HARD('NU band limits do not match the band weight count')
+        if( any(shape(band_w(:,:,:,1)) /= self%box) ) THROW_HARD('NU band weights do not match the solve box')
+        if( .not. all(ieee_is_finite(band_w)) ) THROW_HARD('NU band weights contain non-finite values')
+        if( minval(band_w) < 0.0 .or. maxval(band_w) > 1.0 ) &
+            &THROW_HARD('NU band weights outside [0,1]; clip before installing')
+        do b = 2, nb
+            if( .not.(band_limits(b) > 0.0) .or. band_limits(b) >= band_limits(b-1) ) &
+                &THROW_HARD('NU band limits must be strictly decreasing and positive (coarse to fine)')
+        enddo
+        if( .not.(band_limits(1) > 0.0) ) THROW_HARD('NU band limits must be positive')
+        if( allocated(self%nu_band_w)      ) deallocate(self%nu_band_w)
+        if( allocated(self%nu_band_limits) ) deallocate(self%nu_band_limits)
+        if( allocated(self%nu_band_wmean)  ) deallocate(self%nu_band_wmean)
+        if( allocated(self%nu_band_idx)    ) deallocate(self%nu_band_idx)
+        allocate(self%nu_band_w(self%box,self%box,self%box,nb))
+        allocate(self%nu_band_limits(nb), source=band_limits)
+        allocate(self%nu_band_wmean(nb),  source=0.0)
+        n_supp = count(self%mask > 0.0)
+        if( n_supp < 1 ) THROW_HARD('NU replay precision has an empty support')
+        do b = 1, nb
+            self%nu_band_w(:,:,:,b) = (self%mask * band_w(:,:,:,b))**2
+            self%nu_band_wmean(b)   = real(sum(real(self%nu_band_w(:,:,:,b),dp), &
+                &mask=self%mask > 0.0) / real(n_supp,dp))
+        enddo
+        self%nu_lambda_rel = lambda_rel
+        self%lambda_nu     = lambda_rel
+        self%l_nu_prior    = .true.
+    end subroutine set_nu_prior
+
+    !>  \brief  Padded-lattice band index for the disjoint radial Fourier
+    !!          masks B_b. Built lazily on the wimg cmat layout, exactly the
+    !!          lattice traversal build_ml_prior_from_density uses. Padded DC
+    !!          and any physically unaddressed points stay 0 and are excluded
+    !!          from every band. NOTE: padded-DC exclusion alone does NOT null
+    !!          a native constant (zero-padding turns it into a box window
+    !!          with non-DC padded content); the exact constant null mode is
+    !!          supplied by the explicit native mean-centering in
+    !!          apply_nu_precision. Band 1 covers detail coarser than or equal
+    !!          to limits(1); band b covers [limits(b), limits(b-1)); the
+    !!          finest band also absorbs everything finer than limits(nb),
+    !!          where no candidate evidence exists.
+    subroutine ensure_nu_band_index( self )
+        class(reconstructor_pcg), intent(inout) :: self
+        integer :: cdim(3), h, k, m, phys(3), shpd, b, nb, band
+        real    :: res
+        if( allocated(self%nu_band_idx) ) return
+        if( .not. allocated(self%nu_band_limits) ) THROW_HARD('set_nu_prior has not been called; ensure_nu_band_index')
+        call self%ensure_wimg
+        cdim = self%wimg%get_array_shape()
+        allocate(self%nu_band_idx(cdim(1),cdim(2),cdim(3)), source=0_1)
+        nb = size(self%nu_band_limits)
+        !$omp parallel do collapse(2) default(shared) private(h,k,m,phys,shpd,b,band,res) schedule(static)
+        do m = self%lims3(3,1), self%lims3(3,2)
+            do k = self%lims3(2,1), self%lims3(2,2)
+                do h = 0, self%lims3(1,2)
+                    shpd = nint(sqrt(real(h*h + k*k + m*m)))
+                    if( shpd < 1 ) cycle   ! DC excluded: constant fields are unpenalized
+                    res  = real(self%box) * self%smpd * real(self%padf) / real(shpd)
+                    band = nb
+                    do b = 1, nb
+                        if( res >= self%nu_band_limits(b) )then
+                            band = b
+                            exit
+                        endif
+                    enddo
+                    phys = self%wimg%comp_addr_phys(h,k,m)
+                    self%nu_band_idx(phys(1),phys(2),phys(3)) = int(band,kind=1)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine ensure_nu_band_index
+
+    !>  \brief  Q_NU x = C sum_b B_b^T (W_b .* (B_b (C x))) at unit strength;
+    !!          callers scale by their lambda. C = I - 11^T/N is the native
+    !!          mean-centering projector: symmetric idempotent, applied on
+    !!          both sides so Q_NU stays symmetric PSD and a constant field is
+    !!          an EXACT null mode (padded-DC exclusion alone cannot provide
+    !!          this: a native constant zero-pads to a box window with non-DC
+    !!          padded content). Each B_b is crop o IFFT o M_b o FFT o pad
+    !!          with M_b a real 0/1 radial mask, hence symmetric (restriction
+    !!          is the adjoint of zero-extension and the diagonal is real), so
+    !!          every summand is symmetric PSD. The per-band results are
+    !!          accumulated in real space so only two padded complex
+    !!          workspaces are live at a time.
+    function apply_nu_precision( self, x ) result( qx )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                       intent(in)    :: x(self%box,self%box,self%box)
+        real,    allocatable :: qx(:,:,:), xb(:,:,:), xc(:,:,:)
+        complex, allocatable :: cmat0(:,:,:), cband(:,:,:)
+        real(dp) :: mean_dp
+        integer :: cdim(3), b, nb, i, j, k
+        if( .not. self%l_nu_prior ) THROW_HARD('set_nu_prior has not been called; apply_nu_precision')
+        call self%ensure_wimg
+        call self%ensure_nu_band_index
+        cdim = self%wimg%get_array_shape()
+        ! left application of C: remove the native mean before the band bank
+        mean_dp = sum(real(x,dp)) / real(self%box,dp)**3
+        allocate(xc(self%box,self%box,self%box), source=x)
+        xc = xc - real(mean_dp)
+        call self%wimg%set_rmat(self%pad_vol(xc), .false.)
+        call self%wimg%fft()
+        cmat0 = self%wimg%get_cmat()
+        allocate(qx(self%box,self%box,self%box), source=0.0)
+        allocate(cband(cdim(1),cdim(2),cdim(3)))
+        nb = size(self%nu_band_w,4)
+        do b = 1, nb
+            !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
+            do k = 1, cdim(3)
+                do j = 1, cdim(2)
+                    do i = 1, cdim(1)
+                        if( self%nu_band_idx(i,j,k) == int(b,kind=1) )then
+                            cband(i,j,k) = cmat0(i,j,k)
+                        else
+                            cband(i,j,k) = cmplx(0.0,0.0)
+                        endif
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+            call self%wimg%set_cmat(cband)
+            call self%wimg%ifft()
+            xb = self%crop_vol(self%wimg%get_rmat())
+            xb = self%nu_band_w(:,:,:,b) * xb
+            call self%wimg%set_rmat(self%pad_vol(xb), .false.)
+            call self%wimg%fft()
+            cband = self%wimg%get_cmat()
+            !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
+            do k = 1, cdim(3)
+                do j = 1, cdim(2)
+                    do i = 1, cdim(1)
+                        if( self%nu_band_idx(i,j,k) /= int(b,kind=1) ) cband(i,j,k) = cmplx(0.0,0.0)
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+            call self%wimg%set_cmat(cband)
+            call self%wimg%ifft()
+            qx = qx + self%crop_vol(self%wimg%get_rmat())
+            deallocate(xb)
+        enddo
+        ! right application of C: re-center the output (C is symmetric, so
+        ! this completes C Q~ C and restores the exact adjoint identity)
+        mean_dp = sum(real(qx,dp)) / real(self%box,dp)**3
+        qx = qx - real(mean_dp)
+        deallocate(cmat0, cband, xc)
+    end function apply_nu_precision
+
+    !>  \brief  NU replay diagnostics of a final map: the penalty
+    !!          R_NU = (lambda_nu/2) x^T Q_NU x and its per-band energies.
+    subroutine get_nu_prior_stats( self, x, penalty )
+        class(reconstructor_pcg), intent(inout) :: self
+        real,                       intent(in)  :: x(self%box,self%box,self%box)
+        real,                       intent(out) :: penalty
+        real, allocatable :: qx(:,:,:)
+        if( .not. self%l_nu_prior ) THROW_HARD('set_nu_prior has not been called; get_nu_prior_stats')
+        qx = self%apply_nu_precision(x)
+        penalty = real(0.5_dp * real(self%lambda_nu,dp) * sum(real(x,dp) * real(qx,dp)))
+        deallocate(qx)
+    end subroutine get_nu_prior_stats
+
+    !>  \brief  Declared nonnegative preconditioner approximation of Q_NU: the
+    !!          support-mean band weight as a shell diagonal in raw rho units
+    !!          (the /padsc**2 mirrors the ML-prior fusion). Exact spatial
+    !!          structure cannot be represented in the Fourier-shell
+    !!          preconditioner; the shell mean preserves PSD and captures the
+    !!          bandwise average stiffening.
+    pure real function nu_precond_shell_diag( self, sh_padded ) result( d )
+        class(reconstructor_pcg), intent(in) :: self
+        integer,                    intent(in) :: sh_padded
+        integer :: b, nb, band
+        real    :: res
+        d = 0.0
+        if( .not. self%l_nu_prior ) return
+        if( self%lambda_nu <= 0.0 ) return
+        if( sh_padded < 1 ) return
+        res  = real(self%box) * self%smpd * real(self%padf) / real(sh_padded)
+        nb   = size(self%nu_band_limits)
+        band = nb
+        do b = 1, nb
+            if( res >= self%nu_band_limits(b) )then
+                band = b
+                exit
+            endif
+        enddo
+        d = self%lambda_nu * self%nu_band_wmean(band) / self%padsc**2
+    end function nu_precond_shell_diag
+
+    pure real function get_effective_nu_lambda( self )
+        class(reconstructor_pcg), intent(in) :: self
+        get_effective_nu_lambda = self%lambda_nu
+    end function get_effective_nu_lambda
 
     !>  \brief  Multiplies a real volume by E^-1, the inverse KB instrument
     !!          envelope -- the deapodization / roll-off correction.
@@ -905,6 +1167,10 @@ contains
         if( allocated(self%ml_fsc)   ) deallocate(self%ml_fsc)
         if( allocated(self%ml_prior) ) deallocate(self%ml_prior)
         if( allocated(self%solvent_s)) deallocate(self%solvent_s)
+        if( allocated(self%nu_band_w)      ) deallocate(self%nu_band_w)
+        if( allocated(self%nu_band_limits) ) deallocate(self%nu_band_limits)
+        if( allocated(self%nu_band_wmean)  ) deallocate(self%nu_band_wmean)
+        if( allocated(self%nu_band_idx)    ) deallocate(self%nu_band_idx)
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
@@ -933,6 +1199,9 @@ contains
         self%solvent_lambda_rel = 0.0
         self%lambda_solvent     = 0.0
         self%l_solvent_prior    = .false.
+        self%nu_lambda_rel      = 0.0
+        self%lambda_nu          = 0.0
+        self%l_nu_prior         = .false.
         self%wimg_exists = .false.
         self%op_mode     = PCG_OP_MATRIXFREE
         call self%reset_profile(.false.)
@@ -2146,6 +2415,7 @@ contains
         call self%deapod_mul(hp)
         if( self%l_ml_prior ) hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
         if( self%l_solvent_prior ) hp = hp + self%lambda_solvent * self%apply_solvent_precision(p)
+        if( self%l_nu_prior ) hp = hp + self%lambda_nu * self%apply_nu_precision(p)
         hp = hp + self%lambda * p
     end function apply_normal_matrixfree
 
@@ -2201,9 +2471,11 @@ contains
         if( self%l_ml_prior .and. .not. self%l_deapod )then
             hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
         endif
-        ! real-space precision on the same (deapodized) domain as the iterate;
-        ! attachment mode is enforced upstream, see assert_prior_attachment_mode
+        ! real-space/band precisions on the same (deapodized) domain as the
+        ! iterate; attachment mode is enforced upstream, see
+        ! assert_prior_attachment_mode
         if( self%l_solvent_prior ) hp = hp + self%lambda_solvent * self%apply_solvent_precision(p)
+        if( self%l_nu_prior ) hp = hp + self%lambda_nu * self%apply_nu_precision(p)
         hp = hp + self%lambda * p
     end function apply_normal_kernel
 
@@ -2953,6 +3225,7 @@ contains
         endif
         if( self%l_lambda_relative ) self%lambda = self%lambda_rel * self%data_scale
         if( self%l_solvent_prior   ) self%lambda_solvent = self%solvent_lambda_rel * self%data_scale
+        if( self%l_nu_prior        ) self%lambda_nu = self%nu_lambda_rel * self%data_scale
     end subroutine update_lambda_from_density
 
     !> Build P_tau from the independent-half FSC and raw data-only D.
@@ -3144,6 +3417,9 @@ contains
                             if( self%l_ml_prior )then
                                 denom = denom + self%ml_prior(phys(1),phys(2),phys(3)) / self%padsc**2
                             endif
+                            if( self%l_nu_prior )then
+                                denom = denom + self%nu_precond_shell_diag(sh)
+                            endif
                             if( denom > 0.0 )then
                                 self%precond(phys(1),phys(2),phys(3)) = 1.0 / denom
                             endif
@@ -3334,12 +3610,14 @@ contains
         real(dp) :: num, den
         real     :: lam_save, ctr, sig, dx, dy, dz, scale
         integer  :: i, j, k
-        logical  :: l_ml_save
+        logical  :: l_ml_save, l_nu_save
         if( .not. self%l_kernel ) THROW_HARD('build_kernel has not been called; measure_kernel_scale')
         lam_save    = self%lambda
         l_ml_save   = self%l_ml_prior
+        l_nu_save   = self%l_nu_prior
         self%lambda = 0.0   ! compare the DATA term only
         self%l_ml_prior = .false.
+        self%l_nu_prior = .false.
         allocate(probe(self%box,self%box,self%box))
         ctr = real(self%box)/2.0 + 0.5
         sig = 0.15 * real(self%box)
@@ -3359,6 +3637,7 @@ contains
         if( den > 0.0_dp ) scale = real(num/den)
         self%lambda = lam_save
         self%l_ml_prior = l_ml_save
+        self%l_nu_prior = l_nu_save
     end function measure_kernel_scale
 
     ! PRIVATE HELPERS

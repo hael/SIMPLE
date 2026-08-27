@@ -198,8 +198,12 @@ contains
         box  = 0
         n_nu_mask = 0
         smpd = 0.
+        nu_support_mskdiam = 0.
         if( allocated(nu_noise_profile_cached) ) deallocate(nu_noise_profile_cached)
         nu_noise_rmax_cached = 0.
+        nu_evidence_requested = .false.
+        nu_evidence_source = ''
+        nu_evidence_source_fingerprint = 0.d0
     end subroutine cleanup_nu_filter
 
     module subroutine cleanup_aux_bank
