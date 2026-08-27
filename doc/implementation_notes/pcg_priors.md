@@ -33,12 +33,17 @@ The production PCG path performs, per state and half, one *base* solve and one
   warm-starts from the previous refinement iteration's ML half map when one
   exists (own half only, support re-masked after constant-FOV resampling,
   first-iteration `startvol` excluded), falling back to the base solution.
-- **Implemented solvent experiment, pending removal**: in NU-enabled PCG runs
-  with a valid `nu_envmask3D_stateNN.mrc`, master can also add the binary-
-  envelope solvent precision `lambda_s Q_s` to the ML replay. The calibrated
-  control currently defaults to `pcg_solvent_lambda_rel=0.1`. This is not the
-  approved target architecture after the 2026-08-27 decision; §4 and the
-  completed Stage 2--5 entries retain its algebra and measurements as history.
+- **Solvent experiment REMOVED (2026-08-27)**: the binary-envelope solvent
+  precision `Q_s`, its envelope loader, `pcg_solvent_lambda_rel`, the
+  suppression/inflation convergence readout, and the harness strength-ladder
+  sweep were removed from the codebase after the direct NU-evidence replay
+  passed its first Gate C ablations (truth-judged win on 1WCM at both
+  budgets; truth-free observables equal-or-better on bgal with the ML-replay
+  stall fixed). §4 and the completed Stage 2--5 entries retain the algebra
+  and measurements as the experiment record; `test=pcg_priors` was
+  repurposed as the Q_NU Gate A suite. The abinitio3D automsk staging that
+  the solvent bootstrap introduced is KEPT for its reference-masking
+  registration benefit (Gate B streptavidin: base-pair 3.812 -> 3.191 A).
 - `lambda_0` is the fixed absolute base Tikhonov `PCG_LAMBDA = 1e-3`.
 - the soft spherical support `P` constrains the solve as `P H P u = P b`.
 - maps are stored at the data-quotient amplitude convention
@@ -161,10 +166,11 @@ Two verification prerequisites apply to the NU operator:
 
 This section is an experiment record, not an implementation proposal. The
 operator was implemented and calibrated successfully, but the 2026-08-27
-decision supersedes its binary molecular/solvent partition with the direct NU
-precision of §5. Retain the algebra, gates, and real-data measurements so the
-experiment is not repeated; remove `Q_s`, its envelope loader, controls, and
-convergence guidance from the target workflow when the NU replacement lands.
+decision superseded its binary molecular/solvent partition with the direct NU
+precision of §5, and the code was REMOVED the same day once the NU
+replacement passed its first Gate C ablations (see §1). The algebra, gates,
+and real-data measurements below are retained so the experiment is not
+repeated.
 
 ### 4.1 Motivation and literature position
 
@@ -1227,8 +1233,145 @@ independent-noise fixture means the Q25 offset is deliberately permissive
 (~25% of gaps below it) -- weak coarse-band solvent penalty (W_1~0.17),
 stronger fine-band penalty (W_4~0.7). Conservative direction for H3;
 whether it regularizes ENOUGH is the S5.4 evidence-to-precision mapping
-question the harness measures. Pending: repeat the streptavidin harness
-invocation.
+question the harness measures.
+
+### Stage 6 first PASSING run: streptavidin NU replay at 0.1 (2026-08-27)
+
+Identical invocation to the failed run; center-only offset (Q25 0.252 vs the
+old detection threshold 0.92 on the same gap distribution: median 0.369, MAD
+0.184). **PASS, all gates.** Evidence now graded and plausible:
+null_fraction 0.189, band support 0.828/0.755/0.670/0.373 (monotone),
+uncertain 3.1%. Observables:
+
+- base pair pinned 3.518/3.119 (bit-identical to gridding and to the failed
+  run -- H2/R5 hold);
+- gated-band median amplitude ratio 1.066 (was 0.63 saturated-null), radial
+  profile flat 1.00-1.09 inside 0.85x mask radius, centre-bin 0.79;
+- shipped pair 3.267/3.049 -- 0.143 inflation vs base 2.2%, under the 5%
+  bound, and equal to the ordinary P_tau shipped pair's 3.049 on this data;
+- prior energy 7.1e9 (10x below the saturated run), ML RESID 1.7e-2 vs the
+  P_tau-less base 4.0e-2 -- the precision also conditions the replay;
+- known low-shell excess reappears mildly (k=1-2 ratio 1.75/1.50, inside the
+  recorded historical 1.3-2.0 range);
+- WATCH: near/beyond the band edge the NU replay carries more amplitude than
+  the FSC-weighted gridding product (ratio rising 1.3 -> 7 over k=35-45,
+  large beyond-band excess above k=46, outside the gated band). Expected
+  structurally -- Q_NU has no per-shell Wiener rolloff, it suppresses only
+  what local evidence disclaims (band-4 mean weight ~0.63) -- but whether
+  that retained edge amplitude is signal or noise is precisely an R6
+  question: only truth/held-out comparison decides it, never the half-map
+  tables.
+
+Next per Gate C: neutral-fixture run with ground truth (`vol1=` + `lp=`) and
+the two-way P_tau-vs-Q_NU ablation at converged settings; then bgal (large
+box, right-shifted dose-response) as the second dataset.
+
+### Gate C first two-way ablation: 1WCM phantom, truth-judged — Q_NU wins (2026-08-27)
+
+New user-built fixture (1WCM/RNA-Pol-II phantom, box 256, smpd 1.0, 2500
+ptcls, c1, mskdiam 200, euclid+ml_reg, its=30 rtol=1e-4, lp=10 truth
+comparison; an earlier B attempt at mskdiam=60 amputated the molecule inside
+the support sphere -- negative low-k truth FSC, discarded, mask now matched).
+Run A = `P_tau` control (`pcg_solvent_lambda_rel=0`), run B = `Q_NU` at 0.1.
+Both PASS all gates; base pair bit-identical across A/B/gridding
+(3.368/2.943 -- H2/R5). Evidence in B: null 0.126, bands
+0.924/0.637/0.513/0.173, uncertain 0.
+
+Map-to-truth FSC (the R6 decision variable; gridding column identical in
+both runs):
+
+| shell (A) | gridding | A: P_tau pcg | B: Q_NU pcg |
+|---|---|---|---|
+| 4.00 | 0.9427 | 0.9408 | 0.9543 |
+| 3.20 | 0.7397 | 0.7317 | 0.7968 |
+| 3.01 | 0.5931 | 0.5824 | 0.6748 |
+| 2.91 | 0.5014 | 0.4951 | 0.5818 |
+| 2.56 | 0.2079 | 0.1977 | 0.2844 |
+
+Truth FSC=0.5 crossing: ~2.91 A (gridding), ~2.91 A (P_tau), ~2.84 A
+(Q_NU). Q_NU matches everyone at low k (>=0.9988 through 5 A) and is
+uniformly better than BOTH the P_tau replay and gridding from ~4 A outward
+-- H1/H4/H5 supported on this fixture. Truth LS radial profile flat for
+Q_NU (0.94-1.04 through bin 13) where gridding drifts to 1.3-1.5. Shipped
+pair 3.241/2.844: 0.143 inflation vs base 3.4%, under the 5% bound.
+
+Costs and watch items:
+
+- **Convergence cost (H6).** The Q_NU replay ran 29-30 its at ~300 s/half
+  (one half hit xtol at 29); the P_tau replay converged in 2 its / 6 s
+  (warm shrinkage init ~= its optimum). ~50x converged-cost gap =
+  Q_NU FFT stack x no closed-form initialization. Candidate mitigation for
+  the production budget: a bandwise-shrinkage initial guess (scale each
+  band by ~1/(1+lambda*W_b/rho) locally or shell-mean), the Q_NU analogue
+  of `regularized_ml_initial_guess`. Production-budget (its=5) A/B still
+  to be measured before any refinement integration.
+- **Rim amplitude.** Q_NU map carries 1.5-2.0x gridding's |rho| in radial
+  bins 10-13 (72-104 px) where P_tau's map declined; truth LS stays ~1
+  and truth FSC is better, so it reads as retained real signal at the
+  periphery rather than halo -- but verify against eroded/omitted-domain
+  variants before trusting it generally.
+- **Beyond-band retention.** amp_pcg/truth grows 20-80x for k>105 where
+  truth FSC < 0.2: unshrunk beyond-band content survives at converged
+  settings (S6 signature, outside the gated band). The evidence-mapped
+  band-4 weight suppresses by lack of evidence, not by SSNR, so a
+  Wiener-like rolloff is absent by design; postprocessing/FSC filtering
+  owns the shipped-map rolloff as it does for the base maps.
+
+### Gate C bgal ablation (no truth), its=30 rtol=1e-4 (2026-08-27)
+
+Three-way on a fresh bgal registration (`bench.simple`, d2, box 256,
+mskdiam 180, ~4.5k ptcls; base pair pins at 4.295/3.752 across ALL runs --
+different registration than the recorded 4.132/3.709 ladder, internally
+consistent): P_tau control, solvent Q_s at 0.1 (command-line slip, kept as a
+free reference), Q_NU at 0.1. All three PASS all gates. Truth-free
+observables (R6):
+
+| observable | P_tau | Q_s 0.1 | Q_NU 0.1 |
+|---|---|---|---|
+| shipped 0.5/0.143 (A) | 4.185/3.667 | 4.132/3.667 | 4.132/3.627 |
+| 0.143 inflation vs base | 2.3% | 2.3% | 3.3% (bound 5%) |
+| gated-band ratio | 1.024 | 1.026 | 1.043 |
+| agreement band | k=2-94 | k=2-94 | k=2-94 |
+| radial norm min/max (in 0.85 mask) | 0.82/1.21 | 0.80/1.22 | **0.94/1.06** |
+| centre-bin ratio | 0.76 | 0.76 | 0.85 |
+| ML replay RESID / stop | 8.6e-2 xtol@12 | 1.4e-1 xtol@15 | **2.0e-2 maxits@30** |
+
+Findings: (a) **the recorded bgal ML-replay stall is gone under Q_NU** --
+the box-256 P_tau system stalls on step size at RESID ~0.09-0.14 while the
+NU system reaches 2.0e-2, the second dataset where the shell-mean
+preconditioner fusion conditions the NU replay BETTER than P_tau's; (b) the
+Q_NU map has the flattest radial profile of the three and the best
+centre-bin -- the rim erosion that dogged the solvent prior on bgal is
+absent, consistent with the 1WCM rim-retention finding; (c) evidence sane
+and mid-window (null 0.220, bands 0.763/0.664/0.576/0.169, uncertain ~0) --
+the 0.90 ceiling was not approached despite the solvent-dominated support;
+(d) shipped-pair inflation 3.3%, inside the bound. OPEN QUESTION (the one
+number that cannot be adjudicated without truth): the in-band amplitude
+ratio pcg/gridding runs 1.5-2.0x through k=44-75 and higher toward the band
+edge (in-band median 1.59 vs the control's 1.19) -- the expected signature
+of no per-shell Wiener shrinkage on a low-SNR dataset (supported bands keep
+base-level amplitude), and on 1WCM the same signature was truth-confirmed as
+signal, but on bgal only an independent map-to-model comparison against the
+deposited structure can decide it (R6). The postprocessing Wiener layer of
+`nu_evidence_local_sharpening.md` is the designed consumer of exactly this
+retained amplitude. Cost: 163 s/half at 30 its (production budget ~2 its
+after warm start).
+
+**Production-budget A/B (its=5, rtol=1e-3), same fixture (2026-08-27) --
+H4 PASSES.** The Q_NU truth advantage survives the 5-iteration budget
+essentially undiminished (truth FSC at 3.01 A: gridding 0.593, P_tau 0.580,
+Q_NU 0.670 -- vs converged 0.593/0.582/0.675; at 2.91 A: 0.501/0.491/0.578;
+at 2.44 A: 0.139/0.082/0.206). Both runs PASS all gates; base pair pinned
+3.368/2.943 in all four runs; shipped-pair crossings identical to the
+converged runs (Q_NU 3.241/2.844, inflation 3.4%). Notably the Q_NU replay
+reaches RESID 8.4e-3 in 5 its (vs P_tau's 2.2e-2): the shell-mean
+preconditioner fusion conditions the NU system well, and the converged-cost
+gap was initialization distance, not ill-conditioning -- production budgets
+do not suffer it. Cost at its=5: NU replay 56 s/half vs P_tau 13 s/half
+(4.3x per replay; whole harness run 199 s vs 92 s including evidence build
+and the 7 s stats overhead). Evidence stable across budgets (null 0.134 vs
+0.126, bands 0.928/0.657/0.539/0.180). The bandwise-shrinkage init remains
+worthwhile for converged/offline solves only.
 Fallback if the quantile estimator proves fragile: calibrate the null on
 noise-matched surrogates built from the half-map difference `(even-odd)`
 (right noise spectrum, signal cancelled) -- costs a second bank pass and has
@@ -1244,6 +1387,34 @@ so it is recorded, not built.
 - reuse the compact evidence state for cutoff/local-resolution diagnostics and
   LP-set handoff rather than recomputing it after replay;
 - leave the ordinary global-ML path bit-identical.
+
+6.3 **refinement integration + solvent removal DONE (2026-08-27), runtime
+gate pending.** `pcg_nu_lambda_rel` is registered on `refine3D` and
+`abinitio3D` (activation-gated on `rec_backend=pcg`) and forwarded through
+`apply_refine3D_reconstruction_controls`, exactly the `maxits_pcg`/`rtol`
+route the solvent key used -- an abinitio3D run opts in with
+`rec_backend=pcg pcg_nu_lambda_rel=0.1` and every stage's regularized
+replays run the NU precision with the established cross-iteration warm
+start. The solvent prior is fully removed: `Q_s` and its stats from
+`simple_reconstructor_pcg`; the envelope loader, suppression reference,
+stats reporter/persistence, and the envelope-flattening part of the
+regularized init from the strategy (both paths); the suppression/inflation
+readout, guidance thresholds, and stats reader from `simple_convergence`;
+`pcg_solvent_lambda_rel` from parameters/parse and all four UIs;
+`PCG_SOLVENT_STATS_FILE` from the fname defs; the strength-ladder sweep,
+envelope requirement, envelope symlinking, and solvent summary fields from
+`test=rec3D_backends` (now always a single comparison; NU runs get soft
+gates). `test=pcg_priors` is repurposed as the Gate A Q_NU suite: adjoint,
+PSD, EXACT constant null (the centering mutation target),
+zero-action-under-full-support, monotonicity under evidence withdrawal, FD
+gradient, the MEASURED 4-band-vs-2-band partition sensitivity, masked
+composition, and priored solve parity across the shared-vs-nparts reduction
+seam. The abinitio3D automsk-from-first-NU-stage staging is kept for the
+reference-masking registration benefit; the shipped-pair crossing
+measurement is kept as the NU over-regularization diagnostic (in-strategy
+print only; the solvent stats file and convergence guidance are gone).
+Build + `test=pcg_priors` + `test=rec3D_backends` reruns pending user-side;
+first abinitio3D run with the NU prior is the outstanding refinement gate.
 
 6.4 Science/cost Gates C and D:
 
@@ -1267,6 +1438,12 @@ Singer/Gilles off-diagonal covariance; nonzero or phase-bearing prior means;
 lagged LocScale surrogates; nonlinear/proximal priors; and any combined
 NU/Wilson product-of-experts model. Each requires its own approved experiment
 after the preceding estimator is independently understood.
+
+Related but separate (POSTPROCESSING, not a solver prior, so the in-solve
+LocScale risks above do not apply): model-free LocScale-style local
+sharpening driven by the same frozen NU evidence state is specified in
+`nu_evidence_local_sharpening.md` — parked until this document's Gate C/D
+program completes.
 
 ## 11. The NU machinery as the prior infrastructure
 

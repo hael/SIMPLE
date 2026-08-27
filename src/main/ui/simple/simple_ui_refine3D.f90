@@ -173,11 +173,6 @@ subroutine new_automask( prgtab )
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits_pcg iterations', 'tolerance{0}', &
         &.false., 0.0, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call reconstruct3D%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
-        &'Graded solvent-flatness prior strength relative to the PCG data scale; applied to the ML replays '//&
-        &'whenever the state-specific NU evidence envelope is available; 0 disables', 'strength{0.1}', &
-        &.false., 0.1, visibility=UI_VIS_ADVANCED, &
-        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
         &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the '//&
         &'regularized replay derives graded band-support evidence from the current base half pair and '//&
@@ -361,10 +356,11 @@ subroutine new_automask( prgtab )
         &'Maximum kernel PCG iterations; independent of refine3D outer maxits', 'iterations{2}', &
         &.false., 2., group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
-        call refine3D%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
-        &'Graded solvent-flatness prior strength relative to the PCG data scale; applied to the ML replays '//&
-        &'whenever the state-specific NU evidence envelope is available (automsk=yes); 0 disables', 'strength{0.1}', &
-        &.false., 0.1, group="filter", visibility=UI_VIS_ADVANCED, &
+        call refine3D%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
+        &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the '//&
+        &'regularized replay derives graded band-support evidence from the current base half pair and '//&
+        &'attaches Q_NU INSTEAD of the FSC/SSNR P_tau (mode-exclusive); 0 keeps the ordinary global-ML replay', &
+        &'strength{0}', .false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, nu_refine, group="filter", &

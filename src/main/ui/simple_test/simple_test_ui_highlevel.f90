@@ -224,11 +224,12 @@ contains
         call pcg_priors%new(&
         &'pcg_priors',&
         &'PCG prior-operator unit gate',&
-        &'In-memory, project-free unit gate for the PCG prior operators (pcg_priors.md). Currently '//&
-        &'validates the graded solvent-flatness precision Q_s: normalization contract (unit mean '//&
-        &'diagonal on the effective support), adjoint identity, positive semidefiniteness, constant '//&
-        &'null space, zero action at zero solvent confidence, graded-edge continuity, the '//&
-        &'finite-difference gradient of the penalty, and composition with the masked normal operator.',&
+        &'In-memory, project-free unit gate for the PCG replay prior operator (pcg_priors.md Gate A). '//&
+        &'Validates the direct NU-evidence precision Q_NU: adjoint identity, positive '//&
+        &'semidefiniteness, the exact constant null mode (mean centering), zero action under full '//&
+        &'band support, monotonicity under evidence withdrawal, the finite-difference gradient of '//&
+        &'the penalty, the measured band-partition sensitivity, composition with the masked normal '//&
+        &'operator, and priored solve parity across the shared-vs-nparts reduction seam.',&
         &'simple_test_exec',&
         &.false.)
         call add_ui_program('pcg_priors', pcg_priors, tsttab, UI_CATEGORY)
@@ -240,12 +241,11 @@ contains
         &'rec3D_backends',&
         &'Same-inputs gridding vs PCG reconstruction comparison',&
         &'Minimal invocation is projfile+pgrp+mskdiam+nthr: defaults to objfun=euclid ml_reg=yes '//&
-        &'maxits_pcg=5 rtol=1e-3 and sweeps the default solvent-prior strength ladder, requiring the NU '//&
-        &'evidence envelope in the invocation directory (fails early with the nu_filt3D remedy if absent); '//&
-        &'an explicit pcg_solvent_lambda_rel runs a single comparison. '//&
+        &'maxits_pcg=5 rtol=1e-3; pcg_nu_lambda_rel>0 measures the direct NU-evidence replay against '//&
+        &'the unpriored gridding reference (gates soft in that mode). '//&
         &'Reconstructs one fixed set of particles/orientations/sigma2 with reconstruct3D using the gridding '//&
         &'and the PCG backend, in a numbered execution directory named after the run settings (run it inside '//&
-        &'a refine3D run directory; the sigma2 group files and any NU evidence envelope are symlinked in; '//&
+        &'a refine3D run directory; the sigma2 group files are symlinked in; '//&
         &'mkdir=no runs in the current directory instead), and compares the merged maps: per-shell amplitude '//&
         &'ratio and FSC between '//&
         &'backends, and the radial real-space profile ratio that exposes a deapodization mismatch. Writes '//&
@@ -264,13 +264,10 @@ contains
         &'PCG iterations for the comparison', 'iterations{5}', .false., 5.)
         call rec3D_backends%add_input(UI_FILT, 'rtol', 'num', 'PCG relative residual tolerance', &
         &'Tolerance for the comparison', 'tolerance{1e-3}', .false., 1.e-3)
-        call rec3D_backends%add_input(UI_FILT, 'pcg_solvent_lambda_rel', 'num', 'PCG solvent-flatness prior strength', &
-        &'Solvent-flatness prior strength relative to the PCG data scale, applied on the pcg leg whenever '//&
-        &'ml_reg (objfun=euclid) and a valid NU evidence envelope are available; 0 disables', 'strength{0.1}', .false., 0.1)
         call rec3D_backends%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
         &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the pcg '//&
         &'leg builds the compact NU evidence state from its own base half pair in-run and attaches Q_NU '//&
-        &'INSTEAD of the FSC/SSNR P_tau (needs no envelope artifact; disables the solvent ladder); '//&
+        &'INSTEAD of the FSC/SSNR P_tau (needs no envelope artifact); '//&
         &'0 keeps the ordinary global-ML replay', 'strength{0}', .false., 0.0)
         call rec3D_backends%add_input(UI_IMG, 'vol1', 'file', 'Ground-truth volume', &
         &'Known volume the particles were simulated from; enables the radial recon/truth table', &

@@ -68,18 +68,14 @@ type, extends(commander_base) :: commander_test_rec3D_backends
     procedure :: execute      => exec_test_rec3D_backends
 end type commander_test_rec3D_backends
 
-!> Collated per-run observables of one rec3D_backends comparison, for the
-!! solvent-prior sweep table (Stage 5 observables + the suppression readout)
+!> Collated per-run observables of one rec3D_backends comparison
 type backends_run_summary
-    real    :: lambda_rel  = -1.   !< solvent prior strength of the run
     real    :: g_base05    = 0.    !< gridding base half-pair FSC=0.5 (A)
     real    :: g_base0143  = 0.    !< gridding base half-pair FSC=0.143 (A)
     real    :: p_base05    = 0.    !< pcg base (_unfil) half-pair FSC=0.5 -- the negative control
     real    :: p_base0143  = 0.    !< pcg base (_unfil) half-pair FSC=0.143
     real    :: p_ship05    = 0.    !< pcg shipped (regularized) half-pair FSC=0.5 -- inflation diagnostic
     real    :: p_ship0143  = 0.    !< pcg shipped (regularized) half-pair FSC=0.143
-    real    :: supp_pct    = -999. !< solvent suppression %, from the strategy's stats file
-    real    :: solvent_rms = -1.   !< weighted solvent RMS of the shipped pcg map
     real    :: band_ratio  = -1.   !< median gated-band amplitude ratio pcg/gridding
     real    :: band_fsc    = -1.   !< median gated-band FSC(gridding,pcg) -- backend agreement
     real    :: rad_min     = -1.   !< min normalised in-mask radial ratio -- erosion indicator
@@ -2111,61 +2107,70 @@ subroutine exec_test_pcg_recon( self, cline )
 
 end subroutine exec_test_pcg_recon
 
-!  Unit gate for the PCG prior operators (pcg_priors.md S10 Stage 2), in-memory
-!  and project-free like test=pcg_recon. Currently covers the graded
-!  solvent-flatness precision Q_s = D_s - s s^T/S (S4):
+!  Unit gate for the PCG replay prior operator (pcg_priors.md S10 Stage 6.2,
+!  Gate A), in-memory and project-free like test=pcg_recon. Covers the direct
+!  NU-evidence precision Q_NU = C (sum_b B_b^T W_b B_b) C (S5.3):
 !
-!    1. normalization contract       -- unit mean diagonal on effective support
-!    2. adjoint identity             -- <x,Q y> = <Q x,y>
-!    3. positive semidefiniteness    -- <x,Q x> >= 0, > 0 for a random probe
-!    4. null space                   -- Q (c 1) = 0: variation, not offset
-!    5. zero action at zero solvent confidence (m = 1 plateau voxels)
-!    6. graded-edge continuity       -- O(eps) response to an eps envelope change
-!    7. finite-difference gradient   -- grad of R_s(x) = (1/2) x^T Q_s x is Q_s x
-!    8. composition                  -- P (H_data + lambda_s Q_s + lambda) P
+!    1. adjoint identity             -- <x,Q y> = <Q x,y>
+!    2. positive semidefiniteness    -- <x,Q x> >= 0, > 0 for a random probe
+!    3. exact constant null mode     -- Q (c 1) = 0 (the centering C; padded-DC
+!                                       exclusion alone cannot provide this)
+!    4. zero action, full support    -- W_b = 0 everywhere => Q x = 0 exactly
+!    5. monotone under evidence withdrawal -- W2 >= W1 pointwise =>
+!                                       x^T Q2 x >= x^T Q1 x
+!    6. finite-difference gradient   -- grad of R(x) = (1/2) x^T Q x is Q x
+!    7. band-partition sensitivity   -- uniform weights, 4-band vs 2-band cut:
+!                                       the pad/crop frame is NOT tight, so the
+!                                       deviation is MEASURED and recorded, not
+!                                       asserted zero (bank-refinement lesson)
+!    8. composition                  -- P (H_data + lambda Q_NU + lambda_0) P
 !                                       stays symmetric positive-definite
 !    9. priored solve parity         -- monolithic streaming vs two-part raw
 !                                       reduction at a positive strength: the
 !                                       exact shared-vs-nparts execution seam
 !
 !  Mutation contract (R4, verified manually and recorded in pcg_priors.md S10):
-!  replacing L^T L by L (outer weight sqrt(s) instead of s) must fail stage 2;
-!  dropping the rank-one mean term (Q x = s.*x) must fail stage 4.
+!  dropping the mean-centering C must fail stage 3; applying W_b once (L
+!  instead of L^T L, i.e. weighting only the analysis side) must fail stage 1;
+!  overlapping band masks change the stage-7 measurement. The P_tau/Q_NU and
+!  attachment-order mutual exclusions are THROW_HARD contracts exercised by
+!  deliberate-failure runs, not by this in-process suite.
 subroutine exec_test_pcg_priors( self, cline )
     use simple_reconstructor_pcg, only: reconstructor_pcg, PCG_OP_KERNEL
     class(commander_test_pcg_priors), intent(inout) :: self
     class(cmdline),                   intent(inout) :: cline
-    integer, parameter :: BOX = 24, NPROJS = 12, NCTF = 3
+    integer, parameter :: BOX = 24, NPROJS = 12, NCTF = 3, NB = 4
     real,    parameter :: SMPD = 1.5, LAMBDA = 1.0e-3
     real,    parameter :: MSKRAD = real(BOX)/3.0
-    real,    parameter :: ADJ_RELTOL  = 1.0e-5   ! pure diagonal+rank-one algebra, dp reductions
-    real,    parameter :: NORM_TOL    = 1.0e-5
+    real,    parameter :: BAND_LIMITS4(NB) = [20., 12., 8., 5.]
+    real,    parameter :: BAND_LIMITS2(2)  = [20., 8.]
+    real,    parameter :: ADJ_RELTOL  = 1.0e-4   ! band ops run through single-precision FFT round trips
     real,    parameter :: NULL_RELTOL = 1.0e-5
+    real,    parameter :: ZERO_TOL    = 1.0e-12
     real,    parameter :: FD_H        = 1.0e-2
     real,    parameter :: FD_RELTOL   = 1.0e-3
-    real,    parameter :: ENV_EPS     = 1.0e-3
-    real,    parameter :: CONT_RELTOL = 5.0e-2   ! O(eps) with a generous Lipschitz factor
     real,    parameter :: OP_RELTOL   = 1.0e-4   ! matches pcg_recon's NORMAL_OP_RELTOL
     real,    parameter :: KV = 300., CS = 2.7, FRACA = 0.1
     real,    parameter :: DFX_VALS(NCTF) = [1.0, 1.8, 2.6]
     real,    parameter :: PARITY_RELTOL = 5.0e-4  ! matches pcg_recon's STREAM_SOLVE_RELTOL
     integer, parameter :: PARITY_ITS    = 20
-    type(reconstructor_pcg) :: pcgop, pcg_parts, pcg_reduce
+    type(reconstructor_pcg) :: pcgop, pcgop_zero, pcgop_hi, pcgop_p4, pcgop_p2, pcg_parts, pcg_reduce
     type(oris)              :: projdirs
     type(ori)               :: e
     type(ctfparams)         :: ctfparms
     type(string)            :: raw1, raw2
-    real,    allocatable    :: m_env(:,:,:), m_pert(:,:,:), s_diag(:,:,:)
+    real,    allocatable    :: band_w(:,:,:,:), band_w0(:,:,:,:), band_w_hi(:,:,:,:), band_wu4(:,:,:,:)
+    real,    allocatable    :: band_wu2(:,:,:,:)
     real,    allocatable    :: x(:,:,:), y(:,:,:), d(:,:,:), ones_vol(:,:,:)
-    real,    allocatable    :: qx(:,:,:), qy(:,:,:), qc(:,:,:), qx_pert(:,:,:)
+    real,    allocatable    :: qx(:,:,:), qy(:,:,:), qc(:,:,:), q4(:,:,:), q2(:,:,:)
     real,    allocatable    :: hp(:,:,:), hq(:,:,:), sig2arr(:), sig2_2d(:,:)
     real,    allocatable    :: xa(:,:,:), xb(:,:,:)
     complex, allocatable    :: gx_plane(:,:), Ti(:,:), y_planes(:,:,:)
     integer, allocatable    :: iseed(:)
-    real(dp) :: dp_x_qy, dp_qx_y, dp_x_qx, r_plus, r_minus, g_fd, g_an
-    real     :: ctr, rr, adj_err, null_err, cont_err, fd_err, s_mean
+    real(dp) :: dp_x_qy, dp_qx_y, dp_x_qx, dp_hi, r_plus, r_minus, g_fd, g_an
+    real     :: ctr, rr, adj_err, null_err, fd_err, part_dev
     real     :: parity_err, lam_a, lam_b
-    integer  :: i, j, k, g, n_eff, n_plateau, n_bad, iseed_n, R, lims2(2,2), nraw, niters
+    integer  :: i, j, k, g, b, iseed_n, R, lims2(2,2), nraw, niters
     logical  :: all_ok
     all_ok = .true.
 
@@ -2173,59 +2178,50 @@ subroutine exec_test_pcg_priors( self, cline )
     allocate(iseed(iseed_n), source=42)
     call random_seed(put=iseed)
 
-    ! graded molecular envelope: radial profile with an exact m=1 plateau in
-    ! the core, a smooth falloff, and exact 0 outside -- exercises both hard
-    ! plateaus and the graded transition zone
-    allocate(m_env(BOX,BOX,BOX), source=0.0)
+    ! synthetic graded lack-of-evidence weights: a fully supported core
+    ! (w=0), a graded transition, and full lack of evidence outside (w=1),
+    ! monotone non-decreasing coarse-to-fine as the nested band-support
+    ! contract requires
+    allocate(band_w(BOX,BOX,BOX,NB), source=0.0)
     ctr = real(BOX)/2.0 + 0.5
     do k = 1,BOX
         do j = 1,BOX
             do i = 1,BOX
                 rr = sqrt((real(i)-ctr)**2 + (real(j)-ctr)**2 + (real(k)-ctr)**2)
-                m_env(i,j,k) = min(1.0, max(0.0, (6.0 - rr)/3.0 + 1.0))  ! 1 for rr<=3, 0 for rr>=9
+                do b = 1, NB
+                    ! coarser bands lose evidence at larger radii
+                    band_w(i,j,k,b) = min(1.0, max(0.0, (rr - (7.0 - real(b)))/3.0))
+                end do
             end do
         end do
     end do
 
     call pcgop%new(BOX, SMPD, LAMBDA)
     call pcgop%set_mask(MSKRAD)
-    call pcgop%set_solvent_prior(m_env, 1.0)
+    call pcgop%set_nu_prior(band_w, BAND_LIMITS4, 1.0)
 
-    ! ============ STAGE 1: normalization contract ============
-    write(logfhandle,'(a)') '>>> TEST_PCG_PRIORS'
-    write(logfhandle,'(a)') '>>> STAGE 1: unit mean diagonal on the effective support'
-    s_diag = pcgop%get_solvent_precision_diag()
-    n_eff  = count(s_diag > 0.0)
-    s_mean = real(sum(real(s_diag,dp)) / real(n_eff,dp))
-    write(logfhandle,'(a,i0,a,es14.6)') '    n_eff=', n_eff, ' mean_diag=', s_mean
-    if( n_eff < 1 .or. abs(s_mean - 1.0) > NORM_TOL )then
-        write(logfhandle,'(a)') '    FAIL: solvent precision is not normalized to unit mean diagonal'
-        all_ok = .false.
-    else
-        write(logfhandle,'(a)') '    PASS: normalization contract holds'
-    endif
-
-    ! ============ STAGE 2: adjoint identity ============
-    write(logfhandle,'(a)') '>>> STAGE 2: adjoint identity <x,Qy> = <Qx,y>'
+    ! ============ STAGE 1: adjoint identity ============
+    write(logfhandle,'(a)') '>>> TEST_PCG_PRIORS (Q_NU Gate A)'
+    write(logfhandle,'(a)') '>>> STAGE 1: adjoint identity <x,Qy> = <Qx,y>'
     allocate(x(BOX,BOX,BOX), y(BOX,BOX,BOX))
     call random_number(x); call random_number(y)
     x = x - 0.5; y = y - 0.5
-    qx = pcgop%apply_solvent_precision(x)
-    qy = pcgop%apply_solvent_precision(y)
+    qx = pcgop%apply_nu_precision(x)
+    qy = pcgop%apply_nu_precision(y)
     dp_x_qy = pcgop%dot_real_volume(x, qy)
     dp_qx_y = pcgop%dot_real_volume(qx, y)
     adj_err = real(abs(dp_x_qy-dp_qx_y) / max(1.0_dp, abs(dp_x_qy), abs(dp_qx_y)))
     write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    <x,Qy>=', real(dp_x_qy), &
         &' <Qx,y>=', real(dp_qx_y), ' rel_err=', adj_err
     if( adj_err > ADJ_RELTOL )then
-        write(logfhandle,'(a)') '    FAIL: solvent precision is not symmetric (L instead of L^T L?)'
+        write(logfhandle,'(a)') '    FAIL: NU precision is not symmetric (one-sided weighting?)'
         all_ok = .false.
     else
-        write(logfhandle,'(a)') '    PASS: solvent precision is symmetric'
+        write(logfhandle,'(a)') '    PASS: NU precision is symmetric'
     endif
 
-    ! ============ STAGE 3: positive semidefiniteness ============
-    write(logfhandle,'(a)') '>>> STAGE 3: positive semidefiniteness'
+    ! ============ STAGE 2: positive semidefiniteness ============
+    write(logfhandle,'(a)') '>>> STAGE 2: positive semidefiniteness'
     dp_x_qx = pcgop%dot_real_volume(x, qx)
     write(logfhandle,'(a,es14.6)') '    <x,Qx>=', real(dp_x_qx)
     if( dp_x_qx <= 0.0_dp )then
@@ -2235,64 +2231,61 @@ subroutine exec_test_pcg_priors( self, cline )
         write(logfhandle,'(a)') '    PASS: quadratic form positive for a random probe'
     endif
 
-    ! ============ STAGE 4: null space Q (c 1) = 0 ============
-    write(logfhandle,'(a)') '>>> STAGE 4: constant maps are unpenalized'
+    ! ============ STAGE 3: exact constant null mode ============
+    write(logfhandle,'(a)') '>>> STAGE 3: constant maps are exact null modes (centering C)'
     allocate(ones_vol(BOX,BOX,BOX), source=3.7)
-    qc = pcgop%apply_solvent_precision(ones_vol)
-    null_err = maxval(abs(qc)) / (3.7 * max(1.0, maxval(s_diag)))
-    write(logfhandle,'(a,es14.6)') '    max|Q(c*1)| / (c*max_s) =', null_err
+    qc = pcgop%apply_nu_precision(ones_vol)
+    null_err = maxval(abs(qc)) / 3.7
+    write(logfhandle,'(a,es14.6)') '    max|Q(c*1)| / c =', null_err
     if( null_err > NULL_RELTOL )then
-        write(logfhandle,'(a)') '    FAIL: constant mode is penalized (mean term dropped?)'
+        write(logfhandle,'(a)') '    FAIL: constant mode is penalized (centering dropped?)'
         all_ok = .false.
     else
         write(logfhandle,'(a)') '    PASS: constant mode is in the null space'
     endif
 
-    ! ============ STAGE 5: zero action at zero solvent confidence ============
-    write(logfhandle,'(a)') '>>> STAGE 5: zero action on the confident molecular plateau'
-    n_plateau = 0; n_bad = 0
-    do k = 1,BOX
-        do j = 1,BOX
-            do i = 1,BOX
-                if( m_env(i,j,k) >= 1.0 )then
-                    n_plateau = n_plateau + 1
-                    if( abs(qx(i,j,k)) > 0.0 ) n_bad = n_bad + 1
-                endif
-            end do
-        end do
-    end do
-    write(logfhandle,'(a,i0,a,i0)') '    plateau voxels=', n_plateau, ' with nonzero action=', n_bad
-    if( n_plateau < 1 .or. n_bad > 0 )then
-        write(logfhandle,'(a)') '    FAIL: prior acts inside the confident molecular region'
+    ! ============ STAGE 4: zero action under full support ============
+    write(logfhandle,'(a)') '>>> STAGE 4: fully supported field (all W_b = 0) is untouched'
+    allocate(band_w0(BOX,BOX,BOX,NB), source=0.0)
+    call pcgop_zero%new(BOX, SMPD, LAMBDA)
+    call pcgop_zero%set_mask(MSKRAD)
+    call pcgop_zero%set_nu_prior(band_w0, BAND_LIMITS4, 1.0)
+    qc = pcgop_zero%apply_nu_precision(x)
+    write(logfhandle,'(a,es14.6)') '    max|Q_0 x| =', maxval(abs(qc))
+    if( maxval(abs(qc)) > ZERO_TOL )then
+        write(logfhandle,'(a)') '    FAIL: zero weights act on the iterate'
         all_ok = .false.
     else
-        write(logfhandle,'(a)') '    PASS: prior is inert where solvent confidence is zero'
+        write(logfhandle,'(a)') '    PASS: zero action for a fully supported band bank'
     endif
+    call pcgop_zero%kill
 
-    ! ============ STAGE 6: graded-edge continuity ============
-    write(logfhandle,'(a)') '>>> STAGE 6: O(eps) response to an eps envelope perturbation'
-    allocate(m_pert(BOX,BOX,BOX))
-    m_pert = min(1.0, max(0.0, m_env + ENV_EPS))
-    call pcgop%set_solvent_prior(m_pert, 1.0)
-    qx_pert = pcgop%apply_solvent_precision(x)
-    cont_err = real(sqrt(sum(real(qx_pert-qx,dp)**2) / max(1.0_dp, sum(real(qx,dp)**2))))
-    write(logfhandle,'(a,es14.6,a,es14.6)') '    eps=', ENV_EPS, ' rel_response=', cont_err
-    if( cont_err > CONT_RELTOL )then
-        write(logfhandle,'(a)') '    FAIL: prior responds discontinuously to a graded envelope change'
+    ! ============ STAGE 5: monotone under evidence withdrawal ============
+    write(logfhandle,'(a)') '>>> STAGE 5: withdrawing evidence never decreases the penalty'
+    allocate(band_w_hi(BOX,BOX,BOX,NB))
+    band_w_hi = min(1.0, band_w + 0.2)
+    call pcgop_hi%new(BOX, SMPD, LAMBDA)
+    call pcgop_hi%set_mask(MSKRAD)
+    call pcgop_hi%set_nu_prior(band_w_hi, BAND_LIMITS4, 1.0)
+    qc    = pcgop_hi%apply_nu_precision(x)
+    dp_hi = pcgop_hi%dot_real_volume(x, qc)
+    write(logfhandle,'(a,es14.6,a,es14.6)') '    <x,Q x>=', real(dp_x_qx), ' <x,Q_hi x>=', real(dp_hi)
+    if( dp_hi < dp_x_qx * (1.0_dp - 1.0e-6_dp) )then
+        write(logfhandle,'(a)') '    FAIL: penalty decreased when evidence was withdrawn'
         all_ok = .false.
     else
-        write(logfhandle,'(a)') '    PASS: graded-edge response is O(eps)'
+        write(logfhandle,'(a)') '    PASS: penalty is monotone in the lack-of-evidence weights'
     endif
-    call pcgop%set_solvent_prior(m_env, 1.0)  ! restore
+    call pcgop_hi%kill
 
-    ! ============ STAGE 7: finite-difference gradient of R_s ============
-    write(logfhandle,'(a)') '>>> STAGE 7: gradient of R_s(x) = (1/2) x^T Q_s x is Q_s x'
+    ! ============ STAGE 6: finite-difference gradient of R_NU ============
+    write(logfhandle,'(a)') '>>> STAGE 6: gradient of R(x) = (1/2) x^T Q x is Q x'
     allocate(d(BOX,BOX,BOX))
     call random_number(d)
     d = d - 0.5
-    qy      = pcgop%apply_solvent_precision(x + FD_H*d)
+    qy      = pcgop%apply_nu_precision(x + FD_H*d)
     r_plus  = 0.5_dp * pcgop%dot_real_volume(x + FD_H*d, qy)
-    qy      = pcgop%apply_solvent_precision(x - FD_H*d)
+    qy      = pcgop%apply_nu_precision(x - FD_H*d)
     r_minus = 0.5_dp * pcgop%dot_real_volume(x - FD_H*d, qy)
     g_fd    = (r_plus - r_minus) / real(2.0*FD_H,dp)
     g_an    = pcgop%dot_real_volume(d, qx)
@@ -2300,14 +2293,37 @@ subroutine exec_test_pcg_priors( self, cline )
     write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    fd=', real(g_fd), ' analytic=', real(g_an), &
         &' rel_err=', fd_err
     if( fd_err > FD_RELTOL )then
-        write(logfhandle,'(a)') '    FAIL: finite-difference gradient disagrees with Q_s x'
+        write(logfhandle,'(a)') '    FAIL: finite-difference gradient disagrees with Q x'
         all_ok = .false.
     else
         write(logfhandle,'(a)') '    PASS: finite-difference gradient matches'
     endif
 
+    ! ============ STAGE 7: band-partition sensitivity (measured) ============
+    write(logfhandle,'(a)') '>>> STAGE 7: 4-band vs 2-band partition at uniform weights (measured, not asserted zero)'
+    allocate(band_wu4(BOX,BOX,BOX,NB), source=0.5)
+    allocate(band_wu2(BOX,BOX,BOX,2),  source=0.5)
+    call pcgop_p4%new(BOX, SMPD, LAMBDA)
+    call pcgop_p4%set_mask(MSKRAD)
+    call pcgop_p4%set_nu_prior(band_wu4, BAND_LIMITS4, 1.0)
+    call pcgop_p2%new(BOX, SMPD, LAMBDA)
+    call pcgop_p2%set_mask(MSKRAD)
+    call pcgop_p2%set_nu_prior(band_wu2, BAND_LIMITS2, 1.0)
+    q4 = pcgop_p4%apply_nu_precision(x)
+    q2 = pcgop_p2%apply_nu_precision(x)
+    part_dev = real(sqrt(sum(real(q4-q2,dp)**2) / max(1.0_dp, sum(real(q4,dp)**2))))
+    write(logfhandle,'(a,es14.6)') '    rel_dev(Q4 x, Q2 x) =', part_dev
+    if( .not. (part_dev >= 0.0) )then   ! NaN guard; the value itself is the record
+        write(logfhandle,'(a)') '    FAIL: partition-change measurement is not finite'
+        all_ok = .false.
+    else
+        write(logfhandle,'(a)') '    PASS: bank-refinement sensitivity measured (record with the run)'
+    endif
+    call pcgop_p4%kill
+    call pcgop_p2%kill
+
     ! ============ STAGE 8: composition with the masked normal operator ============
-    write(logfhandle,'(a)') '>>> STAGE 8: P (H_data + lambda_s Q_s + lambda) P symmetry and positivity'
+    write(logfhandle,'(a)') '>>> STAGE 8: P (H_data + lambda Q_NU + lambda_0) P symmetry and positivity'
     call pcgop%set_deapod(.false.)   ! inverse-crime domain, algebra gate only
     call projdirs%new(NPROJS, .false.)
     call projdirs%spiral
@@ -2340,7 +2356,7 @@ subroutine exec_test_pcg_priors( self, cline )
     write(logfhandle,'(a,es14.6,a,es14.6,a,es14.6)') '    dot(p,Hq)=', real(dp_x_qy), &
         &' dot(Hp,q)=', real(dp_qx_y), ' rel_err=', adj_err
     if( adj_err > OP_RELTOL .or. dp_x_qx <= 0.0_dp )then
-        write(logfhandle,'(a)') '    FAIL: solvent term breaks the masked normal operator contract'
+        write(logfhandle,'(a)') '    FAIL: NU term breaks the masked normal operator contract'
         all_ok = .false.
     else
         write(logfhandle,'(a)') '    PASS: priored masked operator remains symmetric positive-definite'
@@ -2349,7 +2365,7 @@ subroutine exec_test_pcg_priors( self, cline )
     ! ============ STAGE 9: priored solve parity, monolithic vs raw reduction ============
     ! The exact seam that separates shared-memory from nparts=2 execution is
     ! the raw (B,D) artifact reduction; everything downstream (finalization,
-    ! data scale, effective solvent strength, kernel solve) is master-local.
+    ! data scale, effective NU strength, kernel solve) is master-local.
     ! Solve the same synthetic problem WITH the prior at a positive strength
     ! through both routes and require the solutions to agree.
     if( all_ok )then
@@ -2357,7 +2373,7 @@ subroutine exec_test_pcg_priors( self, cline )
         allocate(gx_plane(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
         allocate(Ti(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2)))
         allocate(y_planes(lims2(1,1):lims2(1,2), lims2(2,1):lims2(2,2), NPROJS))
-        call pcgop%set_volume(m_env)   ! any in-support structure serves
+        call pcgop%set_volume(band_w(:,:,:,1))   ! any in-support structure serves
         do i = 1, NPROJS
             call projdirs%get_ori(i, e)
             call pcgop%forward_plane(e, gx_plane)
@@ -2369,7 +2385,7 @@ subroutine exec_test_pcg_priors( self, cline )
         call pcgop%accumulate_batch(y_planes, NPROJS, 1)
         call pcgop%end_accum(.true.)
         call pcgop%set_op_mode(PCG_OP_KERNEL)
-        lam_a = pcgop%get_effective_solvent_lambda()
+        lam_a = pcgop%get_effective_nu_lambda()
         allocate(xa(BOX,BOX,BOX), source=0.0)
         call pcgop%solve_accum(xa, maxits=PARITY_ITS, rtol=0.0, niters=niters)
         ! route B: two raw artifacts, fixed-order reduction, same prior
@@ -2389,13 +2405,13 @@ subroutine exec_test_pcg_priors( self, cline )
         call pcg_reduce%new(BOX, SMPD, LAMBDA)
         call pcg_reduce%set_deapod(.false.)
         call pcg_reduce%set_mask(MSKRAD)
-        call pcg_reduce%set_solvent_prior(m_env, 1.0)
+        call pcg_reduce%set_nu_prior(band_w, BAND_LIMITS4, 1.0)
         call pcg_reduce%begin_reduction
         call pcg_reduce%add_raw_accum(raw1, 1, 0, 1, 2, 'pcg_priors_test_v1', nraw)
         call pcg_reduce%add_raw_accum(raw2, 1, 0, 2, 2, 'pcg_priors_test_v1', nraw)
         call pcg_reduce%end_accum(.true.)
         call pcg_reduce%set_op_mode(PCG_OP_KERNEL)
-        lam_b = pcg_reduce%get_effective_solvent_lambda()
+        lam_b = pcg_reduce%get_effective_nu_lambda()
         allocate(xb(BOX,BOX,BOX), source=0.0)
         call pcg_reduce%solve_accum(xb, maxits=PARITY_ITS, rtol=0.0, niters=niters)
         parity_err = sqrt(sum((xa-xb)**2)) / max(1.0, sqrt(sum(xa*xa)))
@@ -2469,154 +2485,28 @@ end subroutine exec_test_pcg_frac_update
 !> a hard failure. Thresholds derive from the validated neutral-phantom fixture and
 !> the streptavidin reference runs recorded in the plan document.
 subroutine exec_test_rec3D_backends( self, cline )
-    use simple_sp_project, only: sp_project
     class(commander_test_rec3D_backends), intent(inout) :: self
     class(cmdline),                       intent(inout) :: cline
-    ! default strength ladder swept when a prior-capable invocation (ml_reg
-    ! with an NU evidence envelope in the cwd) leaves pcg_solvent_lambda_rel
-    ! unset: the bgal calibration grid incl. the zero-strength negative
-    ! control. An explicit strength runs a single comparison -- the follow-up
-    ! mechanism for extra data points.
-    real, parameter :: SOLVENT_LADDER(7) = [0.0, 1.0e-3, 1.0e-2, 3.0e-2, 1.0e-1, 3.0e-1, 1.0]
-    character(len=*), parameter :: SWEEP_SUMMARY_FILE = 'rec3D_backends_sweep_summary.txt'
-    type(backends_run_summary) :: summaries(size(SOLVENT_LADDER)), summary
-    type(cmdline) :: cline_run
-    character(len=256) :: line
-    logical :: l_sweep, l_mlreg, l_mkdir_ok, l_control_ok, l_prior_active, l_nu_replay
-    integer :: i, fnr
-    real    :: spread
+    type(backends_run_summary) :: summary
+    logical :: l_mlreg, l_nu_replay
     ! prior-capable defaults: a bare invocation (projfile, pgrp, mskdiam,
-    ! nthr) runs the euclid+ml_reg solvent strength sweep at the
+    ! nthr) runs a single euclid+ml_reg comparison at the
     ! production-representative budget; every default is overridable
     if( .not. cline%defined('objfun')     ) call cline%set('objfun',     'euclid')
     if( .not. cline%defined('ml_reg')     ) call cline%set('ml_reg',        'yes')
     if( .not. cline%defined('maxits_pcg') ) call cline%set('maxits_pcg',       5.)
     if( .not. cline%defined('rtol')       ) call cline%set('rtol',         1.e-3)
     l_mlreg = cline%get_carg('ml_reg') .eq. 'yes'
-    l_mkdir_ok = .true.
-    if( cline%defined('mkdir') ) l_mkdir_ok = cline%get_carg('mkdir') .ne. 'no'
     ! direct NU-evidence replay (pcg_priors.md S5): the pcg leg derives its
-    ! evidence in-run from its own base half pair, so no envelope artifact is
-    ! required and the solvent ladder does not apply; the run is a single
-    ! measurement against the unpriored gridding reference (gates soft)
+    ! evidence in-run from its own base half pair; the run is a single
+    ! measurement against the unpriored gridding reference, so gates are
+    ! soft -- the prior legitimately moves the pcg leg away from gridding
     l_nu_replay = .false.
     if( cline%defined('pcg_nu_lambda_rel') ) l_nu_replay = cline%get_rarg('pcg_nu_lambda_rel') > 0.0
-    if( l_nu_replay )then
-        if( .not. l_mlreg ) &
-            &THROW_HARD('pcg_nu_lambda_rel requires ml_reg=yes: Q_NU replaces P_tau in the regularized replay')
-        ! R10: the strategy never resolves a solvent envelope in NU mode; the
-        ! explicit zero documents the mode exclusivity on the command line
-        call cline%set('pcg_solvent_lambda_rel', 0.)
-        call run_rec3D_backends_single(cline, summary, .false.)
-        call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
-        return
-    endif
-    ! any solvent-prior-active run needs the state-specific NU evidence
-    ! envelope in the invocation directory -- fall over early with the remedy
-    ! rather than reconstructing for nothing
-    l_prior_active = l_mlreg
-    if( cline%defined('pcg_solvent_lambda_rel') )then
-        if( cline%get_rarg('pcg_solvent_lambda_rel') == 0.0 ) l_prior_active = .false.
-    endif
-    if( l_prior_active ) call require_solvent_envelope
-    l_sweep = l_mlreg .and. l_mkdir_ok .and. .not. cline%defined('pcg_solvent_lambda_rel')
-    if( .not. l_sweep )then
-        ! gates are hard failures only for prior-inactive runs (backend
-        ! equivalence checks); a prior-active single run is a measurement --
-        ! the prior legitimately moves the pcg leg away from the unpriored
-        ! gridding reference, so gate violations are reported, not fatal
-        call run_rec3D_backends_single(cline, summary, .not. l_prior_active)
-        call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
-        return
-    endif
-    write(logfhandle,'(A,I0,A)') '>>> REC3D BACKENDS SWEEP: solvent-prior default ladder (', &
-        &size(SOLVENT_LADDER), ' strengths incl. the zero control); one execution directory per rung'
-    do i = 1, size(SOLVENT_LADDER)
-        cline_run = cline
-        call cline_run%set('pcg_solvent_lambda_rel', SOLVENT_LADDER(i))
-        call run_rec3D_backends_single(cline_run, summaries(i), .false.)
-        call cline_run%kill
-    enddo
-    ! collated Stage-5 observables, one row per rung; also written to
-    ! SWEEP_SUMMARY_FILE in the invocation directory for machine reading
-    call fopen(fnr, file=string(SWEEP_SUMMARY_FILE), status='replace', action='write')
-    call emit('>>> REC3D BACKENDS SWEEP:   lambda  base0.5  base.143  ship0.5  ship.143    supp%  sol_rms  band_ratio  band_fsc  rad_min  rad_max  truth_fsc_pcg  gates')
-    do i = 1, size(SOLVENT_LADDER)
-        write(line,'(A,ES9.1,4F9.3,F9.2,ES9.1,2F10.4,2F9.4,F15.4,I7)') '>>> REC3D BACKENDS SWEEP: ', &
-            &summaries(i)%lambda_rel, summaries(i)%p_base05, summaries(i)%p_base0143, &
-            &summaries(i)%p_ship05, summaries(i)%p_ship0143, summaries(i)%supp_pct, &
-            &summaries(i)%solvent_rms, summaries(i)%band_ratio, summaries(i)%band_fsc, &
-            &summaries(i)%rad_min, summaries(i)%rad_max, summaries(i)%truth_fsc_p, summaries(i)%nfail
-        call emit(trim(line))
-    enddo
-    ! negative control: the base (_unfil) pair is prior-free by construction,
-    ! so its FSC=0.143 must be identical across the ladder
-    spread = maxval(summaries(:)%p_base0143) - minval(summaries(:)%p_base0143)
-    write(line,'(A,F8.4,A)') '>>> REC3D BACKENDS SWEEP: NEGATIVE CONTROL base-pair FSC=0.143 spread across ladder ', &
-        &spread, ' A (must be ~0: priors are confined to the ML replay)'
-    call emit(trim(line))
-    l_control_ok = spread < 0.01
-    if( .not. l_control_ok ) call emit('>>> REC3D BACKENDS SWEEP: FAIL -- the base pair moved with the prior strength')
-    call emit('>>> REC3D BACKENDS SWEEP: follow-up data points: rerun with an explicit pcg_solvent_lambda_rel=<value>')
-    call fclose(fnr)
-    if( any(summaries(:)%nfail > 0) )then
-        write(logfhandle,'(A,I0,A)') '>>> REC3D BACKENDS SWEEP: ', count(summaries(:)%nfail > 0), &
-            &' rung(s) violated gates (see the per-rung FAIL lines above)'
-    endif
-    if( .not. l_control_ok )     THROW_HARD('TEST_REC3D_BACKENDS SWEEP FAILED: base pair moved with prior strength')
-    if( summaries(1)%nfail > 0 ) THROW_HARD('TEST_REC3D_BACKENDS SWEEP FAILED: the zero-strength control rung violated gates')
+    if( l_nu_replay .and. .not. l_mlreg ) &
+        &THROW_HARD('pcg_nu_lambda_rel requires ml_reg=yes: Q_NU replaces P_tau in the regularized replay')
+    call run_rec3D_backends_single(cline, summary, .not. l_nu_replay)
     call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
-
-    contains
-
-        subroutine emit( str )
-            character(len=*), intent(in) :: str
-            write(logfhandle,'(A)') str
-            write(fnr,'(A)') str
-        end subroutine emit
-
-        !> Fail-fast validation of the NU evidence envelope the solvent prior
-        !! consumes: present, cubic, and matching the project's physical
-        !! extent (the constant-FOV invariant), checked BEFORE any
-        !! reconstruction is run
-        subroutine require_solvent_envelope
-            type(sp_project) :: spproj_here
-            type(string)     :: env_fname
-            character(len=:), allocatable :: errmsg
-            integer :: ldim_env(3), nimgs, state_here, box_proj
-            real    :: smpd_env, smpd_proj, ext_env, ext_proj
-            state_here = 1
-            if( cline%defined('state') ) state_here = cline%get_iarg('state')
-            env_fname = string(NU_ENVMASK_FBODY)//int2str_pad(state_here,2)//string(MRC_EXT)
-            if( .not. file_exists(env_fname) )then
-                errmsg = 'solvent-prior run requires the NU evidence envelope '//env_fname%to_char()//&
-                    &' in the invocation directory; generate it with simple_exec prg=nu_filt3D on the '//&
-                    &'_unfil half pair and copy/link outvol_nu_envmask.mrc to that name (or pass '//&
-                    &'pcg_solvent_lambda_rel=0 for a prior-free comparison)'
-                THROW_HARD(errmsg)
-            endif
-            call find_ldim_nptcls(env_fname, ldim_env, nimgs)
-            smpd_env = find_img_smpd(env_fname)
-            if( ldim_env(1) /= ldim_env(2) .or. ldim_env(1) /= ldim_env(3) )then
-                THROW_HARD('NU evidence envelope '//env_fname%to_char()//' is not cubic')
-            endif
-            call spproj_here%read(cline%get_carg('projfile'))
-            box_proj  = spproj_here%get_box()
-            smpd_proj = spproj_here%get_smpd()
-            call spproj_here%kill
-            ext_proj = real(box_proj) * smpd_proj
-            ext_env  = real(ldim_env(1)) * smpd_env
-            if( abs(ext_env - ext_proj) > 1.0e-3 * ext_proj )then
-                write(logfhandle,'(A,I0,A,F0.4,A,F0.2,A,I0,A,F0.4,A,F0.2,A)') &
-                    &'>>> REC3D BACKENDS: envelope extent ', ldim_env(1), ' x ', smpd_env, ' = ', ext_env, &
-                    &' A vs project ', box_proj, ' x ', smpd_proj, ' = ', ext_proj, ' A'
-                errmsg = 'NU evidence envelope '//env_fname%to_char()//' does not match the project physical '//&
-                    &'extent (wrong smpd/box; regenerate with the correct header sampling)'
-                THROW_HARD(errmsg)
-            endif
-            call env_fname%kill
-        end subroutine require_solvent_envelope
-
 end subroutine exec_test_rec3D_backends
 
 subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
@@ -2649,8 +2539,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
     real    :: smpd, smpd_out, mskrad, rbin_width, r, l2(2), rr, rnorm, rmin, rmax, med, lp_here, e0, bg, hp_here
     real    :: r05_tmp, r0143_tmp
     real,    allocatable  :: tspec(:), tcorr(:,:), tspec_b(:,:)
-    type(string)          :: cwd_orig, sol_key
-    type(oris)            :: os_sol
+    type(string)          :: cwd_orig
     integer :: ldim(3), ib, state, nptcls, k, lfny, irb, i, j, l, c(3), nrb_msk, n, box, kagree, nrb_used, it
     logical :: l_truth, l_gate_ls, l_mkdir
     if( .not. cline%defined('trs')     ) call cline%set('trs', 5.)
@@ -2678,9 +2567,6 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         endif
         if( cline%defined('maxits_pcg') ) dirbody = dirbody//('_its'//int2str(cline%get_iarg('maxits_pcg')))
         if( cline%defined('rtol')       ) dirbody = dirbody//('_rtol'//real_tok(cline%get_rarg('rtol')))
-        if( cline%defined('pcg_solvent_lambda_rel') )then
-            dirbody = dirbody//('_sol'//real_tok(cline%get_rarg('pcg_solvent_lambda_rel')))
-        endif
         if( cline%defined('pcg_nu_lambda_rel') )then
             dirbody = dirbody//('_nu'//real_tok(cline%get_rarg('pcg_nu_lambda_rel')))
         endif
@@ -2699,14 +2585,7 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
             end do
             deallocate(link_list)
         endif
-        call simple_list_files(NU_ENVMASK_FBODY//'*'//MRC_EXT, link_list)
-        if( allocated(link_list) )then
-            do i = 1, size(link_list)
-                call syslib_symlink(simple_abspath(link_list(i)), exec_dir//('/'//link_list(i)%to_char()))
-            end do
-            deallocate(link_list)
-        endif
-        call simple_getcwd(cwd_orig)   ! the runner returns here, so a sweep can loop rungs
+        call simple_getcwd(cwd_orig)   ! the runner returns here after the comparison
         call simple_chdir(exec_dir)
         write(logfhandle,'(a)') '>>> REC3D BACKENDS: EXECUTION DIRECTORY '//exec_dir%to_char()
     endif
@@ -2759,20 +2638,6 @@ subroutine run_rec3D_backends_single( cline, summary, l_abort_on_fail )
         call simple_rename(vol_fname, out_fnames(ib), overwrite=.true.)
         call cline_rec%kill
     enddo
-    ! collate the solvent-prior readout the pcg leg left behind (present only
-    ! when the prior fired; the strategy deletes stale files)
-    if( cline%defined('pcg_solvent_lambda_rel') ) summary%lambda_rel = cline%get_rarg('pcg_solvent_lambda_rel')
-    if( file_exists(PCG_SOLVENT_STATS_FILE) )then
-        call os_sol%new(1, is_ptcl=.false.)
-        call os_sol%read(string(PCG_SOLVENT_STATS_FILE))
-        if( os_sol%isthere('PCG_SOLVENT_LAMBDA_REL') ) summary%lambda_rel = os_sol%get(1,'PCG_SOLVENT_LAMBDA_REL')
-        sol_key = 'PCG_SOLVENT_SUPP_STATE'//int2str_pad(state,2)
-        if( os_sol%isthere(sol_key%to_char()) ) summary%supp_pct = os_sol%get(1, sol_key%to_char())
-        sol_key = 'PCG_SOLVENT_RMS_STATE'//int2str_pad(state,2)
-        if( os_sol%isthere(sol_key%to_char()) ) summary%solvent_rms = os_sol%get(1, sol_key%to_char())
-        call os_sol%kill
-        call sol_key%kill
-    endif
     ! read the two maps
     call find_ldim_nptcls(out_fnames(1), ldim, nptcls)
     smpd_out = smpd * real(box) / real(ldim(1))

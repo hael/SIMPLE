@@ -84,28 +84,22 @@ contains
     !! iteration, abinitio3D stage handoffs). The documented cold-start gap
     !! is that the regularized optimum differs from ANY unregularized map in
     !! slowly-converging directions -- beyond-band/high-shell noise the ML
-    !! prior shrinks, solvent texture the solvent prior flattens -- so a
+    !! prior shrinks -- so a
     !! small iteration budget leaves the solve transient-dominated. Apply
     !! the regularizers' expected effect to the base solution in closed form
     !! instead: shrink each shell's amplitude by the FSC (the Wiener
     !! shrinkage the ML prior's optimum implies; no shrinkage below the hp
-    !! no-prior limit, zero beyond the measured band), then, when a
-    !! validated solvent envelope is attached, blend the solvent domain
-    !! toward its weighted mean -- Q_s's fixed point. CG then corrects an
+    !! no-prior limit, zero beyond the measured band). CG then corrects an
     !! approximate optimum rather than constructing it. Pure initialization:
     !! the quadratic objective has a unique optimum, so this changes the
     !! convergence path, never the converged solution.
-    subroutine regularized_ml_initial_guess( params, fsc, m_env, l_env, x, context, half )
+    subroutine regularized_ml_initial_guess( params, fsc, x, context, half )
         class(parameters), intent(in)    :: params
         real,              intent(in)    :: fsc(:)
-        real, allocatable, intent(in)    :: m_env(:,:,:)
-        logical,           intent(in)    :: l_env
         real,              intent(inout) :: x(:,:,:)
         character(len=*),  intent(in)    :: context, half
         type(image) :: img
         real, allocatable :: filt(:)
-        real(dp) :: wsum, xsum
-        real     :: mu
         call img%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
         call img%set_rmat(x, .false.)
         call ml_shrinkage_filter(params, fsc, img%get_filtsz(), filt)
@@ -115,26 +109,13 @@ contains
         x = img%get_rmat()
         call img%kill
         deallocate(filt)
-        if( l_env )then
-            wsum = sum(1.0_dp - real(m_env,dp))
-            if( wsum > 0.0_dp )then
-                xsum = sum((1.0_dp - real(m_env,dp)) * real(x,dp))
-                mu   = real(xsum / wsum)
-                x    = m_env * x + (1.0 - m_env) * mu
-            endif
-            write(logfhandle,'(A)') '>>> PCG ML REGULARIZED INIT ('//trim(context)//'/'//trim(half)//&
-                &'): shell-shrunk base + envelope-flattened solvent'
-        else
-            write(logfhandle,'(A)') '>>> PCG ML REGULARIZED INIT ('//trim(context)//'/'//trim(half)//&
-                &'): shell-shrunk base'
-        endif
+        write(logfhandle,'(A)') '>>> PCG ML REGULARIZED INIT ('//trim(context)//'/'//trim(half)//&
+            &'): shell-shrunk base'
     end subroutine regularized_ml_initial_guess
 
     !> The strategy-side wrapper for the ML shrinkage filter (fsc2shrink_filter
     !! in simple_estimate_ssnr, alongside the other FSC-derived filters):
     !! resolves the no-shrinkage high-pass index from the workflow parameters.
-    !! Shared by the regularized initial guess and the solvent suppression
-    !! reference.
     subroutine ml_shrinkage_filter( params, fsc, nyq, filt )
         class(parameters), intent(in)  :: params
         real,              intent(in)  :: fsc(:)
@@ -145,39 +126,13 @@ contains
         call fsc2shrink_filter(fsc, k_hp, nyq, filt)
     end subroutine ml_shrinkage_filter
 
-    !> Reference level for the solvent suppression readout: the weighted
-    !! solvent RMS of the shell-shrunk base solution. The FSC/Wiener shrinkage
-    !! is the part of the ML replay that reduces solvent variation WITHOUT the
-    !! solvent prior, so measuring the final ML map against this reference
-    !! isolates the prior's own contribution -- an inert prior reads ~0%
-    !! suppression regardless of tau.
-    real function solvent_suppression_reference( pcgop, params, fsc, base_volume ) result( rms_ref )
-        type(reconstructor_pcg), intent(in) :: pcgop
-        class(parameters),       intent(in) :: params
-        real,                    intent(in) :: fsc(:)
-        type(image),             intent(in) :: base_volume
-        type(image) :: img
-        real, allocatable :: filt(:), xr(:,:,:)
-        real :: mean_s, penalty
-        call img%copy(base_volume)
-        call ml_shrinkage_filter(params, fsc, img%get_filtsz(), filt)
-        call img%fft()
-        call img%apply_filter(filt)
-        call img%ifft()
-        xr = img%get_rmat()
-        call pcgop%get_solvent_stats(xr, mean_s, rms_ref, penalty)
-        call img%kill
-        deallocate(filt, xr)
-    end function solvent_suppression_reference
-
     !> Resolution readout of the shipped (regularized) half pair, measured the
     !! same way as the harness diagnostic (soft spherical mask, standard FSC
     !! crossings). The shipped pair shares its regularizers between halves, so
     !! this is NEVER a resolution claim — its crossing pulling materially
-    !! finer than the base pair's is the portable over-flattening signal the
-    !! convergence guidance consumes (calibrated: fired at lambda_rel=1e-1 on
-    !! streptavidin, quiet through 3e-1 on bgal, matching both datasets'
-    !! ladder verdicts).
+    !! finer than the base pair's is the portable over-regularization signal
+    !! (calibrated on the retired solvent prior's strength ladders; retained
+    !! as the NU replay's over-regularization diagnostic).
     subroutine shipped_pair_res( params, even_in, odd_in, res05, res0143 )
         class(parameters), intent(in)  :: params
         type(image),       intent(in)  :: even_in, odd_in
@@ -203,52 +158,6 @@ contains
         deallocate(corrs, res_arr)
     end subroutine shipped_pair_res
 
-    !> Persist the per-state solvent suppression readout for the convergence
-    !! reporter (simple_convergence prints it with the other iteration stats
-    !! and advises on pcg_solvent_lambda_rel). The file is rewritten on every
-    !! ML volassemble and deleted first, so an iteration in which the prior is
-    !! skipped never leaves stale values behind.
-    subroutine write_solvent_convergence_stats( params, supps, rmss, cnts, base0143s, ship0143s )
-        class(parameters), intent(in) :: params
-        real,              intent(in) :: supps(:), rmss(:), base0143s(:), ship0143s(:)
-        integer,           intent(in) :: cnts(:)
-        type(oris)   :: os
-        type(string) :: key
-        integer :: state
-        call del_file(PCG_SOLVENT_STATS_FILE)
-        if( .not. any(cnts > 0) ) return
-        call os%new(1, is_ptcl=.false.)
-        call os%set(1, 'PCG_SOLVENT_LAMBDA_REL', params%pcg_solvent_lambda_rel)
-        do state = 1, size(supps)
-            if( cnts(state) < 1 ) cycle
-            key = 'PCG_SOLVENT_SUPP_STATE'//int2str_pad(state,2)
-            call os%set(1, key%to_char(), supps(state) / real(cnts(state)))
-            key = 'PCG_SOLVENT_RMS_STATE'//int2str_pad(state,2)
-            call os%set(1, key%to_char(), rmss(state) / real(cnts(state)))
-            if( base0143s(state) > 0. .and. ship0143s(state) > 0. )then
-                key = 'PCG_BASE_FSC0143_STATE'//int2str_pad(state,2)
-                call os%set(1, key%to_char(), base0143s(state))
-                key = 'PCG_SHIP_FSC0143_STATE'//int2str_pad(state,2)
-                call os%set(1, key%to_char(), ship0143s(state))
-            endif
-        end do
-        call os%write(string(PCG_SOLVENT_STATS_FILE))
-        call os%kill
-        call key%kill
-    end subroutine write_solvent_convergence_stats
-
-    !> Solvent-envelope loader for the graded solvent-flatness prior
-    !! (pcg_priors.md S4, S6.2). Resolves the state-specific NU evidence
-    !! envelope, runs the full S6.2 validation contract -- presence, cubic
-    !! lattice, physical-extent identity, constant-FOV resample when the
-    !! lattice differs, finiteness, [0,1] range with re-clip after resampling,
-    !! nonzero solvent evidence -- and emits the pcg_solvent_* diagnostic
-    !! block. When the envelope validates AND pcg_solvent_lambda_rel > 0 the
-    !! clipped envelope is returned with l_ready true, and the caller attaches
-    !! it to BOTH halves' ML replays (one fixed mask identity per state and
-    !! iteration, S6.2). In every other case l_ready is false with a clear
-    !! skip reason and the solve path is untouched (R5: strength zero is
-    !! bit-identical). Never substitutes a density or spherical mask.
     !> Stage-6 direct NU-evidence replay (pcg_priors.md S5-S6): construct the
     !! frozen compact evidence state from the CURRENT state's unregularized
     !! base half pair -- current-iteration empirical Bayes, exactly as the ML
@@ -295,144 +204,6 @@ contains
         endif
     end subroutine validate_nu_replay_request
 
-    subroutine resolve_solvent_envelope( params, state_here, context, m_env, l_ready )
-        class(parameters), intent(in)  :: params
-        integer,           intent(in)  :: state_here
-        character(len=*),  intent(in)  :: context
-        real, allocatable, intent(out) :: m_env(:,:,:)
-        logical,           intent(out) :: l_ready
-        real, parameter :: EXTENT_RELTOL = 1.0e-3 !< constant-FOV identity tolerance
-        real, parameter :: VALUE_SLACK   = 1.0e-2 !< clip-vs-reject boundary around [0,1]
-        type(string) :: env_fname
-        type(image)  :: env
-        real,    allocatable :: m(:,:,:)
-        character(len=:), allocatable :: skip_reason
-        real     :: smpd_env, extent_env, extent_rec, mask_min, mask_max
-        real(dp) :: weight_sum, weight_fraction
-        integer  :: ldim_env(3), nimgs
-        logical  :: l_resampled, l_env_valid
-        l_ready     = .false.
-        l_env_valid = .false.
-        l_resampled = .false.
-        mask_min    = 0.0
-        mask_max    = 0.0
-        weight_sum  = 0.0_dp
-        env_fname   = string(NU_ENVMASK_FBODY)//int2str_pad(state_here,2)//string(MRC_EXT)
-        if( .not. file_exists(env_fname) )then
-            skip_reason = 'envelope_absent'
-        else
-            call find_ldim_nptcls(env_fname, ldim_env, nimgs)
-            smpd_env = find_img_smpd(env_fname)
-            if( ldim_env(1) /= ldim_env(2) .or. ldim_env(1) /= ldim_env(3) )then
-                skip_reason = 'envelope_not_cubic'
-            else
-                extent_env = real(ldim_env(1))     * smpd_env
-                extent_rec = real(params%box_crop) * params%smpd_crop
-                if( abs(extent_env - extent_rec) > EXTENT_RELTOL * extent_rec )then
-                    skip_reason = 'physical_extent_mismatch'
-                    ! the numbers make a wrong-smpd envelope immediately
-                    ! visible: a header smpd typo shifts extent_env off the
-                    ! reconstruction FOV by exactly the smpd error
-                    write(logfhandle,'(A,I0,A,F8.4,A,F10.3,A,I0,A,F8.4,A,F10.3,A)') &
-                        &'>>> PCG SOLVENT ENVELOPE EXTENT MISMATCH: envelope box ', ldim_env(1), &
-                        &' x smpd ', smpd_env, ' = ', extent_env, ' A vs reconstruction box ', &
-                        &params%box_crop, ' x smpd ', params%smpd_crop, ' = ', extent_rec, ' A'
-                else
-                    ! constant-FOV lattice change: factor-free Fourier pad/clip
-                    ! under the data-quotient convention (S3 item 8)
-                    l_resampled = ldim_env(1) /= params%box_crop
-                    call env%read_and_crop(env_fname, smpd_env, params%box_crop, params%smpd_crop)
-                    m = env%get_rmat()
-                    call env%kill
-                    if( .not. all(ieee_is_finite(m)) )then
-                        skip_reason = 'envelope_not_finite'
-                    else
-                        mask_min = minval(m)
-                        mask_max = maxval(m)
-                        if( mask_min < -VALUE_SLACK .or. mask_max > 1.0 + VALUE_SLACK )then
-                            skip_reason = 'values_outside_unit_range'
-                        else
-                            ! S3: re-clip to [0,1]; resampling rings slightly
-                            m = min(1.0, max(0.0, m))
-                            ! solvent confidence is the molecular-envelope complement
-                            weight_sum = sum(1.0_dp - real(m,dp))
-                            if( weight_sum <= 0.0_dp )then
-                                skip_reason = 'no_solvent_evidence'
-                            else
-                                l_env_valid = .true.
-                                if( params%pcg_solvent_lambda_rel > 0.0 )then
-                                    skip_reason = 'none'
-                                else
-                                    skip_reason = 'strength_zero'
-                                endif
-                            endif
-                        endif
-                    endif
-                endif
-            endif
-        endif
-        l_ready = l_env_valid .and. params%pcg_solvent_lambda_rel > 0.0
-        if( l_ready )then
-            call move_alloc(m, m_env)
-        else if( params%pcg_solvent_lambda_rel > 0.0 .and. skip_reason /= 'envelope_absent' )then
-            ! the prior is on by default, so an ABSENT envelope is the normal
-            ! lag-one state (early iterations, gridding-era projects) and only
-            ! rates the diagnostic block below; a PRESENT-but-unusable envelope
-            ! is a broken input and warns loudly. Never substitute a mask type.
-            THROW_WARN('NU evidence envelope is unusable ('//skip_reason//'); solvent prior skipped for this iteration')
-        endif
-        weight_fraction = weight_sum / real(params%box_crop,dp)**3
-        write(logfhandle,'(A,I0,A)') '>>> PCG SOLVENT ENVELOPE ('//trim(context)//'/state ', &
-            &state_here, ')'
-        if( l_ready )then
-            write(logfhandle,'(A,ES11.4)') '    pcg_solvent_prior_enabled=T pcg_solvent_lambda_rel=', &
-                &params%pcg_solvent_lambda_rel
-        else
-            write(logfhandle,'(A,ES11.4)') '    pcg_solvent_prior_enabled=F pcg_solvent_lambda_rel=', &
-                &params%pcg_solvent_lambda_rel
-        endif
-        write(logfhandle,'(A)')      '    pcg_solvent_mask_file='//env_fname%to_char()
-        if( l_resampled )then
-            write(logfhandle,'(A,I0,A,I0,A)') '    pcg_solvent_mask_resampled=T (box ', ldim_env(1), &
-                &' -> ', params%box_crop, ', constant FOV)'
-        else
-            write(logfhandle,'(A)') '    pcg_solvent_mask_resampled=F'
-        endif
-        write(logfhandle,'(A,ES11.4,A,ES11.4)') '    pcg_solvent_mask_min=', mask_min, &
-            &' pcg_solvent_mask_max=', mask_max
-        write(logfhandle,'(A,ES11.4,A,ES11.4)') '    pcg_solvent_weight_sum=', real(weight_sum), &
-            &' pcg_solvent_weight_fraction=', real(weight_fraction)
-        ! lambda_eff and the mean/rms/penalty_final values are per-half solve
-        ! outputs; written by the PCG SOLVENT PRIOR line after each ML replay
-        write(logfhandle,'(A)')      '    pcg_solvent_skip_reason='//skip_reason
-        call env_fname%kill
-    end subroutine resolve_solvent_envelope
-
-    !> The solve-output half of the pcg_solvent_* diagnostic block (S6.2):
-    !! effective absolute strength and the final map's weighted solvent mean,
-    !! RMS deviation and penalty, written after each priored ML replay.
-    subroutine report_solvent_solve_stats( pcgop, x, rms_ref, context, half, supp_pct, rms_out )
-        type(reconstructor_pcg), intent(in)  :: pcgop
-        real,                    intent(in)  :: x(:,:,:)
-        real,                    intent(in)  :: rms_ref
-        character(len=*),        intent(in)  :: context, half
-        real,                    intent(out) :: supp_pct, rms_out
-        real :: mean_s, rms_s, penalty
-        call pcgop%get_solvent_stats(x, mean_s, rms_s, penalty)
-        ! suppression is measured against the shell-shrunk base reference
-        ! (solvent_suppression_reference), which carries the Wiener component
-        ! of the replay but no solvent prior: ~0% means the prior is inert
-        supp_pct = 0.0
-        if( rms_ref > 1.0e-12 ) supp_pct = 100.0 * (1.0 - rms_s / rms_ref)
-        rms_out = rms_s
-        write(logfhandle,'(A,ES11.4,A,ES11.4,A,ES11.4,A,ES11.4)') &
-            &'>>> PCG SOLVENT PRIOR ('//trim(context)//'/'//trim(half)//'): pcg_solvent_lambda_eff=', &
-            &pcgop%get_effective_solvent_lambda(), ' pcg_solvent_mean_final=', mean_s, &
-            &' pcg_solvent_rms_final=', rms_s, ' pcg_solvent_penalty_final=', penalty
-        write(logfhandle,'(A,ES11.4,A,F8.2)') '    pcg_solvent_rms_ref=', rms_ref, &
-            &' pcg_solvent_suppression_pct=', supp_pct
-    end subroutine report_solvent_solve_stats
-
     subroutine execute_rec3D_pcg_shared( params, build, cline )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -440,13 +211,12 @@ contains
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         integer, allocatable :: selected_pinds(:), half_pinds(:)
-        real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:), solvent_rmss(:)
+        real, allocatable :: fsc(:), res0143s(:)
         real, allocatable :: ship05s(:), ship0143s(:), nu_band_w(:,:,:,:)
-        integer, allocatable :: solvent_supp_cnts(:)
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         real :: res05, cfar
-        logical :: l_solvent_ready, l_nu_replay
+        logical :: l_nu_replay
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
         logical :: l_sigma_loaded
@@ -454,9 +224,9 @@ contains
         call validate_supported_mode()
         call validate_nu_replay_request(params)
         ! replay precision mode: pcg_nu_lambda_rel > 0 selects the direct
-        ! NU-evidence replay (Q_NU), replacing P_tau and any solvent prior
-        ! (mode-exclusive, pcg_priors.md R10); validated above, so a positive
-        ! strength here implies the euclid ML replay is active
+        ! NU-evidence replay (Q_NU), replacing P_tau (mode-exclusive,
+        ! pcg_priors.md R10); validated above, so a positive strength here
+        ! implies the euclid ML replay is active
         l_nu_replay = params%pcg_nu_lambda_rel > 0.0
         nselected = 0
         call build%spproj_field%sample4rec([params%fromp,params%top], nselected, selected_pinds)
@@ -469,13 +239,10 @@ contains
 
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
-        allocate(solvent_supps(params%nstates), solvent_rmss(params%nstates), source=0.0)
         allocate(ship05s(params%nstates), ship0143s(params%nstates), source=0.0)
-        allocate(solvent_supp_cnts(params%nstates), source=0)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
 
         do state = 1, params%nstates
-            l_solvent_ready = .false.
             n_state = count_state(state)
             n_even = count_state_half(state, 0)
             n_odd  = count_state_half(state, 1)
@@ -517,20 +284,16 @@ contains
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
-                if( l_nu_replay )then
-                    ! evidence from the current base pair; frozen before either
-                    ! replay, no envelope artifact, no solvent precision
-                    call build_nu_replay_evidence(params, state, 'shared', half_even, half_odd, nu_band_w)
-                else
-                    call resolve_solvent_envelope(params, state, 'shared', solvent_env, l_solvent_ready)
-                endif
+                ! NU mode: evidence from the current base pair, frozen before
+                ! either replay; no envelope artifact is read or written
+                if( l_nu_replay ) call build_nu_replay_evidence(params, state, 'shared', &
+                    &half_even, half_odd, nu_band_w)
                 call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
                 call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
-                if( allocated(solvent_env) ) deallocate(solvent_env)
-                if( allocated(nu_band_w)   ) deallocate(nu_band_w)
-                ! shipped-pair crossing for the inflation-based guidance
-                ! (diagnostic only, never a resolution claim)
-                if( solvent_supp_cnts(state) > 0 .or. l_nu_replay )then
+                if( allocated(nu_band_w) ) deallocate(nu_band_w)
+                ! shipped-pair crossing: the over-regularization diagnostic
+                ! (never a resolution claim)
+                if( l_nu_replay )then
                     call shipped_pair_res(params, ml_even, ml_odd, ship05s(state), ship0143s(state))
                 endif
                 call merged%kill
@@ -577,10 +340,6 @@ contains
         enddo
 
         call killimgbatch(build)
-        if( params%l_ml_reg )then
-            call write_solvent_convergence_stats(params, solvent_supps, solvent_rmss, solvent_supp_cnts, &
-                &res0143s, ship0143s)
-        endif
         if( .not. any(state_written) ) THROW_HARD('PCG reconstruct3D produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
@@ -595,8 +354,7 @@ contains
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call register_project_outputs()
 
-        deallocate(selected_pinds, res0143s, state_written, solvent_supps, solvent_rmss, solvent_supp_cnts, &
-            &ship05s, ship0143s)
+        deallocate(selected_pinds, res0143s, state_written, ship05s, ship0143s)
 
     contains
 
@@ -807,7 +565,7 @@ contains
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve, time_total, time_nu_stats
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
-            real :: rms_supp_ref, supp_pct, rms_half, nu_penalty
+            real :: nu_penalty
             logical :: l_warm
 
             t_phase = tic()
@@ -829,7 +587,6 @@ contains
                 call pcgop%set_nu_prior(nu_band_w, NU_EVIDENCE_BAND_LIMITS, params%pcg_nu_lambda_rel)
             else
                 call pcgop%set_ml_prior(fsc_here, params%tau, params%hp)
-                if( l_solvent_ready ) call pcgop%set_solvent_prior(solvent_env, params%pcg_solvent_lambda_rel)
             endif
             call pcgop%end_accum(.true.)
             call pcgop%set_op_mode(PCG_OP_KERNEL)
@@ -846,12 +603,11 @@ contains
             endif
             x = base_volume%get_rmat()
             call override_ml_warm_start_from_previous(params, state_here, half, x, 'shared', l_warm)
-            ! the closed-form shrinkage initial guess encodes the P_tau/Q_s
+            ! the closed-form shrinkage initial guess encodes the P_tau
             ! optimum; the NU replay has no such closed form yet and cold-starts
             ! from the base solution
             if( .not. l_warm .and. .not. l_nu_replay )then
-                call regularized_ml_initial_guess(params, fsc_here, solvent_env, &
-                    &l_solvent_ready, x, 'shared', half)
+                call regularized_ml_initial_guess(params, fsc_here, x, 'shared', half)
             endif
             t_phase = tic()
             call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
@@ -868,13 +624,6 @@ contains
                 write(logfhandle,'(A,ES12.4,A,ES12.4,A,F9.3)') '>>> PCG NU REPLAY (shared/'//trim(half)//&
                     &'): lambda_eff=', pcgop%get_effective_nu_lambda(), '  pcg_nu_prior_energy_final=', &
                     &nu_penalty, '  stats_overhead_s=', real(time_nu_stats)
-            endif
-            if( l_solvent_ready )then
-                rms_supp_ref = solvent_suppression_reference(pcgop, params, fsc_here, base_volume)
-                call report_solvent_solve_stats(pcgop, x, rms_supp_ref, 'shared', half, supp_pct, rms_half)
-                solvent_supps(state_here)     = solvent_supps(state_here) + supp_pct
-                solvent_rmss(state_here)      = solvent_rmss(state_here)  + rms_half
-                solvent_supp_cnts(state_here) = solvent_supp_cnts(state_here) + 1
             endif
             time_total = time_reduce + time_finalize + time_solve + time_nu_stats
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
@@ -1633,24 +1382,23 @@ contains
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(image) :: previous_even, previous_odd, previous_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
-        real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:), solvent_rmss(:)
+        real, allocatable :: fsc(:), res0143s(:)
         real, allocatable :: realized_fractions(:), update_weights(:), ship05s(:), ship0143s(:)
         real, allocatable :: nu_band_w(:,:,:,:)
-        integer, allocatable :: solvent_supp_cnts(:)
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
         integer :: n_active_state, n_sampled_state
         real :: res05, cfar
-        logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_solvent_ready, l_nu_replay
+        logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_nu_replay
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
 
         call validate_pcg_common(params)
         call validate_nu_replay_request(params)
-        ! replay precision mode: Q_NU replaces P_tau and any solvent prior
-        ! (mode-exclusive, pcg_priors.md R10); same rule as the shared path,
-        ! validated above so a positive strength implies the ML replay is active
+        ! replay precision mode: Q_NU replaces P_tau (mode-exclusive,
+        ! pcg_priors.md R10); same rule as the shared path, validated above
+        ! so a positive strength implies the ML replay is active
         l_nu_replay = params%pcg_nu_lambda_rel > 0.0
         if( l_nu_replay .and. params%l_trail_rec )then
             ! trailing replays blended accumulators whose base pair is not the
@@ -1686,11 +1434,8 @@ contains
         endif
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
-        allocate(solvent_supps(params%nstates), solvent_rmss(params%nstates), source=0.0)
         allocate(ship05s(params%nstates), ship0143s(params%nstates), source=0.0)
-        allocate(solvent_supp_cnts(params%nstates), source=0)
         do state = 1, params%nstates
-            l_solvent_ready = .false.
             l_bootstrap = .false.
             if( params%l_trail_rec )then
                 raw_fname = refine3D_pcg_trail_accum_fname(state, 'even')
@@ -1758,16 +1503,13 @@ contains
                     ! that interaction is not designed yet
                     if( l_bootstrap ) THROW_HARD('NU replay does not support the trailing bootstrap path yet')
                     call build_nu_replay_evidence(params, state, 'distributed', half_even, half_odd, nu_band_w)
-                else
-                    call resolve_solvent_envelope(params, state, 'distributed', solvent_env, l_solvent_ready)
                 endif
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
                 call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
-                if( allocated(solvent_env) ) deallocate(solvent_env)
-                if( allocated(nu_band_w)   ) deallocate(nu_band_w)
-                ! shipped-pair crossing for the inflation-based guidance
-                ! (diagnostic only, never a resolution claim)
-                if( solvent_supp_cnts(state) > 0 .or. l_nu_replay )then
+                if( allocated(nu_band_w) ) deallocate(nu_band_w)
+                ! shipped-pair crossing: the over-regularization diagnostic
+                ! (never a resolution claim)
+                if( l_nu_replay )then
                     call shipped_pair_res(params, ml_even, ml_odd, ship05s(state), ship0143s(state))
                 endif
                 call merged%kill
@@ -1831,10 +1573,6 @@ contains
             call fname_fsc%kill
             if( allocated(fsc) ) deallocate(fsc)
         enddo
-        if( params%l_ml_reg )then
-            call write_solvent_convergence_stats(params, solvent_supps, solvent_rmss, solvent_supp_cnts, &
-                &res0143s, ship0143s)
-        endif
         if( .not. any(state_written) ) THROW_HARD('distributed PCG produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
@@ -1867,8 +1605,7 @@ contains
             enddo
         endif
         call raw_fname%kill
-        deallocate(res0143s, state_written, realized_fractions, update_weights, solvent_supps, solvent_rmss, &
-            &solvent_supp_cnts, ship05s, ship0143s)
+        deallocate(res0143s, state_written, realized_fractions, update_weights, ship05s, ship0143s)
 
     contains
 
@@ -1947,7 +1684,7 @@ contains
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
-            real :: realized_fraction, update_weight, current_scale, rms_supp_ref, supp_pct, rms_half
+            real :: realized_fraction, update_weight, current_scale
             real :: nu_penalty
             logical :: l_ml_solve, l_chain_exists, l_seed_chain, l_warm
 
@@ -2028,7 +1765,6 @@ contains
                     call pcgop%set_nu_prior(nu_band_w, NU_EVIDENCE_BAND_LIMITS, params%pcg_nu_lambda_rel)
                 else
                     call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
-                    if( l_solvent_ready ) call pcgop%set_solvent_prior(solvent_env, params%pcg_solvent_lambda_rel)
                 endif
             endif
             call pcgop%end_accum(.true.)
@@ -2047,11 +1783,10 @@ contains
             if( l_ml_solve )then
                 x = warm_start%get_rmat()
                 call override_ml_warm_start_from_previous(params, state_here, half, x, 'distributed', l_warm)
-                ! the closed-form shrinkage initial guess encodes the P_tau/Q_s
+                ! the closed-form shrinkage initial guess encodes the P_tau
                 ! optimum; the NU replay cold-starts from the base solution
                 if( .not. l_warm .and. .not. l_nu_replay )then
-                    call regularized_ml_initial_guess(params, fsc_prior, solvent_env, &
-                        &l_solvent_ready, x, 'distributed', half)
+                    call regularized_ml_initial_guess(params, fsc_prior, x, 'distributed', half)
                 endif
             else
                 allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
@@ -2069,14 +1804,6 @@ contains
                 write(logfhandle,'(A,ES12.4,A,ES12.4,A,F9.3)') '>>> PCG NU REPLAY (distributed/'//trim(half)//&
                     &'): lambda_eff=', pcgop%get_effective_nu_lambda(), '  pcg_nu_prior_energy_final=', &
                     &nu_penalty, '  stats_overhead_s=', real(real(toc(t_phase),dp))
-            endif
-            if( l_ml_solve .and. l_solvent_ready )then
-                ! warm_start is the base half solution at both ML call sites
-                rms_supp_ref = solvent_suppression_reference(pcgop, params, fsc_prior, warm_start)
-                call report_solvent_solve_stats(pcgop, x, rms_supp_ref, 'distributed', half, supp_pct, rms_half)
-                solvent_supps(state_here)     = solvent_supps(state_here) + supp_pct
-                solvent_rmss(state_here)      = solvent_rmss(state_here)  + rms_half
-                solvent_supp_cnts(state_here) = solvent_supp_cnts(state_here) + 1
             endif
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)

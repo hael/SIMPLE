@@ -396,12 +396,13 @@ contains
         cfg%automsk = 'no'
         if( l_cavgs ) return
         if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
-        ! rec_backend=pcg: the solvent-flatness prior (on by default) consumes
-        ! the state-specific NU evidence envelope lag-one, so envelope
-        ! generation turns on as soon as NU filtering is active -- the first
-        ! NU stage generates the envelope and every later stage's ML replays
-        ! are solvent-priored. An explicit automsk=no vetoes this; a
-        ! user-supplied automsk mode (e.g. tight) is respected.
+        ! rec_backend=pcg: automasking from the first NU stage switches
+        ! matching to envelope-masked references, which the Gate B streptavidin
+        ! run showed improves registration (base-pair 0.143 improved 3.812 ->
+        ! 3.191 A through the NU stage). The retired solvent prior no longer
+        ! consumes the envelope; this staging is kept for the reference-masking
+        ! benefit. An explicit automsk=no vetoes this; a user-supplied automsk
+        ! mode (e.g. tight) is respected.
         if( trim(params%rec_backend) == 'pcg' .and. istage >= NU_FILTER_STAGE .and. &
             &l_nonuniform .and. .not. l_automsk_off )then
             if( l_automsk )then

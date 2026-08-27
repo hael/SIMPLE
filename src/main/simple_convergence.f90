@@ -8,18 +8,6 @@ implicit none
 public :: convergence
 private
 
-! PCG solvent prior guidance thresholds (pcg_priors.md Stage 5, 2026-08-27
-! calibration). The INERT test uses the suppression % (solvent variation
-! removed relative to the shell-shrunk base; ~0% when the prior does
-! nothing), which is dataset-robust at the low end. The OVER-FLATTENING test
-! uses shipped-vs-base pair FSC=0.143 inflation — the observable that landed
-! at the right per-dataset operating point on both calibration datasets
-! (fired at lambda_rel=1e-1 on streptavidin, quiet through 3e-1 on bgal) —
-! because absolute suppression percentages are NOT portable across box
-! sizes/convergence states.
-real, parameter :: PCG_SOLVENT_SUPP_INERT_PCT = 2.0 !< suppression below this: prior inert, increase pcg_solvent_lambda_rel
-real, parameter :: PCG_SOLVENT_INFL_PCT       = 5.0 !< shipped-pair 0.143 finer than base-pair 0.143 by more than this %: decrease
-
 type convergence
     private
     type(stats_struct) :: score            !< objective function stats
@@ -279,12 +267,10 @@ contains
         type(string)         :: s_ratio, cont_ratio
         type(stats_struct)   :: res_state
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
-        real,    allocatable :: res_state_avg(:), state_update_fracs(:), pcg_solvent_supps(:), pcg_infls(:)
-        logical, allocatable :: mask(:), state_mask(:), pcg_solvent_mask(:), pcg_infl_mask(:)
+        real,    allocatable :: res_state_avg(:), state_update_fracs(:)
+        logical, allocatable :: mask(:), state_mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
-        real    :: pcg_solvent_supp_avg, pcg_infl_avg
-        logical :: l_pcg_solvent, l_pcg_infl
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
@@ -376,49 +362,6 @@ contains
             endif
         end do
         deallocate(state_mask)
-        ! PCG solvent prior firing readout: % solvent variation suppressed by
-        ! the prior, measured against the shell-shrunk base solution (~0% =
-        ! inert). Written by the PCG reconstruction each priored volassemble.
-        l_pcg_solvent        = .false.
-        l_pcg_infl           = .false.
-        pcg_solvent_supp_avg = 0.
-        pcg_infl_avg         = 0.
-        allocate(pcg_solvent_supps(params%nstates), pcg_infls(params%nstates))
-        allocate(pcg_solvent_mask(params%nstates),  pcg_infl_mask(params%nstates))
-        if( trim(params%rec_backend) == 'pcg' )then
-            call read_pcg_solvent_stats(params%nstates, pcg_solvent_supps, pcg_solvent_mask, &
-                &pcg_infls, pcg_infl_mask, l_pcg_solvent)
-        endif
-        if( l_pcg_solvent )then
-            pcg_solvent_supp_avg = sum(pcg_solvent_supps, mask=pcg_solvent_mask) / real(count(pcg_solvent_mask))
-            write(logfhandle,601) '>>> % SOLVENT SUPPRESSED (PCG SOLVENT PRIOR): ', pcg_solvent_supp_avg
-            if( params%nstates > 1 )then
-                do istate = 1, params%nstates
-                    if( .not. pcg_solvent_mask(istate) ) cycle
-                    write(res_state_label,'(A,I3,A)') '>>>     state ', istate, ':'
-                    write(logfhandle,601) res_state_label, pcg_solvent_supps(istate)
-                end do
-            endif
-            l_pcg_infl = any(pcg_infl_mask)
-            if( l_pcg_infl )then
-                pcg_infl_avg = sum(pcg_infls, mask=pcg_infl_mask) / real(count(pcg_infl_mask))
-                write(logfhandle,601) '>>> % SHIPPED-PAIR FSC INFLATION  (PCG PRIOR):', pcg_infl_avg
-                if( params%nstates > 1 )then
-                    do istate = 1, params%nstates
-                        if( .not. pcg_infl_mask(istate) ) cycle
-                        write(res_state_label,'(A,I3,A)') '>>>     state ', istate, ':'
-                        write(logfhandle,601) res_state_label, pcg_infls(istate)
-                    end do
-                endif
-            endif
-            if( pcg_solvent_supp_avg < PCG_SOLVENT_SUPP_INERT_PCT )then
-                write(logfhandle,609) '>>> PCG SOLVENT PRIOR INERT (SUPPRESSION < 2%); INCREASE PCG_SOLVENT_LAMBDA_REL (~3X)'
-            else if( l_pcg_infl .and. pcg_infl_avg > PCG_SOLVENT_INFL_PCT )then
-                write(logfhandle,609) '>>> PCG SOLVENT PRIOR OVER-FLATTENING (SHIPPED-PAIR FSC INFLATION > 5%); DECREASE PCG_SOLVENT_LAMBDA_REL (~3X)'
-            else
-                write(logfhandle,609) '>>> PCG SOLVENT PRIOR NOMINAL; KEEP PCG_SOLVENT_LAMBDA_REL'
-            endif
-        endif
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
@@ -594,16 +537,6 @@ contains
         if( params%l_update_frac )then
             call ostats%set(1,'TRAIL_REC_UPDATE_FRACTION', trail_rec_ufrac)
         endif
-        if( l_pcg_solvent )then
-            call ostats%set(1,'PCG_SOLVENT_SUPPRESSION_PCT', pcg_solvent_supp_avg)
-            call ostats%set(1,'PCG_SOLVENT_LAMBDA_REL',      params%pcg_solvent_lambda_rel)
-            if( l_pcg_infl ) call ostats%set(1,'PCG_SHIP_INFLATION_PCT', pcg_infl_avg)
-            do istate = 1, params%nstates
-                if( .not. pcg_solvent_mask(istate) ) cycle
-                write(res_key,'(A,I2.2)') 'PCG_SOLVENT_SUPP_STATE', istate
-                call ostats%set(1, trim(res_key), pcg_solvent_supps(istate))
-            end do
-        endif
         call ostats%write(string(STATS_FILE))
         call self%append_stats(params, ostats)
         call self%plot_projdirs(params, os, mask)
@@ -612,61 +545,9 @@ contains
         if( allocated(statepops)          ) deallocate(statepops)
         if( allocated(res_state_avg)      ) deallocate(res_state_avg)
         if( allocated(state_update_fracs) ) deallocate(state_update_fracs)
-        if( allocated(pcg_solvent_supps)  ) deallocate(pcg_solvent_supps)
-        if( allocated(pcg_solvent_mask)   ) deallocate(pcg_solvent_mask)
-        if( allocated(pcg_infls)          ) deallocate(pcg_infls)
-        if( allocated(pcg_infl_mask)      ) deallocate(pcg_infl_mask)
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
     end function check_conv3D
-
-    !> Reads the per-state solvent suppression readout the PCG reconstruction
-    !! strategy leaves behind after each priored ML volassemble. The file is
-    !! rewritten (or removed) every reconstruction, so presence means the
-    !! prior fired this iteration.
-    subroutine read_pcg_solvent_stats( nstates, supps, supp_mask, infls, infl_mask, available )
-        integer, intent(in)  :: nstates
-        real,    intent(out) :: supps(nstates), infls(nstates)
-        logical, intent(out) :: supp_mask(nstates), infl_mask(nstates)
-        logical, intent(out) :: available
-        type(oris)   :: os
-        type(string) :: key
-        real    :: base0143, ship0143
-        integer :: state
-        supps     = 0.
-        infls     = 0.
-        supp_mask = .false.
-        infl_mask = .false.
-        available = .false.
-        if( .not. file_exists(PCG_SOLVENT_STATS_FILE) ) return
-        call os%new(1, is_ptcl=.false.)
-        call os%read(string(PCG_SOLVENT_STATS_FILE))
-        do state = 1, nstates
-            key = 'PCG_SOLVENT_SUPP_STATE'//int2str_pad(state,2)
-            if( os%isthere(key%to_char()) )then
-                supps(state)     = os%get(1, key%to_char())
-                supp_mask(state) = .true.
-            endif
-            key = 'PCG_BASE_FSC0143_STATE'//int2str_pad(state,2)
-            if( os%isthere(key%to_char()) )then
-                base0143 = os%get(1, key%to_char())
-                key = 'PCG_SHIP_FSC0143_STATE'//int2str_pad(state,2)
-                if( os%isthere(key%to_char()) )then
-                    ship0143 = os%get(1, key%to_char())
-                    if( base0143 > 0. .and. ship0143 > 0. )then
-                        ! % by which the shipped-pair 0.143 crossing pulls
-                        ! finer than the base-pair crossing (shared
-                        ! regularization between halves; diagnostic only)
-                        infls(state)     = 100.0 * (base0143 - ship0143) / base0143
-                        infl_mask(state) = .true.
-                    endif
-                endif
-            endif
-        enddo
-        available = any(supp_mask)
-        call os%kill
-        call key%kill
-    end subroutine read_pcg_solvent_stats
 
     subroutine calc_continuous_inplane_stats( self, os, mask, available )
         class(convergence), intent(inout) :: self

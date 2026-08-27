@@ -243,8 +243,8 @@ contains
         if( cline_refine3D%defined('rtol') )then
             call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
         endif
-        if( cline_refine3D%defined('pcg_solvent_lambda_rel') )then
-            call child_cline%set('pcg_solvent_lambda_rel', cline_refine3D%get_rarg('pcg_solvent_lambda_rel'))
+        if( cline_refine3D%defined('pcg_nu_lambda_rel') )then
+            call child_cline%set('pcg_nu_lambda_rel', cline_refine3D%get_rarg('pcg_nu_lambda_rel'))
         endif
         if( cline_refine3D%defined('ml_reg') )then
             call child_cline%set('ml_reg', cline_refine3D%get_carg('ml_reg'))

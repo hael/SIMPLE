@@ -2,8 +2,10 @@
 
 Contract of the code that runs today: the opt-in CTF- and sigma-weighted
 preconditioned-conjugate-gradient (PCG) reconstruction path. Regularization
-research (solvent-flatness/Wilson priors) and the record of removed prior
-experiments live in `doc/implementation_notes/pcg_priors.md`.
+research (the direct NU-evidence replay precision, Wilson priors) and the
+record of removed prior experiments -- including the retired binary-envelope
+solvent prior, removed 2026-08-27 -- live in
+`doc/implementation_notes/pcg_priors.md`.
 
 The production `reconstruct3D` command accepts the selector
 `rec_backend=gridding|pcg`, with `gridding` unchanged as the default. Its `pcg`

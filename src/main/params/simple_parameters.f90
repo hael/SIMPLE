@@ -616,7 +616,6 @@ type :: parameters
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
-    real    :: pcg_solvent_lambda_rel=0.1 !< graded solvent-flatness prior strength relative to the PCG data scale; applied whenever a valid NU evidence envelope exists; 0 disables{0.1}
     real    :: pcg_nu_lambda_rel=0.  !< direct NU-evidence replay precision strength relative to the PCG data scale; replaces the FSC/SSNR P_tau replay precision (mode-exclusive, pcg_priors.md S5); 0 keeps the ordinary global-ML replay{0}
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
