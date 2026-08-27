@@ -26,6 +26,7 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: PCG_LAMBDA = 1.0e-3
+logical, parameter :: DEBUG = .false.
 
 contains
 
@@ -1364,8 +1365,10 @@ contains
                 n_half = size(half_pinds)
                 call accumulate_worker_state_half(state, eo, half_pinds, provenance)
                 deallocate(half_pinds)
-                write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> PCG RAW WORKER: PART ', params%part, &
-                    &' STATE ', state, ' HALF ', eo, ' PARTICLES ', n_half
+                if( DEBUG )then
+                    write(logfhandle,'(A,I0,A,I0,A,I0,A,I0)') '>>> PCG RAW WORKER: PART ', params%part, &
+                        &' STATE ', state, ' HALF ', eo, ' PARTICLES ', n_half
+                endif
             enddo
         enddo
         if( size(selected_pinds) > 0 ) call killimgbatch(build)
