@@ -14,6 +14,7 @@ use pose_cont_refinement_pose_capture_test, only: run_pose_capture_range
 use pose_cont_refinement_pose_mechanism_test, only: run_pose_capture_mechanism
 use pose_cont_refinement_calibration_test, only: run_tolerance_calibration
 use pose_cont_refinement_objective_normals_test, only: run_objective_normals
+use pose_cont_refinement_lm_transactions_test, only: run_lm_transactions
 implicit none
 
 character(len=256) :: selected_case
@@ -202,6 +203,8 @@ subroutine run_case(label)
         call run_tolerance_calibration()
     case('objective_normals')
         call run_objective_normals()
+    case('lm_transactions')
+        call run_lm_transactions()
     case default
         error stop 'unknown continuous 3D pose refinement case: '//trim(label)
     end select

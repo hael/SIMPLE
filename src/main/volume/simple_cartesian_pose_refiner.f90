@@ -17,6 +17,7 @@ public :: POSE_LM_ACCEPTED_IMPROVEMENT, POSE_LM_FINITE_NO_IMPROVEMENT
 public :: POSE_LM_NO_RELIABLE_UPDATE, POSE_LM_STEP_BOUND_REJECTED
 public :: POSE_LM_INVALID_NUMERICS, POSE_LM_ITERATION_LIMIT
 public :: right_increment_rotation
+public :: pose_lm_system_test, pose_lm_transaction_test
 private
 #include "simple_local_flags.inc"
 
@@ -877,13 +878,14 @@ contains
         integer, optional, intent(in) :: shell_range(2)
         real(dp) :: gradient(5), hessian(5,5), trial_gradient(5), trial_hessian(5,5)
         real(dp) :: scaled_gradient(5), scaled_hessian(5,5), solve_matrix(5,5)
-        real(dp) :: diagonal(5), coordinate_scale(5), scaled_direction(5), direction(5)
-        real(dp) :: trial_rotmat(3,3), trial_shift(2), objective, trial_objective
-        real(dp) :: mu, predicted, actual, ratio, rotation_norm, shift_norm, hessian_scale
+        real(dp) :: diagonal(5), scaled_direction(5), direction(5)
+        real(dp) :: trial_rotmat(3,3), trial_shift(2), selected_rotmat(3,3), selected_shift(2)
+        real(dp) :: objective, trial_objective, mu, predicted, actual, ratio, rotation_norm, shift_norm
         real(dp) :: relative_reduction, min_switch_margin, trial_switch_margin
         real(dp) :: cumulative_rotation, cumulative_shift, sine_half
-        integer :: axis, jaxis, iteration, trial_switches
-        logical :: active(5), bounded_trial, cumulative_guard, reliable
+        integer :: iteration, trial_switches
+        logical :: active(5), bounded_trial, bounded_step, cumulative_guard
+        logical :: accept_trial, identifiable, reliable, stationary
 
         if( max_iterations < 1 ) error stop 'refine_pose_lm requires at least one LM iteration'
         if( rotation_scale <= 0._dp .or. .not. ieee_is_finite(rotation_scale) ) &
@@ -930,58 +932,28 @@ contains
             return
         endif
 
-        ! Dimensionless variables balance radians against pixel shifts.
-        coordinate_scale = [rotation_scale,rotation_scale,rotation_scale,1._dp,1._dp]
-        do axis = 1, 5
-            scaled_gradient(axis) = coordinate_scale(axis)*gradient(axis)
-            do jaxis = 1, 5
-                scaled_hessian(axis,jaxis) = &
-                    &coordinate_scale(axis)*hessian(axis,jaxis)*coordinate_scale(jaxis)
-            enddo
-        enddo
-        call apply_pose_parameter_mask(scaled_gradient,scaled_hessian,active)
         mu = 1.e-3_dp
         do iteration = 1, max_iterations
-            ! Damping must not hide an unidentifiable five-parameter block.
-            call solve_pose_cholesky(scaled_hessian,-scaled_gradient,scaled_direction,reliable)
-            if( .not. reliable )then
+            call build_pose_lm_system(gradient,hessian,rotation_scale,mu,active,scaled_gradient, &
+                &scaled_hessian,diagonal,solve_matrix,scaled_direction,direction,identifiable, &
+                &stationary,reliable,bounded_step)
+            if( .not. identifiable )then
                 status = merge(POSE_LM_ACCEPTED_IMPROVEMENT,POSE_LM_NO_RELIABLE_UPDATE,naccepted>0)
                 exit
             endif
-            if( sqrt(dot_product(scaled_gradient,scaled_gradient)) < 1.e-8_dp )then
+            if( stationary )then
                 status = merge(POSE_LM_ACCEPTED_IMPROVEMENT,POSE_LM_FINITE_NO_IMPROVEMENT,naccepted>0)
                 exit
             endif
-            hessian_scale = max(maxval(abs(scaled_hessian)),POSE_NUMERIC_FLOOR)
-            do axis = 1, 5
-                diagonal(axis) = max(scaled_hessian(axis,axis), &
-                    &sqrt(epsilon(1._dp))*hessian_scale,POSE_NUMERIC_FLOOR)
-            enddo
-            solve_matrix = scaled_hessian
-            do axis = 1, 5
-                solve_matrix(axis,axis) = solve_matrix(axis,axis)+mu*diagonal(axis)
-            enddo
-            call solve_pose_cholesky(solve_matrix,-scaled_gradient,scaled_direction,reliable)
             if( .not. reliable )then
                 status = POSE_LM_NO_RELIABLE_UPDATE
                 exit
             endif
-            direction = coordinate_scale*scaled_direction
             if( any(.not. ieee_is_finite(direction)) )then
                 status = POSE_LM_INVALID_NUMERICS
                 exit
             endif
-            ! Bound rotations in radians and shifts in pixels independently.
-            rotation_norm = sqrt(dot_product(direction(1:3),direction(1:3)))
-            if( rotation_norm > rotation_scale )then
-                direction(1:3) = direction(1:3)*(rotation_scale/rotation_norm)
-                bounded_trial = .true.
-            endif
-            shift_norm = sqrt(dot_product(direction(4:5),direction(4:5)))
-            if( shift_norm > 1._dp )then
-                direction(4:5) = direction(4:5)/shift_norm
-                bounded_trial = .true.
-            endif
+            bounded_trial = bounded_trial .or. bounded_step
             rotation_norm = sqrt(dot_product(direction(1:3),direction(1:3)))
             shift_norm = sqrt(dot_product(direction(4:5),direction(4:5)))
             max_rotation_step = max(max_rotation_step,rotation_norm)
@@ -1023,21 +995,16 @@ contains
             ! Gain ratio compares the recomputed reduction with the local model.
             actual = objective-trial_objective
             ratio = actual/predicted
-            if( actual > 0._dp .and. ratio >= 0.25_dp )then
+            accept_trial = actual > 0._dp .and. ratio >= 0.25_dp
+            call select_pose_lm_transaction(rotmat,shift,trial_rotmat,trial_shift,accept_trial, &
+                &selected_rotmat,selected_shift)
+            if( accept_trial )then
                 relative_reduction = actual/max(abs(objective),1._dp)
-                rotmat = trial_rotmat
-                shift = trial_shift
+                rotmat = selected_rotmat
+                shift = selected_shift
                 objective = trial_objective
                 gradient = trial_gradient
                 hessian = trial_hessian
-                do axis = 1, 5
-                    scaled_gradient(axis) = coordinate_scale(axis)*gradient(axis)
-                    do jaxis = 1, 5
-                        scaled_hessian(axis,jaxis) = &
-                            &coordinate_scale(axis)*hessian(axis,jaxis)*coordinate_scale(jaxis)
-                    enddo
-                enddo
-                call apply_pose_parameter_mask(scaled_gradient,scaled_hessian,active)
                 naccepted = naccepted+1
                 accepted_objectives(naccepted) = objective
                 if( present(accepted_rotmats) ) accepted_rotmats(:,:,naccepted) = rotmat
@@ -1052,6 +1019,116 @@ contains
         if( status == POSE_LM_ITERATION_LIMIT .and. naccepted == 0 .and. bounded_trial ) &
             &status = POSE_LM_STEP_BOUND_REJECTED
     end subroutine refine_pose_lm
+
+    !> Test-only access to the scaled LM system shared by the production driver.
+    subroutine pose_lm_system_test(gradient,hessian,rotation_scale,mu,objective,trial_objective, &
+        &active,scaled_gradient,scaled_hessian,damping_diagonal,solve_matrix,scaled_step, &
+        &physical_step,predicted,actual,ratio,identifiable,stationary,reliable,bounded,accepted)
+        real(dp), intent(in) :: gradient(5), hessian(5,5), rotation_scale, mu
+        real(dp), intent(in) :: objective, trial_objective
+        logical, intent(in) :: active(5)
+        real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
+        real(dp), intent(out) :: damping_diagonal(5), solve_matrix(5,5)
+        real(dp), intent(out) :: scaled_step(5), physical_step(5)
+        real(dp), intent(out) :: predicted, actual, ratio
+        logical, intent(out) :: identifiable, stationary, reliable, bounded, accepted
+
+        call build_pose_lm_system(gradient,hessian,rotation_scale,mu,active,scaled_gradient, &
+            &scaled_hessian,damping_diagonal,solve_matrix,scaled_step,physical_step, &
+            &identifiable,stationary,reliable,bounded)
+        predicted = 0._dp
+        actual = objective-trial_objective
+        ratio = 0._dp
+        accepted = .false.
+        if( .not. reliable ) return
+        predicted = -dot_product(gradient,physical_step)-0.5_dp* &
+            &dot_product(physical_step,matmul(hessian,physical_step))
+        if( predicted <= 0._dp .or. .not. ieee_is_finite(predicted) ) return
+        ratio = actual/predicted
+        accepted = actual > 0._dp .and. ratio >= 0.25_dp
+    end subroutine pose_lm_system_test
+
+    !> Test-only access to the complete-pose commit or rollback transaction.
+    pure subroutine pose_lm_transaction_test(input_rotmat,input_shift,trial_rotmat,trial_shift, &
+        &accepted,output_rotmat,output_shift)
+        real(dp), intent(in) :: input_rotmat(3,3), input_shift(2)
+        real(dp), intent(in) :: trial_rotmat(3,3), trial_shift(2)
+        logical, intent(in) :: accepted
+        real(dp), intent(out) :: output_rotmat(3,3), output_shift(2)
+
+        call select_pose_lm_transaction(input_rotmat,input_shift,trial_rotmat,trial_shift, &
+            &accepted,output_rotmat,output_shift)
+    end subroutine pose_lm_transaction_test
+
+    !> Commit both pose fields together or retain the complete input pose.
+    pure subroutine select_pose_lm_transaction(input_rotmat,input_shift,trial_rotmat,trial_shift, &
+        &accepted,output_rotmat,output_shift)
+        real(dp), intent(in) :: input_rotmat(3,3), input_shift(2)
+        real(dp), intent(in) :: trial_rotmat(3,3), trial_shift(2)
+        logical, intent(in) :: accepted
+        real(dp), intent(out) :: output_rotmat(3,3), output_shift(2)
+
+        if( accepted )then
+            output_rotmat = trial_rotmat
+            output_shift = trial_shift
+        else
+            output_rotmat = input_rotmat
+            output_shift = input_shift
+        endif
+    end subroutine select_pose_lm_transaction
+
+    !> Construct one scaled, damped, and independently bounded pose proposal.
+    pure subroutine build_pose_lm_system(gradient,hessian,rotation_scale,mu,active, &
+        &scaled_gradient,scaled_hessian,damping_diagonal,solve_matrix,scaled_step, &
+        &physical_step,identifiable,stationary,reliable,bounded)
+        real(dp), intent(in) :: gradient(5), hessian(5,5), rotation_scale, mu
+        logical, intent(in) :: active(5)
+        real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5)
+        real(dp), intent(out) :: damping_diagonal(5), solve_matrix(5,5)
+        real(dp), intent(out) :: scaled_step(5), physical_step(5)
+        logical, intent(out) :: identifiable, stationary, reliable, bounded
+        real(dp) :: coordinate_scale(5), ignored_step(5), hessian_scale
+        real(dp) :: rotation_norm, shift_norm
+        integer :: axis, jaxis
+
+        coordinate_scale = [rotation_scale,rotation_scale,rotation_scale,1._dp,1._dp]
+        do axis = 1, 5
+            scaled_gradient(axis) = coordinate_scale(axis)*gradient(axis)
+            do jaxis = 1, 5
+                scaled_hessian(axis,jaxis) = &
+                    &coordinate_scale(axis)*hessian(axis,jaxis)*coordinate_scale(jaxis)
+            enddo
+        enddo
+        call apply_pose_parameter_mask(scaled_gradient,scaled_hessian,active)
+        call solve_pose_cholesky(scaled_hessian,-scaled_gradient,ignored_step,identifiable)
+        stationary = sqrt(dot_product(scaled_gradient,scaled_gradient)) < 1.e-8_dp
+        damping_diagonal = 0._dp
+        solve_matrix = scaled_hessian
+        scaled_step = 0._dp
+        physical_step = 0._dp
+        reliable = .false.
+        bounded = .false.
+        if( .not. identifiable .or. stationary ) return
+        hessian_scale = max(maxval(abs(scaled_hessian)),POSE_NUMERIC_FLOOR)
+        do axis = 1, 5
+            damping_diagonal(axis) = max(scaled_hessian(axis,axis), &
+                &sqrt(epsilon(1._dp))*hessian_scale,POSE_NUMERIC_FLOOR)
+            solve_matrix(axis,axis) = solve_matrix(axis,axis)+mu*damping_diagonal(axis)
+        enddo
+        call solve_pose_cholesky(solve_matrix,-scaled_gradient,scaled_step,reliable)
+        if( .not. reliable ) return
+        physical_step = coordinate_scale*scaled_step
+        rotation_norm = sqrt(dot_product(physical_step(1:3),physical_step(1:3)))
+        if( rotation_norm > rotation_scale )then
+            physical_step(1:3) = physical_step(1:3)*(rotation_scale/rotation_norm)
+            bounded = .true.
+        endif
+        shift_norm = sqrt(dot_product(physical_step(4:5),physical_step(4:5)))
+        if( shift_norm > 1._dp )then
+            physical_step(4:5) = physical_step(4:5)/shift_norm
+            bounded = .true.
+        endif
+    end subroutine build_pose_lm_system
 
     !> Freeze inactive pose coordinates while retaining one five-vector LM path.
     pure subroutine apply_pose_parameter_mask( gradient, hessian, active )
