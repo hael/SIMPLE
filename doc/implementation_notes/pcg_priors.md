@@ -1,11 +1,11 @@
-# PCG priors: experiment record and the solvent/Wilson proposal
+# PCG priors: experiment record and the NU-evidence prior design
 
 ## Status
 
 This is the single reference for regularization of the PCG reconstruction
 backend: what exists on master, what was tried and removed (with the
-measurements that killed it), and the approved-for-staging proposal for a
-solvent-flatness prior and a Wilson molecular prior. It consolidates and
+measurements that killed it), and the approved development order for a direct
+NU-evidence prior followed by a Wilson molecular prior. It consolidates and
 replaces `pcg_euclid_crash_investigation.md`,
 `pcg_reconstruction_production_readiness.md`,
 `pcg_refine3D_integration_plan.md`, and
@@ -13,8 +13,12 @@ replaces `pcg_euclid_crash_investigation.md`,
 contracts live in `doc/policies/reconstruct3D_pcg_policy.md` and the PCG
 section of `doc/policies/refine3D_policy.md`.
 
-**All proposed features are opt-in and disabled by default.** Neither
-hard-zeros the solvent region.
+**Decision (2026-08-27): the direct NU-evidence prior is priority 1.** When NU
+regularization is active it replaces the FSC/SSNR `P_tau` replay precision; it
+is never added to `P_tau`. The binary NU-envelope solvent prior is scientifically
+retired and must be removed from the target workflow. Its implementation and
+measurements remain recorded below only as experiment history until the code is
+removed. Wilson is priority 2, after the NU prior has passed its gates.
 
 ## 1. Current regularization inventory (master)
 
@@ -29,6 +33,12 @@ The production PCG path performs, per state and half, one *base* solve and one
   warm-starts from the previous refinement iteration's ML half map when one
   exists (own half only, support re-masked after constant-FOV resampling,
   first-iteration `startvol` excluded), falling back to the base solution.
+- **Implemented solvent experiment, pending removal**: in NU-enabled PCG runs
+  with a valid `nu_envmask3D_stateNN.mrc`, master can also add the binary-
+  envelope solvent precision `lambda_s Q_s` to the ML replay. The calibrated
+  control currently defaults to `pcg_solvent_lambda_rel=0.1`. This is not the
+  approved target architecture after the 2026-08-27 decision; §4 and the
+  completed Stage 2--5 entries retain its algebra and measurements as history.
 - `lambda_0` is the fixed absolute base Tikhonov `PCG_LAMBDA = 1e-3`.
 - the soft spherical support `P` constrains the solve as `P H P u = P b`.
 - maps are stored at the data-quotient amplitude convention
@@ -63,12 +73,13 @@ Two historical defects, both fixed, whose lessons are contracts now:
   data-quotient convention; any future backend or prior must preserve
   scale continuity at handoffs.
 
-Prior priority (updated from the retired production-readiness note):
+Prior priority (decision 2026-08-27):
 
 | Idea | Priority | Recommendation |
 | --- | --- | --- |
-| solvent-flatness quadratic prior | first new-prior experiment | this proposal, §4 |
-| Wilson molecular precision | with solvent, as a `P_tau` spectrum source | this proposal, §5 |
+| direct NU-evidence-conditioned precision | **1 — immediate** | replace `P_tau` in NU mode; §3 and §5 |
+| Wilson molecular precision | **2 — after NU** | separate follow-on experiment; §5.5 |
+| binary-envelope solvent precision | retired | remove from the target workflow; preserve §4 as experiment history |
 | soft state weights | integration semantics | weight both `B` and `D` |
 | symmetry projection/permutation | performance only | after distributed profiling |
 | total variation / non-negativity / wavelet L1 | deferred | separate nonlinear/proximal solver project |
@@ -78,52 +89,82 @@ Any prior must preserve half independence, positive-semidefinite CG structure,
 conditioning, data-mass scaling, and separate reporting of fit and prior
 energy, and must be evaluated against a strength-zero control.
 
-## 3. Decision requested
+## 3. Approved architecture: mode-exclusive regularized replay
 
-Approve a staged experiment with the following fixed design:
+The regularized replay has one precision source selected by filtering mode.
+There is no additive stack of global ML, solvent, Wilson, and NU priors.
 
-1. Add a dimensionless control named `pcg_solvent_lambda_rel` with default
-   value `0.0`.
-2. Interpret a positive value as the strength of a graded solvent-flatness
-   prior relative to the PCG data scale.
-3. Use the previous available `nu_envmask3D_stateNN.mrc` as a molecular
-   envelope. Use its complement as solvent confidence.
-4. Hold the envelope fixed during each PCG solve and use the same envelope for
-   both half sets.
-5. **Add the solvent precision to the ML replay solves only.** The base
-   solves — and therefore the FSC — remain unregularized by the new priors.
-   Do not add another solve or raw-accumulator reload for this feature; the
-   existing cross-iteration ML warm start is retained unchanged.
-6. Calculate the ordinary FSC from the base (`_unfil`) pair as today, then run
-   the existing NU filtering and envelope-generation steps on the priored ML
-   pair.
-7. Treat the envelope generated in the current iteration as input to a later
-   iteration, never as mutable state inside the current PCG solve.
-8. If the NU envelope has a different grid but the same physical extent,
-   resample it by the factor-free constant-FOV Fourier pad/clip and re-clip
-   values to `[0,1]`; skip the priors for that iteration only when the
-   envelope is missing, invalid, or of mismatched physical extent. Do not
-   silently substitute a density mask or a spherical mask.
-9. Implement the Wilson molecular precision as a second *spectrum source* for
-   the existing `P_tau` mechanism (see §5), controlled by
-   `pcg_wilson_lambda_rel`, default `0.0` — not as a parallel prior array.
-10. Test four separate cases: neither prior, solvent only, Wilson only, and
-    both. Do not infer the value of the combination from either prior alone.
+### 3.1 Ordinary PCG mode
 
-Two verification prerequisites before any implementation:
+Outside NU mode, keep the production estimator unchanged:
+
+```text
+base:    (H_data + lambda_0 I) x = b
+replay:  (H_data + P_tau + lambda_0 I) x = b
+```
+
+`P_tau` remains the global FSC/SSNR shell precision derived from the current
+unregularized half pair and raw `D`. Nothing in the NU experiment changes or
+reinterprets this path.
+
+### 3.2 NU mode
+
+When the NU machinery is active, replace `P_tau` with one NU-evidence-
+conditioned precision `Q_NU(E)`:
+
+```text
+base:    (H_data + lambda_0 I) x = b
+evidence E = NU analysis(base_even, base_odd)
+replay:  (H_data + Q_NU(E) + lambda_0 I) x = b
+```
+
+The sequence is current-iteration empirical Bayes, exactly as the existing ML
+replay derives `P_tau` from the current base half pair. The NU evidence state is
+built after both base solves, then frozen before either replay. It contains no
+phase-bearing target and changes only the precision, never the RHS.
+
+Fixed rules:
+
+1. Derive `E` only from the unregularized `_unfil` even/odd pair. Do not let an
+   ML-priored auxiliary replacement candidate validate or parameterize its own
+   prior.
+2. Keep the base maps, FSC/cFAR, raw `(B,D)`, and resolution authority
+   unchanged.
+3. Attach exactly one replay precision. `P_tau` and `Q_NU` are mutually
+   exclusive; a hard assertion must reject simultaneous attachment.
+4. Generate no binary molecular envelope for PCG and take no complement to
+   manufacture solvent confidence. There is no `Q_s` in the NU target path.
+5. Preserve the spherical `mskdiam` support needed by the NU objective and its
+   noise/null estimation. Removing envelope generation does not make the NU
+   evidence domain self-defining.
+6. Keep the NU selected-cutoff/local-resolution products as evidence
+   diagnostics and, where required, LP-set bandwidth handoffs. Initially write
+   post-hoc `_nu_filt` maps only as controls; the in-solve NU replay is the
+   candidate matching reference.
+7. Preserve one base solve plus one replay per half and reuse the same raw
+   accumulation. No particle reread or third solve is introduced.
+8. Wilson is not mixed into this first experiment. It begins only after the
+   direct NU estimator passes Gate D.
+
+Two verification prerequisites apply to the NU operator:
 
 - **The `P H P` contract.** The algebra below assumes the support operator is
   applied on both sides of the normal operator and once on the RHS
   (`reconstruct3D_pcg_policy.md` §4 documents this as the contract); verify
   the shared `apply_normal` wrapper and RHS construction actually satisfy it
   before building on it.
-- **The deapodization domain.** With `l_deapod` off, the kernel path wraps the
-  KB envelope around the operator and the iterate lives in the enveloped
-  domain, where real-space solvent weights defined on the map domain would be
-  wrong. Restrict the feature to the deapodized kernel mode (hard error
-  otherwise), as `pcg_lambda_lap` did.
+- **The deapodization domain.** Any spatially varying NU precision is defined
+  on the deapodized map domain. Restrict it to deapodized kernel mode (hard
+  error otherwise), as the solvent experiment and `pcg_lambda_lap` did.
 
-## 4. The solvent-flatness prior
+## 4. Retired binary-envelope solvent experiment
+
+This section is an experiment record, not an implementation proposal. The
+operator was implemented and calibrated successfully, but the 2026-08-27
+decision supersedes its binary molecular/solvent partition with the direct NU
+precision of §5. Retain the algebra, gates, and real-data measurements so the
+experiment is not repeated; remove `Q_s`, its envelope loader, controls, and
+convergence guidance from the target workflow when the NU replacement lands.
 
 ### 4.1 Motivation and literature position
 
@@ -141,7 +182,7 @@ proposal keeps three ideas separate:
 
 - **Wilson prior:** a molecular mean/covariance model.
 - **LocScale operation:** local, phase-preserving amplitude rescaling against
-  an expected or reference spectrum (not PCG-compatible as-is, §5.4).
+  an expected or reference spectrum (not PCG-compatible as-is; Stage 8).
 - **Solvent prior:** expected low real-space variance in the solvent.
 
 ### 4.2 Graded solvent confidence
@@ -209,161 +250,224 @@ mode and the interpolation/deapodize path is least reliable near the padded
 corners, so removing `P` would add weakly constrained unknowns while the new
 prior is being evaluated.
 
-A free hypothesis this null space suggests (H6, §7): the known PCG low-shell
+A historical solvent-experiment hypothesis was that the known PCG low-shell
 anomalies — the k=1–2 backend amplitude excess (~1.3–2.0) and the centre-bin
 radial deficit — are plausibly solvent-offset/low-k noise behavior that `Q_s`
 addresses directly. The gated `rec3D_backends` shell and centre-bin
 diagnostics measure this for free. Re-baseline those numbers after the ML
 warm start is validated, since it moves them too.
 
-## 5. The Wilson molecular prior
+## 5. Direct NU-evidence-conditioned precision — priority 1
 
-### 5.1 Combined model
+### 5.1 Why the full NU state is the prior input
 
-The combination of solvent and molecular priors is a product-of-experts: the
-likelihood and both priors contribute additive negative log probabilities in
-complementary regions, and both remain fixed during a half solve, so the
-summed precision stays symmetric positive semidefinite. With
-`M = diag(m)` the soft molecular selector and `Q_W` a fixed Wilson-derived
-precision, the combined ML-replay system is
+The NU engine already evaluates a noise-whitened cross-half prediction cost
+`C_c(v)` for every retained local low-pass candidate. That full curve contains
+two kinds of information required by a reconstruction prior:
+
+- whether any reproducible signal is supported at voxel `v`;
+- the finest scale to which that signal remains supported, including the
+  confidence/ambiguity of the scale assignment.
+
+The current envelope path throws most of this information away. It reduces the
+bank to `C_20A - min_c C_c`, thresholds the scalar against a whole-support
+median/MAD null, solves a binary MRF, filters components, grows the result, adds
+a soft edge, and finally takes a complement for `Q_s`. The direct prior must
+consume a compact representation of the full candidate curve before that
+binary collapse.
+
+The existing bank still lacks one state needed for this use: the coarsest
+20-A label absorbs both solvent and genuinely coarse ordered density. Add an
+explicit **no-reproducible-signal** candidate or equivalent calibrated null
+score. The resulting latent state is
 
 ```text
-P [H_data + P_tau + lambda_0 I + lambda_s Q_s + lambda_W M Q_W M] P u
-    = P [b + lambda_W M Q_W mu_W]
+z(v) in {null, 20 A, 15 A, 12 A, 10 A, 8 A, 6 A, 5 A, 4 A, accepted extensions}
 ```
 
-For a zero Wilson mean (`mu_W = 0`, the recommended first form) the RHS is the
-data-only `b`. The envelope divides responsibility softly: `M` localizes the
-molecular prior, `w = p(1-m)` localizes solvent flatness; both act with
-reduced weight in the transition zone, deliberately, because a hard partition
-would ring at one mask contour.
+Its null-versus-signal evidence must remain cross-half predictive rather than a
+plain density threshold. Candidate likelihoods/confidences must be calibrated
+against the exact bank, whitening profile, and smoothing scales; raw Huber
+costs are not automatically normalized posterior probabilities.
 
-### 5.2 Implement Wilson as a `P_tau` spectrum source
+### 5.2 Compact evidence state
 
-A shell-diagonal Wilson precision
-`Q_W = F* diag(q_W(k)) F`, with `q_W(k)` the regularized inverse expected
-molecular variance, is *structurally the same object* as the existing
-FSC/SSNR `ml_prior` — a per-shell Fourier diagonal in both the operator and
-the preconditioner. Do not build a second array with its own plumbing:
-implement Wilson as an alternative or modulating **spectrum source** for the
-one existing `P_tau` mechanism. This settles §5.5's overlap problem by
-construction (there is one shell-diagonal precision, with a declared spectrum
-provenance: FSC-derived, Wilson-derived, or a documented combination), puts
-Wilson into the preconditioner for free, and follows the repository's
-one-path rule.
+Do not persist `dmats_mask(n_vox,n_candidates)` between reconstruction phases.
+Before releasing it, reduce it to the sufficient state needed by the solver:
+
+- `a_b(v)`: monotone support/confidence that detail band `b` is reproducible;
+- the selected local cutoff for diagnostics and LP-set handoff;
+- an uncertainty measure such as best-versus-next margin or label entropy;
+- the null calibration/provenance needed to reproduce the mapping.
+
+Use the existing ordered-label spatial model to regularize this state, but do
+not force it through binary topology, component removal, dilation, or a mask
+edge. Confidence must remain graded through molecular boundaries and ambiguous
+domains.
+
+### 5.3 Quadratic precision
+
+Let `B_b` be a normalized detail/band-pass analysis operator and let `W_b` be a
+nonnegative spatial weight derived monotonically from lack of evidence for
+band `b`. Define
+
+```text
+R_NU(x | E) = 1/2 sum_b || sqrt(W_b) B_b x ||^2
+Q_NU(E)     = sum_b B_b^T W_b B_b
+```
+
+Every summand is positive semidefinite, so the fixed replay operator remains
+symmetric positive definite after `lambda_0 I` and the existing `P H P`
+support sandwich. The detail bank should exclude the global DC mode, making a
+constant field a null mode of the NU precision without constructing a solvent
+mean explicitly.
+
+The one field has the required limiting behavior:
+
+- null evidence: penalize all non-DC detail, which yields solvent flattening;
+- coarse ordered density: preserve supported coarse bands and suppress finer
+  unsupported bands;
+- strong ordered density: preserve detail through the evidenced local cutoff;
+- uncertain boundaries: grade the precision continuously instead of choosing
+  a molecular/solvent side.
+
+The initial implementation should use three or four broad, normalized detail
+bands rather than one operator per NU label. Record the frame normalization so
+adding bands does not silently increase total strength. A full 8--16-label
+operator is justified only after the compact form demonstrates scientific gain
+and acceptable replay cost. The preconditioner needs a declared nonnegative
+approximation to the NU precision; scientific comparisons must still be made
+at matched convergence, not matched iteration count.
+
+### 5.4 Relationship to global ML regularization
+
+`Q_NU` is the nonstationary empirical-Bayes alternative to `P_tau`, not a
+correction layered on top. The existing global ML path maps shell FSC to SSNR
+and scales its precision by shell-mean raw `D`. The NU development must define
+and validate the corresponding mapping from calibrated local evidence to
+bandwise precision. Until that mapping is established, the evidence field is
+a detection/selection statistic, not yet a quantitatively normalized prior.
+
+The mode assertion is load-bearing:
+
+```text
+ordinary mode: P_tau present, Q_NU absent
+NU mode:       P_tau absent,  Q_NU present
+```
+
+### 5.5 Wilson molecular prior — priority 2
+
+Wilson supplies population information about molecular Fourier covariance,
+especially where the experiment is uninformative. NU evidence cannot contain
+information the data never observed, but the first question is whether such
+extrapolation is needed at all: the conservative NU estimator regularizes only
+the degrees of freedom the half-map evidence does not support.
+
+Only after the direct NU estimator passes Gate D should a Wilson experiment
+begin. Keep it separate from the NU acceptance experiment. The first Wilson
+form remains a zero-mean, shell-diagonal precision
+`Q_W = F* diag(q_W(k)) F`, implemented through one declared spectrum-source
+path rather than a parallel Fourier array. Compare Wilson against the accepted
+NU estimator; do not combine them until each has an independently established
+benefit and a separate combination experiment is approved.
 
 Singer derives the non-diagonal covariance of Fourier coefficients from the
-random bag-of-atoms model [5]; Gilles and Singer use the corresponding mean
-and covariance as a Bayesian molecular prior [6]. The shell-diagonal
-approximation is the lowest-risk first form; off-diagonal structure [5,6] and
-LocScale-informed *local* covariance profiles (sums of
-`M R_j^T F* diag(q_W,j) F R_j M`, each positive semidefinite) are later
-experiments — the local form costs many small FFTs per matvec.
+random bag-of-atoms model [5]; Gilles and Singer use the corresponding mean and
+covariance as a Bayesian molecular prior [6]. Off-diagonal structure, nonzero
+means, and LocScale-informed local covariances remain later experiments. A
+nonzero or phase-bearing mean is outside the first Wilson scope.
 
-A zero-mean choice adds only precision — it suppresses coefficients according
-to expected variance and does **not** force a target amplitude spectrum. A
-nonzero Wilson mean adds a fixed prior term to the RHS and needs stronger
-provenance and bias controls.
-
-### 5.3 Why LocScale is not directly another PCG matrix term
-
-LocScale multiplies observed local Fourier amplitudes by a scale derived from
-a reference-to-observation power ratio while preserving phases [1,2]; the
-scale depends on the current map, so the corresponding penalty is nonlinear in
-`x` and its Hessian is not a fixed SPD operator — applying it inside
-`apply_normal` breaks linearity. The PCG-compatible interpretations are (a)
-the fixed Wilson covariance above (recommended first) and (b) a *lagged*
-quadratic surrogate frozen at iteration start — a nonlinear outer fixed-point
-method with many local FFTs, whose phase-bearing targets must be half-specific
-and lagged (a merged phase-bearing target would directly compromise half-set
-independence; a common radial variance curve contains no phase and is the
-safer first experiment).
-
-## 6. Workflow, mask contract, and bias discipline
+## 6. Workflow, evidence contract, and bias discipline
 
 ### 6.1 Per-state sequence (one particle accumulation, two solve phases)
 
-1. Resolve and validate (or constant-FOV-resample, §3 item 8) the previous
-   state-specific NU envelope; construct the fixed Wilson spectrum before
-   either half solve.
-2. Reduce the raw, data-only even and odd statistics as today.
-3. Base-solve each half unchanged (`P_tau = 0`, no new priors), write the
-   `_unfil` pair, and compute FSC/cFAR from it — the FSC keeps its current,
-   unregularized meaning.
-4. Build `P_tau` from the FSC (or the Wilson spectrum source, per §5.2), add
-   `lambda_s Q_s`, and run each half's ML replay with the existing
-   cross-iteration warm start.
-5. Write the standard maps, run NU filtering and envelope generation, and
-   publish the new envelope for a later iteration.
+1. Reduce the raw, data-only even and odd statistics as today.
+2. Base-solve each half unchanged, with neither `P_tau` nor `Q_NU`; retain and
+   write the `_unfil` pair.
+3. Compute FSC/cFAR from that pair. It remains the unregularized resolution
+   authority and is not used as a second NU replay precision.
+4. If NU mode is inactive, build `P_tau` and run the existing ML replay.
+5. If NU mode is active, run the NU candidate/null analysis on the current
+   base pair, compact and freeze the evidence state, build `Q_NU`, assert that
+   `P_tau` is absent, and replay both halves with the same fixed precision.
+6. Write the standard replay maps. Retain selected-cutoff/local-resolution and
+   post-hoc NU products as diagnostics during validation; generate no PCG
+   solvent envelope.
 
-### 6.2 Mask contract
+### 6.2 Evidence contract
 
-Accept only the state-specific NU evidence envelope; never fall back to the
-spherical NU support or `automask3D_stateNN.mrc` silently. Validate before a
-solve: file presence and complete read; finite values; documented
-molecular-envelope convention; clip/reject outside `[0,1]`; nonzero `S` and an
-adequate effective solvent population; same physical extent as the
-reconstruction grid (resample per §3 item 8 when the lattice differs); one
-fixed mask identity for both halves and all iterations of each solve. Emit the
-diagnostics:
+The direct prior accepts only evidence derived from the current state's
+unregularized even/odd base pair. Validate before replay:
+
+- identical dimensions, sampling, and physical extent for the base halves;
+- finite, nonnegative candidate costs and a valid radial whitening profile;
+- a nonempty spherical `mskdiam` support with an adequate null population;
+- exact candidate-bank, smoothing, extension, and null-calibration provenance;
+- monotone band-support confidences in `[0,1]` and finite nonnegative precision
+  weights;
+- one immutable evidence identity used for both half replays.
+
+Emit at least:
 
 ```text
-pcg_solvent_prior_enabled=  pcg_solvent_mask_file=   pcg_solvent_mask_min/max=
-pcg_solvent_weight_sum=     pcg_solvent_weight_fraction=
-pcg_solvent_lambda_rel/eff= pcg_solvent_mean_final=  pcg_solvent_rms_final=
-pcg_solvent_penalty_final=  pcg_solvent_skip_reason=
-pcg_wilson_prior_enabled=   pcg_wilson_mode=         pcg_wilson_lambda_rel/eff=
-pcg_wilson_profile_source=  pcg_wilson_profile_min/max= pcg_wilson_penalty_final=
+pcg_replay_prior_mode=global_ml|nu_evidence
+pcg_nu_prior_enabled=  pcg_nu_candidate_count=  pcg_nu_null_fraction=
+pcg_nu_supported_fraction_bandNN=  pcg_nu_uncertain_fraction=
+pcg_nu_prior_energy_final=  pcg_nu_preconditioner_mode=
+pcg_nu_evidence_source=base_unfil  pcg_nu_evidence_provenance=
 ```
 
-An invalid or evidence-null mask must produce a clear skip reason; a positive
-user setting must never select a different mask type without notice.
+There is no mask loader, missing-envelope skip, mask resampling, morphology,
+or silent fallback in the NU prior path. Failure to construct valid evidence
+must be explicit; fallback policy, if any, is a workflow decision rather than
+an inferred substitute prior.
 
 ### 6.3 Half-set and bias discipline
 
-Both halves may use the same fixed spatial prior, but a common prior can
-correlate their errors. With the priors confined to the ML replay, the
-reported FSC remains that of the unregularized base pair — but the lag-one
-feedback through the NU envelope remains: priored maps influence the next
-iteration's envelope. Therefore: record envelope occupancy/overlap across
-iterations so support shrinkage is visible; keep raw accumulators
-half-specific and unchanged; fix the envelope before either half solve; share
-only phase-free Wilson parameters; make scientific comparisons against
-separate strength-zero runs; and prefer map-to-truth or independent
-map-to-model measures over half-map FSC [10,11].
+Both halves use the same fixed scalar confidence/bandwidth field, so their
+errors can still become correlated even though the prior has no phase-bearing
+mean. The reported FSC must therefore remain that of the unregularized base
+pair. Keep raw accumulators half-specific and unchanged; freeze the evidence
+before either replay; report shipped-pair FSC only as a correlation-inflation
+diagnostic; compare against the ordinary `P_tau` estimator using map-to-truth,
+independent map-to-model, or held-out predictive evidence; and track local-
+cutoff/confidence overlap across refinement iterations. Deriving the field
+from the current base pair removes lagged envelope feedback, but matching
+against the NU-regularized replay map remains an outer refinement feedback
+loop and weak omitted domains must be tested explicitly.
 
 ### 6.4 Ownership
 
 | Concern | Owner |
 | --- | --- |
-| CLI/defaults/validation | `parameters`, dictionaries, UI (both strengths default `0.0`, reject negatives) |
-| Numerical priors | `src/main/volume/simple_reconstructor_pcg.f90` (fixed solvent weights and Wilson spectrum state; actions behind the shared normal-operator wrapper, after the data operator and inside the support sandwich) |
-| PCG refinement assembly | `simple_rec3D_pcg_strategy.f90` (resolve one lagged envelope and one fixed spectrum per state; attach to the ML replays) |
-| NU envelope generation | `simple_commanders_rec_distr.f90` and NU modules (unchanged order; publish for a later iteration) |
+| Mode selection/defaults/validation | `parameters`, dictionaries, UI, and refinement policy; ordinary global ML versus NU replay is explicit and mutually exclusive |
+| Numerical precision | `src/main/volume/simple_reconstructor_pcg.f90` (fixed NU evidence state behind the shared normal-operator wrapper and inside the support sandwich) |
+| Evidence construction | `src/main/nu_filt/` (null candidate, full unary reduction, spatial regularization, compact band-confidence state) |
+| PCG reconstruction orchestration | `simple_rec3D_pcg_strategy.f90` and assembly owner (base pair -> FSC -> evidence -> one replay; shared/distributed parity) |
+| NU diagnostics/LP handoff | `simple_commanders_rec_distr.f90` and NU modules; avoid recomputing an inconsistent second evidence state |
 | Policy record | `reconstruct3D_pcg_policy.md`, `nonuniform_filtering_policy.md` |
 
-The raw `(B,D)` format does not change; mask and strengths are solve-time
-state, never accumulated into `D`; a nonzero Wilson mean contributes to a
-solve-time RHS, not to raw `B`; loading a prior triggers no raw re-read.
+The raw `(B,D)` format does not change. NU evidence and precision are
+solve-time state, never accumulated into `D`; constructing the prior triggers
+no particle or raw-artifact reread.
 
 ## 7. Hypotheses
 
-- **H1:** At a useful positive strength, the solvent prior reduces weighted
-  solvent RMS without material loss of molecular signal.
-- **H2 (architectural invariant):** With both strengths zero, outputs are
-  identical to the current route; with positive strengths, raw `(B,D)`, the
-  base solves, and the FSC are unchanged, and the solve structure remains one
-  base solve plus one ML replay per half.
-- **H3:** A soft NU envelope is more robust to boundary error than a hard
-  solvent projection, especially for weak peripheral density.
-- **H4 (performance gate):** Prior actions cost little against the PCG data
-  operator, and the production iteration budget still converges the ML replay
-  (measured, not assumed — see Gate C).
-- **H5:** Wilson and solvent precisions are complementary: the combination
-  improves molecular spectral behavior and solvent flatness jointly, not by
-  trading one for the other.
-- **H6:** The solvent prior reduces the PCG k=1–3 amplitude excess and the
-  centre-bin deficit measured by the gated `rec3D_backends` diagnostics.
+- **H1:** A single NU-conditioned replay suppresses unsupported solvent and
+  high-resolution variation without a binary molecular/solvent partition.
+- **H2 (architectural invariant):** Selecting NU replay changes neither raw
+  `(B,D)`, the base solves, nor FSC/cFAR, and preserves one base solve plus one
+  replay per half.
+- **H3:** The explicit null state preserves genuinely coarse ordered density
+  better than treating the 20-A saturating label as solvent.
+- **H4:** `Q_NU` produces at least the scientific benefit of post-hoc NU
+  filtering while participating in deconvolution and improving or preserving
+  replay conditioning.
+- **H5:** NU replay outperforms the ordinary global `P_tau` replay on
+  heterogeneous/local-resolution data without degrading uniform high-SNR
+  cases materially.
+- **H6 (performance gate):** The compact band operator and its preconditioner
+  reach matched residual accuracy within an operationally acceptable budget.
 
 Record numerical thresholds for "material loss", parity, convergence, and
 acceptable overhead *before* the real-data sweep.
@@ -372,106 +476,94 @@ acceptable overhead *before* the real-data sweep.
 
 ### Gate A: algebra and operator identity
 
-Small synthetic volumes, fixed masks: linearity of `Q_s`; the dot-product
-identity `<x, Q_s y> = <Q_s x, y>`; nonnegative quadratic form; `Q_s 1 = 0`;
-zero action where solvent confidence is zero; continuity across a graded mask
-edge; penalty gradient vs finite differences; unchanged
-kernel-vs-matrix-free data-operator comparison; default-off numerical
-identity; self-adjointness and nonnegative curvature of the Wilson action and
-of the summed prior action; correct prior-RHS for a synthetic nonzero Wilson
-mean. Failure of symmetry, curvature, or default-off identity blocks all
-workflow tests.
+Small synthetic volumes and fixed evidence fields: linearity of `Q_NU`; the
+dot-product identity `<x,Q_NU y>=<Q_NU x,y>`; nonnegative quadratic form;
+constant/DC null behavior; zero action for a fully supported band; monotone
+action as evidence is withdrawn; continuity under small confidence changes;
+penalty gradient versus finite differences; correct `P(H+Q_NU)P`
+composition; hard failure when `P_tau` and `Q_NU` are both requested; and
+unchanged ordinary-mode numerical identity. Mutation tests must break the
+adjoint factorization, band ordering, mode exclusion, and evidence freeze.
 
 ### Gate B: workflow and artifact invariants
 
-Enabling the priors: does not change raw `(B,D)` checksums; leaves the base
-solves and the FSC bit-identical; performs exactly one ML replay per populated
-half; uses the same envelope for even and odd; keeps shared/distributed
-parity under the existing deterministic-reduction tolerance; records a clear
-skip when the envelope is absent; generates the NU envelope only after both
-solve phases and the FSC; reproduces current outputs at strength zero.
+Selecting NU replay does not change raw `(B,D)` checksums; leaves the base
+solves and FSC bit-identical; performs exactly one replay per populated half;
+derives evidence from `_unfil` maps without an ML auxiliary candidate; freezes
+one evidence identity for even and odd; never attaches `P_tau`; generates no
+PCG solvent envelope; keeps shared/distributed parity under the existing
+deterministic-reduction tolerance; and leaves ordinary global-ML mode
+bit-identical.
 (Fractional/trailing reconstruction is hard-errored on the PCG path today,
 which keeps this gate's surface small; revisit when that guard lifts.)
 
 ### Gate C: controlled scientific tests — with convergence isolation
 
-The direct lesson of the removed nu^4 prior: at production iteration budgets,
-measured "prior effects" are confounded with ML-replay under-convergence, and
-`D_s` is real-space diagonal — not representable in the Fourier-diagonal
-preconditioner — so some per-iteration convergence cost is guaranteed.
+The direct lesson of the removed nu^4 prior is that, at production iteration
+budgets, measured "prior effects" are confounded with replay under-convergence.
+The spatially varying NU precision is not representable exactly by the current
+Fourier-diagonal preconditioner, so convergence cost must be measured.
 **Scientific comparisons run at converged settings** (high `maxits_pcg` /
 tight `rtol`); the production-budget behavior is measured separately as H4.
 
 Harness: the neutral-phantom fixture and the gated `rec3D_backends`
 ground-truth mode (map-to-truth FSC, radial LS profiles, background handling,
 centre-bin and shell diagnostics) already provide the measurement
-infrastructure; the eroded/dilated/omitted-envelope runs drop straight into
-it. Measure: weighted solvent RMS vs the matched strength-zero run; FSC to
-ground truth (not only half-map FSC); molecular-region RMS change; boundary
-ringing and leakage; recovery of a deliberately weak peripheral domain
-(the omitted-domain envelope is the main bias test); PCG residual history and
-stop reason; the H6 low-shell/centre diagnostics.
+infrastructure. Measure map-to-truth FSC (not only half-map FSC), local
+resolution calibration, background variation, boundary ringing/leakage,
+recovery of deliberately weak and coarse peripheral domains, PCG residual
+history/stop reason, alignment overlap, and shipped-versus-base half-map
+correlation inflation.
 
-First real-data sweep (exploratory, not a production default):
+The first ablation is deliberately two-way:
 
-```text
-pcg_solvent_lambda_rel = 0, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1
-```
+| Run | Replay precision | Purpose |
+| --- | --- | --- |
+| A | existing global FSC/SSNR `P_tau` | Production estimator/control. |
+| B | direct `Q_NU`, with `P_tau` absent | Isolate the complete NU estimator. |
 
-each point a separate reconstruction with identical particles, poses, raw
-accumulators, converged solver settings, and incoming NU envelope. Then the
-factorial ablation:
-
-| Run | Solvent | Wilson | Purpose |
-| --- | --- | --- | --- |
-| A | off | off | Current estimator. |
-| B | on | off | Isolate solvent flatness. |
-| C | off | on | Isolate molecular spectral regularization. |
-| D | on | on | Complementarity or antagonism. |
-
-All four with the same particles, poses, incoming envelope, Wilson spectrum,
-band, and solver settings. Tune neither strength from half-map FSC alone;
-prefer held-out predictive likelihood, map-to-truth FSC, or independent
-map-to-model comparison. Continue selected strengths across refinement
-iterations and monitor envelope occupancy/overlap for lagged feedback.
+Use identical particles, poses, raw accumulators, base maps, candidate bank,
+and converged solver settings. Within B, sweep only one declared NU precision
+temperature/strength if calibration has not eliminated it. Do not tune from
+half-map FSC alone; prefer held-out predictive likelihood, map-to-truth FSC,
+or independent map-to-model comparison. Wilson is not part of this gate.
 
 ### Gate D: acceptance for an experimental release
 
-All algebraic and workflow invariants pass; no default-off output changes; FSC
-increases are supported by independent truth/model evidence; weak-domain
-recovery is not systematically worse under reasonable mask perturbations; the
-combination outperforms or sits on a useful Pareto frontier vs both single
-priors; the chosen strength reduces solvent variance without material
-molecular loss; per-half convergence stays within the operational budget or a
-measured new budget is approved; shared and distributed routes agree. No
-positive production default from one specimen.
+All algebraic and workflow invariants pass; ordinary global-ML outputs are
+unchanged; improvements are supported by independent truth/model or held-out
+evidence; coarse and weak-domain recovery is not systematically worse;
+background suppression does not require a binary envelope; the NU replay
+outperforms or sits on a useful quality/cost frontier versus `P_tau`; per-half
+convergence stays within the operational budget or a measured new budget is
+approved; and shared/distributed routes agree. Only then does Wilson become
+the active development priority.
 
 ## 9. Risks and mitigations
 
 | Risk | Consequence | Mitigation |
 | --- | --- | --- |
-| Envelope misses weak molecular density | Real signal flattened as solvent. | Soft NU envelope, lag-one, eroded/omitted-mask tests, default off. |
-| Priored maps influence the next envelope | Lagged self-reinforcing support shrinkage. | Track occupancy/overlap; omitted-domain tests; hysteresis only if shrinkage appears. |
-| Common prior inflates half-map correlation | Misleading resolution estimate. | Priors in the ML replay only (FSC stays base-pair); independent truth/model evidence required. |
-| Wilson duplicates the FSC/SSNR precision | Shrinkage credited to a new physical prior. | One `P_tau` mechanism with a declared spectrum source (§5.2); ablation. |
+| Null state fails to separate solvent from coarse density | Real coarse signal is over-regularized. | Explicit no-signal competitor; coarse-domain synthetic gate; calibrate against the exact bank. |
+| Huber costs treated as posterior probabilities | Arbitrary and nonportable precision scale. | Calibrated null/temperature with recorded bank, whitening, and smoothing provenance. |
+| Evidence-derived replay map drives later alignment | Self-reinforcing local-bandwidth loss. | Current base-pair evidence, full spherical support, weak/omitted-domain recovery tests, field-overlap tracking. |
+| Common evidence precision inflates half-map correlation | Misleading shipped-pair FSC. | Resolution from base pair only; shipped FSC diagnostic only; independent truth/model evidence. |
+| `P_tau` accidentally remains active | Uninterpretable combined estimator. | Hard mutual-exclusion assertion and mutation test. |
+| Wilson is introduced before NU is resolved | Multiple moving scientific variables. | Wilson starts only after NU Gate D. |
 | LocScale amplitude target treated as linear | Operator depends on `x`; PCG assumptions fail. | Fixed Wilson covariance or a lagged surrogate; never rescale inside `apply_normal`. |
 | Common LocScale target carries phases | Half errors directly correlated. | Share only phase-free profiles; lagged, half-specific otherwise. |
-| Incomparable prior normalizations | Relative strengths uninterpretable. | Normalize each precision on its effective support before the common data scale. |
-| Outside-support zeros dominate the mean | Unintended zero-density penalty. | Include broad support in `w_v`. |
-| `L` added instead of `L^T L` | Loss of symmetry; PCG failure. | Implement `Q_s = D_s - s s^T/S` directly; Gate A identity. |
-| Solvent population too small | Unstable mean, ineffective prior. | Minimum effective weight; skip with diagnostic. |
+| Overlapping detail bands change total strength | Candidate-bank size silently changes regularization. | Declared frame/band normalization; parity test when refining the bank. |
 | Prior effect confounded with under-convergence | Wrong scientific conclusions (the nu^4 lesson). | Gate C convergence isolation; H4 measured separately. |
-| Preconditioner cannot represent `D_s` | Iteration-count regression at production budgets. | Measure; if material, assess a symmetric approximation to `lambda_s D_s` (rank-one term stays exact) with its own parity study. |
-| Envelope grid mismatch at stage handoffs | Prior silently off for a stage. | Constant-FOV resample + `[0,1]` re-clip (§3 item 8). |
-| Silent mask fallback | Uninterpretable experiment. | No fallback in the first implementation. |
+| Preconditioner cannot represent spatial `Q_NU` exactly | Iteration-count regression at production budgets. | Nonnegative declared approximation; matched-convergence science; cost gate. |
+| A second NU pass builds different evidence | Replay and postprocess disagree about local support. | Construct once from base halves; share the compact state with diagnostics/LP handoff. |
 
 ## 10. Staged development plan
 
-Each stage ends at a gate; a later stage does not begin until the preceding
-gate passes and the stage's changes are committed (trunk development;
-everything default-off, so master is protected throughout). "Fixture" means
-the neutral-phantom project with ground truth plus the gated
-`test=rec3D_backends`.
+Each active stage ends at a gate; a later stage does not begin until the
+preceding gate passes and the stage's changes are committed. New NU behavior
+must be explicit and protected while the existing ordinary global-ML path
+remains unchanged. "Fixture" means the neutral-phantom project with ground
+truth plus the gated `test=rec3D_backends`. Stages 2--5 below are retained as
+the completed/superseded solvent experiment record, not as active work.
 
 ### Cross-cutting rules (the distilled foot-gun list)
 
@@ -492,22 +584,20 @@ the neutral-phantom project with ground truth plus the gated
   evidence decide.
 - **R7 — reliability changes require a measured control** at matched n (the
   `ref_taper` lesson: master's own failure rate was 1/10).
-- **R8 — plumbing before math.** Ship inert loaders/diagnostics first so mask
-  handling and operator algebra are never debugged simultaneously.
+- **R8 — evidence plumbing before operator math.** First expose the null
+  candidate and compact immutable evidence state, then attach `Q_NU`.
 - **R9 — record acceptance thresholds in this document before running the
   experiment that is judged by them.**
-- **R10 — every prior is an independent toggle.** One strength control per
-  prior, default `0.0` = off, forwarded intact through `abinitio3D` ->
-  `refine3D` -> the solver, with any combination selectable. This is both the
-  experimental design (factorial ablation by command line) and the
-  application path: refine3D is the work-horse everything else depends on,
-  so a validated prior is deployed by turning its flag on — no new
-  integration step.
+- **R10 — replay precisions are mode-exclusive.** Ordinary PCG attaches
+  `P_tau`; NU PCG attaches `Q_NU`. No command-line combination may activate
+  both. Wilson is a later estimator choice, not an additive knob in the NU
+  acceptance experiment.
 
-### Stage 0 — close out in-flight work (blocking)
+### Stage 0 — historical warm-start foundation
 
-The cross-iteration ML warm start is implemented and unvalidated; it changes
-the baselines (R2).
+The cross-iteration ML warm start changed the baselines against which the
+solvent experiment was measured (R2). These entries are retained as history;
+they do not block the active Stage 6 NU design.
 
 - 0.1 **VALIDATED (2026-08-25):** the cross-iteration warm start produces a
   clean bgal map with a sensible resolution estimate at production settings.
@@ -529,7 +619,7 @@ the baselines (R2).
   unless kernel + deapodized) is called at both ML-replay attach sites —
   shared `regularize_state_half` and distributed `reduce_solve_state_half`.
 - 1.3 **DONE, refine3D diagnostics check pending (2026-08-25).** Inert
-  `report_solvent_envelope_status` in the strategy runs the S6.2 contract
+  `report_solvent_envelope_status` in the strategy runs the former mask contract
   (presence, cubic lattice, physical-extent identity, constant-FOV
   `read_and_crop` resample on lattice mismatch, finiteness, `[0,1]` re-clip,
   nonzero solvent evidence) and emits the `pcg_solvent_*` block with
@@ -540,7 +630,7 @@ the baselines (R2).
   there — the envelope-absent skip and the resample demo must be read from
   the next production refine3D/abinitio3D run.
 
-### Stage 2 — solvent `Q_s` operator, Gate A (algebra), default off
+### Stage 2 — historical solvent `Q_s` operator record
 
 **DONE (2026-08-25).** `Q_s` lives in `simple_reconstructor_pcg`
 (`set_solvent_prior` / `apply_solvent_precision` / `get_solvent_stats`):
@@ -570,7 +660,7 @@ usable envelope.
 - Remaining for Stage 3: shared vs `nparts=2` parity at a positive strength,
   abinitio3D/refine3D forwarding, `rec3D_backends` strength registration.
 
-### Stage 3 — workflow integration incl. abinitio3D, Gate B (invariants)
+### Stage 3 — historical solvent workflow-integration record
 
 **Implementation DONE (2026-08-25); real-data gate items pending.**
 `pcg_solvent_lambda_rel` is registered on `refine3D` and `abinitio3D`
@@ -687,8 +777,8 @@ the A/B capability R10 requires for the remaining Gate C envelope-variant
 tests and for calibration on new dataset classes. With default-on, an ABSENT
 envelope is the normal lag-one state (early iterations, gridding-era
 projects) and produces only the diagnostic block; a PRESENT-but-unusable
-envelope (extent mismatch, invalid values) still warns loudly. The S6.2
-never-substitute-a-mask rule is unchanged.
+envelope (extent mismatch, invalid values) still warns loudly. The former
+never-substitute-a-mask rule remained in force for that experiment.
 
 ### Stage 5 record: streptavidin sweep (2026-08-27, minimal-invocation harness)
 
@@ -871,8 +961,8 @@ control and must be bit-identical; with `ml_reg=yes` the truth LS-profile
 check is reported as a diagnostic rather than gated (the shipped maps are
 ML-regularized; the gate is calibrated on unregularized maps). The
 envelope-tuning knobs (`nu_msk_sig/beta/dens`, `amsklp`) let the same loop
-drive the Gate C eroded/dilated envelope variants without touching the
-reconstruction inputs. Every S8.2 sweep value of `pcg_solvent_lambda_rel`
+drive the former Gate C eroded/dilated envelope variants without touching the
+reconstruction inputs. Every historical sweep value of `pcg_solvent_lambda_rel`
 reuses the same envelope file — one `nu_filt3D` call per envelope variant,
 one `rec3D_backends` call per strength. **Validated on the neutral fixture
 (2026-08-25):** a 20-second single-iteration refine3D seeds
@@ -880,26 +970,27 @@ one `rec3D_backends` call per strength. **Validated on the neutral fixture
 files; the loop then activates the prior end-to-end
 (`pcg_solvent_prior_enabled=T`, per-half lambda_eff/mean/rms/penalty lines).
 
-### Stage 4 — Gate C science, synthetic (converged settings, R3)
+### Stage 4 — retired solvent Gate C plan (do not execute)
 
 - Record thresholds first (R9): "material molecular loss", acceptable
   weighted-solvent-RMS reduction, omitted-domain damage bound.
 - Fixture sweep at converged settings; envelope variants: true, eroded,
-  dilated, omitted-domain (the bias test); measure H1/H3/H6 + map-to-truth
-  FSC + boundary ringing + residual histories; the cheap locres-diagonal
-  control (§11.3) runs in the same sweep.
-- Abort criterion: if omitted-domain damage exceeds its bound at every
-  useful strength, stop; the §11.2 aux-competition validator becomes a
-  prerequisite, not an option.
+  dilated, omitted-domain (the bias test); measure the former solvent
+  hypotheses plus map-to-truth
+  FSC + boundary ringing + residual histories; the former cheap locres-
+  diagonal control was planned for the same sweep.
+- Abort criterion: if omitted-domain damage exceeds its bound at every useful
+  strength, stop; the former aux-competition validator would have become a
+  prerequisite rather than an option.
 
-### Stage 5 — Gate C science, real data + cost
+### Stage 5 — retired solvent Gate C plan and completed measurements
 
 - **Primary real-scenario harness: abinitio3D with `automsk=yes` in the late
   stages, prior flags on vs off, everything else identical.** Because the
   toggles ride the existing refine3D plumbing (R10), the A/B is two command
   lines differing only in prior strengths — a direct comparison in the exact
   configuration applications will use. Read: final map quality and
-  resolution, the DIAG trajectory, the H6 low-shell/centre diagnostics from
+  resolution, the DIAG trajectory, the historical low-shell/centre diagnostics from
   a post-run `rec3D_backends`, and the solvent RMS diagnostics.
 - Standalone sweeps on bgal and streptavidin at converged settings against
   matched strength-zero runs (fixed poses, isolates the estimator); then H4
@@ -909,105 +1000,122 @@ files; the loop then activates the prior end-to-end
   the recorded intrinsic ~1/10 rate; treat small-n differences as noise
   unless they replicate.
 
-### Stage 6 — Wilson spectrum source
+### Stage 6 — direct NU-evidence replay — active priority 1
 
-Sequential after solvent (one variable, R1), reusing the `P_tau` mechanism
-(§5.2):
+6.1 Evidence contract, no solver behavior change:
 
-- Gate A addition: swapping spectrum *source* with an identical spectrum is
-  bit-identical (mechanism/spectrum separation proven); PSD and curvature of
-  the summed prior action; synthetic nonzero-mean RHS correctness.
-- Gate B as stage 3; then the four-way ablation (A/B/C/D) at converged
-  settings with fixed poses, envelope, spectrum, and band; Gate D criteria
-  from §8 decide experimental-release status.
+- add and validate the no-reproducible-signal/null competitor;
+- derive compact monotone band-support confidence, cutoff, uncertainty, and
+  provenance from the full unary bank before it is released;
+- prove that the state is derived only from the `_unfil` pair and is identical
+  for both replay halves;
+- expose diagnostics and mutation-test candidate ordering/null calibration.
 
-### Stage 7 — explicitly out of first scope
+6.2 Operator Gate A:
 
-Each item gated behind a successful D run: the NU aux-competitor validator
-slot (§11.2, promoted earlier only by the Stage-4 abort); the locres
-nonstationary spectral prior (§11.3, judged against post-hoc NU filtering);
-`dmats` graded confidence (§11.4); preconditioning of `lambda_s D_s`
-(rank-one term stays exact; own parity study); Singer/Gilles off-diagonal
-covariance; the lagged LocScale surrogate.
+- implement the normalized three- or four-band `Q_NU` factorization;
+- prove adjoint identity, PSD, DC null, monotonicity, finite-difference
+  gradient, and `P(H+Q_NU)P` composition;
+- add the hard `P_tau`/`Q_NU` mutual-exclusion assertion;
+- implement and identify a nonnegative preconditioner approximation.
+
+6.3 Workflow Gate B:
+
+- sequence base pair -> FSC/cFAR -> NU evidence -> NU replay from one raw
+  accumulation in both shared and distributed paths;
+- remove the binary-envelope solvent prior and its automatic-mask bootstrap
+  from the NU target path;
+- reuse the compact evidence state for cutoff/local-resolution diagnostics and
+  LP-set handoff rather than recomputing it after replay;
+- leave the ordinary global-ML path bit-identical.
+
+6.4 Science/cost Gates C and D:
+
+- run only the two-way `P_tau` versus `Q_NU` ablation of §8;
+- include uniform, heterogeneous, coarse-domain, weak-domain, and background-
+  disorder fixtures plus real-data fixed-pose and refinement tests;
+- judge at matched convergence, then measure the production-budget cost;
+- do not begin Wilson work until Gate D is closed.
+
+### Stage 7 — Wilson molecular precision — priority 2
+
+Sequential only after Stage 6 Gate D. Start with a zero-mean shell-diagonal
+Wilson spectrum behind one declared spectrum-source mechanism. Establish its
+benefit against the accepted NU estimator as a separate experiment before any
+combination is considered. Off-diagonal covariance, nonzero means, and local
+Wilson/LocScale variants remain outside the first Wilson stage.
+
+### Stage 8 — explicitly out of first scope
+
+Singer/Gilles off-diagonal covariance; nonzero or phase-bearing prior means;
+lagged LocScale surrogates; nonlinear/proximal priors; and any combined
+NU/Wilson product-of-experts model. Each requires its own approved experiment
+after the preceding estimator is independently understood.
 
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery
 (`doc/policies/nonuniform_filtering_policy.md`, `src/main/nu_filt/`) is the
-mature evidence engine this proposal should build on — the LocScale analogy
-made concrete, with better provenance: LocScale-2.0 derives local confidence
-from a pseudoatomic reference (model bias), while NU derives it from
-cross-validated half-map evidence with a null model. All feeds below are
-lag-one by construction (NU runs after the solves inside `volassemble`), the
-same discipline as the envelope. Ranked:
+mature evidence engine the prior now builds on directly. LocScale-2.0 derives
+local confidence from a pseudoatomic reference; NU derives it from
+cross-validated half-map prediction with an explicit noise model. The
+2026-08-27 design joins the formerly separate envelope, local-resolution, and
+graded-confidence ideas into one solver input.
 
-1. **Envelope -> solvent weights** (this proposal, §4): the established "in".
-2. **Aux-competition -> per-voxel prior validator.** Feed the *priored* ML
-   pair through the auxiliary-replacement mechanism (as a distinct
-   "competitor" slot, respecting the resolution gate and the `nu_refine`
-   exclusion) so the cross-validated NU selection decides per voxel whether
-   the priored reconstruction beats the base. The prior then survives only
-   where half-map evidence supports it — converting the "envelope misses weak
-   density" risk from a hand-designed mask-perturbation test into an
-   automatic runtime guard built from trusted machinery. Recommended as a
-   design principle for Gate C/D.
-3. **Local-resolution field -> nonstationary spectral prior.** The
-   Potts-smoothed label field `k_c(v)` (`_nu_locres`) defines the §5
-   local-covariance prior with NU label regions in place of LocScale
-   windows: `Q_locres = sum_j M_j^T Hp_j^T Hp_j M_j` (soft label-region
-   selectors, high-pass above each region's cutoff; every summand PSD, fixed
-   during the solve). Cost ~one FFT pair per retained label per matvec
-   (8-16 labels); the honest question is the increment over post-hoc NU
-   filtering — in-solve, the prior participates in the deconvolution and
-   conditions the ML replay rather than masking output — and the A-vs-D
-   ablation answers it. A cheap degenerate control belongs in the sweep:
-   locres-modulated real-space diagonal Tikhonov (damp voxels with coarse
-   evidenced resolution), free per matvec.
-4. **Unary Huber evidence (`dmats`) -> graded confidence.** Second-generation
-   solvent weights `w^2 = p^2 (1 - c(v))` generalize flatness to "proportional
-   to lack of evidence"; the pull-to-common-mean coupling stays restricted to
-   genuine solvent (weak in-particle voxels get variance damping without the
-   mean term). After the binary envelope form validates.
-5. **Potts machinery -> smooth every prior field.** Any per-voxel weight the
-   solver consumes should pass through the existing beta-estimated
-   ordered-label smoothing so prior fields are spatially coherent. Direct
-   reuse, nearly free.
-6. **Later:** the `nu_refine` frontier-challenge ratchet as evidence for how
-   hard `P_tau` clamps individual beyond-band shells; and the NU §6
-   null-estimation discipline reused verbatim for the prior's solvent
-   mean/RMS diagnostics.
+### 11.1 Reuse without binary collapse
 
-### DECISION (2026-08-26): re-ranked priorities for the NU-evidence feeds
+Reuse:
 
-After the solvent prior went default-on, the ranking above was revised:
+- the radially whitened symmetric cross-half Huber unary;
+- the static candidate bank and accepted `nu_refine` extensions;
+- spherical objective support and null-estimation discipline;
+- ordered-label spatial regularization;
+- selected-cutoff/local-resolution diagnostics and LP-set handoff.
 
-- **Item 3 (locres field -> nonstationary spectral prior) is the priority**
-  after the Wilson spectrum source lands: it is the genuinely novel item —
-  nobody builds the evidenced local band-limit into the reconstruction
-  operator; everybody filters post hoc — and it composes with everything
-  already in place (the locres field exists, the P_tau mechanism exists,
-  the label-region selectors reuse the Potts machinery). The cheap
-  locres-diagonal control stays in the Stage-4 sweep as the first
-  measurement.
-- **Item 4 (dmats -> graded confidence) is the co-priority**: same evidence
-  provenance, generalizes the validated binary-envelope solvent prior to
-  "regularize in proportion to lack of evidence", and shares its
-  calibration protocol (the strength-ladder sweep + suppression readout).
-- **Item 2 (aux-competition validator) is demoted, not dropped**: the
-  auxiliary-replacement slot is OWNED by the high-resolution shell-extension
-  experiment when `nu_refine=yes`, which is precisely the configuration
-  `refine3D_auto` uses for high-resolution refinement and is known to work
-  well. The validator therefore cannot ride the existing slot in the regime
-  where it matters most; it needs a distinct competitor slot engineered to
-  coexist with `nu_refine`, which is only worth building if the Stage-4
-  omitted-domain abort fires (its original promotion trigger) or the graded
-  priors of items 3/4 create a concrete need for a per-voxel runtime guard.
+Replace:
 
-Caution: with envelope, locres, and evidence all derived from priored maps
-and fed back, the §9 support-shrinkage risk generalizes to
-**resolution-field drift**. Extend occupancy/overlap tracking to the locres
-field, and extend the omitted-domain test to confirm a domain absent from the
-locres field can still recover.
+- coarsest-versus-best envelope margin as the sole prior statistic;
+- binary MRF segmentation into molecular/solvent;
+- component filtering, growth, cosine edge, and persistent envelope artifact;
+- envelope complement and weighted-solvent-mean `Q_s`;
+- a second post-replay NU analysis that can disagree with the prior state.
+
+### 11.2 Required new evidence state
+
+Add the null candidate and compact the full unary curve into ordered band
+support/confidence before `dmats_mask` is released. The state is constructed
+from current base halves between solve phases, not lagged from a previous
+replay. It is shared read-only by the two half replays and by downstream NU
+diagnostics. The base maps remain observable over the full spherical support,
+so a weak domain excluded from the replay's useful bandwidth can still recover
+evidence in a later refinement iteration.
+
+Do not include the ML auxiliary replacement pair when constructing this state.
+That pair is a post-hoc NU candidate under the current workflow and would let a
+regularized result participate in estimating the precision that regularizes
+it. `nu_refine` frontier evidence may participate only when the challenged
+shell was evaluated from the unregularized base pair and accepted under the
+recorded frontier contract.
+
+### 11.3 Solver representation
+
+The first operator is the compact multiscale frame of §5.3. Prefer broad bands
+with an explicit normalization and a cheap positive preconditioner
+approximation over an 8--16-label FFT stack. The selected cutoff is a
+diagnostic/hand-off value; the solver consumes graded band confidence, not a
+hard label mask. Measure the incremental value over post-hoc NU filtering:
+the in-solve prior participates in deconvolution and Krylov conditioning,
+whereas post-hoc filtering can only modify the finished estimate.
+
+### 11.4 Feedback discipline
+
+The envelope-specific lag-one shrinkage loop disappears, but resolution-field
+feedback remains because later particle alignment consumes the NU replay map.
+Track confidence/cutoff overlap and entropy across iterations, and retain the
+omitted/weak/coarse-domain recovery tests. The ordinary base-pair FSC remains
+the only resolution claim; shipped-pair correlation is diagnostic. Never feed
+the NU evidence field into FSC solvent correction or replace the spherical NU
+support with it.
 
 ## 12. Recommended reading order
 
