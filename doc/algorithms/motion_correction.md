@@ -50,3 +50,13 @@ When the local model passes the acceptance test, SIMPLE uses the fitted deformat
 ## Compact Summary
 
 SIMPLE first estimates whole-frame translational motion by iterative frame-to-average registration using a hybrid discrete/continuous correlation optimizer. It then partitions the image into patches, estimates local translational trajectories for each patch, and fits those trajectories with a smooth polynomial deformation field defined over image coordinates and frame time. The algorithm accepts the local solution only if the fitted model reproduces the measured patch trajectories within a prescribed tolerance. Otherwise, it reduces model complexity and ultimately falls back to the global solution. When accepted, the fitted deformation field warps the original movie frames and produces both the corrected micrograph and the companion sum for CTF estimation.
+
+## Implementation
+
+- Workflow: `src/main/motion/simple_motion_correct.f90` and
+  `src/main/motion/simple_motion_correct_iter.f90`.
+- Hybrid registration: `src/main/motion/simple_motion_align_hybrid.f90`.
+- Patch trajectories and deformation model:
+  `src/main/motion/simple_motion_patched.f90`.
+- Shared preprocessing and integration helpers:
+  `src/main/motion/simple_motion_correct_utils.f90`.

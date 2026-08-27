@@ -55,7 +55,8 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
           expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
-          NU_EVIDENCE_NBANDS, NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_MIN_NULL_FRAC
+          NU_EVIDENCE_NBANDS, NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_MIN_NULL_FRAC,&
+          NU_EVIDENCE_MAX_NULL_FRAC
 private
 #include "simple_local_flags.inc"
 
@@ -134,15 +135,18 @@ real,             parameter   :: NU_EVIDENCE_INVALID         = 0.5 * huge(1.)
 integer,          parameter   :: NU_EVIDENCE_NBANDS = 4
 real,             parameter   :: NU_EVIDENCE_BAND_LIMITS(NU_EVIDENCE_NBANDS) = [20., 12., 8., 5.]
 real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
-real,             parameter   :: NU_EVIDENCE_NULL_NSIGMA = 3.0
-! Replay-readiness contract: the generous spherical support always contains
-! substantial solvent, so a compact state whose explicit null wins less than
-! this fraction of the support is evidence of a failed null calibration (the
-! observed zero-null failure mode), not of a solvent-free box. The replay must
-! hard-error on it rather than attach an uncalibrated precision. Provisional
-! (R9), anchored to the simple_test_nu_envmask fixture; recalibrate against
-! real-data operating points before relaxing.
+! Replay-readiness contract, both directions. The generous spherical support
+! always contains substantial solvent AND substantial molecule, so a compact
+! state whose explicit null wins less than the floor (the zero-null failure
+! mode) or more than the ceiling (the saturated-null failure mode observed on
+! streptavidin when the offset was a median+3MAD detection threshold) marks a
+! failed null calibration, not a property of the specimen. The replay must
+! hard-error rather than attach an uncalibrated precision. Provisional (R9),
+! anchored to the simple_test_nu_envmask fixture and the 2026-08-27
+! streptavidin run; recalibrate against real-data operating points before
+! relaxing.
 real,             parameter   :: NU_EVIDENCE_MIN_NULL_FRAC = 0.01
+real,             parameter   :: NU_EVIDENCE_MAX_NULL_FRAC = 0.90
 character(len=*), parameter   :: NU_EVIDENCE_SOURCE_BASE = 'base_unfil'
 character(len=*), parameter   :: NU_EVIDENCE_ALGORITHM = 'nu_evidence_v1'
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'

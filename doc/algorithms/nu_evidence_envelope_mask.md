@@ -30,22 +30,31 @@ The standalone command evaluates the static low-pass bank
 Let `E` and `O` be the raw even and odd maps and let `E_c` and `O_c`
 be the maps filtered with candidate `c`.
 
-## Noise-Normalized Huber Objective
+## Radially Whitened Huber Objective
 
-First, SIMPLE estimates one candidate-independent half-map noise scale from the
-raw even-minus-odd values inside the sphere:
+First, SIMPLE estimates one candidate-independent radial noise profile from the
+raw even-minus-odd values inside the sphere. Supported voxels are grouped by
+real-space radius, and each radial shell receives the Gaussian-scaled MAD
 
 \[
-\sigma = 1.4826\,\operatorname{median}
-\left| (E-O)-\operatorname{median}(E-O) \right|.
+\sigma_j = 1.4826\,\operatorname{median}
+\left| (E-O)_j-\operatorname{median}(E-O)_j \right|.
 \]
 
-An RMS fallback is used if this MAD estimate is numerically zero. For every
-candidate and supported voxel `v`, the cross-half residuals are
+Empty or numerically degenerate shells are filled from valid neighbors and the
+profile is smoothed radially. If no shell has a valid MAD, a global MAD, then
+RMS, supplies the fallback. Linear interpolation between shell centers gives
+`sigma(r(v))` at voxel `v`.
+
+This whitening is candidate-independent but spatially varying. It accounts for
+radial noise changes introduced by reconstruction deapodization and tapered
+solve support; a single global scale would put central and peripheral residuals
+in different Huber regimes. For every candidate and supported voxel `v`, the
+cross-half residuals are
 
 \[
-r_{1,c}(v)=\frac{E(v)-O_c(v)}{\sigma}, \qquad
-r_{2,c}(v)=\frac{E_c(v)-O(v)}{\sigma}.
+r_{1,c}(v)=\frac{E(v)-O_c(v)}{\sigma(r(v))}, \qquad
+r_{2,c}(v)=\frac{E_c(v)-O(v)}{\sigma(r(v))}.
 \]
 
 The candidate cost is
@@ -64,9 +73,9 @@ H_\delta(r)=
 \end{cases}
 \]
 
-The common noise scale makes candidates comparable. The Huber loss remains
-quadratic near the expected noise level but prevents isolated large residuals
-from dominating the evidence.
+The common radial profile makes candidates comparable at each voxel. The Huber
+loss remains quadratic near the expected local noise level but prevents
+isolated large residuals from dominating the evidence.
 
 ## Evidence Margin
 

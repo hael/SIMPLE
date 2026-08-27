@@ -25,7 +25,7 @@ contains
         real(kind=8) :: whitening_checksum
         real :: beta, temperature, best_e, second_e, e, prob_sum, entropy, null_lp
         real :: null_bias_median, null_bias_mad, null_bias_threshold
-        integer :: n_signal, n_candidates, imask, icand, iband, i, j, k, label, n_uncertain
+        integer :: n_signal, n_candidates, imask, icand, iband, i, j, k, label, n_uncertain, k25
         character(len=32) :: value_text
         character(len=LONGSTRLEN) :: identity_seed
 
@@ -72,10 +72,18 @@ contains
         ! has an objective offset relative to smoothed predictors even for
         ! independent noise, and choosing the best of several signal candidates
         ! adds a multiple-comparison advantage.  Calibrate both effects from the
-        ! robust distribution of C_zero-min(C_signal) over the deliberately
-        ! generous support.  Subtracting its median-plus-MAD threshold makes the
-        ! competitor a calibrated null score while retaining sensitivity to
-        ! genuinely coarse shared signal whenever the coarsest candidate is best.
+        ! distribution of C_zero-min(C_signal) over the deliberately generous
+        ! support.  The subtracted offset is the NULL COMPONENT'S CENTER ONLY,
+        ! estimated by the lower quartile of the gap distribution: the gaps are
+        ! a solvent/signal mixture in which signal voxels sit strictly higher,
+        ! so the lower quartile tracks the null component even on a
+        ! majority-molecule support where the median is contaminated.  A
+        ! center-plus-3MAD offset is a DETECTION threshold, not a likelihood
+        ! offset -- on streptavidin (2026-08-27) it made the null unbeatable
+        ! everywhere (null_fraction=1.0, global over-smoothing).  With the
+        ! center-only offset the softmax stays a graded competition and the
+        ! ordered-label spatial model does the consolidation; median and MAD
+        ! are retained as recorded diagnostics.
         allocate(null_full(ldim(1),ldim(2),ldim(3)), source=0.)
         allocate(smooth_tmp(ldim(1),ldim(2),ldim(3)), source=0.)
         allocate(null_cost(n_nu_mask), source=0.)
@@ -108,7 +116,10 @@ contains
         !$omp end parallel do
         null_bias_median = median_nocopy(gaps)
         null_bias_mad = mad_gau(gaps, null_bias_median)
-        null_bias_threshold = null_bias_median + NU_EVIDENCE_NULL_NSIGMA * max(null_bias_mad, TINY)
+        ! lower-quartile center of the gap mixture; selec reorders but
+        ! preserves the values, so it composes with the diagnostics above
+        k25 = max(1, nint(0.25 * real(n_nu_mask)))
+        null_bias_threshold = selec(k25, n_nu_mask, gaps)
         deallocate(gaps)
         if( .not.ieee_is_finite(null_bias_median) .or. .not.ieee_is_finite(null_bias_mad) .or. &
             &.not.ieee_is_finite(null_bias_threshold) .or. null_bias_mad < 0. ) &
@@ -234,6 +245,7 @@ contains
         write(value_text,'(F10.4)') null_lp
         state%summary%provenance = 'algorithm='//NU_EVIDENCE_ALGORITHM//';source='//trim(nu_evidence_source)//&
             &';null=calibrated_zero_cross_half_prediction;null_reference=best_exact_signal_bank;'//&
+            &'null_offset=lower_quartile_center;'//&
             &'null_smooth_A='//trim(adjustl(value_text))//&
             &';confidence=spatial_softmax_gap_temperature;'//&
             &'uncertainty=normalized_entropy;candidate_order=coarse_to_fine_validated;'//&
@@ -253,8 +265,6 @@ contains
         state%summary%provenance = trim(state%summary%provenance)//';null_bias_mad='//trim(adjustl(value_text))
         write(value_text,'(ES14.6)') null_bias_threshold
         state%summary%provenance = trim(state%summary%provenance)//';null_bias_threshold='//trim(adjustl(value_text))
-        write(value_text,'(F6.2)') NU_EVIDENCE_NULL_NSIGMA
-        state%summary%provenance = trim(state%summary%provenance)//';null_bias_nsigma='//trim(adjustl(value_text))
         write(value_text,'(I0)') size(nu_noise_profile_cached)
         state%summary%provenance = trim(state%summary%provenance)//';whitening_shells='//trim(value_text)
         whitening_checksum = 0.d0
@@ -385,21 +395,25 @@ contains
     !> Replay-readiness contract (pcg_priors.md S6.2): a valid compact state
     !! is necessary but not sufficient to parameterize the replay precision.
     !! The spherical evidence support is deliberately generous and always
-    !! contains substantial solvent, so a null fraction below
-    !! NU_EVIDENCE_MIN_NULL_FRAC marks a failed null calibration (the
-    !! zero-null failure mode observed in the first runtime tests) -- the
-    !! coarse band would read as fully supported everywhere and Q_NU would
-    !! regularize nothing it should. Hard error, no fallback: fallback policy
-    !! is a workflow decision, never an inferred substitute prior.
+    !! contains BOTH substantial solvent and substantial molecule, so the null
+    !! fraction is gated from both sides: below NU_EVIDENCE_MIN_NULL_FRAC is
+    !! the zero-null failure mode (nothing reads as solvent, Q_NU regularizes
+    !! nothing it should); above NU_EVIDENCE_MAX_NULL_FRAC is the
+    !! saturated-null failure mode observed on streptavidin (everything reads
+    !! as solvent, Q_NU degenerates into a global detail penalty). Hard error,
+    !! no fallback: fallback policy is a workflow decision, never an inferred
+    !! substitute prior.
     module subroutine assert_nu_evidence_replay_ready( state )
         type(nu_evidence_state), intent(in) :: state
         if( .not.nu_evidence_state_is_valid(state) ) &
             &THROW_HARD('NU evidence state is invalid; cannot parameterize the replay precision')
-        if( state%summary%null_fraction < NU_EVIDENCE_MIN_NULL_FRAC )then
+        if( state%summary%null_fraction < NU_EVIDENCE_MIN_NULL_FRAC .or. &
+            &state%summary%null_fraction > NU_EVIDENCE_MAX_NULL_FRAC )then
             call print_nu_evidence_summary(state)
-            write(logfhandle,'(A,F10.6,A,F10.6)') '>>> NU REPLAY EVIDENCE REJECTED: null_fraction=', &
-                &state%summary%null_fraction, ' < required ', NU_EVIDENCE_MIN_NULL_FRAC
-            THROW_HARD('inadequate NU evidence null population (failed null calibration?); cannot attach the replay precision')
+            write(logfhandle,'(A,F10.6,A,F10.6,A,F10.6,A)') '>>> NU REPLAY EVIDENCE REJECTED: null_fraction=', &
+                &state%summary%null_fraction, ' outside [', NU_EVIDENCE_MIN_NULL_FRAC, ',', &
+                &NU_EVIDENCE_MAX_NULL_FRAC, ']'
+            THROW_HARD('NU evidence null population outside its readiness bounds (failed null calibration?)')
         endif
     end subroutine assert_nu_evidence_replay_ready
 

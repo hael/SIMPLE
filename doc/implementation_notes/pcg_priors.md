@@ -1139,7 +1139,10 @@ Review-added contracts (2026-08-27):
   sufficient: `assert_nu_evidence_replay_ready` hard-errors before either
   replay when the explicit null wins less than `NU_EVIDENCE_MIN_NULL_FRAC`
   (provisional 1%, R9) of the generous spherical support -- the observed
-  zero-null calibration failure must never attach silently. The same assert
+  zero-null calibration failure must never attach silently -- or, after the
+  first streptavidin run exposed the opposite failure, more than
+  `NU_EVIDENCE_MAX_NULL_FRAC` (provisional 90%): a saturated null is equally
+  a calibration failure, never a specimen property. The same assert
   now gates `simple_test_nu_envmask`, and that test must pass before the
   reconstruction harness results are trusted.
 - **Explicit activation, no silent fallback.** `validate_nu_replay_request`
@@ -1177,8 +1180,60 @@ simple_test_exec test=rec3D_backends projfile=<proj.simple> pgrp=<pgrp> \
 against the strength-zero control (omit the key and use
 `pcg_solvent_lambda_rel=0` for the pure `P_tau` reference, R5/Gate C run A)
 and the solvent rungs already recorded. The execution directory carries a
-`_nu<X>` token. Numbers not yet recorded: first fixture A/B pending the
-user-side build.
+`_nu<X>` token.
+
+### Stage 6 first run: streptavidin NU replay at 0.1 (2026-08-27) — saturated-null calibration failure
+
+First end-to-end harness run (10335 streptavidin, d2, box 128, mskdiam 80,
+its=5, `pcg_nu_lambda_rel=0.1`). **Workflow invariants all held**: base pair
+bit-identical between backends (3.518/3.119 A both legs, H2); one frozen
+evidence identity for both half replays; solvent forced 0, no envelope
+touched; `lambda_eff` 1.73e6 (vs the solvent prior's 1.53e6 on the same data
+-- `s_data(D)` anchoring consistent); soft gates reported FAIL without
+aborting, as designed. First H6 cost data: NU replay 26-31 s/half vs 6 s
+base (~5x) plus 3-4 s `stats_overhead_s`.
+
+**Scientific failure, opposite sign to the zero-null one:**
+`pcg_nu_null_fraction=1.000000` with `uncertain_fraction=0` -- confidently
+null everywhere including the molecule core, while the softmax still carried
+28.6% coarse-signal mass (`band01=0.286`). `Q_NU` therefore degenerated into
+a global detail penalty: shell amplitude ratio pcg/gridding declining
+monotonically 0.9 (20 A) -> 0.33 (4 A), gated-band median 0.63 (FAIL at
+<0.67). Diagnosis: the null offset `median + 3*MAD` of
+`C_zero - min(C_signal)` over the whole support (median 0.37, MAD 0.18,
+threshold 0.92) is a DETECTION threshold -- a signal label could only win
+where its advantage exceeded the null population's 3-sigma -- and on a
+molecule-dominated support the median itself is signal-contaminated. Right
+shape for the retired binary envelope, wrong shape for a likelihood offset:
+with overlapping components at 3.1 A it makes the null unbeatable. (It passed
+the envmask fixture only because that molecule's gaps are hugely separated.)
+
+**Calibration redesign (implemented same day):** the subtracted offset is now
+the null component's CENTER only, estimated by the lower quartile of the gap
+mixture (signal gaps sit strictly higher, so Q25 tracks the null component
+even on a majority-molecule support); median/MAD stay recorded as
+diagnostics, `null_offset=lower_quartile_center` in the provenance, and the
+`+3*MAD` term is gone -- graded competition belongs to the softmax and
+spatial consolidation to the ordered-label model. The readiness contract
+gained the matching ceiling (`NU_EVIDENCE_MAX_NULL_FRAC=0.90`, provisional
+R9): this run would now hard-error at evidence construction instead of
+attaching a degenerate precision. **Envmask rerun under the center-only
+offset: PASS (2026-08-27).** null_fraction 0.123 (inside the readiness
+window); molecule coarse support 1.000 with zero null selections; solvent
+support 0.829 with 18% null selections; band support monotone
+0.884/0.884/0.804/0.291; envelope path untouched and passing. Watch item,
+recorded not acted on: solvent coarse-band support 0.83 on an
+independent-noise fixture means the Q25 offset is deliberately permissive
+(~25% of gaps below it) -- weak coarse-band solvent penalty (W_1~0.17),
+stronger fine-band penalty (W_4~0.7). Conservative direction for H3;
+whether it regularizes ENOUGH is the S5.4 evidence-to-precision mapping
+question the harness measures. Pending: repeat the streptavidin harness
+invocation.
+Fallback if the quantile estimator proves fragile: calibrate the null on
+noise-matched surrogates built from the half-map difference `(even-odd)`
+(right noise spectrum, signal cancelled) -- costs a second bank pass and has
+an anti-correlation subtlety (one independent difference realization only),
+so it is recorded, not built.
 
 6.3 Workflow Gate B:
 

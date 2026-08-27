@@ -267,9 +267,10 @@ support, 1 outside it), recreating the packed lexicographic order from the
 frozen geometry alone so it works after `cleanup_nu_filter`. Before any
 replay use, `assert_nu_evidence_replay_ready` enforces the readiness
 contract: a state whose explicit null wins less than
-`NU_EVIDENCE_MIN_NULL_FRAC` of the generous spherical support marks a failed
-null calibration and hard-errors -- validity alone does not qualify evidence
-to parameterize a precision. The PCG replay consumes the expanded weights as
+`NU_EVIDENCE_MIN_NULL_FRAC` or more than `NU_EVIDENCE_MAX_NULL_FRAC` of the
+generous spherical support marks a failed null calibration (starved and
+saturated null respectively) and hard-errors -- validity alone does not
+qualify evidence to parameterize a precision. The PCG replay consumes the expanded weights as
 the `Q_NU` precision when `pcg_nu_lambda_rel > 0`
 (`doc/implementation_notes/pcg_priors.md` Stage 6); with the key at its
 default of 0 nothing in production touches this path.
