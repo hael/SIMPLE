@@ -4,6 +4,7 @@ on:
   schedule:
     # Runs at 00:00 UTC every day (Nightly)
     - cron: '0 0 * * *'
+      timezone: 'America/New_York'
 
   # manually trigger for testing
   workflow_dispatch:
