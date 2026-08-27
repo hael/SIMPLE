@@ -690,6 +690,127 @@ projects) and produces only the diagnostic block; a PRESENT-but-unusable
 envelope (extent mismatch, invalid values) still warns loudly. The S6.2
 never-substitute-a-mask rule is unchanged.
 
+### Stage 5 record: streptavidin sweep (2026-08-27, minimal-invocation harness)
+
+First bare-invocation sweep on real data (10335 streptavidin, d2, box 128,
+smpd 1.072, its=5): base pair pinned 3.430/3.119 across the ladder, spread
+0.0000, all gates PASS.
+
+| lambda | supp% | shipped 0.5/0.143 | band_fsc | rad_min | verdict |
+|---|---|---|---|---|---|
+| 0     | --   | 3.347/3.049 | 0.999 | 1.000 | control |
+| 1e-3  | 6.6  | 3.347/3.049 | 0.999 | 1.000 | inert |
+| 1e-2  | 21.8 | 3.267/3.049 | 0.996 | 1.000 | clean |
+| 3e-2  | 36.1 | 3.191/3.049 | 0.991 | 1.000 | clean -- operating point |
+| 1e-1  | 51.2 | 3.119/2.800 | 0.981 | 0.998 | shipped inflation fires |
+| 3e-1  | 63.5 | 3.049/2.144 | 0.965 | 0.912 | inflation + rim erosion |
+| 1     | 78.7 | 2.144/2.144 | 0.932 | 0.741 | over-flattened |
+
+Cross-dataset findings: (a) the suppression-vs-lambda curve nearly overlays
+the fixture's (6.6/22/36/51/64/79 vs 5/15/29/52/71/86 per decade) -- the
+data-scale anchoring makes the readout portable; (b) the FIRST
+over-regularization signature fires at ~51% suppression on both datasets
+(fixture truth-FSC loss at 51.7%, streptavidin shipped inflation at 51.2%),
+independent observables agreeing that trouble onset is a property of the
+suppression coordinate. OPEN DECISION: lower PCG_SOLVENT_SUPP_OVER_PCT from
+60 to ~45-50 (at 60 the default 0.1 reads "nominal" on streptavidin while
+its inflation diagnostic has fired), and whether the default strength should
+move 0.1 -> 3e-2 (clean everywhere measured) with the convergence guidance
+steering upward toward the ~50% line.
+
+### Gate B lag-one activation: CLOSED (2026-08-27, streptavidin abinitio3D)
+
+The warm-started `rec_backend=pcg` abinitio3D run verified the full
+self-bootstrapping staging on real data with zero user flags: stage 5
+automasking off + `envelope_absent` quiet skip; stage 6 first iteration
+forces automasking on, NU engages with the spherical reference ("envelope
+not available yet" — correct first-iteration state) and the volassemble
+generates the envelope (occupancy 7.4%); the next iteration consumes it
+lag-one (`prior_enabled=T`, `skip_reason=none`) and every later iteration
+re-generates/re-consumes. Steady-state warm-started suppression: ~28-35%,
+stable (third regime datum — cold its=5 box-128: 51%; converged bgal
+box-256: 14%; warm box-88: ~32% — triply confirming the removal of
+absolute-% upper thresholds). The prior-free base-pair 0.143 improved
+3.812 -> 3.191 A through stage 6 (crop Nyquist) — the loop demonstrably
+improves registration. WATCH ITEMS (not acted on): at prior/NU engagement
+the promoted matching lp (6.2 -> 3.5 A), the switch to envelope-masked
+references, and the prior all hit the matcher in one iteration ->
+orientation overlap collapses 0.70 -> 0.04 and recovers slowly; stage 6
+exits unconverged on its budget. Envelope occupancy oscillates 7 -> 23 ->
+14-18% (jitter, not runaway shrinkage). Candidate mitigations: stagger the
+reference-mask switch one iteration after lp promotion; cap the promoted
+lp a margin below the crop Nyquist.
+
+### DECISION (2026-08-27): inflation-based over-flattening guidance (implemented)
+
+The convergence guidance is restructured per the anchor verdict below:
+
+- **Inert**: suppression < 2% (`PCG_SOLVENT_SUPP_INERT_PCT`) -> increase
+  `pcg_solvent_lambda_rel` ~3x. Dataset-robust at the low end.
+- **Over-flattening**: shipped-pair FSC=0.143 pulling > 5% finer than the
+  base-pair 0.143 (`PCG_SOLVENT_INFL_PCT`) -> decrease ~3x. The portable
+  signal (fired at 1e-1 on streptavidin, quiet through 3e-1 on bgal,
+  matching both ladder verdicts). Absolute suppression thresholds are NOT
+  used for the upper bound.
+- Suppression % is retained as the monotone within-run trend readout.
+
+Plumbing: the PCG strategy now measures the shipped (regularized) pair's
+FSC crossings in-run after the ML replays (`shipped_pair_res`, same soft-
+masked procedure as the harness diagnostic; computed only when the prior
+fired) and persists `PCG_BASE_FSC0143_STATEXX`/`PCG_SHIP_FSC0143_STATEXX`
+in `simple_pcg_solvent_stats.txt`; `check_conv3D` prints
+`% SHIPPED-PAIR FSC INFLATION (PCG PRIOR)` (per-state lines for
+`nstates>1`), applies the two-test guidance, and records
+`PCG_SHIP_INFLATION_PCT` in `simple_stats.txt`. The shipped-pair crossing
+shares regularization between halves and is never a resolution claim.
+
+### Stage 5 record: bgal its=30 anchor at 1e-1 (2026-08-27) — portability verdict
+
+Base solves converge (RESID 2.7e-2 @ 30 its); ML replays stop on XTOL at
+18/19 its with RESID still 0.12 (CG stalls by step size on the box-256 ML
+system — preconditioner item). Suppression at 1e-1: 12.8/14.0% (up from
+4.7% at its=5; rms 0.675 -> 0.638; reference rose to ~0.73 because the
+30-it base carries more high-frequency noise). VERDICT: convergence
+explains ~3x of the bgal deficit but NOT the gap to streptavidin's 51% —
+lambda_eff at identical lambda_rel=0.1 is 1.98e4 (bgal) vs 1.53e6 (strep),
+i.e. the s_data(D) anchoring does not equalize prior-vs-data balance across
+box sizes; bgal's dose-response is genuinely right-shifted (~lambda_rel>=1
+for 50%-class suppression). Side findings: converged 1e-1 rim is pristine
+(bin-9 ratio 1.067 vs 0.851 at its=5 — better peripheral preservation);
+Nyquist-edge shells k=126-128 blow up (amp ratio up to 17x) over 30 ML its
+— S6 beyond-band growth, outside the gated band, irrelevant at production
+budget. GUIDANCE REDESIGN (proposed, pending decision): absolute
+suppression thresholds cannot be universal; the observable that landed at
+the right per-dataset operating point on BOTH datasets is shipped-vs-base
+pair inflation (fired at 1e-1 strep, 3e-1 bgal). Restructure convergence
+guidance as: inert = suppression ~<2% (dataset-robust); over-flattening =
+shipped-pair 0.143 materially finer than base-pair 0.143 (portable, both
+already computed in-run); suppression % retained as the monotone
+within-run trend readout.
+
+### Stage 5 record: bgal harness sweep + suppression-portability caveat (2026-08-27)
+
+Bare-invocation sweep on bgal (d2, box 256, its=5, shared): base pinned
+4.132/3.709, spread 0.0000, all PASS; the rms ladder and shipped-inflation
+verdicts reproduce the 2026-08-26 manual ladder exactly (rms
+0.716/0.712/0.703/0.675/0.61/0.46; inflation first at 3e-1). BUT the
+suppression scale does NOT overlay streptavidin/fixture: bgal reads
+-1/-0.5/+0.7/4.7/14/35 % per decade vs streptavidin's 6.6/22/36/51/64/79 %.
+Diagnosis: convergence state — bgal ML RESID ~0.17-0.19 at its=5 (box 256,
+STOP=maxits) vs streptavidin ~0.03 (box 128); an unconverged iterate has not
+expressed the prior, so cold-solve suppression under-reports on large boxes.
+The negative values at inert strengths expose a smaller per-dataset
+reference bias (shrunk base is not exactly the lambda=0 ML solution; +6.6%
+strep, -1% bgal at inert rungs). CONSEQUENCES: (a) the ~50%-onset
+universality claim below is RETRACTED as an absolute-percentage rule —
+suppression is monotone and useful within a ladder, comparable across
+datasets only at matched convergence; (b) threshold/default retuning is ON
+HOLD pending the its=30 bgal anchor at 1e-1 (decisive: convergence vs
+data-scale anchoring) and the warm-started abinitio3D suppression
+trajectory (the accumulated steady-state number is the one the convergence
+guidance actually sees); (c) the harness should report/flag RESID next to
+suppression when the ML solve stops on maxits far from rtol.
+
 ### Stage 5 record: bgal solvent-prior strength calibration (2026-08-26)
 
 Full dose-response on beta-gal (box 256, smpd 1.275, d2, ~4.6k ptcls,

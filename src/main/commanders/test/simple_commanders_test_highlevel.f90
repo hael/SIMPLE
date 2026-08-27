@@ -2505,7 +2505,11 @@ subroutine exec_test_rec3D_backends( self, cline )
     if( l_prior_active ) call require_solvent_envelope
     l_sweep = l_mlreg .and. l_mkdir_ok .and. .not. cline%defined('pcg_solvent_lambda_rel')
     if( .not. l_sweep )then
-        call run_rec3D_backends_single(cline, summary, .true.)
+        ! gates are hard failures only for prior-inactive runs (backend
+        ! equivalence checks); a prior-active single run is a measurement --
+        ! the prior legitimately moves the pcg leg away from the unpriored
+        ! gridding reference, so gate violations are reported, not fatal
+        call run_rec3D_backends_single(cline, summary, .not. l_prior_active)
         call simple_end('**** SIMPLE_TEST_REC3D_BACKENDS NORMAL STOP ****', print_simple=.false.)
         return
     endif

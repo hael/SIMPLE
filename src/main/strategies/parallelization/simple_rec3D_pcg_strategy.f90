@@ -12,7 +12,7 @@ use simple_ptcl_cache,        only: ptcl_cache_read_batch
 use simple_sigma2_files,      only: load_sigma2_groups
 use simple_math_ft,           only: resample_sigma2
 use simple_fsc,               only: phase_rand_fsc, fsc_area_score_result
-use simple_estimate_ssnr,     only: fsc2shrink_filter
+use simple_estimate_ssnr,     only: fsc2shrink_filter, get_resolution
 use simple_image,             only: image
 use simple_image_msk,         only: image_msk
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
@@ -167,14 +167,47 @@ contains
         deallocate(filt, xr)
     end function solvent_suppression_reference
 
+    !> Resolution readout of the shipped (regularized) half pair, measured the
+    !! same way as the harness diagnostic (soft spherical mask, standard FSC
+    !! crossings). The shipped pair shares its regularizers between halves, so
+    !! this is NEVER a resolution claim — its crossing pulling materially
+    !! finer than the base pair's is the portable over-flattening signal the
+    !! convergence guidance consumes (calibrated: fired at lambda_rel=1e-1 on
+    !! streptavidin, quiet through 3e-1 on bgal, matching both datasets'
+    !! ladder verdicts).
+    subroutine shipped_pair_res( params, even_in, odd_in, res05, res0143 )
+        class(parameters), intent(in)  :: params
+        type(image),       intent(in)  :: even_in, odd_in
+        real,              intent(out) :: res05, res0143
+        type(image) :: he, ho
+        real, allocatable :: corrs(:), res_arr(:)
+        integer :: nyq
+        call he%copy(even_in)
+        call ho%copy(odd_in)
+        call he%mask3D_soft(params%msk_crop, backgr=0.0)
+        call ho%mask3D_soft(params%msk_crop, backgr=0.0)
+        call he%fft()
+        call ho%fft()
+        nyq = he%get_filtsz()
+        allocate(corrs(nyq), source=0.0)
+        call he%fsc(ho, corrs)
+        res_arr = he%get_res()
+        call get_resolution(corrs, res_arr, res05, res0143)
+        res05   = max(res05,   2.0*params%smpd_crop)
+        res0143 = max(res0143, 2.0*params%smpd_crop)
+        call he%kill
+        call ho%kill
+        deallocate(corrs, res_arr)
+    end subroutine shipped_pair_res
+
     !> Persist the per-state solvent suppression readout for the convergence
     !! reporter (simple_convergence prints it with the other iteration stats
     !! and advises on pcg_solvent_lambda_rel). The file is rewritten on every
     !! ML volassemble and deleted first, so an iteration in which the prior is
     !! skipped never leaves stale values behind.
-    subroutine write_solvent_convergence_stats( params, supps, rmss, cnts )
+    subroutine write_solvent_convergence_stats( params, supps, rmss, cnts, base0143s, ship0143s )
         class(parameters), intent(in) :: params
-        real,              intent(in) :: supps(:), rmss(:)
+        real,              intent(in) :: supps(:), rmss(:), base0143s(:), ship0143s(:)
         integer,           intent(in) :: cnts(:)
         type(oris)   :: os
         type(string) :: key
@@ -189,6 +222,12 @@ contains
             call os%set(1, key%to_char(), supps(state) / real(cnts(state)))
             key = 'PCG_SOLVENT_RMS_STATE'//int2str_pad(state,2)
             call os%set(1, key%to_char(), rmss(state) / real(cnts(state)))
+            if( base0143s(state) > 0. .and. ship0143s(state) > 0. )then
+                key = 'PCG_BASE_FSC0143_STATE'//int2str_pad(state,2)
+                call os%set(1, key%to_char(), base0143s(state))
+                key = 'PCG_SHIP_FSC0143_STATE'//int2str_pad(state,2)
+                call os%set(1, key%to_char(), ship0143s(state))
+            endif
         end do
         call os%write(string(PCG_SOLVENT_STATS_FILE))
         call os%kill
@@ -353,6 +392,7 @@ contains
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         integer, allocatable :: selected_pinds(:), half_pinds(:)
         real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:), solvent_rmss(:)
+        real, allocatable :: ship05s(:), ship0143s(:)
         integer, allocatable :: solvent_supp_cnts(:)
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
@@ -375,6 +415,7 @@ contains
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         allocate(solvent_supps(params%nstates), solvent_rmss(params%nstates), source=0.0)
+        allocate(ship05s(params%nstates), ship0143s(params%nstates), source=0.0)
         allocate(solvent_supp_cnts(params%nstates), source=0)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
 
@@ -425,6 +466,11 @@ contains
                 call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
                 call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
                 if( allocated(solvent_env) ) deallocate(solvent_env)
+                ! shipped-pair crossing for the inflation-based guidance
+                ! (diagnostic only, never a resolution claim)
+                if( solvent_supp_cnts(state) > 0 )then
+                    call shipped_pair_res(params, ml_even, ml_odd, ship05s(state), ship0143s(state))
+                endif
                 call merged%kill
                 call merged%copy(ml_even)
                 call merged%add(ml_odd)
@@ -469,7 +515,10 @@ contains
         enddo
 
         call killimgbatch(build)
-        if( params%l_ml_reg ) call write_solvent_convergence_stats(params, solvent_supps, solvent_rmss, solvent_supp_cnts)
+        if( params%l_ml_reg )then
+            call write_solvent_convergence_stats(params, solvent_supps, solvent_rmss, solvent_supp_cnts, &
+                &res0143s, ship0143s)
+        endif
         if( .not. any(state_written) ) THROW_HARD('PCG reconstruct3D produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
@@ -484,7 +533,8 @@ contains
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call register_project_outputs()
 
-        deallocate(selected_pinds, res0143s, state_written, solvent_supps, solvent_rmss, solvent_supp_cnts)
+        deallocate(selected_pinds, res0143s, state_written, solvent_supps, solvent_rmss, solvent_supp_cnts, &
+            &ship05s, ship0143s)
 
     contains
 
@@ -1492,7 +1542,7 @@ contains
         type(image) :: previous_even, previous_odd, previous_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         real, allocatable :: fsc(:), res0143s(:), solvent_env(:,:,:), solvent_supps(:), solvent_rmss(:)
-        real, allocatable :: realized_fractions(:), update_weights(:)
+        real, allocatable :: realized_fractions(:), update_weights(:), ship05s(:), ship0143s(:)
         integer, allocatable :: solvent_supp_cnts(:)
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance, chain_provenance
@@ -1534,6 +1584,7 @@ contains
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         allocate(solvent_supps(params%nstates), solvent_rmss(params%nstates), source=0.0)
+        allocate(ship05s(params%nstates), ship0143s(params%nstates), source=0.0)
         allocate(solvent_supp_cnts(params%nstates), source=0)
         do state = 1, params%nstates
             l_solvent_ready = .false.
@@ -1602,6 +1653,11 @@ contains
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
                 call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
                 if( allocated(solvent_env) ) deallocate(solvent_env)
+                ! shipped-pair crossing for the inflation-based guidance
+                ! (diagnostic only, never a resolution claim)
+                if( solvent_supp_cnts(state) > 0 )then
+                    call shipped_pair_res(params, ml_even, ml_odd, ship05s(state), ship0143s(state))
+                endif
                 call merged%kill
                 call merged%copy(ml_even)
                 call merged%add(ml_odd)
@@ -1663,7 +1719,10 @@ contains
             call fname_fsc%kill
             if( allocated(fsc) ) deallocate(fsc)
         enddo
-        if( params%l_ml_reg ) call write_solvent_convergence_stats(params, solvent_supps, solvent_rmss, solvent_supp_cnts)
+        if( params%l_ml_reg )then
+            call write_solvent_convergence_stats(params, solvent_supps, solvent_rmss, solvent_supp_cnts, &
+                &res0143s, ship0143s)
+        endif
         if( .not. any(state_written) ) THROW_HARD('distributed PCG produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
@@ -1697,7 +1756,7 @@ contains
         endif
         call raw_fname%kill
         deallocate(res0143s, state_written, realized_fractions, update_weights, solvent_supps, solvent_rmss, &
-            &solvent_supp_cnts)
+            &solvent_supp_cnts, ship05s, ship0143s)
 
     contains
 
