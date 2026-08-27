@@ -182,6 +182,176 @@ class JobBuilderBranchTests(SimpleTestCase):
         self.assertEqual(response.status_code, 302)
         batchjob_cls.assert_not_called()
 
+    def test_create_batch_applies_nthr_default_but_omits_other_untouched_defaults(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "cluster2D",
+        })
+        request.user = _AuthUser()
+
+        workspace = Mock()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "cluster2D": {
+                "program": {"executable": "simple_exec"},
+                "compute": [
+                    {"key": "nthr", "keytype": "int", "has_default": True, "default": 8.0},
+                    {"key": "scale", "keytype": "float", "has_default": True, "default": 1.5},
+                ],
+            },
+        }
+        batchjob = Mock()
+        batchjob.new.return_value = True
+
+        with patch.object(job_builder_views, "get_workspace_id", return_value=4), patch.object(job_builder_views, "get_project_id", return_value=3), patch.object(job_builder_views, "Workspace", return_value=workspace), patch.object(job_builder_views, "_is_workspace_accessible", return_value=True), patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher), patch.object(job_builder_views, "BatchJob", return_value=batchjob), patch.object(job_builder_views.messages, "add_message"):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob.new.assert_called_once_with(
+            workspace,
+            "simple",
+            "cluster2D",
+            {"nthr": "8"},
+        )
+
+    def test_import_movies_does_not_materialize_unselected_directory_default(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "import_movies",
+            "filetab": "/data/movies.txt",
+        })
+        request.user = _AuthUser()
+        workspace = Mock()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "import_movies": {
+                "program": {"executable": "simple_exec"},
+                "files": [
+                    {
+                        "key": "filetab",
+                        "keytype": "file",
+                        "has_default": True,
+                        "default": "",
+                    },
+                    {
+                        "key": "dir_movies",
+                        "keytype": "dir",
+                        "has_default": True,
+                        "default": "preprocess/",
+                    },
+                ],
+            },
+        }
+        batchjob = Mock()
+        batchjob.new.return_value = True
+
+        with (
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "Workspace", return_value=workspace),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher),
+            patch.object(job_builder_views, "BatchJob", return_value=batchjob),
+            patch.object(job_builder_views.messages, "add_message"),
+        ):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob.new.assert_called_once_with(
+            workspace,
+            "simple",
+            "import_movies",
+            {"filetab": "/data/movies.txt"},
+        )
+
+    def test_import_movies_requires_exactly_one_movie_source(self):
+        self.assertEqual(
+            job_builder_views._validate_batch_program_args("import_movies", {}),
+            "choose a movie-file list or an input movies directory",
+        )
+        self.assertEqual(
+            job_builder_views._validate_batch_program_args(
+                "import_movies",
+                {"filetab": "movies.txt", "dir_movies": "/data/movies"},
+            ),
+            "choose either a movie-file list or an input movies directory, not both",
+        )
+        self.assertIsNone(job_builder_views._validate_batch_program_args(
+            "import_movies",
+            {"dir_movies": "/data/movies"},
+        ))
+
+    def test_create_batch_rejects_nonfinite_numeric_input(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "cluster2D",
+            "nthr": "nan",
+        })
+        request.user = _AuthUser()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "cluster2D": {
+                "program": {"executable": "simple_exec"},
+                "compute": [{"key": "nthr", "keytype": "int", "required": True}],
+            },
+        }
+
+        with patch.object(job_builder_views, "get_workspace_id", return_value=4), patch.object(job_builder_views, "get_project_id", return_value=3), patch.object(job_builder_views, "Workspace"), patch.object(job_builder_views, "_is_workspace_accessible", return_value=True), patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher), patch.object(job_builder_views, "BatchJob") as batchjob_cls, patch.object(job_builder_views.messages, "add_message"):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob_cls.assert_not_called()
+
+    def test_create_batch_passes_resolved_snapshot_to_batch_job(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "cluster2D",
+            "batch_source": "snapshot:12:3",
+        })
+        request.user = _AuthUser()
+        workspace = Mock()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "cluster2D": {
+                "program": {"executable": "simple_exec"},
+                "compute": [],
+            },
+        }
+        batchjob = Mock()
+        batchjob.new.return_value = True
+        source = {
+            "type": "stream_snapshot",
+            "stream_job_id": 12,
+            "particle_set_id": 3,
+            "filename": "snapshot_3.simple",
+        }
+
+        with (
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "Workspace", return_value=workspace),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher),
+            patch.object(
+                job_builder_views,
+                "_resolve_batch_project_source",
+                return_value=("/workspace/snapshot_3.simple", source, None),
+            ),
+            patch.object(job_builder_views, "BatchJob", return_value=batchjob),
+            patch.object(job_builder_views.messages, "add_message"),
+        ):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob.new.assert_called_once_with(
+            workspace,
+            "simple",
+            "cluster2D",
+            {},
+            parent_proj="/workspace/snapshot_3.simple",
+            source=source,
+        )
+
 
 class WorkspaceAccessBranchTests(SimpleTestCase):
     def setUp(self):

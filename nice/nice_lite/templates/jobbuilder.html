@@ -266,14 +266,30 @@
                         <p id="simple_program_title" class="text-xs font-medium text-streamtext"></p>
                     </div>
 
+                    <div class="grid grid-cols-[auto_2fr] gap-x-4 items-center mb-4">
+                        <label class="text-xs font-medium text-streamtext whitespace-nowrap"
+                               for="simple_batch_source">input project</label>
+                        <select id="simple_batch_source"
+                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                            <option value="workspace" selected>workspace project</option>
+                            {% for source in batch_snapshot_sources %}
+                                <option value="{{ source.key }}">{{ source.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <p id="simple_batch_feedback" role="alert" aria-live="polite"
+                       class="hidden mb-3 text-xs text-streamerror"></p>
+
                     {% if simple_program_inputs %}
                         {% for program in simple_program_inputs %}
                         <form id="batch_form_simple_{{ program.prg }}" method="POST"
                               action="{% url 'nice_lite:create_batch' %}" target="workspace_iframe"
+                              data-batch-package="simple"
                               class="hidden simple-program-config">
                             {% csrf_token %}
                             <input type="hidden" name="package" value="simple">
                             <input type="hidden" name="program" value="{{ program.prg }}">
+                            <input type="hidden" name="batch_source" value="workspace">
                             <div class="space-y-4 overflow-y-auto pr-1">
                                 {% for section in program.sections %}
                                 <div>
@@ -282,14 +298,14 @@
                                         {% for input in section.inputs %}
                                             {% if input.keytype == "hidden" %}
                                                   <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
-                                                      for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}</label>
+                                                      for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                   <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
                                                    <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
                                                        {% if input.required %}required{% endif %}
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
-                                                <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}</label>
+                                                <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                 <div class="relative flex items-center">
                                                     {% if input.keytype == "int" %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
@@ -448,14 +464,30 @@
                         <p id="single_program_title" class="text-xs font-medium text-streamtext"></p>
                     </div>
 
+                    <div class="grid grid-cols-[auto_2fr] gap-x-4 items-center mb-4">
+                        <label class="text-xs font-medium text-streamtext whitespace-nowrap"
+                               for="single_batch_source">input project</label>
+                        <select id="single_batch_source"
+                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
+                            <option value="workspace" selected>workspace project</option>
+                            {% for source in batch_snapshot_sources %}
+                                <option value="{{ source.key }}">{{ source.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <p id="single_batch_feedback" role="alert" aria-live="polite"
+                       class="hidden mb-3 text-xs text-streamerror"></p>
+
                     {% if single_program_inputs %}
                         {% for program in single_program_inputs %}
                         <form id="batch_form_single_{{ program.prg }}" method="POST"
                               action="{% url 'nice_lite:create_batch' %}" target="workspace_iframe"
+                              data-batch-package="single"
                               class="hidden single-program-config">
                             {% csrf_token %}
                             <input type="hidden" name="package" value="single">
                             <input type="hidden" name="program" value="{{ program.prg }}">
+                            <input type="hidden" name="batch_source" value="workspace">
                             <div class="space-y-4 overflow-y-auto pr-1">
                                 {% for section in program.sections %}
                                 <div>
@@ -464,14 +496,14 @@
                                         {% for input in section.inputs %}
                                             {% if input.keytype == "hidden" %}
                                                   <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
-                                                      for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}</label>
+                                                      for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                   <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
                                                    <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
                                                        {% if input.required %}required{% endif %}
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
-                                                <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}</label>
+                                                <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                 <div class="relative flex items-center">
                                                     {% if input.keytype == "int" %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
@@ -722,6 +754,7 @@
 
         function showSimpleProgramConfig(programKey) {
             selectedSimpleProgramKey = programKey;
+            setBatchFeedback("simple", "");
             const selectorPanel = document.getElementById("simple_selector_panel");
             const configPanel = document.getElementById("simple_config_panel");
             const actions = document.getElementById("simple_batch_actions");
@@ -772,6 +805,7 @@
 
         function showSingleProgramConfig(programKey) {
             selectedSingleProgramKey = programKey;
+            setBatchFeedback("single", "");
             const selectorPanel = document.getElementById("single_selector_panel");
             const configPanel = document.getElementById("single_config_panel");
             const actions = document.getElementById("single_batch_actions");
@@ -790,12 +824,80 @@
             if (active) active.classList.remove("hidden");
         }
 
+        const batchSubmissionPending = {simple: false, single: false};
+
+        function setBatchFeedback(packageName, message) {
+            const feedback = document.getElementById(packageName + "_batch_feedback");
+            if (!feedback) return;
+            feedback.textContent = message;
+            feedback.classList.toggle("hidden", !message);
+        }
+
+        function validateSelectedBatchForm(packageName, programKey, form) {
+            const invalidFields = Array.from(form.querySelectorAll(":invalid"));
+            if (invalidFields.length > 0) {
+                const labels = invalidFields.map((field) => {
+                    const label = field.labels && field.labels.length > 0 ? field.labels[0].textContent.trim() : field.name;
+                    return label || field.name;
+                });
+                setBatchFeedback(packageName, "complete required fields: " + labels.join(", "));
+                invalidFields[0].scrollIntoView({block: "center"});
+                form.reportValidity();
+                return false;
+            }
+
+            if (packageName === "simple" && programKey === "import_movies") {
+                const filetab = form.elements.namedItem("filetab");
+                const moviesDir = form.elements.namedItem("dir_movies");
+                const hasFiletab = Boolean(filetab && filetab.value.trim() !== "");
+                const hasMoviesDir = Boolean(moviesDir && moviesDir.value.trim() !== "");
+                if (hasFiletab === hasMoviesDir) {
+                    const message = hasFiletab
+                        ? "choose either a movie-file list or an input movies directory, not both"
+                        : "choose a movie-file list or an input movies directory";
+                    setBatchFeedback(packageName, message);
+                    const input = hasFiletab ? filetab : (filetab || moviesDir);
+                    if (input) input.scrollIntoView({block: "center"});
+                    return false;
+                }
+            }
+
+            setBatchFeedback(packageName, "");
+            return true;
+        }
+
         function submitSelectedBatch(packageName) {
             const programKey = packageName === "simple" ? selectedSimpleProgramKey : selectedSingleProgramKey;
-            if (!programKey) return;
+            if (!programKey || batchSubmissionPending[packageName]) return;
             const form = document.getElementById("batch_form_" + packageName + "_" + programKey);
-            if (form) form.requestSubmit();
+            if (!form) return;
+            if (!validateSelectedBatchForm(packageName, programKey, form)) return;
+            const sourceSelector = document.getElementById(packageName + "_batch_source");
+            const sourceInput = form.querySelector("input[name='batch_source']");
+            if (sourceSelector && sourceInput) sourceInput.value = sourceSelector.value;
+            form.requestSubmit();
         }
+
+        function markBatchSubmissionPending(event) {
+            const form = event.currentTarget;
+            const packageName = form.dataset.batchPackage;
+            if (!packageName) return;
+            if (batchSubmissionPending[packageName]) {
+                event.preventDefault();
+                return;
+            }
+            batchSubmissionPending[packageName] = true;
+            const button = document.getElementById(packageName + "_batch_start");
+            if (!button) return;
+            button.disabled = true;
+            button.setAttribute("aria-busy", "true");
+            button.textContent = "starting...";
+            button.classList.add("opacity-60", "cursor-wait");
+        }
+
+        document.querySelectorAll("form[data-batch-package]").forEach((form) => {
+            form.addEventListener("submit", markBatchSubmissionPending);
+        });
 
         let hiddenInputsVisible = false;
         function toggleHiddenInputsVisibility() {

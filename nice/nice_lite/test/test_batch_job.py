@@ -1,6 +1,7 @@
 import os
+import subprocess
 import tempfile
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -11,6 +12,7 @@ from ..data_structures.batchjob import BatchJob
 from ..data_structures.simple import SIMPLEBatch
 from ..data_structures.workspace import Workspace
 from ..models import JobModel, ProjectModel, WorkspaceModel
+from ..views import job_builder_views
 
 
 class BatchJobLifecycleTests(TestCase):
@@ -77,8 +79,190 @@ class BatchJobLifecycleTests(TestCase):
         self.assertTrue(created)
         create.assert_called_once_with()
 
+    def test_new_keeps_failed_record_when_job_directory_cannot_be_created(self):
+        launcher = batchjob_module.SIMPLEBatch
+        with patch.object(batchjob_module, "ensure_directory", return_value=False), patch.object(launcher, "loadUIJSON", return_value=True), patch.object(launcher, "start") as start:
+            job = BatchJob()
+            created = job.new(self.workspace, "simple", "import_movies", {})
+
+        self.assertFalse(created)
+        jobmodel = JobModel.objects.get(id=job.id)
+        self.assertEqual(jobmodel.status, "failed")
+        self.assertEqual(jobmodel.master_status, "failed")
+        self.workspace_model.refresh_from_db()
+        self.assertEqual(self.workspace_model.jcnt, 1)
+        start.assert_not_called()
+
+    def test_new_launches_from_explicit_stream_snapshot_and_records_source(self):
+        snapshot_dir = os.path.join(
+            self.workspace_dir,
+            "2_simple_stream",
+            "classification_2D",
+            "snapshots",
+            "snapshot_1",
+        )
+        os.makedirs(snapshot_dir)
+        snapshot_path = os.path.join(snapshot_dir, "snapshot_1.simple")
+        with open(snapshot_path, "w", encoding="utf-8"):
+            pass
+        source = {
+            "type": "stream_snapshot",
+            "stream_job_id": 12,
+            "particle_set_id": 1,
+            "filename": "snapshot_1.simple",
+        }
+
+        launcher = batchjob_module.SIMPLEBatch
+        with (
+            patch.object(launcher, "loadUIJSON", return_value=True),
+            patch.object(launcher, "start", return_value=True) as start,
+        ):
+            job = BatchJob()
+            created = job.new(
+                self.workspace,
+                "simple",
+                "cluster2D",
+                {"nthr": "8"},
+                parent_proj=snapshot_path,
+                source=source,
+            )
+
+        self.assertTrue(created)
+        start.assert_called_once_with(
+            {"nthr": "8"},
+            os.path.join(self.workspace_dir, "1_cluster2D"),
+            self.workspace_dir,
+            "cluster2D",
+            job.id,
+            parent_proj=snapshot_path,
+        )
+        jobmodel = JobModel.objects.get(id=job.id)
+        self.assertEqual(jobmodel.master_stats["source"], source)
+        self.assertEqual(BatchJob(id=job.id).source, source)
+
+    def test_new_rejects_explicit_project_outside_workspace(self):
+        outside_project = os.path.join(self.tempdir.name, "outside.simple")
+        with open(outside_project, "w", encoding="utf-8"):
+            pass
+
+        launcher = batchjob_module.SIMPLEBatch
+        with patch.object(launcher, "start") as start:
+            created = BatchJob().new(
+                self.workspace,
+                "simple",
+                "cluster2D",
+                {},
+                parent_proj=outside_project,
+            )
+
+        self.assertFalse(created)
+        self.assertEqual(JobModel.objects.count(), 0)
+        start.assert_not_called()
+
+    def test_snapshot_sources_are_resolved_from_workspace_metadata(self):
+        snapshot_dir = os.path.join(
+            self.workspace_dir,
+            "2_simple_stream",
+            "classification_2D",
+            "snapshots",
+            "snapshot_3",
+        )
+        os.makedirs(snapshot_dir)
+        snapshot_path = os.path.join(snapshot_dir, "snapshot_3.simple")
+        with open(snapshot_path, "w", encoding="utf-8"):
+            pass
+        stream_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=2,
+            dirc="2_simple_stream",
+            particle_sets_stats={
+                "particle_sets": [{
+                    "id": 3,
+                    "name": "particle set 3",
+                    "type": "snapshot",
+                    "filename": "snapshot_3.simple",
+                    "time": 123,
+                }],
+            },
+        )
+
+        sources = job_builder_views._collect_batch_snapshot_sources(self.workspace)
+        project_path, metadata, error = job_builder_views._resolve_batch_project_source(
+            self.workspace,
+            f"snapshot:{stream_job.id}:3",
+        )
+
+        self.assertEqual(sources, [{
+            "key": f"snapshot:{stream_job.id}:3",
+            "label": "stream 2 - particle set 3",
+        }])
+        self.assertIsNone(error)
+        self.assertEqual(project_path, snapshot_path)
+        self.assertEqual(metadata, {
+            "type": "stream_snapshot",
+            "stream_job_id": stream_job.id,
+            "particle_set_id": 3,
+            "filename": "snapshot_3.simple",
+        })
+
 
 class SimpleBatchDispatchTests(TestCase):
+    def test_lsf_submission_waits_for_scheduler_acceptance(self):
+        dispatch = type("Dispatch", (), {"scmd": "bsub"})()
+
+        with tempfile.TemporaryDirectory() as job_dir:
+            script_path = os.path.join(job_dir, "job.script")
+            with open(script_path, "w", encoding="utf-8"):
+                pass
+            with patch.object(simple_module.subprocess, "run") as run:
+                simple_module._submit(dispatch, script_path, job_dir)
+
+        run.assert_called_once_with(
+            ["bsub", "-L", "/bin/sh"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=job_dir,
+            stdin=ANY,
+            text=True,
+            check=True,
+        )
+        self.assertTrue(run.call_args.kwargs["stdin"].closed)
+
+    def test_start_fails_when_lsf_rejects_submission(self):
+        with tempfile.TemporaryDirectory() as parent_dir:
+            parent_proj = os.path.join(parent_dir, "workspace.simple")
+            with open(parent_proj, "w", encoding="utf-8"):
+                pass
+            base_dir = os.path.join(parent_dir, "import_movies")
+            os.mkdir(base_dir)
+            dispatch = type("Dispatch", (), {
+                "tplt": "#!/bin/sh\nXXXSIMPLEXXX",
+                "scmd": "bsub",
+                "url": "localhost:8000",
+            })()
+
+            with (
+                patch.object(SIMPLEBatch, "loadUIJSON", return_value=True),
+                patch.object(simple_module.DispatchModel.objects, "filter") as dispatch_filter,
+                patch.object(simple_module.shutil, "which", return_value="/usr/bin/bsub"),
+                patch.object(
+                    simple_module.subprocess,
+                    "run",
+                    side_effect=subprocess.CalledProcessError(1, ["bsub"]),
+                ),
+            ):
+                dispatch_filter.return_value.last.return_value = dispatch
+                started = SIMPLEBatch(pckg="simple").start(
+                    {},
+                    base_dir,
+                    parent_dir,
+                    "import_movies",
+                    9,
+                )
+
+        self.assertFalse(started)
+
     def test_start_dispatches_corresponding_executable_and_quotes_values(self):
         with tempfile.TemporaryDirectory() as parent_dir:
             parent_proj = os.path.join(parent_dir, "parent project.simple")
@@ -86,7 +270,7 @@ class SimpleBatchDispatchTests(TestCase):
                 pass
 
             dispatch = type("Dispatch", (), {
-                "tplt": "#!/bin/sh\nXXXSIMPLEXXX",
+                "tplt": "#!/bin/sh\n# CPU XXXNCPUXXX\nXXXSIMPLEXXX",
                 "scmd": "sh",
                 "url": "http://localhost:8000",
             })()
@@ -99,7 +283,7 @@ class SimpleBatchDispatchTests(TestCase):
                         dispatch_filter.return_value.last.return_value = dispatch
                         launcher = SIMPLEBatch(pckg=package)
                         started = launcher.start(
-                            {"input": "path with spaces"},
+                            {"input": "path with spaces", "nthr": "8"},
                             base_dir,
                             parent_dir,
                             "demo_commander",
@@ -110,6 +294,7 @@ class SimpleBatchDispatchTests(TestCase):
                     self.assertTrue(started)
                     with open(os.path.join(base_dir, "job.script"), encoding="utf-8") as script:
                         content = script.read()
-                    self.assertIn(f"{executable} prg=demo_commander input='path with spaces'", content)
+                    self.assertIn(f"{executable} prg=demo_commander input='path with spaces' nthr=8", content)
                     self.assertIn(f"cp -v '{parent_proj}' workspace.simple", content)
+                    self.assertIn("# CPU 8", content)
                     submit.assert_called_once()

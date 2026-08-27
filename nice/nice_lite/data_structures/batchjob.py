@@ -3,6 +3,7 @@ import os
 import time
 
 # django imports
+from django.db import transaction
 from django.utils import timezone
 
 # local imports
@@ -27,6 +28,7 @@ class BatchJob(Job):
         self.wspc = None
         self.pckg = pckg
         self.status = "unknown"
+        self.source = None
 
         if id is not None:
             self.id = id
@@ -64,6 +66,7 @@ class BatchJob(Job):
         self.pckg = metadata.get("package", "")
         self.prnt = metadata.get("parent", 0)
         self.status = self.jobmodel.status
+        self.source = metadata.get("source")
         self.absdir = self.get_absdir()
 
     # ------------------------------------------------------------------
@@ -124,15 +127,18 @@ class BatchJob(Job):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _metadata(pckg, prog, parent=0):
-        return {
+    def _metadata(pckg, prog, parent=0, source=None):
+        metadata = {
             "job_type": "batch",
             "package": pckg,
             "program": prog,
             "parent": parent,
         }
+        if isinstance(source, dict):
+            metadata["source"] = dict(source)
+        return metadata
 
-    def new(self, workspace, pckg, prog, args):
+    def new(self, workspace, pckg, prog, args, parent_proj=None, source=None):
         """Create and launch a SIMPLE or SINGLE batch job."""
         if workspace is None or pckg not in ("simple", "single") or not prog:
             print_error("new: invalid batch job configuration")
@@ -147,45 +153,67 @@ class BatchJob(Job):
             print_error("new: workspace is unavailable")
             return False
 
-        parent_proj = os.path.join(workspace_dir, "workspace.simple")
-        if not os.path.isfile(parent_proj):
-            if not SIMPLEProject(workspace_dir).create():
-                print_error("new: failed to initialize workspace.simple")
+        explicit_parent_proj = parent_proj is not None
+        if explicit_parent_proj:
+            try:
+                workspace_root = os.path.realpath(workspace_dir)
+                parent_proj = os.path.realpath(parent_proj)
+                source_in_workspace = os.path.commonpath((workspace_root, parent_proj)) == workspace_root
+            except (TypeError, ValueError):
+                source_in_workspace = False
+            if not source_in_workspace or not os.path.isfile(parent_proj):
+                print_error("new: batch project source is unavailable")
                 return False
+        else:
+            parent_proj = os.path.join(workspace_dir, "workspace.simple")
+            if not os.path.isfile(parent_proj):
+                if not SIMPLEProject(workspace_dir).create():
+                    print_error("new: failed to initialize workspace.simple")
+                    return False
 
-        self.disp = workspacemodel.jcnt + 1
         self.pckg = pckg
         self.prog = prog
         self.name = prog.replace("_", " ")
-        self.dirc = f"{self.disp}_{prog}"
         self.args = dict(args)
-        if not self._create_dir(workspace_dir):
-            return False
 
-        jobmodel = JobModel(
-            dset=workspacemodel,
-            cdat=timezone.now(),
-            disp=self.disp,
-            args=self.args,
-            name=self.name,
-            dirc=self.dirc,
-            status="queued",
-            master_status="queued",
-            master_stats=self._metadata(pckg, prog),
-            master_heartbeat=0,
-        )
-        jobmodel.save()
-        workspacemodel.jcnt = self.disp
-        workspacemodel.save()
+        # Reserve the display counter under a row lock so two near-simultaneous
+        # Start clicks cannot choose the same job directory.
+        with transaction.atomic():
+            locked_workspace = WorkspaceModel.objects.select_for_update().get(pk=workspacemodel.pk)
+            self.disp = locked_workspace.jcnt + 1
+            self.dirc = f"{self.disp}_{prog}"
+            jobmodel = JobModel(
+                dset=locked_workspace,
+                cdat=timezone.now(),
+                disp=self.disp,
+                args=self.args,
+                name=self.name,
+                dirc=self.dirc,
+                status="queued",
+                master_status="queued",
+                master_stats=self._metadata(pckg, prog, source=source),
+                master_heartbeat=0,
+            )
+            jobmodel.save()
+            locked_workspace.jcnt = self.disp
+            locked_workspace.save()
 
         self.id = jobmodel.id
         self.jobmodel = jobmodel
-        self.wspc = workspacemodel
+        self.wspc = locked_workspace
         self.status = "queued"
         self.absdir = self.get_absdir()
 
+        if not self._create_dir(workspace_dir):
+            self.status = "failed"
+            jobmodel.status = "failed"
+            jobmodel.master_status = "failed"
+            jobmodel.save()
+            return False
+
         simple = SIMPLEBatch(pckg=pckg)
-        if simple.start(self.args, self.absdir, workspace_dir, prog, self.id):
+        launch_options = {"parent_proj": parent_proj} if explicit_parent_proj else {}
+        if simple.start(self.args, self.absdir, workspace_dir, prog, self.id, **launch_options):
             return True
 
         self.status = "failed"

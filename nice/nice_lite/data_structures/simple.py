@@ -25,17 +25,20 @@ def _submit(dispatchmodel, script_path, cwd):
       - 'bsub'  : pipes the script into bsub -L /bin/sh (LSF)
       - anything else : launches the script directly as a detached process
 
-    The file handle for bsub stdin is managed via a context manager to
-    prevent resource leaks.
+    LSF submission waits for bsub to report scheduler acceptance. The file
+    handle for bsub stdin is managed via a context manager to prevent resource
+    leaks.
     """
     if dispatchmodel.scmd == 'bsub':
         with open(script_path, 'r') as f:
-            subprocess.Popen(
+            subprocess.run(
                 ['bsub', '-L', '/bin/sh'],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=cwd,
-                stdin=f
+                stdin=f,
+                text=True,
+                check=True
             )
     else:
         subprocess.Popen(
@@ -356,7 +359,7 @@ class SIMPLEBatch:
             return False
         if not os.path.isdir(parent_dir):
             return False
-        if not os.path.exists(self.parent_proj):
+        if not os.path.isfile(self.parent_proj):
             return False
         if not self.executable or not self.jobtype:
             return False
@@ -392,8 +395,13 @@ class SIMPLEBatch:
         command_string += " >> stdout.log 2>> stderr.log\n"
 
         # fill template placeholders and normalise line endings
+        try:
+            scheduler_nthr = max(1, int(float(self.args.get("nthr", 1))))
+        except (TypeError, ValueError, OverflowError):
+            scheduler_nthr = 1
+
         dispatch_script = dispatchmodel.tplt
-        dispatch_script = dispatch_script.replace(self.tplt_nthr_motif,   "1")
+        dispatch_script = dispatch_script.replace(self.tplt_nthr_motif,   str(scheduler_nthr))
         dispatch_script = dispatch_script.replace(self.tplt_simple_motif, command_string)
         dispatch_script = dispatch_script.replace("\r\n", "\n")
 

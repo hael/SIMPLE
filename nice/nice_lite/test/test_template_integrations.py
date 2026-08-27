@@ -47,6 +47,12 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertNotIn("{% url 'nice_lite:file_browser' type path|add:'/'|add:dir %}", filebrowser)
         self.assertIn('name="selectedpath" value="{{ parentdir }}"', filebrowser)
 
+    def test_batch_file_browser_restore_does_not_show_loading_overlay(self):
+        filebrowser = self._read_template("filebrowser.html")
+
+        self.assertIn("const restoreJobsIframe = (iframe) => {", filebrowser)
+        self.assertNotIn("parent.toggleJobsIframeLoading(true);", filebrowser)
+
     def test_file_browser_openers_share_last_directory(self):
         filebrowser = self._read_template("filebrowser.html")
         jobbuilder = self._read_template("jobbuilder.html")
@@ -95,13 +101,55 @@ class TemplateIntegrationTests(SimpleTestCase):
         jobbuilder = self._read_template("jobbuilder.html")
 
         self.assertEqual(jobbuilder.count("action=\"{% url 'nice_lite:create_batch' %}\""), 2)
+        self.assertIn('data-batch-package="simple"', jobbuilder)
+        self.assertIn('data-batch-package="single"', jobbuilder)
         self.assertIn('name="package" value="simple"', jobbuilder)
         self.assertIn('name="package" value="single"', jobbuilder)
         self.assertIn('name="program" value="{{ program.prg }}"', jobbuilder)
         self.assertIn('onclick="submitSelectedBatch(\'simple\')"', jobbuilder)
         self.assertIn('onclick="submitSelectedBatch(\'single\')"', jobbuilder)
         self.assertIn('function submitSelectedBatch(packageName)', jobbuilder)
-        self.assertIn('if (form) form.requestSubmit();', jobbuilder)
+        self.assertIn('if (!form) return;', jobbuilder)
+        self.assertIn('sourceInput.value = sourceSelector.value;', jobbuilder)
+        self.assertIn('form.requestSubmit();', jobbuilder)
+        self.assertIn('function validateSelectedBatchForm(packageName, programKey, form)', jobbuilder)
+        self.assertIn('form.reportValidity();', jobbuilder)
+        self.assertIn('complete required fields:', jobbuilder)
+        self.assertIn('programKey === "import_movies"', jobbuilder)
+        self.assertIn('choose a movie-file list or an input movies directory', jobbuilder)
+        self.assertIn('id="simple_batch_feedback" role="alert"', jobbuilder)
+        self.assertIn('id="single_batch_feedback" role="alert"', jobbuilder)
+        self.assertEqual(jobbuilder.count('class="text-streamerror" aria-hidden="true"> *</span>'), 4)
+        self.assertIn('const batchSubmissionPending = {simple: false, single: false};', jobbuilder)
+        self.assertIn('form.addEventListener("submit", markBatchSubmissionPending);', jobbuilder)
+        self.assertIn('button.textContent = "starting...";', jobbuilder)
+
+    def test_batch_submission_guard_does_not_change_stream_submission(self):
+        jobbuilder = self._read_template("jobbuilder.html")
+
+        self.assertIn("action=\"{% url 'nice_lite:create_stream' %}\"", jobbuilder)
+        self.assertIn('<button type="submit"', jobbuilder)
+        self.assertEqual(jobbuilder.count('data-batch-package='), 2)
+        self.assertIn('document.querySelectorAll("form[data-batch-package]")', jobbuilder)
+
+    def test_batch_project_source_defaults_to_workspace_and_lists_snapshots(self):
+        rendered = render_to_string("jobbuilder.html", {
+            "stream_user_inputs": [],
+            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "batch_snapshot_sources": [{
+                "key": "snapshot:12:3",
+                "label": "stream 2 - particle set 3",
+            }],
+        })
+
+        self.assertEqual(rendered.count('value="workspace" selected>workspace project'), 2)
+        self.assertEqual(rendered.count('value="snapshot:12:3"'), 2)
+        self.assertEqual(rendered.count('name="batch_source" value="workspace"'), 2)
+        self.assertIn('id="simple_batch_source"', rendered)
+        self.assertIn('id="single_batch_source"', rendered)
 
     def test_batch_inputs_render_current_ui_json_schema(self):
         context = {

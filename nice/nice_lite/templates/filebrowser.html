@@ -129,10 +129,6 @@
         };
 
         const restoreJobsIframe = (iframe) => {
-            if (typeof parent.toggleJobsIframeLoading === "function") {
-                parent.toggleJobsIframeLoading(true);
-            }
-
             iframe.dataset.pickerMode = "";
             iframe.dataset.browserTarget = "";
 
