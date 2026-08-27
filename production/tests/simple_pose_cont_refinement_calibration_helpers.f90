@@ -8,6 +8,13 @@ integer, parameter, public :: CALIBRATION_BOXES(2) = [8,12]
 integer, parameter, public :: ACCEPTANCE_BOXES(2) = [10,16]
 integer, parameter, public :: N_TOLERANCE_FAMILIES = 7
 real(dp), parameter, public :: CALIBRATION_SAFETY_FACTOR = 8._dp
+! Phase 4 Oracle artifacts froze these values before acceptance-fixture tests.
+real(dp), parameter, public :: FROZEN_ABSOLUTE_TOLERANCES(N_TOLERANCE_FAMILIES) = [ &
+    &4.9353318740941177e-4_dp, 2.0599365235796085e-7_dp, 1.e-8_dp, 1.e-10_dp, &
+    &1.e-5_dp, 1.1541020711748716e-4_dp, 1.e-5_dp]
+real(dp), parameter, public :: FROZEN_RELATIVE_TOLERANCES(N_TOLERANCE_FAMILIES) = [ &
+    &5.7686781070864920e-6_dp, 2.e-5_dp, 5.e-3_dp, 2.e-5_dp, 3.e-2_dp, &
+    &2.e-5_dp, 5.e-2_dp]
 integer, parameter :: MAX_CALIBRATION_OBSERVATIONS = 64
 
 character(len=32), parameter, public :: TOLERANCE_NAMES(N_TOLERANCE_FAMILIES) = [character(len=32) :: &

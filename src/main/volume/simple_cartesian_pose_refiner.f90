@@ -67,6 +67,8 @@ contains
     procedure :: new_prepared_test => new_pose_refiner_prepared_test
     procedure :: prepare_particle => prepare_pose_particle
     procedure :: prepared_objective_gradient => prepared_pose_objective_gradient
+    procedure :: prepared_normal_terms_test => prepared_pose_normal_terms_test
+    procedure :: prepared_residual_jacobian_test => prepared_pose_residual_jacobian_test
     procedure :: refine_prepared_pose_lm
     procedure :: kill => kill_fourier_workspace
     procedure :: get_lims2 => get_fourier_workspace_lims2
@@ -602,6 +604,70 @@ contains
         enddo
         if( min_switch_margin == huge(0._dp) ) min_switch_margin = 0._dp
     end subroutine pose_normal_terms
+
+    !> Test-only access to the fused prepared-data normal equations.
+    subroutine prepared_pose_normal_terms_test( self, rotmat, shift, data, objective, &
+        &gradient, hessian, min_switch_margin )
+        class(cartesian_pose_refiner), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2)
+        type(cartesian_pose_data), intent(in) :: data
+        real(dp), intent(out) :: objective, gradient(5), hessian(5,5), min_switch_margin
+
+        if( .not. data%valid ) error stop 'prepared normal terms require valid particle data'
+        call self%pose_normal_terms(rotmat,shift,data%observed,objective,gradient,hessian, &
+            &min_switch_margin,data%transfer,data%shell_range)
+    end subroutine prepared_pose_normal_terms_test
+
+    !> Test-only access to each prepared-data residual and Jacobian column.
+    subroutine prepared_pose_residual_jacobian_test( self, rotmat, shift, data, residual, &
+        &jacobian, min_switch_margin )
+        class(cartesian_pose_refiner), intent(in) :: self
+        real(dp), intent(in) :: rotmat(3,3), shift(2)
+        type(cartesian_pose_data), intent(in) :: data
+        complex(dp), allocatable, intent(out) :: residual(:,:), jacobian(:,:,:)
+        real(dp), intent(out) :: min_switch_margin
+        complex :: value, dvalue_dloc(3), phase
+        complex(dp) :: weighted_phase, model
+        real(sp) :: loc(3), switch_margin(3)
+        real(dp) :: arg, dloc(3,3), frequency(2)
+        integer :: axis, h, k, radius_squared
+
+        if( .not. self%exists ) &
+            &error stop 'prepared residual Jacobian called on an empty Fourier workspace'
+        if( .not. data%valid ) &
+            &error stop 'prepared residual Jacobian requires valid particle data'
+        allocate(residual(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2)))
+        allocate(jacobian(self%lims2(1,1):self%lims2(1,2),self%lims2(2,1):self%lims2(2,2),5))
+        residual = cmplx(0._dp,0._dp,kind=dp)
+        jacobian = cmplx(0._dp,0._dp,kind=dp)
+        min_switch_margin = huge(0._dp)
+        do k = self%lims2(2,1), self%lims2(2,2)
+            do h = self%lims2(1,1), self%lims2(1,2)
+                radius_squared = h*h+k*k
+                if( radius_squared < data%shell_range(1)**2 .or. &
+                    &radius_squared > data%shell_range(2)**2 ) cycle
+                loc = real(self%padf,sp)*real(matmul(real([h,k,0],dp),rotmat),sp)
+                call self%sample_with_grad(loc,value,dvalue_dloc,switch_margin)
+                min_switch_margin = min(min_switch_margin,real(minval(switch_margin),dp))
+                dloc(:,1) = [0._dp,real(loc(3),dp),-real(loc(2),dp)]
+                dloc(:,2) = [-real(loc(3),dp),0._dp,real(loc(1),dp)]
+                dloc(:,3) = [real(loc(2),dp),-real(loc(1),dp),0._dp]
+                arg = 2._dp*real(PI,dp)*(real(h,dp)*shift(1)+real(k,dp)*shift(2))/ &
+                    &real(self%box,dp)
+                phase = cmplx(cos(arg),sin(arg),kind=sp)
+                weighted_phase = cmplx(phase,kind=dp)*cmplx(data%transfer(h,k),kind=dp)
+                model = weighted_phase*cmplx(value,kind=dp)
+                residual(h,k) = model-cmplx(data%observed(h,k),kind=dp)
+                do axis = 1, 3
+                    jacobian(h,k,axis) = weighted_phase* &
+                        &sum(cmplx(dvalue_dloc,kind=dp)*dloc(:,axis))
+                enddo
+                frequency = 2._dp*real(PI,dp)*real([h,k],dp)/real(self%box,dp)
+                jacobian(h,k,4:5) = cmplx(0._dp,frequency,kind=dp)*model
+            enddo
+        enddo
+        if( min_switch_margin == huge(0._dp) ) min_switch_margin = 0._dp
+    end subroutine prepared_pose_residual_jacobian_test
 
     !> Return the joint pose objective and five-vector gradient without exposing
     !! the computed Gauss-Newton block or stencil margin.

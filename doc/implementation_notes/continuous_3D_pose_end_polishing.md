@@ -930,7 +930,160 @@ Implement the disjoint calibration and acceptance fixtures, combined error metri
 
 ### Phase 5 — verify the weighted objective and normal equations
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
+
+**Prepare evidence — 2026-08-27:**
+
+- The independent phase gate passed with Phases 0 through 4 `COMPLETE` and Phase 5 `NOT STARTED`.
+  The prepared source starts from `HEAD=b709b905b`, with the worktree clean at turn entry.
+- `src/main/volume/simple_cartesian_pose_refiner.f90:609` adds test-only access to the fused prepared
+  objective, five-component $J^Hr$, symmetric $J^HJ$, and stencil margin. The component surface at
+  `src/main/volume/simple_cartesian_pose_refiner.f90:622` exposes each executed complex residual and
+  all five complex Jacobian columns without changing or allocating in the production LM path.
+- `production/tests/simple_pose_cont_refinement_calibration_helpers.f90:12` publishes the Phase 4
+  Oracle-frozen absolute and relative tolerance arrays without changing a derived value.
+  `production/tests/simple_pose_cont_refinement_objective_normals_test.f90:27` applies them to the
+  untouched $10^3$ and $16^3$ acceptance fixtures. The independent accumulator at
+  `production/tests/simple_pose_cont_refinement_objective_normals_test.f90:186` reconstructs the
+  whitened residual and right-tangent Jacobian and then accumulates the scalar objective, every
+  $J^Hr$ component, and all 25 $J^HJ$ entries separately from the fused routine.
+- The focused case covers exact and nonstationary poses under unit, constant, and shell-varying
+  positive variance. It retains `residual_jacobian_components.tsv`,
+  `normal_equation_components.tsv`, and `objective_normal_summary.tsv` in the required Oracle
+  `evidence_dir`. `production/tests/simple_test_pose_cont_refinement.f90:203` exposes the keyed
+  `case=objective_normals` entry without adding it to the established mother-suite schedule.
+- The focused hypothesis is that every executed residual and Jacobian component agrees with its
+  independent counterpart under the frozen algebraic or derivative tolerance, and that the fused
+  scalar objective, $J^Hr$, and symmetric $J^HJ$ agree with independent componentwise accumulation.
+  The regression hypothesis is that all five established mother groups still pass unchanged.
+- Lightweight source checks are `PASS`: `git diff --check` exited `0`; the four edited Fortran
+  sources have no line longer than 132 columns, conflict marker, or invalid same-line diagnostic
+  continuation. The new source follows the `simple_pose_cont_refinement_*` dependency-glob naming
+  convention. `production/CMakeLists.txt` is unchanged at SHA-256
+  `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- Applicable policies are `doc/policies/KB_Interpolation_Policy.md` for padded-grid normalization,
+  `doc/policies/reconstruct3D_pcg_policy.md` for the unchanged reconstruction boundary,
+  `doc/policies/refine3D_policy.md` for fixed-volume pose ownership, and
+  `doc/policies/sigma_calculation_policy.md` for positive native-shell variance. No UI policy
+  applies to this numerical test slice.
+- The restricted UCRT64 environment check failed before Bash execution with the documented signal-
+  pipe `Win32 error 5`. Its one exact elevated retry exited `0` and reported `UCRT64`, source
+  `/home/hossainm7/hael_SIMPLE`, `/usr/bin/rsync`, and rsync `3.4.4` protocol `32`.
+- No local compilation, linking, CMake command, SIMPLE executable, real synchronization, remote
+  normalization, runtime test, scientific acceptance test, or commit occurs in this prepare turn.
+  The exact approved rsync dry run is the final operation. Its complete output remains in the
+  controller JSONL evidence. Any subsequent tracked or untracked source or controller-input change
+  invalidates the prepared fingerprint and requires a new Phase 5 prepare turn.
+
+**Oracle validation attempt — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 4 `COMPLETE` and Phase 5
+  `READY FOR ORACLE VALIDATION`. The exact approved `rsync -av --delete --info=progress2` command
+  exited `0`, transferred 85 files, and reported no deletion. The transfer used the prepared source,
+  destination, and exclusions.
+- The first remote line-ending invocation failed locally with exit `1` because its nested shell quote
+  was incomplete. SSH and `sed` did not run. The corrected invocation of the same approved command
+  exited `0` and normalized only copied `*.pl` and `*.sh` files below
+  `~/Projects/hael_SIMPLE-rsync-test`.
+- The default incremental logged build loaded `gcc/15.2.0`, retained `pipefail`, and exited `1`.
+  GFortran rejected the two declarations at
+  `production/tests/simple_pose_cont_refinement_objective_normals_test.f90:254` and line 255 because
+  an assumed-shape array cannot give its third dimension the explicit extent `5`. The resulting
+  unknown-type diagnostics and caller mismatches are consequences of those declarations, not
+  separate failures. The failed log is retained at
+  `~/Projects/hael_SIMPLE-rsync-test/build_debug_incremental_failed.log`; the original is also at
+  `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`.
+- A clean retry was not used because deletion and regeneration of `build/` cannot correct a parsed
+  source declaration. No SIMPLE runtime or numerical test ran, so AC-1 and AC-2 remain untested.
+- The smallest local correction changes only those two third-dimension declarations from explicit
+  extent `5` to assumed shape `:` at
+  `production/tests/simple_pose_cont_refinement_objective_normals_test.f90:254`. This source change
+  invalidates the reviewed synchronization state. The safe next action is a new Phase 5 prepare turn,
+  lightweight checks, and a new exact rsync dry run. Do not perform a second real rsync in this turn.
+- Local controller evidence is
+  `codex_logs/pose_cont_20260826_144540_289/phase05/validate_20260827_143010_050.events.jsonl` and its
+  sibling prompt and stderr files. No focused commit was made because compilation did not pass.
+
+**Compiler-correction reprepare evidence — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 4 `COMPLETE` and Phase 5 `REWORK REQUIRED`.
+  The branch remains at `HEAD=b709b905b`; the local `origin/master` ref advanced independently, so
+  status reports `ahead 3, behind 1`. No pull, fetch, checkout, merge, rebase, reset, or stash ran.
+- The rework is limited to the compiler-rejected declarations at
+  `production/tests/simple_pose_cont_refinement_objective_normals_test.f90:254` and line 255. Both
+  Jacobian dummy arrays now use an assumed third dimension `:`. The test still checks exactly five
+  columns through its fixed axis loop and does not change a fixture, tolerance, formula, or gate.
+- Lightweight source checks are `PASS`: `git diff --check` exited `0`; the four Phase 5 Fortran
+  sources have zero lines longer than 132 columns, zero conflict markers, zero invalid diagnostic
+  continuations, and zero occurrences of the rejected `jacobian(-box/2:,-box/2:,5)` declaration.
+  `production/CMakeLists.txt` remains unchanged at SHA-256
+  `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- Applicable policies remain `doc/policies/KB_Interpolation_Policy.md` for padded-grid normalization,
+  `doc/policies/reconstruct3D_pcg_policy.md` for the unchanged reconstruction boundary,
+  `doc/policies/refine3D_policy.md` for fixed-volume pose ownership, and
+  `doc/policies/sigma_calculation_policy.md` for positive native-shell variance. No UI policy
+  applies.
+- The restricted UCRT64 environment check failed before Bash execution with the documented signal-
+  pipe `Win32 error 5`. Its one exact elevated retry exited `0` and reported `UCRT64`, source
+  `/home/hossainm7/hael_SIMPLE`, `/usr/bin/rsync`, and rsync `3.4.4` protocol `32`.
+- No local compilation, linking, CMake command, SIMPLE executable, real synchronization, remote
+  normalization, runtime test, scientific acceptance test, or commit occurs in this reprepare turn.
+  The exact approved rsync dry run is the final operation. The disposable remote-root
+  `build_debug_incremental_failed.log` from the failed validation is the only pre-explained safe
+  deletion. Any later source or controller-input change invalidates this dry run.
+
+**Successful Oracle validation evidence — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 4 `COMPLETE` and Phase 5
+  `READY FOR ORACLE VALIDATION`. The authoritative source remained `HEAD=b709b905b`. The exact
+  synchronization command was `rsync -av --delete --info=progress2 --exclude='.git/'
+  --exclude='.codex/.local-history.git/' --exclude='build/' --exclude='*.o' --exclude='*.mod'
+  --exclude='*.a' --exclude='*.so' ~/hael_SIMPLE/
+  hossainm7@fwl-c143206.ncifcrf.gov:~/Projects/hael_SIMPLE-rsync-test`; it exited `0`, transferred
+  84 files, and deleted only the reviewed disposable remote-root
+  `build_debug_incremental_failed.log`.
+- Remote normalization used `find . -type f \( -name '*.pl' -o -name '*.sh' \) -exec sed -i
+  's/\r$//' {} +` below `~/Projects/hael_SIMPLE-rsync-test` and exited `0`. The default incremental
+  command `module load gcc/15.2.0; set -o pipefail; .codex/compile_debug.sh 2>&1 | tee
+  build/build_debug.log` exited `0`. The conditional clean retry was not used. The compiler log is
+  `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`.
+- The first focused runtime wrapper exited `1` before test execution because PowerShell evaluated the
+  remote timestamp expression and gave SSH an incomplete script. The corrected command loaded
+  `gcc/15.2.0`, set `SIMPLE_PATH=~/Projects/hael_SIMPLE-rsync-test/build`, changed to `~/Projects`,
+  and ran `simple_test_pose_cont_refinement case=objective_normals evidence_dir=<absolute-package>`.
+  It exited `0` and printed `POSE_CONT_REFINEMENT_OBJECTIVE_NORMALS: PASS`.
+- The focused evidence package is
+  `~/Projects/continuous_3D_phase5_objective_normals_20260827_145659`. It contains the runtime log,
+  context, three component or summary tables, `objective_normals_analysis.txt`, and
+  `manifest.sha256`. The evidence has 12 summary cases, 10,008 residual-Jacobian component rows,
+  and 372 normal-equation component rows. It covers boxes 10 and 16, unit, constant, and varying
+  variance, and exact and nonstationary poses.
+- The maximum observed residual, Jacobian, gradient, Hessian, and Hessian-asymmetry errors are
+  `2.0825005858203301E-09`, `0`, `1.1492309090043590E-10`, `0`, and `0`. The minimum switch margin
+  is `2.5862455368041992E-03`. These results pass the frozen algebraic absolute and relative gates
+  `4.9353318740941177E-04` and `5.7686781070864920E-06`, and the derivative absolute and relative
+  gates `1.0E-08` and `5.0E-03`. AC-1 and AC-2 pass without a tolerance change.
+- The regression command used the same module and environment, changed to `~/Projects`, and ran
+  `simple_test_pose_cont_refinement`. It exited `0`; all five scheduled groups ran and passed, and
+  zero groups failed. Evidence is in
+  `~/Projects/continuous_3D_phase5_regression_20260827_145731`, including `mother_suite.log`,
+  `runtime_context.txt`, `regression_analysis.txt`, and `manifest.sha256`.
+- A first read-only evidence-display wrapper exited `1` because two display patterns were split; it
+  did not change test evidence. A first regression-analysis wrapper exited `0` but produced an
+  invalid analysis file because its patterns were split. The corrected token-safe analysis replaced
+  that file, exited `0`, and its checksum is in the final manifest.
+- Post-test checks returned zero top-level `validation/` directories and zero
+  `continuous_3D_matrix_volumes_*` directories in both `~/Projects/hael_SIMPLE-rsync-test` and
+  `~/Projects/SIMPLE`. The project parent also contained zero `continuous_3D_matrix_volumes_*`
+  directories. Both runtime tests used `~/Projects` as their working directory; no runtime evidence
+  was created below a source checkout.
+- Major implementation references remain `src/main/volume/simple_cartesian_pose_refiner.f90:609`,
+  `production/tests/simple_pose_cont_refinement_calibration_helpers.f90:12`,
+  `production/tests/simple_pose_cont_refinement_objective_normals_test.f90:27`, its independent
+  accumulator at line 186 and corrected declarations at lines 254-255, and
+  `production/tests/simple_test_pose_cont_refinement.f90:203`. The remaining limit is that this phase
+  verifies the frozen weighted objective and normal equations only; LM transaction behavior starts
+  in Phase 6 and was not tested here.
 
 Implement AC-1 and AC-2 under **Pose, prepared reference, and weighted objective**, **Executed forward-model conventions**, **Local derivatives and LM**, and the frozen tolerance protocol.
 
