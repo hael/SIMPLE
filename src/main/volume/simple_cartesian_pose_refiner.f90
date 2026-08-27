@@ -41,11 +41,16 @@ integer, parameter :: POSE_DATA_INVALID_NOISE_RANGE = 1
 type :: cartesian_pose_data
     private
     complex, allocatable :: observed(:,:), transfer(:,:)
+    integer :: requested_shell_range(2) = 0
     integer :: shell_range(2) = 0
+    integer :: active_samples = 0
     logical :: valid = .false.
 contains
     procedure :: is_valid => pose_data_is_valid
+    procedure :: get_requested_shell_range => pose_data_get_requested_shell_range
     procedure :: get_shell_range => pose_data_get_shell_range
+    procedure :: get_active_sample_count => pose_data_get_active_sample_count
+    procedure :: copy_components_test => pose_data_copy_components_test
 end type cartesian_pose_data
 
 type :: cartesian_pose_refiner
@@ -100,6 +105,26 @@ contains
         integer :: shell_range(2)
         shell_range = self%shell_range
     end function pose_data_get_shell_range
+
+    pure function pose_data_get_requested_shell_range(self) result(shell_range)
+        class(cartesian_pose_data), intent(in) :: self
+        integer :: shell_range(2)
+        shell_range = self%requested_shell_range
+    end function pose_data_get_requested_shell_range
+
+    pure integer function pose_data_get_active_sample_count(self) result(active_samples)
+        class(cartesian_pose_data), intent(in) :: self
+        active_samples = self%active_samples
+    end function pose_data_get_active_sample_count
+
+    !> Copy prepared components only for focused validation diagnostics.
+    subroutine pose_data_copy_components_test(self, observed, transfer)
+        class(cartesian_pose_data), intent(in) :: self
+        complex, allocatable, intent(out) :: observed(:,:), transfer(:,:)
+        if( .not. self%valid ) error stop 'cannot copy invalid prepared pose data'
+        observed = self%observed
+        transfer = self%transfer
+    end subroutine pose_data_copy_components_test
 
     !> Construct one immutable Fourier reference from a physical real-space volume.
     subroutine new_pose_refiner(self, volume)
@@ -181,14 +206,16 @@ contains
         type(ctfvars) :: ctfvals
         real :: cval, sigma, s2, cterm, df, phsh
         real :: wl, half_wl2_cs, sum_df, diff_df, angast, accc, phc
-        integer :: h, k, shell, lower_shell, upper_shell
+        integer :: h, k, shell, lower_shell, upper_shell, radius_squared
         logical :: use_ctf, phase_flip
 
         status = POSE_DATA_INVALID_NOISE_RANGE
         data%valid = .false.
-        data%shell_range = 0
+        data%requested_shell_range = requested_range
+        data%active_samples = 0
         lower_shell = max(0,requested_range(1))
         upper_shell = min(requested_range(2),ubound(sigma2,1),self%box/2)
+        data%shell_range = [lower_shell,upper_shell]
         if( upper_shell < lower_shell ) return
         do shell = lower_shell, upper_shell
             if( .not. ieee_is_finite(sigma2(shell)) .or. sigma2(shell) <= 0.0 ) return
@@ -213,8 +240,10 @@ contains
         endif
         do k = self%lims2(2,1), self%lims2(2,2)
             do h = self%lims2(1,1), self%lims2(1,2)
-                shell = nint(sqrt(real(h*h+k*k)))
-                if( shell < lower_shell .or. shell > upper_shell ) cycle
+                radius_squared = h*h+k*k
+                if( radius_squared < lower_shell*lower_shell .or. &
+                    &radius_squared > upper_shell*upper_shell ) cycle
+                shell = nint(sqrt(real(radius_squared)))
                 sigma = sigma2(shell)
                 cval = 1.0
                 if( use_ctf )then
@@ -227,9 +256,9 @@ contains
                 endif
                 data%transfer(h,k) = cval/sqrt(sigma)
                 data%observed(h,k) = raw_observed(h,k)/sqrt(sigma)
+                data%active_samples = data%active_samples+1
             enddo
         enddo
-        data%shell_range = [lower_shell,upper_shell]
         data%valid = .true.
         status = POSE_DATA_VALID
     end subroutine prepare_pose_particle
