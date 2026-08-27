@@ -106,6 +106,7 @@ digraph module_graph {
   "simple_butterworth";
   "simple_calc_pspec_strategy";
   "simple_cartesian_fourier";
+  "simple_cartesian_pose_refiner";
   "simple_cavg_quality_analysis";
   "simple_cavg_quality_feats";
   "simple_cavg_quality_helpers";
@@ -385,7 +386,6 @@ digraph module_graph {
   "simple_particle_extractor";
   "simple_pca";
   "simple_pca_svd";
-  "simple_pcg_pose_polisher";
   "simple_persistent_worker_message_base";
   "simple_persistent_worker_message_heartbeat";
   "simple_persistent_worker_message_status";
@@ -1051,6 +1051,11 @@ digraph module_graph {
   "simple_calc_pspec_strategy" -> "simple_ran_tabu";
   "simple_calc_pspec_strategy" -> "simple_sigma2_binfile";
   "simple_cartesian_fourier" -> "simple_image";
+  "simple_cartesian_pose_refiner" -> "simple_cartesian_fourier";
+  "simple_cartesian_pose_refiner" -> "simple_core_module_api";
+  "simple_cartesian_pose_refiner" -> "simple_ctf";
+  "simple_cartesian_pose_refiner" -> "simple_gridding";
+  "simple_cartesian_pose_refiner" -> "simple_image";
   "simple_cavg_quality_analysis" -> "simple_cavg_quality_feats";
   "simple_cavg_quality_analysis" -> "simple_cavg_quality_model";
   "simple_cavg_quality_analysis" -> "simple_cavg_quality_relations";
@@ -2672,9 +2677,6 @@ digraph module_graph {
   "simple_particle_extractor" -> "simple_starfile_wrappers";
   "simple_pca_svd" -> "simple_core_module_api";
   "simple_pca_svd" -> "simple_pca";
-  "simple_pcg_pose_polisher" -> "ieee_arithmetic";
-  "simple_pcg_pose_polisher" -> "simple_core_module_api";
-  "simple_pcg_pose_polisher" -> "simple_reconstructor_pcg";
   "simple_persistent_worker_message_heartbeat" -> "simple_persistent_worker_message_base";
   "simple_persistent_worker_message_heartbeat" -> "simple_persistent_worker_message_types";
   "simple_persistent_worker_message_status" -> "simple_defs";

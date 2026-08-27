@@ -109,6 +109,7 @@
 | `simple_butterworth` | /home/hossainm7/hael_SIMPLE/src/utils/filter/simple_butterworth.f90 | 0 |
 | `simple_calc_pspec_strategy` | /home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_calc_pspec_strategy.f90 | 20 |
 | `simple_cartesian_fourier` | /home/hossainm7/hael_SIMPLE/src/main/interp/simple_cartesian_fourier.f90 | 5 |
+| `simple_cartesian_pose_refiner` | /home/hossainm7/hael_SIMPLE/src/main/volume/simple_cartesian_pose_refiner.f90 | 25 |
 | `simple_cavg_quality_analysis` | /home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_analysis.f90 | 15 |
 | `simple_cavg_quality_feats` | /home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_feats.f90 | 10 |
 | `simple_cavg_quality_helpers` | /home/hossainm7/hael_SIMPLE/src/main/cavg_quality/simple_cavg_quality_helpers.f90 | 1 |
@@ -388,7 +389,6 @@
 | `simple_particle_extractor` | /home/hossainm7/hael_SIMPLE/src/main/simple_particle_extractor.f90 | 14 |
 | `simple_pca` | /home/hossainm7/hael_SIMPLE/src/main/pca/simple_pca.f90 | 5 |
 | `simple_pca_svd` | /home/hossainm7/hael_SIMPLE/src/main/pca/simple_pca_svd.f90 | 7 |
-| `simple_pcg_pose_polisher` | /home/hossainm7/hael_SIMPLE/src/main/strategies/search/simple_pcg_pose_polisher.f90 | 4 |
 | `simple_persistent_worker_message_base` | /home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_base.f90 | 3 |
 | `simple_persistent_worker_message_heartbeat` | /home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_heartbeat.f90 | 3 |
 | `simple_persistent_worker_message_status` | /home/hossainm7/hael_SIMPLE/src/utils/persistent_worker/message/simple_persistent_worker_message_status.f90 | 3 |
@@ -446,7 +446,7 @@
 | `simple_rec_list_tester` | /home/hossainm7/hael_SIMPLE/src/utils/structs/simple_rec_list_tester.f90 | 13 |
 | `simple_reconstructor` | /home/hossainm7/hael_SIMPLE/src/main/volume/simple_reconstructor.f90 | 42 |
 | `simple_reconstructor_openmpoffload` | /home/hossainm7/hael_SIMPLE/src/main/volume/simple_reconstructor_openmpoffload.f90 | 5 |
-| `simple_reconstructor_pcg` | /home/hossainm7/hael_SIMPLE/src/main/volume/simple_reconstructor_pcg.f90 | 103 |
+| `simple_reconstructor_pcg` | /home/hossainm7/hael_SIMPLE/src/main/volume/simple_reconstructor_pcg.f90 | 84 |
 | `simple_reextract_strategy` | /home/hossainm7/hael_SIMPLE/src/main/strategies/parallelization/simple_reextract_strategy.f90 | 20 |
 | `simple_refine3D_fnames` | /home/hossainm7/hael_SIMPLE/src/defs/simple_refine3D_fnames.f90 | 1 |
 | `simple_refine3D_stage_plan` | /home/hossainm7/hael_SIMPLE/src/main/simple_refine3D_stage_plan.f90 | 1 |

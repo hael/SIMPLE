@@ -12,34 +12,21 @@
     - `simple_test_exec.f90` — executes SIMPLE tests workflows
     - `single_exec.f90` — executes the SINGLE (Structure Identification of Nanoparticles with Liquid-cell Em) workflows
     - **tests/** — home of executable unit tests
-      - `simple_continuous_3D_pcg_refinement_fixed_reference_test.f90`
-      - `simple_continuous_3D_pcg_refinement_forward_path_test.f90`
-      - `simple_continuous_3D_pcg_refinement_halfset_gridding.f90`
-      - `simple_continuous_3D_pcg_refinement_halfset_matrix.f90`
-      - `simple_continuous_3D_pcg_refinement_halfset_support.f90`
-      - `simple_continuous_3D_pcg_refinement_halfset_test.f90`
-      - `simple_continuous_3D_pcg_refinement_helpers.f90`
-      - `simple_continuous_3D_pcg_refinement_kb_gather_test.f90`
-      - `simple_continuous_3D_pcg_refinement_kb_test.f90`
-      - `simple_continuous_3D_pcg_refinement_matched_window_test.f90`
-      - `simple_continuous_3D_pcg_refinement_neutral_extract_test.f90` — Phase 2 neutral Cartesian Fourier and envelope extraction regression checks
-      - `simple_continuous_3D_pcg_refinement_noise_gauran_test.f90`
-      - `simple_continuous_3D_pcg_refinement_noise_observation_test.f90`
-      - `simple_continuous_3D_pcg_refinement_noise_support.f90`
-      - `simple_continuous_3D_pcg_refinement_noise_test.f90`
-      - `simple_continuous_3D_pcg_refinement_noise_volume_test.f90`
-      - `simple_continuous_3D_pcg_refinement_operator_contract_support.f90`
-      - `simple_continuous_3D_pcg_refinement_operator_contract_test.f90`
-      - `simple_continuous_3D_pcg_refinement_pose_capture_test.f90`
-      - `simple_continuous_3D_pcg_refinement_pose_contract_test.f90`
-      - `simple_continuous_3D_pcg_refinement_pose_mechanism_test.f90`
-      - `simple_continuous_3D_pcg_refinement_recovery_test.f90`
-      - `simple_continuous_3D_pcg_refinement_reference_bias_test.f90`
-      - `simple_continuous_3D_pcg_refinement_rotation_test.f90`
-      - `simple_continuous_3D_pcg_refinement_scaffold_test.f90`
-      - `simple_continuous_3D_pcg_refinement_shift_polish_test.f90`
-      - `simple_continuous_3D_pcg_refinement_shift_test.f90`
-      - `simple_continuous_3D_pcg_refinement_volume_test.f90`
+      - `simple_cartesian_fourier_kb_gather_test.f90`
+      - `simple_cartesian_fourier_kb_test.f90`
+      - `simple_cartesian_fourier_neutral_extract_test.f90` — Phase 2 neutral Cartesian Fourier and envelope extraction regression checks
+      - `simple_cartesian_fourier_test_helpers.f90`
+      - `simple_continuous_3D_pcg_reconstruction_halfset_gridding.f90`
+      - `simple_continuous_3D_pcg_reconstruction_halfset_matrix.f90`
+      - `simple_continuous_3D_pcg_reconstruction_halfset_support.f90`
+      - `simple_continuous_3D_pcg_reconstruction_halfset_test.f90`
+      - `simple_continuous_3D_pcg_reconstruction_noise_gauran_test.f90`
+      - `simple_continuous_3D_pcg_reconstruction_noise_observation_test.f90`
+      - `simple_continuous_3D_pcg_reconstruction_noise_support.f90`
+      - `simple_continuous_3D_pcg_reconstruction_noise_test.f90`
+      - `simple_continuous_3D_pcg_reconstruction_noise_volume_test.f90`
+      - `simple_continuous_3D_pcg_reconstruction_test_helpers.f90`
+      - `simple_continuous_3D_pcg_reconstruction_volume_test.f90`
       - `simple_continuous_inplane_refine3D_baseline.f90`
       - `simple_continuous_inplane_refine3D_direct.f90`
       - `simple_continuous_inplane_refine3D_joint.f90`
@@ -47,6 +34,22 @@
       - `simple_continuous_inplane_refine3D_policy.f90`
       - `simple_continuous_inplane_refine3D_recovery.f90`
       - `simple_continuous_inplane_refine3D_state.f90`
+      - `simple_pose_cont_refinement_batch_helpers.f90`
+      - `simple_pose_cont_refinement_fixed_reference_test.f90`
+      - `simple_pose_cont_refinement_forward_path_test.f90`
+      - `simple_pose_cont_refinement_matched_window_test.f90`
+      - `simple_pose_cont_refinement_operator_contract_support.f90`
+      - `simple_pose_cont_refinement_operator_contract_test.f90`
+      - `simple_pose_cont_refinement_pose_capture_test.f90`
+      - `simple_pose_cont_refinement_pose_contract_test.f90`
+      - `simple_pose_cont_refinement_pose_mechanism_test.f90`
+      - `simple_pose_cont_refinement_recovery_test.f90`
+      - `simple_pose_cont_refinement_reference_bias_test.f90`
+      - `simple_pose_cont_refinement_reference_support.f90`
+      - `simple_pose_cont_refinement_rotation_test.f90`
+      - `simple_pose_cont_refinement_shift_polish_test.f90`
+      - `simple_pose_cont_refinement_shift_test.f90`
+      - `simple_pose_cont_refinement_test_helpers.f90`
       - `simple_sgd_base_suite_baseline_test.f90`
       - `simple_sgd_base_suite_direct_test.f90`
       - `simple_sgd_base_suite_helpers.f90`
@@ -64,6 +67,7 @@
       - `simple_test_block_tree2D.f90`
       - `simple_test_block_tree_io.f90`
       - `simple_test_bounds_from_mask3D.f90`
+      - `simple_test_cartesian_fourier.f90`
       - `simple_test_cavg_quality_relations.f90`
       - `simple_test_cavg_registration.f90`
       - `simple_test_cc_connectivity.f90`
@@ -71,7 +75,7 @@
       - `simple_test_clustering.f90`
       - `simple_test_cmdline.f90`
       - `simple_test_coarrays.f90`
-      - `simple_test_continuous_3D_pcg_refinement.f90`
+      - `simple_test_continuous_3D_pcg_reconstruction.f90`
       - `simple_test_continuous_inplane_cc_grad.f90`
       - `simple_test_continuous_inplane_hybrid_grad.f90`
       - `simple_test_continuous_inplane_refine3D.f90`
@@ -135,6 +139,7 @@
       - `simple_test_phasecorr.f90`
       - `simple_test_phshift_policy.f90`
       - `simple_test_phshift_star.f90`
+      - `simple_test_pose_cont_refinement.f90`
       - `simple_test_projdir_accumulator.f90`
       - `simple_test_project_merge.f90`
       - `simple_test_ptcl_center.f90`
@@ -163,8 +168,6 @@
       - `simple_test_uniform_rot.f90` — from "Uniform rotations from Gaussians" of https://www.sciencedirect.com/science/article/pii/B9780080507552500361
       - `simple_test_units.f90` — runs all implemented unit tests
       - `test_socket_comm_distr.f90`
-      - **continuous_3D_pcg_pose_capture/**
-      - **continuous_3D_pcg_pose_validation/**
       - **pose_cont_capture/**
   - **scripts/** — home of scripts and code generators
     - **memory/**
@@ -564,7 +567,6 @@
           - `simple_matcher_ptcl_io.f90` — particle image batch I/O routines shared by matcher workflows
           - `simple_matcher_refvol_utils.f90` — shared helpers for reading, masking, filtering and reprojecting reference volumes
           - `simple_matcher_smpl_and_lplims.f90` — search-space and particle-selection policy routines for matcher workflows
-          - `simple_pcg_pose_polisher.f90`
           - `simple_ptcl_cache.f90` — downscaled particle cache shared by the 2D and 3D matcher workflows
           - `simple_strategy2D.f90` — abstract base class defining the common strategy2D interface
           - `simple_strategy2D_alloc.f90` — array allocation for concrete strategy2D extensions to improve caching and reduce alloc overheads
@@ -672,6 +674,7 @@
           - `single_ui_tseries.f90` — module defining the user interfaces for time-series analysis in the single_exec suite
           - `single_ui_validate.f90` — module defining the user interfaces for validation programs in the single_exec suite
       - **volume/** — home of the volume reconstructor classes, the volume analyzers, the volume docking routines, and the symmetry search
+        - `simple_cartesian_pose_refiner.f90` — Fixed-volume Cartesian Fourier particle-pose refinement numerics
         - `simple_dock_vols.f90` — class for docking pairs of volumes using correlation search and an icosahedral sampling geomery
         - `simple_halfmap_diagnostics.f90` — backend-neutral half-map FSC, cFAR, and resolution diagnostics shared by the gridding and PCG reconstruction paths
         - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)

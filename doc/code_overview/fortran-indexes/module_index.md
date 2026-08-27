@@ -4490,6 +4490,50 @@ Public symbols:
 - `gather_packed_window_grad` — subroutine
 
 ---
+## Module: simple_cartesian_pose_refiner
+
+Files:
+- `main/volume/simple_cartesian_pose_refiner.f90`
+
+Uses:
+- `simple_cartesian_fourier`
+- `simple_core_module_api`
+- `simple_ctf`
+- `simple_gridding`
+- `simple_image`
+
+Public symbols:
+- `cartesian_pose_data` — type
+- `cartesian_pose_refiner` — type
+- `right_increment_rotation` — function
+
+Private symbols:
+- `apply_pose_parameter_mask` — subroutine
+- `count_stencil_switches` — function
+- `get_fourier_workspace_lims2` — function
+- `kill_fourier_workspace` — subroutine
+- `load_pose_reference` — subroutine
+- `new_pose_refiner` — subroutine
+- `new_pose_refiner_prepared_test` — subroutine
+- `pose_data_get_shell_range` — function
+- `pose_normal_terms` — subroutine
+- `pose_objective_gradient` — subroutine
+- `prepare_pose_particle` — subroutine
+- `prepared_pose_objective_gradient` — subroutine
+- `refine_pose_lm` — subroutine
+- `refine_prepared_pose_lm` — subroutine
+- `refine_shift_lm` — subroutine
+- `rotation_jvp` — subroutine
+- `sample_fourier_with_grad` — subroutine
+- `set_fourier_workspace_shell_range` — subroutine
+- `shift_jhz` — subroutine
+- `shift_jvp` — subroutine
+- `shift_normal_terms` — subroutine
+- `shift_objective_gradient` — subroutine
+- `shift_residual` — subroutine
+- `solve_pose_cholesky` — subroutine
+
+---
 ## Module: simple_cavg_quality_analysis
 
 Files:
@@ -12271,26 +12315,6 @@ Private symbols:
 - `new_svd` — subroutine
 
 ---
-## Module: simple_pcg_pose_polisher
-
-Files:
-- `main/strategies/search/simple_pcg_pose_polisher.f90`
-
-Uses:
-- `ieee_arithmetic`
-- `simple_core_module_api`
-- `simple_reconstructor_pcg`
-
-Public symbols:
-- `pcg_pose_polish_summary` — type
-- `polish_fixed_volume_poses` — subroutine
-- `polish_fixed_volume_shifts` — subroutine
-
-Private symbols:
-- `refine_one_pose` — subroutine
-- `validate_batch_shapes` — subroutine
-
----
 ## Module: simple_persistent_worker_message_base
 
 Files:
@@ -13923,10 +13947,8 @@ Uses:
 - `simple_image`
 
 Public symbols:
-- `pcg_fourier_workspace` — type
 - `pcg_solver_outcome` — type
 - `reconstructor_pcg` — type
-- `right_increment_rotation` — function
 
 Private symbols:
 - `absT2_plane` — subroutine
@@ -13943,11 +13965,9 @@ Private symbols:
 - `apply_normal_kernel` — function
 - `apply_normal_matrixfree` — function
 - `apply_nu_precision` — function
-- `apply_pose_parameter_mask` — subroutine
 - `apply_precond` — function
 - `assert_prior_attachment_mode` — subroutine
 - `begin_accum` — subroutine
-- `begin_fourier_workspace` — subroutine
 - `begin_reduction` — subroutine
 - `build_env` — subroutine
 - `build_hk_luts` — subroutine
@@ -13958,7 +13978,6 @@ Private symbols:
 - `build_transfer` — function
 - `calibrate_kernel` — subroutine
 - `compare_raw_accum` — subroutine
-- `count_stencil_switches` — function
 - `deapod_mul` — subroutine
 - `dot_real_volume` — function
 - `end_accum` — subroutine
@@ -13973,7 +13992,6 @@ Private symbols:
 - `forward_plane` — subroutine
 - `fourier_dot` — function
 - `get_env` — function
-- `get_fourier_workspace_lims2` — function
 - `get_invenv` — function
 - `get_lims2` — function
 - `get_lims3` — function
@@ -13983,23 +14001,16 @@ Private symbols:
 - `get_raw_accum` — subroutine
 - `get_rhs` — subroutine
 - `kill` — subroutine
-- `kill_fourier_workspace` — subroutine
 - `mask_mul` — subroutine
 - `measure_kernel_scale` — function
 - `new` — subroutine
-- `pose_normal_terms` — subroutine
-- `pose_objective_gradient` — subroutine
 - `precond_from_accum` — subroutine
 - `prep_particles` — subroutine
 - `prepare_fused_planes` — subroutine
-- `refine_pose_lm` — subroutine
-- `refine_shift_lm` — subroutine
 - `report_finalize_profile` — subroutine
 - `report_profile` — subroutine
 - `reset_finalize_profile` — subroutine
 - `reset_profile` — subroutine
-- `rotation_jvp` — subroutine
-- `sample_fourier_with_grad` — subroutine
 - `scale_raw_accum` — subroutine
 - `scatter_plane` — subroutine
 - `scatter_window` — subroutine
@@ -14009,7 +14020,6 @@ Private symbols:
 - `scatter_window_pair_nowrap` — subroutine
 - `scatter_window_real` — subroutine
 - `set_deapod` — subroutine
-- `set_fourier_workspace_shell_range` — subroutine
 - `set_lambda_relative` — subroutine
 - `set_mask` — subroutine
 - `set_ml_prior` — subroutine
@@ -14017,15 +14027,9 @@ Private symbols:
 - `set_op_mode` — subroutine
 - `set_sym` — subroutine
 - `set_volume` — subroutine
-- `shift_jhz` — subroutine
-- `shift_jvp` — subroutine
-- `shift_normal_terms` — subroutine
-- `shift_objective_gradient` — subroutine
-- `shift_residual` — subroutine
 - `solve` — subroutine
 - `solve_accum` — subroutine
 - `solve_core` — subroutine
-- `solve_pose_cholesky` — subroutine
 - `stash_nu_forward` — subroutine
 - `transfer_plane_cmplx` — subroutine
 - `update_lambda_from_density` — subroutine
