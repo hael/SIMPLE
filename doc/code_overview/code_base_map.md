@@ -22,6 +22,7 @@
       - `simple_continuous_3D_pcg_refinement_kb_gather_test.f90`
       - `simple_continuous_3D_pcg_refinement_kb_test.f90`
       - `simple_continuous_3D_pcg_refinement_matched_window_test.f90`
+      - `simple_continuous_3D_pcg_refinement_neutral_extract_test.f90` — Phase 2 neutral Cartesian Fourier and envelope extraction regression checks
       - `simple_continuous_3D_pcg_refinement_noise_gauran_test.f90`
       - `simple_continuous_3D_pcg_refinement_noise_observation_test.f90`
       - `simple_continuous_3D_pcg_refinement_noise_support.f90`
@@ -88,7 +89,8 @@
       - `simple_test_eul_prob_tab2D_io.f90` — validates streamed dense/sparse 2D probability-table merge and assignment
       - `simple_test_eval_polarftcc.f90`
       - `simple_test_extr_frac.f90`
-      - `simple_test_flex_pca.f90` — validates the flex_pca embedding cache, kernel/state-weight contracts and packed covariance solve
+      - `simple_test_flex_gpu.f90` — A/B the CUDA-C flex insertion kernel against the CPU batch path (P1 gate)
+      - `simple_test_flex_pca.f90` — validates the flex_pca embedding cache and the kernel/state-weight contracts
       - `simple_test_flex_projected_latent_model.f90` — validates flex projection-aware latent-model I/O, Fourier operations, and canonicalization
       - `simple_test_ft_expanded.f90`
       - `simple_test_gencorrs_fft.f90`
@@ -163,6 +165,7 @@
       - `test_socket_comm_distr.f90`
       - **continuous_3D_pcg_pose_capture/**
       - **continuous_3D_pcg_pose_validation/**
+      - **pose_cont_capture/**
   - **scripts/** — home of scripts and code generators
     - **memory/**
   - **src/** — main source code folder
@@ -204,6 +207,7 @@
     - **inc/** — home of *.inc files containing macro definitions and enumerations
     - **main/** — main source code directory
       - `simple_abinitio2D_controller.f90` — utility routines for ab initio 2D cluster2D staging and limits
+      - `simple_abinitio3D_split_checkpoint.f90` — reusable construction of the abinitio3D docked multi-state split checkpoint
       - `simple_abinitio_controller.f90`
       - `simple_abinitio_utils.f90` — utilities for ab initio 3D reconstruction used by commanders_abinitio
       - `simple_builder.f90` — centralized builder (the main object constructor in SIMPLE)
@@ -215,10 +219,12 @@
       - `simple_eul_prob_tab2D.f90` — 2D probability table routines for multi-reference class assignment with probabilistic sampling
       - `simple_eul_prob_tab_neigh.f90` — neighborhood extension of probabilistic 3D search table.
       - `simple_eul_prob_tab_utils.f90` — shared utility routines for probabilistic alignment tables
+      - `simple_external_reference_pose_initialization.f90` — fixed-reference CC pose initialization shared by 3D refinement workflows
       - `simple_micrograph_generator.f90` — used for generating dose fractionated micrographs from movies
       - `simple_particle_extractor.f90` — core functionality for extracting particles from micrographs
       - `simple_pspec_thumb_iter.f90` — iterator for pspec_thumb for power spectrum and thumbnails generation
       - `simple_pspecs.f90` — abstract data type for power spectra
+      - `simple_refine3D_stage_plan.f90` — workflow-neutral frequency-stage planning for refine3D wrappers
       - `simple_simulator.f90` — simulation of single-particle images
       - `simple_sym.f90` — defines protein point-group symmetries
       - `simple_symanalyzer.f90` — statistical test for point-group symmetry detection in 3D maps not alinged to the symmetry axis
@@ -361,14 +367,25 @@
         - `single_exec_tseries.f90`
         - `single_exec_validate.f90`
       - **flex/**
-        - `simple_flex_pca_columns.f90` — covariance-column estimation, reduced covariance solve and latent embedding for flex_pca
+        - `simple_flex_gpu.f90` — CUDA-C GPU path for the flex_pca insertion family (P1 of the polar/GPU plan)
         - `simple_flex_pca_distr.f90` — distributed-execution context for flex_pca stage fan-out
+        - `simple_flex_pca_em.f90` — EM estimation of the low-rank flex_pca covariance model: basis fit, latent embedding and mean estimation
+        - `simple_flex_pca_em_basis.f90` — flex_pca EM: eigenvolume realization, orthonormalization, alignment and bagging
+        - `simple_flex_pca_em_embed.f90` — flex_pca EM: per-particle latent embedding with contrast fitting
+        - `simple_flex_pca_em_env.f90` — flex_pca EM: environment overrides, memory/dimension budgets and run-stage subsampling
+        - `simple_flex_pca_em_fit.f90` — flex_pca EM: basis-fit driver, noise-prior calibration, probe-state I/O and band selection
+        - `simple_flex_pca_em_iter.f90` — flex_pca EM: the subspace EM iteration (E-step accumulation, M-step update)
+        - `simple_flex_pca_em_mean.f90` — flex_pca EM: consensus mean estimation, mean scale and Fourier-plane accumulation
+        - `simple_flex_pca_em_pose.f90` — flex_pca EM: polar pose refinement, pose perturbation and banded plane projections
+        - `simple_flex_pca_em_solve.f90` — flex_pca EM: dense SPD/ECM/MCFA solvers and subspace-angle diagnostics
         - `simple_flex_pca_merge.f90` — Two-gate agglomerative merge of over-provisioned flex_pca states.
         - `simple_flex_pca_model.f90` — Standalone projection-aware low-rank covariance workflow for heterogeneous SPA data
         - `simple_flex_pca_parts.f90` — versioned part-file contracts for distributed flex_pca stage reductions
+        - `simple_flex_pca_polar.f90` — polar-Fourier shared-direction basis bank for flex_pca
         - `simple_flex_pca_rec3D.f90` — kernel-weighted state reconstruction for flex_pca
         - `simple_flex_projected_latent_model.f90` — Projection-aware latent volume model kernels for flex_analysis
         - `simple_flex_reconstructor_latent_ops.f90` — Latent-volume projection/backprojection helpers for flex_analysis
+        - **cuda/**
       - **image/** — home of the submodules of the image class, its extensions, and its variants
         - `simple_ft_expanded.f90` — expanded Fourier transform class for improved cache utilisation
         - `simple_ftexp_shsrch.f90` — shift search with L-BFGS-B using expanded Fourier transforms (used in motion_correct)
@@ -396,6 +413,7 @@
         - `simple_projector_pft.f90` — projector-to-polarft adapters kept outside simple_projector to avoid module cycles
         - `simple_projector_pft_batch.f90` — fused projection helpers that operate on projector data without polarft class dependencies
       - **interp/** — home of the window functions for Fourier gridding interpolation
+        - `simple_cartesian_fourier.f90` — neutral Cartesian Fourier lattice embedding, extraction, and packed KB gathers
         - `simple_edges_sqwins.f90` — square windows and mask edges
         - `simple_gridding.f90` — utilities for convolution interpolation (gridding)
         - `simple_kbinterpol.f90` — Kaiser-Bessel interpolation kernel

@@ -6,7 +6,8 @@ use simple_projector, only: projector
 implicit none
 
 public :: prep2D_inv_instrfun4mul, prep3D_inv_kbenvelope4mul
-public :: kb_stencil_envelope_1d, kb_stencil_inv_envelope_1d, deapodize3D_inplace
+public :: kb_stencil_envelope_1d, kb_stencil_inv_envelope_1d
+public :: kb_stencil_centered_crop_inv_envelope_1d, deapodize3D_inplace
 private
 #include "simple_local_flags.inc"
 
@@ -122,6 +123,28 @@ contains
         end do
         deallocate(env1d)
     end subroutine kb_stencil_inv_envelope_1d
+
+    !> Guarded reciprocal of the padded-period KB envelope at the centered
+    !! native-volume indices. The returned factors have native_box elements.
+    subroutine kb_stencil_centered_crop_inv_envelope_1d( kbwin, padded_box, native_box, inv1d )
+        type(kbinterpol),  intent(in)  :: kbwin
+        integer,           intent(in)  :: padded_box, native_box
+        real, allocatable, intent(out) :: inv1d(:)
+        real, parameter :: EPS_DIV = 1.0e-8
+        real, allocatable :: padded_env(:)
+        integer :: i, offset
+        if( native_box < 1 .or. native_box > padded_box .or. &
+            &mod(padded_box-native_box,2) /= 0 ) &
+            &error stop 'centered-crop envelope requires an even nonnegative size difference'
+        call kb_stencil_envelope_1d(kbwin,padded_box,padded_env)
+        offset = (padded_box-native_box)/2
+        if( allocated(inv1d) ) deallocate(inv1d)
+        allocate(inv1d(native_box),source=0.0)
+        do i = 1, native_box
+            if( abs(padded_env(offset+i)) >= EPS_DIV ) inv1d(i) = 1.0/padded_env(offset+i)
+        end do
+        deallocate(padded_env)
+    end subroutine kb_stencil_centered_crop_inv_envelope_1d
 
     !> Multiplies a real-space cubic volume in place by the separable product
     !! inv1d(i)*inv1d(j)*inv1d(k)

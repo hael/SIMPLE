@@ -10,6 +10,7 @@ use continuous_3D_pcg_refinement_kb_test, only: run_kb_derivative
 use continuous_3D_pcg_refinement_rotation_test, only: run_rotation_gradient
 use continuous_3D_pcg_refinement_recovery_test, only: run_pose_recovery
 use continuous_3D_pcg_refinement_pose_contract_test, only: run_pose_contract
+use continuous_3D_pcg_refinement_neutral_extract_test, only: run_neutral_extract
 use continuous_3D_pcg_refinement_fixed_reference_test, only: run_fixed_reference_diagnostic
 use continuous_3D_pcg_refinement_forward_path_test, only: run_forward_path_diagnostic
 use continuous_3D_pcg_refinement_matched_window_test, only: run_matched_window_diagnostic
@@ -71,7 +72,7 @@ subroutine run_suite()
     character(len=*), parameter :: labels(*) = [character(len=24) :: &
         &'scaffold', 'volume_fixture', 'volume_noise', 'halfset_fsc', &
         &'shift_gradient', 'shift_polish', 'kb_derivative', 'rotation_gradient', 'pose_recovery', &
-        &'pose_contract']
+        &'pose_contract', 'neutral_extract']
     integer :: failures, groups_passed, groups_run, groups_skipped, i
 
     failures = 0
@@ -199,6 +200,8 @@ subroutine run_case(label)
         call run_pose_recovery()
     case('pose_contract')
         call run_pose_contract()
+    case('neutral_extract')
+        call run_neutral_extract()
     case('fixed_reference')
         call run_fixed_reference_diagnostic()
     case('forward_path')

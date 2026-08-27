@@ -3,7 +3,7 @@
 ## Module: CPlot2D_wrapper_module
 
 Files:
-- `../scripts/../src/extlibs/CPlot2D/simple_CPlot2D_wrapper.f90`
+- `extlibs/CPlot2D/simple_CPlot2D_wrapper.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -70,13 +70,13 @@ Private symbols:
 ## Module: curl
 
 Files:
-- `../scripts/../src/extlibs/curl/src/curl.f90`
+- `extlibs/curl/src/curl.f90`
 
 ---
 ## Module: curl_easy
 
 Files:
-- `../scripts/../src/extlibs/curl/src/curl_easy.f90`
+- `extlibs/curl/src/curl_easy.f90`
 
 Public symbols:
 - `curl_easy_cleanup` — subroutine
@@ -123,7 +123,7 @@ Private symbols:
 ## Module: curl_multi
 
 Files:
-- `../scripts/../src/extlibs/curl/src/curl_multi.f90`
+- `extlibs/curl/src/curl_multi.f90`
 
 Public symbols:
 - `curl_multi_add_handle` — function
@@ -145,7 +145,7 @@ Private symbols:
 ## Module: curl_urlapi
 
 Files:
-- `../scripts/../src/extlibs/curl/src/curl_urlapi.f90`
+- `extlibs/curl/src/curl_urlapi.f90`
 
 Public symbols:
 - `curl_url` — function
@@ -164,7 +164,7 @@ Private symbols:
 ## Module: curl_util
 
 Files:
-- `../scripts/../src/extlibs/curl/src/curl_util.f90`
+- `extlibs/curl/src/curl_util.f90`
 
 Public symbols:
 - `c_f_str_ptr` — subroutine
@@ -176,15 +176,15 @@ Private symbols:
 ## Module: elemental
 
 Files:
-- `../scripts/../src/main/image/simple_image.f90`
-- `../scripts/../src/main/image/simple_image_access.f90`
-- `../scripts/../src/main/image/simple_image_arith.f90`
+- `main/image/simple_image.f90`
+- `main/image/simple_image_access.f90`
+- `main/image/simple_image_arith.f90`
 
 ---
 ## Module: FoX_common
 
 Files:
-- `../scripts/../src/extlibs/xml/common/FoX_common.F90`
+- `extlibs/xml/common/FoX_common.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -198,7 +198,7 @@ Uses:
 ## Module: FoX_dom
 
 Files:
-- `../scripts/../src/extlibs/xml/dom/FoX_dom.f90`
+- `extlibs/xml/dom/FoX_dom.f90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -213,7 +213,7 @@ Uses:
 ## Module: fox_m_fsys_abort_flush
 
 Files:
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_abort_flush.F90`
+- `extlibs/xml/fsys/fox_m_fsys_abort_flush.F90`
 
 Uses:
 - `f90_unix_io`
@@ -229,13 +229,13 @@ Public symbols:
 ## Module: fox_m_fsys_array_str
 
 Files:
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_array_str.F90`
+- `extlibs/xml/fsys/fox_m_fsys_array_str.F90`
 
 ---
 ## Module: fox_m_fsys_count_parse_input
 
 Files:
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90`
+- `extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -244,7 +244,7 @@ Uses:
 ## Module: fox_m_fsys_format
 
 Files:
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_format.F90`
+- `extlibs/xml/fsys/fox_m_fsys_format.F90`
 
 Uses:
 - `fox_m_fsys_abort_flush`
@@ -254,7 +254,7 @@ Uses:
 ## Module: fox_m_fsys_parse_input
 
 Files:
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_parse_input.F90`
+- `extlibs/xml/fsys/fox_m_fsys_parse_input.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -263,13 +263,13 @@ Uses:
 ## Module: fox_m_fsys_realtypes
 
 Files:
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_realtypes.f90`
+- `extlibs/xml/fsys/fox_m_fsys_realtypes.f90`
 
 ---
 ## Module: fox_m_fsys_string
 
 Files:
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_string.F90`
+- `extlibs/xml/fsys/fox_m_fsys_string.F90`
 
 Public symbols:
 - `toLower` — function
@@ -278,7 +278,7 @@ Public symbols:
 ## Module: fox_m_fsys_string_list
 
 Files:
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_string_list.F90`
+- `extlibs/xml/fsys/fox_m_fsys_string_list.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -287,7 +287,7 @@ Uses:
 ## Module: fox_m_utils_mtprng
 
 Files:
-- `../scripts/../src/extlibs/xml/utils/fox_m_utils_mtprng.F90`
+- `extlibs/xml/utils/fox_m_utils_mtprng.F90`
 
 Private symbols:
 - `mtprng_init` — subroutine
@@ -303,7 +303,7 @@ Private symbols:
 ## Module: fox_m_utils_uri
 
 Files:
-- `../scripts/../src/extlibs/xml/utils/fox_m_utils_uri.F90`
+- `extlibs/xml/utils/fox_m_utils_uri.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -360,7 +360,7 @@ Private symbols:
 ## Module: fox_m_utils_uuid
 
 Files:
-- `../scripts/../src/extlibs/xml/utils/fox_m_utils_uuid.F90`
+- `extlibs/xml/utils/fox_m_utils_uuid.F90`
 
 Uses:
 - `fox_m_utils_mtprng`
@@ -378,7 +378,7 @@ Private symbols:
 ## Module: FoX_sax
 
 Files:
-- `../scripts/../src/extlibs/xml/sax/FoX_sax.f90`
+- `extlibs/xml/sax/FoX_sax.f90`
 
 Uses:
 - `fox_common`
@@ -388,7 +388,7 @@ Uses:
 ## Module: FoX_utils
 
 Files:
-- `../scripts/../src/extlibs/xml/utils/FoX_utils.f90`
+- `extlibs/xml/utils/FoX_utils.f90`
 
 Uses:
 - `fox_m_utils_uri`
@@ -398,7 +398,7 @@ Uses:
 ## Module: FoX_wcml
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/FoX_wcml.f90`
+- `extlibs/xml/wcml/FoX_wcml.f90`
 
 Uses:
 - `fox_wxml`
@@ -417,7 +417,7 @@ Uses:
 ## Module: FoX_wkml
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/FoX_wkml.f90`
+- `extlibs/xml/wkml/FoX_wkml.f90`
 
 Uses:
 - `fox_wxml`
@@ -434,7 +434,7 @@ Uses:
 ## Module: FoX_wxml
 
 Files:
-- `../scripts/../src/extlibs/xml/wxml/FoX_wxml.f90`
+- `extlibs/xml/wxml/FoX_wxml.f90`
 
 Uses:
 - `m_wxml_core`
@@ -444,38 +444,41 @@ Uses:
 ## Module: function
 
 Files:
-- `../scripts/../src/main/image/simple_image.f90`
-- `../scripts/../src/main/image/simple_image_access.f90`
-- `../scripts/../src/main/image/simple_image_arith.f90`
-- `../scripts/../src/main/image/simple_image_calc.f90`
-- `../scripts/../src/main/image/simple_image_checks.f90`
-- `../scripts/../src/main/image/simple_image_fft.f90`
-- `../scripts/../src/main/image/simple_image_filt.f90`
-- `../scripts/../src/main/image/simple_image_freq_anal.f90`
-- `../scripts/../src/main/image/simple_image_geom.f90`
-- `../scripts/../src/main/image/simple_image_seg.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
-- `../scripts/../src/main/ori/simple_oris.f90`
-- `../scripts/../src/main/ori/simple_oris_dists.f90`
-- `../scripts/../src/main/ori/simple_oris_getters.f90`
-- `../scripts/../src/main/ori/simple_oris_life.f90`
-- `../scripts/../src/main/ori/simple_oris_neig.f90`
-- `../scripts/../src/main/ori/simple_oris_sampling.f90`
-- `../scripts/../src/main/ori/simple_oris_stats.f90`
-- `../scripts/../src/main/params/simple_parameters.f90`
-- `../scripts/../src/main/params/simple_parameters_core.f90`
-- `../scripts/../src/main/pftc/simple_polarft_access.f90`
-- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
-- `../scripts/../src/main/pftc/simple_polarft_memo.f90`
-- `../scripts/../src/main/project/simple_sp_project.f90`
-- `../scripts/../src/main/project/simple_sp_project_cls.f90`
-- `../scripts/../src/main/project/simple_sp_project_core.f90`
-- `../scripts/../src/main/project/simple_sp_project_io.f90`
-- `../scripts/../src/main/project/simple_sp_project_mic.f90`
-- `../scripts/../src/main/project/simple_sp_project_stk.f90`
-- `../scripts/../src/main/simple_abinitio_controller.f90`
-- `../scripts/../src/main/simple_abinitio_utils.f90`
+- `main/flex/simple_flex_pca_em.f90`
+- `main/flex/simple_flex_pca_em_fit.f90`
+- `main/flex/simple_flex_pca_em_mean.f90`
+- `main/image/simple_image.f90`
+- `main/image/simple_image_access.f90`
+- `main/image/simple_image_arith.f90`
+- `main/image/simple_image_calc.f90`
+- `main/image/simple_image_checks.f90`
+- `main/image/simple_image_fft.f90`
+- `main/image/simple_image_filt.f90`
+- `main/image/simple_image_freq_anal.f90`
+- `main/image/simple_image_geom.f90`
+- `main/image/simple_image_seg.f90`
+- `main/nu_filt/simple_nu_filter.f90`
+- `main/nu_filt/simple_nu_filter_state.f90`
+- `main/ori/simple_oris.f90`
+- `main/ori/simple_oris_dists.f90`
+- `main/ori/simple_oris_getters.f90`
+- `main/ori/simple_oris_life.f90`
+- `main/ori/simple_oris_neig.f90`
+- `main/ori/simple_oris_sampling.f90`
+- `main/ori/simple_oris_stats.f90`
+- `main/params/simple_parameters.f90`
+- `main/params/simple_parameters_core.f90`
+- `main/pftc/simple_polarft_access.f90`
+- `main/pftc/simple_polarft_calc.f90`
+- `main/pftc/simple_polarft_memo.f90`
+- `main/project/simple_sp_project.f90`
+- `main/project/simple_sp_project_cls.f90`
+- `main/project/simple_sp_project_core.f90`
+- `main/project/simple_sp_project_io.f90`
+- `main/project/simple_sp_project_mic.f90`
+- `main/project/simple_sp_project_stk.f90`
+- `main/simple_abinitio_controller.f90`
+- `main/simple_abinitio_utils.f90`
 
 Uses:
 - `simple_online_var`
@@ -484,30 +487,30 @@ Uses:
 ## Module: gnufor2
 
 Files:
-- `../scripts/../src/extlibs/gnufor/gnufor2.f90`
+- `extlibs/gnufor/gnufor2.f90`
 
 ---
 ## Module: integer
 
 Files:
-- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_bank.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_potts.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
-- `../scripts/../src/main/pftc/simple_polarft_access.f90`
-- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
-- `../scripts/../src/main/project/simple_sp_project.f90`
-- `../scripts/../src/main/project/simple_sp_project_core.f90`
-- `../scripts/../src/main/project/simple_sp_project_mic.f90`
-- `../scripts/../src/main/project/simple_sp_project_out.f90`
-- `../scripts/../src/main/project/simple_sp_project_ptcl.f90`
-- `../scripts/../src/main/project/simple_sp_project_stk.f90`
+- `main/nu_filt/simple_nu_filter.f90`
+- `main/nu_filt/simple_nu_filter_bank.f90`
+- `main/nu_filt/simple_nu_filter_potts.f90`
+- `main/nu_filt/simple_nu_filter_state.f90`
+- `main/pftc/simple_polarft_access.f90`
+- `main/pftc/simple_polarft_calc.f90`
+- `main/project/simple_sp_project.f90`
+- `main/project/simple_sp_project_core.f90`
+- `main/project/simple_sp_project_mic.f90`
+- `main/project/simple_sp_project_out.f90`
+- `main/project/simple_sp_project_ptcl.f90`
+- `main/project/simple_sp_project_stk.f90`
 
 ---
 ## Module: json_file_module
 
 Files:
-- `../scripts/../src/extlibs/json/json_file_module.f90`
+- `extlibs/json/json_file_module.f90`
 
 Uses:
 - `json_kinds`
@@ -522,13 +525,13 @@ Private symbols:
 ## Module: json_kinds
 
 Files:
-- `../scripts/../src/extlibs/json/json_kinds.f90`
+- `extlibs/json/json_kinds.f90`
 
 ---
 ## Module: json_module
 
 Files:
-- `../scripts/../src/extlibs/json/json_module.f90`
+- `extlibs/json/json_module.f90`
 
 Uses:
 - `json_file_module`
@@ -541,7 +544,7 @@ Uses:
 ## Module: json_parameters
 
 Files:
-- `../scripts/../src/extlibs/json/json_parameters.f90`
+- `extlibs/json/json_parameters.f90`
 
 Uses:
 - `json_kinds`
@@ -550,7 +553,7 @@ Uses:
 ## Module: json_string_utilities
 
 Files:
-- `../scripts/../src/extlibs/json/json_string_utilities.f90`
+- `extlibs/json/json_string_utilities.f90`
 
 Uses:
 - `json_kinds`
@@ -560,7 +563,7 @@ Uses:
 ## Module: json_value_module
 
 Files:
-- `../scripts/../src/extlibs/json/json_value_module.f90`
+- `extlibs/json/json_value_module.f90`
 
 Uses:
 - `json_kinds`
@@ -575,25 +578,25 @@ Private symbols:
 ## Module: logical
 
 Files:
-- `../scripts/../src/main/image/simple_image.f90`
-- `../scripts/../src/main/image/simple_image_calc.f90`
-- `../scripts/../src/main/image/simple_image_checks.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_evidence.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_potts.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
-- `../scripts/../src/main/pftc/simple_polarft_access.f90`
-- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
-- `../scripts/../src/main/project/simple_sp_project.f90`
-- `../scripts/../src/main/project/simple_sp_project_mic.f90`
-- `../scripts/../src/main/project/simple_sp_project_out.f90`
-- `../scripts/../src/main/project/simple_sp_project_ptcl.f90`
+- `main/image/simple_image.f90`
+- `main/image/simple_image_calc.f90`
+- `main/image/simple_image_checks.f90`
+- `main/nu_filt/simple_nu_filter.f90`
+- `main/nu_filt/simple_nu_filter_evidence.f90`
+- `main/nu_filt/simple_nu_filter_potts.f90`
+- `main/nu_filt/simple_nu_filter_state.f90`
+- `main/pftc/simple_polarft_access.f90`
+- `main/pftc/simple_polarft_calc.f90`
+- `main/project/simple_sp_project.f90`
+- `main/project/simple_sp_project_mic.f90`
+- `main/project/simple_sp_project_out.f90`
+- `main/project/simple_sp_project_ptcl.f90`
 
 ---
 ## Module: m_common_attrs
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_attrs.F90`
+- `extlibs/xml/common/m_common_attrs.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -604,7 +607,7 @@ Uses:
 ## Module: m_common_buffer
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_buffer.F90`
+- `extlibs/xml/common/m_common_buffer.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -615,7 +618,7 @@ Uses:
 ## Module: m_common_charset
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_charset.F90`
+- `extlibs/xml/common/m_common_charset.F90`
 
 Uses:
 - `fox_m_fsys_string`
@@ -638,7 +641,7 @@ Public symbols:
 ## Module: m_common_content_model
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_content_model.F90`
+- `extlibs/xml/common/m_common_content_model.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -666,7 +669,7 @@ Private symbols:
 ## Module: m_common_element
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_element.F90`
+- `extlibs/xml/common/m_common_element.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -680,7 +683,7 @@ Uses:
 ## Module: m_common_elstack
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_elstack.F90`
+- `extlibs/xml/common/m_common_elstack.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -695,7 +698,7 @@ Private symbols:
 ## Module: m_common_entities
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_entities.F90`
+- `extlibs/xml/common/m_common_entities.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -708,7 +711,7 @@ Uses:
 ## Module: m_common_entity_expand
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_entity_expand.F90`
+- `extlibs/xml/common/m_common_entity_expand.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -724,7 +727,7 @@ Public symbols:
 ## Module: m_common_error
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_error.F90`
+- `extlibs/xml/common/m_common_error.F90`
 
 Uses:
 - `fox_m_fsys_abort_flush`
@@ -734,7 +737,7 @@ Uses:
 ## Module: m_common_io
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_io.F90`
+- `extlibs/xml/common/m_common_io.F90`
 
 Uses:
 - `f90_iostat`
@@ -751,7 +754,7 @@ Private symbols:
 ## Module: m_common_namecheck
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_namecheck.F90`
+- `extlibs/xml/common/m_common_namecheck.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -783,7 +786,7 @@ Public symbols:
 ## Module: m_common_namespaces
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_namespaces.F90`
+- `extlibs/xml/common/m_common_namespaces.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -798,7 +801,7 @@ Uses:
 ## Module: m_common_notations
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_notations.F90`
+- `extlibs/xml/common/m_common_notations.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -814,7 +817,7 @@ Public symbols:
 ## Module: m_common_struct
 
 Files:
-- `../scripts/../src/extlibs/xml/common/m_common_struct.F90`
+- `extlibs/xml/common/m_common_struct.F90`
 
 Uses:
 - `fox_utils`
@@ -835,7 +838,7 @@ Public symbols:
 ## Module: m_contours
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_contours.F90`
+- `extlibs/xml/wkml/m_contours.F90`
 
 Uses:
 - `fox_common`
@@ -879,7 +882,7 @@ Private symbols:
 ## Module: m_dom_dom
 
 Files:
-- `../scripts/../src/extlibs/xml/dom/m_dom_dom.F90`
+- `extlibs/xml/dom/m_dom_dom.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -896,7 +899,7 @@ Uses:
 ## Module: m_dom_error
 
 Files:
-- `../scripts/../src/extlibs/xml/dom/m_dom_error.f90`
+- `extlibs/xml/dom/m_dom_error.f90`
 
 Uses:
 - `fox_m_fsys_abort_flush`
@@ -917,7 +920,7 @@ Private symbols:
 ## Module: m_dom_extras
 
 Files:
-- `../scripts/../src/extlibs/xml/dom/m_dom_extras.F90`
+- `extlibs/xml/dom/m_dom_extras.F90`
 
 Uses:
 - `fox_m_fsys_parse_input`
@@ -929,7 +932,7 @@ Uses:
 ## Module: m_dom_parse
 
 Files:
-- `../scripts/../src/extlibs/xml/dom/m_dom_parse.f90`
+- `extlibs/xml/dom/m_dom_parse.f90`
 
 Uses:
 - `fox_common`
@@ -977,7 +980,7 @@ Private symbols:
 ## Module: m_dom_utils
 
 Files:
-- `../scripts/../src/extlibs/xml/dom/m_dom_utils.f90`
+- `extlibs/xml/dom/m_dom_utils.f90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -1001,7 +1004,7 @@ Private symbols:
 ## Module: m_ieee
 
 Files:
-- `../scripts/../src/extlibs/xml/fsys/m_ieee.f90`
+- `extlibs/xml/fsys/m_ieee.f90`
 
 Public symbols:
 - `generate_nan` — function
@@ -1010,7 +1013,7 @@ Public symbols:
 ## Module: m_sax_operate
 
 Files:
-- `../scripts/../src/extlibs/xml/sax/m_sax_operate.F90`
+- `extlibs/xml/sax/m_sax_operate.F90`
 
 Uses:
 - `fox_common`
@@ -1058,7 +1061,7 @@ Private symbols:
 ## Module: m_sax_parser
 
 Files:
-- `../scripts/../src/extlibs/xml/sax/m_sax_parser.F90`
+- `extlibs/xml/sax/m_sax_parser.F90`
 
 Uses:
 - `fox_common`
@@ -1133,7 +1136,7 @@ Private symbols:
 ## Module: m_sax_reader
 
 Files:
-- `../scripts/../src/extlibs/xml/sax/m_sax_reader.F90`
+- `extlibs/xml/sax/m_sax_reader.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -1168,7 +1171,7 @@ Private symbols:
 ## Module: m_sax_tokenizer
 
 Files:
-- `../scripts/../src/extlibs/xml/sax/m_sax_tokenizer.F90`
+- `extlibs/xml/sax/m_sax_tokenizer.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -1192,7 +1195,7 @@ Private symbols:
 ## Module: m_sax_types
 
 Files:
-- `../scripts/../src/extlibs/xml/sax/m_sax_types.F90`
+- `extlibs/xml/sax/m_sax_types.F90`
 
 Uses:
 - `m_common_attrs`
@@ -1208,7 +1211,7 @@ Uses:
 ## Module: m_sax_xml_source
 
 Files:
-- `../scripts/../src/extlibs/xml/sax/m_sax_xml_source.F90`
+- `extlibs/xml/sax/m_sax_xml_source.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -1231,7 +1234,7 @@ Private symbols:
 ## Module: m_wcml_coma
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_coma.F90`
+- `extlibs/xml/wcml/m_wcml_coma.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1243,7 +1246,7 @@ Uses:
 ## Module: m_wcml_core
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_core.F90`
+- `extlibs/xml/wcml/m_wcml_core.F90`
 
 Uses:
 - `fox_common`
@@ -1263,7 +1266,7 @@ Public symbols:
 ## Module: m_wcml_geometry
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_geometry.F90`
+- `extlibs/xml/wcml/m_wcml_geometry.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1274,7 +1277,7 @@ Uses:
 ## Module: m_wcml_lattice
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_lattice.F90`
+- `extlibs/xml/wcml/m_wcml_lattice.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1285,7 +1288,7 @@ Uses:
 ## Module: m_wcml_lists
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_lists.F90`
+- `extlibs/xml/wcml/m_wcml_lists.F90`
 
 Uses:
 - `fox_common`
@@ -1311,7 +1314,7 @@ Public symbols:
 ## Module: m_wcml_metadata
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_metadata.F90`
+- `extlibs/xml/wcml/m_wcml_metadata.F90`
 
 Uses:
 - `fox_wxml`
@@ -1323,7 +1326,7 @@ Public symbols:
 ## Module: m_wcml_molecule
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_molecule.F90`
+- `extlibs/xml/wcml/m_wcml_molecule.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -1336,7 +1339,7 @@ Uses:
 ## Module: m_wcml_parameter
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_parameter.F90`
+- `extlibs/xml/wcml/m_wcml_parameter.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1348,7 +1351,7 @@ Uses:
 ## Module: m_wcml_property
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_property.F90`
+- `extlibs/xml/wcml/m_wcml_property.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1360,7 +1363,7 @@ Uses:
 ## Module: m_wcml_stml
 
 Files:
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_stml.F90`
+- `extlibs/xml/wcml/m_wcml_stml.F90`
 
 Uses:
 - `fox_wxml`
@@ -1370,7 +1373,7 @@ Uses:
 ## Module: m_wkml_chart
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_chart.F90`
+- `extlibs/xml/wkml/m_wkml_chart.F90`
 
 Uses:
 - `fox_common`
@@ -1382,7 +1385,7 @@ Uses:
 ## Module: m_wkml_color
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_color.F90`
+- `extlibs/xml/wkml/m_wkml_color.F90`
 
 Uses:
 - `fox_common`
@@ -1394,13 +1397,13 @@ Uses:
 ## Module: m_wkml_color_def
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_color_def.F90`
+- `extlibs/xml/wkml/m_wkml_color_def.F90`
 
 ---
 ## Module: m_wkml_contours
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_contours.F90`
+- `extlibs/xml/wkml/m_wkml_contours.F90`
 
 Uses:
 - `fox_common`
@@ -1417,7 +1420,7 @@ Uses:
 ## Module: m_wkml_core
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_core.F90`
+- `extlibs/xml/wkml/m_wkml_core.F90`
 
 Uses:
 - `fox_wxml`
@@ -1433,7 +1436,7 @@ Public symbols:
 ## Module: m_wkml_coverage
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_coverage.F90`
+- `extlibs/xml/wkml/m_wkml_coverage.F90`
 
 Uses:
 - `fox_common`
@@ -1450,7 +1453,7 @@ Uses:
 ## Module: m_wkml_features
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_features.F90`
+- `extlibs/xml/wkml/m_wkml_features.F90`
 
 Uses:
 - `fox_common`
@@ -1466,7 +1469,7 @@ Uses:
 ## Module: m_wkml_lowlevel
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_lowlevel.F90`
+- `extlibs/xml/wkml/m_wkml_lowlevel.F90`
 
 Uses:
 - `fox_common`
@@ -1479,7 +1482,7 @@ Uses:
 ## Module: m_wkml_styling
 
 Files:
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_styling.F90`
+- `extlibs/xml/wkml/m_wkml_styling.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1492,7 +1495,7 @@ Uses:
 ## Module: m_wxml_core
 
 Files:
-- `../scripts/../src/extlibs/xml/wxml/m_wxml_core.F90`
+- `extlibs/xml/wxml/m_wxml_core.F90`
 
 Uses:
 - `fox_m_fsys_abort_flush`
@@ -1517,7 +1520,7 @@ Uses:
 ## Module: m_wxml_escape
 
 Files:
-- `../scripts/../src/extlibs/xml/wxml/m_wxml_escape.F90`
+- `extlibs/xml/wxml/m_wxml_escape.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -1532,7 +1535,7 @@ Public symbols:
 ## Module: m_wxml_overloads
 
 Files:
-- `../scripts/../src/extlibs/xml/wxml/m_wxml_overloads.F90`
+- `extlibs/xml/wxml/m_wxml_overloads.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -1543,7 +1546,7 @@ Uses:
 ## Module: mod_phasecorr
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_test_mod_phasecorr.f90`
+- `main/commanders/test/simple_test_mod_phasecorr.f90`
 
 Uses:
 - `simple_image`
@@ -1561,82 +1564,82 @@ Public symbols:
 ## Module: procedure
 
 Files:
-- `../scripts/../src/defs/simple_type_defs.f90`
-- `../scripts/../src/extlibs/curl/src/curl_easy.f90`
-- `../scripts/../src/extlibs/gnufor/gnufor2.f90`
-- `../scripts/../src/extlibs/json/json_file_module.f90`
-- `../scripts/../src/extlibs/json/json_string_utilities.f90`
-- `../scripts/../src/extlibs/json/json_value_module.f90`
-- `../scripts/../src/extlibs/unix/src/unix.f90`
-- `../scripts/../src/extlibs/xml/common/m_common_attrs.F90`
-- `../scripts/../src/extlibs/xml/common/m_common_buffer.F90`
-- `../scripts/../src/extlibs/xml/common/m_common_element.F90`
-- `../scripts/../src/extlibs/xml/common/m_common_elstack.F90`
-- `../scripts/../src/extlibs/xml/common/m_common_entities.F90`
-- `../scripts/../src/extlibs/xml/common/m_common_error.F90`
-- `../scripts/../src/extlibs/xml/common/m_common_namespaces.F90`
-- `../scripts/../src/extlibs/xml/dom/m_dom_dom.F90`
-- `../scripts/../src/extlibs/xml/dom/m_dom_extras.F90`
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_array_str.F90`
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90`
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_format.F90`
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_parse_input.F90`
-- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_string_list.F90`
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_coma.F90`
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_geometry.F90`
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_lattice.F90`
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_molecule.F90`
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_parameter.F90`
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_property.F90`
-- `../scripts/../src/extlibs/xml/wcml/m_wcml_stml.F90`
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_chart.F90`
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_color.F90`
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_contours.F90`
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_coverage.F90`
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_features.F90`
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_lowlevel.F90`
-- `../scripts/../src/extlibs/xml/wkml/m_wkml_styling.F90`
-- `../scripts/../src/extlibs/xml/wxml/m_wxml_core.F90`
-- `../scripts/../src/extlibs/xml/wxml/m_wxml_overloads.F90`
-- `../scripts/../src/fileio/simple_fileio.f90`
-- `../scripts/../src/main/ctf/simple_ctf.f90`
-- `../scripts/../src/main/image/simple_ftiter.f90`
-- `../scripts/../src/main/image/simple_image.f90`
-- `../scripts/../src/main/interp/simple_edges_sqwins.f90`
-- `../scripts/../src/main/interp/simple_kbinterpol.f90`
-- `../scripts/../src/main/interp/simple_winfuns.f90`
-- `../scripts/../src/main/ori/simple_ori.f90`
-- `../scripts/../src/main/ori/simple_oris.f90`
-- `../scripts/../src/main/simple_abinitio_controller.f90`
-- `../scripts/../src/main/simple_eul_prob_tab_utils.f90`
-- `../scripts/../src/main/simple_sym.f90`
-- `../scripts/../src/main/strategies/search/simple_matcher_ptcl_io.f90`
-- `../scripts/../src/main/stream/simple_stream_watcher.f90`
-- `../scripts/../src/utils/filter/simple_butterworth.f90`
-- `../scripts/../src/utils/filter/simple_opt_filter.f90`
-- `../scripts/../src/utils/math/simple_linalg.f90`
-- `../scripts/../src/utils/math/simple_math.f90`
-- `../scripts/../src/utils/math/simple_math_ft.f90`
-- `../scripts/../src/utils/math/simple_neighs.f90`
-- `../scripts/../src/utils/math/simple_ran_tabu.f90`
-- `../scripts/../src/utils/math/simple_rnd.f90`
-- `../scripts/../src/utils/math/simple_srch_sort_loc.f90`
-- `../scripts/../src/utils/math/simple_stat.f90`
-- `../scripts/../src/utils/qsys/simple_qsys_ctrl.f90`
-- `../scripts/../src/utils/qsys/simple_qsys_funs.f90`
-- `../scripts/../src/utils/simple_corrmat.f90`
-- `../scripts/../src/utils/simple_gauss2Dfit.f90`
-- `../scripts/../src/utils/simple_gpu_utils.f90`
-- `../scripts/../src/utils/simple_imgarr_utils.f90`
-- `../scripts/../src/utils/simple_is_check_assert.f90`
-- `../scripts/../src/utils/simple_jiffys.f90`
-- `../scripts/../src/utils/simple_magic_boxes.f90`
-- `../scripts/../src/utils/simple_sauron.f90`
-- `../scripts/../src/utils/simple_segmentation.f90`
-- `../scripts/../src/utils/simple_string.f90`
-- `../scripts/../src/utils/simple_string_utils.f90`
-- `../scripts/../src/utils/structs/simple_chash.f90`
-- `../scripts/../src/utils/structs/simple_hash.f90`
+- `defs/simple_type_defs.f90`
+- `extlibs/curl/src/curl_easy.f90`
+- `extlibs/gnufor/gnufor2.f90`
+- `extlibs/json/json_file_module.f90`
+- `extlibs/json/json_string_utilities.f90`
+- `extlibs/json/json_value_module.f90`
+- `extlibs/unix/src/unix.f90`
+- `extlibs/xml/common/m_common_attrs.F90`
+- `extlibs/xml/common/m_common_buffer.F90`
+- `extlibs/xml/common/m_common_element.F90`
+- `extlibs/xml/common/m_common_elstack.F90`
+- `extlibs/xml/common/m_common_entities.F90`
+- `extlibs/xml/common/m_common_error.F90`
+- `extlibs/xml/common/m_common_namespaces.F90`
+- `extlibs/xml/dom/m_dom_dom.F90`
+- `extlibs/xml/dom/m_dom_extras.F90`
+- `extlibs/xml/fsys/fox_m_fsys_array_str.F90`
+- `extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90`
+- `extlibs/xml/fsys/fox_m_fsys_format.F90`
+- `extlibs/xml/fsys/fox_m_fsys_parse_input.F90`
+- `extlibs/xml/fsys/fox_m_fsys_string_list.F90`
+- `extlibs/xml/wcml/m_wcml_coma.F90`
+- `extlibs/xml/wcml/m_wcml_geometry.F90`
+- `extlibs/xml/wcml/m_wcml_lattice.F90`
+- `extlibs/xml/wcml/m_wcml_molecule.F90`
+- `extlibs/xml/wcml/m_wcml_parameter.F90`
+- `extlibs/xml/wcml/m_wcml_property.F90`
+- `extlibs/xml/wcml/m_wcml_stml.F90`
+- `extlibs/xml/wkml/m_wkml_chart.F90`
+- `extlibs/xml/wkml/m_wkml_color.F90`
+- `extlibs/xml/wkml/m_wkml_contours.F90`
+- `extlibs/xml/wkml/m_wkml_coverage.F90`
+- `extlibs/xml/wkml/m_wkml_features.F90`
+- `extlibs/xml/wkml/m_wkml_lowlevel.F90`
+- `extlibs/xml/wkml/m_wkml_styling.F90`
+- `extlibs/xml/wxml/m_wxml_core.F90`
+- `extlibs/xml/wxml/m_wxml_overloads.F90`
+- `fileio/simple_fileio.f90`
+- `main/ctf/simple_ctf.f90`
+- `main/image/simple_ftiter.f90`
+- `main/image/simple_image.f90`
+- `main/interp/simple_edges_sqwins.f90`
+- `main/interp/simple_kbinterpol.f90`
+- `main/interp/simple_winfuns.f90`
+- `main/ori/simple_ori.f90`
+- `main/ori/simple_oris.f90`
+- `main/simple_abinitio_controller.f90`
+- `main/simple_eul_prob_tab_utils.f90`
+- `main/simple_sym.f90`
+- `main/strategies/search/simple_matcher_ptcl_io.f90`
+- `main/stream/simple_stream_watcher.f90`
+- `utils/filter/simple_butterworth.f90`
+- `utils/filter/simple_opt_filter.f90`
+- `utils/math/simple_linalg.f90`
+- `utils/math/simple_math.f90`
+- `utils/math/simple_math_ft.f90`
+- `utils/math/simple_neighs.f90`
+- `utils/math/simple_ran_tabu.f90`
+- `utils/math/simple_rnd.f90`
+- `utils/math/simple_srch_sort_loc.f90`
+- `utils/math/simple_stat.f90`
+- `utils/qsys/simple_qsys_ctrl.f90`
+- `utils/qsys/simple_qsys_funs.f90`
+- `utils/simple_corrmat.f90`
+- `utils/simple_gauss2Dfit.f90`
+- `utils/simple_gpu_utils.f90`
+- `utils/simple_imgarr_utils.f90`
+- `utils/simple_is_check_assert.f90`
+- `utils/simple_jiffys.f90`
+- `utils/simple_magic_boxes.f90`
+- `utils/simple_sauron.f90`
+- `utils/simple_segmentation.f90`
+- `utils/simple_string.f90`
+- `utils/simple_string_utils.f90`
+- `utils/structs/simple_chash.f90`
+- `utils/structs/simple_hash.f90`
 
 Uses:
 - `fox_common`
@@ -1654,53 +1657,54 @@ Uses:
 - `simple_type_defs`
 
 Public symbols:
-- `add2fbody_1` — function
-- `add2fbody_2` — function
-- `add2fbody_3` — function
+- `add_attribute` — function
+- `add_element` — function
+- `add_entity` — subroutine
 - `add_error` — subroutine
+- `add_external_entity` — subroutine
+- `add_internal_entity` — subroutine
+- `add_item_to_dict` — subroutine
+- `add_to_buffer` — subroutine
+- `add_to_path` — subroutine
 - `addDefaultNS` — subroutine
+- `addPrefix` — subroutine
 - `addPrefixedNS` — subroutine
+- `addPrefixedURI` — subroutine
 - `adoptNode` — function
-- `alloc_imgarr` — subroutine
-- `append2basename_1` — function
-- `append2basename_2` — function
+- `alloc_str` — type
+- `annotate_invalid_json` — subroutine
+- `append` — function
+- `append_text` — subroutine
 - `appendChild` — function
 - `appendData` — subroutine
-- `arr2file_dp` — subroutine
-- `arr2file_sp` — subroutine
-- `arr2txtfile_1` — subroutine
-- `arr2txtfile_2` — subroutine
-- `assert_eq2` — function
-- `assert_eq3` — function
-- `assert_eq4` — function
-- `assert_eqn` — function
-- `automatic_thresh_sobel` — subroutine
-- `autoscale` — subroutine
-- `basename` — function
-- `batch_gauss2Dfit_1` — subroutine
-- `batch_gauss2Dfit_2` — subroutine
+- `att_value_normalize` — function
+- `att_value_normalize_len` — function
+- `attribute_has_default` — function
+- `attributeDecl_handler` — subroutine
+- `buffer_length` — function
+- `buffer_to_chararray` — function
+- `buffer_to_str` — function
 - `c_f_str_chars` — subroutine
 - `c_f_str_ptr` — subroutine
 - `c_int32_to_uint16` — function
 - `c_int64_to_uint32` — function
 - `c_uint16_to_int32` — function
 - `c_uint32_to_int64` — function
-- `calc_cartesian_corrmat_1` — subroutine
-- `calc_cartesian_corrmat_2` — subroutine
-- `calc_inpl_invariant_cc_nomirr` — function
-- `canny` — subroutine
-- `canny_edge` — subroutine
-- `check4nans2D_1` — subroutine
-- `check4nans2D_2` — subroutine
-- `check4nans3D_1` — subroutine
-- `check4nans3D_2` — subroutine
-- `check4nans_1` — subroutine
-- `check4nans_2` — subroutine
+- `check_buffer` — subroutine
+- `check_duplicates` — function
+- `check_if_valid` — subroutine
+- `checkContentModel` — function
+- `checkContentModelToEnd` — function
+- `checkEndNamespaces` — subroutine
+- `checkNamespaces` — subroutine
+- `checkNamespacesWriting` — subroutine
 - `cloneNode` — function
 - `cmlEndMolecule` — subroutine
 - `cmlStartMolecule` — subroutine
-- `copy_imgarr` — function
+- `compact_real_string` — subroutine
+- `convert` — subroutine
 - `copyDOMConfig` — subroutine
+- `copyURIMapping` — subroutine
 - `createAttribute` — function
 - `createAttributeNS` — function
 - `createCdataSection` — function
@@ -1718,565 +1722,6 @@ Public symbols:
 - `createNotation` — function
 - `createProcessingInstruction` — function
 - `createTextNode` — function
-- `dealloc_imgarr` — subroutine
-- `decode_rfc6901` — function
-- `del_files_1` — subroutine
-- `del_files_2` — subroutine
-- `deleteData` — subroutine
-- `destroy_error_stack` — subroutine
-- `destroyAllNodesRecursively` — subroutine
-- `destroyDocument` — subroutine
-- `destroyNamedNodeMap` — subroutine
-- `destroyNodeList` — subroutine
-- `detect_peak_thres_1` — subroutine
-- `detect_peak_thres_2` — subroutine
-- `detect_peak_thres_fdr` — subroutine
-- `detect_peak_thres_for_npeaks` — subroutine
-- `detect_peak_thres_sortmeans` — subroutine
-- `dist_avg` — function
-- `dist_btw_farthest` — function
-- `dist_btw_nearest` — function
-- `double_thresh` — subroutine
-- `dumpnsdict` — subroutine
-- `encode_rfc6901` — function
-- `escape_string` — subroutine
-- `extract_imgarr` — function
-- `f_c_str_chars` — subroutine
-- `f_readdir` — function
-- `f_strerror` — function
-- `fclose` — subroutine
-- `file2drarr` — function
-- `file2imat` — subroutine
-- `file2lmat` — subroutine
-- `file2rarr` — function
-- `file2rmat` — subroutine
-- `fileiochk` — subroutine
-- `filelength` — function
-- `filepath_1` — function
-- `filepath_2` — function
-- `filepath_3` — function
-- `filepath_4` — function
-- `find_larger_magic_box` — function
-- `find_magic_box` — function
-- `find_magic_boxes4scale` — function
-- `fname2ext` — function
-- `fname2format` — function
-- `fname_new_ext_1` — function
-- `fname_new_ext_2` — function
-- `fopen` — subroutine
-- `FoX_error_base` — subroutine
-- `FoX_fatal_base` — subroutine
-- `FoX_get_fatal_errors` — function
-- `FoX_get_fatal_warnings` — function
-- `FoX_set_fatal_errors` — subroutine
-- `FoX_set_fatal_warnings` — subroutine
-- `FoX_warning_base` — subroutine
-- `funit_size` — function
-- `gauss2Dfit` — subroutine
-- `get_fbody_1` — function
-- `get_fbody_2` — function
-- `get_fpath` — function
-- `get_open_funits` — subroutine
-- `get_relative_path` — function
-- `getAttribute` — function
-- `getAttributeNode` — function
-- `getAttributeNodeNS` — function
-- `getAttributeNS` — function
-- `getAttributes` — function
-- `getBaseURI` — function
-- `getchildNodes` — function
-- `getdata` — function
-- `getdocType` — function
-- `getdocumentElement` — function
-- `getdocumentURI` — function
-- `getdomConfig` — function
-- `getElementById` — function
-- `getElementsByTagName` — function
-- `getElementsByTagNameNS` — function
-- `getEntities` — function
-- `getEntityByIndex` — function
-- `getEntityByName` — function
-- `getfirstChild` — function
-- `getFoX_checks` — function
-- `getillFormed` — function
-- `getImplementation` — function
-- `getInputEncoding` — function
-- `getInternalSubset` — function
-- `getisElementContentWhitespace` — function
-- `getlastChild` — function
-- `getliveNodeLists` — function
-- `getLocalName` — function
-- `getname` — function
-- `getNamedItem` — function
-- `getNamedItemNS` — function
-- `getnamespaceNodes` — function
-- `getNamespaceURI` — function
-- `getnextSibling` — function
-- `getnodeName` — function
-- `getNodePath` — function
-- `getnodeType` — function
-- `getNodeValue` — function
-- `getnotationName` — function
-- `getNotations` — function
-- `getNumberOfPrefixes` — function
-- `getOwnerDocument` — function
-- `getownerElement` — function
-- `getParameter` — function
-- `getParameterNames` — function
-- `getparentNode` — function
-- `getPrefix` — function
-- `getPrefixByIndex` — function
-- `getpreviousSibling` — function
-- `getpublicId` — function
-- `getreadonly` — function
-- `getspecified` — function
-- `getstrictErrorChecking` — function
-- `getstringValue` — function
-- `getsystemId` — function
-- `gettagName` — function
-- `getTarget` — function
-- `getTextContent` — function
-- `getXds` — function
-- `getXmlEncoding` — function
-- `getxmlStandalone` — function
-- `getXmlVersion` — function
-- `hasAttribute` — function
-- `hasAttributeNS` — function
-- `hasAttributes` — function
-- `hasChildNodes` — function
-- `hasFeature` — function
-- `hough_line` — subroutine
-- `imat2file` — subroutine
-- `importNode` — function
-- `in_error` — function
-- `init_error_stack` — subroutine
-- `insertBefore` — function
-- `insertData` — subroutine
-- `integer_to_string` — subroutine
-- `is_even_2` — function
-- `isDefaultNamespace` — function
-- `isDefaultNSInForce` — function
-- `isEqualNode` — function
-- `isPrefixInForce` — function
-- `isSameNode` — function
-- `isSupported` — function
-- `join_imgarrs` — function
-- `kmlAddLegend` — subroutine
-- `kmlCloseInnerBoundaryIs` — subroutine
-- `kmlCloseLinearRing` — subroutine
-- `kmlCloseLineString` — subroutine
-- `kmlCloseouterBoundaryIs` — subroutine
-- `kmlClosePolygon` — subroutine
-- `kmlCloseStyle` — subroutine
-- `kmlCreateLineStyle` — subroutine
-- `kmlCreatePolygonStyle` — subroutine
-- `kmlEndRegion` — subroutine
-- `kmlGetColorHex` — function
-- `kmlMakeColorMap` — function
-- `kmlOpenInnerBoundaryIs` — subroutine
-- `kmlOpenLinearRing` — subroutine
-- `kmlOpenLineString` — subroutine
-- `kmlOpenOuterBoundaryIs` — subroutine
-- `kmlOpenPolygon` — subroutine
-- `kmlOpenStyle` — subroutine
-- `kmlSetCustomColor` — subroutine
-- `lmat2file` — subroutine
-- `lookupNamespaceURI` — function
-- `lookupPrefix` — function
-- `lowercase_string` — function
-- `make_dirnames` — function
-- `make_filenames` — function
-- `move_files2dir` — subroutine
-- `move_files_in_cwd` — subroutine
-- `namespaceFixup` — subroutine
-- `newDOMConfig` — function
-- `nlines` — function
-- `non_max_supp` — subroutine
-- `normalize` — subroutine
-- `normalizeDocument` — subroutine
-- `otsu_img` — subroutine
-- `otsu_robust_fast` — subroutine
-- `pack_imgarr` — function
-- `pop_nl` — function
-- `print_magic_box_range` — subroutine
-- `read_cavgs_into_imgarr` — function
-- `read_exit_code` — subroutine
-- `read_filetable` — subroutine
-- `read_stk_into_imgarr` — function
-- `real_to_string` — subroutine
-- `refine_peak_thres_sortmeans` — subroutine
-- `remove_nl` — function
-- `removeAttribute` — subroutine
-- `removeAttributeNode` — function
-- `removeAttributeNodeNS` — function
-- `removeAttributeNS` — subroutine
-- `removeChild` — function
-- `removeDefaultNS` — subroutine
-- `removeNamedItem` — function
-- `removeNamedItemNS` — function
-- `removePrefixedNS` — subroutine
-- `renameNode` — function
-- `replace_string` — subroutine
-- `replaceChild` — function
-- `replaceData` — subroutine
-- `rm_from_fbody` — function
-- `rmat2file` — subroutine
-- `sauvola` — subroutine
-- `setAttribute` — subroutine
-- `setAttributeNode` — function
-- `setAttributeNodeNS` — function
-- `setAttributeNS` — subroutine
-- `setData` — subroutine
-- `setDocType` — subroutine
-- `setDocumentElement` — subroutine
-- `setdocumentURI` — subroutine
-- `setdomConfig` — subroutine
-- `setFoX_checks` — subroutine
-- `setGCstate` — subroutine
-- `setIdAttribute` — subroutine
-- `setIdAttributeNode` — subroutine
-- `setIdAttributeNS` — subroutine
-- `setillFormed` — subroutine
-- `setIsElementContentWhitespace` — subroutine
-- `setliveNodeLists` — subroutine
-- `setNamedItem` — function
-- `setNamedItemNS` — function
-- `setNodeValue` — subroutine
-- `setParameter` — subroutine
-- `setPrefix` — subroutine
-- `setReadOnlyMap` — subroutine
-- `setReadOnlyNode` — subroutine
-- `setspecified` — subroutine
-- `setstrictErrorChecking` — subroutine
-- `setstringValue` — subroutine
-- `setTextContent` — subroutine
-- `setValue` — subroutine
-- `setXds` — subroutine
-- `setxmlStandalone` — subroutine
-- `setXmlVersion` — subroutine
-- `simple_copy_file` — subroutine
-- `sobel` — subroutine
-- `splitText` — function
-- `stemname` — function
-- `str_to_int_10` — function
-- `str_to_int_16` — function
-- `str_vs` — function
-- `string` — type
-- `string_to_integer` — subroutine
-- `string_to_real` — subroutine
-- `subStringData` — function
-- `swap_suffix_1` — function
-- `swap_suffix_2` — function
-- `threshold_for_no_peaks` — subroutine
-- `threshold_for_npeaks` — subroutine
-- `unescape_string` — subroutine
-- `valid_json_hex` — function
-- `vs_str` — function
-- `vs_str_alloc` — function
-- `vs_vs_alloc` — function
-- `wait_for_closure` — subroutine
-- `write_filetable` — subroutine
-- `write_imgarr_1` — subroutine
-- `write_imgarr_2` — subroutine
-- `write_imgarr_3` — subroutine
-- `write_junk_cavgs` — subroutine
-- `write_selected_cavgs` — subroutine
-- `write_singlelineoftext` — subroutine
-
-Private symbols:
-- `add2history_1` — subroutine
-- `add2history_2` — subroutine
-- `add2watchdirs` — subroutine
-- `add_attribute` — function
-- `add_element` — function
-- `add_entity` — subroutine
-- `add_eol` — subroutine
-- `add_external_entity` — subroutine
-- `add_internal_entity` — subroutine
-- `add_item_to_dict` — subroutine
-- `add_string` — subroutine
-- `add_to_buffer` — subroutine
-- `add_to_path` — subroutine
-- `add_to_stream_stack` — subroutine
-- `add_to_streaming` — subroutine
-- `addBondArray` — subroutine
-- `addcoords_x3_dp` — subroutine
-- `addcoords_x3_sp` — subroutine
-- `addcoords_xfrac_dp` — subroutine
-- `addcoords_xfrac_sp` — subroutine
-- `addcoords_xyz3_dp` — subroutine
-- `addcoords_xyz3_sp` — subroutine
-- `addcoords_xyzfrac_dp` — subroutine
-- `addcoords_xyzfrac_sp` — subroutine
-- `addDlpolyMatrix_3_dp` — subroutine
-- `addDlpolyMatrix_3_sp` — subroutine
-- `addDlpolyMatrix_dp` — subroutine
-- `addDlpolyMatrix_sp` — subroutine
-- `addPrefix` — subroutine
-- `addPrefixedURI` — subroutine
-- `alloc_chash` — subroutine
-- `alloc_hash` — subroutine
-- `alloc_str` — type
-- `analyze_smat` — subroutine
-- `ang2vox` — function
-- `angle_sampling_1` — function
-- `angle_sampling_2` — function
-- `annotate_invalid_json` — subroutine
-- `apod` — function
-- `apod_fast` — function
-- `apod_fast_device` — function
-- `apod_fast_value_deriv` — subroutine
-- `apod_kb15_a2` — function
-- `apod_mat_2d` — subroutine
-- `apod_mat_2d_fast` — subroutine
-- `apod_mat_3d` — subroutine
-- `apod_mat_3d_fast` — subroutine
-- `apod_mat_3d_fast_grad` — subroutine
-- `append` — function
-- `append_candidate` — subroutine
-- `append_limited_char` — subroutine
-- `append_nl` — subroutine
-- `append_nnm` — subroutine
-- `append_or_replace_candidate` — subroutine
-- `append_ori` — subroutine
-- `append_text` — subroutine
-- `appendNSNode` — subroutine
-- `apply2all` — subroutine
-- `apply_1` — subroutine
-- `apply_2` — subroutine
-- `apply_convention` — subroutine
-- `apply_refine3D_search_overrides` — subroutine
-- `apply_sym_with_shift` — subroutine
-- `arg` — function
-- `arpack_stop` — subroutine
-- `arraytocomplexdp` — subroutine
-- `arraytocomplexsp` — subroutine
-- `arraytointeger` — subroutine
-- `arraytological` — subroutine
-- `arraytorealdp` — subroutine
-- `arraytorealsp` — subroutine
-- `arraytostring` — subroutine
-- `assign` — subroutine
-- `att_value_normalize` — function
-- `att_value_normalize_len` — function
-- `attribute_has_default` — function
-- `AttributeArrayCh` — subroutine
-- `AttributeArrayCmplxDp` — subroutine
-- `AttributeArrayCmplxSp` — subroutine
-- `AttributeArrayInt` — subroutine
-- `AttributeArrayLg` — subroutine
-- `AttributeArrayRealDp` — subroutine
-- `AttributeArrayRealSp` — subroutine
-- `attributeDecl_handler` — subroutine
-- `AttributeMatrixCh` — subroutine
-- `AttributeMatrixCmplxDp` — subroutine
-- `AttributeMatrixCmplxSp` — subroutine
-- `AttributeMatrixInt` — subroutine
-- `AttributeMatrixLg` — subroutine
-- `AttributeMatrixRealDp` — subroutine
-- `AttributeMatrixRealSp` — subroutine
-- `AttributeScalarCmplxDp` — subroutine
-- `AttributeScalarCmplxSp` — subroutine
-- `AttributeScalarInt` — subroutine
-- `AttributeScalarLg` — subroutine
-- `AttributeScalarRealDp` — subroutine
-- `AttributeScalarRealSp` — subroutine
-- `augment_partition_job_descr` — subroutine
-- `avg_frac_smallest` — function
-- `avg_sdev_1` — subroutine
-- `avg_sdev_2` — subroutine
-- `avg_sdev_3` — subroutine
-- `avg_sdev_4` — subroutine
-- `balanced` — subroutine
-- `bessi0` — function
-- `bman_apod` — function
-- `bman_instr` — function
-- `bounds_from_mask3D` — subroutine
-- `buffer_length` — function
-- `buffer_to_chararray` — function
-- `buffer_to_str` — function
-- `build_eullims` — subroutine
-- `build_pind_lookup` — subroutine
-- `build_refine3D_stage_cfg` — subroutine
-- `build_refspiral` — subroutine
-- `butterworth` — function
-- `butterworth_filter_1` — subroutine
-- `butterworth_filter_2` — subroutine
-- `butterworth_filter_3` — subroutine
-- `butterworth_filter_4` — subroutine
-- `butterworth_filter_5` — subroutine
-- `calc_ap_pref` — function
-- `calc_athres` — function
-- `calc_graphene_mask` — function
-- `calc_num2sample` — subroutine
-- `calc_offset2D` — subroutine
-- `calc_score_thres` — function
-- `calc_stats` — subroutine
-- `canSetParameter_ch` — function
-- `canSetParameter_log` — function
-- `cast_str_types` — function
-- `char2str` — function
-- `CharactersArrayCh` — subroutine
-- `CharactersArrayCmplxDp` — subroutine
-- `CharactersArrayCmplxSp` — subroutine
-- `CharactersArrayInt` — subroutine
-- `CharactersArrayLg` — subroutine
-- `CharactersArrayRealDp` — subroutine
-- `CharactersArrayRealSp` — subroutine
-- `CharactersMatrixCh` — subroutine
-- `CharactersMatrixCmplxDp` — subroutine
-- `CharactersMatrixCmplxSp` — subroutine
-- `CharactersMatrixInt` — subroutine
-- `CharactersMatrixLg` — subroutine
-- `CharactersMatrixRealDp` — subroutine
-- `CharactersMatrixRealSp` — subroutine
-- `CharactersScalarCmplxDp` — subroutine
-- `CharactersScalarCmplxSp` — subroutine
-- `CharactersScalarInt` — subroutine
-- `CharactersScalarLg` — subroutine
-- `CharactersScalarRealDp` — subroutine
-- `CharactersScalarRealSp` — subroutine
-- `chash2ori` — subroutine
-- `chash2str` — function
-- `check_buffer` — subroutine
-- `check_duplicates` — function
-- `check_if_valid` — subroutine
-- `check_xf` — subroutine
-- `checkBondIdRefs` — subroutine
-- `checkColorHex` — function
-- `checkContentModel` — function
-- `checkContentModelToEnd` — function
-- `checkEndNamespaces` — subroutine
-- `checkExistingRefs` — function
-- `checkExistingRefsInAttValue` — function
-- `checkFmt` — function
-- `checkNamespaces` — subroutine
-- `checkNamespacesWriting` — subroutine
-- `checkParsedRefsInAttValue` — function
-- `clear_history` — subroutine
-- `clear_partition_job_descr` — subroutine
-- `clear_stack` — subroutine
-- `close_start_tag` — subroutine
-- `cmlAddAngle_dp` — subroutine
-- `cmlAddAngle_sp` — subroutine
-- `cmlAddAtoms_3_dp` — subroutine
-- `cmlAddAtoms_3_dp_sh` — subroutine
-- `cmlAddAtoms_3_sp` — subroutine
-- `cmlAddAtoms_3_sp_sh` — subroutine
-- `cmlAddAtomsdp` — subroutine
-- `cmlAddAtomsdp_sh` — subroutine
-- `cmlAddAtomssp` — subroutine
-- `cmlAddAtomssp_sh` — subroutine
-- `cmlAddBandListdp` — subroutine
-- `cmlAddBandListsp` — subroutine
-- `cmlAddCoords_dp` — subroutine
-- `cmlAddCoords_sp` — subroutine
-- `cmlAddCrystaldp` — subroutine
-- `cmlAddCrystalsp` — subroutine
-- `cmlAddEigenValuedp` — subroutine
-- `cmlAddEigenValuesp` — subroutine
-- `cmlAddEigenValueVectorCmplxdp` — subroutine
-- `cmlAddEigenValueVectorCmplxsp` — subroutine
-- `cmlAddEigenValueVectordp` — subroutine
-- `cmlAddEigenValueVectorsp` — subroutine
-- `cmlAddKPointdp` — subroutine
-- `cmlAddKPointsp` — subroutine
-- `cmlAddLatticedp` — subroutine
-- `cmlAddLatticesp` — subroutine
-- `cmlAddLength_dp` — subroutine
-- `cmlAddLength_sp` — subroutine
-- `cmlAddMolecule_3_dp` — subroutine
-- `cmlAddMolecule_3_dp_sh` — subroutine
-- `cmlAddMolecule_3_sp` — subroutine
-- `cmlAddMolecule_3_sp_sh` — subroutine
-- `cmlAddMoleculedp` — subroutine
-- `cmlAddMoleculedp_sh` — subroutine
-- `cmlAddMoleculesp` — subroutine
-- `cmlAddMoleculesp_sh` — subroutine
-- `cmlAddParticles_3_dp` — subroutine
-- `cmlAddParticles_3_dp_sh` — subroutine
-- `cmlAddParticles_3_sp` — subroutine
-- `cmlAddParticles_3_sp_sh` — subroutine
-- `cmlAddParticlesdp` — subroutine
-- `cmlAddParticlesdp_sh` — subroutine
-- `cmlAddParticlessp` — subroutine
-- `cmlAddParticlessp_sh` — subroutine
-- `cmlAddSymmetrydp` — subroutine
-- `cmlAddSymmetryNoOps` — subroutine
-- `cmlAddSymmetrysp` — subroutine
-- `cmlAddTorsion_dp` — subroutine
-- `cmlAddTorsion_sp` — subroutine
-- `cmlEndBand` — subroutine
-- `cmlEndKpoint` — subroutine
-- `cmlStartBand` — subroutine
-- `cmlStartKPointdp` — subroutine
-- `cmlStartKPointsp` — subroutine
-- `cnt_recs_per_line` — function
-- `comp_addr_logi` — function
-- `comp_addr_phys1` — function
-- `comp_addr_phys2` — function
-- `comp_addr_phys3` — function
-- `comp_addr_phys_orig` — function
-- `compact` — subroutine
-- `compact_real_string` — subroutine
-- `compeuler` — subroutine
-- `compose2dshift3d` — subroutine
-- `compose3d2d` — subroutine
-- `concat_complex_dp_str` — function
-- `concat_complex_sp_str` — function
-- `concat_int_str` — function
-- `concat_logical_str` — function
-- `concat_real_dp_str` — function
-- `concat_real_sp_str` — function
-- `concat_str_complex_dp` — function
-- `concat_str_complex_sp` — function
-- `concat_str_int` — function
-- `concat_str_logical` — function
-- `concat_str_real_dp` — function
-- `concat_str_real_sp` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor` — function
-- `constructor_1` — function
-- `constructor_1` — function
-- `constructor_2` — function
-- `constructor_2` — function
-- `conv2rank_weights` — subroutine
-- `convert` — subroutine
-- `copy` — subroutine
-- `copy` — subroutine
-- `copy` — subroutine
-- `copy` — subroutine
-- `copyURIMapping` — subroutine
-- `corrs2weights` — function
-- `cosedge_1` — function
-- `cosedge_2` — function
-- `cosedge_inner_1` — function
-- `cosedge_inner_2` — function
-- `cosedge_r2_2d` — function
-- `cosedge_r2_3d` — function
-- `countcomplexdp` — function
-- `countcomplexsp` — function
-- `countinteger` — function
-- `countlogical` — function
-- `countrealdp` — function
-- `countrealsp` — function
-- `countstring` — function
-- `create_hist_vector` — subroutine
-- `createEmptyElement` — function
-- `createEmptyElementNS` — function
-- `createNode` — function
-- `cross` — function
-- `csq_1` — function
-- `csq_2` — function
-- `csv_field` — function
 - `curl_easy_escape` — function
 - `curl_easy_getinfo_char` — function
 - `curl_easy_getinfo_double` — function
@@ -2301,23 +1746,12 @@ Private symbols:
 - `curl_unescape` — function
 - `curl_version` — function
 - `curl_version_info` — function
-- `cyci_1d` — function
-- `cyci_1d_static` — function
-- `dble2str` — function
-- `dealloc_chash` — subroutine
-- `dealloc_hash` — subroutine
-- `declare_coarray_jobs_finished` — subroutine
 - `declared_element` — function
+- `decode_rfc6901` — function
 - `default_comp_ucs4` — function
 - `default_join_ucs4` — function
 - `default_neq_ucs4` — function
-- `deg2rad_dp` — function
-- `deg2rad_sp` — function
-- `delete` — subroutine
-- `delete` — subroutine
-- `delete_2Dclustering` — subroutine
-- `delete_3Dalignment` — subroutine
-- `delete_entry` — subroutine
+- `deleteData` — subroutine
 - `destroy_attribute_list` — subroutine
 - `destroy_attribute_t` — subroutine
 - `destroy_dict` — subroutine
@@ -2326,70 +1760,27 @@ Private symbols:
 - `destroy_elstack` — subroutine
 - `destroy_entity` — subroutine
 - `destroy_entity_list` — subroutine
+- `destroy_error_stack` — subroutine
 - `destroy_json_core` — subroutine
 - `destroy_json_data` — subroutine
-- `destroy_string_list` — subroutine
-- `destroy_vs` — subroutine
-- `destroyDocumentType` — subroutine
-- `destroyDOMConfig` — subroutine
-- `destroyElementOrAttribute` — subroutine
-- `destroyEntityOrNotation` — subroutine
+- `destroyAllNodesRecursively` — subroutine
+- `destroyDocument` — subroutine
+- `destroyNamedNodeMap` — subroutine
 - `destroyNamespaceDictionary` — subroutine
-- `destroyNode` — subroutine
-- `destroyNodeContents` — subroutine
-- `detect_and_add_dirs` — subroutine
-- `dgelss` — subroutine
-- `dgelsy` — subroutine
-- `dgesvd` — subroutine
-- `dgetrf` — subroutine
-- `dgetri` — subroutine
-- `discrete_read_imgbatch` — subroutine
-- `discrete_read_imgbatch_source` — subroutine
-- `dispatch_task_to_persistent_worker` — subroutine
-- `dist_eval_fun` — function
-- `dists2order` — function
-- `dists2scores_percen` — subroutine
-- `dmat2smat` — function
-- `dnrm2` — function
-- `dposv` — subroutine
-- `dsyev` — subroutine
+- `destroyNodeList` — subroutine
 - `dump_buffer` — subroutine
+- `dumpnsdict` — subroutine
 - `duplicate_key_func` — subroutine
-- `dynfind` — function
-- `e1get` — function
-- `e1set` — subroutine
-- `e2get` — function
-- `e2set` — subroutine
-- `e3get` — function
-- `e3set` — subroutine
-- `eigh_sp` — subroutine
-- `eigsrt_dp` — subroutine
-- `eigsrt_sp` — subroutine
 - `elementContent` — function
-- `elim_dup` — subroutine
-- `ellipse` — subroutine
-- `emit_refine3D_stage_cfg` — subroutine
 - `emptyContent` — function
+- `encode_rfc6901` — function
 - `end_prefix_handler` — subroutine
 - `end_prefix_handler` — subroutine
 - `ensure_capacity` — subroutine
-- `equispaced_vals` — function
-- `estimate_lplim3D` — subroutine
-- `estimate_lplim_1` — subroutine
-- `estimate_lplim_2` — subroutine
-- `estimate_lplims2D` — subroutine
-- `euclid_dp` — function
-- `euclid_sp_1` — function
-- `euclid_sp_2` — function
-- `euldist` — function
-- `eulprob_corr_switch` — function
-- `eulprob_dist_switch` — function
-- `eval_apod` — function
-- `eval_instr` — function
+- `escape_string` — subroutine
 - `existing_attribute` — function
 - `existing_element` — function
 - `existing_entity` — function
-- `exists` — function
 - `expand_char_entity` — function
 - `expand_char_entity_len` — function
 - `expand_entity` — function
@@ -2398,175 +1789,46 @@ Private symbols:
 - `expand_entity_text_len` — function
 - `express_att_decl_len` — function
 - `express_attribute_declaration` — function
-- `extractDataAttNSChArr` — subroutine
-- `extractDataAttNSChMat` — subroutine
-- `extractDataAttNSChSca` — subroutine
-- `extractDataAttNSCmplxDpArr` — subroutine
-- `extractDataAttNSCmplxDpMat` — subroutine
-- `extractDataAttNSCmplxDpSca` — subroutine
-- `extractDataAttNSCmplxSpArr` — subroutine
-- `extractDataAttNSCmplxSpMat` — subroutine
-- `extractDataAttNSCmplxSpSca` — subroutine
-- `extractDataAttNSIntArr` — subroutine
-- `extractDataAttNSIntMat` — subroutine
-- `extractDataAttNSIntSca` — subroutine
-- `extractDataAttNSLgArr` — subroutine
-- `extractDataAttNSLgMat` — subroutine
-- `extractDataAttNSLgSca` — subroutine
-- `extractDataAttNSRealDpArr` — subroutine
-- `extractDataAttNSRealDpMat` — subroutine
-- `extractDataAttNSRealDpSca` — subroutine
-- `extractDataAttNSRealSpArr` — subroutine
-- `extractDataAttNSRealSpMat` — subroutine
-- `extractDataAttNSRealSpSca` — subroutine
-- `extractDataAttributeChArr` — subroutine
-- `extractDataAttributeChMat` — subroutine
-- `extractDataAttributeChSca` — subroutine
-- `extractDataAttributeCmplxDpArr` — subroutine
-- `extractDataAttributeCmplxDpMat` — subroutine
-- `extractDataAttributeCmplxDpSca` — subroutine
-- `extractDataAttributeCmplxSpArr` — subroutine
-- `extractDataAttributeCmplxSpMat` — subroutine
-- `extractDataAttributeCmplxSpSca` — subroutine
-- `extractDataAttributeIntArr` — subroutine
-- `extractDataAttributeIntMat` — subroutine
-- `extractDataAttributeIntSca` — subroutine
-- `extractDataAttributeLgArr` — subroutine
-- `extractDataAttributeLgMat` — subroutine
-- `extractDataAttributeLgSca` — subroutine
-- `extractDataAttributeRealDpArr` — subroutine
-- `extractDataAttributeRealDpMat` — subroutine
-- `extractDataAttributeRealDpSca` — subroutine
-- `extractDataAttributeRealSpArr` — subroutine
-- `extractDataAttributeRealSpMat` — subroutine
-- `extractDataAttributeRealSpSca` — subroutine
-- `extractDataContentChArr` — subroutine
-- `extractDataContentChMat` — subroutine
-- `extractDataContentChSca` — subroutine
-- `extractDataContentCmplxDpArr` — subroutine
-- `extractDataContentCmplxDpMat` — subroutine
-- `extractDataContentCmplxDpSca` — subroutine
-- `extractDataContentCmplxSpArr` — subroutine
-- `extractDataContentCmplxSpMat` — subroutine
-- `extractDataContentCmplxSpSca` — subroutine
-- `extractDataContentIntArr` — subroutine
-- `extractDataContentIntMat` — subroutine
-- `extractDataContentIntSca` — subroutine
-- `extractDataContentLgArr` — subroutine
-- `extractDataContentLgMat` — subroutine
-- `extractDataContentLgSca` — subroutine
-- `extractDataContentRealDpArr` — subroutine
-- `extractDataContentRealDpMat` — subroutine
-- `extractDataContentRealDpSca` — subroutine
-- `extractDataContentRealSpArr` — subroutine
-- `extractDataContentRealSpMat` — subroutine
-- `extractDataContentRealSpSca` — subroutine
-- `fdim` — function
-- `find_1` — subroutine
-- `find_2` — subroutine
-- `find_closest_proj` — function
-- `find_medoids` — subroutine
-- `findloc_str_1` — function
-- `findloc_str_2` — function
-- `fit_lsq_plane` — subroutine
-- `fit_straight_line` — subroutine
-- `fmtsymstr` — function
-- `forget_stk_dims` — subroutine
-- `fortran_logical` — function
-- `fortran_quote` — function
-- `fortran_symbol_from_string` — function
+- `f_c_str_chars` — subroutine
+- `f_readdir` — function
+- `f_strerror` — function
 - `FoX_error` — subroutine
-- `fplane_get_cmplx` — function
-- `fplane_get_ctfsq` — function
-- `free_all_cunits` — subroutine
-- `funcs` — function
-- `funcs` — function
-- `funcs` — function
-- `funcs` — function
-- `gasdev_2` — function
-- `gasdev_3` — function
-- `gau_rnd_shift` — subroutine
-- `gauwfun` — function
-- `gcd` — function
-- `gemm_tn` — subroutine
-- `gen_c1` — subroutine
-- `gen_job_descr` — subroutine
-- `generate_array_script` — subroutine
-- `generate_script_1` — subroutine
-- `generate_script_2` — subroutine
-- `generate_script_3` — subroutine
-- `generate_script_4` — subroutine
-- `generate_scripts_subprojects` — subroutine
-- `geodesic_dist_trace` — function
-- `get_1` — function
-- `get_2` — function
-- `get_2Dshift` — function
-- `get_3Dshift` — function
-- `get_all_subgrps_descr` — function
+- `FoX_error_base` — subroutine
+- `FoX_fatal_base` — subroutine
+- `FoX_get_fatal_errors` — function
+- `FoX_get_fatal_warnings` — function
+- `FoX_set_fatal_errors` — subroutine
+- `FoX_set_fatal_warnings` — subroutine
+- `FoX_warning_base` — subroutine
 - `get_att_index_pointer` — subroutine
 - `get_att_type_enum` — function
 - `get_attdecl_by_index` — function
 - `get_attdecl_by_name` — function
 - `get_attlist_size` — function
 - `get_attribute` — function
-- `get_axis_angle` — subroutine
 - `get_chars_from_array` — subroutine
 - `get_chars_from_array` — subroutine
-- `get_ctfvars` — function
-- `get_ctfvars` — function
 - `get_current_line_from_file_sequential` — subroutine
 - `get_current_line_from_file_stream` — subroutine
 - `get_double_from_array` — subroutine
 - `get_element` — function
-- `get_euler` — function
-- `get_eullims` — function
-- `get_find` — function
-- `get_find_at_crit` — function
-- `get_find_at_res` — function
 - `get_int_from_array` — subroutine
-- `get_jobs_status` — subroutine
 - `get_json_core_in_file` — subroutine
-- `get_key` — function
-- `get_key` — function
 - `get_key` — function
 - `get_key_index` — function
 - `get_key_index_ns` — function
 - `get_key_len` — function
-- `get_keys` — function
-- `get_keys` — function
-- `get_last_string` — function
-- `get_ldim` — function
-- `get_lfny` — function
-- `get_lhp` — function
-- `get_llp` — function
 - `get_localName_by_index` — function
 - `get_localName_by_keyname` — function
 - `get_localname_by_keyname_len` — function
 - `get_logical_from_array` — subroutine
-- `get_lp` — function
-- `get_mat` — function
-- `get_normal` — function
-- `get_nsubgrp` — function
 - `get_nsURI_by_index` — function
 - `get_nsURI_by_keyname` — function
 - `get_nsURI_by_keyname_len` — function
-- `get_pgrp` — function
-- `get_pixel_pos` — subroutine
 - `get_prefix_by_index` — function
 - `get_prefix_by_keyname` — function
 - `get_prefix_by_keyname_len` — function
-- `get_resarr` — function
-- `get_spat_freq` — function
-- `get_static` — subroutine
-- `get_static` — subroutine
-- `get_str` — function
-- `get_stream_done_stack` — subroutine
-- `get_stream_fail_stack` — subroutine
 - `get_string_lengths` — subroutine
-- `get_subgrp` — function
-- `get_subgrp_descr` — function
-- `get_sym_rmat` — subroutine
-- `get_symori` — subroutine
 - `get_top_elstack` — function
 - `get_value_by_index` — function
 - `get_value_by_index_len` — function
@@ -2574,141 +1836,128 @@ Private symbols:
 - `get_value_by_key_len` — function
 - `get_value_by_key_ns` — function
 - `get_value_by_key_ns_len` — function
-- `get_Whalf` — function
-- `getAttribute_len` — function
-- `getAttributesNS_len` — function
+- `getAttribute` — function
+- `getAttributeNode` — function
+- `getAttributeNodeNS` — function
+- `getAttributeNS` — function
+- `getAttributes` — function
 - `getBase` — function
 - `getBase_len` — function
-- `getdata_len` — function
-- `getdocumentURI_len` — function
+- `getBaseURI` — function
+- `getchildNodes` — function
+- `getdata` — function
+- `getdocType` — function
+- `getdocumentElement` — function
+- `getdocumentURI` — function
+- `getdomConfig` — function
+- `getElementById` — function
+- `getElementsByTagName` — function
+- `getElementsByTagNameNS` — function
+- `getEntities` — function
+- `getEntityByIndex` — function
+- `getEntityByName` — function
 - `getEntityNameByIndex` — function
-- `getevensym` — subroutine
-- `getGCstate` — function
-- `getInputEncoding_len` — function
-- `getInternalSubset_len` — function
+- `getfirstChild` — function
+- `getFoX_checks` — function
+- `getillFormed` — function
+- `getImplementation` — function
+- `getInputEncoding` — function
+- `getInternalSubset` — function
+- `getisElementContentWhitespace` — function
 - `getIsId_by_index` — function
-- `getisId_DOM` — function
+- `getlastChild` — function
 - `getLength` — function
-- `getLength_characterdata` — function
-- `getLength_nl` — function
-- `getLength_nnm` — function
-- `getLocalName_len` — function
-- `getname_len` — function
-- `getNamespaceURI_len` — function
-- `getnodeName_len` — function
-- `getNodeValue_len` — function
-- `getnotationName_len` — function
-- `getPrefix_len` — function
+- `getliveNodeLists` — function
+- `getLocalName` — function
+- `getname` — function
+- `getNamedItem` — function
+- `getNamedItemNS` — function
+- `getnamespaceNodes` — function
+- `getNamespaceURI` — function
+- `getnextSibling` — function
+- `getnodeName` — function
+- `getNodePath` — function
+- `getnodeType` — function
+- `getNodeValue` — function
+- `getnotationName` — function
+- `getNotations` — function
+- `getNumberOfPrefixes` — function
+- `getOwnerDocument` — function
+- `getownerElement` — function
+- `getParameter` — function
+- `getParameterNames` — function
+- `getparentNode` — function
+- `getPrefix` — function
+- `getPrefixByIndex` — function
 - `getPrefixIndex` — function
-- `getpublicId_len` — function
-- `getstringValue_len` — function
-- `getsystemId_len` — function
-- `gettagName_len` — function
-- `getTarget_len` — function
-- `getter_1` — subroutine
-- `getter_1` — subroutine
-- `getter_2` — subroutine
-- `getter_2` — subroutine
-- `getter_3` — subroutine
-- `getter_3` — subroutine
-- `getTextContent_len` — function
+- `getpreviousSibling` — function
+- `getpublicId` — function
+- `getreadonly` — function
+- `getspecified` — function
+- `getstrictErrorChecking` — function
+- `getstringValue` — function
+- `getsystemId` — function
+- `gettagName` — function
+- `getTarget` — function
+- `getTextContent` — function
 - `getType_by_index` — function
 - `getType_by_index_len` — function
 - `getType_by_keyname` — function
 - `getType_by_keyname_len` — function
 - `getURIofDefaultNS` — function
 - `getURIofPrefixedNS` — function
-- `getValue_DOM` — function
 - `getWhitespaceHandling` — function
-- `getXmlEncoding_len` — function
-- `getXmlVersionEnum` — function
-- `great_circle_samples` — function
-- `greedy_sampling_1` — function
-- `greedy_sampling_2` — function
-- `hac_1d` — subroutine
-- `hac_1d_fast` — subroutine
-- `hac_med_thres` — subroutine
-- `haloween_end` — subroutine
-- `hann_apod` — function
-- `hann_instr` — function
-- `hardedge_1` — function
-- `hardedge_2` — function
-- `hardedge_3` — function
-- `hardedge_4` — function
-- `hardedge_inner_1` — function
-- `hardedge_inner_2` — function
-- `hardedge_inner_3` — function
-- `hardedge_inner_4` — function
-- `hardedge_r2_2d` — function
-- `hardedge_r2_3d` — function
+- `getXds` — function
+- `getXmlEncoding` — function
+- `getxmlStandalone` — function
+- `getXmlVersion` — function
 - `has_key` — function
 - `has_key_ns` — function
-- `has_subgrp` — function
-- `hash2str` — function
-- `hermitian_eigh_z` — subroutine
-- `hermitian_invert_dp` — subroutine
-- `hermitian_invert_z` — subroutine
-- `hermitian_solve_dp` — subroutine
-- `hermitian_solve_z` — subroutine
+- `hasAttribute` — function
+- `hasAttributeNS` — function
+- `hasAttributes` — function
+- `hasChildNodes` — function
+- `hasFeature` — function
 - `hist` — subroutine
-- `hpsort_1` — subroutine
-- `hpsort_2` — subroutine
-- `hpsort_3` — subroutine
-- `hpsort_4` — subroutine
-- `hpsort_5` — subroutine
-- `hpsort_6` — subroutine
 - `image_1` — subroutine
 - `image_2` — subroutine
 - `image_3` — subroutine
 - `image_4` — subroutine
 - `image_5` — subroutine
 - `image_6` — subroutine
-- `image_stack` — type
-- `init` — subroutine
+- `importNode` — function
+- `in_error` — function
 - `init_attribute_list` — subroutine
 - `init_dict` — subroutine
 - `init_element_list` — subroutine
 - `init_elstack` — subroutine
 - `init_entity_list` — subroutine
-- `init_refine3D_iteration` — subroutine
-- `init_string_list` — subroutine
+- `init_error_stack` — subroutine
 - `initialize_json_core` — function
 - `initialize_json_core_in_file` — subroutine
 - `initialize_json_file` — function
 - `initialize_json_file_v2` — function
 - `initNamespaceDictionary` — subroutine
-- `inplrotdist` — function
-- `insert` — subroutine
-- `instr` — function
-- `int2str` — function
-- `int2str` — function
-- `int2str_pad` — function
-- `irnd` — function
-- `irnd_gasdev` — function
-- `irnd_gau` — function
-- `irnd_pair` — subroutine
-- `irnd_uni` — function
-- `irnd_uni_pair` — function
-- `is` — function
+- `insertBefore` — function
+- `insertData` — subroutine
+- `integer_to_string` — subroutine
 - `is_child_of_callback` — subroutine
 - `is_empty_elstack` — function
 - `is_external_entity` — function
-- `is_particle` — function
 - `is_unparsed_entity_` — function
 - `is_unparsed_entity_from_list` — function
-- `isCharData` — function
 - `isDeclared_by_index` — function
 - `isDeclared_by_key` — function
 - `isDeclared_by_keyNS` — function
+- `isDefaultNamespace` — function
+- `isDefaultNSInForce` — function
+- `isEqualNode` — function
+- `isPrefixInForce` — function
+- `isSameNode` — function
 - `isSpecified_by_index` — function
 - `isSpecified_by_key` — function
 - `isSpecified_by_keyNS` — function
-- `isthere` — function
-- `isthere` — function
-- `item_nl` — function
-- `item_nnm` — function
-- `jacobi_dp` — subroutine
-- `jacobi_sp` — subroutine
+- `isSupported` — function
 - `json_add_double_by_path` — subroutine
 - `json_add_double_vec_by_path` — subroutine
 - `json_add_integer_by_path` — subroutine
@@ -2877,6 +2126,881 @@ Private symbols:
 - `json_value_to_string` — subroutine
 - `json_value_to_string_fast` — subroutine
 - `json_value_validate` — subroutine
+- `kmlAddLegend` — subroutine
+- `kmlCloseInnerBoundaryIs` — subroutine
+- `kmlCloseLinearRing` — subroutine
+- `kmlCloseLineString` — subroutine
+- `kmlCloseouterBoundaryIs` — subroutine
+- `kmlClosePolygon` — subroutine
+- `kmlCloseStyle` — subroutine
+- `kmlCreateLineStyle` — subroutine
+- `kmlCreatePolygonStyle` — subroutine
+- `kmlEndRegion` — subroutine
+- `kmlGetColorHex` — function
+- `kmlMakeColorMap` — function
+- `kmlOpenInnerBoundaryIs` — subroutine
+- `kmlOpenLinearRing` — subroutine
+- `kmlOpenLineString` — subroutine
+- `kmlOpenOuterBoundaryIs` — subroutine
+- `kmlOpenPolygon` — subroutine
+- `kmlOpenStyle` — subroutine
+- `kmlSetCustomColor` — subroutine
+- `lookupNamespaceURI` — function
+- `lookupPrefix` — function
+- `lowercase_string` — function
+- `make_token_group` — function
+- `make_token_group_len` — function
+- `my_date_and_time` — function
+- `name_equal` — function
+- `name_strings_equal` — function
+- `namespaceFixup` — subroutine
+- `newDOMConfig` — function
+- `normalize` — subroutine
+- `normalizeDocument` — subroutine
+- `number_of_items` — function
+- `output_terminal` — function
+- `parse_array` — subroutine
+- `parse_dtd_attlist` — subroutine
+- `parse_dtd_element` — subroutine
+- `parse_for_chars` — subroutine
+- `parse_number` — subroutine
+- `parse_object` — subroutine
+- `parse_string` — subroutine
+- `parse_value` — subroutine
+- `plot3d` — subroutine
+- `plot_1` — subroutine
+- `plot_2` — subroutine
+- `plot_3` — subroutine
+- `plot_4` — subroutine
+- `pop_char` — subroutine
+- `pop_elstack` — function
+- `pop_entity_list` — function
+- `pop_nl` — function
+- `print_buffer` — subroutine
+- `print_dict` — subroutine
+- `print_elstack` — subroutine
+- `print_entity_list` — subroutine
+- `push_char` — subroutine
+- `push_elstack` — subroutine
+- `real_to_string` — subroutine
+- `remove_key_by_index` — subroutine
+- `remove_nl` — function
+- `removeAttribute` — subroutine
+- `removeAttributeNode` — function
+- `removeAttributeNodeNS` — function
+- `removeAttributeNS` — subroutine
+- `removeChild` — function
+- `removeDefaultNS` — subroutine
+- `removeNamedItem` — function
+- `removeNamedItemNS` — function
+- `removePrefix` — subroutine
+- `removePrefixedNS` — subroutine
+- `removePrefixedURI` — subroutine
+- `renameNode` — function
+- `replace_string` — subroutine
+- `replaceChild` — function
+- `replaceData` — subroutine
+- `report_declarations` — subroutine
+- `reset_buffer` — subroutine
+- `reset_dict` — subroutine
+- `reset_elstack` — subroutine
+- `reset_entity_list` — subroutine
+- `resize_elstack` — subroutine
+- `run_gnuplot` — subroutine
+- `set_json_core_in_file` — subroutine
+- `set_localName_by_index_s` — subroutine
+- `set_localName_by_index_vs` — subroutine
+- `set_nsURI_by_index` — subroutine
+- `set_prefix_by_index` — subroutine
+- `setAttribute` — subroutine
+- `setAttributeNode` — function
+- `setAttributeNodeNS` — function
+- `setAttributeNS` — subroutine
+- `setBase` — subroutine
+- `setData` — subroutine
+- `setDeclared` — subroutine
+- `setDocType` — subroutine
+- `setDocumentElement` — subroutine
+- `setdocumentURI` — subroutine
+- `setdomConfig` — subroutine
+- `setFoX_checks` — subroutine
+- `setGCstate` — subroutine
+- `setIdAttribute` — subroutine
+- `setIdAttributeNode` — subroutine
+- `setIdAttributeNS` — subroutine
+- `setillFormed` — subroutine
+- `setIsElementContentWhitespace` — subroutine
+- `setIsId_by_index` — subroutine
+- `setliveNodeLists` — subroutine
+- `setNamedItem` — function
+- `setNamedItemNS` — function
+- `setNodeValue` — subroutine
+- `setParameter` — subroutine
+- `setPrefix` — subroutine
+- `setReadOnlyMap` — subroutine
+- `setReadOnlyNode` — subroutine
+- `setSpecified` — subroutine
+- `setspecified` — subroutine
+- `setstrictErrorChecking` — subroutine
+- `setstringValue` — subroutine
+- `setTextContent` — subroutine
+- `setValue` — subroutine
+- `setXds` — subroutine
+- `setxmlStandalone` — subroutine
+- `setXmlVersion` — subroutine
+- `shallow_copy_entity` — function
+- `sigma_array` — type
+- `size_el` — function
+- `sortAttrs` — subroutine
+- `splitText` — function
+- `start_prefix_handler` — subroutine
+- `str_to_int_10` — function
+- `str_to_int_16` — function
+- `str_vs` — function
+- `string_to_dble` — function
+- `string_to_int` — function
+- `string_to_integer` — subroutine
+- `string_to_real` — subroutine
+- `strip_spaces` — function
+- `subStringData` — function
+- `surf_1` — subroutine
+- `surf_2` — subroutine
+- `surf_3` — subroutine
+- `swap_pointers` — subroutine
+- `to_array` — subroutine
+- `to_double` — subroutine
+- `to_integer` — subroutine
+- `to_logical` — subroutine
+- `to_null` — subroutine
+- `to_object` — subroutine
+- `to_string` — subroutine
+- `to_uni` — function
+- `to_uni_vec` — function
+- `traverse` — subroutine
+- `ucs4_comp_default` — function
+- `ucs4_join_default` — function
+- `ucs4_neq_default` — function
+- `unescape_string` — subroutine
+- `valid_json_hex` — function
+- `vs_str` — function
+- `vs_str_alloc` — function
+- `vs_vs_alloc` — function
+- `wrap_json_add_double_by_path` — subroutine
+- `wrap_json_add_double_vec_by_path` — subroutine
+- `wrap_json_add_integer_by_path` — subroutine
+- `wrap_json_add_integer_vec_by_path` — subroutine
+- `wrap_json_add_logical_by_path` — subroutine
+- `wrap_json_add_logical_vec_by_path` — subroutine
+- `wrap_json_add_member_by_path` — subroutine
+- `wrap_json_add_string_by_path` — subroutine
+- `wrap_json_add_string_vec_by_path` — subroutine
+- `wrap_json_create_by_path` — subroutine
+- `wrap_json_file_add_double` — subroutine
+- `wrap_json_file_add_double_vec` — subroutine
+- `wrap_json_file_add_integer` — subroutine
+- `wrap_json_file_add_integer_vec` — subroutine
+- `wrap_json_file_add_logical` — subroutine
+- `wrap_json_file_add_logical_vec` — subroutine
+- `wrap_json_file_add_object` — subroutine
+- `wrap_json_file_add_string` — subroutine
+- `wrap_json_file_add_string_vec` — subroutine
+- `wrap_json_file_get_alloc_string_vec` — subroutine
+- `wrap_json_file_get_double` — subroutine
+- `wrap_json_file_get_double_vec` — subroutine
+- `wrap_json_file_get_integer` — subroutine
+- `wrap_json_file_get_integer_vec` — subroutine
+- `wrap_json_file_get_logical` — subroutine
+- `wrap_json_file_get_logical_vec` — subroutine
+- `wrap_json_file_get_object` — subroutine
+- `wrap_json_file_get_string` — subroutine
+- `wrap_json_file_get_string_vec` — subroutine
+- `wrap_json_file_load_from_string` — subroutine
+- `wrap_json_file_remove` — subroutine
+- `wrap_json_file_rename` — subroutine
+- `wrap_json_file_update_integer` — subroutine
+- `wrap_json_file_update_logical` — subroutine
+- `wrap_json_file_update_real` — subroutine
+- `wrap_json_file_update_string` — subroutine
+- `wrap_json_file_valid_path` — function
+- `wrap_json_file_valid_path_op` — function
+- `wrap_json_file_variable_info` — subroutine
+- `wrap_json_file_variable_matrix_info` — subroutine
+- `wrap_json_get_alloc_string_vec_by_path` — subroutine
+- `wrap_json_get_array_by_path` — subroutine
+- `wrap_json_get_by_path` — subroutine
+- `wrap_json_get_double_by_path` — subroutine
+- `wrap_json_get_double_vec_by_path` — subroutine
+- `wrap_json_get_integer_by_path` — subroutine
+- `wrap_json_get_integer_vec_by_path` — subroutine
+- `wrap_json_get_logical_by_path` — subroutine
+- `wrap_json_get_logical_vec_by_path` — subroutine
+- `wrap_json_get_path` — subroutine
+- `wrap_json_get_string_by_path` — subroutine
+- `wrap_json_get_string_vec_by_path` — subroutine
+- `wrap_json_info_by_path` — subroutine
+- `wrap_json_matrix_info_by_path` — subroutine
+- `wrap_json_parse_string` — subroutine
+- `wrap_json_rename_by_path` — subroutine
+- `wrap_json_throw_exception` — subroutine
+- `wrap_json_update_double` — subroutine
+- `wrap_json_update_integer` — subroutine
+- `wrap_json_update_logical` — subroutine
+- `wrap_json_update_string` — subroutine
+- `wrap_json_valid_path` — function
+- `wrap_json_value_add_double` — subroutine
+- `wrap_json_value_add_double_vec` — subroutine
+- `wrap_json_value_add_integer` — subroutine
+- `wrap_json_value_add_integer_vec` — subroutine
+- `wrap_json_value_add_logical` — subroutine
+- `wrap_json_value_add_logical_vec` — subroutine
+- `wrap_json_value_add_null` — subroutine
+- `wrap_json_value_add_string` — subroutine
+- `wrap_json_value_add_string_vec` — subroutine
+- `wrap_json_value_create_array` — subroutine
+- `wrap_json_value_create_double` — subroutine
+- `wrap_json_value_create_integer` — subroutine
+- `wrap_json_value_create_logical` — subroutine
+- `wrap_json_value_create_null` — subroutine
+- `wrap_json_value_create_object` — subroutine
+- `wrap_json_value_create_string` — subroutine
+- `wrap_json_value_get_child_by_name` — subroutine
+- `wrap_json_value_remove_if_present` — subroutine
+- `wrap_json_value_rename` — subroutine
+- `write_it` — subroutine
+- `write_it_fast` — subroutine
+
+Private symbols:
+- `add2fbody_1` — function
+- `add2fbody_2` — function
+- `add2fbody_3` — function
+- `add2history_1` — subroutine
+- `add2history_2` — subroutine
+- `add2watchdirs` — subroutine
+- `add_eol` — subroutine
+- `add_string` — subroutine
+- `add_to_stream_stack` — subroutine
+- `add_to_streaming` — subroutine
+- `addBondArray` — subroutine
+- `addcoords_x3_dp` — subroutine
+- `addcoords_x3_sp` — subroutine
+- `addcoords_xfrac_dp` — subroutine
+- `addcoords_xfrac_sp` — subroutine
+- `addcoords_xyz3_dp` — subroutine
+- `addcoords_xyz3_sp` — subroutine
+- `addcoords_xyzfrac_dp` — subroutine
+- `addcoords_xyzfrac_sp` — subroutine
+- `addDlpolyMatrix_3_dp` — subroutine
+- `addDlpolyMatrix_3_sp` — subroutine
+- `addDlpolyMatrix_dp` — subroutine
+- `addDlpolyMatrix_sp` — subroutine
+- `alloc_chash` — subroutine
+- `alloc_hash` — subroutine
+- `alloc_imgarr` — subroutine
+- `analyze_smat` — subroutine
+- `ang2vox` — function
+- `angle_sampling_1` — function
+- `angle_sampling_2` — function
+- `apod` — function
+- `apod_fast` — function
+- `apod_fast_device` — function
+- `apod_fast_value_deriv` — subroutine
+- `apod_kb15_a2` — function
+- `apod_mat_2d` — subroutine
+- `apod_mat_2d_fast` — subroutine
+- `apod_mat_3d` — subroutine
+- `apod_mat_3d_fast` — subroutine
+- `apod_mat_3d_fast_grad` — subroutine
+- `append2basename_1` — function
+- `append2basename_2` — function
+- `append_candidate` — subroutine
+- `append_limited_char` — subroutine
+- `append_nl` — subroutine
+- `append_nnm` — subroutine
+- `append_or_replace_candidate` — subroutine
+- `append_ori` — subroutine
+- `appendNSNode` — subroutine
+- `apply2all` — subroutine
+- `apply_1` — subroutine
+- `apply_2` — subroutine
+- `apply_convention` — subroutine
+- `apply_refine3D_search_overrides` — subroutine
+- `apply_sym_with_shift` — subroutine
+- `arg` — function
+- `arpack_stop` — subroutine
+- `arr2file_dp` — subroutine
+- `arr2file_sp` — subroutine
+- `arr2txtfile_1` — subroutine
+- `arr2txtfile_2` — subroutine
+- `arraytocomplexdp` — subroutine
+- `arraytocomplexsp` — subroutine
+- `arraytointeger` — subroutine
+- `arraytological` — subroutine
+- `arraytorealdp` — subroutine
+- `arraytorealsp` — subroutine
+- `arraytostring` — subroutine
+- `assert_eq2` — function
+- `assert_eq3` — function
+- `assert_eq4` — function
+- `assert_eqn` — function
+- `assign` — subroutine
+- `AttributeArrayCh` — subroutine
+- `AttributeArrayCmplxDp` — subroutine
+- `AttributeArrayCmplxSp` — subroutine
+- `AttributeArrayInt` — subroutine
+- `AttributeArrayLg` — subroutine
+- `AttributeArrayRealDp` — subroutine
+- `AttributeArrayRealSp` — subroutine
+- `AttributeMatrixCh` — subroutine
+- `AttributeMatrixCmplxDp` — subroutine
+- `AttributeMatrixCmplxSp` — subroutine
+- `AttributeMatrixInt` — subroutine
+- `AttributeMatrixLg` — subroutine
+- `AttributeMatrixRealDp` — subroutine
+- `AttributeMatrixRealSp` — subroutine
+- `AttributeScalarCmplxDp` — subroutine
+- `AttributeScalarCmplxSp` — subroutine
+- `AttributeScalarInt` — subroutine
+- `AttributeScalarLg` — subroutine
+- `AttributeScalarRealDp` — subroutine
+- `AttributeScalarRealSp` — subroutine
+- `augment_partition_job_descr` — subroutine
+- `automatic_thresh_sobel` — subroutine
+- `autoscale` — subroutine
+- `avg_frac_smallest` — function
+- `avg_sdev_1` — subroutine
+- `avg_sdev_2` — subroutine
+- `avg_sdev_3` — subroutine
+- `avg_sdev_4` — subroutine
+- `balanced` — subroutine
+- `basename` — function
+- `batch_gauss2Dfit_1` — subroutine
+- `batch_gauss2Dfit_2` — subroutine
+- `bessi0` — function
+- `bman_apod` — function
+- `bman_instr` — function
+- `bounds_from_mask3D` — subroutine
+- `build_eullims` — subroutine
+- `build_pind_lookup` — subroutine
+- `build_refine3D_stage_cfg` — subroutine
+- `build_refspiral` — subroutine
+- `butterworth` — function
+- `butterworth_filter_1` — subroutine
+- `butterworth_filter_2` — subroutine
+- `butterworth_filter_3` — subroutine
+- `butterworth_filter_4` — subroutine
+- `butterworth_filter_5` — subroutine
+- `calc_ap_pref` — function
+- `calc_athres` — function
+- `calc_cartesian_corrmat_1` — subroutine
+- `calc_cartesian_corrmat_2` — subroutine
+- `calc_graphene_mask` — function
+- `calc_inpl_invariant_cc_nomirr` — function
+- `calc_num2sample` — subroutine
+- `calc_offset2D` — subroutine
+- `calc_score_thres` — function
+- `calc_stats` — subroutine
+- `canny` — subroutine
+- `canny_edge` — subroutine
+- `canSetParameter_ch` — function
+- `canSetParameter_log` — function
+- `cast_str_types` — function
+- `char2str` — function
+- `CharactersArrayCh` — subroutine
+- `CharactersArrayCmplxDp` — subroutine
+- `CharactersArrayCmplxSp` — subroutine
+- `CharactersArrayInt` — subroutine
+- `CharactersArrayLg` — subroutine
+- `CharactersArrayRealDp` — subroutine
+- `CharactersArrayRealSp` — subroutine
+- `CharactersMatrixCh` — subroutine
+- `CharactersMatrixCmplxDp` — subroutine
+- `CharactersMatrixCmplxSp` — subroutine
+- `CharactersMatrixInt` — subroutine
+- `CharactersMatrixLg` — subroutine
+- `CharactersMatrixRealDp` — subroutine
+- `CharactersMatrixRealSp` — subroutine
+- `CharactersScalarCmplxDp` — subroutine
+- `CharactersScalarCmplxSp` — subroutine
+- `CharactersScalarInt` — subroutine
+- `CharactersScalarLg` — subroutine
+- `CharactersScalarRealDp` — subroutine
+- `CharactersScalarRealSp` — subroutine
+- `chash2ori` — subroutine
+- `chash2str` — function
+- `check4nans2D_1` — subroutine
+- `check4nans2D_2` — subroutine
+- `check4nans3D_1` — subroutine
+- `check4nans3D_2` — subroutine
+- `check4nans_1` — subroutine
+- `check4nans_2` — subroutine
+- `check_xf` — subroutine
+- `checkBondIdRefs` — subroutine
+- `checkColorHex` — function
+- `checkExistingRefs` — function
+- `checkExistingRefsInAttValue` — function
+- `checkFmt` — function
+- `checkParsedRefsInAttValue` — function
+- `clear_history` — subroutine
+- `clear_partition_job_descr` — subroutine
+- `clear_stack` — subroutine
+- `close_start_tag` — subroutine
+- `cmlAddAngle_dp` — subroutine
+- `cmlAddAngle_sp` — subroutine
+- `cmlAddAtoms_3_dp` — subroutine
+- `cmlAddAtoms_3_dp_sh` — subroutine
+- `cmlAddAtoms_3_sp` — subroutine
+- `cmlAddAtoms_3_sp_sh` — subroutine
+- `cmlAddAtomsdp` — subroutine
+- `cmlAddAtomsdp_sh` — subroutine
+- `cmlAddAtomssp` — subroutine
+- `cmlAddAtomssp_sh` — subroutine
+- `cmlAddBandListdp` — subroutine
+- `cmlAddBandListsp` — subroutine
+- `cmlAddCoords_dp` — subroutine
+- `cmlAddCoords_sp` — subroutine
+- `cmlAddCrystaldp` — subroutine
+- `cmlAddCrystalsp` — subroutine
+- `cmlAddEigenValuedp` — subroutine
+- `cmlAddEigenValuesp` — subroutine
+- `cmlAddEigenValueVectorCmplxdp` — subroutine
+- `cmlAddEigenValueVectorCmplxsp` — subroutine
+- `cmlAddEigenValueVectordp` — subroutine
+- `cmlAddEigenValueVectorsp` — subroutine
+- `cmlAddKPointdp` — subroutine
+- `cmlAddKPointsp` — subroutine
+- `cmlAddLatticedp` — subroutine
+- `cmlAddLatticesp` — subroutine
+- `cmlAddLength_dp` — subroutine
+- `cmlAddLength_sp` — subroutine
+- `cmlAddMolecule_3_dp` — subroutine
+- `cmlAddMolecule_3_dp_sh` — subroutine
+- `cmlAddMolecule_3_sp` — subroutine
+- `cmlAddMolecule_3_sp_sh` — subroutine
+- `cmlAddMoleculedp` — subroutine
+- `cmlAddMoleculedp_sh` — subroutine
+- `cmlAddMoleculesp` — subroutine
+- `cmlAddMoleculesp_sh` — subroutine
+- `cmlAddParticles_3_dp` — subroutine
+- `cmlAddParticles_3_dp_sh` — subroutine
+- `cmlAddParticles_3_sp` — subroutine
+- `cmlAddParticles_3_sp_sh` — subroutine
+- `cmlAddParticlesdp` — subroutine
+- `cmlAddParticlesdp_sh` — subroutine
+- `cmlAddParticlessp` — subroutine
+- `cmlAddParticlessp_sh` — subroutine
+- `cmlAddSymmetrydp` — subroutine
+- `cmlAddSymmetryNoOps` — subroutine
+- `cmlAddSymmetrysp` — subroutine
+- `cmlAddTorsion_dp` — subroutine
+- `cmlAddTorsion_sp` — subroutine
+- `cmlEndBand` — subroutine
+- `cmlEndKpoint` — subroutine
+- `cmlStartBand` — subroutine
+- `cmlStartKPointdp` — subroutine
+- `cmlStartKPointsp` — subroutine
+- `cnt_recs_per_line` — function
+- `comp_addr_logi` — function
+- `comp_addr_phys1` — function
+- `comp_addr_phys2` — function
+- `comp_addr_phys3` — function
+- `comp_addr_phys_orig` — function
+- `compact` — subroutine
+- `compeuler` — subroutine
+- `compose2dshift3d` — subroutine
+- `compose3d2d` — subroutine
+- `concat_complex_dp_str` — function
+- `concat_complex_sp_str` — function
+- `concat_int_str` — function
+- `concat_logical_str` — function
+- `concat_real_dp_str` — function
+- `concat_real_sp_str` — function
+- `concat_str_complex_dp` — function
+- `concat_str_complex_sp` — function
+- `concat_str_int` — function
+- `concat_str_logical` — function
+- `concat_str_real_dp` — function
+- `concat_str_real_sp` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor` — function
+- `constructor_1` — function
+- `constructor_1` — function
+- `constructor_2` — function
+- `constructor_2` — function
+- `conv2rank_weights` — subroutine
+- `copy` — subroutine
+- `copy` — subroutine
+- `copy` — subroutine
+- `copy` — subroutine
+- `copy_imgarr` — function
+- `corrs2weights` — function
+- `cosedge_1` — function
+- `cosedge_2` — function
+- `cosedge_inner_1` — function
+- `cosedge_inner_2` — function
+- `cosedge_r2_2d` — function
+- `cosedge_r2_3d` — function
+- `countcomplexdp` — function
+- `countcomplexsp` — function
+- `countinteger` — function
+- `countlogical` — function
+- `countrealdp` — function
+- `countrealsp` — function
+- `countstring` — function
+- `create_hist_vector` — subroutine
+- `createEmptyElement` — function
+- `createEmptyElementNS` — function
+- `createNode` — function
+- `cross` — function
+- `csq_1` — function
+- `csq_2` — function
+- `csv_field` — function
+- `cyci_1d` — function
+- `cyci_1d_static` — function
+- `dble2str` — function
+- `dealloc_chash` — subroutine
+- `dealloc_hash` — subroutine
+- `dealloc_imgarr` — subroutine
+- `declare_coarray_jobs_finished` — subroutine
+- `deg2rad_dp` — function
+- `deg2rad_sp` — function
+- `del_files_1` — subroutine
+- `del_files_2` — subroutine
+- `delete` — subroutine
+- `delete` — subroutine
+- `delete_2Dclustering` — subroutine
+- `delete_3Dalignment` — subroutine
+- `delete_entry` — subroutine
+- `destroy_string_list` — subroutine
+- `destroy_vs` — subroutine
+- `destroyDocumentType` — subroutine
+- `destroyDOMConfig` — subroutine
+- `destroyElementOrAttribute` — subroutine
+- `destroyEntityOrNotation` — subroutine
+- `destroyNode` — subroutine
+- `destroyNodeContents` — subroutine
+- `detect_and_add_dirs` — subroutine
+- `detect_peak_thres_1` — subroutine
+- `detect_peak_thres_2` — subroutine
+- `detect_peak_thres_fdr` — subroutine
+- `detect_peak_thres_for_npeaks` — subroutine
+- `detect_peak_thres_sortmeans` — subroutine
+- `dgelss` — subroutine
+- `dgelsy` — subroutine
+- `dgesvd` — subroutine
+- `dgetrf` — subroutine
+- `dgetri` — subroutine
+- `discrete_read_imgbatch` — subroutine
+- `discrete_read_imgbatch_source` — subroutine
+- `dispatch_task_to_persistent_worker` — subroutine
+- `dist_avg` — function
+- `dist_btw_farthest` — function
+- `dist_btw_nearest` — function
+- `dist_eval_fun` — function
+- `dists2order` — function
+- `dists2scores_percen` — subroutine
+- `dmat2smat` — function
+- `dnrm2` — function
+- `double_thresh` — subroutine
+- `dposv` — subroutine
+- `dsyev` — subroutine
+- `dynfind` — function
+- `e1get` — function
+- `e1set` — subroutine
+- `e2get` — function
+- `e2set` — subroutine
+- `e3get` — function
+- `e3set` — subroutine
+- `eigh_sp` — subroutine
+- `eigsrt_dp` — subroutine
+- `eigsrt_sp` — subroutine
+- `elim_dup` — subroutine
+- `ellipse` — subroutine
+- `emit_refine3D_stage_cfg` — subroutine
+- `equispaced_vals` — function
+- `estimate_lplim3D` — subroutine
+- `estimate_lplim_1` — subroutine
+- `estimate_lplim_2` — subroutine
+- `estimate_lplims2D` — subroutine
+- `euclid_dp` — function
+- `euclid_sp_1` — function
+- `euclid_sp_2` — function
+- `euldist` — function
+- `eulprob_corr_switch` — function
+- `eulprob_dist_switch` — function
+- `eval_apod` — function
+- `eval_instr` — function
+- `exists` — function
+- `extract_imgarr` — function
+- `extractDataAttNSChArr` — subroutine
+- `extractDataAttNSChMat` — subroutine
+- `extractDataAttNSChSca` — subroutine
+- `extractDataAttNSCmplxDpArr` — subroutine
+- `extractDataAttNSCmplxDpMat` — subroutine
+- `extractDataAttNSCmplxDpSca` — subroutine
+- `extractDataAttNSCmplxSpArr` — subroutine
+- `extractDataAttNSCmplxSpMat` — subroutine
+- `extractDataAttNSCmplxSpSca` — subroutine
+- `extractDataAttNSIntArr` — subroutine
+- `extractDataAttNSIntMat` — subroutine
+- `extractDataAttNSIntSca` — subroutine
+- `extractDataAttNSLgArr` — subroutine
+- `extractDataAttNSLgMat` — subroutine
+- `extractDataAttNSLgSca` — subroutine
+- `extractDataAttNSRealDpArr` — subroutine
+- `extractDataAttNSRealDpMat` — subroutine
+- `extractDataAttNSRealDpSca` — subroutine
+- `extractDataAttNSRealSpArr` — subroutine
+- `extractDataAttNSRealSpMat` — subroutine
+- `extractDataAttNSRealSpSca` — subroutine
+- `extractDataAttributeChArr` — subroutine
+- `extractDataAttributeChMat` — subroutine
+- `extractDataAttributeChSca` — subroutine
+- `extractDataAttributeCmplxDpArr` — subroutine
+- `extractDataAttributeCmplxDpMat` — subroutine
+- `extractDataAttributeCmplxDpSca` — subroutine
+- `extractDataAttributeCmplxSpArr` — subroutine
+- `extractDataAttributeCmplxSpMat` — subroutine
+- `extractDataAttributeCmplxSpSca` — subroutine
+- `extractDataAttributeIntArr` — subroutine
+- `extractDataAttributeIntMat` — subroutine
+- `extractDataAttributeIntSca` — subroutine
+- `extractDataAttributeLgArr` — subroutine
+- `extractDataAttributeLgMat` — subroutine
+- `extractDataAttributeLgSca` — subroutine
+- `extractDataAttributeRealDpArr` — subroutine
+- `extractDataAttributeRealDpMat` — subroutine
+- `extractDataAttributeRealDpSca` — subroutine
+- `extractDataAttributeRealSpArr` — subroutine
+- `extractDataAttributeRealSpMat` — subroutine
+- `extractDataAttributeRealSpSca` — subroutine
+- `extractDataContentChArr` — subroutine
+- `extractDataContentChMat` — subroutine
+- `extractDataContentChSca` — subroutine
+- `extractDataContentCmplxDpArr` — subroutine
+- `extractDataContentCmplxDpMat` — subroutine
+- `extractDataContentCmplxDpSca` — subroutine
+- `extractDataContentCmplxSpArr` — subroutine
+- `extractDataContentCmplxSpMat` — subroutine
+- `extractDataContentCmplxSpSca` — subroutine
+- `extractDataContentIntArr` — subroutine
+- `extractDataContentIntMat` — subroutine
+- `extractDataContentIntSca` — subroutine
+- `extractDataContentLgArr` — subroutine
+- `extractDataContentLgMat` — subroutine
+- `extractDataContentLgSca` — subroutine
+- `extractDataContentRealDpArr` — subroutine
+- `extractDataContentRealDpMat` — subroutine
+- `extractDataContentRealDpSca` — subroutine
+- `extractDataContentRealSpArr` — subroutine
+- `extractDataContentRealSpMat` — subroutine
+- `extractDataContentRealSpSca` — subroutine
+- `fclose` — subroutine
+- `fdim` — function
+- `file2drarr` — function
+- `file2imat` — subroutine
+- `file2lmat` — subroutine
+- `file2rarr` — function
+- `file2rmat` — subroutine
+- `fileiochk` — subroutine
+- `filelength` — function
+- `filepath_1` — function
+- `filepath_2` — function
+- `filepath_3` — function
+- `filepath_4` — function
+- `find_1` — subroutine
+- `find_2` — subroutine
+- `find_closest_proj` — function
+- `find_larger_magic_box` — function
+- `find_magic_box` — function
+- `find_magic_boxes4scale` — function
+- `find_medoids` — subroutine
+- `findloc_str_1` — function
+- `findloc_str_2` — function
+- `fit_lsq_plane` — subroutine
+- `fit_straight_line` — subroutine
+- `fmtsymstr` — function
+- `fname2ext` — function
+- `fname2format` — function
+- `fname_new_ext_1` — function
+- `fname_new_ext_2` — function
+- `fopen` — subroutine
+- `forget_stk_dims` — subroutine
+- `fortran_logical` — function
+- `fortran_quote` — function
+- `fortran_symbol_from_string` — function
+- `fplane_get_cmplx` — function
+- `fplane_get_ctfsq` — function
+- `free_all_cunits` — subroutine
+- `funcs` — function
+- `funcs` — function
+- `funcs` — function
+- `funcs` — function
+- `funit_size` — function
+- `gasdev_2` — function
+- `gasdev_3` — function
+- `gau_rnd_shift` — subroutine
+- `gauss2Dfit` — subroutine
+- `gauwfun` — function
+- `gcd` — function
+- `gemm_tn` — subroutine
+- `gen_c1` — subroutine
+- `gen_job_descr` — subroutine
+- `generate_array_script` — subroutine
+- `generate_script_1` — subroutine
+- `generate_script_2` — subroutine
+- `generate_script_3` — subroutine
+- `generate_script_4` — subroutine
+- `generate_scripts_subprojects` — subroutine
+- `geodesic_dist_trace` — function
+- `get_1` — function
+- `get_2` — function
+- `get_2Dshift` — function
+- `get_3Dshift` — function
+- `get_all_subgrps_descr` — function
+- `get_axis_angle` — subroutine
+- `get_ctfvars` — function
+- `get_ctfvars` — function
+- `get_euler` — function
+- `get_eullims` — function
+- `get_fbody_1` — function
+- `get_fbody_2` — function
+- `get_find` — function
+- `get_find_at_crit` — function
+- `get_find_at_res` — function
+- `get_fpath` — function
+- `get_jobs_status` — subroutine
+- `get_key` — function
+- `get_key` — function
+- `get_keys` — function
+- `get_keys` — function
+- `get_last_string` — function
+- `get_ldim` — function
+- `get_lfny` — function
+- `get_lhp` — function
+- `get_llp` — function
+- `get_lp` — function
+- `get_mat` — function
+- `get_normal` — function
+- `get_nsubgrp` — function
+- `get_open_funits` — subroutine
+- `get_pgrp` — function
+- `get_pixel_pos` — subroutine
+- `get_relative_path` — function
+- `get_resarr` — function
+- `get_spat_freq` — function
+- `get_static` — subroutine
+- `get_static` — subroutine
+- `get_str` — function
+- `get_stream_done_stack` — subroutine
+- `get_stream_fail_stack` — subroutine
+- `get_subgrp` — function
+- `get_subgrp_descr` — function
+- `get_sym_rmat` — subroutine
+- `get_symori` — subroutine
+- `get_Whalf` — function
+- `getAttribute_len` — function
+- `getAttributesNS_len` — function
+- `getdata_len` — function
+- `getdocumentURI_len` — function
+- `getevensym` — subroutine
+- `getGCstate` — function
+- `getInputEncoding_len` — function
+- `getInternalSubset_len` — function
+- `getisId_DOM` — function
+- `getLength_characterdata` — function
+- `getLength_nl` — function
+- `getLength_nnm` — function
+- `getLocalName_len` — function
+- `getname_len` — function
+- `getNamespaceURI_len` — function
+- `getnodeName_len` — function
+- `getNodeValue_len` — function
+- `getnotationName_len` — function
+- `getPrefix_len` — function
+- `getpublicId_len` — function
+- `getstringValue_len` — function
+- `getsystemId_len` — function
+- `gettagName_len` — function
+- `getTarget_len` — function
+- `getter_1` — subroutine
+- `getter_1` — subroutine
+- `getter_2` — subroutine
+- `getter_2` — subroutine
+- `getter_3` — subroutine
+- `getter_3` — subroutine
+- `getTextContent_len` — function
+- `getValue_DOM` — function
+- `getXmlEncoding_len` — function
+- `getXmlVersionEnum` — function
+- `great_circle_samples` — function
+- `greedy_sampling_1` — function
+- `greedy_sampling_2` — function
+- `hac_1d` — subroutine
+- `hac_1d_fast` — subroutine
+- `hac_med_thres` — subroutine
+- `haloween_end` — subroutine
+- `hann_apod` — function
+- `hann_instr` — function
+- `hardedge_1` — function
+- `hardedge_2` — function
+- `hardedge_3` — function
+- `hardedge_4` — function
+- `hardedge_inner_1` — function
+- `hardedge_inner_2` — function
+- `hardedge_inner_3` — function
+- `hardedge_inner_4` — function
+- `hardedge_r2_2d` — function
+- `hardedge_r2_3d` — function
+- `has_subgrp` — function
+- `hash2str` — function
+- `hermitian_eigh_z` — subroutine
+- `hermitian_invert_dp` — subroutine
+- `hermitian_invert_z` — subroutine
+- `hermitian_solve_dp` — subroutine
+- `hermitian_solve_z` — subroutine
+- `hough_line` — subroutine
+- `hpsort_1` — subroutine
+- `hpsort_2` — subroutine
+- `hpsort_3` — subroutine
+- `hpsort_4` — subroutine
+- `hpsort_5` — subroutine
+- `hpsort_6` — subroutine
+- `image_stack` — type
+- `imat2file` — subroutine
+- `init` — subroutine
+- `init_refine3D_iteration` — subroutine
+- `init_string_list` — subroutine
+- `inplrotdist` — function
+- `insert` — subroutine
+- `instr` — function
+- `int2str` — function
+- `int2str` — function
+- `int2str_pad` — function
+- `irnd` — function
+- `irnd_gasdev` — function
+- `irnd_gau` — function
+- `irnd_pair` — subroutine
+- `irnd_uni` — function
+- `irnd_uni_pair` — function
+- `is` — function
+- `is_even_2` — function
+- `is_particle` — function
+- `isCharData` — function
+- `isthere` — function
+- `isthere` — function
+- `item_nl` — function
+- `item_nnm` — function
+- `jacobi_dp` — subroutine
+- `jacobi_sp` — subroutine
+- `join_imgarrs` — function
 - `kb_apod` — function
 - `kb_instr` — function
 - `kill` — subroutine
@@ -3143,6 +3267,7 @@ Private symbols:
 - `lin_apod` — function
 - `lin_instr` — function
 - `list_of_ints2arr` — function
+- `lmat2file` — subroutine
 - `locate_1` — function
 - `locate_2` — function
 - `lookup` — function
@@ -3151,12 +3276,12 @@ Private symbols:
 - `loop_lims` — function
 - `lowercase` — function
 - `make_c_and_d` — subroutine
+- `make_dirnames` — function
+- `make_filenames` — function
 - `make_i_relion` — subroutine
 - `make_i_spider` — subroutine
 - `make_o` — subroutine
 - `make_t` — subroutine
-- `make_token_group` — function
-- `make_token_group_len` — function
 - `map3dshift22d` — subroutine
 - `map_str_nrs` — function
 - `mask2inds` — function
@@ -3203,15 +3328,14 @@ Private symbols:
 - `moment_serial` — subroutine
 - `mostOfLineStyle` — subroutine
 - `mostOfPointStyle` — subroutine
+- `move_files2dir` — subroutine
+- `move_files_in_cwd` — subroutine
 - `move_key_to_front_1` — subroutine
 - `move_key_to_front_2` — subroutine
 - `multinomal` — function
-- `my_date_and_time` — function
 - `myacos_dp` — function
 - `myacos_sp` — function
 - `mycabs` — function
-- `name_equal` — function
-- `name_strings_equal` — function
 - `ne_mnomal_iarr` — subroutine
 - `ne_ran_iarr` — subroutine
 - `nearest_proj_neighbors_1` — subroutine
@@ -3237,8 +3361,10 @@ Private symbols:
 - `new_ori` — subroutine
 - `new_ragged_candidate_store` — subroutine
 - `nextPow2` — function
+- `nlines` — function
 - `nn_apod` — function
 - `nn_instr` — function
+- `non_max_supp` — subroutine
 - `norm_2_dp` — function
 - `norm_2_sp` — function
 - `norm_corr` — function
@@ -3254,7 +3380,6 @@ Private symbols:
 - `normalize_sigm_1` — subroutine
 - `normalize_sigm_2` — subroutine
 - `normalize_sigm_3` — subroutine
-- `number_of_items` — function
 - `ori2chash` — function
 - `ori2json` — subroutine
 - `ori2prec` — subroutine
@@ -3263,12 +3388,14 @@ Private symbols:
 - `otsu_1` — subroutine
 - `otsu_2` — subroutine
 - `otsu_3` — subroutine
+- `otsu_img` — subroutine
+- `otsu_robust_fast` — subroutine
 - `outerprod_d` — function
 - `outerprod_r` — function
-- `output_terminal` — function
 - `outputContourLines` — subroutine
 - `outputContourRegions` — subroutine
 - `p1_lt_p2` — function
+- `pack_imgarr` — function
 - `parameterChArrSh` — subroutine
 - `parameterChArrSi` — subroutine
 - `parameterChMatSh` — subroutine
@@ -3304,15 +3431,7 @@ Private symbols:
 - `parameterRealSpMatSh` — subroutine
 - `parameterRealSpMatSi` — subroutine
 - `parameterRealSpSca` — subroutine
-- `parse_array` — subroutine
 - `parse_cmdline` — subroutine
-- `parse_dtd_attlist` — subroutine
-- `parse_dtd_element` — subroutine
-- `parse_for_chars` — subroutine
-- `parse_number` — subroutine
-- `parse_object` — subroutine
-- `parse_string` — subroutine
-- `parse_value` — subroutine
 - `parsestr` — subroutine
 - `partial_shuffle_1` — subroutine
 - `partial_shuffle_2` — subroutine
@@ -3326,14 +3445,6 @@ Private symbols:
 - `pixels_dist_1` — function
 - `pixels_dist_2` — function
 - `plane_from_points` — function
-- `plot3d` — subroutine
-- `plot_1` — subroutine
-- `plot_2` — subroutine
-- `plot_3` — subroutine
-- `plot_4` — subroutine
-- `pop_char` — subroutine
-- `pop_elstack` — function
-- `pop_entity_list` — function
 - `power_sampling` — subroutine
 - `pparms2str` — function
 - `prec2ori` — subroutine
@@ -3342,15 +3453,12 @@ Private symbols:
 - `prepimgbatch` — subroutine
 - `print` — subroutine
 - `print` — subroutine
-- `print_buffer` — subroutine
-- `print_dict` — subroutine
-- `print_elstack` — subroutine
-- `print_entity_list` — subroutine
 - `print_gpu_specs` — subroutine
 - `print_jobs_status` — subroutine
 - `print_key_val_pair_1` — subroutine
 - `print_key_val_pair_2` — subroutine
 - `print_key_val_pairs` — subroutine
+- `print_magic_box_range` — subroutine
 - `print_mat` — subroutine
 - `print_ori` — subroutine
 - `probks` — function
@@ -3417,8 +3525,6 @@ Private symbols:
 - `push_2` — subroutine
 - `push_2` — subroutine
 - `push_3` — subroutine
-- `push_char` — subroutine
-- `push_elstack` — subroutine
 - `put_last` — subroutine
 - `putNodesInDocument` — subroutine
 - `pythag_dp` — function
@@ -3448,10 +3554,14 @@ Private symbols:
 - `rank_sum_weights` — subroutine
 - `raw` — function
 - `read` — subroutine
+- `read_cavgs_into_imgarr` — function
+- `read_exit_code` — subroutine
+- `read_filetable` — subroutine
 - `read_imgbatch_1` — subroutine
 - `read_imgbatch_2` — subroutine
 - `read_imgbatch_3` — subroutine
 - `read_seed_shift_table` — subroutine
+- `read_stk_into_imgarr` — function
 - `readfile` — subroutine
 - `readline` — subroutine
 - `real2str` — function
@@ -3461,38 +3571,32 @@ Private symbols:
 - `realloc_chash` — subroutine
 - `realloc_hash` — subroutine
 - `realsp2str` — function
+- `refine_peak_thres_sortmeans` — subroutine
 - `registered_string` — function
 - `reject` — subroutine
 - `remove` — subroutine
-- `remove_key_by_index` — subroutine
 - `remove_last_string` — subroutine
 - `remove_node_nl` — subroutine
 - `removeNodesFromDocument` — subroutine
-- `removePrefix` — subroutine
-- `removePrefixedURI` — subroutine
 - `removepunct` — subroutine
 - `removesp` — subroutine
 - `reorder_1` — subroutine
 - `reorder_2` — subroutine
-- `report_declarations` — subroutine
 - `resample_sigma2` — subroutine
 - `resang` — function
 - `reset` — subroutine
 - `reset` — subroutine
-- `reset_buffer` — subroutine
-- `reset_dict` — subroutine
-- `reset_elstack` — subroutine
-- `reset_entity_list` — subroutine
 - `reset_pparms` — subroutine
 - `resetParameter` — subroutine
-- `resize_elstack` — subroutine
 - `reverse_drarr` — subroutine
 - `reverse_f` — subroutine
 - `reverse_iarr` — subroutine
 - `reverse_rarr` — subroutine
 - `reverselookup` — function
 - `ring_stats` — subroutine
+- `rm_from_fbody` — function
 - `rm_substr` — subroutine
+- `rmat2file` — subroutine
 - `rnd_4dim_sphere_pnt` — function
 - `rnd_euler_1` — subroutine
 - `rnd_euler_1` — subroutine
@@ -3519,7 +3623,6 @@ Private symbols:
 - `round2odd` — function
 - `round_shifts` — subroutine
 - `rpl_substr` — subroutine
-- `run_gnuplot` — subroutine
 - `same_energy_euclid` — function
 - `sample_bounded_dist` — subroutine
 - `sample_likelihood_dist` — subroutine
@@ -3527,6 +3630,7 @@ Private symbols:
 - `sample_power_dist` — subroutine
 - `sauron_ori_parser_1` — subroutine
 - `sauron_ori_parser_2` — subroutine
+- `sauvola` — subroutine
 - `savgol` — subroutine
 - `SavitzkyGolay_filter` — subroutine
 - `scalartocomplexdp` — subroutine
@@ -3564,14 +3668,9 @@ Private symbols:
 - `set_hp` — subroutine
 - `set_int` — subroutine
 - `set_jobs_status` — subroutine
-- `set_json_core_in_file` — subroutine
-- `set_localName_by_index_s` — subroutine
-- `set_localName_by_index_vs` — subroutine
-- `set_nsURI_by_index` — subroutine
 - `set_offload_device_1` — subroutine
 - `set_offload_device_2` — subroutine
 - `set_ogid` — subroutine
-- `set_prefix_by_index` — subroutine
 - `set_real` — subroutine
 - `set_refine3D_automsk_policy` — subroutine
 - `set_refine3D_backend_policy` — subroutine
@@ -3588,19 +3687,14 @@ Private symbols:
 - `set_state` — subroutine
 - `set_stkind` — subroutine
 - `set_subgrps` — subroutine
-- `setBase` — subroutine
-- `setDeclared` — subroutine
-- `setIsId_by_index` — subroutine
 - `setisId_DOM` — subroutine
 - `setnamespaceURI` — subroutine
 - `setownerDocument` — subroutine
-- `setSpecified` — subroutine
 - `sgelsy` — subroutine
 - `sgemm` — subroutine
 - `sgesvd` — subroutine
 - `sgetrf` — subroutine
 - `sgetri` — subroutine
-- `shallow_copy_entity` — function
 - `shcloc` — function
 - `shell_quote` — function
 - `shft` — subroutine
@@ -3609,7 +3703,7 @@ Private symbols:
 - `shuffle_1` — subroutine
 - `shuffle_2` — subroutine
 - `shuffle_2` — subroutine
-- `sigma_array` — type
+- `simple_copy_file` — subroutine
 - `simple_end` — subroutine
 - `simple_print_git_version` — subroutine
 - `simple_print_timer` — subroutine
@@ -3617,12 +3711,11 @@ Private symbols:
 - `sinc_apod` — function
 - `sinc_instr` — function
 - `sinhc` — function
-- `size_el` — function
 - `smat2dmat` — function
 - `sniff_folders_SJ` — subroutine
 - `snrm2` — function
+- `sobel` — subroutine
 - `sort` — subroutine
-- `sortAttrs` — subroutine
 - `sortmeans` — subroutine
 - `spaces` — function
 - `sparse_eigh` — subroutine
@@ -3642,7 +3735,7 @@ Private symbols:
 - `ssyev` — subroutine
 - `ssyevr` — subroutine
 - `stage_coarray_jobs` — subroutine
-- `start_prefix_handler` — subroutine
+- `stemname` — function
 - `stk_dims` — subroutine
 - `stmAddChArr` — subroutine
 - `stmAddChMat` — subroutine
@@ -3756,17 +3849,12 @@ Private symbols:
 - `str_string_array_len` — function
 - `str_string_matrix` — function
 - `str_string_matrix_len` — function
-- `string_to_dble` — function
-- `string_to_int` — function
-- `strip_spaces` — function
+- `string` — type
 - `submit_coarray_jobs` — subroutine
 - `submit_script` — subroutine
 - `submit_scripts` — subroutine
 - `substr_remove` — function
 - `substr_replace` — subroutine
-- `surf_1` — subroutine
-- `surf_2` — subroutine
-- `surf_3` — subroutine
 - `svbksb_dp` — subroutine
 - `svbksb_sp` — subroutine
 - `svd_multifit_dp` — subroutine
@@ -3781,9 +3869,10 @@ Private symbols:
 - `swap_cm` — subroutine
 - `swap_cv` — subroutine
 - `swap_i` — subroutine
-- `swap_pointers` — subroutine
 - `swap_r` — subroutine
 - `swap_rv` — subroutine
+- `swap_suffix_1` — function
+- `swap_suffix_2` — function
 - `swape1e3` — subroutine
 - `sym_dists_1` — subroutine
 - `sym_dists_2` — subroutine
@@ -3794,22 +3883,15 @@ Private symbols:
 - `test_ftiter` — subroutine
 - `test_image` — subroutine
 - `test_image_local` — subroutine
-- `to_array` — subroutine
+- `threshold_for_no_peaks` — subroutine
+- `threshold_for_npeaks` — subroutine
 - `to_char_1` — function
 - `to_char_2` — function
 - `to_cstring` — function
-- `to_double` — subroutine
 - `to_fnv1a_hash64` — function
-- `to_integer` — subroutine
-- `to_logical` — subroutine
 - `to_lower` — function
-- `to_null` — subroutine
-- `to_object` — subroutine
 - `to_static_1` — subroutine
 - `to_static_2` — subroutine
-- `to_string` — subroutine
-- `to_uni` — function
-- `to_uni_vec` — function
 - `tokenize_and_add_strings` — subroutine
 - `tokenize_to_string_list` — function
 - `trace` — function
@@ -3817,10 +3899,6 @@ Private symbols:
 - `transfer_3Dparams` — subroutine
 - `transfmat2inpls` — subroutine
 - `transp` — subroutine
-- `traverse` — subroutine
-- `ucs4_comp_default` — function
-- `ucs4_join_default` — function
-- `ucs4_neq_default` — function
 - `unique` — subroutine
 - `unmemoize_mask_coords` — subroutine
 - `unmemoize_powspec_coords` — subroutine
@@ -3838,98 +3916,23 @@ Private symbols:
 - `vis_3Dreal_mat` — subroutine
 - `vox2ang` — function
 - `vs_s_concat` — function
+- `wait_for_closure` — subroutine
 - `watch` — subroutine
 - `watchdirs` — subroutine
 - `which` — function
 - `workout_directory_structure` — subroutine
-- `wrap_json_add_double_by_path` — subroutine
-- `wrap_json_add_double_vec_by_path` — subroutine
-- `wrap_json_add_integer_by_path` — subroutine
-- `wrap_json_add_integer_vec_by_path` — subroutine
-- `wrap_json_add_logical_by_path` — subroutine
-- `wrap_json_add_logical_vec_by_path` — subroutine
-- `wrap_json_add_member_by_path` — subroutine
-- `wrap_json_add_string_by_path` — subroutine
-- `wrap_json_add_string_vec_by_path` — subroutine
-- `wrap_json_create_by_path` — subroutine
-- `wrap_json_file_add_double` — subroutine
-- `wrap_json_file_add_double_vec` — subroutine
-- `wrap_json_file_add_integer` — subroutine
-- `wrap_json_file_add_integer_vec` — subroutine
-- `wrap_json_file_add_logical` — subroutine
-- `wrap_json_file_add_logical_vec` — subroutine
-- `wrap_json_file_add_object` — subroutine
-- `wrap_json_file_add_string` — subroutine
-- `wrap_json_file_add_string_vec` — subroutine
-- `wrap_json_file_get_alloc_string_vec` — subroutine
-- `wrap_json_file_get_double` — subroutine
-- `wrap_json_file_get_double_vec` — subroutine
-- `wrap_json_file_get_integer` — subroutine
-- `wrap_json_file_get_integer_vec` — subroutine
-- `wrap_json_file_get_logical` — subroutine
-- `wrap_json_file_get_logical_vec` — subroutine
-- `wrap_json_file_get_object` — subroutine
-- `wrap_json_file_get_string` — subroutine
-- `wrap_json_file_get_string_vec` — subroutine
-- `wrap_json_file_load_from_string` — subroutine
-- `wrap_json_file_remove` — subroutine
-- `wrap_json_file_rename` — subroutine
-- `wrap_json_file_update_integer` — subroutine
-- `wrap_json_file_update_logical` — subroutine
-- `wrap_json_file_update_real` — subroutine
-- `wrap_json_file_update_string` — subroutine
-- `wrap_json_file_valid_path` — function
-- `wrap_json_file_valid_path_op` — function
-- `wrap_json_file_variable_info` — subroutine
-- `wrap_json_file_variable_matrix_info` — subroutine
-- `wrap_json_get_alloc_string_vec_by_path` — subroutine
-- `wrap_json_get_array_by_path` — subroutine
-- `wrap_json_get_by_path` — subroutine
-- `wrap_json_get_double_by_path` — subroutine
-- `wrap_json_get_double_vec_by_path` — subroutine
-- `wrap_json_get_integer_by_path` — subroutine
-- `wrap_json_get_integer_vec_by_path` — subroutine
-- `wrap_json_get_logical_by_path` — subroutine
-- `wrap_json_get_logical_vec_by_path` — subroutine
-- `wrap_json_get_path` — subroutine
-- `wrap_json_get_string_by_path` — subroutine
-- `wrap_json_get_string_vec_by_path` — subroutine
-- `wrap_json_info_by_path` — subroutine
-- `wrap_json_matrix_info_by_path` — subroutine
-- `wrap_json_parse_string` — subroutine
-- `wrap_json_rename_by_path` — subroutine
-- `wrap_json_throw_exception` — subroutine
-- `wrap_json_update_double` — subroutine
-- `wrap_json_update_integer` — subroutine
-- `wrap_json_update_logical` — subroutine
-- `wrap_json_update_string` — subroutine
-- `wrap_json_valid_path` — function
-- `wrap_json_value_add_double` — subroutine
-- `wrap_json_value_add_double_vec` — subroutine
-- `wrap_json_value_add_integer` — subroutine
-- `wrap_json_value_add_integer_vec` — subroutine
-- `wrap_json_value_add_logical` — subroutine
-- `wrap_json_value_add_logical_vec` — subroutine
-- `wrap_json_value_add_null` — subroutine
-- `wrap_json_value_add_string` — subroutine
-- `wrap_json_value_add_string_vec` — subroutine
-- `wrap_json_value_create_array` — subroutine
-- `wrap_json_value_create_double` — subroutine
-- `wrap_json_value_create_integer` — subroutine
-- `wrap_json_value_create_logical` — subroutine
-- `wrap_json_value_create_null` — subroutine
-- `wrap_json_value_create_object` — subroutine
-- `wrap_json_value_create_string` — subroutine
-- `wrap_json_value_get_child_by_name` — subroutine
-- `wrap_json_value_remove_if_present` — subroutine
-- `wrap_json_value_rename` — subroutine
 - `write` — subroutine
 - `write2bild` — subroutine
 - `write_attributes` — subroutine
 - `write_checkpoint` — subroutine
-- `write_it` — subroutine
-- `write_it_fast` — subroutine
+- `write_filetable` — subroutine
+- `write_imgarr_1` — subroutine
+- `write_imgarr_2` — subroutine
+- `write_imgarr_3` — subroutine
+- `write_junk_cavgs` — subroutine
 - `write_seed_shift_table` — subroutine
+- `write_selected_cavgs` — subroutine
+- `write_singlelineoftext` — subroutine
 - `writeline` — subroutine
 - `wxml_error_xf` — subroutine
 - `wxml_fatal_xf` — subroutine
@@ -3970,20 +3973,20 @@ Private symbols:
 ## Module: pure
 
 Files:
-- `../scripts/../src/main/class/simple_classaverager.f90`
-- `../scripts/../src/main/class/simple_classaverager_restore.f90`
-- `../scripts/../src/main/image/simple_image.f90`
-- `../scripts/../src/main/image/simple_image_access.f90`
-- `../scripts/../src/main/image/simple_image_arith.f90`
-- `../scripts/../src/main/image/simple_image_calc.f90`
-- `../scripts/../src/main/image/simple_image_checks.f90`
-- `../scripts/../src/main/ori/simple_oris.f90`
-- `../scripts/../src/main/ori/simple_oris_dists.f90`
-- `../scripts/../src/main/ori/simple_oris_getters.f90`
-- `../scripts/../src/main/pftc/simple_polarft_access.f90`
-- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
-- `../scripts/../src/main/pftc/simple_polarft_core.f90`
-- `../scripts/../src/main/pftc/simple_polarft_geom.f90`
+- `main/class/simple_classaverager.f90`
+- `main/class/simple_classaverager_restore.f90`
+- `main/image/simple_image.f90`
+- `main/image/simple_image_access.f90`
+- `main/image/simple_image_arith.f90`
+- `main/image/simple_image_calc.f90`
+- `main/image/simple_image_checks.f90`
+- `main/ori/simple_oris.f90`
+- `main/ori/simple_oris_dists.f90`
+- `main/ori/simple_oris_getters.f90`
+- `main/pftc/simple_polarft_access.f90`
+- `main/pftc/simple_polarft_calc.f90`
+- `main/pftc/simple_polarft_core.f90`
+- `main/pftc/simple_polarft_geom.f90`
 
 Uses:
 - `simple_type_defs`
@@ -3995,20 +3998,21 @@ Public symbols:
 ## Module: real
 
 Files:
-- `../scripts/../src/main/image/simple_image.f90`
-- `../scripts/../src/main/image/simple_image_calc.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_bank.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_envmask.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_potts.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_stats.f90`
-- `../scripts/../src/main/ori/simple_oris.f90`
-- `../scripts/../src/main/ori/simple_oris_neig.f90`
-- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
-- `../scripts/../src/main/pftc/simple_polarft_corr.f90`
-- `../scripts/../src/main/project/simple_sp_project.f90`
-- `../scripts/../src/main/project/simple_sp_project_core.f90`
+- `main/image/simple_image.f90`
+- `main/image/simple_image_calc.f90`
+- `main/nu_filt/simple_nu_filter.f90`
+- `main/nu_filt/simple_nu_filter_bank.f90`
+- `main/nu_filt/simple_nu_filter_envmask.f90`
+- `main/nu_filt/simple_nu_filter_evidence.f90`
+- `main/nu_filt/simple_nu_filter_potts.f90`
+- `main/nu_filt/simple_nu_filter_state.f90`
+- `main/nu_filt/simple_nu_filter_stats.f90`
+- `main/ori/simple_oris.f90`
+- `main/ori/simple_oris_neig.f90`
+- `main/pftc/simple_polarft_calc.f90`
+- `main/pftc/simple_polarft_corr.f90`
+- `main/project/simple_sp_project.f90`
+- `main/project/simple_sp_project_core.f90`
 
 Public symbols:
 - `test_oris` — subroutine
@@ -4017,14 +4021,14 @@ Public symbols:
 ## Module: recursive
 
 Files:
-- `../scripts/../src/main/image/simple_image.f90`
-- `../scripts/../src/main/image/simple_image_geom.f90`
+- `main/image/simple_image.f90`
+- `main/image/simple_image_geom.f90`
 
 ---
 ## Module: simple_abinitio2D_controller
 
 Files:
-- `../scripts/../src/main/simple_abinitio2D_controller.f90`
+- `main/simple_abinitio2D_controller.f90`
 
 Uses:
 - `simple_cmdline`
@@ -4048,10 +4052,29 @@ Private symbols:
 - `set_cluster2D_stage_search_policy` — subroutine
 
 ---
+## Module: simple_abinitio3D_split_checkpoint
+
+Files:
+- `main/simple_abinitio3D_split_checkpoint.f90`
+
+Uses:
+- `simple_abinitio_utils`
+- `simple_commanders_api`
+
+Public symbols:
+- `build_abinitio3D_split_checkpoint` — subroutine
+
+Private symbols:
+- `cleanup_assignment_files` — subroutine
+- `prepare_particle_cohort` — subroutine
+- `read_assignment_coverage` — subroutine
+- `select_reconstruction_sample` — subroutine
+
+---
 ## Module: simple_abinitio_utils
 
 Files:
-- `../scripts/../src/main/simple_abinitio_utils.f90`
+- `main/simple_abinitio_utils.f90`
 
 Uses:
 - `simple_class_frcs`
@@ -4069,7 +4092,7 @@ Uses:
 ## Module: simple_aff_prop
 
 Files:
-- `../scripts/../src/utils/clustering/simple_aff_prop.f90`
+- `utils/clustering/simple_aff_prop.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4087,7 +4110,7 @@ Private symbols:
 ## Module: simple_ansi_ctrls
 
 Files:
-- `../scripts/../src/defs/simple_ansi_ctrls.f90`
+- `defs/simple_ansi_ctrls.f90`
 
 Public symbols:
 - `format_str` — function
@@ -4096,7 +4119,7 @@ Public symbols:
 ## Module: simple_atoms
 
 Files:
-- `../scripts/../src/main/nano/simple_atoms.f90`
+- `main/nano/simple_atoms.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4163,7 +4186,7 @@ Private symbols:
 ## Module: simple_binary_tree
 
 Files:
-- `../scripts/../src/utils/structs/simple_binary_tree.f90`
+- `utils/structs/simple_binary_tree.f90`
 
 Uses:
 - `simple_error`
@@ -4187,7 +4210,7 @@ Private symbols:
 ## Module: simple_binary_tree_tester
 
 Files:
-- `../scripts/../src/utils/structs/simple_binary_tree_tester.f90`
+- `utils/structs/simple_binary_tree_tester.f90`
 
 Uses:
 - `simple_binary_tree`
@@ -4210,7 +4233,7 @@ Private symbols:
 ## Module: simple_binoris
 
 Files:
-- `../scripts/../src/fileio/simple_binoris.f90`
+- `fileio/simple_binoris.f90`
 
 Uses:
 - `simple_defs`
@@ -4251,7 +4274,7 @@ Private symbols:
 ## Module: simple_binoris_io
 
 Files:
-- `../scripts/../src/fileio/simple_binoris_io.f90`
+- `fileio/simple_binoris_io.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4267,7 +4290,7 @@ Public symbols:
 ## Module: simple_block_tree
 
 Files:
-- `../scripts/../src/utils/simple_block_tree.f90`
+- `utils/simple_block_tree.f90`
 
 Uses:
 - `simple_binary_tree`
@@ -4294,7 +4317,7 @@ Private symbols:
 ## Module: simple_block_tree_corr
 
 Files:
-- `../scripts/../src/utils/simple_block_tree_corr.f90`
+- `utils/simple_block_tree_corr.f90`
 
 Uses:
 - `simple_aff_prop`
@@ -4315,7 +4338,7 @@ Public symbols:
 ## Module: simple_block_tree_io
 
 Files:
-- `../scripts/../src/fileio/simple_block_tree_io.f90`
+- `fileio/simple_block_tree_io.f90`
 
 Uses:
 - `simple_error`
@@ -4332,7 +4355,7 @@ Public symbols:
 ## Module: simple_bspline_smoother
 
 Files:
-- `../scripts/../src/utils/filter/simple_bspline_smoother.f90`
+- `utils/filter/simple_bspline_smoother.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4362,7 +4385,7 @@ Private symbols:
 ## Module: simple_builder
 
 Files:
-- `../scripts/../src/main/simple_builder.f90`
+- `main/simple_builder.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -4400,7 +4423,7 @@ Private symbols:
 ## Module: simple_butterworth
 
 Files:
-- `../scripts/../src/utils/filter/simple_butterworth.f90`
+- `utils/filter/simple_butterworth.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4409,7 +4432,7 @@ Uses:
 ## Module: simple_calc_pspec_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_calc_pspec_strategy.f90`
+- `main/strategies/parallelization/simple_calc_pspec_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -4451,10 +4474,26 @@ Private symbols:
 - `write_sigma2_bootstrap_selection` — subroutine
 
 ---
+## Module: simple_cartesian_fourier
+
+Files:
+- `main/interp/simple_cartesian_fourier.f90`
+
+Uses:
+- `simple_image`
+
+Public symbols:
+- `center_crop_real3d` — function
+- `center_embed_real3d` — function
+- `extract_native_fourier_plane` — function
+- `gather_packed_window` — function
+- `gather_packed_window_grad` — subroutine
+
+---
 ## Module: simple_cavg_quality_analysis
 
 Files:
-- `../scripts/../src/main/cavg_quality/simple_cavg_quality_analysis.f90`
+- `main/cavg_quality/simple_cavg_quality_analysis.f90`
 
 Uses:
 - `simple_cavg_quality_feats`
@@ -4491,7 +4530,7 @@ Private symbols:
 ## Module: simple_cavg_quality_feats
 
 Files:
-- `../scripts/../src/main/cavg_quality/simple_cavg_quality_feats.f90`
+- `main/cavg_quality/simple_cavg_quality_feats.f90`
 
 Uses:
 - `simple_cavg_quality_types`
@@ -4521,7 +4560,7 @@ Private symbols:
 ## Module: simple_cavg_quality_helpers
 
 Files:
-- `../scripts/../src/main/cavg_quality/simple_cavg_quality_helpers.f90`
+- `main/cavg_quality/simple_cavg_quality_helpers.f90`
 
 Uses:
 - `simple_cavg_quality_types`
@@ -4534,7 +4573,7 @@ Public symbols:
 ## Module: simple_cavg_quality_learn
 
 Files:
-- `../scripts/../src/main/cavg_quality/simple_cavg_quality_learn.f90`
+- `main/cavg_quality/simple_cavg_quality_learn.f90`
 
 Uses:
 - `simple_cavg_quality_feats`
@@ -4609,7 +4648,7 @@ Private symbols:
 ## Module: simple_cavg_quality_model
 
 Files:
-- `../scripts/../src/main/cavg_quality/simple_cavg_quality_model.f90`
+- `main/cavg_quality/simple_cavg_quality_model.f90`
 
 Uses:
 - `simple_cavg_quality_feats`
@@ -4671,7 +4710,7 @@ Private symbols:
 ## Module: simple_cavg_quality_relations
 
 Files:
-- `../scripts/../src/main/cavg_quality/simple_cavg_quality_relations.f90`
+- `main/cavg_quality/simple_cavg_quality_relations.f90`
 
 Uses:
 - `simple_cavg_quality_types`
@@ -4700,7 +4739,7 @@ Private symbols:
 ## Module: simple_cavg_quality_stats
 
 Files:
-- `../scripts/../src/main/cavg_quality/simple_cavg_quality_stats.f90`
+- `main/cavg_quality/simple_cavg_quality_stats.f90`
 
 Uses:
 - `simple_cavg_quality_types`
@@ -4716,7 +4755,7 @@ Public symbols:
 ## Module: simple_cavg_quality_types
 
 Files:
-- `../scripts/../src/main/cavg_quality/simple_cavg_quality_types.f90`
+- `main/cavg_quality/simple_cavg_quality_types.f90`
 
 Uses:
 - `simple_defs`
@@ -4734,7 +4773,7 @@ Public symbols:
 ## Module: simple_chash
 
 Files:
-- `../scripts/../src/utils/structs/simple_chash.f90`
+- `utils/structs/simple_chash.f90`
 
 Uses:
 - `simple_ansi_ctrls`
@@ -4752,7 +4791,7 @@ Public symbols:
 ## Module: simple_chash_tester
 
 Files:
-- `../scripts/../src/utils/structs/simple_chash_tester.f90`
+- `utils/structs/simple_chash_tester.f90`
 
 Uses:
 - `simple_chash`
@@ -4779,7 +4818,7 @@ Private symbols:
 ## Module: simple_class_compatibility
 
 Files:
-- `../scripts/../src/main/class/simple_class_compatibility.f90`
+- `main/class/simple_class_compatibility.f90`
 
 Uses:
 - `simple_defs`
@@ -4816,7 +4855,7 @@ Private symbols:
 ## Module: simple_class_compatibility_tester
 
 Files:
-- `../scripts/../src/main/class/simple_class_compatibility_tester.f90`
+- `main/class/simple_class_compatibility_tester.f90`
 
 Uses:
 - `simple_class_compatibility`
@@ -4846,7 +4885,7 @@ Private symbols:
 ## Module: simple_class_frcs
 
 Files:
-- `../scripts/../src/main/class/simple_class_frcs.f90`
+- `main/class/simple_class_frcs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4879,7 +4918,7 @@ Private symbols:
 ## Module: simple_class_sample_io
 
 Files:
-- `../scripts/../src/fileio/simple_class_sample_io.f90`
+- `fileio/simple_class_sample_io.f90`
 
 Uses:
 - `simple_error`
@@ -4903,7 +4942,7 @@ Private symbols:
 ## Module: simple_classaverager
 
 Files:
-- `../scripts/../src/main/class/simple_classaverager.f90`
+- `main/class/simple_classaverager.f90`
 
 Uses:
 - `simple_builder`
@@ -4928,7 +4967,7 @@ Private symbols:
 ## Module: simple_cls_split_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_cls_split_strategy.f90`
+- `main/strategies/parallelization/simple_cls_split_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -5006,7 +5045,7 @@ Private symbols:
 ## Module: simple_cluster2D_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_cluster2D_strategy.f90`
+- `main/strategies/parallelization/simple_cluster2D_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -5066,7 +5105,7 @@ Private symbols:
 ## Module: simple_cluster_seed
 
 Files:
-- `../scripts/../src/utils/clustering/simple_cluster_seed.f90`
+- `utils/clustering/simple_cluster_seed.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -5089,7 +5128,7 @@ Private symbols:
 ## Module: simple_clustering_utils
 
 Files:
-- `../scripts/../src/utils/clustering/simple_clustering_utils.f90`
+- `utils/clustering/simple_clustering_utils.f90`
 
 Uses:
 - `simple_aff_prop`
@@ -5110,7 +5149,7 @@ Private symbols:
 ## Module: simple_cmdline
 
 Files:
-- `../scripts/../src/main/simple_cmdline.f90`
+- `main/simple_cmdline.f90`
 
 Uses:
 - `simple_args`
@@ -5154,7 +5193,7 @@ Private symbols:
 ## Module: simple_cmdline_tester
 
 Files:
-- `../scripts/../src/main/simple_cmdline_tester.f90`
+- `main/simple_cmdline_tester.f90`
 
 Uses:
 - `simple_chash`
@@ -5181,7 +5220,7 @@ Private symbols:
 ## Module: simple_commander_base
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commander_base.f90`
+- `main/commanders/simple/simple_commander_base.f90`
 
 Uses:
 - `simple_cmdline`
@@ -5198,9 +5237,10 @@ Private symbols:
 ## Module: simple_commanders_abinitio
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_abinitio.f90`
+- `main/commanders/simple/simple_commanders_abinitio.f90`
 
 Uses:
+- `simple_abinitio3d_split_checkpoint`
 - `simple_abinitio_utils`
 - `simple_cluster_seed`
 - `simple_commanders_api`
@@ -5210,6 +5250,7 @@ Uses:
 - `simple_commanders_refine3d`
 - `simple_commanders_reproject`
 - `simple_estimate_ssnr`
+- `simple_external_reference_pose_initialization`
 - `simple_procimgstk`
 - `simple_refine3d_fnames`
 
@@ -5226,15 +5267,14 @@ Private symbols:
 - `ensure_multistate_particle_assignments` — subroutine
 - `exec_abinitio3D` — subroutine
 - `exec_abinitio3D_cavgs` — subroutine
+- `handoff_split_checkpoint_to_refine3D_states` — subroutine
 - `ini3D_from_cavgs` — subroutine
-- `prepare_docked_particle_cohort` — subroutine
 - `prepare_state_continue_project` — subroutine
 - `rank_cavgs` — subroutine
 - `read_multistate_assignment_coverage` — subroutine
 - `reset_ptcl3D_from_ptcl2D_selection` — subroutine
 - `rndstart` — subroutine
 - `run_multistate_missing_update` — subroutine
-- `select_docked_split_reconstruction_sample` — subroutine
 - `strip_distributed_child` — subroutine
 - `sync_distributed_child` — subroutine
 - `validate_cavg_ini_ext_states` — subroutine
@@ -5243,7 +5283,7 @@ Private symbols:
 ## Module: simple_commanders_abinitio2D
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_abinitio2D.f90`
+- `main/commanders/simple/simple_commanders_abinitio2D.f90`
 
 Uses:
 - `simple_abinitio2d_controller`
@@ -5280,7 +5320,7 @@ Private symbols:
 ## Module: simple_commanders_abinitio2d_sgd
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_abinitio2d_sgd.f90`
+- `main/commanders/simple/simple_commanders_abinitio2d_sgd.f90`
 
 Uses:
 - `simple_commanders_abinitio2d`
@@ -5299,7 +5339,7 @@ Private symbols:
 ## Module: simple_commanders_api
 
 Files:
-- `../scripts/../src/main/apis/simple_commanders_api.f90`
+- `main/apis/simple_commanders_api.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -5325,7 +5365,7 @@ Uses:
 ## Module: simple_commanders_atoms
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_atoms.f90`
+- `main/commanders/simple/simple_commanders_atoms.f90`
 
 Uses:
 - `simple_atoms`
@@ -5373,7 +5413,7 @@ Public symbols:
 ## Module: simple_commanders_cavgs
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_cavgs.f90`
+- `main/commanders/simple/simple_commanders_cavgs.f90`
 
 Uses:
 - `simple_cavg_quality_analysis`
@@ -5424,7 +5464,7 @@ Public symbols:
 ## Module: simple_commanders_checks
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_checks.f90`
+- `main/commanders/simple/simple_commanders_checks.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5451,7 +5491,7 @@ Public symbols:
 ## Module: simple_commanders_cluster2D
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_cluster2D.f90`
+- `main/commanders/simple/simple_commanders_cluster2D.f90`
 
 Uses:
 - `simple_classaverager`
@@ -5486,7 +5526,7 @@ Public symbols:
 ## Module: simple_commanders_denoise
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_denoise.f90`
+- `main/commanders/simple/simple_commanders_denoise.f90`
 
 Uses:
 - `simple_cls_split_strategy`
@@ -5511,7 +5551,7 @@ Public symbols:
 ## Module: simple_commanders_distr
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_distr.f90`
+- `main/commanders/simple/simple_commanders_distr.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5525,7 +5565,7 @@ Public symbols:
 ## Module: simple_commanders_euclid
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_euclid.f90`
+- `main/commanders/simple/simple_commanders_euclid.f90`
 
 Uses:
 - `simple_calc_pspec_strategy`
@@ -5543,7 +5583,7 @@ Public symbols:
 ## Module: simple_commanders_euclid_distr
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_euclid_distr.f90`
+- `main/commanders/simple/simple_commanders_euclid_distr.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5558,12 +5598,13 @@ Public symbols:
 ## Module: simple_commanders_flex_pca
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_flex_pca.f90`
+- `main/commanders/simple/simple_commanders_flex_pca.f90`
 
 Uses:
 - `simple_commanders_api`
 - `simple_flex_pca_distr`
 - `simple_flex_pca_model`
+- `simple_ptcl_cache`
 
 Public symbols:
 - `commander_flex_pca` — type
@@ -5574,7 +5615,7 @@ Public symbols:
 ## Module: simple_commanders_imgops
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_imgops.f90`
+- `main/commanders/simple/simple_commanders_imgops.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -5610,7 +5651,7 @@ Public symbols:
 ## Module: simple_commanders_imgproc
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_imgproc.f90`
+- `main/commanders/simple/simple_commanders_imgproc.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5637,7 +5678,7 @@ Public symbols:
 ## Module: simple_commanders_mask
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_mask.f90`
+- `main/commanders/simple/simple_commanders_mask.f90`
 
 Uses:
 - `simple_atoms`
@@ -5658,7 +5699,7 @@ Public symbols:
 ## Module: simple_commanders_misc
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_misc.f90`
+- `main/commanders/simple/simple_commanders_misc.f90`
 
 Uses:
 - `simple_class_frcs`
@@ -5692,7 +5733,7 @@ Public symbols:
 ## Module: simple_commanders_mkcavgs
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_mkcavgs.f90`
+- `main/commanders/simple/simple_commanders_mkcavgs.f90`
 
 Uses:
 - `simple_classaverager`
@@ -5735,7 +5776,7 @@ Public symbols:
 ## Module: simple_commanders_ori
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_ori.f90`
+- `main/commanders/simple/simple_commanders_ori.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5762,7 +5803,7 @@ Public symbols:
 ## Module: simple_commanders_pick
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_pick.f90`
+- `main/commanders/simple/simple_commanders_pick.f90`
 
 Uses:
 - `simple_cmdline`
@@ -5792,7 +5833,7 @@ Private symbols:
 ## Module: simple_commanders_postprocess_nu
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_postprocess_nu.f90`
+- `main/commanders/simple/simple_commanders_postprocess_nu.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5806,7 +5847,7 @@ Public symbols:
 ## Module: simple_commanders_preprocess
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_preprocess.f90`
+- `main/commanders/simple/simple_commanders_preprocess.f90`
 
 Uses:
 - `simple_cmdline`
@@ -5834,7 +5875,7 @@ Public symbols:
 ## Module: simple_commanders_prob
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_prob.f90`
+- `main/commanders/simple/simple_commanders_prob.f90`
 
 Uses:
 - `simple_builder`
@@ -5874,7 +5915,7 @@ Public symbols:
 ## Module: simple_commanders_project_cls
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_project_cls.f90`
+- `main/commanders/simple/simple_commanders_project_cls.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5891,7 +5932,7 @@ Public symbols:
 ## Module: simple_commanders_project_core
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_project_core.f90`
+- `main/commanders/simple/simple_commanders_project_core.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5944,7 +5985,7 @@ Public symbols:
 ## Module: simple_commanders_project_mov
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_project_mov.f90`
+- `main/commanders/simple/simple_commanders_project_mov.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5960,7 +6001,7 @@ Public symbols:
 ## Module: simple_commanders_project_ptcl
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_project_ptcl.f90`
+- `main/commanders/simple/simple_commanders_project_ptcl.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5990,7 +6031,7 @@ Public symbols:
 ## Module: simple_commanders_rec
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_rec.f90`
+- `main/commanders/simple/simple_commanders_rec.f90`
 
 Uses:
 - `simple_builder`
@@ -6024,7 +6065,7 @@ Public symbols:
 ## Module: simple_commanders_rec_distr
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_rec_distr.f90`
+- `main/commanders/simple/simple_commanders_rec_distr.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6098,80 +6139,81 @@ Private symbols:
 ## Module: simple_commanders_refine3D
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_refine3D.f90`
+- `main/commanders/simple/simple_commanders_refine3D.f90`
 
 Uses:
 - `simple_abinitio_utils`
-- `simple_cluster_seed`
 - `simple_commanders_api`
 - `simple_commanders_flex_pca`
 - `simple_commanders_rec`
 - `simple_core_module_api`
 - `simple_estimate_ssnr`
+- `simple_external_reference_pose_initialization`
 - `simple_nu_filter`
 - `simple_pftc_srch_api`
 - `simple_refine3d_fnames`
+- `simple_refine3d_stage_plan`
 - `simple_refine3d_strategy`
 - `simple_strategy3d_matcher`
 
 Public symbols:
 - `cleanup_init_vols` — subroutine
+- `commander_classify3D_refs` — type
 - `commander_refine3D` — type
 - `commander_refine3D_auto` — type
 - `commander_refine3D_distr_worker` — type
-- `commander_refine3D_het` — type
-- `commander_refine3D_multi` — type
-- `configure_refine3D_multi_stages` — subroutine
+- `commander_refine3D_states` — type
+- `configure_refine3D_states_stages` — subroutine
 - `ensure_all_active_particles_updated` — subroutine
 - `ensure_all_active_particles_updated` — subroutine
+- `exec_classify3D_refs` — subroutine
 - `exec_nspace` — subroutine
 - `exec_refine3D` — subroutine
 - `exec_refine3D_auto` — subroutine
 - `exec_refine3D_distr_worker` — subroutine
-- `exec_refine3D_het` — subroutine
-- `exec_refine3D_multi` — subroutine
+- `exec_refine3D_states` — subroutine
+- `initialize_external_reference_poses` — subroutine
 - `initialize_state_volumes` — subroutine
 - `initialize_state_volumes` — subroutine
 - `make_projdir_class_samples` — subroutine
-- `map_ptcls_to_input_volumes` — subroutine
 - `nspace_commander` — type
+- `prepare_classify3D_refs_class_sampling` — subroutine
 - `prepare_external_init_vol` — subroutine
 - `prepare_nu_bootstrap_refs_from_raw_halves` — subroutine
-- `prepare_refine3D_het_class_sampling` — subroutine
-- `prepare_refine3D_multi_class_sampling` — subroutine
+- `prepare_refine3D_states_class_sampling` — subroutine
 - `prepare_startup_reconstruct3D_cline` — subroutine
 - `read_update_coverage` — subroutine
 - `read_update_coverage` — subroutine
 - `reconstruct_all_particles_volumes` — subroutine
-- `reconstruct_reference_volumes` — subroutine
+- `run_classify3D_refs` — subroutine
+- `run_classify3D_refs_missing_update` — subroutine
 - `run_flex_pca` — subroutine
-- `run_refine3D_het` — subroutine
-- `run_refine3D_het_missing_update` — subroutine
-- `run_refine3D_multi_missing_update` — subroutine
-- `run_refine3D_multi_stage` — subroutine
+- `run_refine3D_states_frequency_march` — subroutine
+- `run_refine3D_states_missing_update` — subroutine
+- `run_refine3D_states_stage` — subroutine
 - `seed_refine3D_auto_nonuniform_lpset` — subroutine
+- `set_classify3D_refs_downscaling` — subroutine
+- `set_classify3D_refs_nsample` — subroutine
+- `set_classify3D_refs_nstates` — subroutine
+- `set_classify3D_refs_sampling` — subroutine
 - `set_refine3D_auto_sampling` — subroutine
-- `set_refine3D_het_downscaling` — subroutine
-- `set_refine3D_het_nsample` — subroutine
-- `set_refine3D_het_nstates` — subroutine
-- `set_refine3D_het_sampling` — subroutine
-- `set_refine3D_multi_downscaling` — subroutine
-- `set_refine3D_multi_nstates` — subroutine
-- `set_refine3D_multi_sampling` — subroutine
+- `set_refine3D_states_downscaling` — subroutine
+- `set_refine3D_states_nstates` — subroutine
+- `set_refine3D_states_sampling` — subroutine
+- `validate_classify3D_refs_filtering` — subroutine
+- `validate_classify3D_refs_search_mode` — subroutine
 - `validate_input_volumes` — subroutine
 - `validate_input_volumes` — subroutine
-- `validate_refine3D_het_filtering` — subroutine
-- `validate_refine3D_het_search_mode` — subroutine
-- `validate_refine3D_multi_combine_eo` — subroutine
-- `validate_refine3D_multi_filtering` — subroutine
-- `validate_refine3D_multi_mode` — subroutine
-- `validate_refine3D_multi_prob_neigh_mode` — subroutine
+- `validate_refine3D_states_combine_eo` — subroutine
+- `validate_refine3D_states_filtering` — subroutine
+- `validate_refine3D_states_mode` — subroutine
+- `validate_refine3D_states_prob_neigh_mode` — subroutine
 
 ---
 ## Module: simple_commanders_relion
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_relion.f90`
+- `main/commanders/simple/simple_commanders_relion.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6185,7 +6227,7 @@ Public symbols:
 ## Module: simple_commanders_reproject
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_reproject.f90`
+- `main/commanders/simple/simple_commanders_reproject.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6201,7 +6243,7 @@ Public symbols:
 ## Module: simple_commanders_resolest
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_resolest.f90`
+- `main/commanders/simple/simple_commanders_resolest.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6235,7 +6277,7 @@ Public symbols:
 ## Module: simple_commanders_sieve
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_sieve.f90`
+- `main/commanders/simple/simple_commanders_sieve.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6251,7 +6293,7 @@ Public symbols:
 ## Module: simple_commanders_sim
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_sim.f90`
+- `main/commanders/simple/simple_commanders_sim.f90`
 
 Uses:
 - `simple_atoms`
@@ -6281,7 +6323,7 @@ Public symbols:
 ## Module: simple_commanders_starproject
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_starproject.f90`
+- `main/commanders/simple/simple_commanders_starproject.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6302,7 +6344,7 @@ Public symbols:
 ## Module: simple_commanders_stkops
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_stkops.f90`
+- `main/commanders/simple/simple_commanders_stkops.f90`
 
 Uses:
 - `simple_clustering_utils`
@@ -6331,7 +6373,7 @@ Public symbols:
 ## Module: simple_commanders_test_class
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_class.f90`
+- `main/commanders/test/simple_commanders_test_class.f90`
 
 Uses:
 - `simple_aff_prop`
@@ -6386,7 +6428,7 @@ Public symbols:
 ## Module: simple_commanders_test_fft
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_fft.f90`
+- `main/commanders/test/simple_commanders_test_fft.f90`
 
 Uses:
 - `gnufor2`
@@ -6427,7 +6469,7 @@ Public symbols:
 ## Module: simple_commanders_test_geometry
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_geometry.f90`
+- `main/commanders/test/simple_commanders_test_geometry.f90`
 
 Uses:
 - `json_kinds`
@@ -6458,7 +6500,7 @@ Public symbols:
 ## Module: simple_commanders_test_highlevel
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_highlevel.f90`
+- `main/commanders/test/simple_commanders_test_highlevel.f90`
 
 Uses:
 - `simple_atoms`
@@ -6528,7 +6570,7 @@ Public symbols:
 ## Module: simple_commanders_test_io
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_io.f90`
+- `main/commanders/test/simple_commanders_test_io.f90`
 
 Uses:
 - `simple_cmdline`
@@ -6567,7 +6609,7 @@ Public symbols:
 ## Module: simple_commanders_test_masks
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_masks.f90`
+- `main/commanders/test/simple_commanders_test_masks.f90`
 
 Uses:
 - `simple_cmdline`
@@ -6603,7 +6645,7 @@ Public symbols:
 ## Module: simple_commanders_test_network
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_network.f90`
+- `main/commanders/test/simple_commanders_test_network.f90`
 
 Uses:
 - `json_kinds`
@@ -6629,7 +6671,7 @@ Public symbols:
 ## Module: simple_commanders_test_numerics
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_numerics.f90`
+- `main/commanders/test/simple_commanders_test_numerics.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6660,7 +6702,7 @@ Public symbols:
 ## Module: simple_commanders_test_optimize
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_optimize.f90`
+- `main/commanders/test/simple_commanders_test_optimize.f90`
 
 Uses:
 - `simple_builder`
@@ -6696,7 +6738,7 @@ Public symbols:
 ## Module: simple_commanders_test_parallel
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_parallel.f90`
+- `main/commanders/test/simple_commanders_test_parallel.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6718,14 +6760,17 @@ Public symbols:
 ## Module: simple_commanders_test_single
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_single.f90`
+- `main/commanders/test/simple_commanders_test_single.f90`
 
 Uses:
 - `simple_commanders_api`
 - `simple_commanders_atoms`
 - `simple_commanders_project_core`
+- `simple_commanders_project_ptcl`
 - `simple_commanders_reproject`
 - `simple_commanders_sim`
+- `simple_commanders_stkops`
+- `single_commanders_nano2d`
 - `single_commanders_nano3d`
 - `single_commanders_trajectory`
 
@@ -6738,12 +6783,13 @@ Public symbols:
 - `exec_test_detect_atoms` — subroutine
 - `exec_test_simulate_nanoparticle` — subroutine
 - `exec_test_single_workflow` — subroutine
+- `make_glc_trajectory_oris` — subroutine
 
 ---
 ## Module: simple_commanders_test_stats
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_stats.f90`
+- `main/commanders/test/simple_commanders_test_stats.f90`
 
 Uses:
 - `simple_aff_prop`
@@ -6789,7 +6835,7 @@ Public symbols:
 ## Module: simple_commanders_test_stream
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_stream.f90`
+- `main/commanders/test/simple_commanders_test_stream.f90`
 
 Uses:
 - `simple_commanders_abinitio2d`
@@ -6830,7 +6876,7 @@ Public symbols:
 ## Module: simple_commanders_test_utils
 
 Files:
-- `../scripts/../src/main/commanders/test/simple_commanders_test_utils.f90`
+- `main/commanders/test/simple_commanders_test_utils.f90`
 
 Uses:
 - `simple_ansi_ctrls`
@@ -6881,7 +6927,7 @@ Public symbols:
 ## Module: simple_commanders_validate
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_validate.f90`
+- `main/commanders/simple/simple_commanders_validate.f90`
 
 Uses:
 - `simple_commanders_abinitio2d`
@@ -6906,7 +6952,7 @@ Private symbols:
 ## Module: simple_commanders_volops
 
 Files:
-- `../scripts/../src/main/commanders/simple/simple_commanders_volops.f90`
+- `main/commanders/simple/simple_commanders_volops.f90`
 
 Uses:
 - `simple_atoms`
@@ -6962,7 +7008,7 @@ Public symbols:
 ## Module: simple_complex_ppca
 
 Files:
-- `../scripts/../src/main/pca/simple_complex_ppca.f90`
+- `main/pca/simple_complex_ppca.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -6992,7 +7038,7 @@ Private symbols:
 ## Module: simple_convergence
 
 Files:
-- `../scripts/../src/main/simple_convergence.f90`
+- `main/simple_convergence.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -7015,7 +7061,7 @@ Private symbols:
 ## Module: simple_core_module_api
 
 Files:
-- `../scripts/../src/main/apis/simple_core_api.f90`
+- `main/apis/simple_core_api.f90`
 
 Uses:
 - `simple_binoris`
@@ -7058,7 +7104,7 @@ Uses:
 ## Module: simple_corrmat
 
 Files:
-- `../scripts/../src/utils/simple_corrmat.f90`
+- `utils/simple_corrmat.f90`
 
 Uses:
 - `simple_builder`
@@ -7070,7 +7116,7 @@ Uses:
 ## Module: simple_ctf
 
 Files:
-- `../scripts/../src/main/ctf/simple_ctf.f90`
+- `main/ctf/simple_ctf.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7079,7 +7125,7 @@ Uses:
 ## Module: simple_ctf_estimate_cost
 
 Files:
-- `../scripts/../src/main/ctf/simple_ctf_estimate_cost.f90`
+- `main/ctf/simple_ctf_estimate_cost.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7108,7 +7154,7 @@ Private symbols:
 ## Module: simple_ctf_estimate_fit
 
 Files:
-- `../scripts/../src/main/ctf/simple_ctf_estimate_fit.f90`
+- `main/ctf/simple_ctf_estimate_fit.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -7159,7 +7205,7 @@ Private symbols:
 ## Module: simple_ctf_estimate_iter
 
 Files:
-- `../scripts/../src/main/ctf/simple_ctf_estimate_iter.f90`
+- `main/ctf/simple_ctf_estimate_iter.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7179,7 +7225,7 @@ Private symbols:
 ## Module: simple_ctf_estimate_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_ctf_estimate_strategy.f90`
+- `main/strategies/parallelization/simple_ctf_estimate_strategy.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -7218,7 +7264,7 @@ Private symbols:
 ## Module: simple_decay_funs
 
 Files:
-- `../scripts/../src/utils/math/simple_decay_funs.f90`
+- `utils/math/simple_decay_funs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7236,7 +7282,7 @@ Public symbols:
 ## Module: simple_default_clines
 
 Files:
-- `../scripts/../src/defs/simple_default_clines.f90`
+- `defs/simple_default_clines.f90`
 
 Uses:
 - `simple_cmdline`
@@ -7251,7 +7297,7 @@ Public symbols:
 ## Module: simple_defs
 
 Files:
-- `../scripts/../src/defs/simple_defs.f90`
+- `defs/simple_defs.f90`
 
 Public symbols:
 - `exit_cleanup_iface` — subroutine
@@ -7260,7 +7306,7 @@ Public symbols:
 ## Module: simple_defs_atoms
 
 Files:
-- `../scripts/../src/defs/simple_defs_atoms.f90`
+- `defs/simple_defs_atoms.f90`
 
 Public symbols:
 - `get_element_Z_and_radius` — subroutine
@@ -7270,25 +7316,25 @@ Public symbols:
 ## Module: simple_defs_conv
 
 Files:
-- `../scripts/../src/defs/simple_defs_conv.f90`
+- `defs/simple_defs_conv.f90`
 
 ---
 ## Module: simple_defs_environment
 
 Files:
-- `../scripts/../src/defs/simple_defs_environment.f90`
+- `defs/simple_defs_environment.f90`
 
 ---
 ## Module: simple_defs_fname
 
 Files:
-- `../scripts/../src/defs/simple_defs_fname.f90`
+- `defs/simple_defs_fname.f90`
 
 ---
 ## Module: simple_defs_ori
 
 Files:
-- `../scripts/../src/defs/simple_defs_ori.f90`
+- `defs/simple_defs_ori.f90`
 
 Public symbols:
 - `get_oriparam_flag` — function
@@ -7297,19 +7343,19 @@ Public symbols:
 ## Module: simple_defs_stream
 
 Files:
-- `../scripts/../src/defs/simple_defs_stream.f90`
+- `defs/simple_defs_stream.f90`
 
 ---
 ## Module: simple_defs_string
 
 Files:
-- `../scripts/../src/defs/simple_defs_string.f90`
+- `defs/simple_defs_string.f90`
 
 ---
 ## Module: simple_denoise_movies
 
 Files:
-- `../scripts/../src/main/motion/simple_denoise_movies.f90`
+- `main/motion/simple_denoise_movies.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7328,7 +7374,7 @@ Private symbols:
 ## Module: simple_denoise_project_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_denoise_project_strategy.f90`
+- `main/strategies/parallelization/simple_denoise_project_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -7410,7 +7456,7 @@ Private symbols:
 ## Module: simple_diff_map_denoise
 
 Files:
-- `../scripts/../src/main/pca/simple_diff_map_denoise.f90`
+- `main/pca/simple_diff_map_denoise.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7446,7 +7492,7 @@ Private symbols:
 ## Module: simple_diff_map_graphs
 
 Files:
-- `../scripts/../src/main/pca/simple_diff_map_graphs.f90`
+- `main/pca/simple_diff_map_graphs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7481,7 +7527,7 @@ Private symbols:
 ## Module: simple_diffusion_maps
 
 Files:
-- `../scripts/../src/main/pca/simple_diffusion_maps.f90`
+- `main/pca/simple_diffusion_maps.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7501,7 +7547,7 @@ Private symbols:
 ## Module: simple_discrete_stack_io
 
 Files:
-- `../scripts/../src/fileio/simple_discrete_stack_io.f90`
+- `fileio/simple_discrete_stack_io.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7521,7 +7567,7 @@ Private symbols:
 ## Module: simple_distr_comm
 
 Files:
-- `../scripts/../src/utils/comm/simple_distr_comm.f90`
+- `utils/comm/simple_distr_comm.f90`
 
 Uses:
 - `simple_socket_comm`
@@ -7539,7 +7585,7 @@ Private symbols:
 ## Module: simple_dock_vols
 
 Files:
-- `../scripts/../src/main/volume/simple_dock_vols.f90`
+- `main/volume/simple_dock_vols.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7566,7 +7612,7 @@ Private symbols:
 ## Module: simple_edges_sqwins
 
 Files:
-- `../scripts/../src/main/interp/simple_edges_sqwins.f90`
+- `main/interp/simple_edges_sqwins.f90`
 
 Uses:
 - `simple_defs`
@@ -7576,7 +7622,7 @@ Uses:
 ## Module: simple_eer_factory
 
 Files:
-- `../scripts/../src/fileio/simple_eer_factory.f90`
+- `fileio/simple_eer_factory.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7603,7 +7649,7 @@ Private symbols:
 ## Module: simple_error
 
 Files:
-- `../scripts/../src/fileio/simple_error.f90`
+- `fileio/simple_error.f90`
 
 Uses:
 - `simple_defs`
@@ -7616,7 +7662,7 @@ Public symbols:
 ## Module: simple_estimate_ssnr
 
 Files:
-- `../scripts/../src/utils/filter/simple_estimate_ssnr.f90`
+- `utils/filter/simple_estimate_ssnr.f90`
 
 Uses:
 - `simple_defs`
@@ -7660,7 +7706,7 @@ Private symbols:
 ## Module: simple_euclid_sigma2
 
 Files:
-- `../scripts/../src/main/simple_euclid_sigma2.f90`
+- `main/simple_euclid_sigma2.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7703,7 +7749,7 @@ Private symbols:
 ## Module: simple_eul_prob_tab
 
 Files:
-- `../scripts/../src/main/simple_eul_prob_tab.f90`
+- `main/simple_eul_prob_tab.f90`
 
 Uses:
 - `simple_builder`
@@ -7761,7 +7807,7 @@ Private symbols:
 ## Module: simple_eul_prob_tab2D
 
 Files:
-- `../scripts/../src/main/simple_eul_prob_tab2D.f90`
+- `main/simple_eul_prob_tab2D.f90`
 
 Uses:
 - `simple_builder`
@@ -7819,7 +7865,7 @@ Private symbols:
 ## Module: simple_eul_prob_tab_neigh
 
 Files:
-- `../scripts/../src/main/simple_eul_prob_tab_neigh.f90`
+- `main/simple_eul_prob_tab_neigh.f90`
 
 Uses:
 - `simple_builder`
@@ -7889,7 +7935,7 @@ Private symbols:
 ## Module: simple_eul_prob_tab_utils
 
 Files:
-- `../scripts/../src/main/simple_eul_prob_tab_utils.f90`
+- `main/simple_eul_prob_tab_utils.f90`
 
 Uses:
 - `simple_defs`
@@ -7908,7 +7954,7 @@ Public symbols:
 ## Module: simple_eulspace_neigh_map
 
 Files:
-- `../scripts/../src/utils/simple_eulspace_neigh_map.f90`
+- `utils/simple_eulspace_neigh_map.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7930,7 +7976,7 @@ Private symbols:
 ## Module: simple_exec_abinitio3D
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_abinitio3D.f90`
+- `main/exec/simple_exec_abinitio3D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -7947,7 +7993,7 @@ Public symbols:
 ## Module: simple_exec_api
 
 Files:
-- `../scripts/../src/main/apis/simple_exec_api.f90`
+- `main/apis/simple_exec_api.f90`
 
 Uses:
 - `iso_fortran_env`
@@ -7982,7 +8028,7 @@ Uses:
 ## Module: simple_exec_cavgproc
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_cavgproc.f90`
+- `main/exec/simple_exec_cavgproc.f90`
 
 Uses:
 - `simple_cmdline`
@@ -7996,7 +8042,7 @@ Public symbols:
 ## Module: simple_exec_cluster2D
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_cluster2D.f90`
+- `main/exec/simple_exec_cluster2D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8017,7 +8063,7 @@ Public symbols:
 ## Module: simple_exec_denoise
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_denoise.f90`
+- `main/exec/simple_exec_denoise.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8035,7 +8081,7 @@ Public symbols:
 ## Module: simple_exec_dock
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_dock.f90`
+- `main/exec/simple_exec_dock.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8048,7 +8094,7 @@ Public symbols:
 ## Module: simple_exec_filter
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_filter.f90`
+- `main/exec/simple_exec_filter.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8063,7 +8109,7 @@ Public symbols:
 ## Module: simple_exec_helpers
 
 Files:
-- `../scripts/../src/utils/simple_exec_helpers.f90`
+- `utils/simple_exec_helpers.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8086,7 +8132,7 @@ Public symbols:
 ## Module: simple_exec_image
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_image.f90`
+- `main/exec/simple_exec_image.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8101,7 +8147,7 @@ Public symbols:
 ## Module: simple_exec_mask
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_mask.f90`
+- `main/exec/simple_exec_mask.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8114,7 +8160,7 @@ Public symbols:
 ## Module: simple_exec_ori
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_ori.f90`
+- `main/exec/simple_exec_ori.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8127,7 +8173,7 @@ Public symbols:
 ## Module: simple_exec_other
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_other.f90`
+- `main/exec/simple_exec_other.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8143,7 +8189,7 @@ Public symbols:
 ## Module: simple_exec_preproc
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_preproc.f90`
+- `main/exec/simple_exec_preproc.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8158,7 +8204,7 @@ Public symbols:
 ## Module: simple_exec_print
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_print.f90`
+- `main/exec/simple_exec_print.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8172,7 +8218,7 @@ Public symbols:
 ## Module: simple_exec_project
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_project.f90`
+- `main/exec/simple_exec_project.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8191,7 +8237,7 @@ Public symbols:
 ## Module: simple_exec_refine3D
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_refine3D.f90`
+- `main/exec/simple_exec_refine3D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8209,7 +8255,7 @@ Public symbols:
 ## Module: simple_exec_res
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_res.f90`
+- `main/exec/simple_exec_res.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8222,7 +8268,7 @@ Public symbols:
 ## Module: simple_exec_sieve
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_sieve.f90`
+- `main/exec/simple_exec_sieve.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8235,7 +8281,7 @@ Public symbols:
 ## Module: simple_exec_sim
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_sim.f90`
+- `main/exec/simple_exec_sim.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8249,7 +8295,7 @@ Public symbols:
 ## Module: simple_exec_sym
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_sym.f90`
+- `main/exec/simple_exec_sym.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8262,7 +8308,7 @@ Public symbols:
 ## Module: simple_exec_validate
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_validate.f90`
+- `main/exec/simple_exec_validate.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8276,7 +8322,7 @@ Public symbols:
 ## Module: simple_exec_volume
 
 Files:
-- `../scripts/../src/main/exec/simple_exec_volume.f90`
+- `main/exec/simple_exec_volume.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8287,10 +8333,30 @@ Public symbols:
 - `exec_volume_commander` — subroutine
 
 ---
+## Module: simple_external_reference_pose_initialization
+
+Files:
+- `main/simple_external_reference_pose_initialization.f90`
+
+Uses:
+- `simple_commanders_api`
+- `simple_commanders_euclid`
+- `simple_estimate_ssnr`
+- `simple_refine3d_fnames`
+
+Public symbols:
+- `initialize_poses_against_external_references` — subroutine
+
+Private symbols:
+- `cleanup_assignment_files` — subroutine
+- `prepare_pose_initialization_coverage` — subroutine
+- `validate_pose_initialized_states` — subroutine
+
+---
 ## Module: simple_extract_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_extract_strategy.f90`
+- `main/strategies/parallelization/simple_extract_strategy.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8334,7 +8400,7 @@ Private symbols:
 ## Module: simple_fftw3
 
 Files:
-- `../scripts/../src/defs/simple_fftw3.f90`
+- `defs/simple_fftw3.f90`
 
 Public symbols:
 - `fftw_cleanup` — subroutine
@@ -8385,7 +8451,7 @@ Public symbols:
 ## Module: simple_fileio
 
 Files:
-- `../scripts/../src/fileio/simple_fileio.f90`
+- `fileio/simple_fileio.f90`
 
 Uses:
 - `simple_defs`
@@ -8398,7 +8464,7 @@ Uses:
 ## Module: simple_fileio_tester
 
 Files:
-- `../scripts/../src/fileio/simple_fileio_tester.f90`
+- `fileio/simple_fileio_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -8436,7 +8502,7 @@ Private symbols:
 ## Module: simple_finch
 
 Files:
-- `../scripts/../src/utils/clustering/simple_finch.f90`
+- `utils/clustering/simple_finch.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8469,101 +8535,87 @@ Private symbols:
 - `weighted_cluster_centroids` — subroutine
 
 ---
-## Module: simple_flex_pca_columns
+## Module: simple_flex_gpu
 
 Files:
-- `../scripts/../src/main/flex/simple_flex_pca_columns.f90`
+- `main/flex/simple_flex_gpu.f90`
 
 Uses:
-- `simple_builder`
+- `iso_c_binding`
 - `simple_core_module_api`
-- `simple_flex_pca_distr`
-- `simple_flex_pca_parts`
-- `simple_flex_projected_latent_model`
+- `simple_ctf`
+- `simple_flex_pca_polar`
 - `simple_flex_reconstructor_latent_ops`
-- `simple_gridding`
+- `simple_ftiter`
 - `simple_image`
 - `simple_kbinterpol`
-- `simple_linalg`
-- `simple_matcher_3drec`
-- `simple_matcher_ptcl_io`
 - `simple_math`
-- `simple_parameters`
 - `simple_reconstructor`
-- `simple_srch_sort_loc`
 
 Public symbols:
-- `align_basis_to_reference` — subroutine
-- `apply_packed_A` — subroutine
-- `build_covariance_eigenbasis` — subroutine
-- `cg_solve_packed` — subroutine
-- `cov_env_int_pub` — subroutine
-- `embed_latents_with_contrast` — subroutine
-- `estimate_covariance_mean` — subroutine
-- `probe_external_basis` — subroutine
-- `probe_subspace_iteration` — subroutine
-- `save_probe_state` — subroutine
-- `test_flex_pca_packed_solve` — subroutine
-- `test_flex_pca_svec_isometry` — subroutine
+- `flex_gpu_cols_batch_f` — subroutine
+- `flex_gpu_cols_begin_f` — subroutine
+- `flex_gpu_cols_end_f` — subroutine
+- `flex_gpu_cols_fused_batch_f` — subroutine
+- `flex_gpu_cols_lookup_f` — subroutine
+- `flex_gpu_cols_test_upload_f` — subroutine
+- `flex_gpu_coupled_bank_f` — subroutine
+- `flex_gpu_coupled_bank_free_f` — subroutine
+- `flex_gpu_coupled_batch_banked_f` — subroutine
+- `flex_gpu_coupled_batch_banked_res_f` — subroutine
+- `flex_gpu_coupled_batch_f` — subroutine
+- `flex_gpu_coupled_batch_raw_f` — subroutine
+- `flex_gpu_coupled_begin_f` — subroutine
+- `flex_gpu_coupled_end_f` — subroutine
+- `flex_gpu_estep_batch_f` — subroutine
+- `flex_gpu_estep_batch_res_f` — subroutine
+- `flex_gpu_estep_free_f` — subroutine
+- `flex_gpu_estep_resid_f` — subroutine
+- `flex_gpu_estep_vols_f` — subroutine
+- `flex_gpu_insert_batch_f` — subroutine
+- `flex_gpu_insert_batch_res_f` — subroutine
+- `flex_gpu_insert_begin_f` — subroutine
+- `flex_gpu_insert_end_f` — subroutine
+- `flex_gpu_poles_bank_f` — subroutine
+- `flex_gpu_poles_batch_f` — subroutine
+- `flex_gpu_poles_begin_f` — subroutine
+- `flex_gpu_poles_free_f` — subroutine
+- `flex_gpu_prep_batch_f` — subroutine
+- `flex_gpu_prep_begin_f` — subroutine
+- `flex_gpu_prep_check_f` — subroutine
+- `flex_gpu_prep_fetch_f` — subroutine
+- `flex_gpu_prep_fetch_sep_f` — subroutine
+- `flex_gpu_prep_free_f` — subroutine
+- `flex_gpu_psample_batch_f` — subroutine
+- `flex_gpu_psample_batch_res_f` — subroutine
+- `flex_gpu_psample_begin_f` — subroutine
+- `flex_gpu_psample_diag_batch_f` — subroutine
+- `flex_gpu_psample_diag_begin_f` — subroutine
+- `flex_gpu_psample_diag_fetch_f` — subroutine
+- `flex_gpu_psample_free_f` — subroutine
+- `flex_gpu_snr_batch_f` — subroutine
+- `flex_gpu_snr_batch_res_f` — subroutine
+- `flex_gpu_snr_begin_f` — subroutine
+- `flex_gpu_snr_end_f` — subroutine
+- `flex_gpu_solve_begin_f` — subroutine
+- `flex_gpu_solve_cache_f` — subroutine
+- `flex_gpu_solve_chunk_f` — subroutine
+- `flex_gpu_solve_end_f` — subroutine
+- `test_flex_gpu_coupled` — subroutine
+- `test_flex_gpu_coupled_banked` — subroutine
+- `test_flex_gpu_estep` — subroutine
+- `test_flex_gpu_insert` — subroutine
+- `test_flex_gpu_psample` — subroutine
 
 Private symbols:
-- `accumulate_covariance_columns` — subroutine
-- `apply_cached_mean_scale` — subroutine
-- `backproject_columns` — subroutine
-- `build_column_lookup` — subroutine
-- `build_sample_cache` — subroutine
-- `cleanup_plane` — subroutine
-- `cleanup_utilde_stack` — subroutine
-- `column_generalization_curve` — subroutine
-- `columns_to_real_representatives` — subroutine
-- `cov_env_int` — subroutine
-- `cov_herm_inner` — function
-- `cov_herm_sample_list` — subroutine
-- `cov_herm_selfpower` — subroutine
-- `cov_image_mask_radius` — function
-- `cov_init_right_kernel_width` — subroutine
-- `cov_kb_weights` — subroutine
-- `cov_stage_subsample` — subroutine
-- `covariance_kfromto` — function
-- `estimate_mean_from_data` — subroutine
-- `estimate_mean_scale` — subroutine
-- `estimate_snr_volume` — subroutine
-- `form_adjoint_residual_plane` — subroutine
-- `form_eigenbasis_from_reduced` — subroutine
-- `form_reconstruction_plane` — subroutine
-- `form_residual_plane` — subroutine
-- `gather_column_values` — subroutine
-- `heteropca_impute` — subroutine
-- `init_column_reconstructor` — subroutine
-- `init_mean_reconstructor` — subroutine
-- `load_probe_basis` — subroutine
-- `load_probe_state` — subroutine
-- `load_utilde_stack` — subroutine
-- `map_sampling_precision` — subroutine
-- `orthonormalize_representatives` — subroutine
-- `pick_next_lowfreq` — subroutine
-- `plane_hf_power` — subroutine
-- `plane_shell_cross_accum` — subroutine
-- `plane_shell_power_accum` — subroutine
-- `quad_form` — function
-- `realize_hermitian_volume` — subroutine
-- `rearrange_packed_selfsum` — subroutine
-- `reduced_covariance_solve` — subroutine
-- `regularize_and_merge_columns` — subroutine
-- `select_covariance_columns_lowfreq` — subroutine
-- `select_covariance_columns_snr` — subroutine
-- `spd_inv_dp` — subroutine
-- `spd_solve_dp` — subroutine
-- `unrearrange_kron_selfsum` — subroutine
-- `write_column_diagnostics` — subroutine
-- `write_utilde_stack` — subroutine
-- `write_zhalf_replicates` — subroutine
+- `cov_herm_inner_t` — function
+- `flex_gpu_coupled_end_f_noop` — subroutine
 
 ---
 ## Module: simple_flex_pca_distr
 
 Files:
-- `../scripts/../src/main/flex/simple_flex_pca_distr.f90`
+- `main/flex/simple_flex_pca_distr.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8576,12 +8628,34 @@ Public symbols:
 - `flex_pca_distr_init` — subroutine
 - `flex_pca_distr_kill` — subroutine
 - `flex_pca_run_stage` — subroutine
+- `flex_pca_set_fit` — subroutine
+
+---
+## Module: simple_flex_pca_em
+
+Files:
+- `main/flex/simple_flex_pca_em.f90`
+
+Uses:
+- `simple_builder`
+- `simple_core_module_api`
+- `simple_flex_pca_polar`
+- `simple_ftiter`
+- `simple_gridding`
+- `simple_image`
+- `simple_kbinterpol`
+- `simple_linalg`
+- `simple_math`
+- `simple_math_ft`
+- `simple_parameters`
+- `simple_reconstructor`
+- `simple_srch_sort_loc`
 
 ---
 ## Module: simple_flex_pca_merge
 
 Files:
-- `../scripts/../src/main/flex/simple_flex_pca_merge.f90`
+- `main/flex/simple_flex_pca_merge.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8590,6 +8664,7 @@ Uses:
 - `simple_parameters`
 
 Public symbols:
+- `flex_pca_merge_force_on` — subroutine
 - `two_gate_state_merge` — subroutine
 
 Private symbols:
@@ -8603,15 +8678,15 @@ Private symbols:
 ## Module: simple_flex_pca_model
 
 Files:
-- `../scripts/../src/main/flex/simple_flex_pca_model.f90`
+- `main/flex/simple_flex_pca_model.f90`
 
 Uses:
 - `simple_builder`
 - `simple_cmdline`
 - `simple_core_module_api`
 - `simple_finch`
-- `simple_flex_pca_columns`
 - `simple_flex_pca_distr`
+- `simple_flex_pca_em`
 - `simple_flex_pca_merge`
 - `simple_flex_pca_parts`
 - `simple_flex_pca_rec3d`
@@ -8628,16 +8703,19 @@ Uses:
 
 Public symbols:
 - `run_flex_pca` — subroutine
+- `test_flex_pca_auto_settings` — subroutine
 - `test_flex_pca_embedding_cache_io` — subroutine
 - `test_flex_pca_kernel_bandwidth` — subroutine
 - `test_flex_pca_state_weights` — subroutine
 
 Private symbols:
 - `apply_consensus_nu_filter` — subroutine
+- `bagged_embedding` — subroutine
 - `build_covariance_state_weights` — subroutine
 - `component_reliability_proxy` — subroutine
 - `cov_env_dp` — subroutine
 - `cv_select_bandwidths` — subroutine
+- `diagmat` — function
 - `diffusion_kcenter_targets` — subroutine
 - `finch_state_targets` — subroutine
 - `gmm_state_weights` — subroutine
@@ -8649,14 +8727,18 @@ Private symbols:
 - `mask_state_weights_by_half` — subroutine
 - `orth_block` — subroutine
 - `path_latent_targets` — subroutine
+- `project_onto_target_polyline` — subroutine
 - `read_embedding_cache` — subroutine
 - `read_external_targets` — subroutine
+- `release_recs` — subroutine
 - `reliability_path_targets` — subroutine
 - `report_state_memory` — subroutine
 - `rotate_basis_by_smoothness` — subroutine
 - `run_external_basis_probe` — subroutine
+- `shrink_latents_gaussian` — subroutine
 - `sort_block_desc` — subroutine
 - `validate_covariance_inputs` — subroutine
+- `whiten_latent_frame` — subroutine
 - `write_covariance_eigenvolumes` — subroutine
 - `write_covariance_manifest` — subroutine
 - `write_covariance_tables` — subroutine
@@ -8667,7 +8749,7 @@ Private symbols:
 ## Module: simple_flex_pca_parts
 
 Files:
-- `../scripts/../src/main/flex/simple_flex_pca_parts.f90`
+- `main/flex/simple_flex_pca_parts.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8675,47 +8757,64 @@ Uses:
 
 Public symbols:
 - `check_sigma_state` — subroutine
-- `cleanup_flex_pca_parts` — subroutine
 - `flex_pca_part_fname` — function
-- `read_columns_hkl` — subroutine
 - `read_embed_stats_part` — subroutine
 - `read_mean_scale` — subroutine
 - `read_state_weights_round` — subroutine
-- `reduce_cols_parts` — subroutine
-- `reduce_embed_parts` — subroutine
 - `reduce_embed_zhalf_parts` — subroutine
 - `reduce_probe_parts` — subroutine
-- `reduce_snr_parts` — subroutine
-- `reduce_solve_parts` — subroutine
-- `reduce_states_parts` — subroutine
-- `write_cols_part` — subroutine
-- `write_columns_hkl` — subroutine
-- `write_embed_part` — subroutine
 - `write_embed_stats_part` — subroutine
 - `write_mean_scale` — subroutine
 - `write_probe_part` — subroutine
 - `write_sigma_state` — subroutine
-- `write_snr_part` — subroutine
-- `write_solve_part` — subroutine
 - `write_state_weights_round` — subroutine
-- `write_states_part` — subroutine
+
+---
+## Module: simple_flex_pca_polar
+
+Files:
+- `main/flex/simple_flex_pca_polar.f90`
+
+Uses:
+- `simple_core_module_api`
+- `simple_flex_reconstructor_latent_ops`
+- `simple_kbinterpol`
+- `simple_math`
+- `simple_reconstructor`
+
+Public symbols:
+- `polar_apply_shift` — subroutine
+- `polar_assign_directions` — subroutine
+- `polar_dir_neighbours` — subroutine
+- `polar_grid_build` — subroutine
+- `polar_grid_kill` — subroutine
+- `polar_grid_t` — type
+- `polar_project_recs` — subroutine
+- `polar_relative_inplane` — subroutine
+- `polar_sample_at_pose` — subroutine
+- `polar_sample_particle` — subroutine
+- `polar_sample_particle_fused` — subroutine
 
 ---
 ## Module: simple_flex_pca_rec3D
 
 Files:
-- `../scripts/../src/main/flex/simple_flex_pca_rec3D.f90`
+- `main/flex/simple_flex_pca_rec3D.f90`
 
 Uses:
 - `simple_builder`
 - `simple_core_module_api`
+- `simple_flex_gpu`
 - `simple_flex_pca_distr`
 - `simple_flex_pca_parts`
 - `simple_flex_reconstructor_latent_ops`
+- `simple_ftiter`
 - `simple_gridding`
 - `simple_image`
 - `simple_matcher_3drec`
 - `simple_matcher_ptcl_io`
+- `simple_math`
+- `simple_math_ft`
 - `simple_parameters`
 - `simple_reconstructor`
 - `simple_sp_project`
@@ -8726,6 +8825,7 @@ Public symbols:
 Private symbols:
 - `flex_state_part_fbody` — function
 - `init_state_reconstructor` — subroutine
+- `prep_imgs4rec_dev` — subroutine
 - `prepare_project_fsc_lowpass_filters` — subroutine
 - `write_state` — subroutine
 
@@ -8733,19 +8833,24 @@ Private symbols:
 ## Module: simple_flex_projected_latent_model
 
 Files:
-- `../scripts/../src/main/flex/simple_flex_projected_latent_model.f90`
+- `main/flex/simple_flex_projected_latent_model.f90`
 
 Uses:
 - `simple_builder`
 - `simple_core_module_api`
+- `simple_flex_gpu`
+- `simple_ftiter`
 - `simple_image`
 - `simple_linalg`
+- `simple_math`
+- `simple_math_ft`
 - `simple_memoize_ft_maps`
 - `simple_parameters`
 - `simple_reconstructor`
 
 Public symbols:
 - `prep_imgs4projected_model` — subroutine
+- `projected_model_kfromto` — function
 - `solve_coupled_basis_exp` — subroutine
 - `test_projected_latent_canonicalization` — subroutine
 - `test_projected_latent_mstep_stats_io` — subroutine
@@ -8758,9 +8863,9 @@ Private symbols:
 - `init_projected_latent_mstep_stats` — subroutine
 - `kill_projected_latent_estep_part` — subroutine
 - `kill_projected_latent_mstep_stats` — subroutine
+- `prep_imgs4projected_model_dev` — subroutine
 - `projected_latent_estep_part` — type
 - `projected_latent_mstep_stats` — type
-- `projected_model_kfromto` — function
 - `read_projected_latent_estep_part` — subroutine
 - `reduce_projected_latent_mstep_stats_file` — subroutine
 - `solve_real_spd_complex` — subroutine
@@ -8771,7 +8876,7 @@ Private symbols:
 ## Module: simple_flex_reconstructor_latent_ops
 
 Files:
-- `../scripts/../src/main/flex/simple_flex_reconstructor_latent_ops.f90`
+- `main/flex/simple_flex_reconstructor_latent_ops.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8787,10 +8892,12 @@ Public symbols:
 - `insert_plane_oversamp_coupled_scaled` — subroutine
 - `insert_planes_oversamp_coupled_batch_scaled` — subroutine
 - `insert_planes_oversamp_multi_scaled_batch` — subroutine
+- `latent_projection_weights` — subroutine
 - `project_fplane_mean` — subroutine
 - `project_fplanes_mean_basis` — subroutine
 - `test_cartesian_projection_contract` — subroutine
 - `test_coupled_batch_accumulation` — subroutine
+- `weighted_expanded_cmat` — function
 
 Private symbols:
 - `cleanup_test_plane` — subroutine
@@ -8800,14 +8907,12 @@ Private symbols:
 - `kb_apod_vecs_3d_fast` — subroutine
 - `kb_apod_vecs_3d_fast` — subroutine
 - `kb_apod_vecs_3d_fast_b` — subroutine
-- `latent_projection_weights` — subroutine
-- `weighted_expanded_cmat` — function
 
 ---
 ## Module: simple_forked_process
 
 Files:
-- `../scripts/../src/utils/simple_forked_process.f90`
+- `utils/simple_forked_process.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8844,7 +8949,7 @@ Private symbols:
 ## Module: simple_forked_process_tester
 
 Files:
-- `../scripts/../src/utils/simple_forked_process_tester.f90`
+- `utils/simple_forked_process_tester.f90`
 
 Uses:
 - `simple_forked_process`
@@ -8870,7 +8975,7 @@ Private symbols:
 ## Module: simple_fsc
 
 Files:
-- `../scripts/../src/utils/filter/simple_fsc.f90`
+- `utils/filter/simple_fsc.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -8906,7 +9011,7 @@ Private symbols:
 ## Module: simple_ft_expanded
 
 Files:
-- `../scripts/../src/main/image/simple_ft_expanded.f90`
+- `main/image/simple_ft_expanded.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8948,7 +9053,7 @@ Private symbols:
 ## Module: simple_ftexp_shsrch
 
 Files:
-- `../scripts/../src/main/image/simple_ftexp_shsrch.f90`
+- `main/image/simple_ftexp_shsrch.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8979,7 +9084,7 @@ Private symbols:
 ## Module: simple_ftiter
 
 Files:
-- `../scripts/../src/main/image/simple_ftiter.f90`
+- `main/image/simple_ftiter.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8991,7 +9096,7 @@ Public symbols:
 ## Module: simple_gauss2Dfit
 
 Files:
-- `../scripts/../src/utils/simple_gauss2Dfit.f90`
+- `utils/simple_gauss2Dfit.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9001,7 +9106,7 @@ Uses:
 ## Module: simple_gen_pspecs_and_thumbs_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_gen_pspecs_and_thumbs_strategy.f90`
+- `main/strategies/parallelization/simple_gen_pspecs_and_thumbs_strategy.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -9040,7 +9145,7 @@ Private symbols:
 ## Module: simple_gpu_utils
 
 Files:
-- `../scripts/../src/utils/simple_gpu_utils.f90`
+- `utils/simple_gpu_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9052,7 +9157,7 @@ Public symbols:
 ## Module: simple_gridding
 
 Files:
-- `../scripts/../src/main/interp/simple_gridding.f90`
+- `main/interp/simple_gridding.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9061,6 +9166,7 @@ Uses:
 
 Public symbols:
 - `deapodize3D_inplace` — subroutine
+- `kb_stencil_centered_crop_inv_envelope_1d` — subroutine
 - `kb_stencil_envelope_1d` — subroutine
 - `kb_stencil_inv_envelope_1d` — subroutine
 - `prep2D_inv_instrfun4mul` — function
@@ -9070,7 +9176,7 @@ Public symbols:
 ## Module: simple_gui_assembler
 
 Files:
-- `../scripts/../src/utils/gui/simple_gui_assembler.f90`
+- `utils/gui/simple_gui_assembler.f90`
 
 Uses:
 - `simple_forked_process`
@@ -9102,7 +9208,7 @@ Private symbols:
 ## Module: simple_gui_assembler_tester
 
 Files:
-- `../scripts/../src/utils/gui/simple_gui_assembler_tester.f90`
+- `utils/gui/simple_gui_assembler_tester.f90`
 
 Uses:
 - `simple_gui_assembler`
@@ -9130,7 +9236,7 @@ Private symbols:
 ## Module: simple_gui_metadata_api
 
 Files:
-- `../scripts/../src/main/apis/simple_gui_metadata_api.f90`
+- `main/apis/simple_gui_metadata_api.f90`
 
 Uses:
 - `json_kinds`
@@ -9156,7 +9262,7 @@ Uses:
 ## Module: simple_gui_metadata_base
 
 Files:
-- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_base.f90`
+- `utils/gui/metadata/simple_gui_metadata_base.f90`
 
 Uses:
 - `json_module`
@@ -9179,7 +9285,7 @@ Private symbols:
 ## Module: simple_gui_metadata_cavg2D
 
 Files:
-- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_cavg2D.f90`
+- `utils/gui/metadata/simple_gui_metadata_cavg2D.f90`
 
 Uses:
 - `json_module`
@@ -9205,7 +9311,7 @@ Private symbols:
 ## Module: simple_gui_metadata_histogram
 
 Files:
-- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_histogram.f90`
+- `utils/gui/metadata/simple_gui_metadata_histogram.f90`
 
 Uses:
 - `json_module`
@@ -9226,7 +9332,7 @@ Private symbols:
 ## Module: simple_gui_metadata_micrograph
 
 Files:
-- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_micrograph.f90`
+- `utils/gui/metadata/simple_gui_metadata_micrograph.f90`
 
 Uses:
 - `json_module`
@@ -9251,7 +9357,7 @@ Private symbols:
 ## Module: simple_gui_metadata_optics_group
 
 Files:
-- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_optics_group.f90`
+- `utils/gui/metadata/simple_gui_metadata_optics_group.f90`
 
 Uses:
 - `json_module`
@@ -9273,7 +9379,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_opening2D
 
 Files:
-- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_opening2D.f90`
+- `utils/gui/metadata/stream/simple_gui_metadata_stream_opening2D.f90`
 
 Uses:
 - `json_kinds`
@@ -9297,7 +9403,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_optics_assignment
 
 Files:
-- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_optics_assignment.f90`
+- `utils/gui/metadata/stream/simple_gui_metadata_stream_optics_assignment.f90`
 
 Uses:
 - `json_kinds`
@@ -9320,7 +9426,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_particle_sieving
 
 Files:
-- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_particle_sieving.f90`
+- `utils/gui/metadata/stream/simple_gui_metadata_stream_particle_sieving.f90`
 
 Uses:
 - `json_module`
@@ -9345,7 +9451,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_picking
 
 Files:
-- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_picking.f90`
+- `utils/gui/metadata/stream/simple_gui_metadata_stream_picking.f90`
 
 Uses:
 - `json_kinds`
@@ -9368,7 +9474,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_pool2D
 
 Files:
-- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D.f90`
+- `utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D.f90`
 
 Uses:
 - `json_module`
@@ -9392,7 +9498,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_pool2D_snapshot
 
 Files:
-- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D_snapshot.f90`
+- `utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D_snapshot.f90`
 
 Uses:
 - `json_module`
@@ -9414,7 +9520,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_preprocess
 
 Files:
-- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_preprocess.f90`
+- `utils/gui/metadata/stream/simple_gui_metadata_stream_preprocess.f90`
 
 Uses:
 - `json_kinds`
@@ -9436,7 +9542,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_update
 
 Files:
-- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_update.f90`
+- `utils/gui/metadata/stream/simple_gui_metadata_stream_update.f90`
 
 Uses:
 - `json_kinds`
@@ -9478,7 +9584,7 @@ Private symbols:
 ## Module: simple_gui_metadata_tester
 
 Files:
-- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_tester.f90`
+- `utils/gui/metadata/simple_gui_metadata_tester.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -9537,7 +9643,7 @@ Private symbols:
 ## Module: simple_gui_metadata_timeplot
 
 Files:
-- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_timeplot.f90`
+- `utils/gui/metadata/simple_gui_metadata_timeplot.f90`
 
 Uses:
 - `json_module`
@@ -9558,13 +9664,13 @@ Private symbols:
 ## Module: simple_gui_metadata_types
 
 Files:
-- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_types.f90`
+- `utils/gui/metadata/simple_gui_metadata_types.f90`
 
 ---
 ## Module: simple_gui_metadata_utils
 
 Files:
-- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_utils.f90`
+- `utils/gui/metadata/simple_gui_metadata_utils.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -9576,7 +9682,7 @@ Public symbols:
 ## Module: simple_gui_utils
 
 Files:
-- `../scripts/../src/utils/gui/simple_gui_utils.f90`
+- `utils/gui/simple_gui_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9591,7 +9697,7 @@ Public symbols:
 ## Module: simple_guistats
 
 Files:
-- `../scripts/../src/utils/gui/simple_guistats.f90`
+- `utils/gui/simple_guistats.f90`
 
 Uses:
 - `json_module`
@@ -9623,7 +9729,7 @@ Private symbols:
 ## Module: simple_halfmap_diagnostics
 
 Files:
-- `../scripts/../src/main/volume/simple_halfmap_diagnostics.f90`
+- `main/volume/simple_halfmap_diagnostics.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9644,7 +9750,7 @@ Private symbols:
 ## Module: simple_hash
 
 Files:
-- `../scripts/../src/utils/structs/simple_hash.f90`
+- `utils/structs/simple_hash.f90`
 
 Uses:
 - `simple_defs`
@@ -9659,7 +9765,7 @@ Public symbols:
 ## Module: simple_hash_tester
 
 Files:
-- `../scripts/../src/utils/structs/simple_hash_tester.f90`
+- `utils/structs/simple_hash_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -9685,7 +9791,7 @@ Private symbols:
 ## Module: simple_hclust
 
 Files:
-- `../scripts/../src/utils/clustering/simple_hclust.f90`
+- `utils/clustering/simple_hclust.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9704,7 +9810,7 @@ Private symbols:
 ## Module: simple_histogram
 
 Files:
-- `../scripts/../src/utils/math/simple_histogram.f90`
+- `utils/math/simple_histogram.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -9735,7 +9841,7 @@ Private symbols:
 ## Module: simple_http_post
 
 Files:
-- `../scripts/../src/utils/comm/simple_http_post.f90`
+- `utils/comm/simple_http_post.f90`
 
 Uses:
 - `curl`
@@ -9757,7 +9863,7 @@ Private symbols:
 ## Module: simple_http_post_tester
 
 Files:
-- `../scripts/../src/utils/comm/simple_http_post_tester.f90`
+- `utils/comm/simple_http_post_tester.f90`
 
 Uses:
 - `simple_http_post`
@@ -9777,7 +9883,7 @@ Private symbols:
 ## Module: simple_image
 
 Files:
-- `../scripts/../src/main/image/simple_image.f90`
+- `main/image/simple_image.f90`
 
 Uses:
 - `gnufor2`
@@ -9796,7 +9902,7 @@ Public symbols:
 ## Module: simple_image_bin
 
 Files:
-- `../scripts/../src/main/image/simple_image_bin.f90`
+- `main/image/simple_image_bin.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9851,7 +9957,7 @@ Private symbols:
 ## Module: simple_image_msk
 
 Files:
-- `../scripts/../src/main/image/simple_image_msk.f90`
+- `main/image/simple_image_msk.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9880,7 +9986,7 @@ Private symbols:
 ## Module: simple_imgarr_utils
 
 Files:
-- `../scripts/../src/utils/simple_imgarr_utils.f90`
+- `utils/simple_imgarr_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9892,7 +9998,7 @@ Uses:
 ## Module: simple_imgfile
 
 Files:
-- `../scripts/../src/fileio/simple_imgfile.f90`
+- `fileio/simple_imgfile.f90`
 
 Uses:
 - `gnufor2`
@@ -9931,7 +10037,7 @@ Private symbols:
 ## Module: simple_imghead
 
 Files:
-- `../scripts/../src/fileio/simple_imghead.f90`
+- `fileio/simple_imghead.f90`
 
 Uses:
 - `simple_defs`
@@ -9992,7 +10098,7 @@ Private symbols:
 ## Module: simple_imgproc
 
 Files:
-- `../scripts/../src/utils/simple_imgproc.f90`
+- `utils/simple_imgproc.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10006,7 +10112,7 @@ Public symbols:
 ## Module: simple_ipc_tcp_socket_client
 
 Files:
-- `../scripts/../src/utils/comm/simple_ipc_tcp_socket_client.f90`
+- `utils/comm/simple_ipc_tcp_socket_client.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10029,7 +10135,7 @@ Private symbols:
 ## Module: simple_ipc_tcp_socket_helpers
 
 Files:
-- `../scripts/../src/utils/comm/simple_ipc_tcp_socket_helpers.f90`
+- `utils/comm/simple_ipc_tcp_socket_helpers.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10048,7 +10154,7 @@ Private symbols:
 ## Module: simple_ipc_tcp_socket_server
 
 Files:
-- `../scripts/../src/utils/comm/simple_ipc_tcp_socket_server.f90`
+- `utils/comm/simple_ipc_tcp_socket_server.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10076,7 +10182,7 @@ Private symbols:
 ## Module: simple_ipc_tcp_socket_tester
 
 Files:
-- `../scripts/../src/utils/comm/simple_ipc_tcp_socket_tester.f90`
+- `utils/comm/simple_ipc_tcp_socket_tester.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10111,7 +10217,7 @@ Private symbols:
 ## Module: simple_is_check_assert
 
 Files:
-- `../scripts/../src/utils/simple_is_check_assert.f90`
+- `utils/simple_is_check_assert.f90`
 
 Uses:
 - `simple_defs`
@@ -10121,7 +10227,7 @@ Uses:
 ## Module: simple_jiffys
 
 Files:
-- `../scripts/../src/utils/simple_jiffys.f90`
+- `utils/simple_jiffys.f90`
 
 Uses:
 - `simple_defs`
@@ -10132,7 +10238,7 @@ Uses:
 ## Module: simple_jpg
 
 Files:
-- `../scripts/../src/extlibs/jpg/simple_jpg.f90`
+- `extlibs/jpg/simple_jpg.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10162,7 +10268,7 @@ Private symbols:
 ## Module: simple_kbinterpol
 
 Files:
-- `../scripts/../src/main/interp/simple_kbinterpol.f90`
+- `main/interp/simple_kbinterpol.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10176,7 +10282,7 @@ Public symbols:
 ## Module: simple_kd_tree
 
 Files:
-- `../scripts/../src/utils/structs/simple_kd_tree.f90`
+- `utils/structs/simple_kd_tree.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10207,7 +10313,7 @@ Private symbols:
 ## Module: simple_kmedoids
 
 Files:
-- `../scripts/../src/utils/clustering/simple_kmedoids.f90`
+- `utils/clustering/simple_kmedoids.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10230,7 +10336,7 @@ Private symbols:
 ## Module: simple_kpca_svd
 
 Files:
-- `../scripts/../src/main/pca/simple_kpca_svd.f90`
+- `main/pca/simple_kpca_svd.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10267,7 +10373,7 @@ Private symbols:
 ## Module: simple_linalg
 
 Files:
-- `../scripts/../src/utils/math/simple_linalg.f90`
+- `utils/math/simple_linalg.f90`
 
 Uses:
 - `simple_defs`
@@ -10280,7 +10386,7 @@ Private symbols:
 ## Module: simple_linked_list
 
 Files:
-- `../scripts/../src/utils/structs/simple_linked_list.f90`
+- `utils/structs/simple_linked_list.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10326,7 +10432,7 @@ Private symbols:
 ## Module: simple_linked_list_tester
 
 Files:
-- `../scripts/../src/utils/structs/simple_linked_list_tester.f90`
+- `utils/structs/simple_linked_list_tester.f90`
 
 Uses:
 - `simple_linked_list`
@@ -10363,7 +10469,7 @@ Private symbols:
 ## Module: simple_magic_boxes
 
 Files:
-- `../scripts/../src/utils/simple_magic_boxes.f90`
+- `utils/simple_magic_boxes.f90`
 
 Uses:
 - `simple_defs`
@@ -10374,7 +10480,7 @@ Uses:
 ## Module: simple_make_cavgs_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_make_cavgs_strategy.f90`
+- `main/strategies/parallelization/simple_make_cavgs_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -10433,7 +10539,7 @@ Private symbols:
 ## Module: simple_map_reduce
 
 Files:
-- `../scripts/../src/utils/simple_map_reduce.f90`
+- `utils/simple_map_reduce.f90`
 
 Uses:
 - `simple_defs`
@@ -10451,7 +10557,7 @@ Public symbols:
 ## Module: simple_matcher_2Dprep
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_matcher_2Dprep.f90`
+- `main/strategies/search/simple_matcher_2Dprep.f90`
 
 Uses:
 - `simple_builder`
@@ -10473,7 +10579,7 @@ Public symbols:
 ## Module: simple_matcher_3Drec
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_matcher_3Drec.f90`
+- `main/strategies/search/simple_matcher_3Drec.f90`
 
 Uses:
 - `simple_builder`
@@ -10485,7 +10591,6 @@ Uses:
 - `simple_matcher_ptcl_io`
 - `simple_memoize_ft_maps`
 - `simple_parameters`
-- `simple_ptcl_cache`
 - `simple_reconstructor`
 - `simple_refine3d_fnames`
 - `simple_timer`
@@ -10510,7 +10615,7 @@ Private symbols:
 ## Module: simple_matcher_pftc_prep
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_matcher_pftc_prep.f90`
+- `main/strategies/search/simple_matcher_pftc_prep.f90`
 
 Uses:
 - `simple_builder`
@@ -10529,7 +10634,7 @@ Public symbols:
 ## Module: simple_matcher_ptcl_batch
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_matcher_ptcl_batch.f90`
+- `main/strategies/search/simple_matcher_ptcl_batch.f90`
 
 Uses:
 - `simple_builder`
@@ -10556,7 +10661,7 @@ Private symbols:
 ## Module: simple_matcher_ptcl_io
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_matcher_ptcl_io.f90`
+- `main/strategies/search/simple_matcher_ptcl_io.f90`
 
 Uses:
 - `simple_builder`
@@ -10569,7 +10674,7 @@ Uses:
 ## Module: simple_matcher_refvol_utils
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_matcher_refvol_utils.f90`
+- `main/strategies/search/simple_matcher_refvol_utils.f90`
 
 Uses:
 - `simple_builder`
@@ -10606,7 +10711,7 @@ Private symbols:
 ## Module: simple_matcher_smpl_and_lplims
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_matcher_smpl_and_lplims.f90`
+- `main/strategies/search/simple_matcher_smpl_and_lplims.f90`
 
 Uses:
 - `simple_abinitio2d_controller`
@@ -10626,7 +10731,7 @@ Public symbols:
 ## Module: simple_math
 
 Files:
-- `../scripts/../src/utils/math/simple_math.f90`
+- `utils/math/simple_math.f90`
 
 Uses:
 - `simple_defs`
@@ -10639,7 +10744,7 @@ Uses:
 ## Module: simple_math_ctf
 
 Files:
-- `../scripts/../src/utils/math/simple_math_ctf.f90`
+- `utils/math/simple_math_ctf.f90`
 
 Uses:
 - `simple_defs`
@@ -10649,7 +10754,7 @@ Uses:
 ## Module: simple_math_ft
 
 Files:
-- `../scripts/../src/utils/math/simple_math_ft.f90`
+- `utils/math/simple_math_ft.f90`
 
 Uses:
 - `simple_defs`
@@ -10661,7 +10766,7 @@ Uses:
 ## Module: simple_mem_estimator
 
 Files:
-- `../scripts/../src/utils/simple_mem_estimator.f90`
+- `utils/simple_mem_estimator.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10682,7 +10787,7 @@ Public symbols:
 ## Module: simple_memoize_ft_maps
 
 Files:
-- `../scripts/../src/utils/simple_memoize_ft_maps.f90`
+- `utils/simple_memoize_ft_maps.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10697,7 +10802,7 @@ Public symbols:
 ## Module: simple_memory_monitor
 
 Files:
-- `../scripts/../src/utils/simple_memory_monitor.f90`
+- `utils/simple_memory_monitor.f90`
 
 Uses:
 - `simple_cmdline`
@@ -10718,7 +10823,7 @@ Private symbols:
 ## Module: simple_micproc
 
 Files:
-- `../scripts/../src/utils/simple_micproc.f90`
+- `utils/simple_micproc.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -10746,7 +10851,7 @@ Public symbols:
 ## Module: simple_micrograph_generator
 
 Files:
-- `../scripts/../src/main/simple_micrograph_generator.f90`
+- `main/simple_micrograph_generator.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10776,7 +10881,7 @@ Private symbols:
 ## Module: simple_mini_stream_utils
 
 Files:
-- `../scripts/../src/main/stream/simple_mini_stream_utils.f90`
+- `main/stream/simple_mini_stream_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -10804,7 +10909,7 @@ Public symbols:
 ## Module: simple_molecule_data
 
 Files:
-- `../scripts/../src/main/nano/simple_molecule_data.f90`
+- `main/nano/simple_molecule_data.f90`
 
 Public symbols:
 - `betagal_1jyx` — function
@@ -10815,7 +10920,7 @@ Public symbols:
 ## Module: simple_motion_align_hybrid
 
 Files:
-- `../scripts/../src/main/motion/simple_motion_align_hybrid.f90`
+- `main/motion/simple_motion_align_hybrid.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10865,7 +10970,7 @@ Private symbols:
 ## Module: simple_motion_align_nano
 
 Files:
-- `../scripts/../src/main/motion/simple_motion_align_nano.f90`
+- `main/motion/simple_motion_align_nano.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10895,7 +11000,7 @@ Private symbols:
 ## Module: simple_motion_correct
 
 Files:
-- `../scripts/../src/main/motion/simple_motion_correct.f90`
+- `main/motion/simple_motion_correct.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10932,7 +11037,7 @@ Private symbols:
 ## Module: simple_motion_correct_iter
 
 Files:
-- `../scripts/../src/main/motion/simple_motion_correct_iter.f90`
+- `main/motion/simple_motion_correct_iter.f90`
 
 Uses:
 - `simple_cmdline`
@@ -10954,7 +11059,7 @@ Private symbols:
 ## Module: simple_motion_correct_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_motion_correct_strategy.f90`
+- `main/strategies/parallelization/simple_motion_correct_strategy.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -10994,7 +11099,7 @@ Private symbols:
 ## Module: simple_motion_correct_utils
 
 Files:
-- `../scripts/../src/main/motion/simple_motion_correct_utils.f90`
+- `main/motion/simple_motion_correct_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -11011,7 +11116,7 @@ Public symbols:
 ## Module: simple_motion_gain_analysis
 
 Files:
-- `../scripts/../src/main/motion/simple_motion_gain_analysis.f90`
+- `main/motion/simple_motion_gain_analysis.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11029,7 +11134,7 @@ Private symbols:
 ## Module: simple_motion_gain_helpers
 
 Files:
-- `../scripts/../src/main/motion/simple_motion_gain_helpers.f90`
+- `main/motion/simple_motion_gain_helpers.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11043,7 +11148,7 @@ Public symbols:
 ## Module: simple_motion_gain_tester
 
 Files:
-- `../scripts/../src/main/motion/simple_motion_gain_tester.f90`
+- `main/motion/simple_motion_gain_tester.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11066,7 +11171,7 @@ Private symbols:
 ## Module: simple_motion_patched
 
 Files:
-- `../scripts/../src/main/motion/simple_motion_patched.f90`
+- `main/motion/simple_motion_patched.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -11117,7 +11222,7 @@ Private symbols:
 ## Module: simple_multi_dendro
 
 Files:
-- `../scripts/../src/utils/structs/simple_multi_dendro.f90`
+- `utils/structs/simple_multi_dendro.f90`
 
 Uses:
 - `simple_binary_tree`
@@ -11147,7 +11252,7 @@ Private symbols:
 ## Module: simple_multi_dendro_tester
 
 Files:
-- `../scripts/../src/utils/structs/simple_multi_dendro_tester.f90`
+- `utils/structs/simple_multi_dendro_tester.f90`
 
 Uses:
 - `simple_binary_tree`
@@ -11176,7 +11281,7 @@ Private symbols:
 ## Module: simple_nanoparticle
 
 Files:
-- `../scripts/../src/main/nano/simple_nanoparticle.f90`
+- `main/nano/simple_nanoparticle.f90`
 
 Uses:
 - `simple_atoms`
@@ -11248,7 +11353,7 @@ Private symbols:
 ## Module: simple_nanoparticle_utils
 
 Files:
-- `../scripts/../src/main/nano/simple_nanoparticle_utils.f90`
+- `main/nano/simple_nanoparticle_utils.f90`
 
 Uses:
 - `simple_atoms`
@@ -11285,7 +11390,7 @@ Private symbols:
 ## Module: simple_neighs
 
 Files:
-- `../scripts/../src/utils/math/simple_neighs.f90`
+- `utils/math/simple_neighs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11294,14 +11399,14 @@ Uses:
 ## Module: simple_nice
 
 Files:
-- `../scripts/../src/utils/gui/simple_nice.f90`
+- `utils/gui/simple_nice.f90`
 
 Uses:
 - `json_kinds`
 - `json_module`
 - `simple_core_module_api`
 - `simple_histogram`
-- `simple_socket_comm`
+- `simple_http_post`
 - `simple_sp_project`
 - `unix`
 
@@ -11362,7 +11467,7 @@ Public symbols:
 ## Module: simple_nrtxtfile
 
 Files:
-- `../scripts/../src/fileio/simple_nrtxtfile.f90`
+- `fileio/simple_nrtxtfile.f90`
 
 Uses:
 - `simple_defs`
@@ -11387,7 +11492,7 @@ Private symbols:
 ## Module: simple_nu_filter
 
 Files:
-- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
+- `main/nu_filt/simple_nu_filter.f90`
 
 Uses:
 - `simple_butterworth`
@@ -11407,7 +11512,7 @@ Private symbols:
 ## Module: simple_online_var
 
 Files:
-- `../scripts/../src/utils/math/simple_online_var.f90`
+- `utils/math/simple_online_var.f90`
 
 Uses:
 - `simple_defs`
@@ -11431,7 +11536,7 @@ Private symbols:
 ## Module: simple_opt_bfgs
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_bfgs.f90`
+- `main/opt/simple_opt_bfgs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11452,7 +11557,7 @@ Private symbols:
 ## Module: simple_opt_bfgs2
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_bfgs2.f90`
+- `main/opt/simple_opt_bfgs2.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11492,7 +11597,7 @@ Private symbols:
 ## Module: simple_opt_bforce
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_bforce.f90`
+- `main/opt/simple_opt_bforce.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11512,7 +11617,7 @@ Private symbols:
 ## Module: simple_opt_de
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_de.f90`
+- `main/opt/simple_opt_de.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11531,7 +11636,7 @@ Private symbols:
 ## Module: simple_opt_factory
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_factory.f90`
+- `main/opt/simple_opt_factory.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11554,7 +11659,7 @@ Private symbols:
 ## Module: simple_opt_filter
 
 Files:
-- `../scripts/../src/utils/filter/simple_opt_filter.f90`
+- `utils/filter/simple_opt_filter.f90`
 
 Uses:
 - `simple_butterworth`
@@ -11565,7 +11670,7 @@ Uses:
 ## Module: simple_opt_fr_cg
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_fr_cg.f90`
+- `main/opt/simple_opt_fr_cg.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11589,7 +11694,7 @@ Private symbols:
 ## Module: simple_opt_helpers
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_helpers.f90`
+- `main/opt/simple_opt_helpers.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11605,7 +11710,7 @@ Public symbols:
 ## Module: simple_opt_image_weights
 
 Files:
-- `../scripts/../src/main/motion/simple_opt_image_weights.f90`
+- `main/motion/simple_opt_image_weights.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11644,7 +11749,7 @@ Private symbols:
 ## Module: simple_opt_lbfgsb
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_lbfgsb.f90`
+- `main/opt/simple_opt_lbfgsb.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11689,7 +11794,7 @@ Private symbols:
 ## Module: simple_opt_mask
 
 Files:
-- `../scripts/../src/utils/simple_opt_mask.f90`
+- `utils/simple_opt_mask.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11702,7 +11807,7 @@ Public symbols:
 ## Module: simple_opt_particle_swarm
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_particle_swarm.f90`
+- `main/opt/simple_opt_particle_swarm.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11723,7 +11828,7 @@ Private symbols:
 ## Module: simple_opt_powell
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_powell.f90`
+- `main/opt/simple_opt_powell.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11744,7 +11849,7 @@ Private symbols:
 ## Module: simple_opt_pr_cg
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_pr_cg.f90`
+- `main/opt/simple_opt_pr_cg.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11768,7 +11873,7 @@ Private symbols:
 ## Module: simple_opt_simplex
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_simplex.f90`
+- `main/opt/simple_opt_simplex.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11789,7 +11894,7 @@ Private symbols:
 ## Module: simple_opt_spec
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_spec.f90`
+- `main/opt/simple_opt_spec.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11834,7 +11939,7 @@ Private symbols:
 ## Module: simple_opt_stde
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_stde.f90`
+- `main/opt/simple_opt_stde.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11858,7 +11963,7 @@ Private symbols:
 ## Module: simple_opt_subs
 
 Files:
-- `../scripts/../src/main/opt/simple_opt_subs.f90`
+- `main/opt/simple_opt_subs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11882,7 +11987,7 @@ Private symbols:
 ## Module: simple_optimizer
 
 Files:
-- `../scripts/../src/main/opt/simple_optimizer.f90`
+- `main/opt/simple_optimizer.f90`
 
 Uses:
 - `simple_opt_spec`
@@ -11899,7 +12004,7 @@ Private symbols:
 ## Module: simple_ori
 
 Files:
-- `../scripts/../src/main/ori/simple_ori.f90`
+- `main/ori/simple_ori.f90`
 
 Uses:
 - `simple_ori_api`
@@ -11911,7 +12016,7 @@ Public symbols:
 ## Module: simple_ori_api
 
 Files:
-- `../scripts/../src/main/apis/simple_ori_api.f90`
+- `main/apis/simple_ori_api.f90`
 
 Uses:
 - `json_kinds`
@@ -11940,7 +12045,7 @@ Uses:
 ## Module: simple_ori_tester
 
 Files:
-- `../scripts/../src/main/ori/simple_ori_tester.f90`
+- `main/ori/simple_ori_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -11979,7 +12084,7 @@ Private symbols:
 ## Module: simple_ori_utils
 
 Files:
-- `../scripts/../src/main/ori/simple_ori_utils.f90`
+- `main/ori/simple_ori_utils.f90`
 
 Uses:
 - `simple_defs`
@@ -12006,7 +12111,7 @@ Private symbols:
 ## Module: simple_oris
 
 Files:
-- `../scripts/../src/main/ori/simple_oris.f90`
+- `main/ori/simple_oris.f90`
 
 Uses:
 - `simple_ori`
@@ -12019,7 +12124,7 @@ Public symbols:
 ## Module: simple_oris_tester
 
 Files:
-- `../scripts/../src/main/ori/simple_oris_tester.f90`
+- `main/ori/simple_oris_tester.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12045,7 +12150,7 @@ Private symbols:
 ## Module: simple_parameters
 
 Files:
-- `../scripts/../src/main/params/simple_parameters.f90`
+- `main/params/simple_parameters.f90`
 
 Uses:
 - `simple_atoms`
@@ -12063,7 +12168,7 @@ Public symbols:
 ## Module: simple_parameters_registry
 
 Files:
-- `../scripts/../src/main/params/simple_parameters_registry.f90`
+- `main/params/simple_parameters_registry.f90`
 
 Uses:
 - `simple_cmdline`
@@ -12098,7 +12203,7 @@ Private symbols:
 ## Module: simple_particle_extractor
 
 Files:
-- `../scripts/../src/main/simple_particle_extractor.f90`
+- `main/simple_particle_extractor.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12131,7 +12236,7 @@ Private symbols:
 ## Module: simple_pca
 
 Files:
-- `../scripts/../src/main/pca/simple_pca.f90`
+- `main/pca/simple_pca.f90`
 
 Public symbols:
 - `pca` — type
@@ -12147,7 +12252,7 @@ Private symbols:
 ## Module: simple_pca_svd
 
 Files:
-- `../scripts/../src/main/pca/simple_pca_svd.f90`
+- `main/pca/simple_pca_svd.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12169,7 +12274,7 @@ Private symbols:
 ## Module: simple_pcg_pose_polisher
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_pcg_pose_polisher.f90`
+- `main/strategies/search/simple_pcg_pose_polisher.f90`
 
 Uses:
 - `ieee_arithmetic`
@@ -12189,7 +12294,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_base
 
 Files:
-- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_base.f90`
+- `utils/persistent_worker/message/simple_persistent_worker_message_base.f90`
 
 Public symbols:
 - `qsys_persistent_worker_message_base` — type
@@ -12203,7 +12308,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_heartbeat
 
 Files:
-- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_heartbeat.f90`
+- `utils/persistent_worker/message/simple_persistent_worker_message_heartbeat.f90`
 
 Uses:
 - `simple_persistent_worker_message_base`
@@ -12221,7 +12326,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_status
 
 Files:
-- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_status.f90`
+- `utils/persistent_worker/message/simple_persistent_worker_message_status.f90`
 
 Uses:
 - `simple_defs`
@@ -12240,7 +12345,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_task
 
 Files:
-- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_task.f90`
+- `utils/persistent_worker/message/simple_persistent_worker_message_task.f90`
 
 Uses:
 - `simple_defs`
@@ -12259,7 +12364,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_terminate
 
 Files:
-- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_terminate.f90`
+- `utils/persistent_worker/message/simple_persistent_worker_message_terminate.f90`
 
 Uses:
 - `simple_defs`
@@ -12278,7 +12383,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_tester
 
 Files:
-- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_tester.f90`
+- `utils/persistent_worker/message/simple_persistent_worker_message_tester.f90`
 
 Uses:
 - `simple_persistent_worker_message_base`
@@ -12304,13 +12409,13 @@ Private symbols:
 ## Module: simple_persistent_worker_message_types
 
 Files:
-- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_types.f90`
+- `utils/persistent_worker/message/simple_persistent_worker_message_types.f90`
 
 ---
 ## Module: simple_persistent_worker_server
 
 Files:
-- `../scripts/../src/utils/persistent_worker/simple_persistent_worker_server.f90`
+- `utils/persistent_worker/simple_persistent_worker_server.f90`
 
 Uses:
 - `iso_c_binding`
@@ -12355,7 +12460,7 @@ Private symbols:
 ## Module: simple_persistent_worker_server_tester
 
 Files:
-- `../scripts/../src/utils/persistent_worker/simple_persistent_worker_server_tester.f90`
+- `utils/persistent_worker/simple_persistent_worker_server_tester.f90`
 
 Uses:
 - `simple_persistent_worker_message_task`
@@ -12386,7 +12491,7 @@ Private symbols:
 ## Module: simple_pftc_api
 
 Files:
-- `../scripts/../src/main/apis/simple_pftc_api.f90`
+- `main/apis/simple_pftc_api.f90`
 
 Uses:
 - `gnufor2`
@@ -12404,7 +12509,7 @@ Uses:
 ## Module: simple_pftc_shsrch_grad
 
 Files:
-- `../scripts/../src/main/pftc/simple_pftc_shsrch_grad.f90`
+- `main/pftc/simple_pftc_shsrch_grad.f90`
 
 Uses:
 - `iso_fortran_env`
@@ -12447,7 +12552,7 @@ Private symbols:
 ## Module: simple_pftc_srch_api
 
 Files:
-- `../scripts/../src/main/apis/simple_pftc_srch_api.f90`
+- `main/apis/simple_pftc_srch_api.f90`
 
 Uses:
 - `simple_class_frcs`
@@ -12469,7 +12574,7 @@ Uses:
 ## Module: simple_pick_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_pick_strategy.f90`
+- `main/strategies/parallelization/simple_pick_strategy.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -12518,7 +12623,7 @@ Private symbols:
 ## Module: simple_picker_iter
 
 Files:
-- `../scripts/../src/main/pick/simple_picker_iter.f90`
+- `main/pick/simple_picker_iter.f90`
 
 Uses:
 - `simple_cmdline`
@@ -12539,7 +12644,7 @@ Private symbols:
 ## Module: simple_picker_utils
 
 Files:
-- `../scripts/../src/main/pick/simple_picker_utils.f90`
+- `main/pick/simple_picker_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12561,7 +12666,7 @@ Public symbols:
 ## Module: simple_pickref
 
 Files:
-- `../scripts/../src/main/pick/simple_pickref.f90`
+- `main/pick/simple_pickref.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12599,7 +12704,7 @@ Private symbols:
 ## Module: simple_pickref_corr_batch
 
 Files:
-- `../scripts/../src/main/pick/simple_pickref_corr_batch.f90`
+- `main/pick/simple_pickref_corr_batch.f90`
 
 Uses:
 - `simple_defs`
@@ -12620,7 +12725,7 @@ Private symbols:
 ## Module: simple_pickseg
 
 Files:
-- `../scripts/../src/main/pick/simple_pickseg.f90`
+- `main/pick/simple_pickseg.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -12644,7 +12749,7 @@ Private symbols:
 ## Module: simple_picksegdiam
 
 Files:
-- `../scripts/../src/main/pick/simple_picksegdiam.f90`
+- `main/pick/simple_picksegdiam.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12669,7 +12774,7 @@ Private symbols:
 ## Module: simple_polarft_calc
 
 Files:
-- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
+- `main/pftc/simple_polarft_calc.f90`
 
 Uses:
 - `simple_pftc_api`
@@ -12681,7 +12786,7 @@ Public symbols:
 ## Module: simple_ppca
 
 Files:
-- `../scripts/../src/main/pca/simple_ppca.f90`
+- `main/pca/simple_ppca.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12711,7 +12816,7 @@ Private symbols:
 ## Module: simple_preprocess_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_preprocess_strategy.f90`
+- `main/strategies/parallelization/simple_preprocess_strategy.f90`
 
 Uses:
 - `fox_dom`
@@ -12754,7 +12859,7 @@ Private symbols:
 ## Module: simple_private_exec_api
 
 Files:
-- `../scripts/../src/main/apis/simple_private_exec_api.f90`
+- `main/apis/simple_private_exec_api.f90`
 
 Uses:
 - `simple_cmdline`
@@ -12793,7 +12898,7 @@ Uses:
 ## Module: simple_private_prgs
 
 Files:
-- `../scripts/../src/utils/simple_private_prgs.f90`
+- `utils/simple_private_prgs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12818,7 +12923,7 @@ Private symbols:
 ## Module: simple_procimgstk
 
 Files:
-- `../scripts/../src/utils/simple_procimgstk.f90`
+- `utils/simple_procimgstk.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -12864,7 +12969,7 @@ Public symbols:
 ## Module: simple_progress
 
 Files:
-- `../scripts/../src/utils/simple_progress.f90`
+- `utils/simple_progress.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12884,7 +12989,7 @@ Public symbols:
 ## Module: simple_project_merge_tester
 
 Files:
-- `../scripts/../src/main/project/simple_project_merge_tester.f90`
+- `main/project/simple_project_merge_tester.f90`
 
 Uses:
 - `simple_oris`
@@ -12913,7 +13018,7 @@ Private symbols:
 ## Module: simple_projector
 
 Files:
-- `../scripts/../src/main/image/simple_projector.f90`
+- `main/image/simple_projector.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12936,7 +13041,7 @@ Private symbols:
 ## Module: simple_projector_pft
 
 Files:
-- `../scripts/../src/main/image/simple_projector_pft.f90`
+- `main/image/simple_projector_pft.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12951,7 +13056,7 @@ Public symbols:
 ## Module: simple_projector_pft_batch
 
 Files:
-- `../scripts/../src/main/image/simple_projector_pft_batch.f90`
+- `main/image/simple_projector_pft_batch.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12971,7 +13076,7 @@ Private symbols:
 ## Module: simple_projfile_utils
 
 Files:
-- `../scripts/../src/fileio/simple_projfile_utils.f90`
+- `fileio/simple_projfile_utils.f90`
 
 Uses:
 - `simple_class_frcs`
@@ -13019,7 +13124,7 @@ Public symbols:
 ## Module: simple_pspec_thumb_iter
 
 Files:
-- `../scripts/../src/main/simple_pspec_thumb_iter.f90`
+- `main/simple_pspec_thumb_iter.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13037,7 +13142,7 @@ Private symbols:
 ## Module: simple_pspecs
 
 Files:
-- `../scripts/../src/main/simple_pspecs.f90`
+- `main/simple_pspecs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13056,7 +13161,7 @@ Private symbols:
 ## Module: simple_ptcl_cache
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_ptcl_cache.f90`
+- `main/strategies/search/simple_ptcl_cache.f90`
 
 Uses:
 - `simple_builder`
@@ -13096,7 +13201,7 @@ Private symbols:
 ## Module: simple_ptcl_sieve
 
 Files:
-- `../scripts/../src/main/sieve/simple_ptcl_sieve.f90`
+- `main/sieve/simple_ptcl_sieve.f90`
 
 Uses:
 - `simple_cavg_quality_analysis`
@@ -13164,7 +13269,7 @@ Private symbols:
 ## Module: simple_ptcl_sieve_tester
 
 Files:
-- `../scripts/../src/main/sieve/simple_ptcl_sieve_tester.f90`
+- `main/sieve/simple_ptcl_sieve_tester.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13196,7 +13301,7 @@ Private symbols:
 ## Module: simple_ptcl_sieve_utils
 
 Files:
-- `../scripts/../src/main/sieve/simple_ptcl_sieve_utils.f90`
+- `main/sieve/simple_ptcl_sieve_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13215,7 +13320,7 @@ Public symbols:
 ## Module: simple_qsys_base
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_base.f90`
+- `utils/qsys/simple_qsys_base.f90`
 
 Uses:
 - `simple_chash`
@@ -13235,7 +13340,7 @@ Private symbols:
 ## Module: simple_qsys_coarray
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_coarray.f90`
+- `utils/qsys/simple_qsys_coarray.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13255,7 +13360,7 @@ Private symbols:
 ## Module: simple_qsys_ctrl
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_ctrl.f90`
+- `utils/qsys/simple_qsys_ctrl.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13278,7 +13383,7 @@ Private symbols:
 ## Module: simple_qsys_env
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_env.f90`
+- `utils/qsys/simple_qsys_env.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13328,7 +13433,7 @@ Private symbols:
 ## Module: simple_qsys_factory
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_factory.f90`
+- `utils/qsys/simple_qsys_factory.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13352,7 +13457,7 @@ Private symbols:
 ## Module: simple_qsys_funs
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_funs.f90`
+- `utils/qsys/simple_qsys_funs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13362,7 +13467,7 @@ Uses:
 ## Module: simple_qsys_local
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_local.f90`
+- `utils/qsys/simple_qsys_local.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13382,7 +13487,7 @@ Private symbols:
 ## Module: simple_qsys_lsf
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_lsf.f90`
+- `utils/qsys/simple_qsys_lsf.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13402,7 +13507,7 @@ Private symbols:
 ## Module: simple_qsys_pbs
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_pbs.f90`
+- `utils/qsys/simple_qsys_pbs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13423,7 +13528,7 @@ Private symbols:
 ## Module: simple_qsys_persistent_worker
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_persistent_worker.f90`
+- `utils/qsys/simple_qsys_persistent_worker.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13444,7 +13549,7 @@ Private symbols:
 ## Module: simple_qsys_sge
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_sge.f90`
+- `utils/qsys/simple_qsys_sge.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13464,7 +13569,7 @@ Private symbols:
 ## Module: simple_qsys_slurm
 
 Files:
-- `../scripts/../src/utils/qsys/simple_qsys_slurm.f90`
+- `utils/qsys/simple_qsys_slurm.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13484,7 +13589,7 @@ Private symbols:
 ## Module: simple_r8lib
 
 Files:
-- `../scripts/../src/utils/math/simple_r8lib.f90`
+- `utils/math/simple_r8lib.f90`
 
 Public symbols:
 - `r8mat_cholesky_factor` — subroutine
@@ -13498,7 +13603,7 @@ Private symbols:
 ## Module: simple_ran_tabu
 
 Files:
-- `../scripts/../src/utils/math/simple_ran_tabu.f90`
+- `utils/math/simple_ran_tabu.f90`
 
 Uses:
 - `simple_defs`
@@ -13512,7 +13617,7 @@ Public symbols:
 ## Module: simple_rec3D_pcg_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90`
+- `main/strategies/parallelization/simple_rec3D_pcg_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -13525,7 +13630,6 @@ Uses:
 - `simple_math_ft`
 - `simple_nu_filter`
 - `simple_parameters`
-- `simple_ptcl_cache`
 - `simple_reconstructor_pcg`
 - `simple_refine3d_fnames`
 - `simple_sigma2_files`
@@ -13557,6 +13661,7 @@ Private symbols:
 - `load_weighted` — subroutine
 - `ml_shrinkage_filter` — subroutine
 - `new_reduction` — subroutine
+- `nu_evidence_cache_entry` — type
 - `override_ml_warm_start_from_previous` — subroutine
 - `pcg_chain_provenance` — function
 - `pcg_raw_provenance` — function
@@ -13586,7 +13691,7 @@ Private symbols:
 ## Module: simple_rec3D_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_rec3D_strategy.f90`
+- `main/strategies/parallelization/simple_rec3D_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -13631,7 +13736,7 @@ Private symbols:
 ## Module: simple_rec_list
 
 Files:
-- `../scripts/../src/utils/structs/simple_rec_list.f90`
+- `utils/structs/simple_rec_list.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13688,7 +13793,7 @@ Private symbols:
 ## Module: simple_rec_list_tester
 
 Files:
-- `../scripts/../src/utils/structs/simple_rec_list_tester.f90`
+- `utils/structs/simple_rec_list_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -13717,7 +13822,7 @@ Private symbols:
 ## Module: simple_reconstructor
 
 Files:
-- `../scripts/../src/main/volume/simple_reconstructor.f90`
+- `main/volume/simple_reconstructor.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13782,7 +13887,7 @@ Private symbols:
 ## Module: simple_reconstructor_openmpoffload
 
 Files:
-- `../scripts/../src/main/volume/simple_reconstructor_openmpoffload.f90`
+- `main/volume/simple_reconstructor_openmpoffload.f90`
 
 Uses:
 - `simple_builder`
@@ -13808,9 +13913,10 @@ Private symbols:
 ## Module: simple_reconstructor_pcg
 
 Files:
-- `../scripts/../src/main/volume/simple_reconstructor_pcg.f90`
+- `main/volume/simple_reconstructor_pcg.f90`
 
 Uses:
+- `simple_cartesian_fourier`
 - `simple_core_module_api`
 - `simple_ctf`
 - `simple_gridding`
@@ -13845,7 +13951,6 @@ Private symbols:
 - `begin_reduction` — subroutine
 - `build_env` — subroutine
 - `build_hk_luts` — subroutine
-- `build_kb_envelope_1d` — subroutine
 - `build_kernel` — subroutine
 - `build_ml_prior_from_density` — subroutine
 - `build_operators` — subroutine
@@ -13854,7 +13959,6 @@ Private symbols:
 - `calibrate_kernel` — subroutine
 - `compare_raw_accum` — subroutine
 - `count_stencil_switches` — function
-- `crop_vol` — function
 - `deapod_mul` — subroutine
 - `dot_real_volume` — function
 - `end_accum` — subroutine
@@ -13868,7 +13972,6 @@ Private symbols:
 - `fold_and_ifft` — function
 - `forward_plane` — subroutine
 - `fourier_dot` — function
-- `gather_window_grad` — subroutine
 - `get_env` — function
 - `get_fourier_workspace_lims2` — function
 - `get_invenv` — function
@@ -13884,7 +13987,6 @@ Private symbols:
 - `mask_mul` — subroutine
 - `measure_kernel_scale` — function
 - `new` — subroutine
-- `pad_vol` — function
 - `pose_normal_terms` — subroutine
 - `pose_objective_gradient` — subroutine
 - `precond_from_accum` — subroutine
@@ -13934,7 +14036,7 @@ Private symbols:
 ## Module: simple_reextract_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_reextract_strategy.f90`
+- `main/strategies/parallelization/simple_reextract_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -13976,7 +14078,7 @@ Private symbols:
 ## Module: simple_refine3D_fnames
 
 Files:
-- `../scripts/../src/defs/simple_refine3D_fnames.f90`
+- `defs/simple_refine3D_fnames.f90`
 
 Uses:
 - `simple_defs_fname`
@@ -13987,10 +14089,26 @@ Public symbols:
 - `refine3D_partial_rec_glob` — function
 
 ---
+## Module: simple_refine3D_stage_plan
+
+Files:
+- `main/simple_refine3D_stage_plan.f90`
+
+Uses:
+- `simple_error`
+- `simple_estimate_ssnr`
+- `simple_math_ft`
+- `simple_type_defs`
+
+Public symbols:
+- `plan_refine3D_frequency_stages` — subroutine
+- `refine3D_stage_plan_entry` — type
+
+---
 ## Module: simple_refine3D_strategy
 
 Files:
-- `../scripts/../src/main/strategies/parallelization/simple_refine3D_strategy.f90`
+- `main/strategies/parallelization/simple_refine3D_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -14012,7 +14130,6 @@ Uses:
 - `simple_matcher_refvol_utils`
 - `simple_matcher_smpl_and_lplims`
 - `simple_parameters`
-- `simple_ptcl_cache`
 - `simple_qsys_env`
 - `simple_qsys_funs`
 - `simple_rec3d_pcg_strategy`
@@ -14064,7 +14181,7 @@ Private symbols:
 ## Module: simple_relion
 
 Files:
-- `../scripts/../src/main/star/simple_relion.f90`
+- `main/star/simple_relion.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -14090,7 +14207,7 @@ Private symbols:
 ## Module: simple_rnd
 
 Files:
-- `../scripts/../src/utils/math/simple_rnd.f90`
+- `utils/math/simple_rnd.f90`
 
 Uses:
 - `simple_defs`
@@ -14101,7 +14218,7 @@ Uses:
 ## Module: simple_sauron
 
 Files:
-- `../scripts/../src/utils/simple_sauron.f90`
+- `utils/simple_sauron.f90`
 
 Uses:
 - `simple_chash`
@@ -14114,7 +14231,7 @@ Uses:
 ## Module: simple_segmentation
 
 Files:
-- `../scripts/../src/utils/simple_segmentation.f90`
+- `utils/simple_segmentation.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14126,7 +14243,7 @@ Uses:
 ## Module: simple_sigma2_binfile
 
 Files:
-- `../scripts/../src/fileio/simple_sigma2_binfile.f90`
+- `fileio/simple_sigma2_binfile.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14147,7 +14264,7 @@ Private symbols:
 ## Module: simple_sigma2_files
 
 Files:
-- `../scripts/../src/fileio/simple_sigma2_files.f90`
+- `fileio/simple_sigma2_files.f90`
 
 Uses:
 - `simple_cmdline`
@@ -14169,7 +14286,7 @@ Private symbols:
 ## Module: simple_simple_volinterp
 
 Files:
-- `../scripts/../src/main/volume/simple_volinterp.f90`
+- `main/volume/simple_volinterp.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14185,7 +14302,7 @@ Public symbols:
 ## Module: simple_simulator
 
 Files:
-- `../scripts/../src/main/simple_simulator.f90`
+- `main/simple_simulator.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14199,7 +14316,7 @@ Public symbols:
 ## Module: simple_socket_comm
 
 Files:
-- `../scripts/../src/utils/comm/simple_socket_comm.f90`
+- `utils/comm/simple_socket_comm.f90`
 
 Public symbols:
 - `simple_socket` — type
@@ -14235,7 +14352,7 @@ Private symbols:
 ## Module: simple_sp_project
 
 Files:
-- `../scripts/../src/main/project/simple_sp_project.f90`
+- `main/project/simple_sp_project.f90`
 
 Uses:
 - `json_kinds`
@@ -14257,7 +14374,7 @@ Uses:
 ## Module: simple_srch_sort_loc
 
 Files:
-- `../scripts/../src/utils/math/simple_srch_sort_loc.f90`
+- `utils/math/simple_srch_sort_loc.f90`
 
 Uses:
 - `simple_defs`
@@ -14267,7 +14384,7 @@ Uses:
 ## Module: simple_srchspace_map
 
 Files:
-- `../scripts/../src/utils/simple_srchspace_map.f90`
+- `utils/simple_srchspace_map.f90`
 
 Uses:
 - `simple_error`
@@ -14288,7 +14405,7 @@ Private symbols:
 ## Module: simple_srchspace_map2D_io
 
 Files:
-- `../scripts/../src/fileio/simple_srchspace_map2D_io.f90`
+- `fileio/simple_srchspace_map2D_io.f90`
 
 Uses:
 - `simple_error`
@@ -14305,7 +14422,7 @@ Public symbols:
 ## Module: simple_stack_io
 
 Files:
-- `../scripts/../src/fileio/simple_stack_io.f90`
+- `fileio/simple_stack_io.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14330,7 +14447,7 @@ Private symbols:
 ## Module: simple_stackops
 
 Files:
-- `../scripts/../src/utils/simple_stackops.f90`
+- `utils/simple_stackops.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14351,7 +14468,7 @@ Private symbols:
 ## Module: simple_starfile
 
 Files:
-- `../scripts/../src/main/star/simple_starfile.f90`
+- `main/star/simple_starfile.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14373,7 +14490,7 @@ Private symbols:
 ## Module: simple_starfile_tester
 
 Files:
-- `../scripts/../src/main/star/simple_starfile_tester.f90`
+- `main/star/simple_starfile_tester.f90`
 
 Uses:
 - `omp_lib`
@@ -14419,7 +14536,7 @@ Private symbols:
 ## Module: simple_starfile_wrappers
 
 Files:
-- `../scripts/../src/main/star/simple_starfile_wrapper.f90`
+- `main/star/simple_starfile_wrapper.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14496,7 +14613,7 @@ Private symbols:
 ## Module: simple_starproject
 
 Files:
-- `../scripts/../src/main/star/simple_starproject.f90`
+- `main/star/simple_starproject.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -14547,7 +14664,7 @@ Private symbols:
 ## Module: simple_starproject_stream
 
 Files:
-- `../scripts/../src/main/star/simple_starproject_stream.f90`
+- `main/star/simple_starproject_stream.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -14592,7 +14709,7 @@ Private symbols:
 ## Module: simple_starproject_tester
 
 Files:
-- `../scripts/../src/main/star/simple_starproject_tester.f90`
+- `main/star/simple_starproject_tester.f90`
 
 Uses:
 - `omp_lib`
@@ -14643,7 +14760,7 @@ Private symbols:
 ## Module: simple_starproject_utils
 
 Files:
-- `../scripts/../src/main/star/simple_starproject_utils.f90`
+- `main/star/simple_starproject_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14663,7 +14780,7 @@ Public symbols:
 ## Module: simple_stat
 
 Files:
-- `../scripts/../src/utils/math/simple_stat.f90`
+- `utils/math/simple_stat.f90`
 
 Uses:
 - `simple_defs`
@@ -14676,7 +14793,7 @@ Uses:
 ## Module: simple_strategy2D
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D.f90`
+- `main/strategies/search/simple_strategy2D.f90`
 
 Uses:
 - `simple_builder`
@@ -14697,7 +14814,7 @@ Private symbols:
 ## Module: simple_strategy2D_alloc
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_alloc.f90`
+- `main/strategies/search/simple_strategy2D_alloc.f90`
 
 Uses:
 - `simple_eul_prob_tab_utils`
@@ -14714,7 +14831,7 @@ Public symbols:
 ## Module: simple_strategy2D_eval
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_eval.f90`
+- `main/strategies/search/simple_strategy2D_eval.f90`
 
 Uses:
 - `simple_builder`
@@ -14736,7 +14853,7 @@ Private symbols:
 ## Module: simple_strategy2D_greedy
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_greedy.f90`
+- `main/strategies/search/simple_strategy2D_greedy.f90`
 
 Uses:
 - `simple_builder`
@@ -14759,7 +14876,7 @@ Private symbols:
 ## Module: simple_strategy2D_greedy_smpl
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_greedy_smpl.f90`
+- `main/strategies/search/simple_strategy2D_greedy_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -14783,7 +14900,7 @@ Private symbols:
 ## Module: simple_strategy2D_inpl
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_inpl.f90`
+- `main/strategies/search/simple_strategy2D_inpl.f90`
 
 Uses:
 - `simple_builder`
@@ -14803,7 +14920,7 @@ Private symbols:
 ## Module: simple_strategy2D_inpl_smpl
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_inpl_smpl.f90`
+- `main/strategies/search/simple_strategy2D_inpl_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -14825,7 +14942,7 @@ Private symbols:
 ## Module: simple_strategy2D_matcher
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_matcher.f90`
+- `main/strategies/search/simple_strategy2D_matcher.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -14885,7 +15002,7 @@ Private symbols:
 ## Module: simple_strategy2D_prob
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_prob.f90`
+- `main/strategies/search/simple_strategy2D_prob.f90`
 
 Uses:
 - `simple_builder`
@@ -14908,7 +15025,7 @@ Private symbols:
 ## Module: simple_strategy2D_snhc
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_snhc.f90`
+- `main/strategies/search/simple_strategy2D_snhc.f90`
 
 Uses:
 - `simple_builder`
@@ -14929,7 +15046,7 @@ Private symbols:
 ## Module: simple_strategy2D_snhc_smpl
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_snhc_smpl.f90`
+- `main/strategies/search/simple_strategy2D_snhc_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -14951,7 +15068,7 @@ Private symbols:
 ## Module: simple_strategy2D_snhc_smpl_many
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_snhc_smpl_many.f90`
+- `main/strategies/search/simple_strategy2D_snhc_smpl_many.f90`
 
 Uses:
 - `simple_builder`
@@ -14973,7 +15090,7 @@ Private symbols:
 ## Module: simple_strategy2D_srch
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_srch.f90`
+- `main/strategies/search/simple_strategy2D_srch.f90`
 
 Uses:
 - `simple_builder`
@@ -15000,7 +15117,7 @@ Private symbols:
 ## Module: simple_strategy2D_tseries
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_tseries.f90`
+- `main/strategies/search/simple_strategy2D_tseries.f90`
 
 Uses:
 - `simple_builder`
@@ -15022,7 +15139,7 @@ Private symbols:
 ## Module: simple_strategy2D_utils
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy2D_utils.f90`
+- `main/strategies/search/simple_strategy2D_utils.f90`
 
 Uses:
 - `simple_builder`
@@ -15071,7 +15188,7 @@ Private symbols:
 ## Module: simple_strategy3D
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D.f90`
+- `main/strategies/search/simple_strategy3D.f90`
 
 Uses:
 - `simple_builder`
@@ -15092,7 +15209,7 @@ Private symbols:
 ## Module: simple_strategy3D_alloc
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_alloc.f90`
+- `main/strategies/search/simple_strategy3D_alloc.f90`
 
 Uses:
 - `simple_builder`
@@ -15109,7 +15226,7 @@ Public symbols:
 ## Module: simple_strategy3D_eval
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_eval.f90`
+- `main/strategies/search/simple_strategy3D_eval.f90`
 
 Uses:
 - `simple_builder`
@@ -15133,7 +15250,7 @@ Private symbols:
 ## Module: simple_strategy3D_greedy
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_greedy.f90`
+- `main/strategies/search/simple_strategy3D_greedy.f90`
 
 Uses:
 - `simple_builder`
@@ -15158,7 +15275,7 @@ Private symbols:
 ## Module: simple_strategy3D_greedy_inpl
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_greedy_inpl.f90`
+- `main/strategies/search/simple_strategy3D_greedy_inpl.f90`
 
 Uses:
 - `simple_builder`
@@ -15183,7 +15300,7 @@ Private symbols:
 ## Module: simple_strategy3D_greedy_smpl
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_greedy_smpl.f90`
+- `main/strategies/search/simple_strategy3D_greedy_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -15210,7 +15327,7 @@ Private symbols:
 ## Module: simple_strategy3D_greedy_sub
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_greedy_sub.f90`
+- `main/strategies/search/simple_strategy3D_greedy_sub.f90`
 
 Uses:
 - `simple_builder`
@@ -15237,7 +15354,7 @@ Private symbols:
 ## Module: simple_strategy3D_matcher
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_matcher.f90`
+- `main/strategies/search/simple_strategy3D_matcher.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -15250,7 +15367,6 @@ Uses:
 - `simple_matcher_refvol_utils`
 - `simple_matcher_smpl_and_lplims`
 - `simple_pftc_srch_api`
-- `simple_ptcl_cache`
 - `simple_qsys_funs`
 - `simple_rec3d_pcg_strategy`
 - `simple_refine3d_fnames`
@@ -15288,7 +15404,7 @@ Private symbols:
 ## Module: simple_strategy3D_prob
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_prob.f90`
+- `main/strategies/search/simple_strategy3D_prob.f90`
 
 Uses:
 - `simple_builder`
@@ -15297,7 +15413,6 @@ Uses:
 - `simple_oris`
 - `simple_parameters`
 - `simple_strategy3d`
-- `simple_strategy3d_alloc`
 - `simple_strategy3d_srch`
 - `simple_strategy3d_utils`
 
@@ -15305,7 +15420,6 @@ Public symbols:
 - `strategy3D_prob` — type
 
 Private symbols:
-- `assign_state_fixed` — subroutine
 - `kill_prob` — subroutine
 - `new_prob` — subroutine
 - `oris_assign_prob` — subroutine
@@ -15315,7 +15429,7 @@ Private symbols:
 ## Module: simple_strategy3D_shc
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_shc.f90`
+- `main/strategies/search/simple_strategy3D_shc.f90`
 
 Uses:
 - `simple_builder`
@@ -15340,7 +15454,7 @@ Private symbols:
 ## Module: simple_strategy3D_shc_smpl
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_shc_smpl.f90`
+- `main/strategies/search/simple_strategy3D_shc_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -15367,7 +15481,7 @@ Private symbols:
 ## Module: simple_strategy3D_snhc_smpl
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_snhc_smpl.f90`
+- `main/strategies/search/simple_strategy3D_snhc_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -15395,7 +15509,7 @@ Private symbols:
 ## Module: simple_strategy3D_srch
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_srch.f90`
+- `main/strategies/search/simple_strategy3D_srch.f90`
 
 Uses:
 - `simple_builder`
@@ -15424,7 +15538,7 @@ Private symbols:
 ## Module: simple_strategy3D_utils
 
 Files:
-- `../scripts/../src/main/strategies/search/simple_strategy3D_utils.f90`
+- `main/strategies/search/simple_strategy3D_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -15440,7 +15554,7 @@ Public symbols:
 ## Module: simple_stream2D_state
 
 Files:
-- `../scripts/../src/main/stream/simple_stream2D_state.f90`
+- `main/stream/simple_stream2D_state.f90`
 
 Uses:
 - `json_module`
@@ -15455,7 +15569,7 @@ Uses:
 ## Module: simple_stream_abinitio2D_chunks
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_abinitio2D_chunks.f90`
+- `main/stream/simple_stream_abinitio2D_chunks.f90`
 
 Uses:
 - `simple_stream_api`
@@ -15472,7 +15586,7 @@ Public symbols:
 ## Module: simple_stream_api
 
 Files:
-- `../scripts/../src/main/apis/simple_stream_api.f90`
+- `main/apis/simple_stream_api.f90`
 
 Uses:
 - `json_kinds`
@@ -15508,7 +15622,7 @@ Uses:
 ## Module: simple_stream_chunk
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_chunk.f90`
+- `main/stream/simple_stream_chunk.f90`
 
 Uses:
 - `simple_cmdline`
@@ -15547,7 +15661,7 @@ Private symbols:
 ## Module: simple_stream_chunk2D_utils
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_chunk2D_utils.f90`
+- `main/stream/simple_stream_chunk2D_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -15574,7 +15688,7 @@ Private symbols:
 ## Module: simple_stream_cluster2D_utils
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_cluster2D_utils.f90`
+- `main/stream/simple_stream_cluster2D_utils.f90`
 
 Uses:
 - `json_kinds`
@@ -15624,7 +15738,7 @@ Private symbols:
 ## Module: simple_stream_communicator
 
 Files:
-- `../scripts/../src/utils/comm/simple_stream_communicator.f90`
+- `utils/comm/simple_stream_communicator.f90`
 
 Uses:
 - `json_kinds`
@@ -15666,7 +15780,7 @@ Private symbols:
 ## Module: simple_stream_p00_master
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_p00_master.f90`
+- `main/stream/simple_stream_p00_master.f90`
 
 Uses:
 - `simple_forked_process`
@@ -15737,7 +15851,7 @@ Private symbols:
 ## Module: simple_stream_p01_preprocess_new
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_p01_preprocess_new.f90`
+- `main/stream/simple_stream_p01_preprocess_new.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -15772,7 +15886,7 @@ Private symbols:
 ## Module: simple_stream_p02_assign_optics_new
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_p02_assign_optics_new.f90`
+- `main/stream/simple_stream_p02_assign_optics_new.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -15793,7 +15907,7 @@ Private symbols:
 ## Module: simple_stream_p03_initial_analysis
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_p03_initial_analysis.f90`
+- `main/stream/simple_stream_p03_initial_analysis.f90`
 
 Uses:
 - `simple_abinitio_utils`
@@ -15859,7 +15973,7 @@ Private symbols:
 ## Module: simple_stream_p04_refpick_extract_new
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_p04_refpick_extract_new.f90`
+- `main/stream/simple_stream_p04_refpick_extract_new.f90`
 
 Uses:
 - `simple_commanders_pick`
@@ -15891,7 +16005,7 @@ Private symbols:
 ## Module: simple_stream_p05_sieve_cavgs_new
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_p05_sieve_cavgs_new.f90`
+- `main/stream/simple_stream_p05_sieve_cavgs_new.f90`
 
 Uses:
 - `simple_fileio`
@@ -15917,7 +16031,7 @@ Private symbols:
 ## Module: simple_stream_p06_pool2D_new
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_p06_pool2D_new.f90`
+- `main/stream/simple_stream_p06_pool2D_new.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -15947,7 +16061,7 @@ Private symbols:
 ## Module: simple_stream_pool2D_utils
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_pool2D_utils.f90`
+- `main/stream/simple_stream_pool2D_utils.f90`
 
 Uses:
 - `simple_classaverager`
@@ -15983,13 +16097,13 @@ Private symbols:
 ## Module: simple_stream_state
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_state.f90`
+- `main/stream/simple_stream_state.f90`
 
 ---
 ## Module: simple_stream_utils
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_utils.f90`
+- `main/stream/simple_stream_utils.f90`
 
 Uses:
 - `json_kinds`
@@ -16024,7 +16138,7 @@ Public symbols:
 ## Module: simple_stream_watcher
 
 Files:
-- `../scripts/../src/main/stream/simple_stream_watcher.f90`
+- `main/stream/simple_stream_watcher.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -16034,7 +16148,7 @@ Uses:
 ## Module: simple_string
 
 Files:
-- `../scripts/../src/utils/simple_string.f90`
+- `utils/simple_string.f90`
 
 Uses:
 - `simple_defs`
@@ -16045,7 +16159,7 @@ Uses:
 ## Module: simple_string_tester
 
 Files:
-- `../scripts/../src/utils/simple_string_tester.f90`
+- `utils/simple_string_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -16082,7 +16196,7 @@ Private symbols:
 ## Module: simple_string_utils
 
 Files:
-- `../scripts/../src/utils/simple_string_utils.f90`
+- `utils/simple_string_utils.f90`
 
 Uses:
 - `simple_defs`
@@ -16094,7 +16208,7 @@ Uses:
 ## Module: simple_sym
 
 Files:
-- `../scripts/../src/main/simple_sym.f90`
+- `main/simple_sym.f90`
 
 Uses:
 - `simple_ori`
@@ -16105,7 +16219,7 @@ Uses:
 ## Module: simple_symanalyzer
 
 Files:
-- `../scripts/../src/main/simple_symanalyzer.f90`
+- `main/simple_symanalyzer.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -16129,7 +16243,7 @@ Private symbols:
 ## Module: simple_syslib
 
 Files:
-- `../scripts/../src/fileio/simple_syslib.f90`
+- `fileio/simple_syslib.f90`
 
 Uses:
 - `iso_c_binding`
@@ -16199,7 +16313,7 @@ Public symbols:
 ## Module: simple_syslib_tester
 
 Files:
-- `../scripts/../src/fileio/simple_syslib_tester.f90`
+- `fileio/simple_syslib_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -16239,7 +16353,7 @@ Private symbols:
 ## Module: simple_tent_smooth
 
 Files:
-- `../scripts/../src/utils/filter/simple_tent_smooth.f90`
+- `utils/filter/simple_tent_smooth.f90`
 
 Public symbols:
 - `box_filter_1d` — subroutine
@@ -16252,7 +16366,7 @@ Public symbols:
 ## Module: simple_test_exec_api
 
 Files:
-- `../scripts/../src/main/apis/simple_test_exec_api.f90`
+- `main/apis/simple_test_exec_api.f90`
 
 Uses:
 - `iso_fortran_env`
@@ -16281,7 +16395,7 @@ Uses:
 ## Module: simple_test_exec_class
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_class.f90`
+- `main/exec/simple_test_exec_class.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16294,7 +16408,7 @@ Public symbols:
 ## Module: simple_test_exec_fft
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_fft.f90`
+- `main/exec/simple_test_exec_fft.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16307,7 +16421,7 @@ Public symbols:
 ## Module: simple_test_exec_geometry
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_geometry.f90`
+- `main/exec/simple_test_exec_geometry.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16320,7 +16434,7 @@ Public symbols:
 ## Module: simple_test_exec_highlevel
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_highlevel.f90`
+- `main/exec/simple_test_exec_highlevel.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16333,7 +16447,7 @@ Public symbols:
 ## Module: simple_test_exec_io
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_io.f90`
+- `main/exec/simple_test_exec_io.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16346,7 +16460,7 @@ Public symbols:
 ## Module: simple_test_exec_masks
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_masks.f90`
+- `main/exec/simple_test_exec_masks.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16359,7 +16473,7 @@ Public symbols:
 ## Module: simple_test_exec_network
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_network.f90`
+- `main/exec/simple_test_exec_network.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16372,7 +16486,7 @@ Public symbols:
 ## Module: simple_test_exec_numerics
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_numerics.f90`
+- `main/exec/simple_test_exec_numerics.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16385,7 +16499,7 @@ Public symbols:
 ## Module: simple_test_exec_optimize
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_optimize.f90`
+- `main/exec/simple_test_exec_optimize.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16398,7 +16512,7 @@ Public symbols:
 ## Module: simple_test_exec_parallel
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_parallel.f90`
+- `main/exec/simple_test_exec_parallel.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16411,7 +16525,7 @@ Public symbols:
 ## Module: simple_test_exec_single
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_single.f90`
+- `main/exec/simple_test_exec_single.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16424,7 +16538,7 @@ Public symbols:
 ## Module: simple_test_exec_stats
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_stats.f90`
+- `main/exec/simple_test_exec_stats.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16437,7 +16551,7 @@ Public symbols:
 ## Module: simple_test_exec_stream
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_stream.f90`
+- `main/exec/simple_test_exec_stream.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16450,7 +16564,7 @@ Public symbols:
 ## Module: simple_test_exec_utils
 
 Files:
-- `../scripts/../src/main/exec/simple_test_exec_utils.f90`
+- `main/exec/simple_test_exec_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16463,7 +16577,7 @@ Public symbols:
 ## Module: simple_test_ui_class
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_class.f90`
+- `main/ui/simple_test/simple_test_ui_class.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16477,7 +16591,7 @@ Public symbols:
 ## Module: simple_test_ui_fft
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_fft.f90`
+- `main/ui/simple_test/simple_test_ui_fft.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16497,7 +16611,7 @@ Public symbols:
 ## Module: simple_test_ui_geometry
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_geometry.f90`
+- `main/ui/simple_test/simple_test_ui_geometry.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16515,7 +16629,7 @@ Public symbols:
 ## Module: simple_test_ui_highlevel
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_highlevel.f90`
+- `main/ui/simple_test/simple_test_ui_highlevel.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16538,7 +16652,7 @@ Public symbols:
 ## Module: simple_test_ui_io
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_io.f90`
+- `main/ui/simple_test/simple_test_ui_io.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16560,7 +16674,7 @@ Public symbols:
 ## Module: simple_test_ui_masks
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_masks.f90`
+- `main/ui/simple_test/simple_test_ui_masks.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16580,7 +16694,7 @@ Public symbols:
 ## Module: simple_test_ui_network
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_network.f90`
+- `main/ui/simple_test/simple_test_ui_network.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16596,7 +16710,7 @@ Public symbols:
 ## Module: simple_test_ui_numerics
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_numerics.f90`
+- `main/ui/simple_test/simple_test_ui_numerics.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16613,7 +16727,7 @@ Public symbols:
 ## Module: simple_test_ui_optimize
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_optimize.f90`
+- `main/ui/simple_test/simple_test_ui_optimize.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16630,7 +16744,7 @@ Public symbols:
 ## Module: simple_test_ui_parallel
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_parallel.f90`
+- `main/ui/simple_test/simple_test_ui_parallel.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16646,7 +16760,7 @@ Public symbols:
 ## Module: simple_test_ui_single
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_single.f90`
+- `main/ui/simple_test/simple_test_ui_single.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16662,7 +16776,7 @@ Public symbols:
 ## Module: simple_test_ui_stats
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_stats.f90`
+- `main/ui/simple_test/simple_test_ui_stats.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16683,7 +16797,7 @@ Public symbols:
 ## Module: simple_test_ui_stream
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_stream.f90`
+- `main/ui/simple_test/simple_test_ui_stream.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16702,7 +16816,7 @@ Public symbols:
 ## Module: simple_test_ui_utils
 
 Files:
-- `../scripts/../src/main/ui/simple_test/simple_test_ui_utils.f90`
+- `main/ui/simple_test/simple_test_ui_utils.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16727,7 +16841,7 @@ Public symbols:
 ## Module: simple_test_utils
 
 Files:
-- `../scripts/../src/utils/simple_test_utils.f90`
+- `utils/simple_test_utils.f90`
 
 Uses:
 - `simple_defs`
@@ -16747,7 +16861,7 @@ Public symbols:
 ## Module: simple_testfuns
 
 Files:
-- `../scripts/../src/utils/math/simple_testfuns.f90`
+- `utils/math/simple_testfuns.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -16792,7 +16906,7 @@ Public symbols:
 ## Module: simple_tifflib
 
 Files:
-- `../scripts/../src/fileio/simple_tifflib.f90`
+- `fileio/simple_tifflib.f90`
 
 Uses:
 - `iso_c_binding`
@@ -16833,7 +16947,7 @@ Public symbols:
 ## Module: simple_timer
 
 Files:
-- `../scripts/../src/utils/simple_timer.f90`
+- `utils/simple_timer.f90`
 
 Uses:
 - `ifport`
@@ -16858,7 +16972,7 @@ Public symbols:
 ## Module: simple_timer_omp
 
 Files:
-- `../scripts/../src/utils/simple_timer_omp.f90`
+- `utils/simple_timer_omp.f90`
 
 Uses:
 - `simple_defs`
@@ -16871,7 +16985,7 @@ Public symbols:
 ## Module: simple_tseries_graphene_subtr
 
 Files:
-- `../scripts/../src/main/nano/simple_tseries_graphene_subtr.f90`
+- `main/nano/simple_tseries_graphene_subtr.f90`
 
 Uses:
 - `simple_atoms`
@@ -16894,7 +17008,7 @@ Private symbols:
 ## Module: simple_type_defs
 
 Files:
-- `../scripts/../src/defs/simple_type_defs.f90`
+- `defs/simple_type_defs.f90`
 
 Uses:
 - `simple_defs`
@@ -16904,7 +17018,7 @@ Uses:
 ## Module: simple_ui
 
 Files:
-- `../scripts/../src/main/ui/simple_ui.f90`
+- `main/ui/simple_ui.f90`
 
 Uses:
 - `json_file_module`
@@ -16946,7 +17060,7 @@ Private symbols:
 ## Module: simple_ui_abinitio3D
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_abinitio3D.f90`
+- `main/ui/simple/simple_ui_abinitio3D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16962,7 +17076,7 @@ Public symbols:
 ## Module: simple_ui_cavgproc
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_cavgproc.f90`
+- `main/ui/simple/simple_ui_cavgproc.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16981,7 +17095,7 @@ Public symbols:
 ## Module: simple_ui_cluster2D
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_cluster2D.f90`
+- `main/ui/simple/simple_ui_cluster2D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17004,7 +17118,7 @@ Public symbols:
 ## Module: simple_ui_denoise
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_denoise.f90`
+- `main/ui/simple/simple_ui_denoise.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17025,7 +17139,7 @@ Public symbols:
 ## Module: simple_ui_descriptor_types
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_descriptor_types.f90`
+- `main/ui/simple_ui_descriptor_types.f90`
 
 Uses:
 - `simple_string`
@@ -17040,7 +17154,7 @@ Private symbols:
 ## Module: simple_ui_dock
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_dock.f90`
+- `main/ui/simple/simple_ui_dock.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17055,7 +17169,7 @@ Public symbols:
 ## Module: simple_ui_filter
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_filter.f90`
+- `main/ui/simple/simple_ui_filter.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17072,7 +17186,7 @@ Public symbols:
 ## Module: simple_ui_hash
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_hash.f90`
+- `main/ui/simple_ui_hash.f90`
 
 Uses:
 - `simple_string`
@@ -17097,7 +17211,7 @@ Private symbols:
 ## Module: simple_ui_image
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_image.f90`
+- `main/ui/simple/simple_ui_image.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17117,7 +17231,7 @@ Public symbols:
 ## Module: simple_ui_mask
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_mask.f90`
+- `main/ui/simple/simple_ui_mask.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17132,7 +17246,7 @@ Public symbols:
 ## Module: simple_ui_modules
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_modules.f90`
+- `main/ui/simple_ui_modules.f90`
 
 Uses:
 - `simple_ansi_ctrls`
@@ -17148,7 +17262,7 @@ Uses:
 ## Module: simple_ui_ori
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_ori.f90`
+- `main/ui/simple/simple_ui_ori.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17164,7 +17278,7 @@ Public symbols:
 ## Module: simple_ui_other
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_other.f90`
+- `main/ui/simple/simple_ui_other.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17180,7 +17294,7 @@ Public symbols:
 ## Module: simple_ui_param
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_param.f90`
+- `main/ui/simple_ui_param.f90`
 
 Uses:
 - `simple_error`
@@ -17203,7 +17317,7 @@ Public symbols:
 ## Module: simple_ui_params_common
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_params_common.f90`
+- `main/ui/simple_ui_params_common.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17217,7 +17331,7 @@ Public symbols:
 ## Module: simple_ui_preproc
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_preproc.f90`
+- `main/ui/simple/simple_ui_preproc.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17238,7 +17352,7 @@ Public symbols:
 ## Module: simple_ui_print
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_print.f90`
+- `main/ui/simple/simple_ui_print.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17255,7 +17369,7 @@ Public symbols:
 ## Module: simple_ui_program
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_program.f90`
+- `main/ui/simple_ui_program.f90`
 
 Uses:
 - `json_module`
@@ -17316,7 +17430,7 @@ Public symbols:
 ## Module: simple_ui_project
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_project.f90`
+- `main/ui/simple/simple_ui_project.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17350,7 +17464,7 @@ Public symbols:
 ## Module: simple_ui_refine3D
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_refine3D.f90`
+- `main/ui/simple/simple_ui_refine3D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17359,18 +17473,18 @@ Public symbols:
 - `construct_refine3D_programs` — subroutine
 - `new_automask` — subroutine
 - `new_bootstrap_rec3D` — subroutine
+- `new_classify3D_refs` — subroutine
 - `new_postprocess` — subroutine
 - `new_reconstruct3D` — subroutine
 - `new_refine3D` — subroutine
 - `new_refine3D_auto` — subroutine
-- `new_refine3D_het` — subroutine
-- `new_refine3D_multi` — subroutine
+- `new_refine3D_states` — subroutine
 
 ---
 ## Module: simple_ui_res
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_res.f90`
+- `main/ui/simple/simple_ui_res.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17384,7 +17498,7 @@ Public symbols:
 ## Module: simple_ui_sim
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_sim.f90`
+- `main/ui/simple/simple_ui_sim.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17401,7 +17515,7 @@ Public symbols:
 ## Module: simple_ui_simple_group
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_simple_group.f90`
+- `main/ui/simple_ui_simple_group.f90`
 
 Uses:
 - `simple_ui_abinitio3d`
@@ -17432,7 +17546,7 @@ Public symbols:
 ## Module: simple_ui_single_group
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_single_group.f90`
+- `main/ui/simple_ui_single_group.f90`
 
 Uses:
 - `simple_ui_hash`
@@ -17451,7 +17565,7 @@ Public symbols:
 ## Module: simple_ui_stream
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_stream.f90`
+- `main/ui/simple/simple_ui_stream.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17470,7 +17584,7 @@ Public symbols:
 ## Module: simple_ui_stream_group
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_stream_group.f90`
+- `main/ui/simple_ui_stream_group.f90`
 
 Uses:
 - `simple_ui_hash`
@@ -17483,7 +17597,7 @@ Public symbols:
 ## Module: simple_ui_sym
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_sym.f90`
+- `main/ui/simple/simple_ui_sym.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17498,7 +17612,7 @@ Public symbols:
 ## Module: simple_ui_test_group
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_test_group.f90`
+- `main/ui/simple_ui_test_group.f90`
 
 Uses:
 - `simple_test_ui_class`
@@ -17524,7 +17638,7 @@ Public symbols:
 ## Module: simple_ui_utils
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_utils.f90`
+- `main/ui/simple_ui_utils.f90`
 
 Uses:
 - `simple_error`
@@ -17538,7 +17652,7 @@ Public symbols:
 ## Module: simple_ui_validate
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_validation.f90`
+- `main/ui/simple/simple_ui_validation.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17553,7 +17667,7 @@ Public symbols:
 ## Module: simple_ui_visibility
 
 Files:
-- `../scripts/../src/main/ui/simple_ui_visibility.f90`
+- `main/ui/simple_ui_visibility.f90`
 
 Public symbols:
 - `ui_visibility_name` — function
@@ -17562,7 +17676,7 @@ Public symbols:
 ## Module: simple_ui_volume
 
 Files:
-- `../scripts/../src/main/ui/simple/simple_ui_volume.f90`
+- `main/ui/simple/simple_ui_volume.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17577,7 +17691,7 @@ Public symbols:
 ## Module: simple_vol_pproc_policy
 
 Files:
-- `../scripts/../src/main/volume/simple_vol_pproc_policy.f90`
+- `main/volume/simple_vol_pproc_policy.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17592,7 +17706,7 @@ Public symbols:
 ## Module: simple_volanalyzer
 
 Files:
-- `../scripts/../src/main/volume/simple_volanalyzer.f90`
+- `main/volume/simple_volanalyzer.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17611,7 +17725,7 @@ Public symbols:
 ## Module: simple_volcluster
 
 Files:
-- `../scripts/../src/main/volume/simple_volcluster.f90`
+- `main/volume/simple_volcluster.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17630,7 +17744,7 @@ Private symbols:
 ## Module: simple_volpft_corrcalc
 
 Files:
-- `../scripts/../src/main/volume/simple_volpft_corrcalc.f90`
+- `main/volume/simple_volpft_corrcalc.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17656,7 +17770,7 @@ Private symbols:
 ## Module: simple_volpft_symsrch
 
 Files:
-- `../scripts/../src/main/volume/simple_volpft_symsrch.f90`
+- `main/volume/simple_volpft_symsrch.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17680,7 +17794,7 @@ Private symbols:
 ## Module: simple_vrefhash
 
 Files:
-- `../scripts/../src/utils/structs/simple_vrefhash.f90`
+- `utils/structs/simple_vrefhash.f90`
 
 Uses:
 - `simple_error`
@@ -17711,7 +17825,7 @@ Private symbols:
 ## Module: simple_vrefhash_tester
 
 Files:
-- `../scripts/../src/utils/structs/simple_vrefhash_tester.f90`
+- `utils/structs/simple_vrefhash_tester.f90`
 
 Uses:
 - `simple_string`
@@ -17740,7 +17854,7 @@ Private symbols:
 ## Module: simple_winfuns
 
 Files:
-- `../scripts/../src/main/interp/simple_winfuns.f90`
+- `main/interp/simple_winfuns.f90`
 
 Uses:
 - `simple_defs`
@@ -17756,7 +17870,7 @@ Private symbols:
 ## Module: single_commanders_experimental
 
 Files:
-- `../scripts/../src/main/commanders/single/single_commanders_experimental.f90`
+- `main/commanders/single/single_commanders_experimental.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -17784,7 +17898,7 @@ Public symbols:
 ## Module: single_commanders_nano2D
 
 Files:
-- `../scripts/../src/main/commanders/single/single_commanders_nano2D.f90`
+- `main/commanders/single/single_commanders_nano2D.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -17805,7 +17919,7 @@ Public symbols:
 ## Module: single_commanders_nano3D
 
 Files:
-- `../scripts/../src/main/commanders/single/single_commanders_nano3D.f90`
+- `main/commanders/single/single_commanders_nano3D.f90`
 
 Uses:
 - `simple_abinitio_utils`
@@ -17834,7 +17948,7 @@ Public symbols:
 ## Module: single_commanders_trajectory
 
 Files:
-- `../scripts/../src/main/commanders/single/single_commanders_trajectory.f90`
+- `main/commanders/single/single_commanders_trajectory.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -17864,7 +17978,7 @@ Public symbols:
 ## Module: single_commanders_tseries
 
 Files:
-- `../scripts/../src/main/commanders/single/single_commanders_tseries.f90`
+- `main/commanders/single/single_commanders_tseries.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -17894,7 +18008,7 @@ Public symbols:
 ## Module: single_exec_api
 
 Files:
-- `../scripts/../src/main/apis/single_exec_api.f90`
+- `main/apis/single_exec_api.f90`
 
 Uses:
 - `iso_fortran_env`
@@ -17916,7 +18030,7 @@ Uses:
 ## Module: single_exec_atom
 
 Files:
-- `../scripts/../src/main/exec/single_exec_atom.f90`
+- `main/exec/single_exec_atom.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17930,7 +18044,7 @@ Public symbols:
 ## Module: single_exec_map
 
 Files:
-- `../scripts/../src/main/exec/single_exec_map.f90`
+- `main/exec/single_exec_map.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17944,7 +18058,7 @@ Public symbols:
 ## Module: single_exec_nano2D
 
 Files:
-- `../scripts/../src/main/exec/single_exec_nano2D.f90`
+- `main/exec/single_exec_nano2D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17958,7 +18072,7 @@ Public symbols:
 ## Module: single_exec_nano3D
 
 Files:
-- `../scripts/../src/main/exec/single_exec_nano3D.f90`
+- `main/exec/single_exec_nano3D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17973,7 +18087,7 @@ Public symbols:
 ## Module: single_exec_trajectory
 
 Files:
-- `../scripts/../src/main/exec/single_exec_trajectory.f90`
+- `main/exec/single_exec_trajectory.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17988,7 +18102,7 @@ Public symbols:
 ## Module: single_exec_tseries
 
 Files:
-- `../scripts/../src/main/exec/single_exec_tseries.f90`
+- `main/exec/single_exec_tseries.f90`
 
 Uses:
 - `simple_cmdline`
@@ -18002,7 +18116,7 @@ Public symbols:
 ## Module: single_exec_validate
 
 Files:
-- `../scripts/../src/main/exec/single_exec_validate.f90`
+- `main/exec/single_exec_validate.f90`
 
 Uses:
 - `simple_cmdline`
@@ -18015,7 +18129,7 @@ Public symbols:
 ## Module: single_tseries_extractor
 
 Files:
-- `../scripts/../src/main/nano/single_tseries_extractor.f90`
+- `main/nano/single_tseries_extractor.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -18038,7 +18152,7 @@ Private symbols:
 ## Module: single_tseries_tracker
 
 Files:
-- `../scripts/../src/main/nano/single_tseries_tracker.f90`
+- `main/nano/single_tseries_tracker.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -18066,7 +18180,7 @@ Private symbols:
 ## Module: single_ui_atom
 
 Files:
-- `../scripts/../src/main/ui/single/single_ui_atom.f90`
+- `main/ui/single/single_ui_atom.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18085,7 +18199,7 @@ Public symbols:
 ## Module: single_ui_map
 
 Files:
-- `../scripts/../src/main/ui/single/single_ui_map.f90`
+- `main/ui/single/single_ui_map.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18099,7 +18213,7 @@ Public symbols:
 ## Module: single_ui_nano2D
 
 Files:
-- `../scripts/../src/main/ui/single/single_ui_nano2D.f90`
+- `main/ui/single/single_ui_nano2D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18115,7 +18229,7 @@ Public symbols:
 ## Module: single_ui_nano3D
 
 Files:
-- `../scripts/../src/main/ui/single/single_ui_nano3D.f90`
+- `main/ui/single/single_ui_nano3D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18130,7 +18244,7 @@ Public symbols:
 ## Module: single_ui_trajectory
 
 Files:
-- `../scripts/../src/main/ui/single/single_ui_trajectory.f90`
+- `main/ui/single/single_ui_trajectory.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18149,7 +18263,7 @@ Public symbols:
 ## Module: single_ui_tseries
 
 Files:
-- `../scripts/../src/main/ui/single/single_ui_tseries.f90`
+- `main/ui/single/single_ui_tseries.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18167,7 +18281,7 @@ Public symbols:
 ## Module: single_ui_validate
 
 Files:
-- `../scripts/../src/main/ui/single/single_ui_validate.f90`
+- `main/ui/single/single_ui_validate.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18183,69 +18297,78 @@ Public symbols:
 ## Module: subroutine
 
 Files:
-- `../scripts/../src/main/class/simple_classaverager.f90`
-- `../scripts/../src/main/class/simple_classaverager_core.f90`
-- `../scripts/../src/main/class/simple_classaverager_restore.f90`
-- `../scripts/../src/main/image/simple_image.f90`
-- `../scripts/../src/main/image/simple_image_access.f90`
-- `../scripts/../src/main/image/simple_image_arith.f90`
-- `../scripts/../src/main/image/simple_image_calc.f90`
-- `../scripts/../src/main/image/simple_image_core.f90`
-- `../scripts/../src/main/image/simple_image_ctf.f90`
-- `../scripts/../src/main/image/simple_image_fft.f90`
-- `../scripts/../src/main/image/simple_image_filt.f90`
-- `../scripts/../src/main/image/simple_image_freq_anal.f90`
-- `../scripts/../src/main/image/simple_image_geom.f90`
-- `../scripts/../src/main/image/simple_image_io.f90`
-- `../scripts/../src/main/image/simple_image_norm.f90`
-- `../scripts/../src/main/image/simple_image_ops.f90`
-- `../scripts/../src/main/image/simple_image_polar.f90`
-- `../scripts/../src/main/image/simple_image_seg.f90`
-- `../scripts/../src/main/image/simple_image_vis.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_apply.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_bank.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_envmask.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_evidence.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_extend.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_potts.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_sharpen.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
-- `../scripts/../src/main/nu_filt/simple_nu_filter_stats.f90`
-- `../scripts/../src/main/ori/simple_oris.f90`
-- `../scripts/../src/main/ori/simple_oris_dists.f90`
-- `../scripts/../src/main/ori/simple_oris_getters.f90`
-- `../scripts/../src/main/ori/simple_oris_io.f90`
-- `../scripts/../src/main/ori/simple_oris_life.f90`
-- `../scripts/../src/main/ori/simple_oris_neig.f90`
-- `../scripts/../src/main/ori/simple_oris_reshape.f90`
-- `../scripts/../src/main/ori/simple_oris_sampling.f90`
-- `../scripts/../src/main/ori/simple_oris_setters.f90`
-- `../scripts/../src/main/ori/simple_oris_stats.f90`
-- `../scripts/../src/main/ori/simple_oris_transform.f90`
-- `../scripts/../src/main/params/simple_parameters.f90`
-- `../scripts/../src/main/params/simple_parameters_core.f90`
-- `../scripts/../src/main/params/simple_parameters_parse.f90`
-- `../scripts/../src/main/params/simple_parameters_phases.f90`
-- `../scripts/../src/main/pftc/simple_polarft_access.f90`
-- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
-- `../scripts/../src/main/pftc/simple_polarft_core.f90`
-- `../scripts/../src/main/pftc/simple_polarft_corr.f90`
-- `../scripts/../src/main/pftc/simple_polarft_ctf.f90`
-- `../scripts/../src/main/pftc/simple_polarft_geom.f90`
-- `../scripts/../src/main/pftc/simple_polarft_memo.f90`
-- `../scripts/../src/main/pftc/simple_polarft_ops_io.f90`
-- `../scripts/../src/main/project/simple_sp_project.f90`
-- `../scripts/../src/main/project/simple_sp_project_cls.f90`
-- `../scripts/../src/main/project/simple_sp_project_core.f90`
-- `../scripts/../src/main/project/simple_sp_project_io.f90`
-- `../scripts/../src/main/project/simple_sp_project_mic.f90`
-- `../scripts/../src/main/project/simple_sp_project_optics.f90`
-- `../scripts/../src/main/project/simple_sp_project_out.f90`
-- `../scripts/../src/main/project/simple_sp_project_ptcl.f90`
-- `../scripts/../src/main/project/simple_sp_project_stk.f90`
-- `../scripts/../src/main/simple_abinitio_controller.f90`
-- `../scripts/../src/main/simple_abinitio_utils.f90`
+- `main/class/simple_classaverager.f90`
+- `main/class/simple_classaverager_core.f90`
+- `main/class/simple_classaverager_restore.f90`
+- `main/flex/simple_flex_pca_em.f90`
+- `main/flex/simple_flex_pca_em_basis.f90`
+- `main/flex/simple_flex_pca_em_embed.f90`
+- `main/flex/simple_flex_pca_em_env.f90`
+- `main/flex/simple_flex_pca_em_fit.f90`
+- `main/flex/simple_flex_pca_em_iter.f90`
+- `main/flex/simple_flex_pca_em_mean.f90`
+- `main/flex/simple_flex_pca_em_pose.f90`
+- `main/flex/simple_flex_pca_em_solve.f90`
+- `main/image/simple_image.f90`
+- `main/image/simple_image_access.f90`
+- `main/image/simple_image_arith.f90`
+- `main/image/simple_image_calc.f90`
+- `main/image/simple_image_core.f90`
+- `main/image/simple_image_ctf.f90`
+- `main/image/simple_image_fft.f90`
+- `main/image/simple_image_filt.f90`
+- `main/image/simple_image_freq_anal.f90`
+- `main/image/simple_image_geom.f90`
+- `main/image/simple_image_io.f90`
+- `main/image/simple_image_norm.f90`
+- `main/image/simple_image_ops.f90`
+- `main/image/simple_image_polar.f90`
+- `main/image/simple_image_seg.f90`
+- `main/image/simple_image_vis.f90`
+- `main/nu_filt/simple_nu_filter.f90`
+- `main/nu_filt/simple_nu_filter_apply.f90`
+- `main/nu_filt/simple_nu_filter_bank.f90`
+- `main/nu_filt/simple_nu_filter_envmask.f90`
+- `main/nu_filt/simple_nu_filter_evidence.f90`
+- `main/nu_filt/simple_nu_filter_extend.f90`
+- `main/nu_filt/simple_nu_filter_potts.f90`
+- `main/nu_filt/simple_nu_filter_sharpen.f90`
+- `main/nu_filt/simple_nu_filter_state.f90`
+- `main/nu_filt/simple_nu_filter_stats.f90`
+- `main/ori/simple_oris.f90`
+- `main/ori/simple_oris_dists.f90`
+- `main/ori/simple_oris_getters.f90`
+- `main/ori/simple_oris_io.f90`
+- `main/ori/simple_oris_life.f90`
+- `main/ori/simple_oris_neig.f90`
+- `main/ori/simple_oris_reshape.f90`
+- `main/ori/simple_oris_sampling.f90`
+- `main/ori/simple_oris_setters.f90`
+- `main/ori/simple_oris_stats.f90`
+- `main/ori/simple_oris_transform.f90`
+- `main/params/simple_parameters.f90`
+- `main/params/simple_parameters_core.f90`
+- `main/params/simple_parameters_parse.f90`
+- `main/params/simple_parameters_phases.f90`
+- `main/pftc/simple_polarft_access.f90`
+- `main/pftc/simple_polarft_calc.f90`
+- `main/pftc/simple_polarft_core.f90`
+- `main/pftc/simple_polarft_corr.f90`
+- `main/pftc/simple_polarft_ctf.f90`
+- `main/pftc/simple_polarft_geom.f90`
+- `main/pftc/simple_polarft_memo.f90`
+- `main/pftc/simple_polarft_ops_io.f90`
+- `main/project/simple_sp_project.f90`
+- `main/project/simple_sp_project_cls.f90`
+- `main/project/simple_sp_project_core.f90`
+- `main/project/simple_sp_project_io.f90`
+- `main/project/simple_sp_project_mic.f90`
+- `main/project/simple_sp_project_optics.f90`
+- `main/project/simple_sp_project_out.f90`
+- `main/project/simple_sp_project_ptcl.f90`
+- `main/project/simple_sp_project_stk.f90`
+- `main/simple_abinitio_controller.f90`
+- `main/simple_abinitio_utils.f90`
 
 Uses:
 - `simple_commanders_euclid`
@@ -18266,6 +18389,7 @@ Uses:
 - `simple_parameters`
 - `simple_projector`
 - `simple_projector_pft_batch`
+- `simple_ptcl_cache`
 - `simple_ran_tabu`
 - `simple_sp_project`
 - `simple_tent_smooth`
@@ -18297,6 +18421,7 @@ Public symbols:
 - `dealloc_cavgs` — subroutine
 - `double_check_file_formats` — subroutine
 - `dt_1d` — subroutine
+- `ensure_bank_ctf_planes` — subroutine
 - `ensure_phase_shift_fields` — subroutine
 - `eval_joint_coeffs_at_rotind` — subroutine
 - `eval_series_at_rotind` — subroutine
@@ -18314,6 +18439,7 @@ Public symbols:
 - `get_projections` — subroutine
 - `init_gridcorr_mats` — subroutine
 - `inject_refine3D_volume` — subroutine
+- `inv_sqrt_sym` — subroutine
 - `loc_var_masked` — subroutine
 - `log_nu_aux_replacement_margin_stats` — subroutine
 - `log_nu_objective_smoothing_bank` — subroutine
@@ -18324,11 +18450,14 @@ Public symbols:
 - `normalized_masked_value` — subroutine
 - `open_pft_or_ctf2_array_for_write` — subroutine
 - `pack_nu_dmat_to_mask_vector` — subroutine
+- `pick` — subroutine
 - `prep_class_command_lines` — subroutine
 - `prep_final_rec_cline` — subroutine
 - `prepare_nu_smooth_norm` — subroutine
 - `print_states` — subroutine
 - `prune_nu_highres_extension_bank` — subroutine
+- `quad_form` — function
+- `quad_form` — function
 - `randomize_states` — subroutine
 - `read_cavgs` — subroutine
 - `read_masks` — subroutine
@@ -18346,6 +18475,7 @@ Public symbols:
 - `set_symmetry_class_vars` — subroutine
 - `shift_stack_slice2D` — subroutine
 - `sort_oris` — function
+- `spd_logdet_dp` — subroutine
 - `strip_pcg_backend_keys` — subroutine
 - `strip_refine3D_planning_keys` — subroutine
 - `symmetrize` — subroutine
@@ -18357,13 +18487,13 @@ Public symbols:
 ## Module: unix
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix.f90`
+- `extlibs/unix/src/unix.f90`
 
 ---
 ## Module: unix_dirent
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_dirent.F90`
+- `extlibs/unix/src/unix_dirent.F90`
 
 Public symbols:
 - `c_closedir` — function
@@ -18378,7 +18508,7 @@ Private symbols:
 ## Module: unix_errno
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_errno.F90`
+- `extlibs/unix/src/unix_errno.F90`
 
 Public symbols:
 - `c_errno` — function
@@ -18387,7 +18517,7 @@ Public symbols:
 ## Module: unix_fcntl
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_fcntl.F90`
+- `extlibs/unix/src/unix_fcntl.F90`
 
 Public symbols:
 - `c_fcntl` — function
@@ -18397,7 +18527,7 @@ Public symbols:
 ## Module: unix_inet
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_inet.F90`
+- `extlibs/unix/src/unix_inet.F90`
 
 Public symbols:
 - `c_htonl` — function
@@ -18408,7 +18538,7 @@ Public symbols:
 ## Module: unix_ioctl
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_ioctl.F90`
+- `extlibs/unix/src/unix_ioctl.F90`
 
 Public symbols:
 - `c_ioctl` — function
@@ -18417,7 +18547,7 @@ Public symbols:
 ## Module: unix_ipc
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_ipc.F90`
+- `extlibs/unix/src/unix_ipc.F90`
 
 Public symbols:
 - `c_ftok` — function
@@ -18426,7 +18556,7 @@ Public symbols:
 ## Module: unix_mqueue
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_mqueue.F90`
+- `extlibs/unix/src/unix_mqueue.F90`
 
 Public symbols:
 - `c_mq_close` — function
@@ -18446,7 +18576,7 @@ Private symbols:
 ## Module: unix_msg
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_msg.F90`
+- `extlibs/unix/src/unix_msg.F90`
 
 Public symbols:
 - `c_msgctl` — function
@@ -18458,7 +18588,7 @@ Public symbols:
 ## Module: unix_netdb
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_netdb.F90`
+- `extlibs/unix/src/unix_netdb.F90`
 
 Public symbols:
 - `c_freeaddrinfo` — subroutine
@@ -18478,7 +18608,7 @@ Private symbols:
 ## Module: unix_pthread
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_pthread.F90`
+- `extlibs/unix/src/unix_pthread.F90`
 
 Public symbols:
 - `c_pthread_cancel` — function
@@ -18502,7 +18632,7 @@ Private symbols:
 ## Module: unix_regex
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_regex.F90`
+- `extlibs/unix/src/unix_regex.F90`
 
 Public symbols:
 - `c_regcomp` — function
@@ -18519,7 +18649,7 @@ Private symbols:
 ## Module: unix_semaphore
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_semaphore.F90`
+- `extlibs/unix/src/unix_semaphore.F90`
 
 Public symbols:
 - `c_sem_close` — function
@@ -18540,7 +18670,7 @@ Private symbols:
 ## Module: unix_signal
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_signal.F90`
+- `extlibs/unix/src/unix_signal.F90`
 
 Public symbols:
 - `c_kill` — function
@@ -18550,7 +18680,7 @@ Public symbols:
 ## Module: unix_socket
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_socket.F90`
+- `extlibs/unix/src/unix_socket.F90`
 
 Public symbols:
 - `c_accept` — function
@@ -18565,7 +18695,7 @@ Public symbols:
 ## Module: unix_stat
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_stat.F90`
+- `extlibs/unix/src/unix_stat.F90`
 
 Public symbols:
 - `c_fstat` — function
@@ -18584,7 +18714,7 @@ Private symbols:
 ## Module: unix_stdio
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_stdio.F90`
+- `extlibs/unix/src/unix_stdio.F90`
 
 Public symbols:
 - `c_fclose` — function
@@ -18611,7 +18741,7 @@ Public symbols:
 ## Module: unix_stdlib
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_stdlib.F90`
+- `extlibs/unix/src/unix_stdlib.F90`
 
 Public symbols:
 - `c_exit` — subroutine
@@ -18621,7 +18751,7 @@ Public symbols:
 ## Module: unix_string
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_string.F90`
+- `extlibs/unix/src/unix_string.F90`
 
 Public symbols:
 - `c_memcpy` — function
@@ -18633,7 +18763,7 @@ Public symbols:
 ## Module: unix_syslog
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_syslog.F90`
+- `extlibs/unix/src/unix_syslog.F90`
 
 Public symbols:
 - `c_closelog` — subroutine
@@ -18644,7 +18774,7 @@ Public symbols:
 ## Module: unix_termios
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_termios.F90`
+- `extlibs/unix/src/unix_termios.F90`
 
 Public symbols:
 - `c_cfgetispeed` — function
@@ -18668,7 +18798,7 @@ Private symbols:
 ## Module: unix_time
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_time.F90`
+- `extlibs/unix/src/unix_time.F90`
 
 Public symbols:
 - `c_asctime` — function
@@ -18694,13 +18824,13 @@ Private symbols:
 ## Module: unix_types
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_types.F90`
+- `extlibs/unix/src/unix_types.F90`
 
 ---
 ## Module: unix_unistd
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_unistd.F90`
+- `extlibs/unix/src/unix_unistd.F90`
 
 Public symbols:
 - `c_chdir` — function
@@ -18721,7 +18851,7 @@ Public symbols:
 ## Module: unix_utsname
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_utsname.F90`
+- `extlibs/unix/src/unix_utsname.F90`
 
 Public symbols:
 - `c_uname` — function
@@ -18734,7 +18864,7 @@ Private symbols:
 ## Module: unix_wait
 
 Files:
-- `../scripts/../src/extlibs/unix/src/unix_wait.F90`
+- `extlibs/unix/src/unix_wait.F90`
 
 Public symbols:
 - `c_wait` — function

@@ -14,7 +14,9 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 use simple_core_module_api
 use simple_image, only: image
 use simple_ctf,   only: ctf
-use simple_gridding, only: kb_stencil_envelope_1d
+use simple_cartesian_fourier, only: center_embed_real3d, center_crop_real3d, &
+    &extract_native_fourier_plane, gather_packed_window, gather_packed_window_grad
+use simple_gridding, only: kb_stencil_envelope_1d, kb_stencil_centered_crop_inv_envelope_1d
 !$ use omp_lib, only: omp_get_max_threads, omp_get_thread_num
 implicit none
 
@@ -267,7 +269,6 @@ type :: reconstructor_pcg
     procedure :: set_lambda_relative
     procedure :: set_ml_prior
     procedure, private :: build_env
-    procedure, private :: build_kb_envelope_1d
     procedure, private :: build_hk_luts
     procedure, private :: deapod_mul
     procedure, private :: mask_mul
@@ -323,8 +324,6 @@ type :: reconstructor_pcg
     procedure, private :: fold_and_ifft
     procedure, private :: apply_precond
     procedure, private :: ensure_wimg
-    procedure, private :: pad_vol
-    procedure, private :: crop_vol
     procedure, private :: update_lambda_from_density
     procedure, private :: build_ml_prior_from_density
     procedure, private :: apply_fourier_diagonal
@@ -509,24 +508,25 @@ contains
     subroutine build_env( self )
         class(reconstructor_pcg), intent(inout) :: self
         real, parameter :: EPS_DIV = 1.0e-8
-        real, allocatable :: env1d(:)
+        real, allocatable :: env1d(:), env1d_padded(:), inv1d(:)
         real    :: ctrval
-        integer :: c, i, j, k, o
+        integer :: c, i, j, k
         if( allocated(self%env)    ) deallocate(self%env)
         if( allocated(self%invenv) ) deallocate(self%invenv)
-        call self%build_kb_envelope_1d(self%boxpd, env1d)
+        call kb_stencil_envelope_1d(self%kbwin,self%boxpd,env1d_padded)
+        call kb_stencil_centered_crop_inv_envelope_1d(self%kbwin,self%boxpd,self%box,inv1d)
+        allocate(env1d(self%box),source=env1d_padded(self%pad_off+1:self%pad_off+self%box))
         allocate(self%env(self%box,self%box,self%box))
-        o = self%pad_off
         !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
         do k = 1, self%box
             do j = 1, self%box
                 do i = 1, self%box
-                    self%env(i,j,k) = env1d(o+i) * env1d(o+j) * env1d(o+k)
+                    self%env(i,j,k) = env1d(i)*env1d(j)*env1d(k)
                 end do
             end do
         end do
         !$omp end parallel do
-        deallocate(env1d)
+        deallocate(env1d,env1d_padded)
         ! normalize so the envelope is unity at the box centre
         c      = self%box/2 + 1
         ctrval = self%env(c,c,c)
@@ -536,29 +536,16 @@ contains
         do k = 1, self%box
             do j = 1, self%box
                 do i = 1, self%box
-                    ! guarded reciprocal, same convention as prep3D_inv_instrfun4mul
                     if( abs(self%env(i,j,k)) < EPS_DIV )then
                         self%invenv(i,j,k) = 0.0
                     else
-                        self%invenv(i,j,k) = 1.0 / self%env(i,j,k)
+                        self%invenv(i,j,k) = inv1d(i)*inv1d(j)*inv1d(k)
                     endif
                 end do
             end do
         end do
+        deallocate(inv1d)
     end subroutine build_env
-
-    !> Exact 1-D inverse transform of the discrete, normalized KB stencil at
-    !! the Fourier origin. The origin stencil is symmetric and real, so the
-    !! transform is the real cosine sum below. Spatial index n/2+1 is the
-    !! centered image origin used by image%get_rmat.
-    subroutine build_kb_envelope_1d( self, n, env1d )
-        class(reconstructor_pcg), intent(in) :: self
-        integer,                    intent(in) :: n
-        real, allocatable,          intent(out) :: env1d(:)
-        ! shared with the gridding backend (simple_gridding): same normalized
-        ! origin stencil, period n (the padded lattice here)
-        call kb_stencil_envelope_1d(self%kbwin, n, env1d)
-    end subroutine build_kb_envelope_1d
 
     pure function get_env( self ) result( env )
         class(reconstructor_pcg), intent(in) :: self
@@ -1105,30 +1092,6 @@ contains
         self%wimg_exists = .true.
     end subroutine ensure_wimg
 
-    !>  \brief  centre-embed a native box^3 volume into the padded lattice.
-    !!          pad_vol and crop_vol are exact adjoints of one another, which is
-    !!          what keeps the oversampled operator self-adjoint.
-    function pad_vol( self, v ) result( vp )
-        class(reconstructor_pcg), intent(in) :: self
-        real,                     intent(in) :: v(self%box,self%box,self%box)
-        real, allocatable :: vp(:,:,:)
-        integer :: o
-        o = self%pad_off
-        allocate(vp(self%boxpd,self%boxpd,self%boxpd), source=0.0)
-        vp(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box) = v
-    end function pad_vol
-
-    !>  \brief  centre-crop the padded lattice back to the native box.
-    function crop_vol( self, vp ) result( v )
-        class(reconstructor_pcg), intent(in) :: self
-        real,                     intent(in) :: vp(self%boxpd,self%boxpd,self%boxpd)
-        real, allocatable :: v(:,:,:)
-        integer :: o
-        o = self%pad_off
-        allocate(v(self%box,self%box,self%box), &
-            &source=vp(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box))
-    end function crop_vol
-
     ! DESTRUCTOR
 
     subroutine kill( self )
@@ -1286,7 +1249,7 @@ contains
         class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: v(self%box,self%box,self%box)
         call self%ensure_wimg
-        call self%wimg%set_rmat(self%pad_vol(v), .false.)
+        call self%wimg%set_rmat(center_embed_real3d(v,self%boxpd), .false.)
         call self%wimg%fft()
     end subroutine set_volume
 
@@ -1368,7 +1331,8 @@ contains
             &any(i0 + self%wdim - 1 > ubound(self%wrap,1)) )then
             error stop 'sample_with_grad location lies outside the periodic wrap table'
         endif
-        call gather_window_grad(self, i0, w, dw, value, dvalue_dloc)
+        call gather_packed_window_grad(self%cmat,lbound(self%wrap,1),self%wrap, &
+            &i0,w,dw,value,dvalue_dloc)
         ! Apply native Fourier scaling to the value and all derivatives.
         value       = self%padsc * value
         dvalue_dloc = self%padsc * dvalue_dloc
@@ -2079,7 +2043,7 @@ contains
                 loc = real(self%padf) * matmul(real([h,k,0]), e_rotmat)
                 i0  = nint(loc) - self%iwinsz
                 call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                plane(h,k) = self%padsc * gather_window(self, cmat, i0, w)
+                plane(h,k) = self%padsc*gather_packed_window(cmat,lbound(self%wrap,1),self%wrap,i0,w)
             end do
         end do
         !$omp end parallel do
@@ -2248,15 +2212,7 @@ contains
         class(reconstructor_pcg), intent(in) :: self
         class(image),               intent(in) :: img2d
         complex :: plane(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2))
-        integer :: h, k, phys(3)
-        plane = cmplx(0.,0.)
-        do k = self%lims2(2,1), self%lims2(2,2)
-            do h = self%lims2(1,1), self%lims2(1,2)
-                if( h*h + k*k > self%sqlp ) cycle
-                phys = img2d%comp_addr_phys(h,k,0)
-                plane(h,k) = img2d%get_fcomp([h,k,0], phys)
-            end do
-        end do
+        plane = extract_native_fourier_plane(img2d,self%lims2,self%sqlp)
     end function extract_native_plane
 
     !>  \brief  deterministic double-precision real-volume dot product.
@@ -2368,7 +2324,7 @@ contains
                             i0   = nint(loc) - self%iwinsz
                             if( win_wraps(self, i0) ) cycle  ! rim: serial pass below
                             call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                            comp = self%padsc * gather_window(self, cmat, i0, w)
+                            comp = self%padsc*gather_packed_window(cmat,lbound(self%wrap,1),self%wrap,i0,w)
                             comp = comp * absT2(h,k) * self%padsc
                             call scatter_window(self, i0, w, comp, vol_accum)
                         end do
@@ -2386,7 +2342,7 @@ contains
                         i0   = nint(loc) - self%iwinsz
                         if( .not. win_wraps(self, i0) ) cycle
                         call self%kbwin%apod_mat_3d_fast(loc, self%iwinsz, self%wdim, w)
-                        comp = self%padsc * gather_window(self, cmat, i0, w)
+                        comp = self%padsc*gather_packed_window(cmat,lbound(self%wrap,1),self%wrap,i0,w)
                         comp = comp * absT2(h,k) * self%padsc
                         call scatter_window(self, i0, w, comp, vol_accum)
                     end do
@@ -2425,7 +2381,7 @@ contains
         ! envelope has to be reinstated on both sides for the two to agree.
         if( .not. self%l_deapod ) work = work * self%env
         if( self%l_profile ) tp = tic()
-        call self%wimg%set_rmat(self%pad_vol(work), .false.)
+        call self%wimg%set_rmat(center_embed_real3d(work,self%boxpd), .false.)
         call self%wimg%fft()
         if( self%l_profile ) self%t_setvol = self%t_setvol + real(toc(tp),dp)
         if( self%l_profile ) tp = tic()
@@ -2454,7 +2410,7 @@ contains
         if( self%l_profile ) tp = tic()
         call self%wimg%set_cmat(cmat)
         call self%wimg%ifft()
-        hp = self%crop_vol(self%wimg%get_rmat())
+        hp = center_crop_real3d(self%wimg%get_rmat(),self%box)
         if( self%l_profile ) self%t_fold = self%t_fold + real(toc(tp),dp)
         if( .not. self%l_deapod ) hp = hp * self%env
         if( self%l_ml_prior .and. .not. self%l_deapod )then
@@ -2479,7 +2435,7 @@ contains
         call self%ensure_wimg
         cdim = self%wimg%get_array_shape()
         if( any(shape(diag) /= cdim) ) THROW_HARD('PCG Fourier diagonal shape mismatch')
-        call self%wimg%set_rmat(self%pad_vol(p), .false.)
+        call self%wimg%set_rmat(center_embed_real3d(p,self%boxpd), .false.)
         call self%wimg%fft()
         cmat = self%wimg%get_cmat()
         !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
@@ -2493,7 +2449,7 @@ contains
         !$omp end parallel do
         call self%wimg%set_cmat(cmat)
         call self%wimg%ifft()
-        q = self%crop_vol(self%wimg%get_rmat())
+        q = center_crop_real3d(self%wimg%get_rmat(),self%box)
     end function apply_fourier_diagonal
 
     !>  \brief  b = sum_i G_i^dagger(conjg(T_i) * y_i / sqrt(sigma2_i)), the
@@ -3580,7 +3536,7 @@ contains
         ! origin stencil used for deposition. Its separability eliminates a
         ! full complex accumulator and padded inverse FFT.
         tp = tic()
-        call self%build_kb_envelope_1d(self%boxpd, dep1d)
+        call kb_stencil_envelope_1d(self%kbwin,self%boxpd,dep1d)
         self%t_fin_dep = real(toc(tp),dp)
         tp = tic()
         ctmp = cmplx(self%Khat, 0.)
@@ -3890,7 +3846,7 @@ contains
         !$omp end parallel do
         call self%wimg%ifft()
         ! back to the native lattice: the unknown never leaves box^3
-        z = self%crop_vol(self%wimg%get_rmat())
+        z = center_crop_real3d(self%wimg%get_rmat(),self%box)
         if( self%l_profile ) self%t_fold = self%t_fold + real(toc(tp),dp)
     end function fold_and_ifft
 
@@ -3924,7 +3880,7 @@ contains
         if( self%l_profile ) tp = tic()
         allocate(rw(self%box,self%box,self%box), source=r)
         if( self%l_deapod ) rw = rw * self%env
-        call self%wimg%set_rmat(self%pad_vol(rw), .false.)
+        call self%wimg%set_rmat(center_embed_real3d(rw,self%boxpd), .false.)
         call self%wimg%fft()
         cmat = self%wimg%get_cmat()
         cdim = self%wimg%get_array_shape()
@@ -3940,7 +3896,7 @@ contains
         !$omp end parallel do
         call self%wimg%set_cmat(cmat)
         call self%wimg%ifft()
-        z = self%crop_vol(self%wimg%get_rmat())
+        z = center_crop_real3d(self%wimg%get_rmat(),self%box)
         if( self%l_deapod ) z = z * self%env
         ! keeping z inside the support keeps the whole Krylov space there; M^-1
         ! is a Fourier diagonal and would otherwise leak the search directions
@@ -3948,85 +3904,6 @@ contains
         call self%mask_mul(z)
         if( self%l_profile ) self%t_prec = self%t_prec + real(toc(tp),dp)
     end function apply_precond
-
-    ! MODULE-LEVEL KERNELS (not type-bound: kept free of polymorphic dispatch so
-    ! gfortran can inline them into the hot loops)
-
-    !>  \brief  KB-weighted gather of one Fourier component from an image's
-    !!          packed cmat, with the physical addressing and Friedel folding
-    !!          inlined. A direct path through class(image)%comp_addr_phys
-    !!          and %get_fcomp here would be true indirect calls into a submodule, 27
-    !!          times per plane pixel, which also blocked vectorization.
-    pure complex function gather_window( self, cmat, i0, w ) result( comp )
-        class(reconstructor_pcg), intent(in) :: self
-        complex,                    intent(in) :: cmat(:,:,:)
-        integer,                    intent(in) :: i0(3)
-        real,                       intent(in) :: w(self%wdim,self%wdim,self%wdim)
-        integer :: di, dj, dk, hh, kk, mm, ph, pk, pm, ny, nz
-        ny   = self%boxpd
-        nz   = self%boxpd
-        comp = cmplx(0.,0.)
-        do dk = 1, self%wdim
-            mm = self%wrap(i0(3)+dk-1)
-            do dj = 1, self%wdim
-                kk = self%wrap(i0(2)+dj-1)
-                do di = 1, self%wdim
-                    hh = self%wrap(i0(1)+di-1)
-                    if( hh >= 0 )then
-                        ph = hh + 1
-                        pk = kk + 1; if( kk < 0 ) pk = pk + ny
-                        pm = mm + 1; if( mm < 0 ) pm = pm + nz
-                        comp = comp + w(di,dj,dk) * cmat(ph,pk,pm)
-                    else
-                        ph = -hh + 1
-                        pk = -kk + 1; if( -kk < 0 ) pk = pk + ny
-                        pm = -mm + 1; if( -mm < 0 ) pm = pm + nz
-                        comp = comp + w(di,dj,dk) * conjg(cmat(ph,pk,pm))
-                    endif
-                end do
-            end do
-        end do
-    end function gather_window
-
-    !>  \brief  One packed/Friedel traversal for a KB value and three spatial
-    !!          derivatives. Kept non-type-bound so the 27-tap loop can inline.
-    pure subroutine gather_window_grad( self, i0, w, dw, value, dvalue_dloc )
-        type(pcg_fourier_workspace), intent(in)  :: self
-        integer,                     intent(in)  :: i0(3)
-        real(sp),                    intent(in)  :: w(self%wdim,self%wdim,self%wdim)
-        real(sp),                    intent(in)  :: dw(self%wdim,self%wdim,self%wdim,3)
-        complex,                     intent(out) :: value, dvalue_dloc(3)
-        complex :: fcomp
-        integer :: di, dj, dk, hh, kk, mm, ph, pk, pm, ny, nz
-        ny           = self%boxpd
-        nz           = self%boxpd
-        value        = cmplx(0.,0.)
-        dvalue_dloc  = cmplx(0.,0.)
-        do dk = 1, self%wdim
-            mm = self%wrap(i0(3)+dk-1)
-            do dj = 1, self%wdim
-                kk = self%wrap(i0(2)+dj-1)
-                do di = 1, self%wdim
-                    hh = self%wrap(i0(1)+di-1)
-                    if( hh >= 0 )then
-                        ph = hh + 1
-                        pk = kk + 1; if( kk < 0 ) pk = pk + ny
-                        pm = mm + 1; if( mm < 0 ) pm = pm + nz
-                        fcomp = self%cmat(ph,pk,pm)
-                    else
-                        ph = -hh + 1
-                        pk = -kk + 1; if( -kk < 0 ) pk = pk + ny
-                        pm = -mm + 1; if( -mm < 0 ) pm = pm + nz
-                        fcomp = conjg(self%cmat(ph,pk,pm))
-                    endif
-                    ! V(loc) = sum_j w_j(loc) V_j.
-                    value = value + w(di,dj,dk) * fcomp
-                    ! dV/dloc_a = sum_j (dw_j/dloc_a) V_j.
-                    dvalue_dloc = dvalue_dloc + dw(di,dj,dk,:) * fcomp
-                end do
-            end do
-        end do
-    end subroutine gather_window_grad
 
     !>  \brief  Does this window straddle the periodic wrap boundary?
     !!
