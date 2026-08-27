@@ -244,20 +244,39 @@ contains
 
     subroutine test_simple_list_files()
         type(string), allocatable :: list(:)
-        type(string) :: f1, f2
+        type(string) :: f1, f2, d1, nested, marker
+        integer      :: i, istat
+        logical      :: has_blank
         write(*,'(A)') 'test_simple_list_files'
-        f1 = 'file_a.txt'
-        f2 = 'file_b.txt'
+        f1     = 'list_item_a.txt'
+        f2     = 'list_item_b.txt'
+        d1     = 'list_item_dir.txt'
+        nested = d1//'/'//'nested.txt'
+        marker = 'list_item_TASK_FINISHED'
         call simple_touch(f1)
         call simple_touch(f2)
-        call simple_list_files('file_*.txt', list)
+        call simple_touch(marker)
+        call simple_mkdir(d1, verbose=.false.)
+        call simple_touch(nested)
+        call simple_list_files('list_item*', list)
         call assert_true(allocated(list), 'list_files: list allocated')
-        call assert_true(size(list) >= 1, 'list_files: list contains entries')
+        call assert_int(3, size(list), 'list_files: returns only matching files')
         call assert_true(any(list == f1), 'list_files: contains f1')
         call assert_true(any(list == f2), 'list_files: contains f2')
+        call assert_true(any(list == marker), 'list_files: contains extensionless marker')
+        call assert_true(.not. any(list == d1), 'list_files: excludes matching directory')
+        call assert_true(.not. any(list == nested), 'list_files: excludes nested file')
+        has_blank = .false.
+        do i = 1, size(list)
+            if( list(i)%is_blank() ) has_blank = .true.
+        enddo
+        call assert_true(.not. has_blank, 'list_files: excludes blank entries')
         if (allocated(list)) deallocate(list)
         call del_file(f1)
         call del_file(f2)
+        call del_file(marker)
+        call del_file(nested)
+        call simple_rmdir(d1, status=istat)
     end subroutine test_simple_list_files
 
     !---------------- simple_list_files_regexp ----------------

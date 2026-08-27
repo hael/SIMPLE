@@ -916,14 +916,13 @@ contains
         type(string), allocatable, intent(inout) :: list(:)
         character(len=XLONGSTRLEN) :: buffer
         type(string)               :: cmd, tmpfile
-        character(len=1)           :: junk
         integer                    :: sz, funit, ios, i, nlines, pid
         pid     = getpid()
         tmpfile = '__simple_filelist_'//int2str(pid)//'__'
 #if defined(_WIN32)
-        cmd = 'cmd /c dir /b "'//trim(pattern)//'" > "'//tmpfile%to_char()//'"'
+        cmd = 'cmd /c dir /b /a-d "'//trim(pattern)//'" > "'//tmpfile%to_char()//'"'
 #else
-        cmd = 'ls -1f '//trim(pattern)//' > '//tmpfile%to_char()
+        cmd = 'ls -1dp -- '//trim(pattern)//' | grep -v "/$" > '//tmpfile%to_char()
 #endif
         call exec_cmdline( cmd, suppress_errors=.true.)
         if( .not. file_exists(tmpfile) )then
@@ -937,17 +936,21 @@ contains
             open(newunit=funit, file=tmpfile%to_char())
             nlines = 0
             do
-                read(funit,*,iostat=ios) junk
-                if(ios /= 0)then
-                    exit
-                else
-                    nlines = nlines + 1
-                endif
+                read(funit, '(a)', iostat=ios) buffer
+                if( ios /= 0 ) exit
+                if( len_trim(buffer) == 0 ) cycle
+                if( trim(adjustl(buffer)) == tmpfile%to_char() ) cycle
+                nlines = nlines + 1
             end do
             rewind(funit)
             allocate( list(nlines) )
-            do i=1,nlines
-                read(funit, '(a)') buffer
+            i = 0
+            do
+                read(funit, '(a)', iostat=ios) buffer
+                if( ios /= 0 ) exit
+                if( len_trim(buffer) == 0 ) cycle
+                if( trim(adjustl(buffer)) == tmpfile%to_char() ) cycle
+                i = i + 1
                 list(i) = trim(adjustl(buffer))
             enddo
             close(funit, status='delete')
