@@ -13,7 +13,8 @@ use simple_reconstructor,   only: reconstructor
 use simple_refine3D_fnames, only: refine3D_partial_rec_fbody, refine3D_state_vol_fname
 implicit none
 
-public :: init_rec, prep_imgs4rec, cleanup_rec_buffers, write_state_partial, calc_3Drec, calc_projdir3Drec
+public :: init_rec, prep_imgs4rec, cleanup_rec_buffers, write_state_half_partial, set_state_vol_output, &
+    &calc_3Drec, calc_projdir3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -31,7 +32,7 @@ contains
     subroutine calc_3Drec( params, build, cline, nptcls, pinds, cached )
         use simple_image,        only: image
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
-        class(parameters), intent(inout) :: params
+        class(parameters), target, intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls
@@ -136,7 +137,7 @@ contains
     subroutine calc_projdir3Drec( params, build, cline, nptcls, pinds, cached )
         use simple_image,        only: image
         use simple_imgarr_utils, only: alloc_imgarr, dealloc_imgarr
-        class(parameters), intent(inout) :: params
+        class(parameters), target, intent(inout) :: params
         class(builder),    intent(inout) :: build
         class(cmdline),    intent(inout) :: cline
         integer,           intent(in)    :: nptcls
@@ -327,22 +328,17 @@ contains
         deallocate(group_counts, next_pos)
     end subroutine group_pinds_by_state_eo
 
-    !> Initialize one half-map worker reconstructor.  The EO composite remains
-    !! owned by volassemble, where both halves are required for FSC and merge.
+    !> Initialize one half-map worker reconstructor. Pair assembly owns explicit
+    !! even and odd operands only where both halves are required.
     subroutine init_state_half_rec( params, build, recvol )
-        class(parameters),     intent(inout) :: params
+        class(parameters), target, intent(inout) :: params
         class(builder),        intent(inout) :: build
         class(reconstructor),  intent(inout) :: recvol
-        call recvol%dealloc_rho
-        call recvol%kill
-        call recvol%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-        call recvol%alloc_rho(params, build%spproj, expand=.true.)
-        call recvol%reset_exp
+        call recvol%new_accumulator(params, build%spproj, expand=.true.)
     end subroutine init_state_half_rec
 
     subroutine kill_state_half_rec( recvol )
         class(reconstructor), intent(inout) :: recvol
-        call recvol%dealloc_rho
         call recvol%kill
     end subroutine kill_state_half_rec
 
@@ -373,21 +369,25 @@ contains
         class(parameters),     intent(in)    :: params
         class(reconstructor),  intent(inout) :: recvol
         integer,               intent(in)    :: state, eo
-        type(string) :: fbody
+        type(string) :: fbody, numerator_fname, density_fname
         integer :: numlen_part
         numlen_part = max(1, params%numlen)
         fbody = refine3D_partial_rec_fbody(state, params%part, numlen_part)
         call recvol%compress_exp
         select case(eo)
             case(0)
-                call recvol%write(fbody//'_even'//MRC_EXT, del_if_exists=.true.)
-                call recvol%write_rho(string('rho_')//fbody//'_even'//MRC_EXT)
+                numerator_fname = fbody//'_even'//MRC_EXT
+                density_fname   = string('rho_')//fbody//'_even'//MRC_EXT
             case(1)
-                call recvol%write(fbody//'_odd'//MRC_EXT, del_if_exists=.true.)
-                call recvol%write_rho(string('rho_')//fbody//'_odd'//MRC_EXT)
+                numerator_fname = fbody//'_odd'//MRC_EXT
+                density_fname   = string('rho_')//fbody//'_odd'//MRC_EXT
             case default
                 THROW_HARD('unsupported even-odd half; write_state_half_partial')
         end select
+        call recvol%write_raw_accum(numerator_fname, density_fname)
+        call fbody%kill
+        call numerator_fname%kill
+        call density_fname%kill
     end subroutine write_state_half_partial
 
     subroutine set_state_vol_output( params, cline, state )
@@ -399,23 +399,6 @@ contains
             call cline%set('vol'//int2str(state), params%vols(state))
         endif
     end subroutine set_state_vol_output
-
-    !> Write one current-state Cartesian partial using the EO composite.  This
-    !! remains the OpenMP-offload writer; CPU workers write one half at a time.
-    subroutine write_state_partial( params, build, cline, state )
-        class(parameters), intent(inout) :: params
-        class(builder),    intent(inout) :: build
-        class(cmdline),    intent(inout) :: cline
-        integer,           intent(in)    :: state
-        integer :: numlen_part
-        numlen_part = max(1, params%numlen)
-        call build%eorecvol%compress_exp
-        call build%eorecvol%write_eos(refine3D_partial_rec_fbody(state, params%part, numlen_part))
-        if( .not. cline%defined('force_volassemble') )then
-            params%vols(state) = refine3D_state_vol_fname(state)
-            call cline%set('vol'//int2str(state), params%vols(state))
-        endif
-    end subroutine write_state_partial
 
     subroutine mark_empty_state( build, state )
         class(builder),    intent(inout) :: build

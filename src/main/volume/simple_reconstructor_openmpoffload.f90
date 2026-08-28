@@ -4,7 +4,9 @@ use simple_core_module_api
 use simple_builder,          only: builder
 use simple_parameters,       only: parameters
 use simple_matcher_ptcl_io,  only: prepimgbatch, discrete_read_imgbatch, discrete_read_imgbatch_source
-use simple_matcher_3Drec,    only: calc_3Drec, prep_imgs4rec, init_rec, write_state_partial, cleanup_rec_buffers
+use simple_matcher_3Drec,    only: calc_3Drec, prep_imgs4rec, init_rec, write_state_half_partial, &
+    &set_state_vol_output, cleanup_rec_buffers
+use simple_reconstructor,    only: reconstructor
 use simple_cmdline,          only: cmdline
 use simple_math,             only: ceil_div, floor_div
 use simple_kbinterpol,       only: apod_kb15_a2
@@ -21,12 +23,13 @@ contains
 
     !> volumetric 3D reconstruction
     subroutine calc_3Drec_gpu( params, build, cline, nptcls, pinds )
-        class(parameters),       intent(inout) :: params
+        class(parameters), target, intent(inout) :: params
         type(builder),           intent(inout) :: build
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: nptcls
         integer,                 intent(in)    :: pinds(nptcls)
         type(fplane_type), allocatable :: fpls(:)
+        type(reconstructor) :: even_rec, odd_rec
         real,              allocatable, target :: symmats(:,:,:), rotmats(:,:,:)
         integer   :: vollims(3,2)
         integer   :: cdim(3), clb(3), jsym, nsym, h_edge, nyq
@@ -47,12 +50,12 @@ contains
         ! Initialize reconstruction objects
         if( DEBUG ) t = tic()
         call init_rec(params, build, MAXIMGBATCHSZ, fpls)
-        call build%eorecvol%new(params, build%spproj)
-        call build%eorecvol%reset_all
+        call even_rec%new_accumulator(params, build%spproj, expand=.true.)
+        call odd_rec%new_accumulator(params, build%spproj, expand=.true.)
         ! Prep batch image objects
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
         ! 3D limits
-        vollims = build%eorecvol%even%loop_lims(2)
+        vollims = even_rec%loop_lims(2)
         h_edge  = vollims(1,1)
         ! Setup rotation matrices
         allocate(symmats(3,3,build%pgrpsyms%get_nsym()))
@@ -62,9 +65,9 @@ contains
         end do
         allocate(rotmats(2,3,MAXIMGBATCHSZ))
         ! Arrays
-        clb  = lbound(build%eorecvol%even%cmat_exp)
-        cdim = ubound(build%eorecvol%even%cmat_exp) - clb + 1
-        nyq  = build%eorecvol%even%get_lfny(1)
+        clb  = lbound(even_rec%cmat_exp)
+        cdim = ubound(even_rec%cmat_exp) - clb + 1
+        nyq  = even_rec%get_lfny(1)
         if( DEBUG ) then
             t_init     = toc(t)
             t_read     = 0.d0
@@ -78,13 +81,15 @@ contains
         endif
         ! Gridding interpolation of all particles
         call insert_all_slices(params, build, nptcls, pinds, fpls,&
-            & build%eorecvol%even%cmat_exp, build%eorecvol%odd%cmat_exp,&
-            & build%eorecvol%even%rho_exp, build%eorecvol%odd%rho_exp,&
+            &even_rec%cmat_exp, odd_rec%cmat_exp, even_rec%rho_exp, odd_rec%rho_exp,&
             & cdim, clb, h_edge, nyq, symmats, rotmats, nsym)
         if( DEBUG ) t = tic()
         deallocate(symmats, rotmats)
-        call write_state_partial(params, build, cline, 1)
-        call build%eorecvol%kill
+        call write_state_half_partial(params, even_rec, 1, 0)
+        call write_state_half_partial(params, odd_rec, 1, 1)
+        call even_rec%kill
+        call odd_rec%kill
+        call set_state_vol_output(params, cline, 1)
         call cleanup_rec_buffers(build, fpls)
         ! Timings
         if( DEBUG .and. (params%part==1) )then

@@ -1,320 +1,91 @@
-!@descr: 3D reconstruction of even-odd pairs for FSC estimation
+!@descr: explicit gridding half-pair I/O, FSC, and restoration operations
 module simple_reconstructor_eo
 use simple_core_module_api
-use simple_reconstructor,   only: reconstructor
+use simple_reconstructor,   only: reconstructor, gridding_half_restore
 use simple_parameters,      only: parameters
 use simple_image,           only: image
-use simple_sp_project,      only: sp_project
 use simple_refine3D_fnames, only: refine3D_fsc_fname
-use simple_gridding,        only: kb_stencil_inv_envelope_1d, deapodize3D_inplace
 use simple_fsc
 implicit none
 
-public :: reconstructor_eo
+public :: gridding_pair_diagnostics, calculate_gridding_pair_fsc, &
+    &read_gridding_pair_accumulators, restore_gridding_pair, &
+    &write_gridding_pair_accumulators, write_gridding_pair_diagnostics
 private
 #include "simple_local_flags.inc"
 
-type :: reconstructor_eo
-    private
-    class(parameters),  pointer :: p_ptr=>null()
-    type(reconstructor), public :: even       !< Only made public for the sake of GPU implementation
-    type(reconstructor), public :: odd        !< Only made public for the sake of GPU implementation
-    type(reconstructor) :: eosum
-    type(string)        :: ext
-    real, allocatable   :: fsc(:)
-    real, allocatable   :: invenv1d(:)       !< inverse KB-stencil envelope (deapodization), period box
-    real                :: res_fsc05          !< target resolution at FSC=0.5
-    real                :: res_fsc0143        !< target resolution at FSC=0.143
-    real                :: cfar=0.
-    real                :: smpd, msk, fny
-    integer             :: ldim(3), box=0, boxpd=0
-    integer             :: nstates=1, numlen=2, filtsz=0
-    logical             :: exists     = .false.
+type :: gridding_pair_diagnostics
+    real, allocatable :: fsc(:)
+    real              :: res_fsc05   = 0.
+    real              :: res_fsc0143 = 0.
+    real              :: cfar        = 0.
   contains
-    ! CONSTRUCTOR
-    procedure          :: new
-    ! SETTERS
-    procedure          :: reset_all
-    procedure          :: reset_eos
-    procedure, private :: reset_eoexp
-    procedure, private :: reset_even
-    procedure, private :: reset_odd
-    procedure          :: reset_sum
-    procedure          :: apply_weight
-    procedure          :: apply_weight_sums
-    procedure          :: set_sh_lim
-    procedure          :: set_fsc
-    ! GETTERS
-    procedure          :: is_initialized
-    procedure          :: get_kbwin
-    procedure          :: get_res
-    procedure          :: get_cfar
-    ! I/O
-    ! writers
-    procedure          :: write_eos
-    procedure, private :: write_even
-    procedure, private :: write_odd
-    ! readers
-    procedure          :: read_eos
-    procedure          :: read_eos_parallel_io
-    procedure, private :: read_even
-    procedure, private :: read_odd
-    ! INTERPOLATION
-    procedure          :: grid_plane
-    procedure          :: grid_plane_compact
-    procedure          :: compress_exp
-    procedure          :: expand_exp
-    procedure          :: project_polar
-    procedure          :: sum_eos    !< for merging even and odd into sum
-    procedure          :: sum_reduce !< for summing eo_recs obtained by parallel exec
-    procedure          :: sampl_dens_correct_eos
-    procedure          :: calc_fsc4sampl_dens_correct
-    procedure          :: write_fsc2txt
-    procedure          :: sampl_dens_correct_sum
-    procedure, private :: deapodize
-    ! DESTRUCTORS
-    procedure          :: kill_exp
-    procedure          :: kill
-end type reconstructor_eo
+    procedure :: kill => kill_gridding_pair_diagnostics
+end type gridding_pair_diagnostics
 
 contains
 
-    subroutine set_fsc( self, fsc )
-        class(reconstructor_eo), intent(inout) :: self
-        real,                    intent(in)    :: fsc(:)
-        real, allocatable :: res(:)
-        if( size(fsc) /= self%filtsz ) THROW_HARD('FSC size mismatch; reconstructor_eo%set_fsc')
-        if( allocated(self%fsc) ) deallocate(self%fsc)
-        allocate(self%fsc(self%filtsz), source=fsc)
-        res = get_resarr(self%box, self%smpd)
-        call get_resolution(self%fsc, res, self%res_fsc05, self%res_fsc0143)
-        self%res_fsc05   = max(self%res_fsc05, self%fny)
-        self%res_fsc0143 = max(self%res_fsc0143, self%fny)
-        deallocate(res)
-    end subroutine set_fsc
-
-    ! CONSTRUCTOR
-
-    !>  \brief  is a constructor
-    subroutine new( self, params, spproj, expand  )
-        class(reconstructor_eo),   intent(inout) :: self   !< instance
-        class(parameters), target, intent(in)    :: params !< global parameters
-        class(sp_project),         intent(inout) :: spproj !< project description
-        logical, optional,         intent(in)    :: expand !< create expanded matrix versions or not
-        logical :: l_expand
-        call self%kill
-        ! set pointer to params
-        self%p_ptr => params
-        l_expand = .true.
-        if( present(expand) ) l_expand = expand
-        ! set constants
-        self%box     = self%p_ptr %box_crop
-        self%boxpd   = self%p_ptr %box_croppd
-        self%smpd    = self%p_ptr %smpd_crop
-        self%fny     = 2.*self%smpd
-        self%nstates = self%p_ptr %nstates
-        self%ext     = MRC_EXT
-        self%numlen  = self%p_ptr %numlen
-        self%filtsz  = fdim(self%box) - 1
-        self%msk     = real(self%box / 2) - COSMSKHALFWIDTH - 1.
-        self%ldim           = [self%box,self%box,self%box]
-        ! deapodization: inverse envelope of the normalized KB stencil on the native lattice
-        call kb_stencil_inv_envelope_1d(self%box, self%invenv1d)
-        ! create composites
-        call self%even%new(self%ldim, self%smpd)
-        call self%even%alloc_rho(self%p_ptr, spproj, expand=l_expand)
-        call self%even%set_ft(.true.)
-        call self%odd%new(self%ldim, self%smpd)
-        call self%odd%alloc_rho(self%p_ptr, spproj, expand=l_expand)
-        call self%odd%set_ft(.true.)
-        call self%eosum%new(self%ldim, self%smpd)
-        call self%eosum%alloc_rho(self%p_ptr, spproj, expand=.false.)
-        ! set existence
-        self%exists = .true.
-    end subroutine new
-
-    ! SETTERS
-
-    logical function is_initialized( self )
-        class(reconstructor_eo), intent(in) :: self
-        is_initialized = self%exists
-    end function is_initialized
-
-    !>  \brief  resets all
-    subroutine reset_all( self )
-        class(reconstructor_eo), intent(inout) :: self
-        call self%reset_eos
-        call self%reset_eoexp
-        call self%reset_sum
-    end subroutine reset_all
-
-    !>  \brief  resets the even odd pairs
-    subroutine reset_eos( self )
-        class(reconstructor_eo), intent(inout) :: self
-        call self%even%reset
-        call self%odd%reset
-    end subroutine reset_eos
-
-    !>  \brief  resets the even odd pairs expanded matrices
-    subroutine reset_eoexp( self )
-        class(reconstructor_eo), intent(inout) :: self
-        call self%even%reset_exp
-        call self%odd%reset_exp
-    end subroutine reset_eoexp
-
-    !>  \brief  resets the even
-    subroutine reset_even( self )
-        class(reconstructor_eo), intent(inout) :: self
-        call self%even%reset
-    end subroutine reset_even
-
-    !>  \brief  resets the odd
-    subroutine reset_odd( self )
-        class(reconstructor_eo), intent(inout) :: self
-        call self%odd%reset
-    end subroutine reset_odd
-
-    !>  \brief  resets the sum
-    subroutine reset_sum( self )
-        class(reconstructor_eo), intent(inout) :: self
-        call self%eosum%reset
-    end subroutine reset_sum
-
-    subroutine apply_weight( self, w )
-        class(reconstructor_eo), intent(inout) :: self
-        real,                    intent(in)    :: w
-        call self%even%apply_weight(w)
-        call self%odd%apply_weight(w)
-    end subroutine apply_weight
-
-    !>  \brief  scales the non-expanded even/odd Fourier sums and sampling
-    !!          densities; used to decay the trailing-reconstruction chain
-    subroutine apply_weight_sums( self, w )
-        class(reconstructor_eo), intent(inout) :: self
-        real,                    intent(in)    :: w
-        call self%even%apply_weight_sums(w)
-        call self%odd%apply_weight_sums(w)
-    end subroutine apply_weight_sums
-
-    subroutine set_sh_lim(self, sh_lim)
-        class(reconstructor_eo), intent(inout) :: self
-        integer,                 intent(in)    :: sh_lim
-        call self%even%set_sh_lim(sh_lim)
-        call self%odd%set_sh_lim(sh_lim)
-    end subroutine set_sh_lim
-
-    ! GETTERS
-
-    !>  \brief  return the window functions used by reconstructor_eo
-    function get_kbwin( self ) result( wf )
-        class(reconstructor_eo), intent(inout) :: self
-        type(kbinterpol) :: wf
-        wf = self%even%get_kbwin()
-    end function get_kbwin
-
-    !> \brief  for getting the resolution
-    !> \param res_fsc05  target resolution a FSC=0.5
-    !> \param res_fsc0143  target resolution a FSC=0.143
-    subroutine get_res( self, res_fsc05, res_fsc0143 )
-        class(reconstructor_eo), intent(in)  :: self !< instance
-        real,                    intent(out) :: res_fsc05, res_fsc0143
-        res_fsc0143 = self%res_fsc0143
-        res_fsc05   = self%res_fsc05
-    end subroutine get_res
-
-    pure real function get_cfar( self )
-        class(reconstructor_eo), intent(in) :: self
-        get_cfar = self%cfar
-    end function get_cfar
-
-    ! I/O
-
-    !>  \brief  write the even and odd reconstructions
-    subroutine write_eos( self, fbody )
-        class(reconstructor_eo), intent(inout) :: self
-        class(string),           intent(in)    :: fbody !< filename
-        call self%write_even(fbody)
-        call self%write_odd(fbody)
-    end subroutine write_eos
-
-    !>  \brief  write the even reconstruction
-    subroutine write_even( self, fbody )
-        class(reconstructor_eo), intent(inout) :: self
-        class(string),           intent(in)    :: fbody
-        call self%even%write(fbody//'_even'//self%ext%to_char(), del_if_exists=.true.)
-        call self%even%write_rho(string('rho_')//fbody//'_even'//self%ext%to_char())
-    end subroutine write_even
-
-    !>  \brief  write the odd reconstruction
-    subroutine write_odd( self, fbody )
-        class(reconstructor_eo), intent(inout) :: self
-        class(string),           intent(in)    :: fbody
-        call self%odd%write(fbody//'_odd'//self%ext%to_char(), del_if_exists=.true.)
-        call self%odd%write_rho(string('rho_')//fbody//'_odd'//self%ext%to_char())
-    end subroutine write_odd
-
-    !>  \brief read the even and odd reconstructions
-    subroutine read_eos( self, fbody )
-        class(reconstructor_eo), intent(inout) :: self
-        class(string),           intent(in)    :: fbody
-        logical, parameter :: SERIAL_READ = .false.
-        if( SERIAL_READ )then
-            call self%read_even(fbody)
-            call self%read_odd(fbody)
-        else
-            call self%read_eos_parallel_io(fbody)
-        endif
-    end subroutine read_eos
-
-    !>  \brief read the even and odd reconstructions
-    subroutine read_eos_parallel_io( self, fbody )
+    !> Read an explicit even/odd gridding-accumulator artifact. Previous
+    !! smaller grids retain the legacy update-fraction zero-padding behavior.
+    !! A missing artifact resets the pair (legacy partial semantics) unless the
+    !! caller marks the artifact required, in which case it is a hard error.
+    subroutine read_gridding_pair_accumulators( params, even_rec, odd_rec, fbody, required )
         use simple_imgfile, only: imgfile
-        class(reconstructor_eo), intent(inout) :: self
-        class(string),           intent(in)    :: fbody
+        class(parameters),    intent(in)    :: params
+        class(reconstructor), intent(inout) :: even_rec, odd_rec
+        class(string),        intent(in)    :: fbody
+        logical, optional,    intent(in)    :: required
         type(string)      :: even_vol, even_rho, odd_vol, odd_rho
         type(image)       :: prev_vol_e, prev_vol_o
         type(imgfile)     :: ioimg_e, ioimg_o
         real, allocatable :: rho_e(:,:,:), rho_o(:,:,:)
-        integer :: cshape(3), prev_ldim(3)
+        integer :: current_ldim(3), cshape(3), prev_ldim(3)
         integer :: fhandle_rho_e, fhandle_rho_o, i, ierr, dummy
-        real    :: prev_smpd
+        real    :: current_smpd, prev_smpd
         logical :: here(4), l_pad_with_zeros
-        even_vol = fbody//'_even'//self%ext%to_char()
-        even_rho = string('rho_')//fbody//'_even'//self%ext%to_char()
-        odd_vol  = fbody//'_odd'//self%ext
-        odd_rho  = string('rho_')//fbody//'_odd'//self%ext%to_char()
+        current_ldim = even_rec%get_ldim()
+        current_smpd = even_rec%get_smpd()
+        if( any(odd_rec%get_ldim() /= current_ldim) )then
+            THROW_HARD('gridding pair accumulator dimensions do not match')
+        endif
+        if( abs(odd_rec%get_smpd() - current_smpd) > TINY )then
+            THROW_HARD('gridding pair accumulator sampling does not match')
+        endif
+        even_vol = fbody//'_even'//MRC_EXT
+        even_rho = string('rho_')//fbody//'_even'//MRC_EXT
+        odd_vol  = fbody//'_odd'//MRC_EXT
+        odd_rho  = string('rho_')//fbody//'_odd'//MRC_EXT
         here(1)  = file_exists(even_vol)
         here(2)  = file_exists(even_rho)
         here(3)  = file_exists(odd_vol)
         here(4)  = file_exists(odd_rho)
         if( all(here) )then
             l_pad_with_zeros = .false.
-            if( self%p_ptr %l_update_frac )then
-                ! check dimensions
+            if( params%l_update_frac )then
                 call find_ldim_nptcls(even_vol, prev_ldim, dummy)
-                prev_smpd = self%smpd
-                if( prev_ldim(1) == self%ldim(1) )then
-                    ! all good
-                elseif( prev_ldim(1) > self%ldim(1) )then
-                    THROW_HARD('Incorrect dimensions')
+                prev_smpd = current_smpd
+                if( prev_ldim(1) == current_ldim(1) )then
+                    ! matching grids require no compatibility transform
+                elseif( prev_ldim(1) > current_ldim(1) )then
+                    THROW_HARD('previous gridding accumulator is larger than the current grid')
                 else
                     l_pad_with_zeros = .true.
                 endif
             endif
             call fopen(fhandle_rho_e, file=even_rho, status='OLD', action='READ', access='STREAM', iostat=ierr)
-            call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//even_rho%to_char(), ierr)
-            call fopen(fhandle_rho_o, file=odd_rho,  status='OLD', action='READ', access='STREAM', iostat=ierr)
-            call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, opening '//odd_rho%to_char(),  ierr)
+            call fileiochk('read_gridding_pair_accumulators opening '//even_rho%to_char(), ierr)
+            call fopen(fhandle_rho_o, file=odd_rho, status='OLD', action='READ', access='STREAM', iostat=ierr)
+            call fileiochk('read_gridding_pair_accumulators opening '//odd_rho%to_char(), ierr)
             if( l_pad_with_zeros )then
                 call ioimg_e%open(even_vol, prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
-                call ioimg_o%open(odd_vol,  prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
+                call ioimg_o%open(odd_vol, prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
                 call prev_vol_e%new(prev_ldim, prev_smpd)
                 call prev_vol_o%new(prev_ldim, prev_smpd)
                 cshape = [fdim(prev_ldim(1)), prev_ldim(2), prev_ldim(3)]
-                allocate(rho_e(1:cshape(1),1:cshape(2),1:cshape(3)), rho_o(1:cshape(1),1:cshape(2),1:cshape(3)))
-                call self%reset_even
-                call self%reset_odd
-                ! read
+                allocate(rho_e(1:cshape(1),1:cshape(2),1:cshape(3)), &
+                    &rho_o(1:cshape(1),1:cshape(2),1:cshape(3)))
+                call even_rec%reset
+                call odd_rec%reset
                 !$omp parallel do default(shared) private(i,ierr) schedule(static) num_threads(4)
                 do i = 1, 4
                     select case(i)
@@ -324,38 +95,36 @@ contains
                             call prev_vol_o%read_raw_mrc(ioimg_o)
                         case(3)
                             read(fhandle_rho_e, pos=1, iostat=ierr) rho_e
-                            if( ierr .ne. 0 )&
-                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// even_rho%to_char(), ierr)
+                            if( ierr /= 0 ) call fileiochk('read_gridding_pair_accumulators reading even rho', ierr)
                         case(4)
                             read(fhandle_rho_o, pos=1, iostat=ierr) rho_o
-                            if( ierr .ne. 0 )&
-                                &call fileiochk('simple_reconstructor_eo::read_eos_parallel_io, reading '// odd_rho%to_char(), ierr)
-                        end select
-                end do
+                            if( ierr /= 0 ) call fileiochk('read_gridding_pair_accumulators reading odd rho', ierr)
+                    end select
+                enddo
                 !$omp end parallel do
-                ! pad
-                call self%even%pad_with_zeros(prev_vol_e, rho_e)
-                call self%odd%pad_with_zeros(prev_vol_o, rho_o)
-                ! cleanup
+                call even_rec%pad_with_zeros(prev_vol_e, rho_e)
+                call odd_rec%pad_with_zeros(prev_vol_o, rho_o)
                 call prev_vol_e%kill
                 call prev_vol_o%kill
-                deallocate(rho_e,rho_o)
+                deallocate(rho_e, rho_o)
             else
-                call ioimg_e%open(even_vol, self%ldim, self%even%get_smpd(), formatchar='M', readhead=.false., rwaction='read')
-                call ioimg_o%open(odd_vol,  self%ldim, self%odd%get_smpd(),  formatchar='M', readhead=.false., rwaction='read')
+                call ioimg_e%open(even_vol, current_ldim, current_smpd, formatchar='M', &
+                    &readhead=.false., rwaction='read')
+                call ioimg_o%open(odd_vol, current_ldim, current_smpd, formatchar='M', &
+                    &readhead=.false., rwaction='read')
                 !$omp parallel do default(shared) private(i) schedule(static) num_threads(4)
                 do i = 1, 4
                     select case(i)
                         case(1)
-                            call self%even%read_raw_mrc(ioimg_e)
+                            call even_rec%read_raw_mrc(ioimg_e)
                         case(2)
-                            call self%odd%read_raw_mrc(ioimg_o)
+                            call odd_rec%read_raw_mrc(ioimg_o)
                         case(3)
-                            call self%even%read_raw_rho(fhandle_rho_e)
+                            call even_rec%read_raw_rho(fhandle_rho_e)
                         case(4)
-                            call self%odd%read_raw_rho(fhandle_rho_o)
+                            call odd_rec%read_raw_rho(fhandle_rho_o)
                     end select
-                end do
+                enddo
                 !$omp end parallel do
             endif
             call ioimg_e%close
@@ -363,287 +132,146 @@ contains
             call fclose(fhandle_rho_e)
             call fclose(fhandle_rho_o)
         else
-            call self%reset_even
-            call self%reset_odd
+            if( present(required) )then
+                if( required )then
+                    THROW_HARD('required gridding pair accumulator artifact is incomplete: '//fbody%to_char())
+                endif
+            endif
+            call even_rec%reset
+            call odd_rec%reset
         endif
-    end subroutine read_eos_parallel_io
+    end subroutine read_gridding_pair_accumulators
 
-    !>  \brief  read the even reconstruction
-    subroutine read_even( self, fbody )
-        class(reconstructor_eo), intent(inout) :: self
-        class(string),           intent(in)    :: fbody
-        type(string) :: even_vol, even_rho
-        logical      :: here(2)
-        even_vol = fbody//'_even'//self%ext%to_char()
-        even_rho = string('rho_')//fbody//'_even'//self%ext%to_char()
-        here(1)= file_exists(even_vol)
-        here(2)= file_exists(even_rho)
-        if( all(here) )then
-            call self%even%read(even_vol)
-            call self%even%read_rho(even_rho)
-        else
-            call self%reset_even
-        endif
-    end subroutine read_even
+    !> Write an explicit even/odd gridding-accumulator artifact using the
+    !! established numerator/rho filenames.
+    subroutine write_gridding_pair_accumulators( even_rec, odd_rec, fbody )
+        class(reconstructor), intent(inout) :: even_rec, odd_rec
+        class(string),        intent(in)    :: fbody
+        call even_rec%write_raw_accum(fbody//'_even'//MRC_EXT, &
+            &string('rho_')//fbody//'_even'//MRC_EXT)
+        call odd_rec%write_raw_accum(fbody//'_odd'//MRC_EXT, &
+            &string('rho_')//fbody//'_odd'//MRC_EXT)
+    end subroutine write_gridding_pair_accumulators
 
-    !>  \brief  read the odd reconstruction
-    subroutine read_odd( self, fbody )
-        class(reconstructor_eo), intent(inout) :: self
-        class(string),           intent(in)    :: fbody
-        type(string) :: odd_vol, odd_rho
-        logical      :: here(2)
-        odd_vol = fbody//'_odd'//self%ext%to_char()
-        odd_rho = string('rho_')//fbody//'_odd'//self%ext%to_char()
-        here(1)= file_exists(odd_vol)
-        here(2)= file_exists(odd_rho)
-        if( all(here) )then
-            call self%odd%read(odd_vol)
-            call self%odd%read_rho(odd_rho)
-        else
-            call self%reset_odd
-        endif
-    end subroutine read_odd
-
-    ! INTERPOLATION
-
-    !> \brief  for gridding a Fourier plane
-    subroutine grid_plane( self, se, o, fpl, eo )
-        class(reconstructor_eo), intent(inout) :: self    !< instance
-        class(sym),              intent(inout) :: se      !< symmetry elements
-        class(ori),              intent(inout) :: o       !< orientation
-        class(fplane_type),      intent(in)    :: fpl     !< Forurier & ctf planes
-        integer,                 intent(in)    :: eo      !< eo flag
-        select case(eo)
-            case(-1,0)
-                call self%even%insert_plane_oversamp(se, o, fpl)
-            case(1)
-                call self%odd%insert_plane_oversamp(se, o, fpl)
-            case DEFAULT
-                THROW_HARD('unsupported eo flag; grid_plane')
-        end select
-    end subroutine grid_plane
-
-    !> \brief grid a compact native-grid 2D KB numerator/CTF^2 sum
-    subroutine grid_plane_compact( self, se, o, fpl, eo )
-        class(reconstructor_eo), intent(inout) :: self
-        class(sym),              intent(inout) :: se
-        class(ori),              intent(inout) :: o
-        class(fplane_type),      intent(in)    :: fpl
-        integer,                 intent(in)    :: eo
-        select case(eo)
-            case(-1,0)
-                call self%even%insert_plane_oversamp(se, o, fpl, compact_source=.true.)
-            case(1)
-                call self%odd%insert_plane_oversamp(se, o, fpl, compact_source=.true.)
-            case DEFAULT
-                THROW_HARD('unsupported eo flag; grid_plane_compact')
-        end select
-    end subroutine grid_plane_compact
-
-    !> \brief  for summing the even odd pairs, resulting sum in self%even
-    subroutine sum_eos( self )
-        class(reconstructor_eo), intent(inout) :: self !< instance
-        call self%eosum%reset
-        call self%eosum%sum_reduce(self%even)
-        call self%eosum%sum_reduce(self%odd)
-    end subroutine sum_eos
-
-    !> \brief  for summing reconstructors generated by parallel execution
-    subroutine sum_reduce( self, self_in )
-         class(reconstructor_eo), intent(inout) :: self
-         class(reconstructor_eo), intent(in)    :: self_in
-         call self%even%sum_reduce(self_in%even)
-         call self%odd%sum_reduce(self_in%odd)
-    end subroutine sum_reduce
-
-    !>  \brief compress e/o
-    subroutine compress_exp( self )
-        class(reconstructor_eo), intent(inout) :: self
-        call self%even%compress_exp
-        call self%odd%compress_exp
-    end subroutine compress_exp
-
-    !>  \brief expand e/o
-    subroutine expand_exp( self )
-        class(reconstructor_eo), intent(inout) :: self
-        call self%even%expand_exp
-        call self%odd%expand_exp
-    end subroutine expand_exp
-
-    subroutine project_polar( self, eulspace, nspace, kfromto, polar_x, polar_y, &
-            &pfts_even, pfts_odd, ctf2_even, ctf2_odd )
-        class(reconstructor_eo), intent(inout) :: self
-        class(oris),             intent(inout) :: eulspace
-        integer,                 intent(in)    :: nspace, kfromto(2)
-        real(sp),                intent(in)    :: polar_x(:,:), polar_y(:,:)
-        complex(dp),             intent(out)   :: pfts_even(:,:,:), pfts_odd(:,:,:)
-        real(dp),                intent(out)   :: ctf2_even(:,:,:), ctf2_odd(:,:,:)
-        call self%even%project_polar(eulspace, nspace, kfromto, polar_x, polar_y, pfts_even, ctf2_even)
-        call self%odd%project_polar( eulspace, nspace, kfromto, polar_x, polar_y, pfts_odd,  ctf2_odd )
-    end subroutine project_polar
-
-    !> \brief  for sampling density correction of the eo pairs
-    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg, fsc_in, cones_in )
+    !> Restore one explicit gridding half pair. This owns backend-specific
+    !! base/replay mechanics but no composite lifetime, partial reduction, or
+    !! trailing-chain policy.
+    subroutine restore_gridding_pair( params, even_rec, odd_rec, state, fname_even, fname_odd, &
+        &diagnostics, fsc_in, cfar_in, cones_in )
         use simple_fsc, only: fsc_area_score_result
-        class(reconstructor_eo),                intent(inout) :: self                   !< instance
-        integer,                                intent(in)    :: state                  !< state
-        class(string),                          intent(in)    :: fname_even, fname_odd  !< even/odd filenames
-        integer,                                intent(out)   :: find4eoavg             !< Fourier index for eo averaging
-        real, optional,                         intent(in)    :: fsc_in(self%filtsz)    !< inputted fsc
+        class(parameters),                      intent(in)    :: params
+        class(reconstructor),                   intent(inout) :: even_rec, odd_rec
+        integer,                                intent(in)    :: state
+        class(string),                          intent(in)    :: fname_even, fname_odd
+        type(gridding_pair_diagnostics),        intent(out)   :: diagnostics
+        real, optional,                         intent(in)    :: fsc_in(:)
+        real, optional,                         intent(in)    :: cfar_in
         class(fsc_area_score_result), optional, intent(inout) :: cones_in
-        type(image)                 :: even, odd, volmsk
+        type(gridding_half_restore) :: even_restore, odd_restore
         type(fsc_area_score_result) :: cones_fsc
-        complex,  allocatable :: cmat(:,:,:)
         real,     allocatable :: res(:)
+        real                  :: smpd, fny
+        integer               :: box, filtsz
         logical               :: l_have_fsc
-        res = get_resarr(self%box, self%smpd)
-        if( allocated(self%fsc) ) deallocate(self%fsc)
+        box    = params%box_crop
+        smpd   = params%smpd_crop
+        filtsz = fdim(box) - 1
+        fny    = 2. * smpd
+        res    = get_resarr(box, smpd)
         if( present(fsc_in) )then
-            allocate(self%fsc(self%filtsz),source=fsc_in)
+            if( .not. present(cfar_in) ) THROW_HARD('cfar_in must accompany an input gridding FSC')
+            if( size(fsc_in) /= filtsz ) THROW_HARD('input FSC size does not match gridding reconstruction')
+            allocate(diagnostics%fsc(filtsz), source=fsc_in)
+            diagnostics%cfar = cfar_in
             l_have_fsc = .true.
-            if( self%p_ptr %l_ml_reg .and. (self%p_ptr%conical_fsc == 'yes') )then
+            if( params%l_ml_reg .and. (params%conical_fsc == 'yes') )then
                 if( .not. present(cones_in) )then
                     THROW_HARD('cones_in must be provided if conical regularization is enabled')
                 endif
             endif
         else
-            allocate(self%fsc(self%filtsz),source=0.)
+            allocate(diagnostics%fsc(filtsz), source=0.)
             l_have_fsc = .false.
         endif
+        call even_restore%new(even_rec)
+        call odd_restore%new(odd_rec)
         ! ML-regularization
-        if( self%p_ptr%l_ml_reg )then
+        if( params%l_ml_reg )then
             ! preprocessing for FSC calculation
             ! even
-            cmat = self%even%get_cmat()
-            call self%even%sampl_dens_correct
-            even = self%even
-            call self%even%set_cmat(cmat)
-            deallocate(cmat)
-            call even%ifft()
-            call even%clip_inplace([self%box,self%box,self%box])
+            call even_rec%restore_base(even_restore%base, preserve_numerator=.true.)
             ! write a deapodized copy; the in-memory half stays undeapodized so the
             ! FSC below matches the legacy estimate (the inverse envelope's edge
             ! gain up-weights rim noise and shifts the FSC crossing)
-            call write_deapodized(even, add2fbody(fname_even,MRC_EXT,'_unfil'))
+            call even_restore%finalize_from_base(even_rec)
+            call even_restore%final%write(add2fbody(fname_even,MRC_EXT,'_unfil'), del_if_exists=.true.)
+            call even_restore%final%kill
             ! odd
-            cmat = self%odd%get_cmat()
-            call self%odd%sampl_dens_correct
-            odd = self%odd
-            call self%odd%set_cmat(cmat)
-            deallocate(cmat)
-            call odd%ifft()
-            call odd%clip_inplace([self%box,self%box,self%box])
-            call write_deapodized(odd, add2fbody(fname_odd,MRC_EXT,'_unfil'))
+            call odd_rec%restore_base(odd_restore%base, preserve_numerator=.true.)
+            call odd_restore%finalize_from_base(odd_rec)
+            call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
+            call odd_restore%final%kill
             ! Regularization
             if( l_have_fsc )then
-                if( (self%p_ptr%conical_fsc == 'yes') )then
-                    call self%even%add_conical_invtausq2rho(cones_in)
-                    call self%odd%add_conical_invtausq2rho(cones_in)
+                if( params%conical_fsc == 'yes' )then
+                    call even_rec%add_conical_invtausq2rho(cones_in)
+                    call odd_rec%add_conical_invtausq2rho(cones_in)
                 else
-                    call self%even%add_invtausq2rho(self%fsc)
-                    call self%odd%add_invtausq2rho(self%fsc)
+                    call even_rec%add_invtausq2rho(diagnostics%fsc)
+                    call odd_rec%add_invtausq2rho(diagnostics%fsc)
                 endif
             else
-                if( self%p_ptr%l_envfsc )then
-                    ! Density-envelope FSC and cFAR calculations use the same mask.
-                    call calc_env_fsc_optlp(self%p_ptr, even, odd, state, self%fsc, envmsk=volmsk)
-                    call calc_masked_cfar(self, even, odd, state, cones_fsc, envmsk=volmsk)
-                else
-                    ! Broad-spherical FSC and cFAR calculations use the same mask.
-                    call calc_masked_cfar(self, even, odd, state, cones_fsc)
-                    call apply_spherical_fsc_mask(self, even, odd)
-                    call even%fft
-                    call odd%fft
-                    call even%fsc(odd, self%fsc)
-                endif
+                call calculate_gridding_pair_fsc(params, even_restore%base, odd_restore%base, &
+                    &state, diagnostics%fsc, diagnostics%cfar, cones=cones_fsc)
                 ! Regularization
-                if( self%p_ptr%conical_fsc == 'yes' )then
-                    call self%even%add_conical_invtausq2rho(cones_fsc)
-                    call self%odd%add_conical_invtausq2rho(cones_fsc)
+                if( params%conical_fsc == 'yes' )then
+                    call even_rec%add_conical_invtausq2rho(cones_fsc)
+                    call odd_rec%add_conical_invtausq2rho(cones_fsc)
                 else
-                    call self%even%add_invtausq2rho(self%fsc)
-                    call self%odd%add_invtausq2rho(self%fsc)
+                    call even_rec%add_invtausq2rho(diagnostics%fsc)
+                    call odd_rec%add_invtausq2rho(diagnostics%fsc)
                 endif
             endif
             ! Even: uneven sampling density correction, clip, & write
-            cmat = self%even%get_cmat()
-            call self%even%sampl_dens_correct
-            call self%even%ifft
-            call even%zero_and_unflag_ft
-            call self%even%clip(even)
-            call self%deapodize(even)
-            call even%write(fname_even, del_if_exists=.true.)
-            call self%even%set_cmat(cmat)
-            call even%kill
-            deallocate(cmat)
+            call even_restore%base%kill
+            call even_restore%prepare_final(even_rec)
+            call even_rec%restore_final(even_restore%final, preserve_numerator=.true.)
+            call even_restore%final%write(fname_even, del_if_exists=.true.)
+            call even_restore%final%kill
             ! Odd: uneven sampling density correction, clip, & write
-            cmat = self%odd%get_cmat()
-            call self%odd%sampl_dens_correct
-            call self%odd%ifft
-            call odd%zero_and_unflag_ft
-            call self%odd%clip(odd)
-            call self%deapodize(odd)
-            call odd%write(fname_odd, del_if_exists=.true.)
-            call self%odd%set_cmat(cmat)
-            call odd%kill
-            deallocate(cmat)
+            call odd_restore%base%kill
+            call odd_restore%prepare_final(odd_rec)
+            call odd_rec%restore_final(odd_restore%final, preserve_numerator=.true.)
+            call odd_restore%final%write(fname_odd, del_if_exists=.true.)
+            call odd_restore%final%kill
         else
-            ! make clipped volumes
-            call even%new([self%box,self%box,self%box],self%smpd)
-            call odd%new([self%box,self%box,self%box],self%smpd)
             ! correct for the uneven sampling density
-            call self%even%sampl_dens_correct
-            call self%odd%sampl_dens_correct
-            ! reverse FT
-            call self%even%ifft()
-            call self%odd%ifft()
-            ! clip
-            call self%even%clip(even)
-            call self%odd%clip(odd)
+            call even_rec%restore_base(even_restore%base)
+            call odd_rec%restore_base(odd_restore%base)
             ! write un-normalised unmasked DEAPODIZED even/odd volumes; the in-memory
             ! halves stay undeapodized so the FSC below matches the legacy estimate
-            call write_deapodized(even, fname_even)
-            call write_deapodized(odd,  fname_odd)
+            call even_restore%finalize_from_base(even_rec)
+            call even_restore%final%write(fname_even, del_if_exists=.true.)
+            call even_restore%final%kill
+            call odd_restore%finalize_from_base(odd_rec)
+            call odd_restore%final%write(fname_odd, del_if_exists=.true.)
+            call odd_restore%final%kill
             if( .not. l_have_fsc )then
-                if( self%p_ptr%l_envfsc )then
-                    call calc_env_fsc_optlp(self%p_ptr, even, odd, state, self%fsc, envmsk=volmsk)
-                    call calc_masked_cfar(self, even, odd, state, cones_fsc, envmsk=volmsk)
-                else
-                    call calc_masked_cfar(self, even, odd, state, cones_fsc)
-                    call apply_spherical_fsc_mask(self, even, odd)
-                    call even%fft
-                    call odd%fft
-                    call even%fsc(odd, self%fsc)
-                endif
+                call calculate_gridding_pair_fsc(params, even_restore%base, odd_restore%base, &
+                    &state, diagnostics%fsc, diagnostics%cfar, cones=cones_fsc)
             endif
         endif
         ! save, get & print resolution
-        call arr2file(self%fsc, refine3D_fsc_fname(state))
-        call get_resolution(self%fsc, res, self%res_fsc05, self%res_fsc0143)
-        self%res_fsc05   = max(self%res_fsc05,self%fny)
-        self%res_fsc0143 = max(self%res_fsc0143,self%fny)
-        ! Fourier index for eo averaging
-        find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D,self%box,self%smpd))
-        find4eoavg = min(find4eoavg, get_find_at_crit(self%fsc, FSC4EOAVG3D))
+        call arr2file(diagnostics%fsc, refine3D_fsc_fname(state))
+        call get_resolution(diagnostics%fsc, res, diagnostics%res_fsc05, diagnostics%res_fsc0143)
+        diagnostics%res_fsc05   = max(diagnostics%res_fsc05, fny)
+        diagnostics%res_fsc0143 = max(diagnostics%res_fsc0143, fny)
         deallocate(res)
-        call even%kill
-        call odd%kill
+        call even_restore%kill
+        call odd_restore%kill
         call cones_fsc%kill
-        call volmsk%kill
 
-        contains
-
-            subroutine write_deapodized( vol, fname )
-                class(image),  intent(in) :: vol
-                class(string), intent(in) :: fname
-                type(image) :: tmp
-                call tmp%copy(vol)
-                call self%deapodize(tmp)
-                call tmp%write(fname, del_if_exists=.true.)
-                call tmp%kill
-            end subroutine write_deapodized
-
-    end subroutine sampl_dens_correct_eos
+    end subroutine restore_gridding_pair
 
     subroutine calc_env_fsc_optlp( params, even, odd, state, fsc_corrected, envmsk )
         class(parameters),     intent(in)    :: params
@@ -681,11 +309,12 @@ contains
         call mskvol%kill_bimg
     end subroutine calc_density_envmask
 
-    subroutine calc_masked_cfar( self, even, odd, state, cones, envmsk )
-        class(reconstructor_eo),       intent(inout) :: self
+    subroutine calc_masked_cfar( msk, even, odd, state, cones, cfar, envmsk )
+        real,                          intent(in)    :: msk
         class(image),                  intent(in)    :: even, odd
         integer,                       intent(in)    :: state
         class(fsc_area_score_result),  intent(inout) :: cones
+        real,                          intent(out)   :: cfar
         class(image), optional,        intent(in)    :: envmsk
         type(image) :: even_tmp, odd_tmp
         call even_tmp%copy(even)
@@ -698,130 +327,101 @@ contains
             call even_tmp%mul(envmsk)
             call odd_tmp%mul(envmsk)
         else
-            call apply_spherical_fsc_mask(self, even_tmp, odd_tmp)
+            call apply_spherical_fsc_mask(msk, even_tmp, odd_tmp)
         endif
         call cones%new(even_tmp, 256, 20., 0.143, 1)
         call cones%calc_fsc_area_score(even_tmp, odd_tmp, state=state)
-        self%cfar = cones%cfar
+        cfar = cones%cfar
         call even_tmp%kill
         call odd_tmp%kill
     end subroutine calc_masked_cfar
 
     !> Apply the broad spherical mask used when density-envelope FSC is disabled.
-    subroutine apply_spherical_fsc_mask( self, even, odd )
-        class(reconstructor_eo), intent(inout) :: self
-        class(image),            intent(inout) :: even, odd
-        call even%mask3D_soft(self%msk, backgr=0.)
-        call odd%mask3D_soft(self%msk, backgr=0.)
+    subroutine apply_spherical_fsc_mask( msk, even, odd )
+        real,         intent(in)    :: msk
+        class(image), intent(inout) :: even, odd
+        call even%mask3D_soft(msk, backgr=0.)
+        call odd%mask3D_soft(msk, backgr=0.)
     end subroutine apply_spherical_fsc_mask
 
-    subroutine calc_fsc4sampl_dens_correct( self, even, odd, fsc, state, cones )
-        class(reconstructor_eo),                intent(inout) :: self
+    !> Calculate the FSC and conical FSC area score for an explicit image pair.
+    !! The input images retain the legacy representation expected by the
+    !! gridding restoration path; masking and Fourier conversion use copies.
+    subroutine calculate_gridding_pair_fsc( params, even, odd, state, fsc, cfar, cones )
+        class(parameters),                      intent(in)    :: params
         class(image),                           intent(inout) :: even, odd
-        real, allocatable,                      intent(inout) :: fsc(:)
         integer,                                intent(in)    :: state
+        real, allocatable,                      intent(inout) :: fsc(:)
+        real,                                   intent(out)   :: cfar
         class(fsc_area_score_result), optional, intent(inout) :: cones
-        type(image) :: even_tmp, odd_tmp, envmsk
+        type(image)                 :: even_tmp, odd_tmp, envmsk
         type(fsc_area_score_result) :: cones_local
-        if( allocated(fsc)      ) deallocate(fsc)
-        if( allocated(self%fsc) ) deallocate(self%fsc)
-        call even_tmp%copy(even)
-        call odd_tmp%copy(odd)
-        if( self%p_ptr%l_envfsc )then
-            call calc_env_fsc_optlp(self%p_ptr, even, odd, state, fsc, envmsk=envmsk)
+        real    :: msk
+        integer :: filtsz
+        msk     = real(params%box_crop / 2) - COSMSKHALFWIDTH - 1.
+        filtsz  = fdim(params%box_crop) - 1
+        if( allocated(fsc) ) deallocate(fsc)
+        if( params%l_envfsc )then
+            call calc_env_fsc_optlp(params, even, odd, state, fsc, envmsk=envmsk)
             if( present(cones) )then
-                call calc_masked_cfar(self, even, odd, state, cones, envmsk=envmsk)
+                call calc_masked_cfar(msk, even, odd, state, cones, cfar, envmsk=envmsk)
             else
-                call calc_masked_cfar(self, even, odd, state, cones_local, envmsk=envmsk)
+                call calc_masked_cfar(msk, even, odd, state, cones_local, cfar, envmsk=envmsk)
+                call cones_local%kill
             endif
             call envmsk%kill
         else
-            allocate(fsc(self%filtsz), source=0.)
+            allocate(fsc(filtsz), source=0.)
             if( present(cones) )then
-                call calc_masked_cfar(self, even, odd, state, cones)
+                call calc_masked_cfar(msk, even, odd, state, cones, cfar)
             else
-                call calc_masked_cfar(self, even, odd, state, cones_local)
+                call calc_masked_cfar(msk, even, odd, state, cones_local, cfar)
                 call cones_local%kill
             endif
+            ! the temporaries protect the caller's pair from the destructive
+            ! spherical masking; the envfsc branch never needs them
+            call even_tmp%copy(even)
+            call odd_tmp%copy(odd)
             call even_tmp%ifft
             call odd_tmp%ifft
-            call apply_spherical_fsc_mask(self, even_tmp, odd_tmp)
+            call apply_spherical_fsc_mask(msk, even_tmp, odd_tmp)
             call even_tmp%fft
             call odd_tmp%fft
             call even_tmp%fsc(odd_tmp, fsc)
         endif
-        allocate(self%fsc(self%filtsz), source=fsc)
-        ! cleanup
         call even_tmp%kill
         call odd_tmp%kill
-    end subroutine calc_fsc4sampl_dens_correct
+    end subroutine calculate_gridding_pair_fsc
 
-    subroutine write_fsc2txt( self, fname )
-        class(reconstructor_eo), intent(in) :: self
-        class(string),           intent(in) :: fname
+    subroutine write_gridding_pair_diagnostics( diagnostics, box, smpd, fname )
+        type(gridding_pair_diagnostics), intent(in) :: diagnostics
+        integer,                         intent(in) :: box
+        real,                            intent(in) :: smpd
+        class(string),                   intent(in) :: fname
         real, allocatable :: res(:)
         integer :: k, fnr
-        if( .not. allocated(self%fsc) ) THROW_HARD('No FSC available to write to text file!')
-        res = get_resarr(self%box, self%smpd)
+        if( .not. allocated(diagnostics%fsc) ) THROW_HARD('No gridding pair FSC available to write')
+        res = get_resarr(box, smpd)
         call fopen(fnr, FILE=fname, STATUS='REPLACE', action='WRITE')
         do k=1,size(res)
-            write(fnr,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', self%fsc(k)
+            write(fnr,'(A,1X,F6.2,1X,A,1X,F7.3)') &
+                &'>>> RESOLUTION:', res(k), '>>> CORRELATION:', diagnostics%fsc(k)
         end do
-        write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
-        write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
-        write(fnr,'(A,1X,F6.2)') '>>> CONICAL FSC AREA RATIO (cFAR) SCORE  :', self%cfar
+        write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', diagnostics%res_fsc05
+        write(fnr,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', diagnostics%res_fsc0143
+        write(fnr,'(A,1X,F6.2)') '>>> CONICAL FSC AREA RATIO (cFAR) SCORE  :', diagnostics%cfar
         call fclose(fnr)
-    end subroutine write_fsc2txt
+        deallocate(res)
+    end subroutine write_gridding_pair_diagnostics
 
-    !> \brief  for sampling density correction, antialiasing, ifft & normalization of the sum
-    subroutine sampl_dens_correct_sum( self, reference )
-        class(reconstructor_eo), intent(inout) :: self      !< instance
-        class(image),            intent(inout) :: reference !< reference volume
-        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
-        call reference%set_ft(.false.)
-        call self%eosum%sampl_dens_correct
-        call self%eosum%ifft()
-        call self%deapodize(self%eosum)
-        call self%eosum%clip(reference)
-    end subroutine sampl_dens_correct_sum
+    ! DIAGNOSTIC LIFECYCLE
 
-    !> \brief  divides a real-space map on the native lattice by the KB-stencil envelope
-    subroutine deapodize( self, vol )
-        class(reconstructor_eo), intent(in)    :: self
-        class(image),            intent(inout) :: vol
-        if( .not. allocated(self%invenv1d) ) THROW_HARD('deapodization envelope not built; reconstructor_eo::deapodize')
-        call deapodize3D_inplace(vol, self%invenv1d)
-    end subroutine deapodize
-
-    ! DESTRUCTORS
-
-    !>  \brief  is the expanded destructor
-    subroutine kill_exp( self )
-        class(reconstructor_eo), intent(inout) :: self !< instance
-        if( self%exists )then
-            call self%even%dealloc_exp
-            call self%odd%dealloc_exp
-            call self%eosum%dealloc_exp
-        endif
-    end subroutine kill_exp
-
-    !>  \brief  is a destructor
-    subroutine kill( self )
-        class(reconstructor_eo), intent(inout) :: self !< instance
-        if( self%exists )then
-            ! kill composites
-            call self%even%dealloc_rho
-            call self%even%kill
-            call self%odd%dealloc_rho
-            call self%odd%kill
-            call self%eosum%dealloc_rho
-            call self%eosum%kill
-            self%p_ptr => null()
-            ! set existence
-            self%exists = .false.
-        endif
-        if( allocated(self%fsc) )      deallocate(self%fsc)
-        if( allocated(self%invenv1d) ) deallocate(self%invenv1d)
-    end subroutine kill
+    subroutine kill_gridding_pair_diagnostics( self )
+        class(gridding_pair_diagnostics), intent(inout) :: self
+        if( allocated(self%fsc) ) deallocate(self%fsc)
+        self%res_fsc05   = 0.
+        self%res_fsc0143 = 0.
+        self%cfar        = 0.
+    end subroutine kill_gridding_pair_diagnostics
 
 end module simple_reconstructor_eo

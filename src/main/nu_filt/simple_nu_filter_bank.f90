@@ -32,8 +32,10 @@ contains
         nu_evidence_source = ''
         nu_evidence_source_fingerprint = 0.d0
         if( nu_evidence_requested )then
-            if( trim(evidence_source) /= NU_EVIDENCE_SOURCE_BASE ) &
-                &THROW_HARD('NU replay evidence source must be base_unfil')
+            if( trim(evidence_source) /= NU_EVIDENCE_SOURCE_BASE .and. &
+                &trim(evidence_source) /= NU_EVIDENCE_SOURCE_PREV )then
+                THROW_HARD('NU replay evidence source must be base_unfil or previous_shipped')
+            endif
             nu_evidence_source = trim(evidence_source)
         endif
         aux_replacement_idx = 0

@@ -1557,6 +1557,39 @@ recalibrate with a `pcg_nu_lambda_rel` strength ladder now that every run
 prints the readout, reading the suppression % against the shipped-pair
 crossing and the evidence trajectory.
 
+### DECISION (2026-08-28): NU replay supports trailing reconstruction (evidence pair = FSC pair)
+
+The hard block on `Q_NU` + `trail_rec` is lifted; real-data refinement needs
+both. The governing contract is **the evidence pair is always the FSC pair of
+the volassemble**:
+
+- **Trailing, chain present**: the base solves are the full-mass blended
+  chain solutions — the very statistics the ML replay re-reads
+  (`add_raw_accum_weighted` of the same chain) — so current-iteration
+  evidence from that pair (`source=base_unfil`) satisfies the "evidence from
+  the pair the replay reuses" requirement. The original block's concern (the
+  base pair is not the plain current-cohort pair) is resolved by matching the
+  evidence to the replayed statistics, not to the cohort.
+- **Trailing bootstrap (no chain yet)**: the FSC already comes lag-one from
+  the previous iteration's shipped half pair; the evidence comes from that
+  same pair (`source=previous_shipped`, a new allowed evidence source next
+  to `base_unfil`). Lag-one evidence is precedented by the retired solvent
+  envelope's one-iteration lag and is exactly as trustworthy as the
+  bootstrap FSC that `P_tau` would be built from. The current-cohort
+  fractional pair is NOT used: at small update fractions it can legitimately
+  fail null calibration and would hard-stop real runs.
+
+The accumulator arithmetic (chain blend weights, `scale_raw_accum`,
+fixed-order reduction) is the `test=pcg_frac_update`-gated path
+(`validate_rec3D_pcg_fractional_updates`) and is untouched: `Q_NU` attaches
+after accumulation and before `end_accum`, exactly where `set_ml_prior`
+does, so the prior is orthogonal to the tested trailing contracts. The
+firing readout's reference remains the base solution of the same half (in
+trailing, the blended base solve the replay warm-starts from), and the
+LP-set handoff derives from whichever evidence pair was used. Shared-memory
+trailing remains unsupported for PCG generally (pre-existing
+accumulator-domain restriction, unrelated to the prior).
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

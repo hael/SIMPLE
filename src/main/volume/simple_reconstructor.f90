@@ -4,11 +4,25 @@ use simple_core_module_api
 use simple_fftw3
 use simple_image,      only: image
 use simple_parameters, only: parameters
+use simple_gridding,   only: kb_stencil_inv_envelope_1d, deapodize3D_inplace
 implicit none
 
-public :: reconstructor
+public :: reconstructor, gridding_half_restore
 private
 #include "simple_local_flags.inc"
+
+!> Dense outputs produced while restoring one gridding half. The base image is
+!! deliberately undeapodized because it is the legacy FSC/cFAR representation;
+!! final is the deapodized map handed to downstream consumers.
+type :: gridding_half_restore
+    type(image) :: base
+    type(image) :: final
+  contains
+    procedure :: new                => new_gridding_half_restore
+    procedure :: prepare_final      => prepare_gridding_half_final
+    procedure :: finalize_from_base => finalize_gridding_half_restore
+    procedure :: kill               => kill_gridding_half_restore
+end type gridding_half_restore
 
 type, extends(image) :: reconstructor
     private
@@ -18,6 +32,7 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable, public :: cmat_exp(:,:,:)             !< Fourier components of expanded reconstructor, only made public for the sake of GPU implementation
     real,    allocatable, public :: rho_exp(:,:,:)              !< sampling+CTF**2 density of expanded reconstructor, only made public for the sake of GPU implementation
+    real,    allocatable         :: invenv1d(:)                  !< inverse KB-stencil envelope on the native lattice
     real                        :: shconst_rec(3) = 0.          !< memoized constants for origin shifting
     integer                     :: wdim           = 0           !< dim of interpolation matrix
     integer                     :: nyq            = 0           !< Nyqvist Fourier index
@@ -31,6 +46,7 @@ type, extends(image) :: reconstructor
     logical                     :: rho_allocated  = .false.     !< existence of rho matrix
   contains
     ! CONSTRUCTORS
+    procedure          :: new_accumulator
     procedure          :: alloc_rho
     ! SETTERS
     procedure          :: reset
@@ -42,12 +58,17 @@ type, extends(image) :: reconstructor
     ! GETTERS
     procedure          :: get_kbwin
     ! I/O
+    procedure          :: write_raw_accum
     procedure          :: write_rho, write_rho_as_mrc, write_absfc_as_mrc
     procedure          :: read_rho, read_raw_rho
     ! CONVOLUTION INTERPOLATION
     procedure          :: insert_plane_oversamp
     procedure          :: insert_plane_oversamp_opt
     procedure          :: sampl_dens_correct
+    procedure          :: deapodize => deapodize_self
+    procedure          :: deapodize_volume
+    procedure          :: restore_base
+    procedure          :: restore_final
     procedure          :: floor_rho_shellwise
     procedure          :: compress_exp
     procedure          :: expand_exp
@@ -60,11 +81,49 @@ type, extends(image) :: reconstructor
     ! DESTRUCTORS
     procedure          :: dealloc_exp
     procedure          :: dealloc_rho
+    procedure          :: kill => kill_reconstructor
 end type reconstructor
 
 contains
 
     ! CONSTRUCTORS
+
+    subroutine new_gridding_half_restore( self, backend, wthreads )
+        class(gridding_half_restore), intent(inout) :: self
+        class(reconstructor),         intent(in)    :: backend
+        logical, optional,            intent(in)    :: wthreads
+        integer :: ldim(3)
+        call self%kill
+        if( .not. backend%exists() ) THROW_HARD('construct gridding backend before restoration result')
+        ldim = backend%get_ldim()
+        call self%base%new(ldim, backend%get_smpd(), wthreads)
+    end subroutine new_gridding_half_restore
+
+    subroutine prepare_gridding_half_final( self, backend, wthreads )
+        class(gridding_half_restore), intent(inout) :: self
+        class(reconstructor),         intent(in)    :: backend
+        logical, optional,            intent(in)    :: wthreads
+        if( .not. backend%exists() ) THROW_HARD('construct gridding backend before final restoration')
+        call self%final%new(backend%get_ldim(), backend%get_smpd(), wthreads)
+    end subroutine prepare_gridding_half_final
+
+    !> Construct a complete one-half gridding accumulator on the active crop
+    !! grid. This is the reconstruction-backend lifecycle entry point; callers
+    !! no longer need to coordinate the inherited image allocation with rho.
+    subroutine new_accumulator( self, params, spproj, expand, wthreads )
+        use simple_sp_project, only: sp_project
+        class(reconstructor),      intent(inout) :: self
+        class(parameters), target, intent(inout) :: params
+        class(sp_project),         intent(inout) :: spproj
+        logical,                   intent(in)    :: expand
+        logical, optional,         intent(in)    :: wthreads
+        integer :: ldim(3)
+        call self%kill
+        ldim = [params%box_crop, params%box_crop, params%box_crop]
+        call self%image%new(ldim, params%smpd_crop, wthreads)
+        call self%alloc_rho(params, spproj, expand)
+        if( expand ) call self%reset_exp
+    end subroutine new_accumulator
 
     subroutine alloc_rho( self, params, spproj, expand )
         use simple_sp_project, only: sp_project
@@ -88,6 +147,7 @@ contains
         self%lims           = self%loop_lims(2)
         self%cyc_lims       = self%loop_lims(3)
         self%shconst_rec    = self%get_shconst()
+        call kb_stencil_inv_envelope_1d(self%ldim_img(1), self%invenv1d)
         ! Work out dimensions of the rho array
         self%rho_shape(1)   = fdim(self%ldim_img(1))
         self%rho_shape(2:3) = self%ldim_img(2:3)
@@ -179,6 +239,18 @@ contains
     end function get_kbwin
 
     ! I/O
+
+    !> Write one raw gridding accumulator without imposing state/half naming
+    !! policy. The caller owns the explicit numerator and density filenames.
+    subroutine write_raw_accum( self, numerator_fname, density_fname )
+        class(reconstructor), intent(inout) :: self
+        class(string),        intent(in)    :: numerator_fname, density_fname
+        if( .not. self%exists() ) THROW_HARD('gridding accumulator image is not constructed')
+        if( .not. self%rho_allocated ) THROW_HARD('gridding accumulator density is not allocated')
+        call self%write(numerator_fname, del_if_exists=.true.)
+        call self%write_rho(density_fname)
+    end subroutine write_raw_accum
+
     !>Write reconstructed image
     subroutine write_rho( self, kernam )
         class(reconstructor), intent(in) :: self   !< this instance
@@ -217,6 +289,102 @@ contains
     end subroutine read_raw_rho
 
     ! CONVOLUTION INTERPOLATION
+
+    !> Divide a native-grid real-space map by this gridding operator's
+    !! discrete KB deposition envelope.
+    subroutine deapodize_self( self )
+        class(reconstructor), intent(inout) :: self
+        if( .not. allocated(self%invenv1d) ) THROW_HARD('gridding deapodization envelope is not built')
+        call deapodize3D_inplace(self, self%invenv1d)
+    end subroutine deapodize_self
+
+    subroutine deapodize_volume( self, vol )
+        class(reconstructor), intent(in)    :: self
+        class(image),         intent(inout) :: vol
+        if( .not. allocated(self%invenv1d) ) THROW_HARD('gridding deapodization envelope is not built')
+        call deapodize3D_inplace(vol, self%invenv1d)
+    end subroutine deapodize_volume
+
+    !> Promote the legacy FSC base representation to the deapodized final-map
+    !! representation without changing the base image.
+    subroutine finalize_gridding_half_restore( self, backend )
+        class(gridding_half_restore), intent(inout) :: self
+        class(reconstructor),         intent(in)    :: backend
+        if( .not. self%base%exists() ) THROW_HARD('gridding half restore has no base image')
+        call self%final%copy(self%base)
+        call backend%deapodize_volume(self%final)
+    end subroutine finalize_gridding_half_restore
+
+    !> Restore the dense, undeapodized native-grid map used as the legacy
+    !! gridding FSC oracle. With preserve_numerator=.true., sampling-density
+    !! correction runs on a temporary image and the raw Fourier numerator is
+    !! restored for a later FSC-prior replay. Rho is deliberately not copied:
+    !! attaching a prior to it remains an in-place backend operation.
+    subroutine restore_base( self, vol, preserve_numerator )
+        class(reconstructor), intent(inout) :: self
+        class(image),         intent(inout) :: vol
+        logical, optional,    intent(in)    :: preserve_numerator
+        complex, allocatable :: cmat(:,:,:)
+        logical :: l_preserve
+        call validate_restore_source(self)
+        l_preserve = .false.
+        if( present(preserve_numerator) ) l_preserve = preserve_numerator
+        if( l_preserve )then
+            cmat = self%get_cmat()
+            call self%sampl_dens_correct
+            vol = self
+            call self%set_cmat(cmat)
+            deallocate(cmat)
+            call vol%ifft()
+            call vol%clip_inplace(self%ldim_img)
+        else
+            call validate_restore_target(self, vol)
+            call self%sampl_dens_correct
+            call self%ifft()
+            call self%clip(vol)
+        endif
+    end subroutine restore_base
+
+    !> Restore the dense, deapodized native-grid map shipped to downstream
+    !! consumers. Numerator preservation supports the ML replay path after an
+    !! FSC-derived prior has been attached to rho.
+    subroutine restore_final( self, vol, preserve_numerator )
+        class(reconstructor), intent(inout) :: self
+        class(image),         intent(inout) :: vol
+        logical, optional,    intent(in)    :: preserve_numerator
+        complex, allocatable :: cmat(:,:,:)
+        logical :: l_preserve
+        call validate_restore_source(self)
+        l_preserve = .false.
+        if( present(preserve_numerator) ) l_preserve = preserve_numerator
+        call validate_restore_target(self, vol)
+        if( l_preserve ) cmat = self%get_cmat()
+        call self%sampl_dens_correct
+        call self%ifft()
+        if( l_preserve )then
+            call vol%zero_and_unflag_ft
+            call self%clip(vol)
+            call self%deapodize_volume(vol)
+            call self%set_cmat(cmat)
+            deallocate(cmat)
+        else
+            call self%deapodize
+            call self%clip(vol)
+        endif
+    end subroutine restore_final
+
+    subroutine validate_restore_source( self )
+        class(reconstructor), intent(in) :: self
+        if( .not. self%exists() ) THROW_HARD('gridding restoration source is not constructed')
+        if( .not. self%rho_allocated ) THROW_HARD('gridding restoration density is not allocated')
+    end subroutine validate_restore_source
+
+    subroutine validate_restore_target( self, vol )
+        class(reconstructor), intent(in) :: self
+        class(image),         intent(in) :: vol
+        if( .not. vol%exists() ) THROW_HARD('construct gridding restoration target before use')
+        if( any(vol%get_ldim() /= self%ldim_img) ) THROW_HARD('gridding restoration target has incompatible dimensions')
+    end subroutine validate_restore_target
 
     !> Experimental variant of insert_plane_oversamp for benchmarking.
     !! It preserves the original h-strided OpenMP race-avoidance scheme, but
@@ -1084,6 +1252,30 @@ contains
 
     ! DESTRUCTORS
 
+    subroutine kill_gridding_half_restore( self )
+        class(gridding_half_restore), intent(inout) :: self
+        call self%base%kill
+        call self%final%kill
+    end subroutine kill_gridding_half_restore
+
+    !> Complete destructor for the extended image. A bare reconstructor%kill
+    !! must release the inherited image, rho, and expanded accumulator storage.
+    subroutine kill_reconstructor( self )
+        class(reconstructor), intent(inout) :: self
+        call self%dealloc_rho
+        self%p_ptr => null()
+        self%shconst_rec = 0.
+        self%wdim        = 0
+        self%nyq         = 0
+        self%sh_lim      = 0
+        self%ldim_img    = 0
+        self%ldim_exp    = 0
+        self%lims        = 0
+        self%rho_shape   = 0
+        self%cyc_lims    = 0
+        call self%image%kill
+    end subroutine kill_reconstructor
+
     !>  \brief  is the expanded destructor
     subroutine dealloc_exp( self )
         class(reconstructor), intent(inout) :: self !< this instance
@@ -1095,6 +1287,7 @@ contains
     subroutine dealloc_rho( self )
         class(reconstructor), intent(inout) :: self !< this instance
         call self%dealloc_exp
+        if( allocated(self%invenv1d) ) deallocate(self%invenv1d)
         if( self%rho_allocated )then
             call fftwf_free(self%kp)
             self%rho => null()

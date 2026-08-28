@@ -30,15 +30,19 @@ contains
     !> restored half-volumes needed by automask, while vol_nu_base_even/odd and
     !> optional vol_nu_aux_even/odd contain the static-bank nonuniform-filter
     !> auxiliary inputs before even/odd low-resolution insertion.
-    subroutine restore_state_from_parts( params, build, cline, eorecvol_read, state, numlen_part, &
+    subroutine restore_state_from_parts( params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
+        &sum_rec, state, numlen_part, &
         &update_frac_trail_rec, realized_update_frac, vol_prev_even, vol_prev_odd, vol_merged, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
         &volname, eonames, res05, res0143, timings )
-        use simple_reconstructor_eo, only: reconstructor_eo
+        use simple_reconstructor, only: reconstructor
+        use simple_reconstructor_eo, only: gridding_pair_diagnostics, calculate_gridding_pair_fsc, &
+            &read_gridding_pair_accumulators, restore_gridding_pair, write_gridding_pair_accumulators, &
+            &write_gridding_pair_diagnostics
         type(parameters),       intent(in)    :: params
         type(builder),          intent(inout) :: build
         class(cmdline),         intent(in)    :: cline
-        type(reconstructor_eo), intent(inout) :: eorecvol_read
+        type(reconstructor),    intent(inout) :: even_rec, odd_rec, read_even_rec, read_odd_rec, sum_rec
         integer,                intent(in)    :: state, numlen_part
         real,                   intent(in)    :: update_frac_trail_rec !< applied map-update weight u (ufrac_trec override or realized)
         real,                   intent(in)    :: realized_update_frac  !< realized fraction f that produced the current partials
@@ -50,9 +54,10 @@ contains
         type(restore_timings_t), intent(inout) :: timings
         type(string) :: volname_prev, volname_prev_even, volname_prev_odd
         type(string) :: fsc_txt_file, trail_fbody
+        type(gridding_pair_diagnostics) :: pair_diagnostics
         real, allocatable :: fsc(:)
-        real    :: weight_prev
-        integer :: find4eoavg, ldim(3), trail_chain_gen
+        real    :: weight_prev, bootstrap_cfar
+        integer :: ldim(3), trail_chain_gen
         logical :: l_trail_chain
         integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos, t_trail
         integer(timer_int_kind) :: t_trail_blend
@@ -86,10 +91,13 @@ contains
         subroutine reduce_partials()
             integer :: part
             if( L_BENCH_GLOB ) t_reduce_partials = tic()
-            call build%eorecvol%reset_all
+            call even_rec%reset
+            call odd_rec%reset
             do part = 1, params%nparts
-                call eorecvol_read%read_eos(refine3D_partial_rec_fbody(state, part, numlen_part))
-                call build%eorecvol%sum_reduce(eorecvol_read)
+                call read_gridding_pair_accumulators(params, read_even_rec, read_odd_rec, &
+                    &refine3D_partial_rec_fbody(state, part, numlen_part))
+                call even_rec%sum_reduce(read_even_rec)
+                call odd_rec%sum_reduce(read_odd_rec)
             enddo
             if( L_BENCH_GLOB ) timings%reduce_partials = timings%reduce_partials + toc(t_reduce_partials)
         end subroutine reduce_partials
@@ -136,10 +144,16 @@ contains
                 ! accumulators by u/f achieves that and keeps the chain at full
                 ! sampling mass: (u/f)*(f*D) + (1-u)*D = D.
                 cur_scale = update_frac_trail_rec / realized_update_frac
-                if( abs(cur_scale - 1.0) > 0.001 ) call build%eorecvol%apply_weight_sums(cur_scale)
-                call eorecvol_read%read_eos(trail_fbody)
-                call eorecvol_read%apply_weight_sums(weight_prev)
-                call build%eorecvol%sum_reduce(eorecvol_read)
+                if( abs(cur_scale - 1.0) > 0.001 )then
+                    call even_rec%apply_weight_sums(cur_scale)
+                    call odd_rec%apply_weight_sums(cur_scale)
+                endif
+                call read_gridding_pair_accumulators(params, read_even_rec, read_odd_rec, trail_fbody, &
+                    &required=.true.)
+                call read_even_rec%apply_weight_sums(weight_prev)
+                call read_odd_rec%apply_weight_sums(weight_prev)
+                call even_rec%sum_reduce(read_even_rec)
+                call odd_rec%sum_reduce(read_odd_rec)
                 call write_trail_chain_set()
                 write(logfhandle,'(A,I0,A,F8.4,A,F8.4)') &
                     &'>>> VOLASSEMBLE: TRAILING ACCUMULATOR BLEND, STATE ', state, &
@@ -156,9 +170,11 @@ contains
                 ! this, a chain seeded at fractional mass f makes the next
                 ! iteration's effective update weight f/(f + (1-f)*f), far above
                 ! the requested fraction.
-                call build%eorecvol%apply_weight_sums(1.0 / realized_update_frac)
+                call even_rec%apply_weight_sums(1.0 / realized_update_frac)
+                call odd_rec%apply_weight_sums(1.0 / realized_update_frac)
                 call write_trail_chain_set()
-                call build%eorecvol%apply_weight_sums(realized_update_frac)
+                call even_rec%apply_weight_sums(realized_update_frac)
+                call odd_rec%apply_weight_sums(realized_update_frac)
                 if( .not. l_trail_chain )then
                     write(logfhandle,'(A,I0,A)') &
                         &'>>> VOLASSEMBLE: SEEDED FULL-MASS TRAILING CHAIN, STATE ', state, &
@@ -227,7 +243,7 @@ contains
             integer         :: funit, io_stat, ifile
             manifest = refine3D_trail_manifest_fname(state)
             call del_file(manifest)
-            call build%eorecvol%write_eos(trail_fbody)
+            call write_gridding_pair_accumulators(even_rec, odd_rec, trail_fbody)
             do ifile = 1, 4
                 sizes(ifile) = trail_chain_file_size(trail_chain_component(ifile))
             enddo
@@ -305,10 +321,18 @@ contains
 
         subroutine sum_eos_before_density_correction_if_needed()
             if( params%l_ml_reg ) return
-            if( L_BENCH_GLOB ) t_sum_eos = tic()
-            call build%eorecvol%sum_eos
-            if( L_BENCH_GLOB ) timings%sum_eos = timings%sum_eos + toc(t_sum_eos)
+            call sum_pair_into_sum_rec()
         end subroutine sum_eos_before_density_correction_if_needed
+
+        !> single owner of the merged-accumulator summation so the ml_reg and
+        !! non-ml_reg paths cannot diverge
+        subroutine sum_pair_into_sum_rec()
+            if( L_BENCH_GLOB ) t_sum_eos = tic()
+            call sum_rec%reset
+            call sum_rec%sum_reduce(even_rec)
+            call sum_rec%sum_reduce(odd_rec)
+            if( L_BENCH_GLOB ) timings%sum_eos = timings%sum_eos + toc(t_sum_eos)
+        end subroutine sum_pair_into_sum_rec
 
         subroutine restore_eos_and_write_fsc()
             use simple_fsc, only: fsc_area_score_result
@@ -322,21 +346,29 @@ contains
                 if( allocated(fsc) ) deallocate(fsc)
                 if( params%conical_fsc == 'yes' )then
                     call cones_fsc%new(vol_prev_even, 256, 20., 0.143, 1)
-                    call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc, state, cones=cones_fsc)
-                    call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc_in=fsc, cones_in=cones_fsc)
+                    call calculate_gridding_pair_fsc(params, vol_prev_even, vol_prev_odd, &
+                        &state, fsc, bootstrap_cfar, cones=cones_fsc)
+                    call restore_gridding_pair(params, even_rec, odd_rec, state, &
+                        &eonames(1), eonames(2), pair_diagnostics, fsc_in=fsc, &
+                        &cfar_in=bootstrap_cfar, cones_in=cones_fsc)
                     call cones_fsc%kill
                 else
-                    call build%eorecvol%calc_fsc4sampl_dens_correct(vol_prev_even, vol_prev_odd, fsc, state)
-                    call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg, fsc_in=fsc)
+                    call calculate_gridding_pair_fsc(params, vol_prev_even, vol_prev_odd, &
+                        &state, fsc, bootstrap_cfar)
+                    call restore_gridding_pair(params, even_rec, odd_rec, state, &
+                        &eonames(1), eonames(2), pair_diagnostics, fsc_in=fsc, cfar_in=bootstrap_cfar)
                 endif
             else
                 ! With an accumulator chain the blended sums already contain the
                 ! trailed statistics, so the FSC is estimated post-blend from
                 ! the restored halves and describes the artifact written to disk.
-                call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
+                call restore_gridding_pair(params, even_rec, odd_rec, state, &
+                    &eonames(1), eonames(2), pair_diagnostics)
             endif
+            res05      = pair_diagnostics%res_fsc05
+            res0143    = pair_diagnostics%res_fsc0143
             fsc_txt_file = resolve_fsc_txt_fname()
-            call build%eorecvol%write_fsc2txt(fsc_txt_file)
+            call write_gridding_pair_diagnostics(pair_diagnostics, params%box_crop, params%smpd_crop, fsc_txt_file)
             if( L_BENCH_GLOB ) timings%restore_eos_and_write_fsc = &
                 timings%restore_eos_and_write_fsc + toc(t_restore_eos)
         end subroutine restore_eos_and_write_fsc
@@ -383,9 +415,7 @@ contains
 
         subroutine sum_eos_after_density_correction_if_needed()
             if( .not. params%l_ml_reg ) return
-            if( L_BENCH_GLOB ) t_sum_eos = tic()
-            call build%eorecvol%sum_eos
-            if( L_BENCH_GLOB ) timings%sum_eos = timings%sum_eos + toc(t_sum_eos)
+            call sum_pair_into_sum_rec()
         end subroutine sum_eos_after_density_correction_if_needed
 
         subroutine capture_nonuniform_source_halves()
@@ -406,13 +436,15 @@ contains
                 call vol_nu_base_even%read(eonames(1))
                 call vol_nu_base_odd%read( eonames(2))
             endif
-            ! the half-maps on disk are deapodized by reconstructor_eo; nothing to apply here
+            ! the half-maps on disk are deapodized by the one-half gridding backend; nothing to apply here
         end subroutine capture_nonuniform_source_halves
 
         subroutine restore_merged_volume()
             if( L_BENCH_GLOB ) t_restore_merged = tic()
-            call build%eorecvol%get_res(res05, res0143)
-            call build%eorecvol%sampl_dens_correct_sum(build%vol)
+            if( L_VERBOSE_GLOB )then
+                write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
+            endif
+            call sum_rec%restore_final(build%vol)
             call build%vol%fft
             call build%vol%ifft
             call build%vol%write(volname, del_if_exists=.true.)
@@ -473,6 +505,7 @@ contains
             call volname_prev%kill
             call volname_prev_even%kill
             call volname_prev_odd%kill
+            call pair_diagnostics%kill
             if( allocated(fsc) ) deallocate(fsc)
         end subroutine cleanup_restore_state
 
@@ -704,7 +737,7 @@ contains
     end subroutine filter_pcg_nonuniform_maps
 
     subroutine exec_volassemble( self, cline )
-        use simple_reconstructor_eo, only: reconstructor_eo
+        use simple_reconstructor,    only: reconstructor
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &set_nu_filter_report, NU_DEV_OUTPUT, &
@@ -718,9 +751,9 @@ contains
             &NU_ENVMASK_ACTION_REGENERATE
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(parameters)              :: params
+        type(parameters), target      :: params
         type(builder)                 :: build
-        type(reconstructor_eo)        :: eorecvol_read
+        type(reconstructor)           :: even_rec, odd_rec, read_even_rec, read_odd_rec, sum_rec
         type(image)                   :: vol_prev_even, vol_prev_odd, vol_merged
         type(image)                   :: vol_even_nu, vol_odd_nu
         type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
@@ -751,7 +784,7 @@ contains
         if( L_BENCH_GLOB ) t_trail_frac = tic()
         call determine_trailing_update_fraction()
         if( L_BENCH_GLOB ) rt_trail_frac = toc(t_trail_frac)
-        rt_gridcorr = 0.  ! deapodization now lives in reconstructor_eo (sampl_dens_correct_eos/_sum)
+        rt_gridcorr = 0.  ! deapodization lives in the gridding backend (pair/sum restoration)
         call determine_dropped_states()
         do state = 1, params%nstates
             if( l_state_dropped(state) )then
@@ -791,9 +824,17 @@ contains
 
         subroutine initialize_context()
             call build%init_params_and_build_general_tbox(cline, params)
+            ! the retired build_rec_eo_tbox back-filled missing per-particle
+            ! projection-direction labels before assembly; preserve that contract
+            if( .not. build%spproj_field%isthere('proj') )then
+                call build%spproj_field%set_projs(build%eulspace)
+            endif
             call set_nu_filter_report(params%part == 1)
-            call build%build_rec_eo_tbox(params)
-            call build%eorecvol%kill_exp
+            call even_rec%new_accumulator(params, build%spproj, expand=.false.)
+            call odd_rec%new_accumulator(params, build%spproj, expand=.false.)
+            call read_even_rec%new_accumulator(params, build%spproj, expand=.false.)
+            call read_odd_rec%new_accumulator(params, build%spproj, expand=.false.)
+            call sum_rec%new_accumulator(params, build%spproj, expand=.false.)
             numlen_part       = max(1, params%numlen)
             l_nonuniform_mode = params%l_nonuniform
             allocate(res0143s(params%nstates))
@@ -806,7 +847,6 @@ contains
             realized_update_fracs = 1.0
             allocate(state_pops(params%nstates))
             state_pops = 0
-            call eorecvol_read%new(params, build%spproj, expand=.false.)
         end subroutine initialize_context
 
         subroutine refresh_state_populations()
@@ -896,7 +936,8 @@ contains
         end subroutine determine_trailing_update_fraction
 
         subroutine assemble_state()
-            call restore_state_from_parts(params, build, cline, eorecvol_read, state, numlen_part, &
+            call restore_state_from_parts(params, build, cline, even_rec, odd_rec, read_even_rec, read_odd_rec, &
+                &sum_rec, state, numlen_part, &
                 &update_frac_trail_recs(state), realized_update_fracs(state), &
                 &vol_prev_even, vol_prev_odd, vol_merged, &
                 &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
@@ -1247,9 +1288,11 @@ contains
 
         subroutine cleanup_context()
             call build%kill_general_tbox
-            call build%eorecvol%kill_exp
-            call build%kill_rec_eo_tbox
-            call eorecvol_read%kill
+            call even_rec%kill
+            call odd_rec%kill
+            call read_even_rec%kill
+            call read_odd_rec%kill
+            call sum_rec%kill
             call vol_prev_even%kill
             call vol_prev_odd%kill
             call vol_merged%kill
