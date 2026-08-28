@@ -198,10 +198,11 @@ contains
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         logical          :: l_trail_bootstrap(params%nstates)
+        real             :: nu_replay_lps(params%nstates)
         call validate_refine3D_pcg_integration(params)
         call execute_rec3D_pcg_distributed_master(params, build, cline, &
-            &trail_bootstrap_states=l_trail_bootstrap)
-        call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap)
+            &trail_bootstrap_states=l_trail_bootstrap, nu_replay_finest_lps=nu_replay_lps)
+        call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, nu_replay_lps)
     end subroutine assemble_refine3D_pcg
 
     subroutine validate_refine3D_pcg_integration( params )

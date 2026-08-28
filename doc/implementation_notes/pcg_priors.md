@@ -1416,6 +1416,77 @@ print only; the solvent stats file and convergence guidance are gone).
 Build + `test=pcg_priors` + `test=rec3D_backends` reruns pending user-side;
 first abinitio3D run with the NU prior is the outstanding refinement gate.
 
+### First NU-replay abinitio3D: bgal (2026-08-28) — refinement gate observations
+
+`rec_backend=pcg pcg_nu_lambda_rel=0.1`, distributed, stages 4-6+ observed
+(box crop 130 -> 140, lp 10.2 -> 9.3 -> 4.66 promoted by the NU filter):
+
+- **End-to-end NU refinement loop works.** Every iteration: base solves (2
+  its, ~1 s/half) -> fresh evidence from the current base pair (distinct
+  identity per iteration, readiness passing) -> warm start from the previous
+  shipped half -> 2-it Q_NU replay (~4.5-7 s/half + ~1.1-1.8 s stats
+  overhead). Production-viable cost: reconstruction remains a small fraction
+  of the alignment wall time.
+- **Evidence trajectory is stable and physically sensible** (the S6.3
+  field-overlap tracking item, answered by inspection): null pinned at
+  0.229-0.232 across every iteration and stage; coarse bands constant
+  (band01 ~0.764); band04 support 0.000 through stage 5 (crop Nyquist above
+  5 A -- correctly no fine evidence), then 0.086 -> 0.146 -> 0.161 as stage
+  6 extends the band and resolution genuinely develops. No oscillation, no
+  runaway. Warm-started ML RESID 0.056-0.075 at 2 its (base 0.13).
+- **Resolution progression**: 5.44 -> 5.02 -> 4.66 A at 0.143 through
+  stages 4-6, cFAR 0.64 -> 0.75.
+- **The solvent-era stage-6 overlap collapse is largely CURED**: at NU/lp
+  engagement (lp 9.3 -> 4.66 + switch to envelope-masked references) the
+  orientation overlap dips 0.92 -> 0.80 -> 0.60 and recovers to 0.86 within
+  two iterations -- versus the recorded 0.70 -> 0.04 collapse with the
+  solvent prior. The NU replay map is evidently a much better matching
+  reference at promotion.
+- **Kept automsk staging coexists correctly**: stage 6 first iteration
+  generates the envelope (occupancy 29.6%, one component), later iterations
+  consume it for reference masking only; no solvent-prior lines anywhere.
+- **Remaining S6.3 sub-item now visible as measured cost**: the NU analysis
+  runs TWICE per stage-6 iteration -- once for the replay evidence, once for
+  the volassemble NU filter/envelope postprocess (identical whitening and
+  ordered-label logs back to back). Sharing the compact evidence state with
+  the postprocess remains the outstanding dedup, now with a concrete
+  per-iteration price attached.
+
+### DECISION (2026-08-28): Q_NU default-on in NU mode; post-hoc NU filter and pcg automasking retired from the NU-replay path
+
+Following the first NU-replay abinitio3D (above) and the user-side
+observation that the Q_NU shipped map and the post-hoc NU-filtered map are
+nearly indistinguishable, three policy changes landed together:
+
+1. **Default-on.** `pcg_nu_lambda_rel` dynamically defaults to 0.1 whenever
+   `rec_backend=pcg`, the NU machinery is active (`l_nonuniform`), and the
+   euclid ML replay runs -- i.e. the NU-filtered stages of abinitio3D/refine3D
+   run the Q_NU replay with no flags. An explicit 0 restores the P_tau
+   replay (the R10 A/B control); the plain-`reconstruct3D`/harness default
+   (no `filt_mode`) stays 0, preserving R5 for the recorded baselines.
+2. **No post-hoc NU filtering with Q_NU in the solve.**
+   `filter_pcg_nonuniform_maps` returns early when the NU replay is active:
+   no second NU analysis (S6.3 dedup closed), no `_nu_filt`/`_nu_locres`
+   products, no evidence envelope. The LP-set matching handoff survives,
+   now derived from the frozen replay evidence itself (finest evidenced
+   local cutoff per state, threaded
+   `build_nu_replay_evidence -> execute_rec3D_pcg_distributed_master ->
+   filter_pcg_nonuniform_maps`, same `set_all2single('lp',...)` contract).
+   Matchers fall back to the regular (Q_NU-regularized) references, which
+   is the point. The full postprocess remains for the P_tau/gridding paths.
+3. **No forced automasking in the pcg path of abinitio3D.** The staging
+   existed to bootstrap the solvent envelope and switch to envelope-masked
+   references; with the prior gone and the Q_NU map already locally
+   regularized, automasking follows the same explicit user control as
+   everywhere else. (The Gate B registration-benefit observation attributed
+   to envelope-masked references is superseded by the user's read that the
+   NU-replay reference makes it unnecessary; if registration regresses on a
+   future run, this is the first knob to revisit.)
+
+Verification pending: an abinitio3D rerun with zero prior flags showing the
+dynamic default engaging at the first NU stage, single NU analysis per
+iteration, evidence-derived lp promotion, and no envelope/automask lines.
+
 6.4 Science/cost Gates C and D:
 
 - run only the two-way `P_tau` versus `Q_NU` ablation of §8;

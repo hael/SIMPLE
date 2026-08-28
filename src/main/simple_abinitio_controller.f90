@@ -396,21 +396,12 @@ contains
         cfg%automsk = 'no'
         if( l_cavgs ) return
         if( istage >= AUTOMSK_STAGE .and. l_automsk ) cfg%automsk = trim(params%automsk)
-        ! rec_backend=pcg: automasking from the first NU stage switches
-        ! matching to envelope-masked references, which the Gate B streptavidin
-        ! run showed improves registration (base-pair 0.143 improved 3.812 ->
-        ! 3.191 A through the NU stage). The retired solvent prior no longer
-        ! consumes the envelope; this staging is kept for the reference-masking
-        ! benefit. An explicit automsk=no vetoes this; a user-supplied automsk
-        ! mode (e.g. tight) is respected.
-        if( trim(params%rec_backend) == 'pcg' .and. istage >= NU_FILTER_STAGE .and. &
-            &l_nonuniform .and. .not. l_automsk_off )then
-            if( l_automsk )then
-                cfg%automsk = trim(params%automsk)
-            else
-                cfg%automsk = 'yes'
-            endif
-        endif
+        ! rec_backend=pcg no longer forces automasking (policy 2026-08-28):
+        ! the solvent prior that consumed the envelope is removed, and with
+        ! the default-on Q_NU replay the shipped maps are already locally
+        ! regularized, making them good matching references without envelope
+        ! masking. Automasking in the pcg path now follows the same explicit
+        ! user control as everywhere else.
     end subroutine set_refine3D_automsk_policy
 
     subroutine set_refine3D_envfsc_policy( cfg, params, istage, l_cavgs )

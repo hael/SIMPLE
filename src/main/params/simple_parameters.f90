@@ -616,7 +616,7 @@ type :: parameters
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
-    real    :: pcg_nu_lambda_rel=0.  !< direct NU-evidence replay precision strength relative to the PCG data scale; replaces the FSC/SSNR P_tau replay precision (mode-exclusive, pcg_priors.md S5); 0 keeps the ordinary global-ML replay{0}
+    real    :: pcg_nu_lambda_rel=0.  !< direct NU-evidence replay precision strength relative to the PCG data scale; replaces the FSC/SSNR P_tau replay precision (mode-exclusive, pcg_priors.md S5); defaults to 0.1 when rec_backend=pcg with NU filtering and euclid ml_reg active, 0 otherwise; explicit 0 keeps the ordinary global-ML replay{0|0.1 in NU mode}
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
     real    :: rtol=0.             !< PCG relative residual tolerance; <=0 runs exactly maxits_pcg{0}

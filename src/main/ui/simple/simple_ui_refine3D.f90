@@ -176,8 +176,9 @@ subroutine new_automask( prgtab )
         call reconstruct3D%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
         &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the '//&
         &'regularized replay derives graded band-support evidence from the current base half pair and '//&
-        &'attaches Q_NU INSTEAD of the FSC/SSNR P_tau (mode-exclusive); 0 keeps the ordinary global-ML replay', &
-        &'strength{0}', .false., 0.0, visibility=UI_VIS_ADVANCED, &
+        &'attaches Q_NU INSTEAD of the FSC/SSNR P_tau (mode-exclusive); default 0.1 when NU filtering and '//&
+        &'euclid ml_reg are active, explicit 0 restores the ordinary global-ML replay', &
+        &'strength{0.1 in NU mode}', .false., 0.0, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_MASK, mskdiam, &
         &visibility=UI_VIS_STANDARD)
@@ -359,8 +360,9 @@ subroutine new_automask( prgtab )
         call refine3D%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
         &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the '//&
         &'regularized replay derives graded band-support evidence from the current base half pair and '//&
-        &'attaches Q_NU INSTEAD of the FSC/SSNR P_tau (mode-exclusive); 0 keeps the ordinary global-ML replay', &
-        &'strength{0}', .false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
+        &'attaches Q_NU INSTEAD of the FSC/SSNR P_tau (mode-exclusive); default 0.1 when NU filtering and '//&
+        &'euclid ml_reg are active, explicit 0 restores the ordinary global-ML replay', &
+        &'strength{0.1 in NU mode}', .false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, nu_refine, group="filter", &

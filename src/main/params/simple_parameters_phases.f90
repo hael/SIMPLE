@@ -882,6 +882,16 @@ contains
         self%l_ml_reg     = trim(self%ml_reg).eq.'yes'
         self%l_euclid_diag = trim(self%euclid_diag).eq.'yes'
         if( self%l_ml_reg ) self%l_ml_reg = self%cc_objfun == OBJFUN_EUCLID
+        ! Direct NU-evidence PCG replay default (pcg_priors.md, policy
+        ! 2026-08-28): when the PCG backend runs with the NU machinery and the
+        ! euclid ML replay active, Q_NU is the default regularized estimator
+        ! at the calibrated strength. An explicit pcg_nu_lambda_rel=0 keeps
+        ! the ordinary global-ML P_tau replay (the R10 A/B control).
+        if( .not. cline%defined('pcg_nu_lambda_rel') )then
+            if( trim(self%rec_backend) == 'pcg' .and. self%l_nonuniform .and. self%l_ml_reg )then
+                self%pcg_nu_lambda_rel = 0.1
+            endif
+        endif
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')
         if( cline%defined('element') )then
