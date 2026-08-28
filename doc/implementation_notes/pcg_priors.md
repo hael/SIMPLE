@@ -1516,6 +1516,47 @@ sharpening driven by the same frozen NU evidence state is specified in
 `nu_evidence_local_sharpening.md` — parked until this document's Gate C/D
 program completes.
 
+### DECISION (2026-08-28): NU-replay firing readout in the convergence report
+
+With `Q_NU` default-on in NU mode, refinement needs the same in-run answer the
+retired solvent prior had: "is the prior firing, and is
+`pcg_nu_lambda_rel` right?" — with no harness and no ground truth. The readout
+is the **NU prior-energy suppression percentage**, per half:
+
+    supp% = 100 * (1 - sqrt(E_NU(x_ML) / E_NU(x_base)))
+
+where `E_NU(x) = (lambda_nu/2) x^T Q_NU x` (`get_nu_prior_stats`; the
+`lambda_nu` factor cancels in the ratio) and `x_base` is the unregularized
+base solution of the SAME half — the replay's own reference: with `P_tau`
+absent in NU mode and the replay cold-started from the base solution, a
+vanishing `pcg_nu_lambda_rel` reproduces `x_base`, so an inert prior reads
+~0% with no shrinkage referencing needed (unlike the solvent readout, whose
+reference had to factor out the Wiener component of the `P_tau` replay). The
+amplitude-domain square root mirrors the solvent readout's rms ratio. Cost:
+one extra full `Q_NU` application per half (~13 padded FFTs), timed into the
+existing `stats_overhead_s` diagnostic.
+
+Plumbing mirrors the retired solvent readout: `report_nu_solve_stats` prints
+`pcg_nu_prior_energy_final/base` and `pcg_nu_suppression_pct` per half; both
+PCG execution paths average even/odd per state and persist
+`simple_pcg_nu_stats.txt` (delete-then-rewrite each volassemble, so a
+skipped replay leaves no stale values), including the shipped-pair FSC=0.143
+crossing per state (the over-regularization diagnostic, never a resolution
+claim); `check_conv3D` prints `% PRIOR ENERGY SUPPRESSED (PCG NU REPLAY)` and
+`SHIPPED-PAIR FSC=0.143` with the other iteration stats, writes them to
+`simple_stats.txt` (`PCG_NU_SUPPRESSION_PCT`, `PCG_NU_SHIP0143`,
+`PCG_NU_LAMBDA_REL` + per-state keys), and advises:
+
+- **< 5%**: prior inert — increase `pcg_nu_lambda_rel` (~3x)
+- **5-60%**: nominal — keep the strength
+- **> 60%**: over-regularization risk — decrease (~3x)
+
+Thresholds are provisional constants in `simple_convergence`
+(`PCG_NU_SUPP_INERT/OVER_PCT`), inherited from the solvent readout's bounds;
+recalibrate with a `pcg_nu_lambda_rel` strength ladder now that every run
+prints the readout, reading the suppression % against the shipped-pair
+crossing and the evidence trajectory.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

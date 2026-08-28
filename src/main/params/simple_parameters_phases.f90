@@ -885,11 +885,18 @@ contains
         ! Direct NU-evidence PCG replay default (pcg_priors.md, policy
         ! 2026-08-28): when the PCG backend runs with the NU machinery and the
         ! euclid ML replay active, Q_NU is the default regularized estimator
-        ! at the calibrated strength. An explicit pcg_nu_lambda_rel=0 keeps
-        ! the ordinary global-ML P_tau replay (the R10 A/B control).
+        ! at the calibrated strength -- no command-line flag is required. An
+        ! explicit pcg_nu_lambda_rel=0 keeps the ordinary global-ML P_tau
+        ! replay (the R10 A/B control). When the replay itself is unavailable
+        ! (explicit ml_reg=no or objfun=cc), the prior cannot engage; warn so
+        ! the deviation from the pcg+NU => Q_NU policy is never silent.
         if( .not. cline%defined('pcg_nu_lambda_rel') )then
-            if( trim(self%rec_backend) == 'pcg' .and. self%l_nonuniform .and. self%l_ml_reg )then
-                self%pcg_nu_lambda_rel = 0.1
+            if( trim(self%rec_backend) == 'pcg' .and. self%l_nonuniform )then
+                if( self%l_ml_reg )then
+                    self%pcg_nu_lambda_rel = 0.1
+                else
+                    THROW_WARN('rec_backend=pcg with NU filtering but no euclid ML replay; Q_NU prior DISABLED')
+                endif
             endif
         endif
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
