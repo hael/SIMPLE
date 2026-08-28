@@ -51,6 +51,11 @@ def view_file_browser(request, type, path=None):
 
     username = request.user.username
     purpose = request.GET.get("purpose", "")
+    required_extension = request.GET.get("extension", "").strip().lower()
+    if required_extension:
+        if type != "file" or required_extension not in known_file_extensions:
+            error = True
+            errortext = "invalid file extension filter"
     is_unrestricted_picker = purpose == "external_input" or (type == "dir" and purpose == "project_root")
     selected_path = request.GET.get("selectedpath")
     path_was_requested = path is not None or selected_path is not None
@@ -136,11 +141,12 @@ def view_file_browser(request, type, path=None):
                 # ignore hidden files/folders
                 if not entry or entry.startswith('.'):
                     continue
+                entry_path = os.path.join(path, entry)
                 ext = os.path.splitext(entry)[1].lower()
-                if ext in known_file_extensions:
-                    files.append(entry)
-                elif os.path.isdir(os.path.join(path, entry)):
+                if os.path.isdir(entry_path):
                     dirs.append(entry)
+                elif required_extension and ext != required_extension:
+                    continue
                 else:
                     files.append(entry)
         except OSError:
@@ -152,6 +158,7 @@ def view_file_browser(request, type, path=None):
     context = {
         "type": type,
         "purpose": purpose,
+        "required_extension": required_extension,
         "path": path,
         "parentdir": parentdir,
         "error": error,

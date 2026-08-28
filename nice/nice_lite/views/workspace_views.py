@@ -162,6 +162,8 @@ def view_workspace(request):
 
     # Include stream statuses in checksum seed so parent iframe updates on state changes.
     jobs = list(JobModel.objects.filter(dset=workspace_obj.id).order_by("id"))
+    if batch_job_controls_enabled() and _reconcile_local_batch_completions(jobs):
+        jobs = list(JobModel.objects.filter(dset=workspace_obj.id).order_by("id"))
     jobstats = "|".join(
         job.status if _is_batch_job(job) else StreamJob(id=job.id).get_status()
         for job in jobs

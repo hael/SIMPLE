@@ -41,6 +41,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="selectedpath" value="{{ parentdir }}">
                             {% if purpose %}<input type="hidden" name="purpose" value="{{ purpose }}">{% endif %}
+                            {% if required_extension %}<input type="hidden" name="extension" value="{{ required_extension }}">{% endif %}
                             <button type="button" onclick="this.form.submit()"
                                     class="h-8 px-2 text-streamicon hover:text-streamsubtle transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4">
@@ -52,6 +53,7 @@
                         <form id="selectedpath_form" class="w-full" method="GET" action={% url 'nice_lite:file_browser' type %}>
                             {% csrf_token %}
                             {% if purpose %}<input type="hidden" name="purpose" value="{{ purpose }}">{% endif %}
+                            {% if required_extension %}<input type="hidden" name="extension" value="{{ required_extension }}">{% endif %}
                             <input id="selectedpath" name="selectedpath"
                                    class="w-full text-xs px-2 py-1 bg-transparent text-streaminput focus:outline-none"
                                    value="{{ path }}" onblur="this.form.submit()">
@@ -64,6 +66,8 @@
                     </button>
                 </div>
 
+                <div id="selection_error" role="alert"
+                     class="hidden mb-3 text-xs text-red-500 bg-streamsurface border border-streamline rounded-lg p-2"></div>
                 {% if error %}
                     <div class="text-xs text-red-500 bg-streamsurface border border-streamline rounded-lg p-2">{{ errortext }}</div>
                 {% else %}
@@ -74,6 +78,7 @@
                                     {% csrf_token %}
                                     <input type="hidden" name="selectedpath" value="{% if path == '/' %}/{{ dir }}{% else %}{{ path }}/{{ dir }}{% endif %}">
                                     {% if purpose %}<input type="hidden" name="purpose" value="{{ purpose }}">{% endif %}
+                                    {% if required_extension %}<input type="hidden" name="extension" value="{{ required_extension }}">{% endif %}
                                     <button type="button"
                                             class="browser-entry w-full text-left flex flex-row items-center whitespace-nowrap rounded px-1.5 py-1 hover:bg-streambg cursor-pointer"
                                             onclick="selectDir(this, '{{ path }}', '{{ dir }}', '{{ type }}')"
@@ -107,6 +112,7 @@
 
     <script>
         const FILE_BROWSER_LAST_DIRECTORY_KEY = "niceFileBrowserLastDirectory";
+        const requiredExtension = "{{ required_extension|escapejs }}";
         const directoryToRemember = "{{ remember_directory|escapejs }}";
         if (directoryToRemember) {
             try {
@@ -192,6 +198,14 @@
 
         const select = () => {
             const selectedpath = document.querySelector("#selectedpath");
+            const selectionError = document.querySelector("#selection_error");
+            if (requiredExtension && !selectedpath.value.toLowerCase().endsWith(requiredExtension)) {
+                selectionError.textContent = "select a " + requiredExtension + " file";
+                selectionError.classList.remove("hidden");
+                selectedpath.focus();
+                return;
+            }
+            selectionError.classList.add("hidden");
             const iframe = getHostIframe();
             if (!iframe) return;
 

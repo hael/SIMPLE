@@ -133,6 +133,8 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('function submitSelectedBatch(packageName)', jobbuilder)
         self.assertIn('if (!form) return;', jobbuilder)
         self.assertIn('sourceInput.value = sourceSelector.value;', jobbuilder)
+        self.assertIn('projectFile.toLowerCase().endsWith(".simple")', jobbuilder)
+        self.assertIn('projectFileInput.value = projectFile;', jobbuilder)
         self.assertIn('form.requestSubmit();', jobbuilder)
         self.assertIn('function validateSelectedBatchForm(packageName, programKey, form)', jobbuilder)
         self.assertIn('form.reportValidity();', jobbuilder)
@@ -163,10 +165,11 @@ class TemplateIntegrationTests(SimpleTestCase):
             "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
             "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
             "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
-            "batch_snapshot_sources": [{
+            "batch_project_sources": [{
                 "key": "snapshot:12:3",
                 "label": "stream 2 - particle set 3",
             }],
+            "default_batch_source": "workspace",
         })
 
         self.assertEqual(rendered.count('value="workspace" selected>workspace project'), 2)
@@ -174,6 +177,64 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertEqual(rendered.count('name="batch_source" value="workspace"'), 2)
         self.assertIn('id="simple_batch_source"', rendered)
         self.assertIn('id="single_batch_source"', rendered)
+
+    def test_batch_project_source_defaults_to_latest_completed_job(self):
+        rendered = render_to_string("jobbuilder.html", {
+            "stream_user_inputs": [],
+            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "batch_project_sources": [{
+                "key": "job:8",
+                "label": "job 1 - Import Movie Data",
+            }],
+            "default_batch_source": "job:8",
+        })
+
+        self.assertEqual(rendered.count('value="job:8" selected'), 2)
+        self.assertEqual(rendered.count('name="batch_source" value="job:8"'), 2)
+        self.assertEqual(rendered.count('value="workspace" >workspace project'), 2)
+
+    def test_batch_project_file_selector_uses_inherited_simple_project(self):
+        project_path = "/workspace/1_import_movies/workspace.simple"
+        rendered = render_to_string("jobbuilder.html", {
+            "stream_user_inputs": [],
+            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "batch_project_file_selector_enabled": True,
+            "default_batch_project_file": project_path,
+        })
+
+        self.assertIn('id="simple_batch_project_file"', rendered)
+        self.assertIn('id="single_batch_project_file"', rendered)
+        self.assertNotIn('id="simple_batch_source"', rendered)
+        self.assertNotIn('id="single_batch_source"', rendered)
+        self.assertEqual(
+            rendered.count(f'name="batch_project_file" value="{project_path}"'),
+            2,
+        )
+        self.assertEqual(rendered.count('data-required-extension=".simple"'), 2)
+        self.assertEqual(
+            rendered.count("openWorkspaceBrowser('file', 'simple_batch_project_file', '.simple', 'project_file')"),
+            1,
+        )
+        self.assertEqual(
+            rendered.count("openWorkspaceBrowser('file', 'single_batch_project_file', '.simple', 'project_file')"),
+            1,
+        )
+
+    def test_file_browser_preserves_and_enforces_extension_filter(self):
+        filebrowser = self._read_template("filebrowser.html")
+
+        self.assertGreaterEqual(
+            filebrowser.count('name="extension" value="{{ required_extension }}"'),
+            3,
+        )
+        self.assertIn('const requiredExtension = "{{ required_extension|escapejs }}";', filebrowser)
+        self.assertIn('!selectedpath.value.toLowerCase().endsWith(requiredExtension)', filebrowser)
 
     def test_batch_inputs_render_current_ui_json_schema(self):
         context = {
@@ -222,7 +283,8 @@ class TemplateIntegrationTests(SimpleTestCase):
             }],
             "single_programs": [],
             "single_program_inputs": [],
-            "batch_snapshot_sources": [],
+            "batch_project_sources": [],
+            "default_batch_source": "workspace",
         }
 
         rendered = render_to_string("jobbuilder.html", context)
@@ -291,6 +353,11 @@ class TemplateIntegrationTests(SimpleTestCase):
             "job": job,
             "batch_job_controls_enabled": True,
         })
+        job["status"] = "queued"
+        queued = render_to_string("nice_classic/_batch_card.html", {
+            "job": job,
+            "batch_job_controls_enabled": True,
+        })
         job["status"] = "finished"
         finished = render_to_string("nice_classic/_batch_card.html", {
             "job": job,
@@ -301,12 +368,18 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertNotIn('title="delete batch job"', disabled)
         self.assertIn('title="stop batch job"', running)
         self.assertNotIn('title="delete batch job"', running)
+        self.assertIn("rounded-full bg-streamaction/10 text-streamaction", running)
+        self.assertNotIn("w-1.5 h-1.5", running)
         self.assertLess(
             running.index('title="stop batch job"'),
             running.index('job directory'),
         )
+        self.assertNotIn('title="stop batch job"', queued)
+        self.assertIn('title="delete batch job"', queued)
+        self.assertIn("rounded-full bg-streamline/40 text-streamlabel", queued)
         self.assertNotIn('title="stop batch job"', finished)
         self.assertIn('title="delete batch job"', finished)
+        self.assertIn("rounded-full bg-streamring/10 text-streamaccent", finished)
         self.assertLess(
             finished.index('title="delete batch job"'),
             finished.index('job directory'),

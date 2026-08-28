@@ -18,15 +18,17 @@ class _AuthUser:
 
 
 class _FakeJob:
-    classification_2D_stats = {}
-    master_stats = {}
-    status = "running"
+    def __init__(self, status="running", master_stats=None):
+        self.classification_2D_stats = {}
+        self.particle_sieving_stats = {}
+        self.master_stats = master_stats or {}
+        self.status = status
 
 
 class _FakeQueryset:
-    def __init__(self, values_payload):
+    def __init__(self, values_payload, jobs=None):
         self._values_payload = values_payload
-        self._jobs = [_FakeJob()]
+        self._jobs = jobs if jobs is not None else [_FakeJob()]
 
     def order_by(self, *_args, **_kwargs):
         return self
@@ -103,6 +105,58 @@ class WorkspaceJobsViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         reconcile.assert_called_once_with(fake_queryset)
+
+    @override_settings(NICE_LITE_BATCH_JOB_CONTROLS=True)
+    def test_workspace_reconciles_local_completion_before_checksum(self):
+        request = self.factory.get("/workspace")
+        request.user = _AuthUser()
+
+        queued_job = _FakeJob(status="queued", master_stats={"job_type": "batch"})
+        finished_job = _FakeJob(status="finished", master_stats={"job_type": "batch"})
+        queued_jobs = _FakeQueryset([], jobs=[queued_job])
+        finished_jobs = _FakeQueryset([], jobs=[finished_job])
+        workspace_model = SimpleNamespace(
+            proj=SimpleNamespace(name="project"),
+            name="workspace",
+            cdat="created",
+            mdat="modified",
+            user="tester",
+            desc="description",
+        )
+        workspace = SimpleNamespace(
+            id=1,
+            get_id=lambda: 1,
+            get_linkpath=lambda: "/tmp/workspace",
+            get_workspacemodel=lambda: workspace_model,
+        )
+
+        with (
+            patch.object(workspace_views, "get_workspace_id", return_value=1),
+            patch.object(workspace_views, "get_project_id", return_value=2),
+            patch.object(workspace_views, "Workspace", return_value=workspace),
+            patch.object(workspace_views, "_is_workspace_accessible", return_value=True),
+            patch.object(
+                workspace_views.JobModel.objects,
+                "filter",
+                side_effect=[queued_jobs, finished_jobs],
+            ),
+            patch.object(
+                workspace_views,
+                "_reconcile_local_batch_completions",
+                return_value=True,
+            ) as reconcile,
+            patch.object(workspace_views, "_normalize_latest_cls2d"),
+            patch.object(
+                workspace_views,
+                "render",
+                return_value=HttpResponse("workspace"),
+            ) as mock_render,
+        ):
+            response = workspace_views.view_workspace(request)
+
+        self.assertEqual(response.status_code, 200)
+        reconcile.assert_called_once_with([queued_job])
+        self.assertEqual(mock_render.call_args.args[2]["jobstats"], "finished")
 
 
 class WorkspaceJobRefreshTests(SimpleTestCase):

@@ -59,7 +59,7 @@ def view_batch_stop(request):
 @login_required(login_url="/login")
 @require_POST
 def view_batch_delete(request):
-    """Permanently delete an owned terminal batch job and return to its workspace."""
+    """Permanently delete an owned deletable batch job and return to its workspace."""
     if not _controls_available(request):
         return redirect("nice_lite:workspace")
 
@@ -68,6 +68,8 @@ def view_batch_delete(request):
         messages.add_message(request, messages.ERROR, "invalid batch job selection")
     elif jobmodel.status not in BatchJob.DELETABLE_STATUSES:
         messages.add_message(request, messages.ERROR, "batch job is not complete")
+    elif jobmodel.status == "queued" and not batch_job.queued_job_can_delete():
+        messages.add_message(request, messages.ERROR, "queued batch job is still active or cannot be verified")
     else:
         project = Project(id=jobmodel.dset.proj_id)
         workspace = Workspace(jobmodel.dset_id)

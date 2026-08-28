@@ -1,3 +1,4 @@
+import os
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -195,7 +196,6 @@ class FileBrowserViewTests(SimpleTestCase):
             hidden_file = base_dir + "/.hidden.txt"
             hidden_dir = base_dir + "/.hidden_dir"
 
-            import os
             os.makedirs(os_dir, exist_ok=True)
             os.makedirs(hidden_dir, exist_ok=True)
             open(hidden_file, "w", encoding="utf-8").close()
@@ -208,3 +208,20 @@ class FileBrowserViewTests(SimpleTestCase):
         self.assertFalse(context["error"])
         self.assertEqual(context["files"], ["a.dat", "b.txt"])
         self.assertEqual(context["dirs"], ["z_folder"])
+
+    def test_file_extension_filter_lists_only_matching_files(self):
+        request = self._request({"extension": ".simple"})
+        with tempfile.TemporaryDirectory() as base_dir:
+            open(os.path.join(base_dir, "project.simple"), "w", encoding="utf-8").close()
+            open(os.path.join(base_dir, "notes.txt"), "w", encoding="utf-8").close()
+            os.mkdir(os.path.join(base_dir, "archive.simple"))
+
+            with patch.object(file_browser_views, "get_project_id", return_value=1), patch.object(file_browser_views.ProjectModel.objects, "filter", return_value=_ProjectIdQuery([1])), patch.object(file_browser_views, "Project", return_value=SimpleNamespace(absdir=base_dir)), patch.object(file_browser_views, "render", return_value=HttpResponse("ok")) as mock_render:
+                response = file_browser_views.view_file_browser(request, "file", path=base_dir)
+
+        self.assertEqual(response.status_code, 200)
+        context = mock_render.call_args[0][2]
+        self.assertFalse(context["error"])
+        self.assertEqual(context["required_extension"], ".simple")
+        self.assertEqual(context["files"], ["project.simple"])
+        self.assertEqual(context["dirs"], ["archive.simple"])

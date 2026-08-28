@@ -6,7 +6,9 @@
             <p class="text-[9px] uppercase tracking-wide text-streamlabel">{{ job.master_stats.package }} batch</p>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
-            <span class="text-[10px] {% if job.status == 'failed' or job.status == 'stopped' %}text-streamerror{% else %}text-streamsubtle{% endif %}">{{ job.status }}</span>
+<span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full {% if job.status == 'running' %}bg-streamaction/10 text-streamaction{% elif job.status == 'finished' %}bg-streamring/10 text-streamaccent{% elif job.status == 'failed' or job.status == 'stopped' %}bg-streamerrorsurface text-streamerror{% elif job.status == 'queued' %}bg-streamline/40 text-streamlabel{% else %}bg-streamrejected/10 text-streamrejected{% endif %}">
+    {{ job.status }}
+</span>
             {% if batch_job_controls_enabled %}
                 {% if job.status == "running" %}
                     <form method="POST" action="{% url 'nice_lite:stop_batch' %}" target="_parent">
@@ -21,7 +23,7 @@
                             </svg>
                         </button>
                     </form>
-                {% elif job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
+                {% elif job.status == "queued" or job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
                     <form method="POST" action="{% url 'nice_lite:delete_batch' %}" target="_parent">
                         {% csrf_token %}
                         <input type="hidden" name="selected_job_id" value="{{ job.id }}">

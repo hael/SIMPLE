@@ -2,7 +2,7 @@
 module simple_nice
 use simple_core_module_api
 use simple_sp_project, only: sp_project
-use simple_socket_comm
+use simple_http_post, only: http_post, http_response
 use simple_histogram
 use json_kinds
 use json_module
@@ -21,10 +21,9 @@ type, private :: nice_thread_comm_message
     type(c_pthread_mutex_t)               :: lock
     logical                               :: terminate
     integer                               :: msg_len, procid
-    integer(kind=c_int16_t)               :: port
-    character(len=39)                     :: ip
+    character(len=STDLEN)                 :: server_url
     character(kind=CK,len=:), allocatable :: msg_str
-    type(json_value),         pointer     :: answer_json
+    type(json_value),         pointer     :: answer_json => null()
 end type nice_thread_comm_message
 
 type(nice_thread_comm_message), target, private, save :: nice_thread_comm
@@ -166,9 +165,7 @@ end type nice_view_vols
 type, public :: simple_nice_comm
     integer,                        public  :: pid, current_checksum
     logical,                        private :: remote_active
-    integer,                        private :: port
-    character(len=39),              private :: ip
-    type(simple_socket),            private :: socket
+    character(len=STDLEN),          private :: server_url
     type(json_core),                private :: stat_json
     type(json_value),   pointer,    private :: stat_json_root
     type(c_pthread_t),              private :: comm_thread
@@ -219,20 +216,16 @@ end type simple_nice_comm
         character(*),            intent(in)    :: serveraddr
         integer,                 intent(in)    :: procid
         real, allocatable     :: histogram_rvec(:)
-        character(len=STDLEN) :: ip, port_str
-        integer               :: io_stat
         if(procid > 0 .and. serveraddr .ne. "") then
             this%remote_active = .true.
-            port_str(:) = serveraddr(:)
-            call split_str(port_str, ':', ip)
-            this%ip   = trim(ip)
-            this%port = str2int(trim(port_str), io_stat)
-            if(io_stat .gt. 0) then
-                this%remote_active = .false.
-                write(logfhandle, *) ">>> REMOTE COMMUNICATION TO NICE DISABLED DUE TO MALFORMED ADDRESS STRING ", trim(serveraddr)
+            if(index(trim(serveraddr), '://') == 0) then
+                this%server_url = 'http://' // trim(serveraddr)
+            else
+                this%server_url = trim(serveraddr)
             end if
         else
             this%remote_active = .false.
+            this%server_url = ''
         endif
         this%exit = .false.
         this%stop = .false.
@@ -370,8 +363,9 @@ end type simple_nice_comm
         integer :: rc
         nice_thread_comm%terminate = .false.
         nice_thread_comm%procid    = this%stat_root%procid
-        nice_thread_comm%ip        = this%ip
-        nice_thread_comm%port      = int(this%port, kind=kind(nice_thread_comm%port))
+        nice_thread_comm%server_url = this%server_url
+        nice_thread_comm%msg_len = 0
+        if(allocated(nice_thread_comm%msg_str)) deallocate(nice_thread_comm%msg_str)
         rc = c_pthread_mutex_init(nice_thread_comm%lock, c_null_ptr)
         if(rc .ne. 0) then
             write(logfhandle, *) "simple_nice:start_comm_thread failed to init mutex. Remote sync deactivated"
@@ -399,29 +393,34 @@ end type simple_nice_comm
 
     subroutine remote_heartbeat() bind(c)
         integer                                :: rc, procid, heartbeat_count
-        logical                                :: terminate, send
-        type(simple_socket)                    :: socket
+        logical                                :: terminate, send, request_ok
+        type(http_post)                        :: post
+        type(http_response)                    :: response
+        type(string)                           :: request_body
         type(json_core)                        :: json
-        type(json_value), pointer              :: ans_json, update_json, update_arguments_1, update_arguments_2, update_arguments_3
+        type(json_value), pointer              :: ans_json => null(), update_json => null()
+        type(json_value), pointer              :: update_arguments_1 => null(), update_arguments_2 => null()
+        type(json_value), pointer              :: update_arguments_3 => null()
         logical                                :: found_update, found_arguments_1, found_arguments_2, found_arguments_3
         character(kind=CK,len=:),  allocatable :: msg_str_loc
         character(kind=CK, len=:), allocatable :: ans_str_loc
         heartbeat_count = 0
         call json%initialize()
+        call post%new(string(trim(nice_thread_comm%server_url)))
         do
             send = .false.
             rc = c_pthread_mutex_lock(nice_thread_comm%lock)
             terminate = nice_thread_comm%terminate
             procid    = nice_thread_comm%procid
             if(nice_thread_comm%msg_len > 0 .and. allocated(nice_thread_comm%msg_str)) then
-                msg_str_loc = int2str_pad(procid, 10) // nice_thread_comm%msg_str // char(0)
+                msg_str_loc = '{"jobid":' // int2str(procid) // ',"job":' // nice_thread_comm%msg_str // '}'
                 nice_thread_comm%msg_len = 0
                 deallocate(nice_thread_comm%msg_str)
                 send = .true.
                 heartbeat_count = 0
             else
                 if(heartbeat_count == 10) then
-                    msg_str_loc = int2str_pad(procid, 10) // char(0)
+                    msg_str_loc = '{"jobid":' // int2str(procid) // ',"job_heartbeat":{}}'
                     send = .true.
                     heartbeat_count = 0
                 else
@@ -430,11 +429,15 @@ end type simple_nice_comm
             end if
             rc = c_pthread_mutex_unlock(nice_thread_comm%lock)
             if(send) then
-                call socket%open(port=nice_thread_comm%port, ip=trim(nice_thread_comm%ip))
-                call socket%set_options
-                call socket%send(msg_str_loc)
-                call socket%read(ans_str_loc)
-                call socket%close
+                request_body = string(msg_str_loc)
+                request_ok = post%request(response, request_body)
+                if(request_ok .and. response%code >= 200 .and. response%code < 300) then
+                    if(response%content%is_allocated()) ans_str_loc = response%content%to_char()
+                else if(request_ok) then
+                    write(logfhandle, '(A,I0)') '>>> NICE HTTP CALLBACK FAILED WITH STATUS ', response%code
+                else
+                    write(logfhandle, '(A)') '>>> NICE HTTP CALLBACK FAILED'
+                end if
                 if(allocated(ans_str_loc)) then
                     rc = c_pthread_mutex_lock(nice_thread_comm%lock)
                    !  call json%destroy(nice_thread_comm%answer_json)
@@ -472,6 +475,7 @@ end type simple_nice_comm
             if(terminate) exit
             if(.not. send) call sleep(1)
         end do
+        call post%kill()
     end subroutine remote_heartbeat
 
     subroutine generate_stat_json(this)
@@ -482,6 +486,8 @@ end type simple_nice_comm
         call this%stat_json%add(this%stat_json_root, "status",            this%stat_root%status)
         call this%stat_json%add(this%stat_json_root, "stage",             this%stat_root%stage)
         call this%stat_json%add(this%stat_json_root, "user_input",        this%stat_root%user_input)
+        if(this%stat_root%status == 'finished' .or. this%stat_root%status == 'failed' .or. &
+           this%stat_root%status == 'stopped') call this%stat_json%add(this%stat_json_root, "terminate", .true.)
         if(this%stat_root%user_input) this%stat_root%user_input = .false.
         call this%stat_json%create_object(headlinestats, "headlinestats")
         if(this%view_micrographs%active) call add_headline_micrographs()

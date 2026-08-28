@@ -19,7 +19,8 @@ from .workspace import Workspace
 class BatchJob(Job):
     """Classic (non-stream) SIMPLE job attached to a workspace."""
 
-    DELETABLE_STATUSES = frozenset(("finished", "failed", "stopped"))
+    TERMINAL_STATUSES = frozenset(("finished", "failed", "stopped"))
+    DELETABLE_STATUSES = TERMINAL_STATUSES | frozenset(("queued",))
 
     def __init__(self, pckg=None, id=None, request=None):
         super().__init__(id=None)
@@ -341,6 +342,27 @@ class BatchJob(Job):
             return True
         return process_dir == os.path.realpath(self.get_absdir() or "")
 
+    def queued_job_can_delete(self):
+        """Return True for a stale local queued job whose process has exited."""
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is None or jobmodel.status != "queued":
+            return False
+
+        job_dir = self.get_absdir()
+        if job_dir is None:
+            return False
+
+        try:
+            with open(os.path.join(job_dir, "job.script"), encoding="utf-8") as script_file:
+                if "# localtemplate" not in script_file.read(4096):
+                    return False
+            with open(os.path.join(job_dir, "nice.pid"), encoding="utf-8") as pid_file:
+                pid = int(pid_file.read(32).strip())
+        except (OSError, ValueError):
+            return False
+
+        return pid > 1 and not self._local_process_is_running(pid)
+
     def reconcile_local_completion(self):
         """Mark a locally dispatched job finished after a verified normal exit.
 
@@ -475,18 +497,23 @@ class BatchJob(Job):
             jobmodel = JobModel.objects.select_for_update().filter(id=self.id).first()
             if jobmodel is None:
                 return {}
-            # A final heartbeat can race with SIGTERM. Do not resurrect a job
-            # that the user has already stopped through the batch card.
-            if jobmodel.status == "stopped":
+            # Script-level and in-process callbacks can race at shutdown. Once
+            # one of them records a terminal state, do not let a later callback
+            # resurrect the job or replace the original outcome.
+            if jobmodel.status in self.TERMINAL_STATUSES:
                 return {}
 
             response = {}
             if "job_heartbeat" in stats_json:
                 jobmodel.master_heartbeat = int(time.time())
 
-            if "job" in stats_json and "terminate" in stats_json["job"]:
-                jobmodel.status = "finished"
-                jobmodel.master_status = "finished"
+            job_stats = stats_json.get("job")
+            if isinstance(job_stats, dict) and "terminate" in job_stats:
+                terminal_status = job_stats.get("status")
+                if not isinstance(terminal_status, str) or terminal_status not in self.TERMINAL_STATUSES:
+                    terminal_status = "finished"
+                jobmodel.status = terminal_status
+                jobmodel.master_status = terminal_status
             else:
                 jobmodel.status = "running"
                 jobmodel.master_status = "running"
@@ -523,6 +550,12 @@ class BatchJob(Job):
         del project
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is None:
+            return False
+        if jobmodel.status not in self.DELETABLE_STATUSES:
+            print_error("delete: batch job status is not deletable")
+            return False
+        if jobmodel.status == "queued" and not self.queued_job_can_delete():
+            print_error("delete: queued batch job is still active or unverifiable")
             return False
 
         workspace_dir = os.path.realpath(

@@ -6,6 +6,7 @@ from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.test import RequestFactory
 from django.test import SimpleTestCase
+from django.test import override_settings
 
 from ..views import index_views
 from ..views import job_builder_views
@@ -96,6 +97,10 @@ class IndexViewBranchTests(SimpleTestCase):
         self.assertEqual(response._ctx["iframeurl"], "rev:nice_lite:workspace?selected_workspace_id=42")
 
 
+@override_settings(
+    NICE_LITE_BATCH_PROJECT_FILE_SELECTOR=False,
+    NICE_LITE_BATCH_PROJECT_INHERITANCE=False,
+)
 class JobBuilderBranchTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -164,6 +169,49 @@ class JobBuilderBranchTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         stream_inputs = response._ctx["stream_user_inputs"]
         self.assertEqual(stream_inputs[0]["value"], "2.5")
+
+    @override_settings(
+        NICE_LITE_BATCH_PROJECT_FILE_SELECTOR=True,
+        NICE_LITE_BATCH_PROJECT_INHERITANCE=True,
+    )
+    def test_job_builder_defaults_file_selector_to_latest_completed_batch_project(self):
+        request = self.factory.get("/jobbuilder")
+        request.user = _AuthUser()
+        simple_stream = Mock()
+        simple_stream.loadUIJSON.return_value = True
+        simple_stream.get_ui.return_value = {"user_inputs": []}
+        simple_batch = Mock()
+        simple_batch.loadUIJSON.return_value = True
+        simple_batch.get_ui.return_value = {}
+        workspace = Mock()
+        project_path = "/workspace/1_import_movies/workspace.simple"
+
+        with (
+            patch.object(job_builder_views, "get_job_id", return_value=None),
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "SIMPLEStream", return_value=simple_stream),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=simple_batch),
+            patch.object(job_builder_views, "Workspace", return_value=workspace),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(
+                job_builder_views,
+                "_default_batch_project_file",
+                return_value=project_path,
+            ) as default_project,
+            patch.object(job_builder_views, "_collect_batch_job_sources") as batch_sources,
+            patch.object(job_builder_views, "_collect_batch_snapshot_sources") as snapshot_sources,
+            patch.object(job_builder_views, "render", side_effect=_render_with_context),
+            patch.object(job_builder_views, "clear_checksum_cookies"),
+        ):
+            response = job_builder_views.view_job_builder(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response._ctx["batch_project_file_selector_enabled"])
+        self.assertEqual(response._ctx["default_batch_project_file"], project_path)
+        default_project.assert_called_once_with(workspace)
+        batch_sources.assert_not_called()
+        snapshot_sources.assert_not_called()
 
     def test_create_batch_allowlists_program_and_arguments_from_ui(self):
         request = self.factory.post("/createbatch", {
@@ -478,6 +526,64 @@ class JobBuilderBranchTests(SimpleTestCase):
             "cluster2D",
             {},
             parent_proj="/workspace/snapshot_3.simple",
+            source=source,
+        )
+
+    @override_settings(
+        NICE_LITE_BATCH_PROJECT_FILE_SELECTOR=True,
+        NICE_LITE_BATCH_PROJECT_INHERITANCE=True,
+    )
+    def test_create_batch_inherits_latest_job_when_source_is_omitted(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "motion_correct",
+        })
+        request.user = _AuthUser()
+        workspace = Mock()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "motion_correct": {
+                "program": {"executable": "simple_exec"},
+                "compute": [],
+            },
+        }
+        batchjob = Mock()
+        batchjob.new.return_value = True
+        source = {"type": "batch_job", "batch_job_id": 8}
+
+        with (
+            patch.object(job_builder_views, "get_workspace_id", return_value=4),
+            patch.object(job_builder_views, "get_project_id", return_value=3),
+            patch.object(job_builder_views, "Workspace", return_value=workspace),
+            patch.object(job_builder_views, "_is_workspace_accessible", return_value=True),
+            patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher),
+            patch.object(
+                job_builder_views,
+                "_default_batch_project_file",
+                return_value="/workspace/1_import_movies/workspace.simple",
+            ) as default_project,
+            patch.object(
+                job_builder_views,
+                "_resolve_batch_project_file",
+                return_value=("/workspace/1_import_movies/workspace.simple", source, None),
+            ) as resolve_project,
+            patch.object(job_builder_views, "BatchJob", return_value=batchjob),
+            patch.object(job_builder_views.messages, "add_message"),
+        ):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        default_project.assert_called_once_with(workspace)
+        resolve_project.assert_called_once_with(
+            workspace,
+            "/workspace/1_import_movies/workspace.simple",
+        )
+        batchjob.new.assert_called_once_with(
+            workspace,
+            "simple",
+            "motion_correct",
+            {},
+            parent_proj="/workspace/1_import_movies/workspace.simple",
             source=source,
         )
 

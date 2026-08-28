@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from unittest.mock import ANY, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from ..data_structures import batchjob as batchjob_module
@@ -159,6 +159,70 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(jobmodel.status, "stopped")
         self.assertEqual(jobmodel.master_status, "stopped")
 
+    def test_terminal_callback_uses_reported_finished_status(self):
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="running",
+            master_status="running",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        BatchJob(id=jobmodel.id).updateStats(
+            {"job": {"status": "finished", "terminate": True}},
+            None,
+            None,
+        )
+
+        jobmodel.refresh_from_db()
+        self.assertEqual(jobmodel.status, "finished")
+        self.assertEqual(jobmodel.master_status, "finished")
+
+    def test_terminal_callback_preserves_reported_failure(self):
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="running",
+            master_status="running",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        BatchJob(id=jobmodel.id).updateStats(
+            {"job": {"status": "failed", "terminate": True}},
+            None,
+            None,
+        )
+
+        jobmodel.refresh_from_db()
+        self.assertEqual(jobmodel.status, "failed")
+        self.assertEqual(jobmodel.master_status, "failed")
+
+    def test_late_callback_does_not_replace_terminal_status(self):
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="failed",
+            master_status="failed",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        response = BatchJob(id=jobmodel.id).updateStats(
+            {"job": {"status": "finished", "terminate": True}},
+            None,
+            None,
+        )
+
+        jobmodel.refresh_from_db()
+        self.assertEqual(response, {})
+        self.assertEqual(jobmodel.status, "failed")
+        self.assertEqual(jobmodel.master_status, "failed")
+
     def test_reconcile_local_completion_marks_normal_exited_job_finished(self):
         job_dir = os.path.join(self.workspace_dir, "1_new_project")
         os.mkdir(job_dir)
@@ -213,6 +277,73 @@ class BatchJobLifecycleTests(TestCase):
         self.assertFalse(changed)
         jobmodel.refresh_from_db()
         self.assertEqual(jobmodel.status, "running")
+
+    def test_queued_job_can_delete_after_local_process_exits(self):
+        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(job_dir)
+        with open(os.path.join(job_dir, "job.script"), "w", encoding="utf-8") as script_file:
+            script_file.write("#!/bin/sh\n# localtemplate\n")
+        with open(os.path.join(job_dir, "nice.pid"), "w", encoding="utf-8") as pid_file:
+            pid_file.write("4321\n")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="queued",
+            master_status="queued",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+        job = BatchJob(id=jobmodel.id)
+
+        with patch.object(job, "_local_process_is_running", return_value=False):
+            can_delete = job.queued_job_can_delete()
+
+        self.assertTrue(can_delete)
+
+    def test_delete_rejects_active_local_queued_job(self):
+        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(job_dir)
+        with open(os.path.join(job_dir, "job.script"), "w", encoding="utf-8") as script_file:
+            script_file.write("#!/bin/sh\n# localtemplate\n")
+        with open(os.path.join(job_dir, "nice.pid"), "w", encoding="utf-8") as pid_file:
+            pid_file.write("4321\n")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="queued",
+            master_status="queued",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+        job = BatchJob(id=jobmodel.id)
+
+        with patch.object(job, "_local_process_is_running", return_value=True):
+            deleted = job.delete(None, self.workspace)
+
+        self.assertFalse(deleted)
+        self.assertTrue(os.path.isdir(job_dir))
+        self.assertTrue(JobModel.objects.filter(id=jobmodel.id).exists())
+
+    def test_delete_rejects_running_batch_job(self):
+        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(job_dir)
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="running",
+            master_status="running",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        deleted = BatchJob(id=jobmodel.id).delete(None, self.workspace)
+
+        self.assertFalse(deleted)
+        self.assertTrue(os.path.isdir(job_dir))
+        self.assertTrue(JobModel.objects.filter(id=jobmodel.id).exists())
 
     def test_delete_permanently_removes_batch_directory_without_trash(self):
         job_dir = os.path.join(self.workspace_dir, "1_import_movies")
@@ -330,6 +461,114 @@ class BatchJobLifecycleTests(TestCase):
         jobmodel = JobModel.objects.get(id=job.id)
         self.assertEqual(jobmodel.master_stats["source"], source)
         self.assertEqual(BatchJob(id=job.id).source, source)
+
+    @override_settings(NICE_LITE_BATCH_PROJECT_INHERITANCE=True)
+    def test_batch_project_sources_list_latest_completed_job_first(self):
+        expected = []
+        for disp, name in ((1, "Import Movie Data"), (2, "Correct Movie Motion")):
+            job_dir = os.path.join(self.workspace_dir, f"{disp}_job")
+            os.mkdir(job_dir)
+            project_path = os.path.join(job_dir, "workspace.simple")
+            with open(project_path, "w", encoding="utf-8"):
+                pass
+            jobmodel = JobModel.objects.create(
+                dset=self.workspace_model,
+                cdat=timezone.now(),
+                disp=disp,
+                name=name,
+                dirc=f"{disp}_job",
+                status="finished",
+                master_status="finished",
+                master_stats={"job_type": "batch", "package": "simple", "program": "demo"},
+            )
+            expected.insert(0, {
+                "key": f"job:{jobmodel.id}",
+                "label": f"job {disp} - {name}",
+            })
+
+        failed_dir = os.path.join(self.workspace_dir, "3_failed")
+        os.mkdir(failed_dir)
+        with open(os.path.join(failed_dir, "workspace.simple"), "w", encoding="utf-8"):
+            pass
+        JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=3,
+            name="Failed Job",
+            dirc="3_failed",
+            status="failed",
+            master_status="failed",
+            master_stats={"job_type": "batch", "package": "simple", "program": "demo"},
+        )
+
+        sources = job_builder_views._collect_batch_job_sources(self.workspace)
+
+        self.assertEqual(sources, expected)
+        self.assertEqual(
+            job_builder_views._default_batch_project_file(self.workspace),
+            os.path.join(self.workspace_dir, "2_job", "workspace.simple"),
+        )
+
+    @override_settings(NICE_LITE_BATCH_PROJECT_INHERITANCE=True)
+    def test_batch_job_project_source_resolves_owned_completed_project(self):
+        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(job_dir)
+        project_path = os.path.join(job_dir, "workspace.simple")
+        with open(project_path, "w", encoding="utf-8"):
+            pass
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            name="Import Movie Data",
+            dirc="1_import_movies",
+            status="finished",
+            master_status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        resolved_path, metadata, error = job_builder_views._resolve_batch_project_source(
+            self.workspace,
+            f"job:{jobmodel.id}",
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(resolved_path, project_path)
+        self.assertEqual(metadata, {
+            "type": "batch_job",
+            "batch_job_id": jobmodel.id,
+        })
+
+    def test_batch_project_file_resolver_accepts_only_simple_files_in_workspace(self):
+        project_path = os.path.join(self.workspace_dir, "selected.simple")
+        with open(project_path, "w", encoding="utf-8"):
+            pass
+        text_path = os.path.join(self.workspace_dir, "selected.txt")
+        with open(text_path, "w", encoding="utf-8"):
+            pass
+        outside_path = os.path.join(self.tempdir.name, "outside.simple")
+        with open(outside_path, "w", encoding="utf-8"):
+            pass
+
+        resolved_path, metadata, error = job_builder_views._resolve_batch_project_file(
+            self.workspace,
+            project_path,
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(resolved_path, project_path)
+        self.assertEqual(metadata, {
+            "type": "project_file",
+            "filename": "selected.simple",
+        })
+        self.assertEqual(
+            job_builder_views._resolve_batch_project_file(self.workspace, text_path),
+            (None, None, "input project must be a .simple file"),
+        )
+        self.assertEqual(
+            job_builder_views._resolve_batch_project_file(self.workspace, outside_path),
+            (None, None, "batch project file is outside the selected workspace"),
+        )
 
     def test_new_rejects_explicit_project_outside_workspace(self):
         outside_project = os.path.join(self.tempdir.name, "outside.simple")
@@ -454,6 +693,7 @@ class SimpleBatchDispatchTests(TestCase):
 
         self.assertFalse(started)
 
+    @override_settings(NICE_LITE_BATCH_STATUS_CALLBACKS=False)
     def test_start_dispatches_corresponding_executable_and_quotes_values(self):
         with tempfile.TemporaryDirectory() as parent_dir:
             parent_proj = os.path.join(parent_dir, "parent project.simple")
@@ -488,8 +728,62 @@ class SimpleBatchDispatchTests(TestCase):
                     self.assertIn(f"{executable} prg=demo_commander input='path with spaces' nthr=8", content)
                     self.assertIn(f"cp -v '{parent_proj}' workspace.simple", content)
                     self.assertIn("# CPU 8", content)
+                    self.assertNotIn("nice_status_callback", content)
                     submit.assert_called_once()
 
+    @override_settings(NICE_LITE_BATCH_STATUS_CALLBACKS=True)
+    def test_status_callbacks_wrap_every_batch_package(self):
+        with tempfile.TemporaryDirectory() as parent_dir:
+            parent_proj = os.path.join(parent_dir, "workspace.simple")
+            with open(parent_proj, "w", encoding="utf-8"):
+                pass
+
+            dispatch = type("Dispatch", (), {
+                "tplt": "#!/bin/sh\nXXXNCPUXXX\nXXXSIMPLEXXX",
+                "scmd": "sh",
+                "url": "http://localhost:8000",
+            })()
+
+            for package, executable in (("simple", "simple_exec"), ("single", "single_exec")):
+                with self.subTest(package=package):
+                    base_dir = os.path.join(parent_dir, package)
+                    os.mkdir(base_dir)
+                    with (
+                        patch.object(SIMPLEBatch, "loadUIJSON", return_value=True),
+                        patch.object(simple_module.DispatchModel.objects, "filter") as dispatch_filter,
+                        patch.object(simple_module.shutil, "which", return_value="/bin/sh"),
+                        patch.object(simple_module, "_submit") as submit,
+                    ):
+                        dispatch_filter.return_value.last.return_value = dispatch
+                        started = SIMPLEBatch(pckg=package).start(
+                            {},
+                            base_dir,
+                            parent_dir,
+                            "demo_commander",
+                            9,
+                            parent_proj=parent_proj,
+                        )
+
+                    self.assertTrue(started)
+                    with open(os.path.join(base_dir, "job.script"), encoding="utf-8") as script:
+                        content = script.read()
+
+                    running = '{"jobid":9,"job_heartbeat":{}}'
+                    finished = '{"jobid":9,"job":{"status":"finished","terminate":true}}'
+                    failed = '{"jobid":9,"job":{"status":"failed","terminate":true}}'
+                    command = f"{executable} prg=demo_commander"
+
+                    self.assertIn("nice_status_callback()", content)
+                    self.assertIn("X-Worker-Token: ${NICE_LITE_WORKER_TOKEN}", content)
+                    self.assertIn("2>> nice_status.log", content)
+                    self.assertIn('exit "$nice_job_exit"', content)
+                    self.assertLess(content.index(running), content.index(command))
+                    self.assertLess(content.index(command), content.index("nice_job_exit=$?"))
+                    self.assertLess(content.index("nice_job_exit=$?"), content.index(finished))
+                    self.assertLess(content.index("nice_job_exit=$?"), content.index(failed))
+                    submit.assert_called_once()
+
+    @override_settings(NICE_LITE_BATCH_STATUS_CALLBACKS=True)
     def test_new_project_dispatch_creates_project_in_job_directory(self):
         with tempfile.TemporaryDirectory() as parent_dir:
             parent_proj = os.path.join(parent_dir, "workspace.simple")
@@ -525,4 +819,6 @@ class SimpleBatchDispatchTests(TestCase):
             self.assertNotIn("cp -v", content)
             self.assertNotIn("prg=update_project", content)
             self.assertNotIn("projfile=workspace.simple", content)
+            self.assertIn("nice_status_callback()", content)
+            self.assertIn('{"jobid":3,"job":{"status":"finished","terminate":true}}', content)
             submit.assert_called_once()

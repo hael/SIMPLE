@@ -268,14 +268,31 @@
 
                     <div class="grid grid-cols-[auto_2fr] gap-x-4 items-center mb-4">
                         <label class="text-xs font-medium text-streamtext whitespace-nowrap"
-                               for="simple_batch_source">input project</label>
+                               for="{% if batch_project_file_selector_enabled %}simple_batch_project_file{% else %}simple_batch_source{% endif %}">input project</label>
+                        {% if batch_project_file_selector_enabled %}
+                        <div class="relative flex items-center">
+                            <input id="simple_batch_project_file" type="text"
+                                   value="{{ default_batch_project_file }}"
+                                   data-required-extension=".simple"
+                                   title="select a .simple project file"
+                                   class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                            <button type="button" title="browse for .simple project file"
+                                    onclick="openWorkspaceBrowser('file', 'simple_batch_project_file', '.simple', 'project_file')"
+                                    class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/>
+                                </svg>
+                            </button>
+                        </div>
+                        {% else %}
                         <select id="simple_batch_source"
                                 class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
-                            <option value="workspace" selected>workspace project</option>
-                            {% for source in batch_snapshot_sources %}
-                                <option value="{{ source.key }}">{{ source.label }}</option>
+                            <option value="workspace" {% if default_batch_source == "workspace" %}selected{% endif %}>workspace project</option>
+                            {% for source in batch_project_sources %}
+                                <option value="{{ source.key }}" {% if source.key == default_batch_source %}selected{% endif %}>{{ source.label }}</option>
                             {% endfor %}
                         </select>
+                        {% endif %}
                     </div>
                     <p id="simple_batch_feedback" role="alert" aria-live="polite"
                        class="hidden mb-3 text-xs text-streamerror"></p>
@@ -289,7 +306,11 @@
                             {% csrf_token %}
                             <input type="hidden" name="package" value="simple">
                             <input type="hidden" name="program" value="{{ program.prg }}">
-                            <input type="hidden" name="batch_source" value="workspace">
+                            {% if batch_project_file_selector_enabled %}
+                            <input type="hidden" name="batch_project_file" value="{{ default_batch_project_file }}">
+                            {% else %}
+                            <input type="hidden" name="batch_source" value="{{ default_batch_source|default:'workspace' }}">
+                            {% endif %}
                             {% if program.requirements %}
                             <div class="mb-4 space-y-1">
                                 {% for requirement in program.requirements %}
@@ -482,14 +503,31 @@
 
                     <div class="grid grid-cols-[auto_2fr] gap-x-4 items-center mb-4">
                         <label class="text-xs font-medium text-streamtext whitespace-nowrap"
-                               for="single_batch_source">input project</label>
+                               for="{% if batch_project_file_selector_enabled %}single_batch_project_file{% else %}single_batch_source{% endif %}">input project</label>
+                        {% if batch_project_file_selector_enabled %}
+                        <div class="relative flex items-center">
+                            <input id="single_batch_project_file" type="text"
+                                   value="{{ default_batch_project_file }}"
+                                   data-required-extension=".simple"
+                                   title="select a .simple project file"
+                                   class="w-full text-xs px-2 py-1 pr-7 border border-streamline rounded-lg bg-streamsurface text-streaminput focus:outline-none focus:ring-1 focus:ring-streamring">
+                            <button type="button" title="browse for .simple project file"
+                                    onclick="openWorkspaceBrowser('file', 'single_batch_project_file', '.simple', 'project_file')"
+                                    class="absolute right-1.5 text-streamicon hover:text-streamsubtle transition-colors">
+                                <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M4 2a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L9.94 2.439A1.5 1.5 0 0 0 8.878 2H4Zm1 5.75A.75.75 0 0 1 5.75 7h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 5 7.75Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/>
+                                </svg>
+                            </button>
+                        </div>
+                        {% else %}
                         <select id="single_batch_source"
                                 class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
-                            <option value="workspace" selected>workspace project</option>
-                            {% for source in batch_snapshot_sources %}
-                                <option value="{{ source.key }}">{{ source.label }}</option>
+                            <option value="workspace" {% if default_batch_source == "workspace" %}selected{% endif %}>workspace project</option>
+                            {% for source in batch_project_sources %}
+                                <option value="{{ source.key }}" {% if source.key == default_batch_source %}selected{% endif %}>{{ source.label }}</option>
                             {% endfor %}
                         </select>
+                        {% endif %}
                     </div>
                     <p id="single_batch_feedback" role="alert" aria-live="polite"
                        class="hidden mb-3 text-xs text-streamerror"></p>
@@ -503,7 +541,11 @@
                             {% csrf_token %}
                             <input type="hidden" name="package" value="single">
                             <input type="hidden" name="program" value="{{ program.prg }}">
-                            <input type="hidden" name="batch_source" value="workspace">
+                            {% if batch_project_file_selector_enabled %}
+                            <input type="hidden" name="batch_project_file" value="{{ default_batch_project_file }}">
+                            {% else %}
+                            <input type="hidden" name="batch_source" value="{{ default_batch_source|default:'workspace' }}">
+                            {% endif %}
                             {% if program.requirements %}
                             <div class="mb-4 space-y-1">
                                 {% for requirement in program.requirements %}
@@ -653,7 +695,7 @@
             iframe.classList.add("hidden");
         }
 
-        function openWorkspaceBrowser(kind, targetInputId) {
+        function openWorkspaceBrowser(kind, targetInputId, requiredExtension = "", purpose = "external_input") {
             const workspaceDoc = window.parent && window.parent.document;
             if (!workspaceDoc) return;
 
@@ -692,7 +734,10 @@
             }
 
             const browserUrl = "{% url 'nice_lite:file_browser' '__kind__' %}".replace("__kind__", kind);
-            const params = new URLSearchParams({ purpose: "external_input" });
+            const params = new URLSearchParams({ purpose: purpose });
+            if (requiredExtension) {
+                params.set("extension", requiredExtension);
+            }
             if (selectedPath) {
                 params.set("selectedpath", selectedPath);
             }
@@ -932,9 +977,21 @@
             const form = document.getElementById("batch_form_" + packageName + "_" + programKey);
             if (!form) return;
             if (!validateSelectedBatchForm(packageName, programKey, form)) return;
-            const sourceSelector = document.getElementById(packageName + "_batch_source");
-            const sourceInput = form.querySelector("input[name='batch_source']");
-            if (sourceSelector && sourceInput) sourceInput.value = sourceSelector.value;
+            const projectFileSelector = document.getElementById(packageName + "_batch_project_file");
+            const projectFileInput = form.querySelector("input[name='batch_project_file']");
+            if (projectFileSelector && projectFileInput) {
+                const projectFile = projectFileSelector.value.trim();
+                if (projectFile && !projectFile.toLowerCase().endsWith(".simple")) {
+                    setBatchFeedback(packageName, "input project must be a .simple file");
+                    projectFileSelector.focus();
+                    return;
+                }
+                projectFileInput.value = projectFile;
+            } else {
+                const sourceSelector = document.getElementById(packageName + "_batch_source");
+                const sourceInput = form.querySelector("input[name='batch_source']");
+                if (sourceSelector && sourceInput) sourceInput.value = sourceSelector.value;
+            }
             form.requestSubmit();
         }
 

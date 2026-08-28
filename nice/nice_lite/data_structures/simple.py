@@ -10,6 +10,7 @@ import subprocess
 
 # local imports
 from ..helpers import *
+from ..features import batch_status_callbacks_enabled
 from ..models import DispatchModel
 
 
@@ -46,6 +47,70 @@ def _submit(dispatchmodel, script_path, cwd):
             cwd=cwd,
             start_new_session=True
         )
+
+
+def _classic_status_callback_wrapper(jobid, endpoint):
+    """Return shell fragments that report one classic job's full lifecycle.
+
+    The wrapper is shared by SIMPLE and SINGLE jobs. Callback failures are
+    logged without changing the scientific program's exit status. When the
+    worker token is exported to the compute environment it is forwarded in
+    the same header accepted by the NICE API.
+    """
+    running_payload = json.dumps(
+        {"jobid": jobid, "job_heartbeat": {}},
+        separators=(",", ":"),
+    )
+    finished_payload = json.dumps(
+        {"jobid": jobid, "job": {"status": "finished", "terminate": True}},
+        separators=(",", ":"),
+    )
+    failed_payload = json.dumps(
+        {"jobid": jobid, "job": {"status": "failed", "terminate": True}},
+        separators=(",", ":"),
+    )
+    quoted_endpoint = shlex.quote(endpoint)
+    curl_options = (
+        "--silent --show-error --fail --connect-timeout 3 --max-time 10 "
+        "--output /dev/null --header 'Content-Type: application/json'"
+    )
+    token_request = (
+        f"        curl {curl_options}"
+        ' --header "X-Worker-Token: ${NICE_LITE_WORKER_TOKEN}"'
+        f' --data "$1" {quoted_endpoint} 2>> nice_status.log\n'
+    )
+    anonymous_request = (
+        f"        curl {curl_options}"
+        f' --data "$1" {quoted_endpoint} 2>> nice_status.log\n'
+    )
+    prefix = (
+        "(\n"
+        "nice_status_callback() {\n"
+        "    if [ -n \"${NICE_LITE_WORKER_TOKEN:-}\" ]; then\n"
+        f"{token_request}"
+        "    else\n"
+        f"{anonymous_request}"
+        "    fi\n"
+        "}\n"
+        f"nice_status_callback {shlex.quote(running_payload)} || true\n"
+        "nice_run_job() {\n"
+    )
+    suffix = (
+        "}\n"
+        "if nice_run_job; then\n"
+        "    nice_job_exit=0\n"
+        "else\n"
+        "    nice_job_exit=$?\n"
+        "fi\n"
+        "if [ \"$nice_job_exit\" -eq 0 ]; then\n"
+        f"    nice_status_callback {shlex.quote(finished_payload)} || true\n"
+        "else\n"
+        f"    nice_status_callback {shlex.quote(failed_payload)} || true\n"
+        "fi\n"
+        "exit \"$nice_job_exit\"\n"
+        ")\n"
+    )
+    return prefix, suffix
 
 
 # ------------------------------------------------------------------
@@ -387,10 +452,26 @@ class SIMPLEBatch:
             return False
 
         creates_project = self.executable == "simple_exec" and self.jobtype == "new_project"
-        command_string = ""
+        status_endpoint = dispatchmodel.url + "/api_classic"
+        status_prefix = ""
+        status_suffix = ""
+        if batch_status_callbacks_enabled():
+            status_prefix, status_suffix = _classic_status_callback_wrapper(
+                self.jobid,
+                status_endpoint,
+            )
+
+        command_string = status_prefix
+        setup_failure_guard = " || return $?" if status_suffix else ""
         if not creates_project:
-            command_string += "cp -v " + shlex.quote(self.parent_proj) + " workspace.simple\n"
-            command_string += "simple_exec prg=update_project projfile=workspace.simple\n"
+            command_string += (
+                "cp -v " + shlex.quote(self.parent_proj)
+                + " workspace.simple" + setup_failure_guard + "\n"
+            )
+            command_string += (
+                "simple_exec prg=update_project projfile=workspace.simple"
+                + setup_failure_guard + "\n"
+            )
         command_string += self.executable + " prg=" + shlex.quote(self.jobtype)
         for key, val in self.args.items():
             command_string += " " + key + "=" + shlex.quote(str(val))
@@ -399,8 +480,9 @@ class SIMPLEBatch:
         command_string += " mkdir=no"
         if not creates_project:
             command_string += " projfile=workspace.simple"
-        command_string += " niceprocid=" + str(self.jobid) + " niceserver=" + shlex.quote(dispatchmodel.url + "/api_classic")
+        command_string += " niceprocid=" + str(self.jobid) + " niceserver=" + shlex.quote(status_endpoint)
         command_string += " >> stdout.log 2>> stderr.log\n"
+        command_string += status_suffix
 
         # fill template placeholders and normalise line endings
         try:

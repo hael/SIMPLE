@@ -41,7 +41,7 @@ class BatchViewTests(SimpleTestCase):
         job.stop.assert_called_once_with()
 
     @override_settings(NICE_LITE_BATCH_JOB_CONTROLS=True)
-    def test_delete_calls_soft_delete_for_owned_finished_job(self):
+    def test_delete_calls_permanent_delete_for_owned_finished_job(self):
         job = Mock()
         job.delete.return_value = True
         jobmodel = SimpleNamespace(
@@ -54,6 +54,35 @@ class BatchViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 302)
         job.delete.assert_called_once_with(project_cls.return_value, workspace_cls.return_value)
+
+    @override_settings(NICE_LITE_BATCH_JOB_CONTROLS=True)
+    def test_delete_calls_permanent_delete_for_stale_queued_job(self):
+        job = Mock()
+        job.queued_job_can_delete.return_value = True
+        job.delete.return_value = True
+        jobmodel = SimpleNamespace(
+            status="queued",
+            dset_id=4,
+            dset=SimpleNamespace(proj_id=3),
+        )
+        with patch.object(batch_views, "_get_accessible_batch_job", return_value=(job, jobmodel)), patch.object(batch_views, "Project") as project_cls, patch.object(batch_views, "Workspace") as workspace_cls, patch.object(batch_views.messages, "add_message"), patch.object(batch_views, "redirect", return_value=HttpResponseRedirect("/workspace")):
+            response = batch_views.view_batch_delete(self._request("/deletebatch"))
+
+        self.assertEqual(response.status_code, 302)
+        job.queued_job_can_delete.assert_called_once_with()
+        job.delete.assert_called_once_with(project_cls.return_value, workspace_cls.return_value)
+
+    @override_settings(NICE_LITE_BATCH_JOB_CONTROLS=True)
+    def test_delete_rejects_active_queued_job(self):
+        job = Mock()
+        job.queued_job_can_delete.return_value = False
+        jobmodel = SimpleNamespace(status="queued")
+        with patch.object(batch_views, "_get_accessible_batch_job", return_value=(job, jobmodel)), patch.object(batch_views.messages, "add_message"), patch.object(batch_views, "redirect", return_value=HttpResponseRedirect("/workspace")):
+            response = batch_views.view_batch_delete(self._request("/deletebatch"))
+
+        self.assertEqual(response.status_code, 302)
+        job.queued_job_can_delete.assert_called_once_with()
+        job.delete.assert_not_called()
 
     @override_settings(NICE_LITE_BATCH_JOB_CONTROLS=True)
     def test_delete_rejects_running_job(self):

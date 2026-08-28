@@ -145,6 +145,9 @@ X_FRAME_OPTIONS = "SAMEORIGIN"
 # Opt-in NICE Lite controls for stopping and deleting batch jobs.
 NICE_LITE_BATCH_JOB_CONTROLS = False
 
+# Opt-in script-level status callbacks for every SIMPLE and SINGLE batch job.
+NICE_LITE_BATCH_STATUS_CALLBACKS = False
+
 # Opt-in cleanup of job cards whose workspace directories were removed externally.
 NICE_LITE_WORKSPACE_JOB_REFRESH = False
 

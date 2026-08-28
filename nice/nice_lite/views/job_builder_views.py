@@ -3,7 +3,7 @@
 This module renders ``jobbuilder.html`` and prepares:
 - stream-specific user inputs (optionally prefilled from a selected stream job)
 - SIMPLE and SINGLE program catalogs derived from batch UI JSON metadata
-- completed stream snapshots that can explicitly seed a batch job
+- completed batch projects and stream snapshots that can seed a batch job
 """
 
 # global imports
@@ -22,6 +22,10 @@ from ..data_structures.batchjob import BatchJob
 from ..data_structures.simple import SIMPLEBatch, SIMPLEStream
 from ..data_structures.streamjob import StreamJob
 from ..data_structures.workspace import Workspace
+from ..features import (
+    batch_project_file_selector_enabled,
+    batch_project_inheritance_enabled,
+)
 from ..models import JobModel
 from ..helpers import (
     clear_checksum_cookies,
@@ -34,6 +38,7 @@ from ..helpers import (
 
 _BATCH_LAUNCHER_KEYS = {"prg", "projfile", "mkdir", "niceprocid", "niceserver"}
 _BATCH_WORKSPACE_SOURCE = "workspace"
+_BATCH_JOB_SOURCE_PREFIX = "job"
 _BATCH_SNAPSHOT_SOURCE_PREFIX = "snapshot"
 
 
@@ -181,7 +186,7 @@ def _validate_batch_requirements(program_cfg, args):
     if not isinstance(requirements, list):
         return None
 
-    # The batch launcher always supplies the selected workspace/snapshot project.
+    # The batch launcher always supplies the selected project source.
     supplied_keys = {"projfile"}
     supplied_keys.update(
         key for key, value in args.items()
@@ -228,6 +233,38 @@ def _is_batch_job(jobmodel):
     """Return True when a shared JobModel record represents a batch job."""
     metadata = getattr(jobmodel, "master_stats", None)
     return isinstance(metadata, dict) and metadata.get("job_type") == "batch"
+
+
+def _batch_job_source(jobmodel, workspace_dir):
+    """Build a safe source descriptor for one completed batch job project."""
+    if not _is_batch_job(jobmodel) or jobmodel.status != "finished":
+        return None
+    if not isinstance(workspace_dir, str) or not isinstance(jobmodel.dirc, str):
+        return None
+    if jobmodel.dirc in ("", ".", "..") or jobmodel.dirc != os.path.basename(jobmodel.dirc):
+        return None
+
+    workspace_root = os.path.realpath(workspace_dir)
+    project_path = os.path.realpath(os.path.join(workspace_root, jobmodel.dirc, "workspace.simple"))
+    try:
+        if os.path.commonpath((workspace_root, project_path)) != workspace_root:
+            return None
+    except ValueError:
+        return None
+    if not os.path.isfile(project_path):
+        return None
+
+    metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
+    job_name = (jobmodel.name or "").strip() or metadata.get("program") or jobmodel.dirc
+    return {
+        "key": f"{_BATCH_JOB_SOURCE_PREFIX}:{jobmodel.id}",
+        "label": f"job {jobmodel.disp} - {job_name}",
+        "path": project_path,
+        "metadata": {
+            "type": "batch_job",
+            "batch_job_id": jobmodel.id,
+        },
+    }
 
 
 def _snapshot_source(jobmodel, particle_set, workspace_dir):
@@ -282,6 +319,21 @@ def _snapshot_source(jobmodel, particle_set, workspace_dir):
     }
 
 
+def _collect_batch_job_sources(workspace_obj):
+    """List completed batch projects, newest first, for the selected workspace."""
+    workspace_dir = workspace_obj.get_absdir()
+    if not isinstance(workspace_dir, str):
+        return []
+
+    sources = []
+    jobs = JobModel.objects.filter(dset=workspace_obj.get_id()).order_by("-id")
+    for jobmodel in jobs:
+        source = _batch_job_source(jobmodel, workspace_dir)
+        if source is not None:
+            sources.append({"key": source["key"], "label": source["label"]})
+    return sources
+
+
 def _collect_batch_snapshot_sources(workspace_obj):
     """List completed snapshot projects available in the selected workspace."""
     workspace_dir = workspace_obj.get_absdir()
@@ -310,6 +362,18 @@ def _resolve_batch_project_source(workspace_obj, source_key):
         return None, None, "invalid batch project source"
 
     parts = source_key.split(":")
+    if len(parts) == 2 and parts[0] == _BATCH_JOB_SOURCE_PREFIX:
+        if not batch_project_inheritance_enabled() or not parts[1].isdecimal():
+            return None, None, "invalid batch project source"
+        jobmodel = JobModel.objects.filter(
+            id=int(parts[1]),
+            dset=workspace_obj.get_id(),
+        ).first()
+        source = _batch_job_source(jobmodel, workspace_obj.get_absdir())
+        if source is None:
+            return None, None, "batch job project is unavailable"
+        return source["path"], source["metadata"], None
+
     if len(parts) != 3 or parts[0] != _BATCH_SNAPSHOT_SOURCE_PREFIX:
         return None, None, "invalid batch project source"
     if not parts[1].isdecimal() or not parts[2].isdecimal():
@@ -336,6 +400,94 @@ def _resolve_batch_project_source(workspace_obj, source_key):
     if source is None:
         return None, None, "batch snapshot is unavailable"
     return source["path"], source["metadata"], None
+
+
+def _default_batch_source_key(workspace_obj):
+    """Return the newest eligible batch project key or the workspace seed."""
+    if not batch_project_inheritance_enabled():
+        return _BATCH_WORKSPACE_SOURCE
+    sources = _collect_batch_job_sources(workspace_obj)
+    if sources:
+        return sources[0]["key"]
+    return _BATCH_WORKSPACE_SOURCE
+
+
+def _default_batch_project_file(workspace_obj):
+    """Return the inherited batch project path, falling back to workspace.simple."""
+    workspace_dir = workspace_obj.get_absdir()
+    if not isinstance(workspace_dir, str):
+        return ""
+
+    if batch_project_inheritance_enabled():
+        jobs = JobModel.objects.filter(dset=workspace_obj.get_id()).order_by("-id")
+        for jobmodel in jobs:
+            source = _batch_job_source(jobmodel, workspace_dir)
+            if source is not None:
+                return source["path"]
+
+    workspace_project = os.path.realpath(os.path.join(workspace_dir, "workspace.simple"))
+    if os.path.isfile(workspace_project):
+        return workspace_project
+    return ""
+
+
+def _batch_project_metadata_for_path(workspace_obj, project_path):
+    """Describe a selected project file, retaining known job/snapshot provenance."""
+    workspace_dir = workspace_obj.get_absdir()
+    jobs = JobModel.objects.filter(dset=workspace_obj.get_id()).order_by("-id")
+    for jobmodel in jobs:
+        source = _batch_job_source(jobmodel, workspace_dir)
+        if source is not None and source["path"] == project_path:
+            return source["metadata"]
+
+        stats = getattr(jobmodel, "particle_sets_stats", None)
+        particle_sets = stats.get("particle_sets") if isinstance(stats, dict) else None
+        if not isinstance(particle_sets, list):
+            continue
+        for particle_set in particle_sets:
+            source = _snapshot_source(jobmodel, particle_set, workspace_dir)
+            if source is not None and source["path"] == project_path:
+                return source["metadata"]
+
+    return {
+        "type": "project_file",
+        "filename": os.path.relpath(project_path, os.path.realpath(workspace_dir)),
+    }
+
+
+def _resolve_batch_project_file(workspace_obj, project_file):
+    """Validate and resolve a posted .simple project inside the selected workspace."""
+    if project_file in (None, ""):
+        return None, None, None
+    if not isinstance(project_file, str):
+        return None, None, "invalid batch project file"
+
+    project_file = project_file.strip()
+    if project_file == "":
+        return None, None, None
+    if os.path.splitext(project_file)[1].lower() != ".simple":
+        return None, None, "input project must be a .simple file"
+
+    workspace_dir = workspace_obj.get_absdir()
+    if not isinstance(workspace_dir, str):
+        return None, None, "batch project file is unavailable"
+    workspace_root = os.path.realpath(workspace_dir)
+    if not os.path.isabs(project_file):
+        project_file = os.path.join(workspace_root, project_file)
+    project_path = os.path.realpath(project_file)
+    try:
+        if os.path.commonpath((workspace_root, project_path)) != workspace_root:
+            return None, None, "batch project file is outside the selected workspace"
+    except ValueError:
+        return None, None, "invalid batch project file"
+    if not os.path.isfile(project_path):
+        return None, None, "batch project file is unavailable"
+
+    return (
+        project_path,
+        _batch_project_metadata_for_path(workspace_obj, project_path),
+        None,
+    )
 
 
 def _is_workspace_accessible(workspace_obj, project_id, username):
@@ -384,7 +536,13 @@ def view_job_builder(request):
     else:
         messages.add_message(request, messages.ERROR, "failed to read batch ui JSON")
 
-    context = {"batch_snapshot_sources": []}
+    project_file_selector_enabled = batch_project_file_selector_enabled()
+    context = {
+        "batch_project_sources": [],
+        "default_batch_source": _BATCH_WORKSPACE_SOURCE,
+        "batch_project_file_selector_enabled": project_file_selector_enabled,
+        "default_batch_project_file": "",
+    }
     if isinstance(streamui, dict):
         user_inputs = streamui.get("user_inputs")
         if isinstance(user_inputs, list):
@@ -409,7 +567,17 @@ def view_job_builder(request):
     if workspace_id is not None and project_id is not None:
         workspace_obj = Workspace(workspace_id)
         if _is_workspace_accessible(workspace_obj, project_id, request.user.username):
-            context["batch_snapshot_sources"] = _collect_batch_snapshot_sources(workspace_obj)
+            if project_file_selector_enabled:
+                context["default_batch_project_file"] = _default_batch_project_file(workspace_obj)
+            else:
+                batch_job_sources = []
+                if batch_project_inheritance_enabled():
+                    batch_job_sources = _collect_batch_job_sources(workspace_obj)
+                context["batch_project_sources"] = (
+                    batch_job_sources + _collect_batch_snapshot_sources(workspace_obj)
+                )
+                if batch_job_sources:
+                    context["default_batch_source"] = batch_job_sources[0]["key"]
 
     response = render(request, template, context)
     if clear_selected_job_cookie:
@@ -459,10 +627,22 @@ def view_create_batch(request):
         messages.add_message(request, messages.ERROR, error)
         return redirect("nice_lite:workspace")
 
-    parent_proj, source_metadata, error = _resolve_batch_project_source(
-        workspace_obj,
-        request.POST.get("batch_source", _BATCH_WORKSPACE_SOURCE),
-    )
+    if batch_project_file_selector_enabled():
+        project_file = request.POST.get("batch_project_file")
+        if project_file in (None, ""):
+            project_file = _default_batch_project_file(workspace_obj)
+        parent_proj, source_metadata, error = _resolve_batch_project_file(
+            workspace_obj,
+            project_file,
+        )
+    else:
+        source_key = request.POST.get("batch_source")
+        if source_key in (None, ""):
+            source_key = _default_batch_source_key(workspace_obj)
+        parent_proj, source_metadata, error = _resolve_batch_project_source(
+            workspace_obj,
+            source_key,
+        )
     if error is not None:
         print_error(f"create_batch: {error}")
         messages.add_message(request, messages.ERROR, error)

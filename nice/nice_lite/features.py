@@ -12,6 +12,30 @@ def batch_job_controls_enabled():
     return enabled
 
 
+def batch_project_inheritance_enabled():
+    """Return the explicitly configured batch-project inheritance state."""
+    enabled = getattr(settings, "NICE_LITE_BATCH_PROJECT_INHERITANCE", False)
+    if not isinstance(enabled, bool):
+        raise ImproperlyConfigured("NICE_LITE_BATCH_PROJECT_INHERITANCE must be a boolean")
+    return enabled
+
+
+def batch_project_file_selector_enabled():
+    """Return the explicitly configured batch-project file-selector state."""
+    enabled = getattr(settings, "NICE_LITE_BATCH_PROJECT_FILE_SELECTOR", False)
+    if not isinstance(enabled, bool):
+        raise ImproperlyConfigured("NICE_LITE_BATCH_PROJECT_FILE_SELECTOR must be a boolean")
+    return enabled
+
+
+def batch_status_callbacks_enabled():
+    """Return the explicitly configured batch script-callback state."""
+    enabled = getattr(settings, "NICE_LITE_BATCH_STATUS_CALLBACKS", False)
+    if not isinstance(enabled, bool):
+        raise ImproperlyConfigured("NICE_LITE_BATCH_STATUS_CALLBACKS must be a boolean")
+    return enabled
+
+
 def workspace_job_refresh_enabled():
     """Return the explicitly configured workspace-card refresh state."""
     enabled = getattr(settings, "NICE_LITE_WORKSPACE_JOB_REFRESH", False)
