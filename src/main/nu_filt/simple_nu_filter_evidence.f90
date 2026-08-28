@@ -30,9 +30,11 @@ contains
         character(len=LONGSTRLEN) :: identity_seed
 
         if( .not.nu_evidence_requested ) &
-            &THROW_HARD('NU evidence setup was not requested with source=base_unfil')
-        if( trim(nu_evidence_source) /= NU_EVIDENCE_SOURCE_BASE ) &
-            &THROW_HARD('NU evidence source is not base_unfil')
+            &THROW_HARD('NU evidence setup was not requested with an evidence source')
+        if( trim(nu_evidence_source) /= NU_EVIDENCE_SOURCE_BASE .and. &
+            &trim(nu_evidence_source) /= NU_EVIDENCE_SOURCE_PREV )then
+            THROW_HARD('NU evidence source is not base_unfil or previous_shipped')
+        endif
         if( nu_aux_replacement_label > 0 ) &
             &THROW_HARD('NU evidence bank contains an auxiliary replacement candidate')
         if( any(vol_even%get_ldim() /= ldim) .or. any(vol_odd%get_ldim() /= ldim) ) &
@@ -48,7 +50,7 @@ contains
         call calculate_nu_source_fingerprint(vol_even, vol_odd, fingerprint)
         if( any(abs(fingerprint - nu_evidence_source_fingerprint) > &
             &1.d-11 * max(1.d0, abs(nu_evidence_source_fingerprint))) )then
-            THROW_HARD('NU evidence half maps differ from the base_unfil setup pair')
+            THROW_HARD('NU evidence half maps differ from the evidence-source setup pair')
         endif
 
         n_signal = size(candidate_coords)
@@ -332,7 +334,8 @@ contains
         if( state%summary%n_support < 1 ) return
         if( state%summary%mskdiam <= TINY ) return
         if( state%summary%n_candidates < 2 .or. state%summary%n_bands /= NU_EVIDENCE_NBANDS ) return
-        if( trim(state%summary%source) /= NU_EVIDENCE_SOURCE_BASE ) return
+        if( trim(state%summary%source) /= NU_EVIDENCE_SOURCE_BASE .and. &
+            &trim(state%summary%source) /= NU_EVIDENCE_SOURCE_PREV ) return
         if( len_trim(state%summary%identity) /= 16 ) return
         if( len_trim(state%summary%provenance) < 1 ) return
         if( .not.ieee_is_finite(state%summary%null_fraction) .or. &

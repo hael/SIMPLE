@@ -18,7 +18,7 @@ use simple_image_msk,         only: image_msk
 use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
     &build_nu_evidence_state, nu_evidence_state, expand_nu_evidence_band_weights, &
     &print_nu_evidence_summary, assert_nu_evidence_replay_ready, unpack_nu_evidence_state, &
-    &NU_EVIDENCE_BAND_LIMITS
+    &NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname
@@ -160,27 +160,35 @@ contains
     end subroutine shipped_pair_res
 
     !> Stage-6 direct NU-evidence replay (pcg_priors.md S5-S6): construct the
-    !! frozen compact evidence state from the CURRENT state's unregularized
-    !! base half pair -- current-iteration empirical Bayes, exactly as the ML
-    !! replay derives P_tau from the current base pair -- and expand it into
-    !! the graded band lack-of-evidence weights the solver consumes. Built
-    !! once per state after both base solves and before either replay; the
-    !! two half replays share the one immutable evidence identity. No
-    !! envelope artifact is read or written and no silent fallback exists:
-    !! evidence-construction failure is a hard error.
+    !! frozen compact evidence state and expand it into the graded band
+    !! lack-of-evidence weights the solver consumes. The evidence pair is
+    !! always the FSC pair of the volassemble: the CURRENT unregularized base
+    !! half pair (source=base_unfil; in trailing mode that pair is the
+    !! full-mass blended base solution, i.e. exactly the statistics the ML
+    !! replay re-reads), or -- in the trailing bootstrap only -- the previous
+    !! iteration's shipped half pair (source=previous_shipped), the same
+    !! lag-one pair the bootstrap FSC is computed from. Built once per state
+    !! after both base solves and before either replay; the two half replays
+    !! share the one immutable evidence identity. No envelope artifact is
+    !! read or written and no silent fallback exists: evidence-construction
+    !! failure is a hard error.
     subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, band_w, &
-            &finest_lp )
-        class(parameters), intent(in)  :: params
-        integer,           intent(in)  :: state_here
-        character(len=*),  intent(in)  :: context
-        type(image),       intent(in)  :: vol_even, vol_odd
-        real, allocatable, intent(out) :: band_w(:,:,:,:)
-        real, optional,    intent(out) :: finest_lp
+            &finest_lp, evidence_source )
+        class(parameters),          intent(in)  :: params
+        integer,                    intent(in)  :: state_here
+        character(len=*),           intent(in)  :: context
+        type(image),                intent(in)  :: vol_even, vol_odd
+        real, allocatable,          intent(out) :: band_w(:,:,:,:)
+        real, optional,             intent(out) :: finest_lp
+        character(len=*), optional, intent(in)  :: evidence_source
         type(nu_evidence_state) :: evstate
         real, allocatable :: cutoffs(:)
+        character(len=32) :: source_here
+        source_here = NU_EVIDENCE_SOURCE_BASE
+        if( present(evidence_source) ) source_here = trim(evidence_source)
         write(logfhandle,'(A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): BUILDING EVIDENCE FROM THE '//&
-            &'BASE HALF PAIR OF STATE ', state_here, ' (source=base_unfil)'
-        call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source='base_unfil')
+            &'FSC HALF PAIR OF STATE ', state_here, ' (source='//trim(source_here)//')'
+        call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source=trim(source_here))
         call optimize_nu_cutoff_finds()
         call build_nu_evidence_state(vol_even, vol_odd, evstate)
         call cleanup_nu_filter()
@@ -1460,8 +1468,10 @@ contains
         class(cmdline),   intent(inout) :: cline
         logical, optional, intent(out)  :: trail_bootstrap_states(:)
         real,    optional, intent(out)  :: nu_replay_finest_lps(:)
-        type(image) :: half_even, half_odd, ml_even, ml_odd, merged
-        type(image) :: previous_even, previous_odd, previous_merged
+        type(image), target  :: half_even, half_odd, ml_even, ml_odd, merged
+        type(image), target  :: previous_even, previous_odd, previous_merged
+        type(image), pointer :: fsc_pair_even, fsc_pair_odd, fsc_pair_merged
+        character(len=32)    :: evidence_source_here
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         real, allocatable :: fsc(:), res0143s(:)
         real, allocatable :: realized_fractions(:), update_weights(:), ship05s(:), ship0143s(:)
@@ -1482,11 +1492,14 @@ contains
         ! pcg_priors.md R10); same rule as the shared path, validated above
         ! so a positive strength implies the ML replay is active
         l_nu_replay = params%pcg_nu_lambda_rel > 0.0
-        if( l_nu_replay .and. params%l_trail_rec )then
-            ! trailing replays blended accumulators whose base pair is not the
-            ! plain current-cohort pair the evidence contract requires
-            THROW_HARD('NU replay does not support trailing reconstruction yet')
-        endif
+        ! NU replay + trailing (policy 2026-08-28): the evidence pair is
+        ! always the FSC pair. In trailing mode the base solves are the
+        ! full-mass blended chain solutions -- the very statistics the ML
+        ! replay re-reads -- so current-iteration evidence from that pair
+        ! satisfies the evidence contract; the accumulator arithmetic is the
+        ! test=pcg_frac_update gated path and is untouched by the prior. The
+        ! bootstrap iteration (no chain yet) uses lag-one evidence from the
+        ! previous shipped pair, exactly as its FSC does.
         if( present(trail_bootstrap_states) )then
             if( size(trail_bootstrap_states) /= params%nstates ) &
                 &THROW_HARD('PCG trailing-bootstrap state output has invalid size')
@@ -1569,33 +1582,40 @@ contains
                 time_map_output = real(toc(t_state_phase),dp)
             endif
             t_state_phase = tic()
+            ! the FSC pair is selected once here and reused for the FSC, its
+            ! summary, and the NU-replay evidence, keeping the
+            ! evidence-pair-is-the-FSC-pair contract structural: the current
+            ! base pair ordinarily (in trailing mode the blended chain solution
+            ! the replay re-reads), the previous shipped pair in the trailing
+            ! bootstrap (lag-one, exactly as its FSC)
             if( l_bootstrap )then
                 call load_previous_state_halves(state, previous_even, previous_odd, previous_merged)
-                call calculate_distributed_fsc(state, previous_even, previous_odd, previous_merged, &
-                    &fsc, res05, res0143s(state), cfar)
+                fsc_pair_even        => previous_even
+                fsc_pair_odd         => previous_odd
+                fsc_pair_merged      => previous_merged
+                evidence_source_here =  NU_EVIDENCE_SOURCE_PREV
             else
-                call calculate_distributed_fsc(state, half_even, half_odd, merged, &
-                    &fsc, res05, res0143s(state), cfar)
+                fsc_pair_even        => half_even
+                fsc_pair_odd         => half_odd
+                fsc_pair_merged      => merged
+                evidence_source_here =  NU_EVIDENCE_SOURCE_BASE
             endif
+            call calculate_distributed_fsc(state, fsc_pair_even, fsc_pair_odd, fsc_pair_merged, &
+                &fsc, res05, res0143s(state), cfar)
             call arr2file(fsc, fname_fsc)
-            if( l_bootstrap )then
-                call write_distributed_fsc_summary(state, previous_merged, fsc, res05, res0143s(state), cfar)
-            else
-                call write_distributed_fsc_summary(state, merged, fsc, res05, res0143s(state), cfar)
-            endif
+            call write_distributed_fsc_summary(state, fsc_pair_merged, fsc, res05, res0143s(state), cfar)
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
                 if( l_nu_replay )then
-                    ! the trailing bootstrap replays previous-cohort halves;
-                    ! evidence must come from the pair the replay reuses, and
-                    ! that interaction is not designed yet
-                    if( l_bootstrap ) THROW_HARD('NU replay does not support the trailing bootstrap path yet')
+                    ! the evidence pair is the FSC pair, selected once above
                     if( present(nu_replay_finest_lps) )then
-                        call build_nu_replay_evidence(params, state, 'distributed', half_even, half_odd, &
-                            &nu_band_w, finest_lp=nu_replay_finest_lps(state))
+                        call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
+                            &fsc_pair_odd, nu_band_w, finest_lp=nu_replay_finest_lps(state), &
+                            &evidence_source=trim(evidence_source_here))
                     else
-                        call build_nu_replay_evidence(params, state, 'distributed', half_even, half_odd, nu_band_w)
+                        call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
+                            &fsc_pair_odd, nu_band_w, evidence_source=trim(evidence_source_here))
                     endif
                 endif
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)

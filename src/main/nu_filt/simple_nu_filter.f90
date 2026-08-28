@@ -56,7 +56,7 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
           expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
           NU_EVIDENCE_NBANDS, NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_MIN_NULL_FRAC,&
-          NU_EVIDENCE_MAX_NULL_FRAC
+          NU_EVIDENCE_MAX_NULL_FRAC, NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
 private
 #include "simple_local_flags.inc"
 
@@ -148,6 +148,9 @@ real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
 real,             parameter   :: NU_EVIDENCE_MIN_NULL_FRAC = 0.01
 real,             parameter   :: NU_EVIDENCE_MAX_NULL_FRAC = 0.90
 character(len=*), parameter   :: NU_EVIDENCE_SOURCE_BASE = 'base_unfil'
+! lag-one evidence source for the PCG trailing bootstrap: the previous
+! iteration's shipped half pair, the same pair that supplies the bootstrap FSC
+character(len=*), parameter   :: NU_EVIDENCE_SOURCE_PREV = 'previous_shipped'
 character(len=*), parameter   :: NU_EVIDENCE_ALGORITHM = 'nu_evidence_v1'
 character(len=*), parameter   :: NU_FILTER_CACHE_EVEN        = 'nu_filter_cache_even'
 character(len=*), parameter   :: NU_FILTER_CACHE_ODD         = 'nu_filter_cache_odd'

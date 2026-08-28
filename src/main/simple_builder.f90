@@ -5,7 +5,6 @@ use simple_binoris_io
 use simple_cmdline,          only: cmdline
 use simple_image,            only: image
 use simple_sp_project,       only: sp_project
-use simple_reconstructor_eo, only: reconstructor_eo
 use simple_projector,        only: projector
 use simple_class_frcs,       only: class_frcs
 use simple_parameters,       only: parameters
@@ -41,8 +40,6 @@ type :: builder
 
     ! STRATEGY2D TOOLBOX
     type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
-    ! RECONSTRUCTION TOOLBOX
-    type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
     ! STRATEGY3D TOOLBOX
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     real,                   allocatable :: inpl_rots(:)           !< in-plane rotations
@@ -51,7 +48,6 @@ type :: builder
 
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
-    logical, private                    :: eo_rec_tbox_exists     = .false.
     logical, private                    :: strategy3D_tbox_exists = .false.
     logical, private                    :: strategy2D_tbox_exists = .false.
   contains
@@ -65,8 +61,6 @@ type :: builder
     procedure                           :: build_spproj
     procedure                           :: build_general_tbox
     procedure                           :: kill_general_tbox
-    procedure                           :: build_rec_eo_tbox
-    procedure                           :: kill_rec_eo_tbox
     procedure                           :: build_strategy3D_tbox
     procedure                           :: kill_strategy3D_tbox
     procedure                           :: build_strategy2D_tbox
@@ -355,24 +349,6 @@ contains
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
-
-    subroutine build_rec_eo_tbox( self, params )
-        class(builder), target, intent(inout) :: self
-        class(parameters),      intent(inout) :: params
-        call self%kill_rec_eo_tbox
-        call self%eorecvol%new(params, self%spproj)
-        if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        self%eo_rec_tbox_exists = .true.
-        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
-    end subroutine build_rec_eo_tbox
-
-    subroutine kill_rec_eo_tbox( self )
-        class(builder), intent(inout) :: self
-        if( self%eo_rec_tbox_exists )then
-            call self%eorecvol%kill
-            self%eo_rec_tbox_exists = .false.
-        endif
-    end subroutine kill_rec_eo_tbox
 
     subroutine build_strategy2D_tbox( self, params )
         class(builder), target, intent(inout) :: self
