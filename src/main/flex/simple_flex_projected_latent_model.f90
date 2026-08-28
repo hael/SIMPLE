@@ -9,7 +9,7 @@ use simple_parameters,       only: parameters
 use simple_reconstructor,    only: reconstructor
 implicit none
 
-public :: prep_imgs4projected_model, solve_coupled_basis_exp
+public :: prep_imgs4projected_model, solve_coupled_basis_exp, projected_model_kfromto
 public :: test_projected_latent_mstep_stats_io, test_projected_latent_canonicalization
 private
 #include "simple_local_flags.inc"
@@ -451,6 +451,11 @@ contains
         real(dp)    :: amat(ncomp,ncomp)
         real(dp)    :: diag_sum, diag_max, ridge, denom
         integer     :: lb(3), ub(3), h, k, m, ih, ik, im, q, r, flag, shell, nyq
+        logical     :: diagonal_density
+        ! Same shape convention insert_planes_oversamp_coupled_batch_scaled uses to pick its
+        ! accumulation mode: a leading extent of ncomp means only the diagonal of the coupled normal
+        ! matrix was accumulated, so the per-voxel system decouples into ncomp scalar divisions.
+        diagonal_density = size(rho_cross_exp,1) == ncomp .and. ncomp /= (ncomp*(ncomp+1))/2
         lb = lbound(basis_recs(1)%cmat_exp)
         ub = ubound(basis_recs(1)%cmat_exp)
         nyq = basis_recs(1)%get_lfny(1)
@@ -477,13 +482,35 @@ contains
                     diag_max = 0.d0
                     do q = 1, ncomp
                         rhs(q) = cmplx(basis_recs(q)%cmat_exp(h,k,m), kind=dp)
-                        denom = max(0.d0,real(rho_cross_exp(pair_index(q,q),ih,ik,im),dp))
+                        if( diagonal_density )then
+                            denom = max(0.d0,real(rho_cross_exp(q,ih,ik,im),dp))
+                        else
+                            denom = max(0.d0,real(rho_cross_exp(pair_index(q,q),ih,ik,im),dp))
+                        endif
                         diag_sum = diag_sum + denom
                         diag_max = max(diag_max,denom)
                     end do
                     if( diag_max <= COUPLED_DENSITY_FLOOR )then
                         do q = 1, ncomp
                             basis_recs(q)%cmat_exp(h,k,m) = CMPLX_ZERO
+                        end do
+                        cycle
+                    endif
+                    ridge = COUPLED_MSTEP_RIDGE_REL * diag_sum / real(max(1,ncomp), dp)
+                    if( diagonal_density )then
+                        ! No off-diagonals were accumulated, so the normal matrix IS its diagonal and
+                        ! the ncomp x ncomp Cholesky collapses to ncomp divisions. Same ridge, same
+                        ! floor, same fallback -- only the cross terms between components are dropped.
+                        do q = 1, ncomp
+                            denom = max(0.d0,real(rho_cross_exp(q,ih,ik,im),dp)) + ridge
+                            if( denom > DTINY )then
+                                sol(q) = rhs(q) / denom
+                            else
+                                sol(q) = DCMPLX_ZERO
+                            endif
+                        end do
+                        do q = 1, ncomp
+                            basis_recs(q)%cmat_exp(h,k,m) = cmplx(real(sol(q), sp), real(aimag(sol(q)), sp))
                         end do
                         cycle
                     endif
@@ -494,7 +521,6 @@ contains
                             amat(r,q) = amat(q,r)
                         end do
                     end do
-                    ridge = COUPLED_MSTEP_RIDGE_REL * diag_sum / real(max(1,ncomp), dp)
                     do q = 1, ncomp
                         amat(q,q) = amat(q,q) + ridge
                     end do
@@ -587,7 +613,9 @@ contains
     !!  only noise, and at box_crop=64/mskdiam=200 the disc keeps ~21% of the frame, so the
     !!  noise in every per-image inner product drops by roughly the same factor. Left absent
     !!  the behaviour is exactly as before.
-    subroutine prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, fplanes, mskrad )
+    subroutine prep_imgs4projected_model( params, build, nptcls, ptcl_imgs, pinds, fplanes, &
+        &mskrad, force_cpu, resident, cached )
+        use simple_flex_gpu, only: flex_gpu_prep_ready
         class(parameters), intent(in)    :: params
         class(builder),    intent(inout) :: build
         integer,           intent(in)    :: nptcls
@@ -595,25 +623,68 @@ contains
         integer,           intent(in)    :: pinds(nptcls)
         type(fplane_type), intent(inout) :: fplanes(nptcls)
         real, optional,    intent(in)    :: mskrad
+        logical, optional, intent(in)    :: force_cpu   !< cross-check reference building
+        logical, optional, intent(in)    :: resident    !< device path: leave planes resident only
+        logical, optional, intent(in)    :: cached      !< serve reads from the downscaled cache
         type(ctfparams) :: ctfparms(nthr_glob)
-        real    :: shift(2)
+        real    :: shift(2), crop_factor
         integer :: iptcl, i, ithr, kfromto(2)
-        logical :: l_mask
+        logical :: l_mask, l_cpu, l_res, l_cached
         l_mask = .false.
         if( present(mskrad) ) l_mask = mskrad > 0.0
-        call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
+        l_cpu = .false.
+        if( present(force_cpu) ) l_cpu = force_cpu
+        l_res = .false.
+        if( present(resident) ) l_res = resident
+        l_cached = .false.
+        if( present(cached) ) l_cached = cached
+        ! A cache entry is the noise-normalised, Fourier-cropped particle at box_crop. That prefix
+        ! is equivalent to the full-box path only for the TAPER variant, which is the one
+        ! prep_imgs4rec certified: norm_noise_mask_pad_fft has no renorm= switch, so a masked run
+        ! would noise-normalise a second time. Refuse rather than change the numerics silently.
+        if( l_cached .and. l_mask ) THROW_HARD('particle cache is incompatible with image masking &
+            &(SIMPLE_COV_MASK_IMAGES); prep_imgs4projected_model')
+        ! device path: when a stage driver has begun the GPU prep lifecycle, the whole
+        ! taper->norm->pad->FFT->plane chain runs on device and the planes are fetched packed
+        ! (taper variant only; the mask variant stays on the CPU)
+        if( flex_gpu_prep_ready() .and. .not. l_mask .and. .not. l_cpu .and. .not. l_cached )then
+            call prep_imgs4projected_model_dev(params, build, nptcls, ptcl_imgs, pinds, &
+                &fplanes, fetch=.not. l_res)
+            return
+        endif
+        if( l_res ) THROW_HARD('resident prep requested without the device prep lifecycle')
+        ! logical/physical address mapping for padded Fourier planes: a cached particle already
+        ! lives on the cropped grid, so the pad heap and the map must both be box_croppd
+        if( l_cached )then
+            call memoize_ft_maps([params%box_croppd, params%box_croppd, 1], params%smpd_crop)
+        else
+            call memoize_ft_maps([params%boxpd, params%boxpd, 1], params%smpd)
+        endif
         kfromto = projected_model_kfromto(params)
+        if( l_cached ) kfromto(2) = min(kfromto(2), params%box_crop/2)
+        crop_factor = real(params%box_crop) / real(params%box)
         !$omp parallel do default(shared) private(i,ithr,iptcl,shift) schedule(static) proc_bind(close)
         do i = 1, nptcls
             ithr   = omp_get_thread_num() + 1
             iptcl  = pinds(i)
             if( l_mask )then
                 call ptcl_imgs(i)%norm_noise_mask_pad_fft(build%lmsk, mskrad, build%img_pad_heap(ithr))
+            else if( l_cached )then
+                ! already noise-normalised when the entry was written; renorm=.false. stops the
+                ! cropped particle being rescaled a second time (see simple_ptcl_cache)
+                call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk_crop, &
+                    &build%img_pad_heap(ithr), renorm=.false.)
             else
                 call ptcl_imgs(i)%norm_noise_taper_edge_pad_fft(build%lmsk, build%img_pad_heap(ithr))
             endif
             ctfparms(ithr) = build%spproj%get_ctfparams(params%oritype, iptcl)
             shift = build%spproj_field%get_2Dshift(iptcl)
+            if( l_cached )then
+                ! shconst is in pixels of the padded box the image actually has, and the CTF kernel
+                ! reads cycles/pixel of the current grid -- both must move to the cropped grid
+                ctfparms(ithr)%smpd = ctfparms(ithr)%smpd / crop_factor   ! = smpd_crop
+                shift               = shift * crop_factor
+            endif
             if( params%l_ml_reg )then
                 if( .not. allocated(build%esig%sigma2_noise) )then
                     THROW_HARD('projected covariance model requested whitening without loaded sigma2 spectra')
@@ -633,6 +704,124 @@ contains
         end do
         !$omp end parallel do
     end subroutine prep_imgs4projected_model
+
+    !> device variant of the stage prep: gathers the per-record host scalars (CTF, shift,
+    !! sigma2), runs the taper->norm->pad->FFT->plane chain on the GPU, fetches the packed
+    !! separated observation-model planes and unpacks them into fplane_type. Byte-equivalent
+    !! to the CPU generator: values live on the OSMPL_PAD_FAC-multiple lattice, zeros
+    !! elsewhere; plane reuse across batches skips the re-zero of the never-written gaps.
+    subroutine prep_imgs4projected_model_dev( params, build, nptcls, ptcl_imgs, pinds, &
+        &fplanes, fetch )
+        use simple_flex_gpu, only: flex_gpu_prep_batch_f, flex_gpu_prep_fetch_sep_f
+        use simple_ftiter,   only: ftiter
+        use simple_math,     only: ceil_div, floor_div
+        use simple_math_ft,  only: resample_sigma2
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nptcls
+        class(image),      intent(inout) :: ptcl_imgs(nptcls)
+        integer,           intent(in)    :: pinds(nptcls)
+        type(fplane_type), intent(inout) :: fplanes(nptcls)
+        logical, optional, intent(in)    :: fetch   !< .false. = planes stay resident only
+        type(ctfparams) :: ctfp_arr(nptcls)
+        real            :: shf(2,nptcls)
+        logical         :: vld(nptcls)
+        complex(sp), allocatable :: plcy(:,:,:)
+        real(sp),    allocatable :: plt(:,:,:), plct(:,:,:)
+        real,        allocatable :: sig2_ups(:,:)
+        type(ftiter) :: fit_pd, fit_cr
+        real    :: shconst_pd(3)
+        integer :: kfromto(2), frlims_pd(3,2), i, h, k, hlo, hhi, klo, nyqpd, signyq
+        integer :: hmin, hmax, kmin, iptcl, pf
+        logical :: l_fresh, l_fetch
+        l_fetch = .true.
+        if( present(fetch) ) l_fetch = fetch
+        pf      = OSMPL_PAD_FAC
+        kfromto = projected_model_kfromto(params)
+        call fit_pd%new([params%boxpd, params%boxpd, 1], params%smpd_crop)
+        frlims_pd = fit_pd%loop_lims(3)
+        ! fill to the FULL padded band like the CPU generator; the working-band cap acts
+        ! through fpl%nyq downstream, not through the stored values
+        nyqpd     = fit_pd%get_lfny(1)
+        if( params%l_ml_reg )then
+            if( .not. allocated(build%esig%sigma2_noise) )then
+                THROW_HARD('projected covariance model requested whitening without loaded sigma2 spectra')
+            endif
+            call fit_cr%new([params%box_crop, params%box_crop, 1], params%smpd_crop)
+            signyq = fit_cr%get_lfny(1)
+            allocate(sig2_ups(0:nyqpd, nptcls), source=1.0)
+        endif
+        vld = .true.
+        !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+        do i = 1, nptcls
+            iptcl       = pinds(i)
+            ctfp_arr(i) = build%spproj%get_ctfparams(params%oritype, iptcl)
+            shf(:,i)    = build%spproj_field%get_2Dshift(iptcl)
+            if( params%l_ml_reg )then
+                if( iptcl < lbound(build%esig%sigma2_noise,2) .or. &
+                    &iptcl > ubound(build%esig%sigma2_noise,2) )then
+                    THROW_HARD('projected covariance particle index is outside the sigma2 table')
+                endif
+                call resample_sigma2(kfromto(1), signyq, &
+                    &build%esig%sigma2_noise(kfromto(1):kfromto(2), iptcl), nyqpd, &
+                    &real(signyq)/real(nyqpd), sig2_ups(:,i))
+            endif
+        end do
+        !$omp end parallel do
+        if( params%l_ml_reg )then
+            call flex_gpu_prep_batch_f(ptcl_imgs, ctfp_arr, shf, vld, nptcls, params%box, &
+                &frlims_pd, nyqpd, sig2_ups=sig2_ups)
+        else
+            call flex_gpu_prep_batch_f(ptcl_imgs, ctfp_arr, shf, vld, nptcls, params%box, &
+                &frlims_pd, nyqpd)
+        endif
+        if( .not. l_fetch )then
+            ! consumer is a resident device stage (fused columns); planes stay on device
+            if( allocated(sig2_ups) ) deallocate(sig2_ups)
+            return
+        endif
+        hlo = ceil_div (frlims_pd(1,1), pf); hhi = floor_div(frlims_pd(1,2), pf)
+        klo = ceil_div (frlims_pd(2,1), pf)
+        allocate(plcy(hlo:hhi, klo:0, nptcls), plt(hlo:hhi, klo:0, nptcls), &
+            &plct(hlo:hhi, klo:0, nptcls))
+        call flex_gpu_prep_fetch_sep_f(plcy, plt, plct, nptcls, hlo, hhi, klo)
+        hmin = frlims_pd(1,1); hmax = frlims_pd(1,2); kmin = frlims_pd(2,1)
+        shconst_pd      = 0.
+        shconst_pd(1:2) = PI/real(params%boxpd/2)
+        !$omp parallel do default(shared) private(i,h,k,l_fresh) schedule(static) proc_bind(close)
+        do i = 1, nptcls
+            l_fresh = .not. allocated(fplanes(i)%cmplx_plane)
+            if( .not. l_fresh )then
+                if( lbound(fplanes(i)%cmplx_plane,1) /= hmin .or. &
+                    &ubound(fplanes(i)%cmplx_plane,1) /= hmax .or. &
+                    &lbound(fplanes(i)%cmplx_plane,2) /= kmin .or. &
+                    &ubound(fplanes(i)%cmplx_plane,2) /= 0    .or. &
+                    &.not. allocated(fplanes(i)%transfer_plane) )then
+                    call cleanup_plane(fplanes(i))
+                    l_fresh = .true.
+                endif
+            endif
+            if( l_fresh )then
+                allocate(fplanes(i)%cmplx_plane(hmin:hmax, kmin:0),    source=cmplx(0.,0.))
+                allocate(fplanes(i)%ctfsq_plane(hmin:hmax, kmin:0),    source=0.)
+                allocate(fplanes(i)%transfer_plane(hmin:hmax, kmin:0), source=cmplx(0.,0.))
+            endif
+            do k = klo, 0
+                do h = hlo, hhi
+                    fplanes(i)%cmplx_plane(pf*h, pf*k)    = plcy(h,k,i)
+                    fplanes(i)%transfer_plane(pf*h, pf*k) = cmplx(plt(h,k,i), 0.)
+                    fplanes(i)%ctfsq_plane(pf*h, pf*k)    = plct(h,k,i)
+                end do
+            end do
+            fplanes(i)%frlims  = frlims_pd
+            fplanes(i)%nyq     = nyqpd
+            fplanes(i)%shconst = shconst_pd
+            call cap_fplane_for_projected_model(fplanes(i), kfromto)
+        end do
+        !$omp end parallel do
+        deallocate(plcy, plt, plct)
+        if( allocated(sig2_ups) ) deallocate(sig2_ups)
+    end subroutine prep_imgs4projected_model_dev
 
     subroutine cap_fplane_for_projected_model( fpl, kfromto )
         type(fplane_type), intent(inout) :: fpl

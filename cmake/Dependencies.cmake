@@ -48,23 +48,75 @@ if(USE_OPENMP)
                 "Falling back to standard OpenMP."
             )
         else()
+            # REQUIRED already hard-fails when the toolkit is absent; the previous inner
+            # conditional tested CUDAToolkit_Fortran_FOUND, which FindCUDAToolkit never sets,
+            # so its FATAL_ERROR branch fired only by accident of an undefined variable.
             find_package(CUDAToolkit REQUIRED)
-            if(NOT CUDAToolkit_Fortran_FOUND)
-                list(APPEND SIMPLE_LIBRARIES
-                    CUDA::cudart
-                    CUDA::cufft
-                    CUDA::cublas)
-            else()
-                message(FATAL_ERROR
-                    "The CUDAToolkit library was not found.\n"
-                )
-            endif()
+            list(APPEND SIMPLE_LIBRARIES
+                CUDA::cudart
+                CUDA::cufft
+                CUDA::cublas)
             string(APPEND CMAKE_Fortran_FLAGS " -foffload=nvptx-none")
             add_compile_definitions(USE_OPENMP_OFFLOAD)
         endif()
     endif()
 else()
     set(USE_OPENMP_OFFLOAD OFF)
+endif()
+
+# ------------------------------------------------------------------------------
+# CUDA-C flex kernels (P0 measured gfortran-nvptx slower than the CPU on the hot
+# gridding kernels, so those live in .cu files behind bind(c) interfaces)
+# ------------------------------------------------------------------------------
+if( USE_FLEX_CUDA )
+    if(APPLE)
+        set(USE_FLEX_CUDA OFF)
+        message(WARNING "USE_FLEX_CUDA not supported on Apple platforms; disabled.")
+    else()
+        # CUDA 13 crt/math_functions.h clashes with new-glibc C23 rsqrt declarations
+        # pulled in by g++'s default _GNU_SOURCE; the kernel TUs need no GNU extensions.
+        # Must be set BEFORE enable_language: the compiler-identification compile uses it.
+        if(NOT CMAKE_CUDA_FLAGS MATCHES "U_GNU_SOURCE")
+            string(APPEND CMAKE_CUDA_FLAGS " -Xcompiler -U_GNU_SOURCE")
+        endif()
+        # Probe first, so a missing toolkit reports what to do instead of
+        # enable_language()'s raw "No CMAKE_CUDA_COMPILER could be found".
+        include(CheckLanguage)
+        check_language(CUDA)
+        if(NOT CMAKE_CUDA_COMPILER)
+            message(FATAL_ERROR
+                "USE_FLEX_CUDA=ON but no CUDA compiler was found.\n"
+                "Either point CMake at nvcc:\n"
+                "  -DCMAKE_CUDA_COMPILER=<cuda>/bin/nvcc "
+                "-DCMAKE_CUDA_HOST_COMPILER=<gcc>/bin/g++\n"
+                "or drop -DUSE_FLEX_CUDA=ON for a CPU-only build (the default).\n")
+        endif()
+        # No hard-coded architecture. 'native' targets the card in THIS machine;
+        # a fixed value silently yields a binary that will not run anywhere else
+        # (the previous default, 120, is Blackwell only). This MUST precede
+        # enable_language: since CMake 3.18 enable_language(CUDA) itself defines
+        # CMAKE_CUDA_ARCHITECTURES (to nvcc's default, 52), after which the
+        # NOT DEFINED test can never fire -- which is why the old 120 never
+        # actually took effect either.
+        if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "")
+            set(CMAKE_CUDA_ARCHITECTURES native)
+        endif()
+        enable_language(CUDA)
+        find_package(CUDAToolkit REQUIRED)
+        list(APPEND SIMPLE_LIBRARIES CUDA::cudart CUDA::cublas CUDA::cufft)
+        add_compile_definitions(USE_FLEX_CUDA)
+        message(STATUS
+            "flex CUDA kernels: ENABLED (arch ${CMAKE_CUDA_ARCHITECTURES})")
+    endif()
+endif()
+
+# USE_FLEX_CUDA is the ONLY switch that compiles the flex .cu kernels. It is
+# independent of USE_OPENMP_OFFLOAD / USE_OPENACC / USE_CUDA: enabling any of
+# those does not pull in nvcc or the flex device code. Say so at configure time
+# so an unexpected CUDA build is visible rather than silent.
+if(NOT USE_FLEX_CUDA)
+    message(STATUS
+        "flex CUDA kernels: disabled (CPU only; -DUSE_FLEX_CUDA=ON to enable)")
 endif()
 
 # ------------------------------------------------------------------------------

@@ -417,25 +417,36 @@ contains
             'e.g. vol1.mrc (consensus mean)', .true., '', &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'neigs', 'num', &
-            'Covariance components (default 6)', 'Number of fitted low-rank covariance factors; capped at 12', &
-            '# components 1-12', .false., 6.0, &
+            'Covariance components (default 16)', 'Number of fitted low-rank covariance factors; capped at 48', &
+            '# components', .false., 16.0, &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'npreimages', 'num', &
-            'State volumes (default 7)', &
-            'Number of kernel-regression targets in latent space; with the default state_axis=0 these are &
-            &k-means centroids over all retained components', &
-            '# states 3-20', .false., 7.0, &
+            'Max state volumes (default 16)', &
+            'Upper bound on the kernel-regression targets in latent space; with the default state_axis=0 &
+            &these are diffusion k-centers over all retained components. The two-gate merge collapses &
+            &indistinct states, so the recovered count is <= this', &
+            'max # states 3-32', .false., 16.0, &
+        &visibility=UI_VIS_STANDARD)
+        call flex_pca%add_input(UI_FILT, 'preimage_auto', 'binary', &
+            'Determine the state count automatically (default no)', &
+            'Raises the state ceiling to 32 (unless npreimages is given) and enables the two-gate merge, &
+            &so the delivered state count is recovered from the data rather than requested(yes|no){no}', &
+            '', .false., 'no', &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_FILT, 'niter', 'num', &
             'Covariance fit iterations (default 5)', 'Alternating projection/backprojection covariance-factor iterations', &
             '# iterations 1-20', .false., 5.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_FILT, 'state_axis', 'num', &
-            'Latent axis for state targets (default 0 = k-means)', &
-            'With 0 the state targets are k-means centroids over ALL retained covariance components &
-            &A positive value places them along that single component instead, &
-            &which discards the other components and tends to concentrate the particles on one state', &
-            'component index, 0=k-means', .false., 0.0, &
+            'Latent axis for state targets (default 0 = diffusion k-center)', &
+            'With 0 the state targets are diffusion k-centers over ALL retained covariance components, &
+            &which covers a continuous reaction coordinate and branched compositional states with the &
+            &same constants. A negative value places them along a density-spread path instead. &
+            &A positive value places them along that single component, &
+            &which discards the other components and tends to concentrate the particles on one state. &
+            &SIMPLE_COV_KMEANS=1 recovers the former k-means placement', &
+            'component index', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_FILT, 'nkern', 'num', &
             'Latent components entering the state kernel (default 0 = all)', &
@@ -473,35 +484,32 @@ contains
             '(yes|no){no}', .false., 'no', &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
-        call flex_pca%add_input(UI_FILT, 'ncols', 'num', &
-            'Selected covariance columns (default 64)', &
-            'Number of independently selected 3D Fourier frequencies used as covariance columns, before &
-            &Hermitian doubling. Raising this improves the column subspace that caps &
-            &everything downstream, at a column-accumulation cost that is linear in this count', &
-            '# columns', .false., 64.0, &
-        &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_FILT, 'column_separation', 'num', &
             'Minimum grid separation between columns (default 2)', &
             'Selected frequencies closer than this are suppressed; also decorrelates the column noise', &
             'grid units', .false., 2.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_SRCH, 'n_probe_iters', 'num', &
-            'Probe subspace-iteration refinements (default 0 = off)', &
+            'Probe subspace-iteration refinements (default 5)', &
             'EM / probe subspace iterations refining the column basis. Probe volumes aggregate the whole &
-            &slice instead of one Fourier voxel, which is the main lever on per-particle latent quality', &
-            '# iterations', .false., 0.0, &
+            &slice instead of one Fourier voxel, which is the main lever on per-particle latent quality. &
+            &An upper bound rather than a fixed count: the loop stops early once the mean principal-angle &
+            &cosine between successive bases reaches 0.97. Set 0 to disable', &
+            '# iterations', .false., 5.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_FILT, lp, required_override=.false., &
-            placeholder_override='Covariance-basis low-pass limit in Angstroms{12}', &
+            label_override='Low-pass limit (derived: 2.5*smpd_crop)', &
             group="regularization", visibility=UI_VIS_STANDARD)
         call flex_pca%add_input(UI_PARM, 'box_crop', 'num', &
             'Working box size (default 64)', 'Even low-resolution box used for covariance fitting and the latent embedding', &
             'pixels', .false., 64.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_PARM, 'box_rec', 'num', &
-            'State-map reconstruction box (default box_crop)', &
+            'State-map reconstruction box (default: native project box)', &
             'Even box for the delivered state maps; decoupled from box_crop so the maps are not &
-            &limited to the covariance Nyquist. Set to the native box for full-resolution states', &
+            &limited to the covariance Nyquist. The commander resolves it to the native project box, &
+            &so the maps come out at the native sampling; it falls back to box_crop only when the &
+            &project geometry cannot be read. Capped at the native box', &
             'pixels', .false., 0.0, &
         &visibility=UI_VIS_ADVANCED)
         call flex_pca%add_input(UI_PARM, 'oritype', 'str', &

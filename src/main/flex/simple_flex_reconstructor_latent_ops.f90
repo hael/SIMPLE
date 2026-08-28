@@ -11,6 +11,9 @@ public :: accumulate_planes_oversamp_coupled_stats_batch
 public :: test_coupled_batch_accumulation
 public :: test_cartesian_projection_contract
 public :: accumulate_plane_oversamp_coupled_stats, project_fplane_mean, project_fplanes_mean_basis
+!> exported for the polar (G,b) former, which must use the SAME interpolation kernel and the SAME
+!! weight normalisation as the Cartesian projector or the two paths cannot be compared
+public :: latent_projection_weights, weighted_expanded_cmat, LATENT_WDIM
 private
 #include "simple_local_flags.inc"
 
@@ -217,6 +220,7 @@ contains
         end subroutine kb_apod_vecs_3d_fast_b
 
     end subroutine insert_planes_oversamp_multi_scaled_batch
+
 
     subroutine insert_plane_oversamp_coupled_scaled( recs, rho_cross_exp, se, o, fpl, data_scales, density_scales )
         use simple_math, only: ceil_div, floor_div
@@ -1249,6 +1253,9 @@ contains
         real,        allocatable :: swx(:,:), swy(:,:), swz(:,:)
         complex,     allocatable :: stf(:)
         logical,     allocatable :: scj(:)
+        ! in-bounds samples first, so the volume loops carry no per-tap window test
+        integer,     allocatable :: jok(:), jbad(:)
+        integer :: exp_lb(3), exp_ub(3), ns_ok, ns_bad, jj
         integer :: ns, nsmax, j
         if( .not. allocated(mean_rec%cmat_exp) )then
             THROW_HARD('expanded mean matrix does not exist; project_fplanes_mean_basis')
@@ -1330,19 +1337,48 @@ contains
                 scj(ns)      = l_conjg
             end do
         end do
+        ! The window-in-lattice test depends on the SAMPLE alone, not on the volume: every
+        ! reconstructor here shares one expanded lattice (the same assumption
+        ! insert_planes_oversamp_coupled_batch_scaled makes when it reads recs(1)'s bounds for all).
+        ! Testing it inside the volume loop re-evaluates lbound/ubound and two any() temporaries
+        ! ncomp+1 times per sample; partitioning it out once is bit-identical -- an out-of-bounds
+        ! sample contributed CMPLX_ZERO before and is written as zero below.
+        exp_lb = lbound(mean_rec%cmat_exp)
+        exp_ub = ubound(mean_rec%cmat_exp)
+        allocate(jok(ns), jbad(ns))
+        ns_ok = 0; ns_bad = 0
         do j = 1, ns
+            if( any(swin(1,:,j) < exp_lb) .or. any(swin(2,:,j) > exp_ub) )then
+                ns_bad = ns_bad + 1
+                jbad(ns_bad) = j
+            else
+                ns_ok = ns_ok + 1
+                jok(ns_ok) = j
+            endif
+        end do
+        do jj = 1, ns_ok
+            j = jok(jj)
             mean_val = weighted_expanded_cmat(mean_rec, swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
             if( scj(j) ) mean_val = conjg(mean_val)
             mean_fpl%cmplx_plane(shp(j),skp(j)) = stf(j) * mean_val
         end do
+        do jj = 1, ns_bad
+            j = jbad(jj)
+            mean_fpl%cmplx_plane(shp(j),skp(j)) = CMPLX_ZERO
+        end do
         do q = 1, ncomp
-            do j = 1, ns
+            do jj = 1, ns_ok
+                j = jok(jj)
                 basis_val = weighted_expanded_cmat(basis_recs(q), swin(:,:,j), swx(:,j), swy(:,j), swz(:,j))
                 if( scj(j) ) basis_val = conjg(basis_val)
                 basis_fpls(q)%cmplx_plane(shp(j),skp(j)) = stf(j) * basis_val
             end do
+            do jj = 1, ns_bad
+                j = jbad(jj)
+                basis_fpls(q)%cmplx_plane(shp(j),skp(j)) = CMPLX_ZERO
+            end do
         end do
-        deallocate(swin, swx, swy, swz, stf, shp, skp, scj)
+        deallocate(swin, swx, swy, swz, stf, shp, skp, scj, jok, jbad)
 
     end subroutine project_fplanes_mean_basis
 
@@ -1424,12 +1460,9 @@ contains
         integer,             intent(in) :: win(2,3)
         real,                intent(in) :: wx(:), wy(:), wz(:)
         complex :: val
-        integer :: ix, iy, iz, hx, ky, mz, lb(3), ub(3)
+        integer :: ix, iy, iz, hx, ky, mz
         real    :: wyz
         val = CMPLX_ZERO
-        lb = lbound(rec%cmat_exp)
-        ub = ubound(rec%cmat_exp)
-        if( any(win(1,:) < lb) .or. any(win(2,:) > ub) ) return
         do iz = 1, LATENT_WDIM
             mz = win(1,3) + iz - 1
             do iy = 1, LATENT_WDIM

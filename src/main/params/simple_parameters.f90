@@ -96,6 +96,7 @@ type :: parameters
     character(len=3)          :: icm='no'             !< whether to apply ICM filter to reference
     character(len=3)          :: nufilt='no'          !< nonuniform local-resolution filter on flex_pca state maps(yes|no){no}
     character(len=3)          :: heldout='no'         !< flex_pca cross-halfset (held-out) embedding(yes|no){no}
+    character(len=3)          :: preimage_auto='no'   !< flex_pca automatic state count: raise the npreimages ceiling and merge down(yes|no){no}
     character(len=3)          :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
     character(len=3)          :: interactive='no'     !< Whether job is interactive
     character(len=3)          :: iterstats='no'       !< Whether to keep track alignment stats throughout iterations
@@ -449,16 +450,15 @@ type :: parameters
     integer :: nptcls_per_cls=500  !< # images in stk/# orientations in oritab
     integer :: nptcls_per_subcls=300 !< legacy class-splitting target; current cls_split auto mode uses nsubcls_min/max trial range
     integer :: nptcls_per_part=0   !< # particles per part in balanced selection
-    integer :: npreimages=8        !< # representative manifold pre-image volumes
+    integer :: npreimages=0        !< # state volumes; 0 = DISCOVER it (over-provision, then two-gate merge)
     integer :: niter=5             !< # alternating low-rank covariance fitting iterations
     integer :: min_neff=2000       !< minimum effective particle count for covariance state kernels
-    integer :: state_axis=0        !< covariance latent coordinate for state targets; 0=k-means over all components
+    integer :: state_axis=0        !< covariance latent coordinate for state targets; 0=diffusion k-center over all comps
     integer :: nkern=0             !< # leading latent components used for state placement/kernel; 0=all (neigs)
     real    :: pcrot=0.            !< Gaussian low-pass (A) for the smoothness basis rotation; 0=off
     integer :: nbins=1             !< # kernel bandwidth bins for cross-validated state selection (1=off)
-    integer :: ncols=64            !< # selected 3D Fourier frequencies used as covariance columns
     integer :: column_separation=2 !< minimum grid separation between selected covariance columns
-    integer :: n_probe_iters=0     !< flex_pca EM/probe subspace-iteration refinements of the column basis (0=off)
+    integer :: n_probe_iters=0     !< EM/probe subspace-iteration refinements of the flex_pca column basis (0=off; commander sets 5)
     integer :: nquanta=0           !< # quanta in quantization
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
@@ -487,6 +487,7 @@ type :: parameters
     integer :: optics_offset=0
     integer :: osmpl_fac=2         !< class-average oversampling factor for bootstrap_cavgs
     integer :: part=1
+    integer :: pcafit=0            !< flex_pca worker-side fit selector, set by the master (0=all|1=halfset A|2=halfset B)
     integer :: period=0           !< periodic window step in frames (0 means disabled)
     integer :: pid=0               !< process ID
     integer :: pftsz=0             !< Desired size of polarft_calc object (half the # of rotations)
@@ -669,6 +670,7 @@ type :: parameters
     logical :: l_graphene        = .false.
     logical :: l_icm             = .false.
     logical :: l_heldout         = .false.
+    logical :: l_preimage_auto   = .false.
     logical :: l_incrreslim      = .false.
     logical :: l_lam_anneal      = .false.
     logical :: l_lpauto          = .false.

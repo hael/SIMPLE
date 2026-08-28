@@ -614,6 +614,7 @@ contains
         self%l_envfsc = self%envfsc .ne. 'no'
         if( cline%defined('icm') )    self%l_icm    = (trim(self%icm).eq.'yes')
         if( cline%defined('heldout') ) self%l_heldout = (trim(self%heldout).eq.'yes')
+        if( cline%defined('preimage_auto') ) self%l_preimage_auto = (trim(self%preimage_auto).eq.'yes')
         if( cline%defined('gauref') ) self%l_gauref = (trim(self%gauref).eq.'yes')
         self%l_corrw = self%wcrit .ne. 'no'
         if( self%l_corrw )then

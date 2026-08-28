@@ -11,18 +11,26 @@ private
 public :: flex_pca_distr_init, flex_pca_distr_kill
 public :: flex_pca_is_master, flex_pca_is_worker, flex_pca_nparts
 public :: flex_pca_run_stage
-public :: PCA_STAGE_SNR, PCA_STAGE_COLS, PCA_STAGE_SOLVE, PCA_STAGE_EMBED, PCA_STAGE_STATES
+public :: PCA_STAGE_EMBED, PCA_STAGE_STATES
 public :: PCA_STAGE_PROBE
+public :: flex_pca_set_fit, flex_pca_fit
+public :: FLEX_FIT_ALL, FLEX_FIT_A, FLEX_FIT_B
 
 ! Stage selector carried to the worker in params%stage, exactly as flex_analysis does.
-integer, parameter :: PCA_STAGE_SNR  = 1
-integer, parameter :: PCA_STAGE_COLS = 2
-integer, parameter :: PCA_STAGE_SOLVE = 3
+! 1..3 were the moment estimator's SNR / column / reduced-solve rounds; that path is gone and the
+! numbering is kept so an old part file cannot be mistaken for a current one.
 integer, parameter :: PCA_STAGE_EMBED  = 4
 integer, parameter :: PCA_STAGE_STATES = 5
 ! One qsys round per probe EM iteration: the basis changes every iteration, so workers must be
 ! re-launched against the master's refreshed flex_pca_pc*.mrc rather than looping locally.
 integer, parameter :: PCA_STAGE_PROBE  = 6
+
+! Which fit a round serves, carried to the worker in params%pcafit beside the stage: the stage says
+! what to compute, this says over which particles. Without it a bagging worker cannot tell fit A's
+! rounds from fit B's and the second basis comes back empty.
+integer, parameter :: FLEX_FIT_ALL = 0
+integer, parameter :: FLEX_FIT_A   = 1
+integer, parameter :: FLEX_FIT_B   = 2
 
 ! Master-side context. Distribution is injected at the level of the individual accumulate routines
 ! rather than by restructuring run_flex_pca into stage procedures: the master executes the ordinary
@@ -34,6 +42,7 @@ type(chash)      :: job_descr
 logical          :: l_master = .false.
 logical          :: l_worker = .false.
 integer          :: nparts_run = 1
+integer          :: fit_sel   = FLEX_FIT_ALL
 
 contains
 
@@ -70,7 +79,11 @@ contains
         else
             l_master = .false.
             if( l_worker )then
-                write(logfhandle,'(A,I0,A,I0)') '>>> FLEX_PCA (WORKER) part=',params%part,' stage=',params%stage
+                ! the master stamped the round it scheduled us for; without it a bagging worker
+                ! cannot tell fit A's rounds from fit B's
+                fit_sel = params%pcafit
+                write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> FLEX_PCA (WORKER) part=',params%part, &
+                    &' stage=',params%stage,' fit=',fit_sel
                 call flush(logfhandle)
             endif
         endif
@@ -103,12 +116,24 @@ contains
         call del_files(JOB_FINISHED_FBODY, nparts_run)
         call del_files(SUBPROJECT_JOB_FINISHED_FBODY, nparts_run)
         call job_descr%set('stage', int2str(stage_id))
+        call job_descr%set('pcafit', int2str(fit_sel))
         write(logfhandle,'(A,A,A,I0,A)') '>>> FLEX_PCA distributing ',label,' over ',nparts_run,' parts'
         call flush(logfhandle)
         call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR)
         write(logfhandle,'(A,A,A,F8.1)') '>>> FLEX_PCA ',label,' qsys round seconds=',toc(t_round)
         call flush(logfhandle)
     end subroutine flex_pca_run_stage
+
+    !> Master-side: stamp every subsequent round as serving this fit. Reset to FLEX_FIT_ALL when the
+    !! multi-fit section is done, or the pooled-basis rounds inherit a halfset selector.
+    subroutine flex_pca_set_fit( ifit )
+        integer, intent(in) :: ifit
+        fit_sel = ifit
+    end subroutine flex_pca_set_fit
+
+    integer function flex_pca_fit()
+        flex_pca_fit = fit_sel
+    end function flex_pca_fit
 
     subroutine flex_pca_distr_kill( params )
         use simple_qsys_funs, only: qsys_cleanup
@@ -121,6 +146,7 @@ contains
         l_master   = .false.
         l_worker   = .false.
         nparts_run = 1
+        fit_sel    = FLEX_FIT_ALL
     end subroutine flex_pca_distr_kill
 
 end module simple_flex_pca_distr

@@ -12,6 +12,9 @@ use simple_flex_pca_distr, only: flex_pca_is_master, flex_pca_is_worker, flex_pc
     &flex_pca_run_stage, PCA_STAGE_STATES
 use simple_flex_pca_parts, only: write_state_weights_round
 use simple_flex_reconstructor_latent_ops, only: insert_planes_oversamp_multi_scaled_batch
+use simple_flex_gpu, only: flex_gpu_available, flex_gpu_insert_begin_f, flex_gpu_insert_batch_f, &
+    &flex_gpu_insert_batch_res_f, flex_gpu_insert_end_f, flex_gpu_prep_begin_f, &
+    &flex_gpu_prep_batch_f, flex_gpu_prep_fetch_f, flex_gpu_prep_free_f, flex_gpu_prep_ready
 use simple_reconstructor,          only: reconstructor
 implicit none
 private
@@ -64,6 +67,22 @@ contains
         integer, allocatable :: lowpass_source_state(:)
         integer :: batchlims(2), batchsz, ibatch, i, iptcl, state, box_rec
         real    :: smpd_rec, smpd_crop_bak
+        ! GPU insertion path (SIMPLE_COV_GPU=1): one device accumulation over the combined
+        ! [state_recs, recs_o] component layout; the halfset routing the CPU path expresses as
+        ! two calls with disjoint masks is expressed here through the scale slots.
+        logical :: l_gpu, l_devprep, l_chk, l_fetch_batch
+        integer :: ncomp_gpu, envlen, envstat, nyq_unpd
+        character(len=8) :: envval
+        real(dp), allocatable :: gscales(:,:)
+        ! halfset split: accumulate even and odd in two passes over nstates device slots instead
+        ! of one pass over 2*nstates -- half the peak device memory (see the decision block below)
+        logical :: l_split, l_forced
+        logical, allocatable :: bvalid_p(:)
+        integer :: ipass, npass, ios
+        integer(kind=8) :: nvox_acc
+        real(dp) :: acc_mb_fused, acc_budget_mb
+        integer(timer_int_kind) :: t_ins, t_sec
+        real    :: sec_read, sec_prep, sec_ins
         l_floor_rho = .false.
         if( present(floor_rho) ) l_floor_rho = floor_rho
         l_fuse = present(outvol_even) .and. present(outvol_odd)
@@ -144,52 +163,257 @@ contains
         smpd_crop_bak    = params%smpd_crop
         params%smpd_crop = smpd_rec
         allocate(borientations(MAXIMGBATCHSZ), bscales(nstates,MAXIMGBATCHSZ))
-        allocate(bvalid_c(MAXIMGBATCHSZ), bvalid_o(MAXIMGBATCHSZ))
-        do ibatch=1,size(pinds),MAXIMGBATCHSZ
-            batchlims=[ibatch,min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
-            batchsz=batchlims(2)-batchlims(1)+1
-            if( params%l_ptcl_src_den )then
-                call discrete_read_imgbatch_source(params,build,'den',batchsz, &
-                    &pinds(batchlims(1):batchlims(2)),[1,batchsz],build%imgbatch(:batchsz))
-            else
-                call discrete_read_imgbatch(params,build,size(pinds),pinds,batchlims)
+        allocate(bvalid_c(MAXIMGBATCHSZ), bvalid_o(MAXIMGBATCHSZ), bvalid_p(MAXIMGBATCHSZ))
+        l_gpu = .false.
+        call get_environment_variable('SIMPLE_COV_GPU', envval, envlen, envstat)
+        if( envstat == 0 .and. envlen > 0 )then
+            if( trim(adjustl(envval)) == '1' )then
+                l_gpu = flex_gpu_available()
+                if( .not. l_gpu ) write(logfhandle,'(A)') &
+                    &'>>> FLEX_PCA WARNING: SIMPLE_COV_GPU=1 but no CUDA build/device; CPU insertion'
             endif
-            call prep_imgs4rec(params,build,batchsz,build%imgbatch(:batchsz), &
-                &pinds(batchlims(1):batchlims(2)),fpls(:batchsz))
-            ! gather serially (get_ori/get_eo are not guaranteed thread-safe), then one parallel
-            ! region per target; under l_fuse each halfset gets its own mask and call
-            do i=1,batchsz
-                iptcl=pinds(batchlims(1)+i-1)
-                call build%spproj_field%get_ori(iptcl,orientation)
-                bscales(:,i) = real(state_weights(batchlims(1)+i-1,:),dp)
-                bvalid_c(i)  = .not. orientation%isstatezero()
-                bvalid_o(i)  = .false.
-                if( bvalid_c(i) .and. l_fuse )then
-                    ! one insertion per particle, into the halfset it belongs to; the union is the
-                    ! combined map and each half is its own deliverable
-                    eo_i = build%spproj_field%get_eo(iptcl)
-                    if( eo_i == 1 )then
-                        bvalid_o(i) = .true.
-                        bvalid_c(i) = .false.
+        endif
+        ! ---- HALFSET SPLIT decision ----
+        ! The fused pass keeps 2*nstates device accumulators resident (2*nstates*nvox*12 bytes --
+        ! 4.9 GB at box_rec=256 with 24 states), which is the PEAK device memory of the whole
+        ! program and what stops many-worker runs sharing one card. Every particle contributes to
+        ! exactly ONE halfset (bvalid_c and bvalid_o are disjoint), so the halves can be
+        ! accumulated in two passes over nstates slots instead of one pass over 2*nstates: half
+        ! the device memory, paid for with a second read+prep sweep (measured ~11 s/worker on
+        ! EMPIAR-10076 at nparts=4, ~2% of the run, and less per worker as nparts grows).
+        ! Engages automatically once the fused footprint exceeds SIMPLE_FLEX_GPU_ACC_MB
+        ! (default 2048 MB); SIMPLE_FLEX_GPU_SPLIT_EO=1/0 forces it on/off.
+        l_split = .false.
+        if( l_gpu .and. l_fuse )then
+            nvox_acc = int(ubound(state_recs(1)%cmat_exp,1)-lbound(state_recs(1)%cmat_exp,1)+1,8) &
+                &    * int(ubound(state_recs(1)%cmat_exp,2)-lbound(state_recs(1)%cmat_exp,2)+1,8) &
+                &    * int(ubound(state_recs(1)%cmat_exp,3)-lbound(state_recs(1)%cmat_exp,3)+1,8)
+            acc_mb_fused  = real(2*nstates,dp) * real(nvox_acc,dp) * 12.d0 / 1048576.d0
+            acc_budget_mb = 2048.d0
+            call get_environment_variable('SIMPLE_FLEX_GPU_ACC_MB', envval, envlen, envstat)
+            if( envstat == 0 .and. envlen > 0 )then
+                read(envval, *, iostat=ios) acc_budget_mb
+                if( ios /= 0 ) acc_budget_mb = 2048.d0
+            endif
+            l_split   = acc_mb_fused > acc_budget_mb
+            l_forced  = .false.
+            call get_environment_variable('SIMPLE_FLEX_GPU_SPLIT_EO', envval, envlen, envstat)
+            if( envstat == 0 .and. envlen > 0 )then
+                if( trim(adjustl(envval)) == '1' )then
+                    l_forced = .not. l_split
+                    l_split  = .true.
+                endif
+                if( trim(adjustl(envval)) == '0' ) l_split = .false.
+            endif
+            if( l_split .and. l_forced )then
+                write(logfhandle,'(A,F8.1,A)') &
+                    &'>>> FLEX_PCA STATEREC HALFSET SPLIT ON (forced): fused accumulators would be ', &
+                    &acc_mb_fused,' MB; two passes over half the slots'
+            else if( l_split )then
+                write(logfhandle,'(A,F8.1,A,F8.1,A)') &
+                    &'>>> FLEX_PCA STATEREC HALFSET SPLIT ON: fused accumulators would be ', &
+                    &acc_mb_fused,' MB > budget ',acc_budget_mb,' MB; two passes over half the slots'
+            endif
+        endif
+        npass = 1
+        if( l_split ) npass = 2
+        if( l_gpu )then
+            ncomp_gpu = nstates
+            if( l_fuse .and. .not. l_split ) ncomp_gpu = 2*nstates
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> FLEX_PCA STATEREC GPU insertion ON (', ncomp_gpu, &
+                &' device accumulators, ',npass,' pass(es))'
+            call flush(logfhandle)
+            ! under the split each pass re-inits the accumulators for its own halfset
+            if( .not. l_split ) call flex_gpu_insert_begin_f(state_recs, ncomp_gpu)
+            allocate(gscales(ncomp_gpu, MAXIMGBATCHSZ), source=0.d0)
+        endif
+        ! device prep lifecycle: same taper geometry as the covariance stages (non-cached
+        ! path, boxpd planes); the planes here are the premultiplied reconstruction pair,
+        ! which is exactly what the device keeps resident
+        l_devprep = .false.
+        if( flex_gpu_available() .and. .not. flex_gpu_prep_ready() )then
+            call get_environment_variable('SIMPLE_COV_GPU_PREP', envval, envlen, envstat)
+            l_devprep = .true.
+            if( envstat == 0 .and. envlen > 0 )then
+                if( trim(adjustl(envval)) == '0' ) l_devprep = .false.
+            endif
+            if( l_devprep .and. params%l_ml_reg )then
+                l_devprep = allocated(build%esig%sigma2_noise)
+            endif
+            if( l_devprep )then
+                call flex_gpu_prep_begin_f(build%lmsk, params%box, params%boxpd, &
+                    &MAXIMGBATCHSZ, 0.0, .true.)
+                write(logfhandle,'(A)') '>>> FLEX_PCA STATEREC DEVICE PREP ON (resident hand-off)'
+                call flush(logfhandle)
+            endif
+        endif
+        l_chk = .false.
+        if( l_devprep )then
+            call get_environment_variable('SIMPLE_COV_PREP_CHECK', envval, envlen, envstat)
+            if( envstat == 0 .and. envlen > 0 )then
+                if( trim(adjustl(envval)) == '1' ) l_chk = .true.
+            endif
+        endif
+        nyq_unpd = 0
+        t_ins = tic()
+        sec_read = 0.; sec_prep = 0.; sec_ins = 0.
+        do ipass = 1, npass
+            ! pass 1 accumulates the EVEN halfset into state_recs, pass 2 the ODD into recs_o,
+            ! both over the same nstates device slots. Without the split this loop runs once and
+            ! the routing below fills the 2*nstates fused layout exactly as before.
+            if( l_split )then
+                if( ipass == 1 )then
+                    call flex_gpu_insert_begin_f(state_recs, ncomp_gpu)
+                else
+                    call flex_gpu_insert_begin_f(recs_o, ncomp_gpu)
+                endif
+            endif
+            do ibatch=1,size(pinds),MAXIMGBATCHSZ
+                batchlims=[ibatch,min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
+                batchsz=batchlims(2)-batchlims(1)+1
+                t_sec = tic()
+                if( params%l_ptcl_src_den )then
+                    call discrete_read_imgbatch_source(params,build,'den',batchsz, &
+                        &pinds(batchlims(1):batchlims(2)),[1,batchsz],build%imgbatch(:batchsz))
+                else
+                    call discrete_read_imgbatch(params,build,size(pinds),pinds,batchlims)
+                endif
+                sec_read = sec_read + toc(t_sec)
+                t_sec = tic()
+                if( l_devprep )then
+                    ! fetch only when a host consumer needs the planes: CPU insertion, or the
+                    ! one-time cross-check; the GPU insert consumes them resident
+                    l_fetch_batch = (.not. l_gpu) .or. (ibatch == 1 .and. ipass == 1 .and. l_chk)
+                    call prep_imgs4rec_dev(params,build,batchsz,build%imgbatch(:batchsz), &
+                        &pinds(batchlims(1):batchlims(2)),fpls(:batchsz), fetch=l_fetch_batch, &
+                        &nyq_unpd_out=nyq_unpd)
+                    if( ibatch == 1 .and. ipass == 1 .and. l_chk )then
+                        ! one-time cross-check of the delivered reconstruction planes vs the CPU prep
+                                block
+                                    type(fplane_type), allocatable :: fpls_chk(:)
+                                    real    :: chk_ey, chk_eq, chk_den
+                                    integer :: ichk
+                                    allocate(fpls_chk(batchsz))
+                                    call prep_imgs4rec(params,build,batchsz,build%imgbatch(:batchsz), &
+                                        &pinds(batchlims(1):batchlims(2)),fpls_chk)
+                                    chk_ey = 0.; chk_eq = 0.; chk_den = 1.e-12
+                                    do ichk = 1, batchsz
+                                        chk_ey  = max(chk_ey, maxval(abs(fpls_chk(ichk)%cmplx_plane - &
+                                            &fpls(ichk)%cmplx_plane)))
+                                        chk_eq  = max(chk_eq, maxval(abs(fpls_chk(ichk)%ctfsq_plane - &
+                                            &fpls(ichk)%ctfsq_plane)))
+                                        chk_den = max(chk_den, maxval(abs(fpls_chk(ichk)%cmplx_plane)))
+                                        deallocate(fpls_chk(ichk)%cmplx_plane, fpls_chk(ichk)%ctfsq_plane)
+                                    end do
+                                    write(logfhandle,'(A,ES10.2,A,ES10.2,A,ES10.2)') &
+                                        &'>>> FLEX_PCA STATEREC PREP CHECK: max|d y|=', chk_ey, &
+                                        &'  rel=', chk_ey/chk_den, '  max|d ctfsq|=', chk_eq
+                                    call flush(logfhandle)
+                                    deallocate(fpls_chk)
+                                end block
+                    endif
+                else
+                    call prep_imgs4rec(params,build,batchsz,build%imgbatch(:batchsz), &
+                        &pinds(batchlims(1):batchlims(2)),fpls(:batchsz))
+                endif
+                sec_prep = sec_prep + toc(t_sec)
+                ! gather serially (get_ori/get_eo are not guaranteed thread-safe), then one parallel
+                ! region per target; under l_fuse each halfset gets its own mask and call
+                do i=1,batchsz
+                    iptcl=pinds(batchlims(1)+i-1)
+                    call build%spproj_field%get_ori(iptcl,orientation)
+                    bscales(:,i) = real(state_weights(batchlims(1)+i-1,:),dp)
+                    bvalid_c(i)  = .not. orientation%isstatezero()
+                    bvalid_o(i)  = .false.
+                    if( bvalid_c(i) .and. l_fuse )then
+                        ! one insertion per particle, into the halfset it belongs to; the union is the
+                        ! combined map and each half is its own deliverable
+                        eo_i = build%spproj_field%get_eo(iptcl)
+                        if( eo_i == 1 )then
+                            bvalid_o(i) = .true.
+                            bvalid_c(i) = .false.
+                        endif
+                    endif
+                    call borientations(i)%copy(orientation)
+                end do
+                t_sec = tic()
+                if( l_gpu )then
+                    ! halfset routing through the component slots: valid_c rows live in 1..nstates,
+                    ! valid_o rows in nstates+1..2*nstates; the batch packer compacts on nonzero scales
+                    gscales(:,:batchsz) = 0.d0
+                    if( l_split )then
+                        ! this pass owns one halfset; the other half contributes nothing to it
+                        do i = 1, batchsz
+                            if( ipass == 1 )then
+                                bvalid_p(i) = bvalid_c(i)
+                            else
+                                bvalid_p(i) = bvalid_o(i)
+                            endif
+                            if( bvalid_p(i) ) gscales(1:nstates,i) = bscales(:,i)
+                        end do
+                    else
+                        do i = 1, batchsz
+                            bvalid_p(i) = bvalid_c(i) .or. bvalid_o(i)
+                            if( bvalid_c(i) )then
+                                gscales(1:nstates,i) = bscales(:,i)
+                            else if( bvalid_o(i) )then
+                                gscales(nstates+1:2*nstates,i) = bscales(:,i)
+                            endif
+                        end do
+                    endif
+                    if( l_devprep )then
+                        ! planes are resident from the device prep of THIS batch: zero plane traffic
+                        call flex_gpu_insert_batch_res_f(build%pgrpsyms, borientations(:batchsz), &
+                            &gscales(:,:batchsz), gscales(:,:batchsz), &
+                            &bvalid_p(:batchsz), batchsz, nyq_unpd)
+                    else
+                        call flex_gpu_insert_batch_f(build%pgrpsyms, borientations(:batchsz), &
+                            &fpls(:batchsz), gscales(:,:batchsz), gscales(:,:batchsz), &
+                            &bvalid_p(:batchsz), batchsz)
+                    endif
+                else
+                    if( l_fuse .and. any(bvalid_o(:batchsz)) )then
+                        call insert_planes_oversamp_multi_scaled_batch(recs_o, build%pgrpsyms, &
+                            &borientations(:batchsz), fpls(:batchsz), bscales(:,:batchsz), &
+                            &bscales(:,:batchsz), bvalid_o(:batchsz), batchsz)
+                    endif
+                    if( any(bvalid_c(:batchsz)) )then
+                        call insert_planes_oversamp_multi_scaled_batch(state_recs, build%pgrpsyms, &
+                            &borientations(:batchsz), fpls(:batchsz), bscales(:,:batchsz), &
+                            &bscales(:,:batchsz), bvalid_c(:batchsz), batchsz)
                     endif
                 endif
-                call borientations(i)%copy(orientation)
+                sec_ins = sec_ins + toc(t_sec)
             end do
-            if( l_fuse .and. any(bvalid_o(:batchsz)) )then
-                call insert_planes_oversamp_multi_scaled_batch(recs_o, build%pgrpsyms, &
-                    &borientations(:batchsz), fpls(:batchsz), bscales(:,:batchsz), &
-                    &bscales(:,:batchsz), bvalid_o(:batchsz), batchsz)
-            endif
-            if( any(bvalid_c(:batchsz)) )then
-                call insert_planes_oversamp_multi_scaled_batch(state_recs, build%pgrpsyms, &
-                    &borientations(:batchsz), fpls(:batchsz), bscales(:,:batchsz), &
-                    &bscales(:,:batchsz), bvalid_c(:batchsz), batchsz)
+            ! fetch this halfset before the next pass reuses the slots
+            if( l_split )then
+                if( ipass == 1 )then
+                    call flex_gpu_insert_end_f(state_recs)
+                else
+                    call flex_gpu_insert_end_f(recs_o)
+                endif
             endif
         end do
+        if( l_devprep ) call flex_gpu_prep_free_f
+        if( l_gpu )then
+            if( .not. l_split )then
+                if( l_fuse )then
+                    call flex_gpu_insert_end_f(state_recs, recs_o)
+                else
+                    call flex_gpu_insert_end_f(state_recs)
+                endif
+            endif
+            deallocate(gscales)
+        endif
+        write(logfhandle,'(A,F8.1,A,I0)') '>>> FLEX_PCA STATEREC read+prep+insert seconds=', &
+            &toc(t_ins), '  gpu=', merge(1, 0, l_gpu)
+        write(logfhandle,'(A,F7.1,A,F7.1,A,F7.1)') '>>> FLEX_PCA STATEREC SPLIT (seconds): read=', &
+            &sec_read,'  prep=',sec_prep,'  insert=',sec_ins
+        call flush(logfhandle)
         do i = 1, MAXIMGBATCHSZ
             call borientations(i)%kill
         end do
-        deallocate(borientations, bscales, bvalid_c, bvalid_o)
+        deallocate(borientations, bscales, bvalid_c, bvalid_o, bvalid_p)
         call orientation%kill
         params%smpd_crop = smpd_crop_bak
         call cleanup_rec_buffers(build,fpls)
@@ -420,6 +644,114 @@ contains
         call state_rec%reset
         call state_rec%reset_exp
     end subroutine init_state_reconstructor
+
+    !> device variant of prep_imgs4rec (non-cached path): the taper->norm->pad->FFT->plane
+    !! chain runs on the GPU and the premultiplied reconstruction pair (conj(T)y/sigma2,
+    !! CTF^2/sigma2) is fetched packed and unpacked into fplane_type. Byte-equivalent to the
+    !! CPU generator: values on the OSMPL_PAD_FAC-multiple lattice, zeros elsewhere.
+    subroutine prep_imgs4rec_dev( params, build, nptcls, ptcl_imgs, pinds, fplanes, fetch, &
+        &nyq_unpd_out )
+        use simple_ftiter,  only: ftiter
+        use simple_math,    only: ceil_div, floor_div
+        use simple_math_ft, only: resample_sigma2
+        class(parameters), intent(in)    :: params
+        class(builder),    intent(inout) :: build
+        integer,           intent(in)    :: nptcls
+        class(image),      intent(inout) :: ptcl_imgs(nptcls)
+        integer,           intent(in)    :: pinds(nptcls)
+        type(fplane_type), intent(inout) :: fplanes(nptcls)
+        logical, optional, intent(in)    :: fetch        !< .false. = leave planes resident only
+        integer, optional, intent(out)   :: nyq_unpd_out !< shared plane band / OSMPL_PAD_FAC
+        type(ctfparams) :: ctfp_arr(nptcls)
+        real            :: shf(2,nptcls)
+        logical         :: vld(nptcls)
+        complex(sp), allocatable :: plc(:,:,:)
+        real(sp),    allocatable :: plct(:,:,:)
+        real,        allocatable :: sig2_ups(:,:)
+        type(ftiter) :: fit_pd, fit_cr
+        real    :: shconst_pd(3)
+        integer :: kfromto(2), frlims_pd(3,2), i, h, k, hlo, hhi, klo, nyqpd, signyq
+        integer :: hmin, hmax, kmin, iptcl, pf
+        logical :: l_fresh, l_fetch
+        l_fetch = .true.
+        if( present(fetch) ) l_fetch = fetch
+        pf      = OSMPL_PAD_FAC
+        kfromto = build%esig%get_kfromto()
+        call fit_pd%new([params%boxpd, params%boxpd, 1], params%smpd_crop)
+        frlims_pd = fit_pd%loop_lims(3)
+        nyqpd     = fit_pd%get_lfny(1)
+        if( present(nyq_unpd_out) ) nyq_unpd_out = max(1, nyqpd / pf)
+        if( params%l_ml_reg )then
+            ! the CPU generator's sigma_nyq comes from the padded box / OSMPL_PAD_FAC
+            call fit_cr%new([params%boxpd/pf, params%boxpd/pf, 1], params%smpd_crop)
+            signyq = fit_cr%get_lfny(1)
+            allocate(sig2_ups(0:nyqpd, nptcls), source=1.0)
+        endif
+        vld = .true.
+        !$omp parallel do default(shared) private(i,iptcl) schedule(static) proc_bind(close)
+        do i = 1, nptcls
+            iptcl       = pinds(i)
+            ctfp_arr(i) = build%spproj%get_ctfparams(params%oritype, iptcl)
+            shf(:,i)    = build%spproj_field%get_2Dshift(iptcl)
+            if( params%l_ml_reg )then
+                call resample_sigma2(kfromto(1), signyq, &
+                    &build%esig%sigma2_noise(kfromto(1):kfromto(2), iptcl), nyqpd, &
+                    &real(signyq)/real(nyqpd), sig2_ups(:,i))
+            endif
+        end do
+        !$omp end parallel do
+        if( params%l_ml_reg )then
+            call flex_gpu_prep_batch_f(ptcl_imgs, ctfp_arr, shf, vld, nptcls, params%box, &
+                &frlims_pd, nyqpd, sig2_ups=sig2_ups)
+        else
+            call flex_gpu_prep_batch_f(ptcl_imgs, ctfp_arr, shf, vld, nptcls, params%box, &
+                &frlims_pd, nyqpd)
+        endif
+        if( .not. l_fetch )then
+            ! consumer is the resident insert; planes stay on device
+            if( allocated(sig2_ups) ) deallocate(sig2_ups)
+            return
+        endif
+        hlo = ceil_div (frlims_pd(1,1), pf); hhi = floor_div(frlims_pd(1,2), pf)
+        klo = ceil_div (frlims_pd(2,1), pf)
+        allocate(plc(hlo:hhi, klo:0, nptcls), plct(hlo:hhi, klo:0, nptcls))
+        call flex_gpu_prep_fetch_f(plc, plct, nptcls, hlo, hhi, klo)
+        hmin = frlims_pd(1,1); hmax = frlims_pd(1,2); kmin = frlims_pd(2,1)
+        shconst_pd      = 0.
+        shconst_pd(1:2) = PI/real(params%boxpd/2)
+        !$omp parallel do default(shared) private(i,h,k,l_fresh) schedule(static) proc_bind(close)
+        do i = 1, nptcls
+            l_fresh = .not. allocated(fplanes(i)%cmplx_plane)
+            if( .not. l_fresh )then
+                if( lbound(fplanes(i)%cmplx_plane,1) /= hmin .or. &
+                    &ubound(fplanes(i)%cmplx_plane,1) /= hmax .or. &
+                    &lbound(fplanes(i)%cmplx_plane,2) /= kmin .or. &
+                    &ubound(fplanes(i)%cmplx_plane,2) /= 0    .or. &
+                    &allocated(fplanes(i)%transfer_plane) )then
+                    if( allocated(fplanes(i)%cmplx_plane) )    deallocate(fplanes(i)%cmplx_plane)
+                    if( allocated(fplanes(i)%ctfsq_plane) )    deallocate(fplanes(i)%ctfsq_plane)
+                    if( allocated(fplanes(i)%transfer_plane) ) deallocate(fplanes(i)%transfer_plane)
+                    l_fresh = .true.
+                endif
+            endif
+            if( l_fresh )then
+                allocate(fplanes(i)%cmplx_plane(hmin:hmax, kmin:0), source=cmplx(0.,0.))
+                allocate(fplanes(i)%ctfsq_plane(hmin:hmax, kmin:0), source=0.)
+            endif
+            do k = klo, 0
+                do h = hlo, hhi
+                    fplanes(i)%cmplx_plane(pf*h, pf*k) = plc(h,k,i)
+                    fplanes(i)%ctfsq_plane(pf*h, pf*k) = plct(h,k,i)
+                end do
+            end do
+            fplanes(i)%frlims  = frlims_pd
+            fplanes(i)%nyq     = nyqpd
+            fplanes(i)%shconst = shconst_pd
+        end do
+        !$omp end parallel do
+        deallocate(plc, plct)
+        if( allocated(sig2_ups) ) deallocate(sig2_ups)
+    end subroutine prep_imgs4rec_dev
 
     subroutine write_state( params, img, state, vol_fname )
         class(parameters), intent(in)    :: params

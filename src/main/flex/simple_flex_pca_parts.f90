@@ -27,7 +27,7 @@ character(len=*), parameter :: WEIGHTS_FNAME    = 'flex_pca_round_weights.bin'
 integer, parameter :: STATES_PART_VERSION = 1
 integer, parameter :: EMBED_PART_VERSION  = 1
 integer, parameter :: EMBED_STATS_VERSION = 1
-integer, parameter :: PROBE_PART_VERSION  = 1
+integer, parameter :: PROBE_PART_VERSION  = 4   ! v4: rho rows are always the full packed triangle (no diagonal option)
 
 ! Every part file is magic + version + shape header + payload, written to a .tmp and renamed, so a
 ! master that finds the final name is guaranteed a complete file. The master reduces STREAMING --
@@ -316,18 +316,31 @@ contains
     !! at every grid point -- then the EM Gamma numerator and the valid-particle count.
     !! Gamma is shipped as a SUM, never a mean: the master divides by the reduced nval, and dividing
     !! per part would weight small parts equally with large ones.
+    !> v3: the four MCFA accumulators are pure ADDITIVE sufficient statistics (already summed
+    !! over threads by the caller), so distributing them is the same operation as the existing
+    !! thread reduction. header(9) carries kmix, 0 when absent, which keeps v3 readable by the
+    !! version check without a second format.
     subroutine write_probe_part( fname, cmat_e, rho_ex, cmat_o, rho_ox, rho_e, rho_o, &
-        &gam_sum, nval, ncomp )
+        &gam_sum, nll_sum, nval, ncomp, mix_sr, mix_sm, mix_smm, mix_sainv, z_sub )
         class(string), intent(in) :: fname
         complex,       intent(in) :: cmat_e(:,:,:,:), cmat_o(:,:,:,:)
         real,          intent(in) :: rho_ex(:,:,:,:), rho_ox(:,:,:,:)
         real,          intent(in) :: rho_e(:,:,:,:),  rho_o(:,:,:,:)
         real(dp),      intent(in) :: gam_sum(:)
+        !> sum over this part's particles of log det A_i - h_i' A_i^-1 h_i, the particle-dependent
+        !! part of -2 log p(y_i). Shipped as a SUM for the same reason gam_sum is.
+        real(dp),      intent(in) :: nll_sum
         integer,       intent(in) :: nval, ncomp
+        real(dp), optional, intent(in) :: mix_sr(:), mix_sm(:,:), mix_smm(:,:,:), mix_sainv(:,:)
+        !> bounded latent subsample: mcfa_init seeds k-means from z, which no single rank holds
+        !! under sharding, so each part ships a deterministic slice and the master pools them.
+        real(dp), optional, intent(in) :: z_sub(:,:)
         type(string) :: tmp_fname
-        integer :: funit, io_stat, header(9), q
+        integer :: funit, io_stat, header(9), q, kmix_w
+        kmix_w = 0
+        if( present(mix_sr) ) kmix_w = size(mix_sr)
         header = [FLEX_PCA_PART_MAGIC, PROBE_PART_VERSION, ncomp, &
-            &size(cmat_e,1), size(cmat_e,2), size(cmat_e,3), size(rho_e,1), nval, 0]
+            &size(cmat_e,1), size(cmat_e,2), size(cmat_e,3), size(rho_e,1), nval, kmix_w]
         tmp_fname = fname//'.tmp'
         call fopen(funit, file=tmp_fname, access='STREAM', action='WRITE', status='REPLACE', iostat=io_stat)
         call fileiochk('write_probe_part; open', io_stat)
@@ -337,8 +350,19 @@ contains
             write(funit, iostat=io_stat) cmat_e(:,:,:,q), rho_ex(:,:,:,q), cmat_o(:,:,:,q), rho_ox(:,:,:,q)
             call fileiochk('write_probe_part; basis payload', io_stat)
         end do
-        write(funit, iostat=io_stat) rho_e, rho_o, gam_sum
+        write(funit, iostat=io_stat) rho_e, rho_o, gam_sum, nll_sum
         call fileiochk('write_probe_part; coupled payload', io_stat)
+        if( kmix_w > 0 )then
+            write(funit, iostat=io_stat) mix_sr, mix_sm, mix_smm, mix_sainv
+            call fileiochk('write_probe_part; mixture payload', io_stat)
+            if( present(z_sub) )then
+                write(funit, iostat=io_stat) size(z_sub,1)
+                write(funit, iostat=io_stat) z_sub
+            else
+                write(funit, iostat=io_stat) 0
+            endif
+            call fileiochk('write_probe_part; z subsample', io_stat)
+        endif
         call fclose(funit)
         call simple_rename(tmp_fname, fname)
         call tmp_fname%kill
@@ -346,17 +370,25 @@ contains
 
     !> Streaming sum of every part into the master's accumulators; one part resident at a time.
     subroutine reduce_probe_parts( params, nparts, cmat_e, rho_ex, cmat_o, rho_ox, rho_e, rho_o, &
-        &gam_sum, nval, ncomp )
+        &gam_sum, nll_sum, nval, ncomp, mix_sr, mix_sm, mix_smm, mix_sainv, z_pool, nz_pool )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: nparts, ncomp
         complex,           intent(inout) :: cmat_e(:,:,:,:), cmat_o(:,:,:,:)
         real,              intent(inout) :: rho_ex(:,:,:,:), rho_ox(:,:,:,:)
         real,              intent(inout) :: rho_e(:,:,:,:),  rho_o(:,:,:,:)
         real(dp),          intent(inout) :: gam_sum(:)
+        real(dp),          intent(inout) :: nll_sum
         integer,           intent(inout) :: nval
+        real(dp), optional, intent(inout) :: mix_sr(:), mix_sm(:,:), mix_smm(:,:,:), mix_sainv(:,:)
+        real(dp), optional, intent(inout) :: z_pool(:,:)
+        integer,  optional, intent(inout) :: nz_pool
+        real(dp), allocatable :: zbuf(:,:)
+        integer :: nz_part
+        real(dp), allocatable :: msr(:), msm(:,:), msmm(:,:,:), msai(:,:)
         complex, allocatable :: cbuf(:,:,:)
         real,    allocatable :: rbuf(:,:,:), rcbuf(:,:,:,:)
         real(dp), allocatable :: gbuf(:)
+        real(dp) :: nllbuf
         type(string) :: fname
         integer :: ipart, funit, io_stat, header(9), q
         integer(timer_int_kind) :: t_red
@@ -365,6 +397,9 @@ contains
         allocate(rbuf(size(rho_ex,1),size(rho_ex,2),size(rho_ex,3)))
         allocate(rcbuf(size(rho_e,1),size(rho_e,2),size(rho_e,3),size(rho_e,4)))
         allocate(gbuf(size(gam_sum)))
+        if( present(mix_sr) ) allocate(msr(size(mix_sr)), msm(size(mix_sm,1),size(mix_sm,2)), &
+            &msmm(size(mix_smm,1),size(mix_smm,2),size(mix_smm,3)), &
+            &msai(size(mix_sainv,1),size(mix_sainv,2)))
         do ipart = 1, nparts
             fname = flex_pca_part_fname('probe', ipart, params%numlen)
             if( .not. file_exists(fname) ) THROW_HARD('missing probe part: '//fname%to_char())
@@ -399,7 +434,34 @@ contains
             read(funit, iostat=io_stat) gbuf
             call fileiochk('reduce_probe_parts; gamma', io_stat)
             gam_sum = gam_sum + gbuf
+            read(funit, iostat=io_stat) nllbuf
+            call fileiochk('reduce_probe_parts; loglik', io_stat)
+            nll_sum = nll_sum + nllbuf
             nval    = nval + header(8)
+            if( present(mix_sr) )then
+                if( header(9) /= size(mix_sr) ) THROW_HARD('probe part kmix mismatch')
+                read(funit, iostat=io_stat) msr, msm, msmm, msai
+                call fileiochk('reduce_probe_parts; mixture', io_stat)
+                mix_sr    = mix_sr    + msr
+                mix_sm    = mix_sm    + msm
+                mix_smm   = mix_smm   + msmm
+                mix_sainv = mix_sainv + msai
+                read(funit, iostat=io_stat) nz_part
+                call fileiochk('reduce_probe_parts; z subsample count', io_stat)
+                if( nz_part > 0 )then
+                    allocate(zbuf(nz_part, size(mix_sm,1)))
+                    read(funit, iostat=io_stat) zbuf
+                    call fileiochk('reduce_probe_parts; z subsample', io_stat)
+                    if( present(z_pool) .and. present(nz_pool) )then
+                        do q = 1, nz_part
+                            if( nz_pool >= size(z_pool,1) ) exit
+                            nz_pool = nz_pool + 1
+                            z_pool(nz_pool,:) = zbuf(q,:)
+                        end do
+                    endif
+                    deallocate(zbuf)
+                endif
+            endif
             call fclose(funit)
             call del_file(fname)
             call fname%kill

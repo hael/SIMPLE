@@ -194,6 +194,11 @@ endif()
 list(APPEND SIMPLE_src "${SIMPLE_GEN_DIR}/simple_args.f90")
 list(APPEND SIMPLE_src "${SIMPLE_UI_DEFAULTS_FILE}")
 
+# CUDA-C flex kernels (the .cu is not covered by the Fortran globs)
+if(USE_FLEX_CUDA)
+    list(APPEND SIMPLE_src "${CMAKE_CURRENT_SOURCE_DIR}/main/flex/cuda/simple_flex_gpu_kernels.cu")
+endif()
+
 set(SIMPLE_ALL_SOURCES
     ${DEFS_src}
     ${GNUFOR_src}
