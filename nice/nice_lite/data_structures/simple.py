@@ -277,8 +277,10 @@ class SIMPLEBatch:
     Manages the launch of a single classic SIMPLE job (simple_exec or single_exec).
 
     Unlike SIMPLEStream, each job corresponds to one program call rather than a
-    pipeline. The dispatch script copies the workspace project file into the job
-    directory, runs update_project, then executes the program.
+    pipeline. Except for new_project, the dispatch script copies the workspace
+    project file into the job directory, runs update_project, then executes the
+    program. A new_project job instead creates its project directly in the job
+    directory without inheriting workspace.simple.
 
     Typical usage:
         simple = SIMPLEBatch(pckg="simple")
@@ -371,7 +373,7 @@ class SIMPLEBatch:
 
         Steps:
           1. Load the active DispatchModel from the DB.
-          2. Build a three-line command: cp workspace, update_project, run executable.
+          2. Build the command, inheriting the parent project when required.
           3. Substitute placeholders into the template.
           4. Write the filled script to job.script in the job directory.
           5. Submit via _submit().
@@ -384,13 +386,19 @@ class SIMPLEBatch:
         if self.tplt_simple_motif not in dispatchmodel.tplt:
             return False
 
-        # copy project file into job dir, update it, then invoke the program
-        command_string  = "cp -v " + shlex.quote(self.parent_proj) + " workspace.simple\n"
-        command_string += "simple_exec prg=update_project projfile=workspace.simple\n"
+        creates_project = self.executable == "simple_exec" and self.jobtype == "new_project"
+        command_string = ""
+        if not creates_project:
+            command_string += "cp -v " + shlex.quote(self.parent_proj) + " workspace.simple\n"
+            command_string += "simple_exec prg=update_project projfile=workspace.simple\n"
         command_string += self.executable + " prg=" + shlex.quote(self.jobtype)
         for key, val in self.args.items():
             command_string += " " + key + "=" + shlex.quote(str(val))
-        command_string += " mkdir=no projfile=workspace.simple"
+        if creates_project and "dir" not in self.args:
+            command_string += " dir=."
+        command_string += " mkdir=no"
+        if not creates_project:
+            command_string += " projfile=workspace.simple"
         command_string += " niceprocid=" + str(self.jobid) + " niceserver=" + shlex.quote(dispatchmodel.url + "/api_classic")
         command_string += " >> stdout.log 2>> stderr.log\n"
 

@@ -174,7 +174,10 @@ class JobBuilderBranchTests(SimpleTestCase):
         launcher = Mock()
         launcher.get_ui.return_value = {
             "pick": {
-                "program": {"executable": "single_exec"},
+                "program": {
+                    "executable": "single_exec",
+                    "display_name": "Pick Particles",
+                },
                 "inputs": [
                     {"key": "mode", "options": ["fast", "slow"]},
                     {"key": "projfile", "required": True},
@@ -188,7 +191,13 @@ class JobBuilderBranchTests(SimpleTestCase):
             response = job_builder_views.view_create_batch(request)
 
         self.assertEqual(response.status_code, 302)
-        batchjob.new.assert_called_once_with(workspace, "single", "pick", {"mode": "fast"})
+        batchjob.new.assert_called_once_with(
+            workspace,
+            "single",
+            "pick",
+            {"mode": "fast"},
+            display_name="Pick Particles",
+        )
 
     def test_collect_batch_args_accepts_free_form_directory_with_empty_options(self):
         program_cfg = {

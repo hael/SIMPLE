@@ -39,11 +39,18 @@ class BatchJobLifecycleTests(TestCase):
         launcher = batchjob_module.SIMPLEBatch
         with patch.object(launcher, "loadUIJSON", return_value=True), patch.object(launcher, "start", return_value=True) as start:
             job = BatchJob()
-            created = job.new(self.workspace, "single", "pick", {"mode": "fast"})
+            created = job.new(
+                self.workspace,
+                "single",
+                "pick",
+                {"mode": "fast"},
+                display_name="Pick Particles",
+            )
 
         self.assertTrue(created)
         jobmodel = JobModel.objects.get(id=job.id)
         self.assertEqual(jobmodel.args, {"mode": "fast"})
+        self.assertEqual(jobmodel.name, "Pick Particles")
         self.assertEqual(jobmodel.master_stats["job_type"], "batch")
         self.assertEqual(jobmodel.master_stats["package"], "single")
         self.assertEqual(jobmodel.master_stats["program"], "pick")
@@ -55,7 +62,9 @@ class BatchJobLifecycleTests(TestCase):
             "pick",
             job.id,
         )
-        self.assertEqual(BatchJob(id=job.id).prog, "pick")
+        loaded_job = BatchJob(id=job.id)
+        self.assertEqual(loaded_job.prog, "pick")
+        self.assertEqual(loaded_job.name, "Pick Particles")
 
     def test_new_marks_persisted_job_failed_when_dispatch_fails(self):
         launcher = batchjob_module.SIMPLEBatch
@@ -298,3 +307,40 @@ class SimpleBatchDispatchTests(TestCase):
                     self.assertIn(f"cp -v '{parent_proj}' workspace.simple", content)
                     self.assertIn("# CPU 8", content)
                     submit.assert_called_once()
+
+    def test_new_project_dispatch_creates_project_in_job_directory(self):
+        with tempfile.TemporaryDirectory() as parent_dir:
+            parent_proj = os.path.join(parent_dir, "workspace.simple")
+            with open(parent_proj, "w", encoding="utf-8"):
+                pass
+            base_dir = os.path.join(parent_dir, "new_project")
+            os.mkdir(base_dir)
+            dispatch = type("Dispatch", (), {
+                "tplt": "#!/bin/sh\nXXXSIMPLEXXX",
+                "scmd": "sh",
+                "url": "http://localhost:8000",
+            })()
+
+            with (
+                patch.object(SIMPLEBatch, "loadUIJSON", return_value=True),
+                patch.object(simple_module.DispatchModel.objects, "filter") as dispatch_filter,
+                patch.object(simple_module.shutil, "which", return_value="/bin/sh"),
+                patch.object(simple_module, "_submit") as submit,
+            ):
+                dispatch_filter.return_value.last.return_value = dispatch
+                started = SIMPLEBatch(pckg="simple").start(
+                    {"projname": "new"},
+                    base_dir,
+                    parent_dir,
+                    "new_project",
+                    3,
+                )
+
+            self.assertTrue(started)
+            with open(os.path.join(base_dir, "job.script"), encoding="utf-8") as script:
+                content = script.read()
+            self.assertIn("simple_exec prg=new_project projname=new dir=. mkdir=no", content)
+            self.assertNotIn("cp -v", content)
+            self.assertNotIn("prg=update_project", content)
+            self.assertNotIn("projfile=workspace.simple", content)
+            submit.assert_called_once()

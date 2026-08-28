@@ -470,8 +470,12 @@ def view_create_batch(request):
 
     batchjob = BatchJob()
     launch_options = {}
+    program_meta = program_cfg.get("program", {})
+    display_name = program_meta.get("display_name")
+    if isinstance(display_name, str) and display_name.strip():
+        launch_options["display_name"] = display_name.strip()
     if parent_proj is not None:
-        launch_options = {"parent_proj": parent_proj, "source": source_metadata}
+        launch_options.update({"parent_proj": parent_proj, "source": source_metadata})
     if not batchjob.new(workspace_obj, package, program, args, **launch_options):
         print_error("failed to create new batch job")
         messages.add_message(request, messages.ERROR, "failed to create batch job")

@@ -138,7 +138,7 @@ class BatchJob(Job):
             metadata["source"] = dict(source)
         return metadata
 
-    def new(self, workspace, pckg, prog, args, parent_proj=None, source=None):
+    def new(self, workspace, pckg, prog, args, parent_proj=None, source=None, display_name=None):
         """Create and launch a SIMPLE or SINGLE batch job."""
         if workspace is None or pckg not in ("simple", "single") or not prog:
             print_error("new: invalid batch job configuration")
@@ -173,7 +173,10 @@ class BatchJob(Job):
 
         self.pckg = pckg
         self.prog = prog
-        self.name = prog.replace("_", " ")
+        if isinstance(display_name, str) and display_name.strip():
+            self.name = display_name.strip()
+        else:
+            self.name = prog.replace("_", " ")
         self.args = dict(args)
 
         # Reserve the display counter under a row lock so two near-simultaneous
