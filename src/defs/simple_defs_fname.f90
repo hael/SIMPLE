@@ -77,6 +77,7 @@ character(len=*), parameter :: POLAR_REFS_FBODY              = 'polar_refs'
 ! STATS
 character(len=*), parameter :: STATS_FILE                    = 'simple_stats'//trim(TXT_EXT)
 character(len=*), parameter :: ITERSTATS_FILE                = 'simple_iter_stats'//trim(TXT_EXT)
+character(len=*), parameter :: PCG_NU_STATS_FILE             = 'simple_pcg_nu_stats'//trim(TXT_EXT)
 ! SAMPLING
 character(len=*), parameter :: CLASS_SAMPLING_FILE           = 'clssmp.bin'
 character(len=*), parameter :: BALPROJPARTFBODY              = 'balanced_xvalid_group'

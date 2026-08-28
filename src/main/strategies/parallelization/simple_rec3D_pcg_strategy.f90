@@ -217,6 +217,70 @@ contains
         endif
     end subroutine validate_nu_replay_request
 
+    !> NU-replay firing readout of a final map: the prior energy of the ML
+    !! solution against the prior energy of the unregularized base solution of
+    !! the SAME half (the replay's own reference; with P_tau absent in NU mode
+    !! a vanishing pcg_nu_lambda_rel reproduces the base solution, so an inert
+    !! prior reads ~0% suppression). The amplitude-domain ratio
+    !! sqrt(E_ML/E_base) mirrors the rms ratio of the retired solvent
+    !! suppression readout; the lambda_nu factor inside the penalty cancels.
+    !! Costs two full Q_NU applications (~26 padded FFTs) -- timed as
+    !! diagnostic overhead, material at small iteration budgets.
+    subroutine report_nu_solve_stats( pcgop, x, base_volume, context, half, supp_pct, overhead_s )
+        type(reconstructor_pcg), intent(inout) :: pcgop
+        real,                    intent(in)    :: x(:,:,:)
+        type(image),             intent(in)    :: base_volume
+        character(len=*),        intent(in)    :: context, half
+        real,                    intent(out)   :: supp_pct
+        real,                    intent(out)   :: overhead_s
+        real, allocatable :: xbase(:,:,:)
+        real :: nu_penalty, nu_penalty_base
+        integer(timer_int_kind) :: t_stats
+        t_stats = tic()
+        call pcgop%get_nu_prior_stats(x, nu_penalty)
+        xbase = base_volume%get_rmat()
+        call pcgop%get_nu_prior_stats(xbase, nu_penalty_base)
+        deallocate(xbase)
+        supp_pct = 0.0
+        if( nu_penalty_base > 1.0e-12 ) supp_pct = 100.0 * (1.0 - sqrt(max(nu_penalty,0.0) / nu_penalty_base))
+        overhead_s = real(real(toc(t_stats),dp))
+        write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,F9.3)') '>>> PCG NU REPLAY ('//trim(context)//'/'//&
+            &trim(half)//'): lambda_eff=', pcgop%get_effective_nu_lambda(), '  pcg_nu_prior_energy_final=', &
+            &nu_penalty, '  pcg_nu_prior_energy_base=', nu_penalty_base, '  stats_overhead_s=', overhead_s
+        write(logfhandle,'(A,F8.2)') '    pcg_nu_suppression_pct=', supp_pct
+    end subroutine report_nu_solve_stats
+
+    !> Persist the per-state NU-replay firing readout for the convergence
+    !! reporter (simple_convergence prints it with the other iteration stats
+    !! and advises on pcg_nu_lambda_rel), alongside the shipped-pair FSC=0.143
+    !! crossing (the over-regularization diagnostic, never a resolution claim).
+    !! The file is rewritten on every NU-replay volassemble and deleted first,
+    !! so an iteration in which the replay is skipped never leaves stale
+    !! values behind.
+    subroutine write_nu_convergence_stats( params, supps, cnts, ship0143s )
+        class(parameters), intent(in) :: params
+        real,              intent(in) :: supps(:)
+        integer,           intent(in) :: cnts(:)
+        real,              intent(in) :: ship0143s(:)
+        type(oris)   :: os
+        type(string) :: key
+        integer :: state
+        call del_file(PCG_NU_STATS_FILE)
+        if( .not. any(cnts > 0) ) return
+        call os%new(1, is_ptcl=.false.)
+        call os%set(1, 'PCG_NU_LAMBDA_REL', params%pcg_nu_lambda_rel)
+        do state = 1, size(supps)
+            if( cnts(state) < 1 ) cycle
+            key = 'PCG_NU_SUPP_STATE'//int2str_pad(state,2)
+            call os%set(1, key%to_char(), supps(state) / real(cnts(state)))
+            key = 'PCG_NU_SHIP0143_STATE'//int2str_pad(state,2)
+            call os%set(1, key%to_char(), ship0143s(state))
+        end do
+        call os%write(string(PCG_NU_STATS_FILE))
+        call os%kill
+        call key%kill
+    end subroutine write_nu_convergence_stats
+
     subroutine execute_rec3D_pcg_shared( params, build, cline )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -225,7 +289,8 @@ contains
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         integer, allocatable :: selected_pinds(:), half_pinds(:)
         real, allocatable :: fsc(:), res0143s(:)
-        real, allocatable :: ship05s(:), ship0143s(:), nu_band_w(:,:,:,:)
+        real, allocatable :: ship05s(:), ship0143s(:), nu_band_w(:,:,:,:), nu_supps(:)
+        integer, allocatable :: nu_supp_cnts(:)
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         real :: res05, cfar
@@ -253,6 +318,8 @@ contains
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         allocate(ship05s(params%nstates), ship0143s(params%nstates), source=0.0)
+        allocate(nu_supps(params%nstates), source=0.0)
+        allocate(nu_supp_cnts(params%nstates), source=0)
         call prepimgbatch(params, build, MAXIMGBATCHSZ)
 
         do state = 1, params%nstates
@@ -353,6 +420,9 @@ contains
         enddo
 
         call killimgbatch(build)
+        ! rewritten (or deleted) every volassemble so the convergence reporter
+        ! never reads a stale NU firing readout
+        call write_nu_convergence_stats(params, nu_supps, nu_supp_cnts, ship0143s)
         if( .not. any(state_written) ) THROW_HARD('PCG reconstruct3D produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
@@ -367,7 +437,7 @@ contains
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call register_project_outputs()
 
-        deallocate(selected_pinds, res0143s, state_written, ship05s, ship0143s)
+        deallocate(selected_pinds, res0143s, state_written, ship05s, ship0143s, nu_supps, nu_supp_cnts)
 
     contains
 
@@ -578,7 +648,7 @@ contains
             integer(timer_int_kind) :: t_phase
             real(dp) :: time_reduce, time_finalize, time_solve, time_total, time_nu_stats
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
-            real :: nu_penalty
+            real :: supp_pct, nu_stats_overhead
             logical :: l_warm
 
             t_phase = tic()
@@ -629,14 +699,10 @@ contains
             call validate_solved_map(x, 'shared', state_here, half, 'ml')
             time_nu_stats = 0.0_dp
             if( l_nu_replay )then
-                ! one full Q_NU application (~13 padded FFTs) -- timed as
-                ! diagnostic overhead, material at small iteration budgets
-                t_phase = tic()
-                call pcgop%get_nu_prior_stats(x, nu_penalty)
-                time_nu_stats = real(toc(t_phase),dp)
-                write(logfhandle,'(A,ES12.4,A,ES12.4,A,F9.3)') '>>> PCG NU REPLAY (shared/'//trim(half)//&
-                    &'): lambda_eff=', pcgop%get_effective_nu_lambda(), '  pcg_nu_prior_energy_final=', &
-                    &nu_penalty, '  stats_overhead_s=', real(time_nu_stats)
+                call report_nu_solve_stats(pcgop, x, base_volume, 'shared', half, supp_pct, nu_stats_overhead)
+                time_nu_stats = real(nu_stats_overhead,dp)
+                nu_supps(state_here)     = nu_supps(state_here) + supp_pct
+                nu_supp_cnts(state_here) = nu_supp_cnts(state_here) + 1
             endif
             time_total = time_reduce + time_finalize + time_solve + time_nu_stats
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
@@ -1399,7 +1465,8 @@ contains
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
         real, allocatable :: fsc(:), res0143s(:)
         real, allocatable :: realized_fractions(:), update_weights(:), ship05s(:), ship0143s(:)
-        real, allocatable :: nu_band_w(:,:,:,:)
+        real, allocatable :: nu_band_w(:,:,:,:), nu_supps(:)
+        integer, allocatable :: nu_supp_cnts(:)
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
@@ -1455,6 +1522,8 @@ contains
         allocate(res0143s(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         allocate(ship05s(params%nstates), ship0143s(params%nstates), source=0.0)
+        allocate(nu_supps(params%nstates), source=0.0)
+        allocate(nu_supp_cnts(params%nstates), source=0)
         do state = 1, params%nstates
             l_bootstrap = .false.
             if( params%l_trail_rec )then
@@ -1598,6 +1667,9 @@ contains
             call fname_fsc%kill
             if( allocated(fsc) ) deallocate(fsc)
         enddo
+        ! rewritten (or deleted) every volassemble so the convergence reporter
+        ! never reads a stale NU firing readout
+        call write_nu_convergence_stats(params, nu_supps, nu_supp_cnts, ship0143s)
         if( .not. any(state_written) ) THROW_HARD('distributed PCG produced no populated states')
         if( params%nstates == 1 )then
             call build%spproj_field%set_all2single('res', res0143s(1))
@@ -1630,7 +1702,8 @@ contains
             enddo
         endif
         call raw_fname%kill
-        deallocate(res0143s, state_written, realized_fractions, update_weights, ship05s, ship0143s)
+        deallocate(res0143s, state_written, realized_fractions, update_weights, ship05s, ship0143s, &
+            &nu_supps, nu_supp_cnts)
 
     contains
 
@@ -1710,7 +1783,7 @@ contains
             real(dp) :: time_reduce, time_finalize, time_solve
             real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
             real :: realized_fraction, update_weight, current_scale
-            real :: nu_penalty
+            real :: supp_pct, nu_stats_overhead
             logical :: l_ml_solve, l_chain_exists, l_seed_chain, l_warm
 
             l_ml_solve = present(fsc_prior)
@@ -1822,13 +1895,11 @@ contains
             time_solve = real(toc(t_phase),dp)
             call validate_solved_map(x, 'distributed', state_here, half, solve_kind)
             if( l_ml_solve .and. l_nu_replay )then
-                ! one full Q_NU application (~13 padded FFTs) -- timed as
-                ! diagnostic overhead, material at small iteration budgets
-                t_phase = tic()
-                call pcgop%get_nu_prior_stats(x, nu_penalty)
-                write(logfhandle,'(A,ES12.4,A,ES12.4,A,F9.3)') '>>> PCG NU REPLAY (distributed/'//trim(half)//&
-                    &'): lambda_eff=', pcgop%get_effective_nu_lambda(), '  pcg_nu_prior_energy_final=', &
-                    &nu_penalty, '  stats_overhead_s=', real(real(toc(t_phase),dp))
+                ! warm_start is this iteration's unregularized base half solve,
+                ! the reference the firing readout is measured against
+                call report_nu_solve_stats(pcgop, x, warm_start, 'distributed', half, supp_pct, nu_stats_overhead)
+                nu_supps(state_here)     = nu_supps(state_here) + supp_pct
+                nu_supp_cnts(state_here) = nu_supp_cnts(state_here) + 1
             endif
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)

@@ -8,6 +8,15 @@ implicit none
 public :: convergence
 private
 
+! PCG NU-replay (Q_NU) firing thresholds, in % prior-energy amplitude
+! suppressed relative to the unregularized base solution of the same half
+! (with P_tau absent in NU mode, a vanishing pcg_nu_lambda_rel reproduces the
+! base solution, so an inert prior reads ~0%). Provisional bounds inherited
+! from the retired solvent-prior readout; recalibrate with a
+! pcg_nu_lambda_rel strength ladder now that the readout is reported per run.
+real, parameter :: PCG_NU_SUPP_INERT_PCT = 5.0  !< below: prior inert, increase pcg_nu_lambda_rel
+real, parameter :: PCG_NU_SUPP_OVER_PCT  = 60.0 !< above: over-regularization risk, decrease pcg_nu_lambda_rel
+
 type convergence
     private
     type(stats_struct) :: score            !< objective function stats
@@ -268,9 +277,12 @@ contains
         type(stats_struct)   :: res_state
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:), scores(:), sampled(:)
         real,    allocatable :: res_state_avg(:), state_update_fracs(:)
-        logical, allocatable :: mask(:), state_mask(:)
+        real,    allocatable :: pcg_nu_supps(:), pcg_nu_ship0143s(:)
+        logical, allocatable :: mask(:), state_mask(:), pcg_nu_mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
+        real    :: pcg_nu_supp_avg, pcg_nu_ship0143_avg
+        logical :: l_pcg_nu
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
         character(len=len('>>> RESOLUTION @ FSC=0.143   AVG/SDEV/MIN/MAX:')) :: res_state_label
@@ -362,6 +374,39 @@ contains
             endif
         end do
         deallocate(state_mask)
+        ! PCG NU-replay (Q_NU) firing readout: % prior-energy amplitude
+        ! suppressed by the replay, measured against the unregularized base
+        ! solution of the same half (~0% = inert). Written by the PCG
+        ! reconstruction each NU-replay volassemble, together with the
+        ! shipped-pair FSC=0.143 crossing (the over-regularization diagnostic,
+        ! never a resolution claim).
+        l_pcg_nu            = .false.
+        pcg_nu_supp_avg     = 0.
+        pcg_nu_ship0143_avg = 0.
+        allocate(pcg_nu_supps(params%nstates), pcg_nu_ship0143s(params%nstates), pcg_nu_mask(params%nstates))
+        if( trim(params%rec_backend) == 'pcg' )then
+            call read_pcg_nu_stats(params%nstates, pcg_nu_supps, pcg_nu_ship0143s, pcg_nu_mask, l_pcg_nu)
+        endif
+        if( l_pcg_nu )then
+            pcg_nu_supp_avg     = sum(pcg_nu_supps,     mask=pcg_nu_mask) / real(count(pcg_nu_mask))
+            pcg_nu_ship0143_avg = sum(pcg_nu_ship0143s, mask=pcg_nu_mask) / real(count(pcg_nu_mask))
+            write(logfhandle,601) '>>> % PRIOR ENERGY SUPPRESSED (PCG NU REPLAY):', pcg_nu_supp_avg
+            write(logfhandle,601) '>>> SHIPPED-PAIR FSC=0.143    (PCG NU REPLAY):', pcg_nu_ship0143_avg
+            if( params%nstates > 1 )then
+                do istate = 1, params%nstates
+                    if( .not. pcg_nu_mask(istate) ) cycle
+                    write(res_state_label,'(A,I3,A)') '>>>     state ', istate, ':'
+                    write(logfhandle,604) res_state_label, pcg_nu_supps(istate), pcg_nu_ship0143s(istate)
+                end do
+            endif
+            if( pcg_nu_supp_avg < PCG_NU_SUPP_INERT_PCT )then
+                write(logfhandle,609) '>>> PCG NU PRIOR INERT (< 5%); INCREASE PCG_NU_LAMBDA_REL (~3X)'
+            else if( pcg_nu_supp_avg > PCG_NU_SUPP_OVER_PCT )then
+                write(logfhandle,609) '>>> PCG NU PRIOR OVER-REGULARIZING (> 60%); DECREASE PCG_NU_LAMBDA_REL (~3X)'
+            else
+                write(logfhandle,609) '>>> PCG NU PRIOR NOMINAL (5-60%); KEEP PCG_NU_LAMBDA_REL'
+            endif
+        endif
         ! score
         write(logfhandle,604) '>>> SCORE [0,1]              AVG/SDEV/MIN/MAX:', self%score%avg, self%score%sdev, self%score%minv, self%score%maxv
         write(logfhandle,609) '>>> -------------------- SETTINGS --------------------'
@@ -383,6 +428,14 @@ contains
         endif
         else
         write(logfhandle,609) '>>> | ML  REGULARIZATION            | off'
+        endif
+        if( trim(params%rec_backend) == 'pcg' )then
+        if( params%pcg_nu_lambda_rel > 0. )then
+        numstr = string(params%pcg_nu_lambda_rel)
+        write(logfhandle,609) '>>> | NU REPLAY PRECISION (Q_NU)    | on, LAMBDA_REL: '//numstr%to_char()
+        else
+        write(logfhandle,609) '>>> | NU REPLAY PRECISION (Q_NU)    | off'
+        endif
         endif
         if( params%l_icm )then
         numstr = string(params%lambda)
@@ -537,6 +590,16 @@ contains
         if( params%l_update_frac )then
             call ostats%set(1,'TRAIL_REC_UPDATE_FRACTION', trail_rec_ufrac)
         endif
+        if( l_pcg_nu )then
+            call ostats%set(1,'PCG_NU_SUPPRESSION_PCT', pcg_nu_supp_avg)
+            call ostats%set(1,'PCG_NU_SHIP0143',        pcg_nu_ship0143_avg)
+            call ostats%set(1,'PCG_NU_LAMBDA_REL',      params%pcg_nu_lambda_rel)
+            do istate = 1, params%nstates
+                if( .not. pcg_nu_mask(istate) ) cycle
+                write(res_key,'(A,I2.2)') 'PCG_NU_SUPP_STATE', istate
+                call ostats%set(1, trim(res_key), pcg_nu_supps(istate))
+            end do
+        endif
         call ostats%write(string(STATS_FILE))
         call self%append_stats(params, ostats)
         call self%plot_projdirs(params, os, mask)
@@ -545,9 +608,46 @@ contains
         if( allocated(statepops)          ) deallocate(statepops)
         if( allocated(res_state_avg)      ) deallocate(res_state_avg)
         if( allocated(state_update_fracs) ) deallocate(state_update_fracs)
+        if( allocated(pcg_nu_supps)       ) deallocate(pcg_nu_supps)
+        if( allocated(pcg_nu_ship0143s)   ) deallocate(pcg_nu_ship0143s)
+        if( allocated(pcg_nu_mask)        ) deallocate(pcg_nu_mask)
         deallocate(mask, updatecnts, states, scores, sampled)
         call ostats%kill
     end function check_conv3D
+
+    !> Reads the per-state NU-replay firing readout the PCG reconstruction
+    !! strategy leaves behind after each NU-replay volassemble. The file is
+    !! rewritten (or removed) every reconstruction, so presence means the
+    !! Q_NU replay fired this iteration.
+    subroutine read_pcg_nu_stats( nstates, supps, ship0143s, supp_mask, available )
+        integer, intent(in)  :: nstates
+        real,    intent(out) :: supps(nstates)
+        real,    intent(out) :: ship0143s(nstates)
+        logical, intent(out) :: supp_mask(nstates)
+        logical, intent(out) :: available
+        type(oris)   :: os
+        type(string) :: key
+        integer :: state
+        supps     = 0.
+        ship0143s = 0.
+        supp_mask = .false.
+        available = .false.
+        if( .not. file_exists(PCG_NU_STATS_FILE) ) return
+        call os%new(1, is_ptcl=.false.)
+        call os%read(string(PCG_NU_STATS_FILE))
+        do state = 1, nstates
+            key = 'PCG_NU_SUPP_STATE'//int2str_pad(state,2)
+            if( os%isthere(key%to_char()) )then
+                supps(state)     = os%get(1, key%to_char())
+                supp_mask(state) = .true.
+            endif
+            key = 'PCG_NU_SHIP0143_STATE'//int2str_pad(state,2)
+            if( os%isthere(key%to_char()) ) ship0143s(state) = os%get(1, key%to_char())
+        enddo
+        available = any(supp_mask)
+        call os%kill
+        call key%kill
+    end subroutine read_pcg_nu_stats
 
     subroutine calc_continuous_inplane_stats( self, os, mask, available )
         class(convergence), intent(inout) :: self
