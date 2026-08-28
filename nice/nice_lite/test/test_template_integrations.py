@@ -21,6 +21,13 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("isJobBuilderVisible", content)
         self.assertIn("&& !isJobBuilderVisible()", content)
 
+    def test_browser_messages_remain_visible(self):
+        content = self._read_template("messages.html")
+
+        self.assertIn('id="message_alert"', content)
+        self.assertNotIn("setTimeout", content)
+        self.assertNotIn('style.display="none"', content)
+
     def test_jobbuilder_submits_to_named_workspace_iframe(self):
         jobbuilder = self._read_template("jobbuilder.html")
         index = self._read_template("index.html")
@@ -115,6 +122,8 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('function validateSelectedBatchForm(packageName, programKey, form)', jobbuilder)
         self.assertIn('form.reportValidity();', jobbuilder)
         self.assertIn('complete required fields:', jobbuilder)
+        self.assertIn('data-batch-requirement', jobbuilder)
+        self.assertIn('requirement.dataset.requirementKeys', jobbuilder)
         self.assertIn('programKey === "import_movies"', jobbuilder)
         self.assertIn('choose a movie-file list or an input movies directory', jobbuilder)
         self.assertIn('id="simple_batch_feedback" role="alert"', jobbuilder)
@@ -179,6 +188,33 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('name="offset" type="number" step="any"', rendered)
         self.assertIn('placeholder="-1.5"', rendered)
         self.assertNotIn('option value=""', rendered)
+
+    def test_batch_input_requirements_are_rendered_for_client_validation(self):
+        context = {
+            "stream_user_inputs": [],
+            "simple_programs": [{"prg": "new_project", "disp": "New project", "desc": ""}],
+            "simple_program_inputs": [{
+                "prg": "new_project",
+                "disp": "New project",
+                "requirements": [{
+                    "label": "Project location",
+                    "help": "Supply a project name, a project directory, or both.",
+                    "min_selected": 1,
+                    "max_selected": 2,
+                    "keys": ["projname", "dir"],
+                }],
+                "sections": [],
+            }],
+            "single_programs": [],
+            "single_program_inputs": [],
+            "batch_snapshot_sources": [],
+        }
+
+        rendered = render_to_string("jobbuilder.html", context)
+
+        self.assertIn("data-batch-requirement", rendered)
+        self.assertIn('data-requirement-keys="projname,dir"', rendered)
+        self.assertIn("Supply a project name, a project directory, or both.", rendered)
 
     def test_batch_panels_match_stream_spacing(self):
         jobbuilder = self._read_template("jobbuilder.html")

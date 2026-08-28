@@ -96,6 +96,28 @@ class JobBuilderBranchTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
 
+    def test_collect_programs_preserves_cross_field_requirements(self):
+        requirements = [{
+            "label": "Project location",
+            "help": "Supply a project name, a project directory, or both.",
+            "min_selected": 1,
+            "max_selected": 2,
+            "keys": ["projname", "dir"],
+        }]
+        batchui = {
+            "new_project": {
+                "program": {
+                    "executable": "simple_exec",
+                    "requirements": requirements,
+                },
+                "inputs": [{"key": "projname"}, {"key": "dir"}],
+            },
+        }
+
+        _, program_inputs = job_builder_views._collect_programs(batchui, "simple_exec")
+
+        self.assertEqual(program_inputs[0]["requirements"], requirements)
+
     def test_inaccessible_selected_job_clears_cookie(self):
         request = self.factory.get("/jobbuilder")
         request.user = _AuthUser()
@@ -168,6 +190,24 @@ class JobBuilderBranchTests(SimpleTestCase):
         self.assertEqual(response.status_code, 302)
         batchjob.new.assert_called_once_with(workspace, "single", "pick", {"mode": "fast"})
 
+    def test_collect_batch_args_accepts_free_form_directory_with_empty_options(self):
+        program_cfg = {
+            "program": {"executable": "simple_exec"},
+            "files": [{
+                "key": "dir_movies",
+                "keytype": "dir",
+                "options": [],
+            }],
+        }
+
+        args, error = job_builder_views._collect_batch_args(
+            {"dir_movies": "/data/movies"},
+            program_cfg,
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(args, {"dir_movies": "/data/movies"})
+
     def test_create_batch_rejects_program_for_wrong_executable(self):
         request = self.factory.post("/createbatch", {"package": "single", "program": "pick"})
         request.user = _AuthUser()
@@ -213,6 +253,82 @@ class JobBuilderBranchTests(SimpleTestCase):
             "cluster2D",
             {"nthr": "8"},
         )
+
+    def test_batch_requirements_reject_missing_and_excess_alternatives(self):
+        program_cfg = {
+            "program": {
+                "requirements": [{
+                    "label": "Input data",
+                    "help": "Supply either a volume or an image stack.",
+                    "min_selected": 1,
+                    "max_selected": 1,
+                    "keys": ["vol1", "stk"],
+                }],
+            },
+        }
+
+        self.assertEqual(
+            job_builder_views._validate_batch_requirements(program_cfg, {}),
+            "Supply either a volume or an image stack.",
+        )
+        self.assertIsNone(job_builder_views._validate_batch_requirements(
+            program_cfg,
+            {"vol1": "map.mrc"},
+        ))
+        self.assertEqual(
+            job_builder_views._validate_batch_requirements(
+                program_cfg,
+                {"vol1": "map.mrc", "stk": "particles.mrcs"},
+            ),
+            "Supply either a volume or an image stack.",
+        )
+
+    def test_batch_requirements_include_launcher_project_file(self):
+        program_cfg = {
+            "program": {
+                "requirements": [{
+                    "label": "Input data",
+                    "help": "Supply an input source.",
+                    "min_selected": 1,
+                    "max_selected": 1,
+                    "keys": ["vol1", "projfile"],
+                }],
+            },
+        }
+
+        self.assertIsNone(job_builder_views._validate_batch_requirements(program_cfg, {}))
+
+    def test_create_batch_rejects_unsatisfied_ui_requirement_before_launch(self):
+        request = self.factory.post("/createbatch", {
+            "package": "simple",
+            "program": "new_project",
+        })
+        request.user = _AuthUser()
+        launcher = Mock()
+        launcher.get_ui.return_value = {
+            "new_project": {
+                "program": {
+                    "executable": "simple_exec",
+                    "requirements": [{
+                        "label": "Project location",
+                        "help": "Supply a project name, a project directory, or both.",
+                        "min_selected": 1,
+                        "max_selected": 2,
+                        "keys": ["projname", "dir"],
+                    }],
+                },
+                "inputs": [
+                    {"key": "projname", "keytype": "str"},
+                    {"key": "dir", "keytype": "dir"},
+                ],
+            },
+        }
+
+        with patch.object(job_builder_views, "get_workspace_id", return_value=4), patch.object(job_builder_views, "get_project_id", return_value=3), patch.object(job_builder_views, "Workspace"), patch.object(job_builder_views, "_is_workspace_accessible", return_value=True), patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher), patch.object(job_builder_views, "BatchJob") as batchjob_cls, patch.object(job_builder_views.messages, "add_message"):
+            response = job_builder_views.view_create_batch(request)
+
+        self.assertEqual(response.status_code, 302)
+        batchjob_cls.assert_not_called()
 
     def test_import_movies_does_not_materialize_unselected_directory_default(self):
         request = self.factory.post("/createbatch", {

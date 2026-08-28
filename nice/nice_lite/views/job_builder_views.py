@@ -100,6 +100,7 @@ def _collect_programs(batchui, executable_name):
         program_inputs.append({
             "prg": prg,
             "disp": display_name,
+            "requirements": program_meta.get("requirements", []),
             "sections": sections,
         })
 
@@ -167,10 +168,46 @@ def _collect_batch_args(post, program_cfg):
                 return None, f"invalid numeric value for input: {key}"
 
         options = user_input.get("options")
-        if isinstance(options, list) and value not in [str(option) for option in options]:
+        if isinstance(options, list) and options and value not in [str(option) for option in options]:
             return None, f"invalid value for input: {key}"
         args[key] = value
     return args, None
+
+
+def _validate_batch_requirements(program_cfg, args):
+    """Validate cross-field requirements published in the batch UI metadata."""
+    program_meta = program_cfg.get("program") if isinstance(program_cfg, dict) else None
+    requirements = program_meta.get("requirements") if isinstance(program_meta, dict) else None
+    if not isinstance(requirements, list):
+        return None
+
+    # The batch launcher always supplies the selected workspace/snapshot project.
+    supplied_keys = {"projfile"}
+    supplied_keys.update(
+        key for key, value in args.items()
+        if isinstance(key, str) and str(value).strip() != ""
+    )
+
+    for requirement in requirements:
+        if not isinstance(requirement, dict):
+            continue
+        keys = [key for key in requirement.get("keys", []) if isinstance(key, str)]
+        if not keys:
+            continue
+
+        min_selected = requirement.get("min_selected", 0)
+        max_selected = requirement.get("max_selected", len(keys))
+        if not isinstance(min_selected, int) or not isinstance(max_selected, int):
+            continue
+
+        selected = sum(key in supplied_keys for key in keys)
+        if selected < min_selected or selected > max_selected:
+            help_text = requirement.get("help")
+            if isinstance(help_text, str) and help_text.strip():
+                return help_text.strip()
+            label = requirement.get("label") or "Input requirement"
+            return f"{label}: select between {min_selected} and {max_selected} inputs"
+    return None
 
 
 def _validate_batch_program_args(program, args):
@@ -405,6 +442,12 @@ def view_create_batch(request):
         return redirect("nice_lite:workspace")
 
     args, error = _collect_batch_args(request.POST, program_cfg)
+    if error is not None:
+        print_error(f"create_batch: {error}")
+        messages.add_message(request, messages.ERROR, error)
+        return redirect("nice_lite:workspace")
+
+    error = _validate_batch_requirements(program_cfg, args)
     if error is not None:
         print_error(f"create_batch: {error}")
         messages.add_message(request, messages.ERROR, error)

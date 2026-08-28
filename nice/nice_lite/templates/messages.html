@@ -4,7 +4,4 @@
       <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
     {% endfor %}
   </ul>
-  <script>
-    setTimeout(() => { document.querySelector("#message_alert").style.display="none" }, 1000)
-  </script>
 {% endif %}

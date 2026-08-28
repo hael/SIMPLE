@@ -290,6 +290,22 @@
                             <input type="hidden" name="package" value="simple">
                             <input type="hidden" name="program" value="{{ program.prg }}">
                             <input type="hidden" name="batch_source" value="workspace">
+                            {% if program.requirements %}
+                            <div class="mb-4 space-y-1">
+                                {% for requirement in program.requirements %}
+                                <p class="text-[10px] text-streamsubtle"
+                                   data-batch-requirement
+                                   data-requirement-label="{{ requirement.label }}"
+                                   data-requirement-help="{{ requirement.help }}"
+                                   data-requirement-min="{{ requirement.min_selected }}"
+                                   data-requirement-max="{{ requirement.max_selected }}"
+                                   data-requirement-keys="{{ requirement.keys|join:',' }}">
+                                    <span class="font-medium text-streamtext">{{ requirement.label }}:</span>
+                                    {{ requirement.help }}
+                                </p>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                             <div class="space-y-4 overflow-y-auto pr-1">
                                 {% for section in program.sections %}
                                 <div>
@@ -488,6 +504,22 @@
                             <input type="hidden" name="package" value="single">
                             <input type="hidden" name="program" value="{{ program.prg }}">
                             <input type="hidden" name="batch_source" value="workspace">
+                            {% if program.requirements %}
+                            <div class="mb-4 space-y-1">
+                                {% for requirement in program.requirements %}
+                                <p class="text-[10px] text-streamsubtle"
+                                   data-batch-requirement
+                                   data-requirement-label="{{ requirement.label }}"
+                                   data-requirement-help="{{ requirement.help }}"
+                                   data-requirement-min="{{ requirement.min_selected }}"
+                                   data-requirement-max="{{ requirement.max_selected }}"
+                                   data-requirement-keys="{{ requirement.keys|join:',' }}">
+                                    <span class="font-medium text-streamtext">{{ requirement.label }}:</span>
+                                    {{ requirement.help }}
+                                </p>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                             <div class="space-y-4 overflow-y-auto pr-1">
                                 {% for section in program.sections %}
                                 <div>
@@ -844,6 +876,34 @@
                 invalidFields[0].scrollIntoView({block: "center"});
                 form.reportValidity();
                 return false;
+            }
+
+            const requirements = Array.from(form.querySelectorAll("[data-batch-requirement]"));
+            for (const requirement of requirements) {
+                const keys = (requirement.dataset.requirementKeys || "")
+                    .split(",")
+                    .map((key) => key.trim())
+                    .filter(Boolean);
+                const minSelected = Number(requirement.dataset.requirementMin || 0);
+                const maxSelected = Number(requirement.dataset.requirementMax || keys.length);
+                const selected = keys.filter((key) => {
+                    if (key === "projfile") return true;
+                    const field = form.elements.namedItem(key);
+                    return Boolean(field && String(field.value || "").trim() !== "");
+                });
+                if (selected.length < minSelected || selected.length > maxSelected) {
+                    const label = requirement.dataset.requirementLabel || "input requirement";
+                    const help = requirement.dataset.requirementHelp ||
+                        "select between " + minSelected + " and " + maxSelected + " inputs";
+                    setBatchFeedback(packageName, label + ": " + help);
+                    const focusKey = keys.find((key) => key !== "projfile" && form.elements.namedItem(key));
+                    const focusField = focusKey ? form.elements.namedItem(focusKey) : null;
+                    if (focusField) {
+                        focusField.scrollIntoView({block: "center"});
+                        focusField.focus();
+                    }
+                    return false;
+                }
             }
 
             if (packageName === "simple" && programKey === "import_movies") {
