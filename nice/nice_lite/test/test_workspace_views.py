@@ -112,7 +112,12 @@ class WorkspaceJobRefreshTests(SimpleTestCase):
     def test_remove_missing_job_records_deletes_only_missing_safe_paths(self):
         with tempfile.TemporaryDirectory() as workspace_dir:
             os.mkdir(os.path.join(workspace_dir, "1_present"))
-            workspace = SimpleNamespace(id=4, get_absdir=lambda: workspace_dir)
+            reconcile_job_counter = Mock()
+            workspace = SimpleNamespace(
+                id=4,
+                get_absdir=lambda: workspace_dir,
+                reconcile_job_counter=reconcile_job_counter,
+            )
             jobs = [
                 SimpleNamespace(id=1, dirc="1_present"),
                 SimpleNamespace(id=2, dirc="2_missing"),
@@ -130,6 +135,7 @@ class WorkspaceJobRefreshTests(SimpleTestCase):
         self.assertEqual(removed, 1)
         job_filter.assert_any_call(dset=4, id__in=[2])
         delete_queryset.delete.assert_called_once_with()
+        reconcile_job_counter.assert_called_once_with()
 
     @override_settings(NICE_LITE_WORKSPACE_JOB_REFRESH=False)
     def test_refresh_is_blocked_when_feature_is_disabled(self):

@@ -13,6 +13,7 @@ from ..helpers import directory_exists, ensure_directory, print_error
 from ..models import JobModel, WorkspaceModel
 from .simple import SIMPLEBatch, SIMPLEProjFile, SIMPLEProject
 from .job import Job
+from .workspace import Workspace
 
 
 class BatchJob(Job):
@@ -518,8 +519,8 @@ class BatchJob(Job):
     # ------------------------------------------------------------------
 
     def delete(self, project, workspace):
-        """Permanently remove a batch job directory and its database record."""
-        del project, workspace
+        """Permanently remove a batch job and reset its workspace job counter."""
+        del project
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is None:
             return False
@@ -559,5 +560,12 @@ class BatchJob(Job):
             print_error("delete: failed to permanently remove batch job directory")
             return False
 
+        workspace_id = jobmodel.dset_id
         jobmodel.delete()
+        if (
+            getattr(workspace, "id", None) != workspace_id
+            or not callable(getattr(workspace, "reconcile_job_counter", None))
+        ):
+            workspace = Workspace(workspace_id)
+        workspace.reconcile_job_counter()
         return True

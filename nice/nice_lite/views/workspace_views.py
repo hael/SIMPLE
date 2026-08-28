@@ -5,7 +5,8 @@ This module serves two coupled HTML payloads:
 - ``jobs.html``: iframe payload containing stream cards.
 
 It also exposes write endpoints for workspace delete/rename/description updates.
-The refresh endpoint reconciles externally removed job directories with cards.
+The refresh endpoint reconciles externally removed job directories, cards, and
+the workspace job counter.
 """
 
 # global imports
@@ -80,7 +81,7 @@ def _reconcile_local_batch_completions(jobs):
 
 
 def _remove_missing_job_records(workspace_obj):
-    """Remove card records whose normalized workspace job directories are gone."""
+    """Remove records for missing job directories and reset the job counter."""
     workspace_dir = workspace_obj.get_absdir()
     if workspace_dir is None:
         return 0
@@ -107,6 +108,7 @@ def _remove_missing_job_records(workspace_obj):
 
     if missing_job_ids:
         JobModel.objects.filter(dset=workspace_obj.id, id__in=missing_job_ids).delete()
+    workspace_obj.reconcile_job_counter()
     return len(missing_job_ids)
 
 
@@ -233,7 +235,7 @@ def view_workspace_jobs(request):
 @login_required(login_url="/login")
 @require_POST
 def view_refresh_workspace_jobs(request):
-    """Remove cards for externally deleted job directories in the selected workspace."""
+    """Reconcile externally deleted job directories and the workspace job counter."""
     response = redirect("nice_lite:workspace")
     if not workspace_job_refresh_enabled():
         messages.add_message(request, messages.ERROR, "workspace job refresh is disabled")

@@ -228,6 +228,8 @@ class BatchJobLifecycleTests(TestCase):
             master_status="finished",
             master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
         )
+        self.workspace_model.jcnt = 1
+        self.workspace_model.save(update_fields=["jcnt"])
 
         deleted = BatchJob(id=jobmodel.id).delete(None, self.workspace)
 
@@ -235,6 +237,8 @@ class BatchJobLifecycleTests(TestCase):
         self.assertFalse(os.path.exists(job_dir))
         self.assertFalse(os.path.exists(os.path.join(self.workspace_dir, "TRASH")))
         self.assertFalse(JobModel.objects.filter(id=jobmodel.id).exists())
+        self.workspace_model.refresh_from_db()
+        self.assertEqual(self.workspace_model.jcnt, 0)
 
     def test_delete_rejects_batch_directory_outside_workspace(self):
         outside_dir = os.path.join(self.tempdir.name, "outside")
