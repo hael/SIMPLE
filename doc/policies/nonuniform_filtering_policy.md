@@ -272,8 +272,15 @@ generous spherical support marks a failed null calibration (starved and
 saturated null respectively) and hard-errors -- validity alone does not
 qualify evidence to parameterize a precision. The PCG replay consumes the expanded weights as
 the `Q_NU` precision when `pcg_nu_lambda_rel > 0`
-(`doc/implementation_notes/pcg_priors.md` Stage 6); with the key at its
-default of 0 nothing in production touches this path.
+(`doc/implementation_notes/pcg_priors.md` Stage 6). Since 2026-08-28 this is
+the DEFAULT whenever `rec_backend=pcg` runs with NU filtering and the euclid
+ML replay; in that mode the post-hoc NU filter, its `_nu_filt`/`_nu_locres`
+products, and the evidence envelope are NOT generated -- the in-solve
+precision already performs the local regularization, and the LP-set matching
+handoff derives from the frozen replay evidence (finest evidenced local
+cutoff). The full post-hoc NU filtering path described in this document
+remains the production behavior for the gridding backend and for PCG with an
+explicit `pcg_nu_lambda_rel=0`.
 
 Auxiliary replacement is conservative. If supplied, the auxiliary pair replaces
 the finest discrete label only when its effective resolution is finer than that

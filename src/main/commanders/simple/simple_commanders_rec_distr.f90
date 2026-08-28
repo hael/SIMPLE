@@ -484,7 +484,7 @@ contains
     !! consumer must never blend solved maps. PCG maps are already corrected in
     !! the solved image domain, so this path deliberately omits the gridding
     !! instrument-function correction performed by commander_volassemble.
-    subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap )
+    subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap, nu_replay_lps )
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &set_nu_filter_report, NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, &
@@ -496,6 +496,7 @@ contains
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         logical,          intent(in)    :: l_trail_bootstrap(:)
+        real, optional,   intent(in)    :: nu_replay_lps(:)
         type(image)                   :: vol_base_even, vol_base_odd, vol_aux_even, vol_aux_odd
         type(image)                   :: vol_even_nu, vol_odd_nu
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
@@ -516,6 +517,37 @@ contains
         if( params%l_nu_refine ) THROW_HARD('PCG nonuniform filtering does not yet support nu_refine=yes')
         if( size(l_trail_bootstrap) /= params%nstates ) &
             &THROW_HARD('PCG nonuniform trailing-bootstrap state input has invalid size')
+        ! Policy (2026-08-28, pcg_priors.md): with the Q_NU replay active the
+        ! shipped maps are already locally regularized in-solve, so the
+        ! post-hoc NU filter is redundant -- no second NU analysis, no
+        ! _nu_filt/_nu_locres products, no evidence envelope. Only the LP-set
+        ! matching handoff survives, derived from the frozen replay evidence
+        ! (the finest evidenced local cutoff per state) instead of a second
+        ! filter-bank optimization.
+        if( params%l_ml_reg .and. params%pcg_nu_lambda_rel > 0.0 )then
+            if( .not. present(nu_replay_lps) ) &
+                &THROW_HARD('NU replay is active but no evidence-derived LP handoff was supplied')
+            if( size(nu_replay_lps) /= params%nstates ) &
+                &THROW_HARD('NU replay LP handoff has invalid size')
+            allocate(state_pops(params%nstates), l_included(params%nstates))
+            do state = 1, params%nstates
+                state_pops(state) = build%spproj_field%get_pop(state, 'state')
+            enddo
+            l_included = (state_pops > 0) .and. (nu_replay_lps > TINY)
+            if( any(l_included) )then
+                align_lp = minval(nu_replay_lps, mask=l_included)
+                write(logfhandle,'(A,F8.3,A)') &
+                    &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); '//&
+                    &'evidence-derived matching low-pass ', align_lp, ' A'
+                call build%spproj_field%set_all2single('lp', align_lp)
+                call build%spproj%write_segment_inside(params%oritype, params%projfile)
+            else
+                write(logfhandle,'(A)') &
+                    &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); no evidenced cutoff to hand off'
+            endif
+            deallocate(state_pops, l_included)
+            return
+        endif
         call set_nu_filter_report(params%part == 1)
         ldim = [params%box_crop, params%box_crop, params%box_crop]
         res  = get_resarr(params%box_crop, params%smpd_crop)

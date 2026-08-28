@@ -17,7 +17,8 @@ use simple_image,             only: image
 use simple_image_msk,         only: image_msk
 use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
     &build_nu_evidence_state, nu_evidence_state, expand_nu_evidence_band_weights, &
-    &print_nu_evidence_summary, assert_nu_evidence_replay_ready, NU_EVIDENCE_BAND_LIMITS
+    &print_nu_evidence_summary, assert_nu_evidence_replay_ready, unpack_nu_evidence_state, &
+    &NU_EVIDENCE_BAND_LIMITS
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname
@@ -167,13 +168,16 @@ contains
     !! two half replays share the one immutable evidence identity. No
     !! envelope artifact is read or written and no silent fallback exists:
     !! evidence-construction failure is a hard error.
-    subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, band_w )
+    subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, band_w, &
+            &finest_lp )
         class(parameters), intent(in)  :: params
         integer,           intent(in)  :: state_here
         character(len=*),  intent(in)  :: context
         type(image),       intent(in)  :: vol_even, vol_odd
         real, allocatable, intent(out) :: band_w(:,:,:,:)
+        real, optional,    intent(out) :: finest_lp
         type(nu_evidence_state) :: evstate
+        real, allocatable :: cutoffs(:)
         write(logfhandle,'(A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): BUILDING EVIDENCE FROM THE '//&
             &'BASE HALF PAIR OF STATE ', state_here, ' (source=base_unfil)'
         call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source='base_unfil')
@@ -187,6 +191,15 @@ contains
         call print_nu_evidence_summary(evstate)
         write(logfhandle,'(A)') '    pcg_replay_prior_mode=nu_evidence'
         call expand_nu_evidence_band_weights(evstate, band_w)
+        ! finest evidenced local cutoff, for the LP-set matching handoff --
+        ! the compact state replaces the retired second NU analysis of the
+        ! postprocess (pcg_priors.md S6.3 evidence-state sharing)
+        if( present(finest_lp) )then
+            call unpack_nu_evidence_state(evstate, selected_cutoff=cutoffs)
+            finest_lp = 0.0
+            if( any(cutoffs > TINY) ) finest_lp = minval(cutoffs, mask=cutoffs > TINY)
+            deallocate(cutoffs)
+        endif
     end subroutine build_nu_replay_evidence
 
     !> Hard activation contract for the direct NU replay (no silent fallback):
@@ -1374,11 +1387,13 @@ contains
     !> Distributed master: reduce raw worker B,D artifacts in ascending part
     !! order, then perform all folding, finalization and PCG locally. Independent
     !! state/half reductions are completed and released one at a time.
-    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, trail_bootstrap_states )
+    subroutine execute_rec3D_pcg_distributed_master( params, build, cline, trail_bootstrap_states, &
+            &nu_replay_finest_lps )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         logical, optional, intent(out)  :: trail_bootstrap_states(:)
+        real,    optional, intent(out)  :: nu_replay_finest_lps(:)
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(image) :: previous_even, previous_odd, previous_merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
@@ -1409,6 +1424,11 @@ contains
             if( size(trail_bootstrap_states) /= params%nstates ) &
                 &THROW_HARD('PCG trailing-bootstrap state output has invalid size')
             trail_bootstrap_states = .false.
+        endif
+        if( present(nu_replay_finest_lps) )then
+            if( size(nu_replay_finest_lps) /= params%nstates ) &
+                &THROW_HARD('PCG NU-replay finest-lp output has invalid size')
+            nu_replay_finest_lps = 0.0
         endif
         provenance = pcg_raw_provenance(params)
         chain_provenance = pcg_chain_provenance(params)
@@ -1502,7 +1522,12 @@ contains
                     ! evidence must come from the pair the replay reuses, and
                     ! that interaction is not designed yet
                     if( l_bootstrap ) THROW_HARD('NU replay does not support the trailing bootstrap path yet')
-                    call build_nu_replay_evidence(params, state, 'distributed', half_even, half_odd, nu_band_w)
+                    if( present(nu_replay_finest_lps) )then
+                        call build_nu_replay_evidence(params, state, 'distributed', half_even, half_odd, &
+                            &nu_band_w, finest_lp=nu_replay_finest_lps(state))
+                    else
+                        call build_nu_replay_evidence(params, state, 'distributed', half_even, half_odd, nu_band_w)
+                    endif
                 endif
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
                 call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)

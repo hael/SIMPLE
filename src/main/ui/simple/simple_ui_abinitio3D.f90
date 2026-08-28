@@ -47,7 +47,8 @@ contains
         &'Direct NU-evidence replay precision strength relative to the PCG data scale, forwarded to the '//&
         &'refine3D stages; when positive each regularized replay derives graded band-support evidence from '//&
         &'its own base half pair and attaches Q_NU INSTEAD of the FSC/SSNR P_tau (mode-exclusive, no '//&
-        &'envelope artifact); 0 keeps the ordinary global-ML replay', 'strength{0}', &
+        &'envelope artifact); default 0.1 in the NU-filtered stages, explicit 0 restores the ordinary '//&
+        &'global-ML replay', 'strength{0.1 in NU mode}', &
         &.false., 0.0, group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
