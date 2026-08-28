@@ -5,23 +5,29 @@ This module serves two coupled HTML payloads:
 - ``jobs.html``: iframe payload containing stream cards.
 
 It also exposes write endpoints for workspace delete/rename/description updates.
+The refresh endpoint reconciles externally removed job directories with cards.
 """
 
 # global imports
 import json
 import hashlib
+import os
 
 # django imports
 from django.contrib                 import messages
 from django.shortcuts               import redirect, render
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http   import require_POST
 
 # local imports
 from ..models                    import JobModel
+from ..data_structures.batchjob  import BatchJob
 from ..data_structures.streamjob import StreamJob
 from ..data_structures.workspace import Workspace
+from ..features                  import batch_job_controls_enabled, workspace_job_refresh_enabled
 from ..helpers                   import (
     HttpResponseNoContent,
+    clear_checksum_cookies,
     get_integer,
     get_project_id,
     get_string,
@@ -58,6 +64,50 @@ def _is_workspace_accessible(workspace_obj, project_id, username=None):
 def _is_batch_job(jobmodel):
     """Return True for classic jobs stored in the shared JobModel table."""
     return isinstance(jobmodel.master_stats, dict) and jobmodel.master_stats.get("job_type") == "batch"
+
+
+def _reconcile_local_batch_completions(jobs):
+    """Refresh verified local completions before rendering batch controls."""
+    changed = False
+    for jobmodel in jobs:
+        if (
+            _is_batch_job(jobmodel)
+            and jobmodel.status in ("queued", "running")
+            and BatchJob(id=jobmodel.id).reconcile_local_completion()
+        ):
+            changed = True
+    return changed
+
+
+def _remove_missing_job_records(workspace_obj):
+    """Remove card records whose normalized workspace job directories are gone."""
+    workspace_dir = workspace_obj.get_absdir()
+    if workspace_dir is None:
+        return 0
+    workspace_dir = os.path.realpath(workspace_dir)
+    if not os.path.isdir(workspace_dir):
+        print_error("refresh_workspace_jobs: workspace directory is unavailable")
+        return 0
+
+    missing_job_ids = []
+    jobs = JobModel.objects.filter(dset=workspace_obj.id)
+    for jobmodel in jobs:
+        if not isinstance(jobmodel.dirc, str) or not jobmodel.dirc.strip():
+            continue
+        try:
+            job_dir = os.path.realpath(os.path.join(workspace_dir, jobmodel.dirc))
+            if os.path.commonpath((workspace_dir, job_dir)) != workspace_dir:
+                print_error(f"refresh_workspace_jobs: unsafe directory for job {jobmodel.id}")
+                continue
+        except (OSError, ValueError):
+            print_error(f"refresh_workspace_jobs: invalid directory for job {jobmodel.id}")
+            continue
+        if not os.path.isdir(job_dir):
+            missing_job_ids.append(jobmodel.id)
+
+    if missing_job_ids:
+        JobModel.objects.filter(dset=workspace_obj.id, id__in=missing_job_ids).delete()
+    return len(missing_job_ids)
 
 
 def _filter_by_selection(stats, latest):
@@ -128,6 +178,7 @@ def view_workspace(request):
         "folder": workspace_obj.get_linkpath(),
         "description": workspacemodel.desc,
         "jobstats": jobstats,
+        "workspace_job_refresh_enabled": workspace_job_refresh_enabled(),
     }
 
     # Render only when payload changed to avoid unnecessary parent iframe redraws.
@@ -157,16 +208,54 @@ def view_workspace_jobs(request):
         return render(request, "jobs.html", {"jobs": []})
 
     jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
+    controls_enabled = batch_job_controls_enabled()
+    if controls_enabled and _reconcile_local_batch_completions(jobs):
+        jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
 
     # Checksum-gate iframe redraws using current DB state for all jobs in workspace.
-    checksum_payload = list(jobs.values())
+    checksum_payload = {
+        "jobs": list(jobs.values()),
+        "batch_job_controls_enabled": controls_enabled,
+    }
     checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
     old_checksum = request.COOKIES.get("workspace_jobs_checksum", "none")
     if old_checksum == "none" or old_checksum != checksum:
         _normalize_latest_cls2d(jobs)
-        response = render(request, "jobs.html", {"jobs": jobs})
+        response = render(request, "jobs.html", {
+            "jobs": jobs,
+            "batch_job_controls_enabled": controls_enabled,
+        })
         response.set_cookie(key="workspace_jobs_checksum", value=checksum)
 
+    return response
+
+
+@login_required(login_url="/login")
+@require_POST
+def view_refresh_workspace_jobs(request):
+    """Remove cards for externally deleted job directories in the selected workspace."""
+    response = redirect("nice_lite:workspace")
+    if not workspace_job_refresh_enabled():
+        messages.add_message(request, messages.ERROR, "workspace job refresh is disabled")
+        return response
+
+    workspace_id = get_workspace_id(request)
+    project_id = get_project_id(request)
+    workspace_obj = Workspace(workspace_id)
+    if not _is_workspace_accessible(workspace_obj, project_id, request.user.username):
+        messages.add_message(request, messages.ERROR, "invalid workspace selection")
+        return response
+
+    removed_count = _remove_missing_job_records(workspace_obj)
+    if removed_count == 0:
+        messages.add_message(request, messages.INFO, "job cards are up to date")
+    else:
+        messages.add_message(
+            request,
+            messages.INFO,
+            f"removed {removed_count} job card{'s' if removed_count != 1 else ''} with missing directories",
+        )
+    clear_checksum_cookies(request, response)
     return response
 
 

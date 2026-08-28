@@ -21,6 +21,14 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("isJobBuilderVisible", content)
         self.assertIn("&& !isJobBuilderVisible()", content)
 
+    def test_workspace_refresh_button_posts_missing_directory_cleanup(self):
+        content = self._read_template("workspace.html")
+
+        self.assertIn("workspace_job_refresh_enabled", content)
+        self.assertIn('<form method="POST" action="{% url \'nice_lite:refresh_workspace_jobs\' %}">', content)
+        self.assertIn('title="refresh job cards"', content)
+        self.assertIn("{% csrf_token %}", content)
+
     def test_browser_messages_remain_visible(self):
         content = self._read_template("messages.html")
 
@@ -46,6 +54,13 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('onclick="openClassicFileBrowser(this, \'dir\')"', classic_newjob)
         self.assertIn('onclick="openClassicFileBrowser(this, \'file\')"', classic_newjob)
         self.assertIn('new URLSearchParams({ selectedpath: selectedPath })', classic_newjob)
+
+    def test_new_project_back_button_closes_form_in_parent_shell(self):
+        newproject = self._read_template("newproject.html")
+
+        self.assertIn("{% url 'nice_lite:close_new_project' %}", newproject)
+        self.assertIn('target="_parent" title="back"', newproject)
+        self.assertNotIn("href={% url 'nice_lite:workspace' %}", newproject)
 
     def test_file_browser_navigation_passes_paths_as_query_parameters(self):
         filebrowser = self._read_template("filebrowser.html")
@@ -238,3 +253,61 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertEqual(jobbuilder.count('onclick="closeJobBuilder()"'), 3)
         self.assertEqual(jobbuilder.count('if (actions) actions.classList.add("hidden");'), 2)
         self.assertEqual(jobbuilder.count('if (actions) actions.classList.remove("hidden");'), 2)
+
+    def test_batch_cards_reuse_stream_stop_and_delete_controls(self):
+        batch_card = self._read_template("nice_classic/_batch_card.html")
+        jobs = self._read_template("jobs.html")
+
+        self.assertIn("batch_job_controls_enabled", batch_card)
+        self.assertIn("{% url 'nice_lite:stop_batch' %}", batch_card)
+        self.assertIn('onclick="stopBatchJob(this)"', batch_card)
+        self.assertIn('<circle cx="8" cy="8" r="6"/>', batch_card)
+        self.assertIn('<rect x="5.5" y="5.5" width="5" height="5"', batch_card)
+        self.assertIn("{% url 'nice_lite:delete_batch' %}", batch_card)
+        self.assertIn('onclick="deleteBatchJob(this)"', batch_card)
+        self.assertIn('<polyline points="2,4 14,4"/>', batch_card)
+        self.assertIn('<path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>', batch_card)
+        self.assertIn("const stopBatchJob = (button) => {", jobs)
+        self.assertIn("const deleteBatchJob = (button) => {", jobs)
+        self.assertIn("permanently delete batch job", jobs)
+        self.assertIn("This cannot be undone.", jobs)
+
+    def test_batch_card_controls_follow_opt_in_and_job_status(self):
+        job = {
+            "id": 7,
+            "disp": 1,
+            "name": "import movies",
+            "dirc": "1_import_movies",
+            "args": {},
+            "master_stats": {"package": "simple"},
+            "status": "running",
+        }
+
+        disabled = render_to_string("nice_classic/_batch_card.html", {
+            "job": job,
+            "batch_job_controls_enabled": False,
+        })
+        running = render_to_string("nice_classic/_batch_card.html", {
+            "job": job,
+            "batch_job_controls_enabled": True,
+        })
+        job["status"] = "finished"
+        finished = render_to_string("nice_classic/_batch_card.html", {
+            "job": job,
+            "batch_job_controls_enabled": True,
+        })
+
+        self.assertNotIn('title="stop batch job"', disabled)
+        self.assertNotIn('title="delete batch job"', disabled)
+        self.assertIn('title="stop batch job"', running)
+        self.assertNotIn('title="delete batch job"', running)
+        self.assertLess(
+            running.index('title="stop batch job"'),
+            running.index('job directory'),
+        )
+        self.assertNotIn('title="stop batch job"', finished)
+        self.assertIn('title="delete batch job"', finished)
+        self.assertLess(
+            finished.index('title="delete batch job"'),
+            finished.index('job directory'),
+        )

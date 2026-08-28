@@ -1,11 +1,42 @@
 {% comment %}Compact workspace card for a classic SIMPLE/SINGLE batch job.{% endcomment %}
-<div class="bg-streambar rounded-xl border {% if job.status == 'failed' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden w-[260px] h-[180px]">
+<div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamring/10{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden w-[260px] h-[180px]">
     <div class="px-3 py-3 border-b border-streamdivider flex items-center justify-between">
         <div class="min-w-0">
             <p class="text-xs font-medium text-streamtext truncate">{{ job.disp }} {{ job.name }}</p>
             <p class="text-[9px] uppercase tracking-wide text-streamlabel">{{ job.master_stats.package }} batch</p>
         </div>
-        <span class="text-[10px] {% if job.status == 'failed' %}text-streamerror{% else %}text-streamsubtle{% endif %}">{{ job.status }}</span>
+        <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="text-[10px] {% if job.status == 'failed' or job.status == 'stopped' %}text-streamerror{% else %}text-streamsubtle{% endif %}">{{ job.status }}</span>
+            {% if batch_job_controls_enabled %}
+                {% if job.status == "running" %}
+                    <form method="POST" action="{% url 'nice_lite:stop_batch' %}" target="_parent">
+                        {% csrf_token %}
+                        <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                        <button type="button" data-job-id="{{ job.id }}" onclick="stopBatchJob(this)"
+                                title="stop batch job"
+                                class="text-streamicon hover:text-streamerror transition-colors p-1">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                <circle cx="8" cy="8" r="6"/>
+                                <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" stroke="none"/>
+                            </svg>
+                        </button>
+                    </form>
+                {% elif job.status == "finished" or job.status == "failed" or job.status == "stopped" %}
+                    <form method="POST" action="{% url 'nice_lite:delete_batch' %}" target="_parent">
+                        {% csrf_token %}
+                        <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                        <button type="button" data-job-id="{{ job.id }}" onclick="deleteBatchJob(this)"
+                                title="delete batch job"
+                                class="text-streamicon hover:text-streamerror transition-colors p-1">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                                <polyline points="2,4 14,4"/>
+                                <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
+                            </svg>
+                        </button>
+                    </form>
+                {% endif %}
+            {% endif %}
+        </div>
     </div>
     <div class="px-3 py-3 flex-1 overflow-hidden">
         <p class="text-[9px] uppercase tracking-wide text-streamlabel mb-1">job directory</p>

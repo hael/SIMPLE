@@ -9,13 +9,8 @@
 </head>
 <body class="bg-streambg min-h-screen font-sans">
     <div class="px-5 pt-4">
-        {% if mode == "stream" %}
-            <a class="inline-flex items-center gap-1.5 text-xs text-streamsubtle hover:text-streamtext transition-colors"
-               href={% url 'nice_lite:workspace' %} title="back">
-        {% else %}
-            <a class="inline-flex items-center gap-1.5 text-xs text-streamsubtle hover:text-streamtext transition-colors"
-               href={% url 'nice_lite:workspace' %} title="back">
-        {% endif %}
+        <a class="inline-flex items-center gap-1.5 text-xs text-streamsubtle hover:text-streamtext transition-colors"
+           href="{% url 'nice_lite:close_new_project' %}" target="_parent" title="back">
             <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor"
                  stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10 3L5 8l5 5"/>

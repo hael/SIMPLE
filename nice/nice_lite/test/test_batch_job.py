@@ -1,4 +1,5 @@
 import os
+import signal
 import subprocess
 import tempfile
 from unittest.mock import ANY, patch
@@ -76,6 +77,183 @@ class BatchJobLifecycleTests(TestCase):
         jobmodel = JobModel.objects.get(id=job.id)
         self.assertEqual(jobmodel.status, "failed")
         self.assertEqual(jobmodel.master_status, "failed")
+
+    def test_stop_terminates_verified_process_group_and_marks_job_stopped(self):
+        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(job_dir)
+        with open(os.path.join(job_dir, "nice.pid"), "w", encoding="utf-8") as pid_file:
+            pid_file.write("4321\n")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="running",
+            master_status="running",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+        job = BatchJob(id=jobmodel.id)
+
+        with patch.object(job, "_get_local_process_group", return_value=4321), patch.object(batchjob_module.os, "killpg") as killpg:
+            stopped = job.stop()
+
+        self.assertTrue(stopped)
+        killpg.assert_called_once_with(4321, signal.SIGTERM)
+        jobmodel.refresh_from_db()
+        self.assertEqual(jobmodel.status, "stopped")
+        self.assertEqual(jobmodel.master_status, "stopped")
+
+    def test_stop_rejects_non_running_job_without_signalling(self):
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="finished",
+            master_status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        with patch.object(batchjob_module.os, "killpg") as killpg:
+            stopped = BatchJob(id=jobmodel.id).stop()
+
+        self.assertFalse(stopped)
+        killpg.assert_not_called()
+
+    def test_stop_rejects_pid_from_outside_job_directory(self):
+        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(job_dir)
+        with open(os.path.join(job_dir, "nice.pid"), "w", encoding="utf-8") as pid_file:
+            pid_file.write("4321\n")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="running",
+            master_status="running",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        with patch.object(batchjob_module.os, "readlink", return_value=self.workspace_dir), patch.object(batchjob_module.os, "getpgid", return_value=4321), patch.object(batchjob_module.os, "killpg") as killpg:
+            stopped = BatchJob(id=jobmodel.id).stop()
+
+        self.assertFalse(stopped)
+        killpg.assert_not_called()
+
+    def test_late_heartbeat_does_not_resurrect_stopped_job(self):
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="stopped",
+            master_status="stopped",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        response = BatchJob(id=jobmodel.id).updateStats({"job_heartbeat": {}}, None, None)
+
+        self.assertEqual(response, {})
+        jobmodel.refresh_from_db()
+        self.assertEqual(jobmodel.status, "stopped")
+        self.assertEqual(jobmodel.master_status, "stopped")
+
+    def test_reconcile_local_completion_marks_normal_exited_job_finished(self):
+        job_dir = os.path.join(self.workspace_dir, "1_new_project")
+        os.mkdir(job_dir)
+        with open(os.path.join(job_dir, "job.script"), "w", encoding="utf-8") as script_file:
+            script_file.write("#!/bin/sh\n# localtemplate\n")
+        with open(os.path.join(job_dir, "nice.pid"), "w", encoding="utf-8") as pid_file:
+            pid_file.write("4321\n")
+        with open(os.path.join(job_dir, "stdout.log"), "w", encoding="utf-8") as stdout_file:
+            stdout_file.write("**** NEW_PROJECT NORMAL STOP ****\n")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_new_project",
+            status="queued",
+            master_status="queued",
+            master_stats={"job_type": "batch", "package": "simple", "program": "new_project"},
+        )
+        job = BatchJob(id=jobmodel.id)
+
+        with patch.object(job, "_local_process_is_running", return_value=False):
+            changed = job.reconcile_local_completion()
+
+        self.assertTrue(changed)
+        jobmodel.refresh_from_db()
+        self.assertEqual(jobmodel.status, "finished")
+        self.assertEqual(jobmodel.master_status, "finished")
+
+    def test_reconcile_local_completion_keeps_active_job_running(self):
+        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(job_dir)
+        with open(os.path.join(job_dir, "job.script"), "w", encoding="utf-8") as script_file:
+            script_file.write("#!/bin/sh\n# localtemplate\n")
+        with open(os.path.join(job_dir, "nice.pid"), "w", encoding="utf-8") as pid_file:
+            pid_file.write("4321\n")
+        with open(os.path.join(job_dir, "stdout.log"), "w", encoding="utf-8") as stdout_file:
+            stdout_file.write("**** IMPORT_MOVIES NORMAL STOP ****\n")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="running",
+            master_status="running",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+        job = BatchJob(id=jobmodel.id)
+
+        with patch.object(job, "_local_process_is_running", return_value=True):
+            changed = job.reconcile_local_completion()
+
+        self.assertFalse(changed)
+        jobmodel.refresh_from_db()
+        self.assertEqual(jobmodel.status, "running")
+
+    def test_delete_permanently_removes_batch_directory_without_trash(self):
+        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(job_dir)
+        with open(os.path.join(job_dir, "result.txt"), "w", encoding="utf-8"):
+            pass
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="finished",
+            master_status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        deleted = BatchJob(id=jobmodel.id).delete(None, self.workspace)
+
+        self.assertTrue(deleted)
+        self.assertFalse(os.path.exists(job_dir))
+        self.assertFalse(os.path.exists(os.path.join(self.workspace_dir, "TRASH")))
+        self.assertFalse(JobModel.objects.filter(id=jobmodel.id).exists())
+
+    def test_delete_rejects_batch_directory_outside_workspace(self):
+        outside_dir = os.path.join(self.tempdir.name, "outside")
+        os.mkdir(outside_dir)
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="../outside",
+            status="finished",
+            master_status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
+        )
+
+        deleted = BatchJob(id=jobmodel.id).delete(None, self.workspace)
+
+        self.assertFalse(deleted)
+        self.assertTrue(os.path.isdir(outside_dir))
+        self.assertTrue(JobModel.objects.filter(id=jobmodel.id).exists())
 
     def test_new_initializes_missing_workspace_project_before_dispatch(self):
         os.remove(os.path.join(self.workspace_dir, "workspace.simple"))

@@ -69,12 +69,16 @@ class IndexViewBranchTests(SimpleTestCase):
     def test_project_sentinel_routes_to_new_project(self):
         request = self.factory.get("/")
         request.user = _AuthUser()
+        request.COOKIES["selected_project_id"] = "1"
+        request.COOKIES["selected_workspace_id"] = "8"
 
         with patch.object(index_views, "get_project_id", return_value=-1), patch.object(index_views, "get_workspace_id", return_value=None), patch.object(index_views.ProjectModel.objects, "filter", return_value=_FakeProjectQuery([1])), patch.object(index_views.WorkspaceModel.objects, "filter", return_value=[]), patch.object(index_views, "reverse", side_effect=_reverse_with_query), patch.object(index_views, "render", side_effect=_render_with_context), patch.object(index_views, "clear_checksum_cookies"), patch.object(index_views.messages, "add_message"):
             response = index_views.view_index(request)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response._ctx["iframeurl"], "rev:nice_lite:new_project")
+        self.assertNotIn("selected_project_id", response.cookies)
+        self.assertNotIn("selected_workspace_id", response.cookies)
 
     def test_workspace_sentinel_creates_workspace_when_project_accessible(self):
         request = self.factory.get("/")

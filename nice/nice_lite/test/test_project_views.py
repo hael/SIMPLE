@@ -41,3 +41,17 @@ class ProjectViewTests(SimpleTestCase):
         self.assertEqual(response["Location"], "/")
         self.assertEqual(response.cookies["selected_project_id"].value, "11")
         self.assertEqual(response.cookies["selected_workspace_id"].value, "22")
+
+    def test_close_new_project_preserves_selection_and_returns_to_index_shell(self):
+        request = self.factory.get("/closeprojectform")
+        request.user = _AuthUser()
+        request.COOKIES["selected_project_id"] = "7"
+        request.COOKIES["selected_workspace_id"] = "9"
+
+        with patch.object(project_views, "clear_checksum_cookies"):
+            response = project_views.view_close_new_project(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "/")
+        self.assertNotIn("selected_project_id", response.cookies)
+        self.assertNotIn("selected_workspace_id", response.cookies)

@@ -82,6 +82,22 @@
             lastinteraction = Date.now();
           };
 
+          const stopBatchJob = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to stop batch job " + jobid)) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
+          const deleteBatchJob = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to permanently delete batch job " + jobid + ". This cannot be undone.")) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
           window.addEventListener("visibilitychange", () => {
             if (document.visibilityState !== "hidden") location.reload();
           });
