@@ -34,13 +34,24 @@ state/half reduction does it fold the RHS, calculate rho floors, finalize
 association order and completeness check do not depend on particle balance.
 
 Box cropping is supported under the constant-field-of-view contract
-(`box*smpd == box_crop*smpd_crop`, enforced at entry). It deliberately rejects
-`projrec=yes`, fractional/trailing reconstruction, and `conical_fsc=yes`
-regularization. Those cases require additional equivalence tests and must not
-silently fall back to gridding or matrix-free PCG. (The designed
+(`box*smpd == box_crop*smpd_crop`, enforced at entry). The shared-memory path
+deliberately rejects `projrec=yes`, fractional/trailing reconstruction, and
+`conical_fsc=yes` regularization; those cases must not silently fall back to
+gridding or matrix-free PCG. The distributed master integrates the
 fractional/trailing algebra — raw `(B,D)` chains blended as
 `(u/f) current + (1-u) previous` at full mass, priors applied only after the
-blend — is recorded here for when that guard lifts.)
+blend (`test=pcg_frac_update` is the equivalence gate). The persisted chain is
+continuous across constant-FOV crop growth: consecutive padded lattices share
+their frequency step, so the smaller previous grid is an index-aligned central
+subset and `add_raw_accum_weighted` embeds it by zero-extension — the PCG
+analogue of the gridding trailing chain's autoscale ramp. The chain
+continuation identity (`pcg_chain_provenance`) therefore excludes the crop
+fields; a field-of-view change, a shrinking box, or any identity change
+discards the chain pair and re-seeds through the trailing bootstrap. The one
+recorded approximation is the old lattice's wrap rim: KB windows that wrapped
+around the old period leave aliased mass in the outermost old shells, at or
+beyond the producing stage's matching band and decaying as `(1-u)^k` — the
+same approximation the gridding ramp accepts.
 
 ## 1. Production scope and fixed inputs
 
