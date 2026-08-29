@@ -77,7 +77,7 @@ Preserve that split when refactoring.
 
 - `doc/policies/automasking_policy.md`
 - `doc/policies/nonuniform_filtering_policy.md`
-- `src/main/volume/simple_reconstructor_eo.f90`
+- `src/main/volume/simple_halfmap_diagnostics.f90`
 - `src/main/volume/simple_vol_pproc_policy.f90`
 - `src/main/nu_filt/*`
 - `src/main/pftc/*`

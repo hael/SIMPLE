@@ -113,7 +113,8 @@ globs and cleanup never match them.
 
 ## Downsampling Compatibility
 
-`simple_reconstructor_eo%read_eos_parallel_io` is the previous-artifact
+`read_gridding_pair_accumulators`, contained in `restore_state_from_parts` in
+`simple_commanders_rec_distr.f90`, is the previous-artifact
 compatibility mechanism, used for both partial reconstructions and the trailing
 accumulator chain:
 

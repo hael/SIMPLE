@@ -105,8 +105,11 @@ It must not silently fall back to another estimator.
 
 ## Implementation
 
-- Gridding: `src/main/volume/simple_reconstructor.f90` and
-  `src/main/volume/simple_reconstructor_eo.f90`.
+- Gridding: `src/main/volume/simple_reconstructor.f90`; even/odd pair I/O and
+  restoration are contained in `restore_state_from_parts` in
+  `src/main/commanders/simple/simple_commanders_rec_distr.f90`.
+- Shared half-map diagnostics (FSC, cFAR, resolution, report):
+  `src/main/volume/simple_halfmap_diagnostics.f90`.
 - PCG operator and solver: `src/main/volume/simple_reconstructor_pcg.f90`.
 - Backend orchestration: `src/main/strategies/parallelization/simple_rec3D_strategy.f90`
   and `src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90`.

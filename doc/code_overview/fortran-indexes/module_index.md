@@ -579,6 +579,7 @@ Files:
 - `main/image/simple_image_calc.f90`
 - `main/image/simple_image_checks.f90`
 - `main/nu_filt/simple_nu_filter.f90`
+- `main/nu_filt/simple_nu_filter_evidence.f90`
 - `main/nu_filt/simple_nu_filter_potts.f90`
 - `main/nu_filt/simple_nu_filter_state.f90`
 - `main/pftc/simple_polarft_access.f90`
@@ -4373,7 +4374,6 @@ Uses:
 - `simple_parameters`
 - `simple_polarft_calc`
 - `simple_projector`
-- `simple_reconstructor_eo`
 - `simple_sp_project`
 - `simple_srchspace_map`
 - `simple_ui`
@@ -4383,7 +4383,6 @@ Public symbols:
 
 Private symbols:
 - `build_general_tbox` — subroutine
-- `build_rec_eo_tbox` — subroutine
 - `build_spproj` — subroutine
 - `build_strategy2D_tbox` — subroutine
 - `build_strategy3D_tbox` — subroutine
@@ -4393,7 +4392,6 @@ Private symbols:
 - `init_params_and_build_strategy3D_tbox` — subroutine
 - `init_params_spproj_tbox2D` — subroutine
 - `kill_general_tbox` — subroutine
-- `kill_rec_eo_tbox` — subroutine
 - `kill_strategy2D_tbox` — subroutine
 - `kill_strategy3D_tbox` — subroutine
 - `set_field_ptr` — subroutine
@@ -6017,8 +6015,10 @@ Files:
 Uses:
 - `simple_commanders_api`
 - `simple_fsc`
+- `simple_halfmap_diagnostics`
+- `simple_imgfile`
 - `simple_nu_filter`
-- `simple_reconstructor_eo`
+- `simple_reconstructor`
 - `simple_refine3d_fnames`
 - `simple_vol_pproc_policy`
 
@@ -6029,6 +6029,7 @@ Public symbols:
 Private symbols:
 - `assemble_state` — subroutine
 - `blend_trailing_accumulators` — subroutine
+- `calc_gridding_pair_diagnostics` — subroutine
 - `capture_nonuniform_source_halves` — subroutine
 - `carry_forward_dropped_state` — subroutine
 - `cleanup_aux_images` — subroutine
@@ -6048,6 +6049,7 @@ Private symbols:
 - `log_nu_alignment_lowpass_summary` — subroutine
 - `nu_highres_steps_fname` — function
 - `postprocess_state` — subroutine
+- `read_gridding_pair_accumulators` — subroutine
 - `read_previous_halfmaps` — subroutine
 - `record_nu_alignment_lowpass_limit` — subroutine
 - `reduce_partials` — subroutine
@@ -6058,6 +6060,7 @@ Private symbols:
 - `resolution_outfile_fbody` — function
 - `resolve_fsc_txt_fname` — function
 - `restore_eos_and_write_fsc` — subroutine
+- `restore_gridding_pair` — subroutine
 - `restore_merged_volume` — subroutine
 - `restore_state_from_parts` — subroutine
 - `restore_timings_t` — type
@@ -6066,11 +6069,13 @@ Private symbols:
 - `setup_nonuniform_filter` — subroutine
 - `sum_eos_after_density_correction_if_needed` — subroutine
 - `sum_eos_before_density_correction_if_needed` — subroutine
+- `sum_pair_into_sum_rec` — subroutine
 - `trail_chain_component` — function
 - `trail_restored_halves_if_needed` — subroutine
 - `update_project_nu_alignment_lowpass` — subroutine
 - `update_project_resolution_metadata` — subroutine
 - `write_benchmark` — subroutine
+- `write_gridding_pair_accumulators` — subroutine
 - `write_nonuniform_outputs` — subroutine
 - `write_nu_highres_steps_for_state` — subroutine
 - `write_trail_chain_set` — subroutine
@@ -6486,7 +6491,6 @@ Public symbols:
 - `commander_test_simulate_particles` — type
 - `commander_test_simulated_workflow` — type
 - `commander_test_subproject_distr` — type
-- `emit` — subroutine
 - `exec_test_mini_stream` — subroutine
 - `exec_test_pcg_frac_update` — subroutine
 - `exec_test_pcg_priors` — subroutine
@@ -6502,7 +6506,6 @@ Public symbols:
 - `real2str_trim` — function
 - `real_tok` — function
 - `report_pair_fsc` — subroutine
-- `require_solvent_envelope` — subroutine
 - `return_to_stage_root` — subroutine
 - `run_rec3D_backends_single` — subroutine
 - `update_project_path` — subroutine
@@ -6992,7 +6995,7 @@ Private symbols:
 - `plot_projdirs` — subroutine
 - `print_iteration` — subroutine
 - `read` — subroutine
-- `read_pcg_solvent_stats` — subroutine
+- `read_pcg_nu_stats` — subroutine
 
 ---
 ## Module: simple_core_module_api
@@ -9602,6 +9605,27 @@ Private symbols:
 - `write_json` — subroutine
 
 ---
+## Module: simple_halfmap_diagnostics
+
+Files:
+- `main/volume/simple_halfmap_diagnostics.f90`
+
+Uses:
+- `simple_core_module_api`
+- `simple_fsc`
+- `simple_image`
+- `simple_image_msk`
+- `simple_parameters`
+
+Public symbols:
+- `evaluate_halfmap_pair` — subroutine
+- `halfmap_diagnostics_result` — type
+- `write_halfmap_diagnostics` — subroutine
+
+Private symbols:
+- `kill_halfmap_diagnostics_result` — subroutine
+
+---
 ## Module: simple_hash
 
 Files:
@@ -10452,21 +10476,20 @@ Uses:
 - `simple_timer`
 
 Public symbols:
-- `calc_3Drec` — subroutine
-- `calc_projdir3Drec` — subroutine
 - `cleanup_rec_buffers` — subroutine
 - `init_rec` — subroutine
 - `prep_imgs4rec` — subroutine
-- `write_state_partial` — subroutine
+- `set_state_vol_output` — subroutine
+- `write_state_half_partial` — subroutine
 
 Private symbols:
+- `calc_3Drec` — subroutine
+- `calc_projdir3Drec` — subroutine
 - `group_pinds_by_state_eo` — subroutine
 - `init_state_half_rec` — subroutine
 - `kill_state_half_rec` — subroutine
 - `mark_empty_state` — subroutine
-- `set_state_vol_output` — subroutine
 - `update_state_half_rec` — subroutine
-- `write_state_half_partial` — subroutine
 
 ---
 ## Module: simple_matcher_pftc_prep
@@ -11361,6 +11384,8 @@ Uses:
 Private symbols:
 - `nu_envmask_params` — type
 - `nu_envmask_stats` — type
+- `nu_evidence_state` — type
+- `nu_evidence_summary` — type
 - `nu_highres_extension_stats` — type
 
 ---
@@ -13479,11 +13504,11 @@ Uses:
 - `simple_cmdline`
 - `simple_core_module_api`
 - `simple_estimate_ssnr`
-- `simple_fsc`
+- `simple_halfmap_diagnostics`
 - `simple_image`
-- `simple_image_msk`
 - `simple_matcher_ptcl_io`
 - `simple_math_ft`
+- `simple_nu_filter`
 - `simple_parameters`
 - `simple_ptcl_cache`
 - `simple_reconstructor_pcg`
@@ -13502,13 +13527,14 @@ Private symbols:
 - `add_weighted` — subroutine
 - `blend_bootstrap_half` — subroutine
 - `build_blend` — subroutine
-- `calculate_distributed_fsc` — subroutine
-- `calculate_state_fsc` — subroutine
+- `build_nu_replay_evidence` — subroutine
+- `calculate_pcg_state_diagnostics` — subroutine
 - `collect_state` — subroutine
 - `collect_state_half` — subroutine
 - `collect_state_half` — subroutine
 - `collect_worker_state_half` — subroutine
 - `count_state_sampling` — subroutine
+- `discard_stale_trail_chain_pair` — subroutine
 - `finalize_and_solve` — subroutine
 - `frac_fname` — function
 - `load_previous_state_halves` — subroutine
@@ -13523,22 +13549,21 @@ Private symbols:
 - `regularize_state_half` — subroutine
 - `regularized_ml_initial_guess` — subroutine
 - `report_beyond_band_excess` — subroutine
+- `report_nu_solve_stats` — subroutine
 - `report_solve_summary` — subroutine
-- `report_solvent_solve_stats` — subroutine
 - `require_raw` — subroutine
-- `resolve_solvent_envelope` — subroutine
+- `shipped_pair_res` — subroutine
 - `solve_state_half` — subroutine
 - `split_complementary` — subroutine
 - `validate_half` — subroutine
+- `validate_nu_replay_request` — subroutine
 - `validate_pcg_common` — subroutine
 - `validate_solved_map` — subroutine
 - `validate_supported_mode` — subroutine
 - `write_distributed_diagnostics` — subroutine
-- `write_distributed_fsc_summary` — subroutine
-- `write_fsc_summary` — subroutine
 - `write_half_diagnostics` — subroutine
+- `write_nu_convergence_stats` — subroutine
 - `write_output_diagnostics` — subroutine
-- `write_solvent_convergence_stats` — subroutine
 
 ---
 ## Module: simple_rec3D_strategy
@@ -13681,6 +13706,7 @@ Uses:
 - `simple_core_module_api`
 - `simple_fftw3`
 - `simple_fsc`
+- `simple_gridding`
 - `simple_image`
 - `simple_kbinterpol`
 - `simple_math`
@@ -13688,6 +13714,7 @@ Uses:
 - `simple_sp_project`
 
 Public symbols:
+- `gridding_half_restore` — type
 - `reconstructor` — type
 
 Private symbols:
@@ -13699,7 +13726,10 @@ Private symbols:
 - `compress_exp` — subroutine
 - `dealloc_exp` — subroutine
 - `dealloc_rho` — subroutine
+- `deapodize_self` — subroutine
+- `deapodize_volume` — subroutine
 - `expand_exp` — subroutine
+- `finalize_gridding_half_restore` — subroutine
 - `floor_rho_shellwise` — subroutine
 - `get_kbwin` — function
 - `insert_plane_oversamp` — subroutine
@@ -13707,81 +13737,29 @@ Private symbols:
 - `interp_cmat_exp` — function
 - `kb_apod_vecs_3d_fast` — subroutine
 - `kernel` — subroutine
+- `kill_gridding_half_restore` — subroutine
+- `kill_reconstructor` — subroutine
+- `new_accumulator` — subroutine
+- `new_gridding_half_restore` — subroutine
 - `pad_with_zeros` — subroutine
+- `prepare_gridding_half_final` — subroutine
 - `project_fplane` — subroutine
 - `project_polar` — subroutine
 - `read_raw_rho` — subroutine
 - `read_rho` — subroutine
 - `reset` — subroutine
 - `reset_exp` — subroutine
+- `restore_base` — subroutine
+- `restore_final` — subroutine
 - `sampl_dens_correct` — subroutine
 - `set_sh_lim` — subroutine
 - `sum_reduce` — subroutine
+- `validate_restore_source` — subroutine
+- `validate_restore_target` — subroutine
 - `write_absfc_as_mrc` — subroutine
+- `write_raw_accum` — subroutine
 - `write_rho` — subroutine
 - `write_rho_as_mrc` — subroutine
-
----
-## Module: simple_reconstructor_eo
-
-Files:
-- `main/volume/simple_reconstructor_eo.f90`
-
-Uses:
-- `simple_core_module_api`
-- `simple_fsc`
-- `simple_gridding`
-- `simple_image`
-- `simple_image_msk`
-- `simple_imgfile`
-- `simple_parameters`
-- `simple_reconstructor`
-- `simple_refine3d_fnames`
-- `simple_sp_project`
-
-Public symbols:
-- `reconstructor_eo` — type
-
-Private symbols:
-- `apply_spherical_fsc_mask` — subroutine
-- `apply_weight` — subroutine
-- `apply_weight_sums` — subroutine
-- `calc_density_envmask` — subroutine
-- `calc_env_fsc_optlp` — subroutine
-- `calc_fsc4sampl_dens_correct` — subroutine
-- `calc_masked_cfar` — subroutine
-- `compress_exp` — subroutine
-- `deapodize` — subroutine
-- `expand_exp` — subroutine
-- `get_kbwin` — function
-- `get_res` — subroutine
-- `grid_plane` — subroutine
-- `grid_plane_compact` — subroutine
-- `kill` — subroutine
-- `kill_exp` — subroutine
-- `new` — subroutine
-- `project_polar` — subroutine
-- `read_eos` — subroutine
-- `read_eos_parallel_io` — subroutine
-- `read_even` — subroutine
-- `read_odd` — subroutine
-- `reset_all` — subroutine
-- `reset_eoexp` — subroutine
-- `reset_eos` — subroutine
-- `reset_even` — subroutine
-- `reset_odd` — subroutine
-- `reset_sum` — subroutine
-- `sampl_dens_correct_eos` — subroutine
-- `sampl_dens_correct_sum` — subroutine
-- `set_fsc` — subroutine
-- `set_sh_lim` — subroutine
-- `sum_eos` — subroutine
-- `sum_reduce` — subroutine
-- `write_deapodized` — subroutine
-- `write_eos` — subroutine
-- `write_even` — subroutine
-- `write_fsc2txt` — subroutine
-- `write_odd` — subroutine
 
 ---
 ## Module: simple_reconstructor_openmpoffload
@@ -13798,6 +13776,7 @@ Uses:
 - `simple_matcher_ptcl_io`
 - `simple_math`
 - `simple_parameters`
+- `simple_reconstructor`
 
 Public symbols:
 - `calc_3Drec_gpu` — subroutine
@@ -13840,9 +13819,9 @@ Private symbols:
 - `apply_normal` — function
 - `apply_normal_kernel` — function
 - `apply_normal_matrixfree` — function
+- `apply_nu_precision` — function
 - `apply_pose_parameter_mask` — subroutine
 - `apply_precond` — function
-- `apply_solvent_precision` — function
 - `assert_prior_attachment_mode` — subroutine
 - `begin_accum` — subroutine
 - `begin_fourier_workspace` — subroutine
@@ -13862,6 +13841,7 @@ Private symbols:
 - `deapod_mul` — subroutine
 - `dot_real_volume` — function
 - `end_accum` — subroutine
+- `ensure_nu_band_index` — subroutine
 - `ensure_wimg` — subroutine
 - `extract_native_plane` — function
 - `finalize_density_accum` — subroutine
@@ -13878,10 +13858,9 @@ Private symbols:
 - `get_lims3` — function
 - `get_ml_prior` — subroutine
 - `get_ml_prior_stats` — subroutine
+- `get_nu_prior_stats` — subroutine
 - `get_raw_accum` — subroutine
 - `get_rhs` — subroutine
-- `get_solvent_precision_diag` — function
-- `get_solvent_stats` — subroutine
 - `kill` — subroutine
 - `kill_fourier_workspace` — subroutine
 - `mask_mul` — subroutine
@@ -13914,8 +13893,8 @@ Private symbols:
 - `set_lambda_relative` — subroutine
 - `set_mask` — subroutine
 - `set_ml_prior` — subroutine
+- `set_nu_prior` — subroutine
 - `set_op_mode` — subroutine
-- `set_solvent_prior` — subroutine
 - `set_sym` — subroutine
 - `set_volume` — subroutine
 - `shift_jhz` — subroutine
@@ -18207,6 +18186,7 @@ Files:
 - `main/nu_filt/simple_nu_filter_apply.f90`
 - `main/nu_filt/simple_nu_filter_bank.f90`
 - `main/nu_filt/simple_nu_filter_envmask.f90`
+- `main/nu_filt/simple_nu_filter_evidence.f90`
 - `main/nu_filt/simple_nu_filter_extend.f90`
 - `main/nu_filt/simple_nu_filter_potts.f90`
 - `main/nu_filt/simple_nu_filter_state.f90`
@@ -18331,6 +18311,7 @@ Public symbols:
 - `read_cavgs` — subroutine
 - `read_masks` — subroutine
 - `register_stage_volume` — subroutine
+- `regularize_evidence_labels` — subroutine
 - `require_valid_stats_mask` — subroutine
 - `reset_mats` — subroutine
 - `set_action` — subroutine
@@ -18345,6 +18326,7 @@ Public symbols:
 - `sort_oris` — function
 - `strip_refine3D_planning_keys` — subroutine
 - `symmetrize` — subroutine
+- `validate_compact_evidence_state` — subroutine
 - `write_abinitio_lowpass_snapshot` — subroutine
 - `write_final_rec_outputs` — subroutine
 

@@ -78,8 +78,10 @@ For public workflow policy, read `doc/policies/refine3D_policy.md` first.
 - `simple_vol_pproc_policy.f90`
   Plan object for automask lifecycle and state-mask compatibility. NU support is
   spherical and owned by `simple_nu_filter`.
-- `simple_reconstructor_eo.f90`
-  FSC consumer of state masks.
+- `simple_halfmap_diagnostics.f90`
+  Backend-neutral half-map FSC/cFAR/resolution evaluator; FSC consumer of
+  state masks. Gridding pair I/O and restoration are contained in
+  `restore_state_from_parts` in `simple_commanders_rec_distr.f90`.
 
 ## Current Artifact Contracts
 

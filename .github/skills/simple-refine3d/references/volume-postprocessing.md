@@ -31,7 +31,7 @@ low-level postprocessing or polar-reference reduction logic.
   Executes Cartesian and polar assembly.
 - `src/main/volume/simple_vol_pproc_policy.f90`
   Computes the postprocessing plan for one state and iteration.
-- `src/main/volume/simple_reconstructor_eo.f90`
+- `src/main/volume/simple_halfmap_diagnostics.f90`
   Consumes compatible state masks when FSC is computed.
 - `src/main/strategies/search/simple_matcher_pftc_prep.f90`
   Checks and loads `POLAR_REFS*` for matcher/probability-table consumers.

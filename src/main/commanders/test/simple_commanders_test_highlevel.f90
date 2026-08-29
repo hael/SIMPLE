@@ -1091,7 +1091,7 @@ end subroutine exec_test_ptcls_ppca_subproject_distr
 !  scored 0.9998 correlation while the forward model was still wrong for real
 !  particles. Stage 8 is the honest one and exists for exactly that reason.
 !
-!  Does not touch reconstructor, reconstructor_eo, or volassemble.
+!  Does not touch reconstructor or volassemble.
 subroutine exec_test_pcg_recon( self, cline )
     use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, &
         &PCG_OP_MATRIXFREE, PCG_OP_KERNEL

@@ -92,8 +92,9 @@ Preserve the sample-once-and-reproduce contract between `prob_align`,
 
 Inspect:
 
-- `src/main/commanders/simple/simple_commanders_rec_distr.f90`
-- `src/main/volume/simple_reconstructor_eo.f90`
+- `src/main/commanders/simple/simple_commanders_rec_distr.f90` (gridding pair
+  I/O and restoration are contained in `restore_state_from_parts`)
+- `src/main/volume/simple_halfmap_diagnostics.f90`
 
 Remember that `volassemble` blends current and previous even/odd reconstructions
 using the realized update fraction. It should not choose a new particle subset.

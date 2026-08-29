@@ -35,10 +35,9 @@ contains
         &update_frac_trail_rec, realized_update_frac, vol_prev_even, vol_prev_odd, vol_merged, &
         &vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd, &
         &volname, eonames, res05, res0143, timings )
-        use simple_reconstructor, only: reconstructor
-        use simple_reconstructor_eo, only: gridding_pair_diagnostics, calculate_gridding_pair_fsc, &
-            &read_gridding_pair_accumulators, restore_gridding_pair, write_gridding_pair_accumulators, &
-            &write_gridding_pair_diagnostics
+        use simple_reconstructor, only: reconstructor, gridding_half_restore
+        use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
+            &write_halfmap_diagnostics
         type(parameters),       intent(in)    :: params
         type(builder),          intent(inout) :: build
         class(cmdline),         intent(in)    :: cline
@@ -54,9 +53,8 @@ contains
         type(restore_timings_t), intent(inout) :: timings
         type(string) :: volname_prev, volname_prev_even, volname_prev_odd
         type(string) :: fsc_txt_file, trail_fbody
-        type(gridding_pair_diagnostics) :: pair_diagnostics
-        real, allocatable :: fsc(:)
-        real    :: weight_prev, bootstrap_cfar
+        type(halfmap_diagnostics_result) :: pair_diagnostics
+        real    :: weight_prev
         integer :: ldim(3), trail_chain_gen
         logical :: l_trail_chain
         integer(timer_int_kind) :: t_reduce_partials, t_restore_eos, t_restore_merged, t_sum_eos, t_trail
@@ -336,28 +334,32 @@ contains
 
         subroutine restore_eos_and_write_fsc()
             use simple_fsc, only: fsc_area_score_result
-            type(fsc_area_score_result) :: cones_fsc
+            type(fsc_area_score_result)      :: cones_fsc
+            type(halfmap_diagnostics_result) :: prev_diagnostics
             if( L_BENCH_GLOB ) t_restore_eos = tic()
             if( params%l_trail_rec .and. .not. l_trail_chain )then
                 ! Bootstrap iteration: the chain has no information yet, so the
                 ! previous halfmaps provide the FSC prior for regularization,
-                ! exactly as the legacy volume-domain trailing did.
+                ! exactly as the legacy volume-domain trailing did. The
+                ! previous half maps are final deapodized real-space volumes;
+                ! they satisfy the common evaluator's real-space contract
+                ! directly, with no representation adapter.
                 call read_previous_halfmaps()
-                if( allocated(fsc) ) deallocate(fsc)
                 if( params%conical_fsc == 'yes' )then
-                    call cones_fsc%new(vol_prev_even, 256, 20., 0.143, 1)
-                    call calculate_gridding_pair_fsc(params, vol_prev_even, vol_prev_odd, &
-                        &state, fsc, bootstrap_cfar, cones=cones_fsc)
+                    call calc_gridding_pair_diagnostics(params, vol_prev_even, vol_prev_odd, &
+                        &state, prev_diagnostics, cones=cones_fsc)
                     call restore_gridding_pair(params, even_rec, odd_rec, state, &
-                        &eonames(1), eonames(2), pair_diagnostics, fsc_in=fsc, &
-                        &cfar_in=bootstrap_cfar, cones_in=cones_fsc)
+                        &eonames(1), eonames(2), pair_diagnostics, fsc_in=prev_diagnostics%fsc, &
+                        &cfar_in=prev_diagnostics%cfar, cones_in=cones_fsc)
                     call cones_fsc%kill
                 else
-                    call calculate_gridding_pair_fsc(params, vol_prev_even, vol_prev_odd, &
-                        &state, fsc, bootstrap_cfar)
+                    call calc_gridding_pair_diagnostics(params, vol_prev_even, vol_prev_odd, &
+                        &state, prev_diagnostics)
                     call restore_gridding_pair(params, even_rec, odd_rec, state, &
-                        &eonames(1), eonames(2), pair_diagnostics, fsc_in=fsc, cfar_in=bootstrap_cfar)
+                        &eonames(1), eonames(2), pair_diagnostics, fsc_in=prev_diagnostics%fsc, &
+                        &cfar_in=prev_diagnostics%cfar)
                 endif
+                call prev_diagnostics%kill
             else
                 ! With an accumulator chain the blended sums already contain the
                 ! trailed statistics, so the FSC is estimated post-blend from
@@ -368,7 +370,7 @@ contains
             res05      = pair_diagnostics%res_fsc05
             res0143    = pair_diagnostics%res_fsc0143
             fsc_txt_file = resolve_fsc_txt_fname()
-            call write_gridding_pair_diagnostics(pair_diagnostics, params%box_crop, params%smpd_crop, fsc_txt_file)
+            call write_halfmap_diagnostics(pair_diagnostics, params%box_crop, params%smpd_crop, fsc_txt_file)
             if( L_BENCH_GLOB ) timings%restore_eos_and_write_fsc = &
                 timings%restore_eos_and_write_fsc + toc(t_restore_eos)
         end subroutine restore_eos_and_write_fsc
@@ -506,8 +508,292 @@ contains
             call volname_prev_even%kill
             call volname_prev_odd%kill
             call pair_diagnostics%kill
-            if( allocated(fsc) ) deallocate(fsc)
         end subroutine cleanup_restore_state
+
+        ! GRIDDING PAIR ACCUMULATOR I/O AND RESTORATION
+        ! These procedures coordinate workflow artifacts and type-bound domain
+        ! operations for this host only; the numerical kernels stay type-bound
+        ! on reconstructor and the diagnostics in simple_halfmap_diagnostics.
+        ! Arguments stay explicit so mutation and lifecycle remain visible.
+
+        !> Read an explicit even/odd gridding-accumulator artifact. Previous
+        !! smaller grids retain the legacy update-fraction zero-padding behavior.
+        !! A missing artifact resets the pair (legacy partial semantics) unless the
+        !! caller marks the artifact required, in which case it is a hard error.
+        subroutine read_gridding_pair_accumulators( params, even_rec, odd_rec, fbody, required )
+            use simple_imgfile, only: imgfile
+            class(parameters),    intent(in)    :: params
+            class(reconstructor), intent(inout) :: even_rec, odd_rec
+            class(string),        intent(in)    :: fbody
+            logical, optional,    intent(in)    :: required
+            type(string)      :: even_vol, even_rho, odd_vol, odd_rho
+            type(image)       :: prev_vol_e, prev_vol_o
+            type(imgfile)     :: ioimg_e, ioimg_o
+            real, allocatable :: rho_e(:,:,:), rho_o(:,:,:)
+            integer :: current_ldim(3), cshape(3), prev_ldim(3)
+            integer :: fhandle_rho_e, fhandle_rho_o, i, ierr, dummy
+            real    :: current_smpd, prev_smpd
+            logical :: here(4), l_pad_with_zeros
+            current_ldim = even_rec%get_ldim()
+            current_smpd = even_rec%get_smpd()
+            if( any(odd_rec%get_ldim() /= current_ldim) )then
+                THROW_HARD('gridding pair accumulator dimensions do not match')
+            endif
+            if( abs(odd_rec%get_smpd() - current_smpd) > TINY )then
+                THROW_HARD('gridding pair accumulator sampling does not match')
+            endif
+            even_vol = fbody//'_even'//MRC_EXT
+            even_rho = string('rho_')//fbody//'_even'//MRC_EXT
+            odd_vol  = fbody//'_odd'//MRC_EXT
+            odd_rho  = string('rho_')//fbody//'_odd'//MRC_EXT
+            here(1)  = file_exists(even_vol)
+            here(2)  = file_exists(even_rho)
+            here(3)  = file_exists(odd_vol)
+            here(4)  = file_exists(odd_rho)
+            if( all(here) )then
+                l_pad_with_zeros = .false.
+                if( params%l_update_frac )then
+                    call find_ldim_nptcls(even_vol, prev_ldim, dummy)
+                    prev_smpd = current_smpd
+                    if( prev_ldim(1) == current_ldim(1) )then
+                        ! matching grids require no compatibility transform
+                    elseif( prev_ldim(1) > current_ldim(1) )then
+                        THROW_HARD('previous gridding accumulator is larger than the current grid')
+                    else
+                        l_pad_with_zeros = .true.
+                    endif
+                endif
+                call fopen(fhandle_rho_e, file=even_rho, status='OLD', action='READ', access='STREAM', iostat=ierr)
+                call fileiochk('read_gridding_pair_accumulators opening '//even_rho%to_char(), ierr)
+                call fopen(fhandle_rho_o, file=odd_rho, status='OLD', action='READ', access='STREAM', iostat=ierr)
+                call fileiochk('read_gridding_pair_accumulators opening '//odd_rho%to_char(), ierr)
+                if( l_pad_with_zeros )then
+                    call ioimg_e%open(even_vol, prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
+                    call ioimg_o%open(odd_vol, prev_ldim, prev_smpd, formatchar='M', readhead=.false., rwaction='read')
+                    call prev_vol_e%new(prev_ldim, prev_smpd)
+                    call prev_vol_o%new(prev_ldim, prev_smpd)
+                    cshape = [fdim(prev_ldim(1)), prev_ldim(2), prev_ldim(3)]
+                    allocate(rho_e(1:cshape(1),1:cshape(2),1:cshape(3)), &
+                        &rho_o(1:cshape(1),1:cshape(2),1:cshape(3)))
+                    call even_rec%reset
+                    call odd_rec%reset
+                    !$omp parallel do default(shared) private(i,ierr) schedule(static) num_threads(4)
+                    do i = 1, 4
+                        select case(i)
+                            case(1)
+                                call prev_vol_e%read_raw_mrc(ioimg_e)
+                            case(2)
+                                call prev_vol_o%read_raw_mrc(ioimg_o)
+                            case(3)
+                                read(fhandle_rho_e, pos=1, iostat=ierr) rho_e
+                                if( ierr /= 0 ) call fileiochk('read_gridding_pair_accumulators reading even rho', ierr)
+                            case(4)
+                                read(fhandle_rho_o, pos=1, iostat=ierr) rho_o
+                                if( ierr /= 0 ) call fileiochk('read_gridding_pair_accumulators reading odd rho', ierr)
+                        end select
+                    enddo
+                    !$omp end parallel do
+                    call even_rec%pad_with_zeros(prev_vol_e, rho_e)
+                    call odd_rec%pad_with_zeros(prev_vol_o, rho_o)
+                    call prev_vol_e%kill
+                    call prev_vol_o%kill
+                    deallocate(rho_e, rho_o)
+                else
+                    call ioimg_e%open(even_vol, current_ldim, current_smpd, formatchar='M', &
+                        &readhead=.false., rwaction='read')
+                    call ioimg_o%open(odd_vol, current_ldim, current_smpd, formatchar='M', &
+                        &readhead=.false., rwaction='read')
+                    !$omp parallel do default(shared) private(i) schedule(static) num_threads(4)
+                    do i = 1, 4
+                        select case(i)
+                            case(1)
+                                call even_rec%read_raw_mrc(ioimg_e)
+                            case(2)
+                                call odd_rec%read_raw_mrc(ioimg_o)
+                            case(3)
+                                call even_rec%read_raw_rho(fhandle_rho_e)
+                            case(4)
+                                call odd_rec%read_raw_rho(fhandle_rho_o)
+                        end select
+                    enddo
+                    !$omp end parallel do
+                endif
+                call ioimg_e%close
+                call ioimg_o%close
+                call fclose(fhandle_rho_e)
+                call fclose(fhandle_rho_o)
+            else
+                if( present(required) )then
+                    if( required )then
+                        THROW_HARD('required gridding pair accumulator artifact is incomplete: '//fbody%to_char())
+                    endif
+                endif
+                call even_rec%reset
+                call odd_rec%reset
+            endif
+        end subroutine read_gridding_pair_accumulators
+
+        !> Write an explicit even/odd gridding-accumulator artifact using the
+        !! established numerator/rho filenames.
+        subroutine write_gridding_pair_accumulators( even_rec, odd_rec, fbody )
+            class(reconstructor), intent(inout) :: even_rec, odd_rec
+            class(string),        intent(in)    :: fbody
+            call even_rec%write_raw_accum(fbody//'_even'//MRC_EXT, &
+                &string('rho_')//fbody//'_even'//MRC_EXT)
+            call odd_rec%write_raw_accum(fbody//'_odd'//MRC_EXT, &
+                &string('rho_')//fbody//'_odd'//MRC_EXT)
+        end subroutine write_gridding_pair_accumulators
+
+        !> Restore one explicit gridding half pair. This owns backend-specific
+        !! base/replay mechanics but no composite lifetime, partial reduction, or
+        !! trailing-chain policy.
+        subroutine restore_gridding_pair( params, even_rec, odd_rec, state, fname_even, fname_odd, &
+            &diagnostics, fsc_in, cfar_in, cones_in )
+            use simple_fsc, only: fsc_area_score_result
+            class(parameters),                      intent(in)    :: params
+            class(reconstructor),                   intent(inout) :: even_rec, odd_rec
+            integer,                                intent(in)    :: state
+            class(string),                          intent(in)    :: fname_even, fname_odd
+            type(halfmap_diagnostics_result),       intent(out)   :: diagnostics
+            real, optional,                         intent(in)    :: fsc_in(:)
+            real, optional,                         intent(in)    :: cfar_in
+            class(fsc_area_score_result), optional, intent(inout) :: cones_in
+            type(gridding_half_restore) :: even_restore, odd_restore
+            type(fsc_area_score_result) :: cones_fsc
+            real,     allocatable :: res(:)
+            real                  :: smpd, fny
+            integer               :: box, filtsz
+            logical               :: l_have_fsc
+            box    = params%box_crop
+            smpd   = params%smpd_crop
+            filtsz = fdim(box) - 1
+            fny    = 2. * smpd
+            res    = get_resarr(box, smpd)
+            if( present(fsc_in) )then
+                if( .not. present(cfar_in) ) THROW_HARD('cfar_in must accompany an input gridding FSC')
+                if( size(fsc_in) /= filtsz ) THROW_HARD('input FSC size does not match gridding reconstruction')
+                allocate(diagnostics%fsc(filtsz), source=fsc_in)
+                diagnostics%cfar = cfar_in
+                l_have_fsc = .true.
+                if( params%l_ml_reg .and. (params%conical_fsc == 'yes') )then
+                    if( .not. present(cones_in) )then
+                        THROW_HARD('cones_in must be provided if conical regularization is enabled')
+                    endif
+                endif
+            else
+                allocate(diagnostics%fsc(filtsz), source=0.)
+                l_have_fsc = .false.
+            endif
+            call even_restore%new(even_rec)
+            call odd_restore%new(odd_rec)
+            ! ML-regularization
+            if( params%l_ml_reg )then
+                ! preprocessing for FSC calculation
+                ! even
+                call even_rec%restore_base(even_restore%base, preserve_numerator=.true.)
+                ! write a deapodized copy; the in-memory half stays undeapodized so the
+                ! FSC below matches the legacy estimate (the inverse envelope's edge
+                ! gain up-weights rim noise and shifts the FSC crossing)
+                call even_restore%finalize_from_base(even_rec)
+                call even_restore%final%write(add2fbody(fname_even,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                call even_restore%final%kill
+                ! odd
+                call odd_rec%restore_base(odd_restore%base, preserve_numerator=.true.)
+                call odd_restore%finalize_from_base(odd_rec)
+                call odd_restore%final%write(add2fbody(fname_odd,MRC_EXT,'_unfil'), del_if_exists=.true.)
+                call odd_restore%final%kill
+                ! Regularization
+                if( l_have_fsc )then
+                    if( params%conical_fsc == 'yes' )then
+                        call even_rec%add_conical_invtausq2rho(cones_in)
+                        call odd_rec%add_conical_invtausq2rho(cones_in)
+                    else
+                        call even_rec%add_invtausq2rho(diagnostics%fsc)
+                        call odd_rec%add_invtausq2rho(diagnostics%fsc)
+                    endif
+                else
+                    call calc_gridding_pair_diagnostics(params, even_restore%base, odd_restore%base, &
+                        &state, diagnostics, cones=cones_fsc)
+                    ! Regularization
+                    if( params%conical_fsc == 'yes' )then
+                        call even_rec%add_conical_invtausq2rho(cones_fsc)
+                        call odd_rec%add_conical_invtausq2rho(cones_fsc)
+                    else
+                        call even_rec%add_invtausq2rho(diagnostics%fsc)
+                        call odd_rec%add_invtausq2rho(diagnostics%fsc)
+                    endif
+                endif
+                ! Even: uneven sampling density correction, clip, & write
+                call even_restore%base%kill
+                call even_restore%prepare_final(even_rec)
+                call even_rec%restore_final(even_restore%final, preserve_numerator=.true.)
+                call even_restore%final%write(fname_even, del_if_exists=.true.)
+                call even_restore%final%kill
+                ! Odd: uneven sampling density correction, clip, & write
+                call odd_restore%base%kill
+                call odd_restore%prepare_final(odd_rec)
+                call odd_rec%restore_final(odd_restore%final, preserve_numerator=.true.)
+                call odd_restore%final%write(fname_odd, del_if_exists=.true.)
+                call odd_restore%final%kill
+            else
+                ! correct for the uneven sampling density
+                call even_rec%restore_base(even_restore%base)
+                call odd_rec%restore_base(odd_restore%base)
+                ! write un-normalised unmasked DEAPODIZED even/odd volumes; the in-memory
+                ! halves stay undeapodized so the FSC below matches the legacy estimate
+                call even_restore%finalize_from_base(even_rec)
+                call even_restore%final%write(fname_even, del_if_exists=.true.)
+                call even_restore%final%kill
+                call odd_restore%finalize_from_base(odd_rec)
+                call odd_restore%final%write(fname_odd, del_if_exists=.true.)
+                call odd_restore%final%kill
+                if( .not. l_have_fsc )then
+                    call calc_gridding_pair_diagnostics(params, even_restore%base, odd_restore%base, &
+                        &state, diagnostics, cones=cones_fsc)
+                endif
+            endif
+            ! save, get & print resolution
+            call arr2file(diagnostics%fsc, refine3D_fsc_fname(state))
+            call get_resolution(diagnostics%fsc, res, diagnostics%res_fsc05, diagnostics%res_fsc0143)
+            diagnostics%res_fsc05   = max(diagnostics%res_fsc05, fny)
+            diagnostics%res_fsc0143 = max(diagnostics%res_fsc0143, fny)
+            deallocate(res)
+            call even_restore%kill
+            call odd_restore%kill
+            call cones_fsc%kill
+        end subroutine restore_gridding_pair
+
+        !> Gridding adapter for the backend-neutral half-map evaluator: builds
+        !! the merged average, selects the legacy broad spherical FSC mask
+        !! radius, and writes the automask artifact on the envfsc path. The
+        !! ordinary restoration path passes the real-space undeapodized base
+        !! pair from restore_base (the legacy gridding FSC representation);
+        !! the trailing bootstrap passes the previous final half maps, which
+        !! already satisfy the real-space contract.
+        subroutine calc_gridding_pair_diagnostics( params, even, odd, state, diagnostics, cones )
+            use simple_fsc, only: fsc_area_score_result
+            class(parameters),                      intent(in)    :: params
+            class(image),                           intent(in)    :: even, odd
+            integer,                                intent(in)    :: state
+            type(halfmap_diagnostics_result),       intent(out)   :: diagnostics
+            class(fsc_area_score_result), optional, intent(inout) :: cones
+            type(image) :: average, envmask
+            real        :: msk
+            msk = real(params%box_crop / 2) - COSMSKHALFWIDTH - 1.
+            call average%copy(even)
+            call average%add(odd)
+            call average%mul(0.5)
+            if( params%l_envfsc )then
+                call evaluate_halfmap_pair(params, state, even, odd, average, msk, diagnostics, &
+                    &envmask=envmask, cones=cones)
+                call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state,2)//MRC_EXT))
+                call envmask%kill
+            else
+                call evaluate_halfmap_pair(params, state, even, odd, average, msk, diagnostics, &
+                    &cones=cones)
+            endif
+            call average%kill
+        end subroutine calc_gridding_pair_diagnostics
 
     end subroutine restore_state_from_parts
 

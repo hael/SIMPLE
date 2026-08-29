@@ -165,7 +165,6 @@
       - **continuous_3D_pcg_pose_validation/**
   - **scripts/** — home of scripts and code generators
     - **memory/**
-    - **ui/**
   - **src/** — main source code folder
     - **defs/** — home of singleton modules with parameter and type definitions
       - `simple_ansi_ctrls.f90` — ANSI C control parameters for text formatting
@@ -425,6 +424,7 @@
         - `simple_nu_filter_apply.f90` — simple nu filter apply implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_bank.f90` — simple nu filter bank implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_envmask.f90` — NU-evidence-driven envelope masking for volume-domain nonuniform filtering
+        - `simple_nu_filter_evidence.f90` — compact immutable evidence state for the direct NU-conditioned PCG replay
         - `simple_nu_filter_extend.f90` — simple nu filter extend implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_potts.f90` — simple nu filter potts implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_state.f90` — simple nu filter state implementation for volume-domain nonuniform filtering
@@ -653,8 +653,8 @@
           - `single_ui_validate.f90` — module defining the user interfaces for validation programs in the single_exec suite
       - **volume/** — home of the volume reconstructor classes, the volume analyzers, the volume docking routines, and the symmetry search
         - `simple_dock_vols.f90` — class for docking pairs of volumes using correlation search and an icosahedral sampling geomery
+        - `simple_halfmap_diagnostics.f90` — backend-neutral half-map FSC, cFAR, and resolution diagnostics shared by the gridding and PCG reconstruction paths
         - `simple_reconstructor.f90` — 3D reconstruction from projections using convolution interpolation (gridding)
-        - `simple_reconstructor_eo.f90` — 3D reconstruction of even-odd pairs for FSC estimation
         - `simple_reconstructor_openmpoffload.f90` — provides one routine for gpu-accelerated reconstruction
         - `simple_reconstructor_pcg.f90` — CTF/sigma-weighted Fourier-projection operator and
         - `simple_vol_pproc_policy.f90` — per-state automask policy decisions consumed by volume assembly
