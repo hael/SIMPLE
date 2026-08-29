@@ -2957,6 +2957,7 @@ digraph module_graph {
   "simple_rec3D_pcg_strategy" -> "simple_reconstructor_pcg";
   "simple_rec3D_pcg_strategy" -> "simple_refine3d_fnames";
   "simple_rec3D_pcg_strategy" -> "simple_sigma2_files";
+  "simple_rec3D_pcg_strategy" -> "simple_vol_pproc_policy";
   "simple_rec3D_strategy" -> "simple_builder";
   "simple_rec3D_strategy" -> "simple_cmdline";
   "simple_rec3D_strategy" -> "simple_commanders_rec_distr";
@@ -3883,6 +3884,7 @@ digraph module_graph {
   "subroutine" -> "simple_euclid_sigma2";
   "subroutine" -> "simple_gpu_utils";
   "subroutine" -> "simple_gridding";
+  "subroutine" -> "simple_image_msk";
   "subroutine" -> "simple_imgarr_utils";
   "subroutine" -> "simple_jpg";
   "subroutine" -> "simple_linalg";

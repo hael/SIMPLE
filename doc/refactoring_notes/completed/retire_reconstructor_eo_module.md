@@ -318,16 +318,21 @@ The refactor is behavior-preserving, so the following backend deltas survive
 it. They are recorded here so the shared module makes them visible rather
 than hiding them, and so a later coherency decision has a checklist:
 
-- **Spherical mask radius (`envfsc=no`)** — the largest scientific delta.
-  Gridding masks with the broad rim radius
-  `box_crop/2 - COSMSKHALFWIDTH - 1` for both FSC and cFAR
-  (`calculate_gridding_pair_fsc`); PCG masks with the user radius
-  `params%msk_crop` for both (`calculate_state_fsc`,
-  `calculate_distributed_fsc`). FSC curves and cFAR scores are therefore not
-  directly comparable across backends in this mode. Unifying the radius is a
-  deliberate, behavior-changing follow-up decision, out of scope here; the
-  explicit `spherical_mask_radius` argument is what makes that follow-up a
-  one-line policy change per caller.
+- **Spherical mask radius (`envfsc=no`)** — RESOLVED 2026-08-28 (post-
+  refactor, explicitly approved as a behavior-changing follow-up). Historically
+  gridding masked with the broad rim radius `box_crop/2 - COSMSKHALFWIDTH - 1`
+  for both FSC and cFAR while PCG used the user radius `params%msk_crop`, so
+  FSC curves and cFAR scores were not directly comparable across backends in
+  this mode. The gridding adapter (`calc_gridding_pair_diagnostics`) now
+  passes `params%msk_crop`, unifying the spherical mask policy across
+  backends; the explicit `spherical_mask_radius` evaluator argument made this
+  the intended one-line change. Consequences: gridding FSC/cFAR values (and
+  the FSC-derived matching low-pass, resolution reports, ML prior strength,
+  and the FSC=0.95 e/o registration-blend cap) shift relative to pre-change
+  gridding runs — typically toward slightly more conservative FSC since the
+  tighter mask excludes rim solvent. Gridding-vs-gridding artifact parity
+  with pre-change runs is NOT expected for FSC-derived quantities; backend
+  cross-comparability is.
 - **Resolution-report filename policy.** The gridding commander resolves the
   text-report name through `resolve_fsc_txt_fname` (honoring `outfile` and
   `which_iter`); PCG always writes the plain
@@ -480,9 +485,10 @@ missing/required semantics, and trailing-chain ownership are unchanged.
 ### Stage 4 (done)
 
 The contained `calc_gridding_pair_diagnostics` adapter builds the merged
-average, selects the legacy broad radius
-(`box_crop/2 - COSMSKHALFWIDTH - 1`), writes the automask on the envfsc path,
-and calls the common evaluator. Both restoration oracles route through it:
+average, selects the spherical mask radius (the legacy broad
+`box_crop/2 - COSMSKHALFWIDTH - 1` at this stage; changed to `msk_crop` by
+the approved post-refactor policy change recorded below), writes the automask
+on the envfsc path, and calls the common evaluator. Both restoration oracles route through it:
 the ordinary path with the real-space undeapodized base pair, the trailing
 bootstrap with the previous final half maps (no adapter semantics needed, as
 reviewed). The redundant pre-`new` of the bootstrap conical result at the
@@ -527,6 +533,19 @@ and were NOT edited.
 Build `simple_exec`, `simple_test_phase_rand_fsc`, `simple_test_rec3D_backend`
 and the continuous PCG half-set tests; run the validation matrix above and
 compare artifacts within established tolerances. No Linux/BOX result claimed.
+
+### Post-refactor policy change: unified spherical FSC mask (2026-08-28)
+
+Explicitly approved after the refactor landed: the gridding adapter now
+passes `params%msk_crop` as the spherical FSC mask radius, replacing the
+legacy broad rim radius, so both backends express identical spherical mask
+policy (see the updated mask-radius entry under Known residual backend
+divergences). This intentionally breaks FSC-derived artifact parity between
+pre- and post-change gridding runs; when running the validation matrix,
+compare gridding FSC/cFAR/resolution outputs against a same-policy baseline
+or against the PCG backend, not against pre-change gridding artifacts. The
+non-FSC accumulator, half-map, and trailing-chain artifacts remain
+parity-comparable.
 
 ### Skill edits (approved and applied 2026-08-28)
 

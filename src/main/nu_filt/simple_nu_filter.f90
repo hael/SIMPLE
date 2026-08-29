@@ -50,7 +50,7 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           nu_highres_extension_stats, get_nu_filter_bank_finest_lp, get_nu_filtmap_finest_selected_lp,&
           get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, set_nu_filter_report, NU_DEV_OUTPUT,&
           nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, calc_nu_evidence_margin,&
-          write_nu_evidence_map, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
+          write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
           NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
@@ -643,6 +643,12 @@ interface
         real,    optional, intent(in) :: lp_smooth
         logical, optional, intent(in) :: l_relative
     end subroutine write_nu_evidence_map
+
+    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname )
+        real,          intent(in) :: nsigma, lp_smooth, smpd
+        integer,       intent(in) :: state
+        class(string), intent(in) :: fname
+    end subroutine write_nu_evidence_envmask
 
     module subroutine print_nu_envmask_stats( stats )
         type(nu_envmask_stats), intent(in) :: stats

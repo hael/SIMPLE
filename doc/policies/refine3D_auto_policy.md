@@ -43,7 +43,9 @@ It also supplies overridable defaults when the user has not provided them:
 - `nsample=25000`
 - `autoscale=yes`
 - `filt_mode=nonuniform`
-- `nu_refine=yes`
+- `nu_refine=yes` (gridding backend; `rec_backend=pcg` defaults `nu_refine=no`
+  because the in-solve Q_NU replay makes NU shell extension obsolete, 2026-08-29;
+  an explicit `nu_refine=yes` with the PCG backend remains a hard error)
 - `automsk=yes`
 - `envfsc=no`
 - `keepvol=no`
@@ -87,6 +89,12 @@ When the raw pair is compatible, `refine3D_auto` generates fresh same-stem
 `_nu_filt` bootstrap references before the first matcher pass. With
 `nu_refine=yes`, that bootstrap may run the sequential shell challenger from
 the finest populated base-bank label.
+
+Under `rec_backend=pcg` (2026-08-29) the NU prefilter of the bootstrap is
+bypassed exactly like the post-hoc NU filter: the raw-pair validation and its
+reconstruct-startup fallback still run, but no `_nu_filt` startup references
+are produced and the first matcher pass uses the raw native E/O references,
+consistent with how every later Q_NU-regularized iteration feeds the matcher.
 
 ## 4. Autoscaling and Sampling
 

@@ -19,7 +19,10 @@ use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfm
 use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
     &build_nu_evidence_state, nu_evidence_state, expand_nu_evidence_band_weights, &
     &print_nu_evidence_summary, assert_nu_evidence_replay_ready, unpack_nu_evidence_state, &
+    &write_nu_evidence_envmask, &
     &NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
+use simple_vol_pproc_policy,  only: vol_pproc_plan, plan_state_postprocess, &
+    &NU_ENVMASK_ACTION_REGENERATE
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname
@@ -198,8 +201,13 @@ contains
     !! lag-one pair the bootstrap FSC is computed from. Built once per state
     !! after both base solves and before either replay; the two half replays
     !! share the one immutable evidence identity. No envelope artifact is
-    !! read or written and no silent fallback exists: evidence-construction
-    !! failure is a hard error.
+    !! read, and no silent fallback exists: evidence-construction failure is
+    !! a hard error. With automsk enabled the NU evidence envelope artifact
+    !! is regenerated here (policy 2026-08-29): the raw per-voxel evidence
+    !! margins are live at this point, so the matching-reference envelope
+    !! derives from the same frozen evidence as the Q_NU precision, without
+    !! a second NU analysis; cadence and artifact naming follow the same
+    !! plan_state_postprocess contract as the post-hoc NU paths.
     subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, band_w, &
             &finest_lp, evidence_source )
         class(parameters),          intent(in)  :: params
@@ -210,6 +218,7 @@ contains
         real, optional,             intent(out) :: finest_lp
         character(len=*), optional, intent(in)  :: evidence_source
         type(nu_evidence_state) :: evstate
+        type(vol_pproc_plan)    :: pp_plan
         real, allocatable :: cutoffs(:)
         character(len=32) :: source_here
         source_here = NU_EVIDENCE_SOURCE_BASE
@@ -218,6 +227,17 @@ contains
             &'FSC HALF PAIR OF STATE ', state_here, ' (source='//trim(source_here)//')'
         call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source=trim(source_here))
         call optimize_nu_cutoff_finds()
+        call plan_state_postprocess(params, state_here, params%which_iter, pp_plan)
+        if( pp_plan%l_nu_envmask_incompatible )then
+            write(logfhandle,'(A,1X,A)') &
+                &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
+                &pp_plan%nu_envmask_file%to_char()
+        endif
+        if( pp_plan%nu_envmask_action == NU_ENVMASK_ACTION_REGENERATE )then
+            call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, vol_even%get_smpd(), &
+                &state_here, pp_plan%nu_envmask_file)
+        endif
+        call pp_plan%nu_envmask_file%kill
         call build_nu_evidence_state(vol_even, vol_odd, evstate)
         call cleanup_nu_filter()
         ! readiness contract: a valid state with an inadequate null population
