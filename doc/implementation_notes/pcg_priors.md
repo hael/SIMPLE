@@ -20,6 +20,15 @@ retired and must be removed from the target workflow. Its implementation and
 measurements remain recorded below only as experiment history until the code is
 removed. Wilson is priority 2, after the NU prior has passed its gates.
 
+**Outcome (2026-08-29): the Wilson question is answered and Stage 7 is
+CLOSED.** `Q_W` was implemented, corrected twice by truth-judged failures,
+validated, adjudicated against `Q_NU` on the 1WCM fixture, and REMOVED from
+the code base the same day: `Q_NU` dominated at every shell even with `Q_W`
+handed the ground-truth spectrum (S5.5 hypothesis confirmed). `Q_NU` is the
+regularized estimator of this document; the Stage 7 sections below are the
+complete experiment record. All forward-looking Wilson language elsewhere in
+this document predates this outcome and is retained as plan history.
+
 ## 1. Current regularization inventory (master)
 
 The production PCG path performs, per state and half, one *base* solve and one
@@ -83,7 +92,7 @@ Prior priority (decision 2026-08-27):
 | Idea | Priority | Recommendation |
 | --- | --- | --- |
 | direct NU-evidence-conditioned precision | **1 — immediate** | replace `P_tau` in NU mode; §3 and §5 |
-| Wilson molecular precision | **2 — after NU** | separate follow-on experiment; §5.5 |
+| Wilson molecular precision | CLOSED 2026-08-29 | adjudicated and removed; `Q_NU` dominates; §5.5 and the Stage 7 records |
 | binary-envelope solvent precision | retired | remove from the target workflow; preserve §4 as experiment history |
 | soft state weights | integration semantics | weight both `B` and `D` |
 | symmetry projection/permutation | performance only | after distributed profiling |
@@ -382,6 +391,12 @@ random bag-of-atoms model [5]; Gilles and Singer use the corresponding mean and
 covariance as a Bayesian molecular prior [6]. Off-diagonal structure, nonzero
 means, and LocScale-informed local covariances remain later experiments. A
 nonzero or phase-bearing mean is outside the first Wilson scope.
+
+OUTCOME (2026-08-29): this experiment was run and its central question
+answered in `Q_NU`'s favor -- see the Stage 7.1 records and the removal
+decision. The hypothesis stated above (that the conservative NU estimator
+already regularizes the unsupported degrees of freedom, leaving Wilson
+extrapolation little to add) was CONFIRMED with `Q_W` at its best case.
 
 ## 6. Workflow, evidence contract, and bias discipline
 
@@ -808,7 +823,8 @@ data-scale anchoring makes the readout portable; (b) the FIRST
 over-regularization signature fires at ~51% suppression on both datasets
 (fixture truth-FSC loss at 51.7%, streptavidin shipped inflation at 51.2%),
 independent observables agreeing that trouble onset is a property of the
-suppression coordinate. OPEN DECISION: lower PCG_SOLVENT_SUPP_OVER_PCT from
+suppression coordinate. OPEN DECISION (superseded 2026-08-29, see the CLOSED
+entry under Stage 6): lower PCG_SOLVENT_SUPP_OVER_PCT from
 60 to ~45-50 (at 60 the default 0.1 reads "nominal" on streptavidin while
 its inflation diagnostic has fired), and whether the default strength should
 move 0.1 -> 3e-2 (clean everywhere measured) with the convergence guidance
@@ -1345,7 +1361,8 @@ centre-bin -- the rim erosion that dogged the solvent prior on bgal is
 absent, consistent with the 1WCM rim-retention finding; (c) evidence sane
 and mid-window (null 0.220, bands 0.763/0.664/0.576/0.169, uncertain ~0) --
 the 0.90 ceiling was not approached despite the solvent-dominated support;
-(d) shipped-pair inflation 3.3%, inside the bound. OPEN QUESTION (the one
+(d) shipped-pair inflation 3.3%, inside the bound. OPEN QUESTION (DEFERRED
+2026-08-29, see the note at the end of this record) (the one
 number that cannot be adjudicated without truth): the in-band amplitude
 ratio pcg/gridding runs 1.5-2.0x through k=44-75 and higher toward the band
 edge (in-band median 1.59 vs the control's 1.19) -- the expected signature
@@ -1356,6 +1373,19 @@ deposited structure can decide it (R6). The postprocessing Wiener layer of
 `nu_evidence_local_sharpening.md` is the designed consumer of exactly this
 retained amplitude. Cost: 163 s/half at 30 its (production budget ~2 its
 after warm start).
+
+DEFERRED (2026-08-29): the map-to-model adjudication is parked by user
+decision. It is not trivial in practice -- the obtained maps are not docked
+to the deposited structure, so an honest comparison would require docking
+and model building, which is not being undertaken now. The question stays
+on record, not open-for-action. Confidence in reading the retained
+amplitude as signal rests, for now, on the 1WCM truth-judged evidence
+(where the identical signature was truth-confirmed, and where the 2026-08-29
+Q_NU run was simultaneously amplitude-faithful and all-gates-passing);
+this is supportive but is not a substitute for the real-data adjudication.
+If the question is ever reopened, docking + model building against the
+deposited bgal structure is the prerequisite; the LocScale-style Wiener
+postprocessing layer remains parked behind it.
 
 **Production-budget A/B (its=5, rtol=1e-3), same fixture (2026-08-27) --
 H4 PASSES.** The Q_NU truth advantage survives the 5-iteration budget
@@ -1467,7 +1497,8 @@ nearly indistinguishable, three policy changes landed together:
 2. **No post-hoc NU filtering with Q_NU in the solve.**
    `filter_pcg_nonuniform_maps` returns early when the NU replay is active:
    no second NU analysis (S6.3 dedup closed), no `_nu_filt`/`_nu_locres`
-   products, no evidence envelope. The LP-set matching handoff survives,
+   products, no evidence envelope (envelope clause amended 2026-08-29, see
+   the automsk decision below). The LP-set matching handoff survives,
    now derived from the frozen replay evidence itself (finest evidenced
    local cutoff per state, threaded
    `build_nu_replay_evidence -> execute_rec3D_pcg_distributed_master ->
@@ -1481,11 +1512,45 @@ nearly indistinguishable, three policy changes landed together:
    everywhere else. (The Gate B registration-benefit observation attributed
    to envelope-masked references is superseded by the user's read that the
    NU-replay reference makes it unnecessary; if registration regresses on a
-   future run, this is the first knob to revisit.)
+   future run, this is the first knob to revisit -- and since 2026-08-29 that
+   knob works: explicit `automsk=yes` regenerates the envelope from the
+   frozen replay evidence without resurrecting the post-hoc filter, see the
+   automsk decision below.)
 
 Verification pending: an abinitio3D rerun with zero prior flags showing the
 dynamic default engaging at the first NU stage, single NU analysis per
 iteration, evidence-derived lp promotion, and no envelope/automask lines.
+CLOSED 2026-08-28/29 by the three-dataset run record below.
+
+### Stage 6 record: zero-prior-flag abinitio3D verification runs (2026-08-28/29, msp1 + embb + exp_gate)
+
+Three abinitio3D runs with `rec_backend=pcg` and NO prior flags
+(commit 6d06a1fa; logs under `Processing/pcg_integration/`), closing the
+default-on decision's pending verification. Observed on the completed runs
+(msp1, 5947 s; embb, 4228 s; exp_gate consistent while still in flight):
+
+- dynamic default engaged at every NU stage (`Q_NU on, LAMBDA_REL 0.1`),
+  early non-NU stages correctly `off`; evidence built once per state per
+  volassemble from the FSC half pair (`source=base_unfil`), no second NU
+  analysis, no `_nu_filt`/`_nu_locres`/envelope/automask lines;
+- evidence-derived matching low-pass promoted every cycle
+  (`set_all2single('lp',...)` values tracking the base FSC=0.5 region);
+- no over-regularization: shipped-pair FSC=0.143 crossings track the base
+  crossings essentially exactly (msp1 3.91-3.96 vs 3.86-3.96 A; embb both
+  4.00 A), never pulling finer;
+- every solve stopped on `fixed_iterations` (2 its) with residuals of a few
+  percent and near-identical even/odd values; halfset cohorts balanced;
+  trailing `F == U` with the expected stage fraction ramps; ML warm starts
+  firing throughout;
+- stable, slowly rising evidence support (band01 ~0.77 -> 0.78); final
+  resolutions Nyquist-limited at the stage crops (msp1 3.86 A, embb 4.00 A);
+  refinement cFAR ~0.80 (msp1) with a 0.51 final full-crop bootstrap value
+  (real directional anisotropy, not a mechanism issue); B-factors -103/-58.
+- convergence contrast worth keeping an eye on, not a gate item: embb
+  converged classically (orientation overlap 0.35 -> 0.87, ~1.6 deg mean
+  angular distance) while msp1/exp_gate plateaued at overlap ~0.10-0.22
+  with within-stage climbs and no collapse signature (the periodic dips
+  align with fill-in sampling iterations).
 
 6.4 Science/cost Gates C and D:
 
@@ -1502,6 +1567,247 @@ Wilson spectrum behind one declared spectrum-source mechanism. Establish its
 benefit against the accepted NU estimator as a separate experiment before any
 combination is considered. Off-diagonal covariance, nonzero means, and local
 Wilson/LocScale variants remain outside the first Wilson stage.
+
+DECISION (2026-08-29): Wilson development STARTS now, ahead of formal Gate D
+closure, by user direction -- the Stage 6 verification runs and the Gate C
+ablations already on record justify overlapping the engineering. The
+sequencing constraint that matters is preserved unchanged: Wilson is
+compared against the NU estimator as a separate experiment, is never
+combined with it (or with P_tau) in this stage, is off by default behind an
+explicit opt-in, and cannot be considered for any default until Stage 6
+Gate D and its own gates close. See the Stage 7 implementation plan below.
+
+### Stage 7.1 — Q_W operator and workflow wiring (historical record: IMPLEMENTED, VALIDATED, ADJUDICATED, and REMOVED 2026-08-29 — Q_NU dominates, see the Gate C record and the removal decision)
+
+**Form.** `Q_W = F* diag(q_W(k)) F`, zero-mean and shell-diagonal, exactly
+the first form S5.5 prescribes (anchoring corrected twice by the first two
+runs, see the S7.1 run records below):
+
+```text
+q_W(sh) = lambda_rel * Dbar(sh) * min(WILSON_PREC_CAP, s(k_hp) / s(sh))
+WILSON_PREC_CAP = 1e2
+```
+
+`s` is the Wilson spectrum SHAPE from the declared source, anchored at the
+first prior-active shell `k_hp`; `Dbar(sh)` is the shell-mean raw data-only
+density -- the same per-shell statistic `P_tau` divides by `tau*SSNR`. The
+per-shell D anchoring makes the prior/data ratio exactly
+`lambda_rel * min(CAP, s_ref/s(sh))` at EVERY shell, bounded in
+`[lambda_rel, CAP*lambda_rel]` and independent of the CTF/sampling decay
+of D -- the bounded-dynamic-range discipline `Q_NU` established (bounded
+operator, one strength knob), expressed in `P_tau`'s per-shell data
+convention. The spectrum supplies shape only. Shells coarser than the `hp`
+limit get no prior, mirroring the `P_tau` low-frequency no-prior guard.
+
+**No parallel Fourier array.** The builder
+(`build_wilson_prior_from_spectrum`) fills the SAME calibrated `ml_prior`
+diagonal `P_tau` uses, with the identical padded-radius -> native-shell
+mapping. Application in the replay operator, kernel-diagonal fusion, the
+preconditioner contribution, and the `get_ml_prior_stats` readout are
+therefore shared verbatim -- `Q_W` is a different *builder* behind the one
+diagonal, and three-way mode exclusion (`P_tau` | `Q_NU` | `Q_W`) is both
+structural (one diagonal) and asserted in all three setters
+(`set_ml_prior`/`set_nu_prior`/`set_wilson_prior`, R10 convention).
+
+**Declared spectrum source (7.1).** An explicit reference volume,
+`pcg_wilson_vol`: read via `read_and_crop` to the solve grid, rotationally
+averaged power spectrum (`image%spectrum('power')`), loaded once per
+execution and shared by both halves like the `P_tau` FSC prior. For the
+phantom gates this is the ground-truth map -- the best-case Wilson prior,
+so the first experiment answers "does a CORRECT molecular spectrum help"
+before any estimation machinery is built. Estimated sources (Wilson-line
+fit of the supported band with extrapolation) and analytic
+composition-based spectra are later sub-stages (7.2+), each behind the same
+single declared-source mechanism.
+
+**Activation contract.** Explicit opt-in only: `pcg_wilson_lambda_rel > 0`
+(no dynamic default) requires `rec_backend=pcg`, the euclid ML replay,
+`pcg_wilson_vol`, and ordinary (non-NU) mode -- `Q_W` + NU filtering
+hard-errors, which keeps the first-stage comparison clean (no post-hoc NU
+filtering of Wilson maps, no dynamic `Q_NU` default interference) and makes
+`Q_NU`/`Q_W` mutual exclusion follow from the mode split; both exclusions
+are ALSO hard-asserted at parameter validation and in the reconstructor.
+A positive strength on any other backend hard-errors (explicit-activation
+contract, S6.2). Both halves cold-start from the base solution (the
+shrinkage initial guess encodes the `P_tau` optimum; no Wilson closed form
+yet); the own-half warm start applies as everywhere.
+
+**Wiring inventory.** `set_wilson_prior`/`build_wilson_prior_from_spectrum`
++ state in `simple_reconstructor_pcg`; `load_wilson_spectrum` + replay
+branches in both PCG execution paths of `simple_rec3D_pcg_strategy`;
+`pcg_wilson_lambda_rel`/`pcg_wilson_vol` in parameters (declaration, parse,
+validation phase); UI registration for `reconstruct3D`, `refine3D`, and the
+`rec3D_backends` test harness; backend guard in the `reconstruct3D`
+commander. The `rec3D_backends` harness handles the Wilson keys like the
+NU key: validated up front (ml_reg required, Q_NU exclusion), soft gates
+when the prior is active (it legitimately moves the pcg leg away from
+gridding), `_wil<strength>` execution-directory tag, `pcg_wilson_vol`
+made absolute before the chdir, and both keys deleted from the gridding
+leg.
+
+**Stage 7.1 gates (as planned; overtaken by events -- Gate C was run first
+and concluded the stage, so the Gate A/B formalization below was never
+executed and is moot after the removal).**
+
+- Gate A algebra: `Q_W` diagonal positivity and shell-constancy on the
+  padded lattice; the three-way exclusion mutation tests (each setter pair
+  rejected in both attachment orders); prior-stats readout sanity
+  (`prior_to_khat` ratios finite, hp shells zero).
+- Gate B invariants: artifact set identical to the `P_tau` replay
+  (`Q_W` changes only the diagonal); FSC/resolution reporting unchanged;
+  the spectrum-source log line present exactly once per execution.
+- Gate C: truth-judged 1WCM two-way ablations `Q_W` vs `P_tau` and `Q_W`
+  vs `Q_NU` at matched convergence, with the truth spectrum as source
+  (best case); then bgal with the deposited-model spectrum. Judge on the
+  same criteria as the Stage 6 ablations; the S5.5 hypothesis to test is
+  that the conservative NU estimator already captures most of the benefit
+  and Wilson extrapolation adds little on data the experiment observed.
+
+### Stage 7.1 first run: 1WCM truth-judged (2026-08-29) — spectrum-peak anchoring failure
+
+First `rec3D_backends` run with the truth map as spectrum source
+(`pcg_wilson_lambda_rel=0.1 pcg_wilson_vol=1WCM.mrc`, euclid+mlreg, its=5,
+box 256 smpd 1.0). The harness worked as intended: both legs ran, soft
+gates reported, and the truth tables adjudicated. Result: FAILURE of the
+initial `Q_W` anchoring, cleanly diagnosed.
+
+- The base pcg solves were healthy (rel residual ~1.2e-2, base-pair
+  FSC=0.143 at 2.94 vs gridding 2.91 A, cFAR 0.89 vs 0.90) -- the failure
+  was confined to the `Q_W` replay, as the mode split predicts.
+- The `Q_W` replay solves left rel residual ~42-45 after 5 iterations
+  (vs ~3e-2 for `Q_NU`/`P_tau` replays): the system was unsolvably stiff.
+  The shipped map was a transient-dominated CG iterate: fsc(truth,pcg)
+  NEGATIVE through the mid band (to -0.74), amplitude collapsed to a flat
+  floor mid-band and rising junk toward Nyquist, shipped-pair FSC
+  crossings far coarser than base.
+- Cause: the initial form max-normalized the spectrum shape and floored it
+  at 1e-4. A real map's power spectrum is dominated by the lowest shells
+  by orders of magnitude, so ESSENTIALLY EVERY prior-active shell sat at
+  the floor and received precision ~1e3-1e4 x data_scale: the prior
+  crushed the data term band-wide.
+- Fix (implemented): anchor the shape at the first prior-active shell
+  (`k_hp`) and cap the precision dynamic range at `WILSON_PREC_CAP = 1e2`
+  -- `q_W in [lambda_w, 1e2*lambda_w]` over the active band, preserving
+  the Wilson decay shape where it is resolved and saturating beyond. This
+  is the same bounded-operator discipline as `Q_NU`. Rerun below.
+
+### Stage 7.1 second run: 1WCM truth-judged (2026-08-29) — anchoring fix verified; global-data_scale over-shrinkage identified
+
+Identical invocation after the hp-anchoring fix. Solvability restored and
+the first genuine `Q_W` measurement obtained:
+
+- `Q_W` replay residuals 1.2e-1 (from 42-45), truth-FSC positive across
+  the band, shipped map a real regularized estimate.
+- LOW-BAND WIN against the ML-regularized gridding leg:
+  fsc(truth,pcg) >= fsc(truth,gridding) through k=2-10, decisively at
+  k=3-5 (0.998 vs 0.956 at k=3) -- the molecular spectrum is informative
+  exactly where Wilson statistics say it should be.
+- Progressive high-band over-shrinkage: pcg truth-FSC falls behind
+  gridding from mid-band (k=80: 0.59 vs 0.74), amp_pcg/truth decays to
+  ~0.29 by k~75, and the shipped-pair crossing moved COARSER than base
+  (3.08 vs 2.94 A) -- the over-regularization direction.
+- Diagnosis: anchoring `lambda_w` to the GLOBAL data_scale while the
+  data term `Dbar(sh)` decays with k (CTF + sampling) inflates the
+  effective prior/data ratio k-dependently by `data_scale/Dbar(sh)` on
+  top of the spectrum ratio -- a mis-anchoring no single lambda can
+  compensate.
+- Fix (implemented): per-shell D anchoring,
+  `q_W(sh) = lambda_rel * Dbar(sh) * min(CAP, s_ref/s(sh))`, mirroring
+  `P_tau`'s convention exactly; the prior/data ratio is now bounded in
+  `[lambda_rel, CAP*lambda_rel]` at every shell. Rerun below.
+
+### Stage 7.1 third run: 1WCM truth-judged (2026-08-29) — per-shell anchoring VALIDATED; Q_W wins both band ends
+
+Identical invocation after the per-shell D anchoring. The operator form is
+now measured-correct and the first Wilson science result is on record:
+
+- Solve health at `Q_NU` class: replay residuals 3.0e-2 (from 1.2e-1);
+  shipped-pair FSC crossings IDENTICAL to base (3.368/2.909 A) -- zero
+  over-regularization signature at lambda=0.1.
+- LOW-BAND WIN retained: fsc(truth,pcg) >= gridding through k=2-9
+  (0.9993 vs 0.9908 at k=2; 0.9981 vs 0.9556 at k=3).
+- HIGH-BAND WIN gained: from k~79 to the band edge pcg matches or beats
+  the ML-regularized gridding reference against truth (k=80: 0.743 vs
+  0.740; k=90: 0.455 vs 0.440; k=100: 0.225 vs 0.209; k=110: 0.100 vs
+  0.058) -- the molecular prior paying off exactly where Wilson statistics
+  extrapolate into weakly measured shells. Run 2 lost this entire region.
+- Remaining: a small systematic mid-band truth-FSC deficit (k~30-75,
+  0.005-0.02, e.g. 0.964 vs 0.974 at k=50) with the amplitude ratio
+  plateauing ~0.86 -- honest lambda=0.1 shrinkage, the lambda sweep's
+  target. High-k amplitude rise beyond the resolved band (rim shells)
+  persists but with better truth-FSC than gridding there.
+
+Next: the lambda sweep (0.01/0.03/0.1) to see whether a weaker prior
+closes the mid-band deficit while keeping both band-end wins, and the
+`Q_NU` two-way on the same project (`pcg_nu_lambda_rel=0.1` in place of
+the Wilson keys) -- the first direct `Q_W` vs `Q_NU` adjudication. These
+are the Gate C entry points. Both executed below.
+
+### Gate C: Q_W lambda sweep + first Q_W vs Q_NU two-way, 1WCM truth-judged (2026-08-29) — Q_NU DOMINATES; S5.5 hypothesis CONFIRMED
+
+Same fixture and budget throughout (euclid+mlreg, its=5, truth spectrum as
+the Q_W source -- Wilson's best case).
+
+**Q_W lambda sweep (0.1 / 0.03 / 0.01):**
+
+- The mid-band truth-FSC deficit against the gridding reference shrinks
+  monotonically with lambda (k=50: 0.964 / 0.967 / 0.972 vs gridding
+  0.974) while the high-band win is essentially lambda-INSENSITIVE
+  (k=110: ~0.10 at all three strengths vs gridding 0.058), and the
+  low-band win is common to all pcg runs. Within the family,
+  lambda~0.01 dominates: near-zero mid-band cost, full high-band gain,
+  replay residuals 1.0e-2. The high-band gain evidently comes from
+  suppressing noise in weakly measured shells at all, not from the
+  precise Wilson strength -- a first hint that the spectrum SHAPE is not
+  the operative ingredient.
+- Amplitude: mid-band amp/truth ~0.86 / ~2.3 / ~4.6 (vs gridding ~9) --
+  the single global knob trades amplitude fidelity against noise
+  suppression band-wide, as a shell-diagonal must.
+
+**Q_W vs Q_NU two-way (pcg_nu_lambda_rel=0.1):**
+
+`Q_NU` beats the gridding reference AND every `Q_W` run at EVERY shell,
+including the high band that was Wilson's presumptive niche (truth-FSC
+k=50: 0.978; k=70: 0.925; k=80: 0.793; k=90: 0.523; k=100: 0.284; k=110:
+0.137 -- vs gridding 0.974/0.905/0.740/0.440/0.209/0.058 and best-Q_W
+0.972/0.901/0.738/0.445/0.219/0.099). It does so while remaining
+amplitude-faithful: amp/truth ~9 band-wide (no shrinkage), the flattest
+radial LS profile of any run including gridding (0.89-1.02 vs gridding's
+1.14-1.22 over-amplification), and the harness passed ALL gates --
+including the gridding-parity amplitude gates every other prior run
+soft-failed. Shipped-pair inflation modest (3.24/2.84 vs base 3.37/2.94),
+suppression ~36%, replay residual 8.4e-3. Cost is the one `Q_W`
+advantage: ~60 s/half (15 s evidence overhead) vs ~13 s.
+
+**Verdict.** The S5.5 hypothesis is CONFIRMED on this fixture: the
+conservative NU estimator captures more than the full Wilson benefit --
+even with `Q_W` handed the ground-truth spectrum -- because the evidence
+field regularizes locally and anisotropically exactly the degrees of
+freedom the half-map evidence does not support, which no shell-diagonal
+can express. `Q_W` is NOT a candidate to displace `Q_NU` and no further
+solo `Q_W` development is warranted on this evidence (removal decision
+below). Remaining bookkeeping if ever needed: a bare pcg run (no prior
+keys) on this fixture for the clean `Q_W` vs `P_tau` two-way; not
+required for the verdict above.
+
+### DECISION (2026-08-29): Q_W REMOVED from the code base
+
+Following the Gate C verdict, the Wilson estimator was removed the same
+day it was implemented, by user direction and in keeping with this
+document's discipline: retired estimators live on as experiment records,
+not as code. Removed: `set_wilson_prior`/`build_wilson_prior_from_spectrum`
+and all Wilson state/constants from `simple_reconstructor_pcg`; the
+spectrum loader and replay branches from both PCG execution paths;
+`pcg_wilson_lambda_rel`/`pcg_wilson_vol` from parameters, parsing,
+validation, and the `reconstruct3D`/`refine3D`/`rec3D_backends` UI; the
+backend guard from the `reconstruct3D` commander; and the Wilson key
+handling from the `rec3D_backends` harness. The three-way mode assertion
+reverts to the two-way `P_tau`/`Q_NU` exclusion. The S7.1 records above
+(operator form, both anchoring corrections, the sweep, and the two-way)
+are the complete archaeological record; if a Stage 8 combination
+experiment is ever approved, the validated per-shell-D-anchored form
+documented here is the reference implementation to resurrect. Wilson
+remains formally priority 2 in name only; in practice Stage 7 is CLOSED.
 
 ### Stage 8 — explicitly out of first scope
 
@@ -1589,6 +1895,79 @@ trailing, the blended base solve the replay warm-starts from), and the
 LP-set handoff derives from whichever evidence pair was used. Shared-memory
 trailing remains unsupported for PCG generally (pre-existing
 accumulator-domain restriction, unrelated to the prior).
+
+### DECISION (2026-08-29): automsk=yes regenerates the evidence envelope under the Q_NU replay
+
+Amends item 2 of the default-on decision: with `automsk` enabled, the NU
+evidence envelope IS produced on the replay path -- regenerated inside
+`build_nu_replay_evidence`, between `optimize_nu_cutoff_finds` and
+`cleanup_nu_filter`, while the raw per-voxel evidence margins are live. The
+matching-reference envelope therefore derives from the same frozen evidence
+as the `Q_NU` precision: one analysis, two consumers, and still no second NU
+pass. Cadence and artifact naming follow the same `plan_state_postprocess`
+contract as the post-hoc paths (missing/incompatible mask, `startit`,
+`AMSK_FREQ`). All three regeneration sites (gridding volassemble, PCG
+post-hoc, PCG replay) now share the single producer
+`write_nu_evidence_envmask` in `simple_nu_filter`; the replay envelope is
+built from the static candidate bank (the replay analysis runs no
+high-resolution shell extension), a deliberate, slightly shallower evidence
+basis than a gridding-path envelope. This also arms the default-on
+decision's item-3 fallback: if reference registration regresses without
+envelope masking, explicit `automsk=yes` is now a functional knob on the
+replay path.
+
+### DECISION (2026-08-29): refine3D_auto joins the pcg bypass; NU shell extension declared obsolete under Q_NU
+
+`refine3D_auto` was the last workflow defaulting into the competition NU
+machinery on the pcg backend: its unconditional `nu_refine=yes` default
+hard-errored at the first volassemble, and its init-volume bootstrap ran the
+competition prefilter (including the shell challenger) on the startup
+halves. Both are fixed, mirroring the abinitio3D stage policy: `nu_refine`
+defaults to `no` when `rec_backend=pcg` (explicit `nu_refine=yes` + pcg
+remains a hard error), and the startup NU prefilter is bypassed under pcg --
+raw-pair validation and its reconstruct-startup fallback stay
+backend-neutral, but no `_nu_filt` startup references are produced and the
+first matcher pass uses the raw native E/O references, exactly as every
+later Q_NU iteration feeds the matcher. Doctrine going forward:
+`rec_backend=pcg` with the `Q_NU` prior makes NU high-resolution shell
+extension obsolete; `nu_refine` survives only on the gridding/competition
+path pending its retirement (next section).
+
+### Gate C/D comparability note (2026-08-28 mask unification)
+
+The gridding backend's spherical FSC mask was unified to `params%msk_crop`
+(previously the broad rim radius), so gridding and PCG FSC/cFAR are now
+directly comparable -- but gridding FSC-derived numbers recorded BEFORE the
+unification (including baselines quoted in the Stage 5/6 records above) are
+not comparable to post-unification gridding runs. Remaining Gate C/D
+ablations must use same-policy baselines: rerun the gridding arm at the
+current mask policy, or compare against the PCG backend directly.
+
+### CLOSED (2026-08-29): solvent-era suppression-threshold OPEN DECISION superseded
+
+The open decision under the Stage 5 streptavidin record (lower
+`PCG_SOLVENT_SUPP_OVER_PCT` from 60 to ~45-50; move the solvent default
+0.1 -> 3e-2) is superseded: the solvent prior is scientifically retired and
+`Q_NU` is the default regularized estimator, so the solvent suppression
+guidance thresholds will leave the tree with the solvent code. No further
+calibration of the retired prior is planned.
+
+### Stage 6.5 — competition-path retirement experiment (planned)
+
+The experiment that would conclusively retire the gridding + post-hoc NU
+competition path (including `nu_refine` shell extension) in favor of
+`rec_backend=pcg` with the `Q_NU` prior. Code preconditions are complete as
+of 2026-08-29: every workflow (abinitio3D, refine3D, refine3D_auto) runs the
+pcg arm with zero prior flags, no competition machinery executing anywhere
+(startup, per-iteration, or postprocess), envelope masking available under
+`automsk=yes`, and cross-backend FSC/cFAR comparability restored by the mask
+unification. Experiment design and acceptance criteria: TO BE DEFINED by the
+user before execution -- candidate axes are the Gate C fixture set plus
+real-data refine3D_auto pairs (gridding+NU competition vs pcg+Q_NU) judged
+at matched convergence on resolution, cFAR, map quality, over-regularization
+diagnostics, and wall-clock/cost. On acceptance: remove the retired solvent
+prior code, the post-hoc NU competition path for pcg, and revisit
+`nu_refine`'s existence; record removals here.
 
 ## 11. The NU machinery as the prior infrastructure
 
