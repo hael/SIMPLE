@@ -10,7 +10,7 @@ This folder owns reconstruction and postprocessing objects.
 ## Read First
 
 - `simple_reconstructor.f90`
-- `simple_reconstructor_eo.f90`
+- `simple_halfmap_diagnostics.f90`
 - `simple_vol_pproc_policy.f90`
 - `simple_volanalyzer.f90`
 - `simple_dock_vols.f90`

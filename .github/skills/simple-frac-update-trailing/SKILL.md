@@ -38,8 +38,10 @@ Then inspect the current code in this order:
 4. `src/main/ori/simple_oris_getters.f90`
 5. `src/main/strategies/search/simple_strategy3D_matcher.f90`
 6. `src/main/strategies/parallelization/simple_refine3D_strategy.f90`
-7. `src/main/commanders/simple/simple_commanders_rec_distr.f90`
-8. `src/main/volume/simple_reconstructor_eo.f90`
+7. `src/main/commanders/simple/simple_commanders_rec_distr.f90` (gridding
+   pair accumulator I/O and restoration are contained in
+   `restore_state_from_parts`)
+8. `src/main/volume/simple_halfmap_diagnostics.f90`
 
 ## Working Rules
 
@@ -74,9 +76,10 @@ Then inspect the current code in this order:
   discard the complete set on any mismatch and re-seed; carry-over between
   directories copies complete sets only, manifest last.
 - Downsampling compatibility is handled by the previous-artifact reader/producer
-  contract. `reconstructor_eo%read_eos_parallel_io` pads previous smaller
-  halfmaps/rhos when `l_update_frac` is active and rejects previous larger
-  dimensions. For the trailing chain, a larger previous grid or a physical
+  contract. `read_gridding_pair_accumulators` (contained in
+  `restore_state_from_parts` in `simple_commanders_rec_distr.f90`) pads previous
+  smaller halfmaps/rhos when `l_update_frac` is active and rejects previous
+  larger dimensions. For the trailing chain, a larger previous grid or a physical
   extent mismatch discards the set and re-seeds instead of failing the run.
 - The recurrence and `ufrac_trec` weighting contracts are covered by the
   deterministic `simple_test_exec prg=trail_rec_blend` test.

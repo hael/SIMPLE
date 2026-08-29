@@ -12,10 +12,10 @@ use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, &
 use simple_ptcl_cache,        only: ptcl_cache_read_batch
 use simple_sigma2_files,      only: load_sigma2_groups
 use simple_math_ft,           only: resample_sigma2
-use simple_fsc,               only: phase_rand_fsc, fsc_area_score_result
 use simple_estimate_ssnr,     only: fsc2shrink_filter, get_resolution
 use simple_image,             only: image
-use simple_image_msk,         only: image_msk
+use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
+    &write_halfmap_diagnostics
 use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
     &build_nu_evidence_state, nu_evidence_state, expand_nu_evidence_band_weights, &
     &print_nu_evidence_summary, assert_nu_evidence_replay_ready, unpack_nu_evidence_state, &
@@ -160,6 +160,33 @@ contains
         deallocate(corrs, res_arr)
     end subroutine shipped_pair_res
 
+    !> PCG half-map diagnostics through the backend-neutral common evaluator:
+    !! this owns the PCG mask policy (params%msk_crop spherical radius on the
+    !! restored real-space base pair), the automask artifact write on the
+    !! envfsc path, and the execution-context resolution log lines. The shared
+    !! and distributed paths pass identical scientific policy and differ only
+    !! in the context label.
+    subroutine calculate_pcg_state_diagnostics( params, state_here, context, even, odd, avg, diagnostics )
+        class(parameters),                intent(in)  :: params
+        integer,                          intent(in)  :: state_here
+        character(len=*),                 intent(in)  :: context
+        class(image),                     intent(in)  :: even, odd, avg
+        type(halfmap_diagnostics_result), intent(out) :: diagnostics
+        type(image) :: envmask
+        if( params%l_envfsc )then
+            call evaluate_halfmap_pair(params, state_here, even, odd, avg, params%msk_crop, &
+                &diagnostics, envmask=envmask)
+            call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state_here,2)//MRC_EXT))
+            call envmask%kill
+        else
+            call evaluate_halfmap_pair(params, state_here, even, odd, avg, params%msk_crop, diagnostics)
+        endif
+        write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
+            &' FSC=0.500 RESOLUTION = ', diagnostics%res_fsc05
+        write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
+            &' FSC=0.143 RESOLUTION = ', diagnostics%res_fsc0143
+    end subroutine calculate_pcg_state_diagnostics
+
     !> Stage-6 direct NU-evidence replay (pcg_priors.md S5-S6): construct the
     !! frozen compact evidence state and expand it into the graded band
     !! lack-of-evidence weights the solver consumes. The evidence pair is
@@ -296,13 +323,14 @@ contains
         class(cmdline),   intent(inout) :: cline
         type(image) :: half_even, half_odd, ml_even, ml_odd, merged
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
+        type(string) :: fname_restxt
+        type(halfmap_diagnostics_result) :: hm_diag
         integer, allocatable :: selected_pinds(:), half_pinds(:)
         real, allocatable :: fsc(:), res0143s(:)
         real, allocatable :: ship05s(:), ship0143s(:), nu_band_w(:,:,:,:), nu_supps(:)
         integer, allocatable :: nu_supp_cnts(:)
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
-        real :: res05, cfar
         logical :: l_nu_replay
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
@@ -367,9 +395,15 @@ contains
             endif
 
             t_state_phase = tic()
-            call calculate_state_fsc(state, half_even, half_odd, merged, fsc, res05, res0143s(state), cfar)
+            call calculate_pcg_state_diagnostics(params, state, 'RECONSTRUCT3D', half_even, half_odd, &
+                &merged, hm_diag)
+            fsc             = hm_diag%fsc
+            res0143s(state) = hm_diag%res_fsc0143
             call arr2file(fsc, fname_fsc)
-            call write_fsc_summary(state, merged, fsc, res05, res0143s(state), cfar)
+            fname_restxt = refine3D_resolution_txt_fbody(state)
+            call write_halfmap_diagnostics(hm_diag, params%box_crop, params%smpd_crop, fname_restxt)
+            call fname_restxt%kill
+            call hm_diag%kill
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
@@ -729,76 +763,6 @@ contains
             call fname%kill
             deallocate(x, rel_res_hist)
         end subroutine regularize_state_half
-
-        subroutine calculate_state_fsc( state_here, even, odd, avg, fsc_out, res05, res0143, cfar )
-            integer,     intent(in)    :: state_here
-            type(image), intent(in)    :: even, odd, avg
-            real, allocatable, intent(out) :: fsc_out(:)
-            real,                    intent(out) :: res05, res0143, cfar
-            type(image)     :: work_even, work_odd
-            type(image_msk) :: envmask
-            type(fsc_area_score_result) :: cones
-            real, allocatable :: fsc_t(:), fsc_n(:), res(:)
-            integer :: nyq
-            nyq = even%get_filtsz()
-            if( params%l_envfsc )then
-                call envmask%automask3D(params, avg, .false., lp_override=params%envmsklp)
-                call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state_here,2)//MRC_EXT))
-                call phase_rand_fsc(even, odd, envmask, state_here, nyq, fsc_out, fsc_t, fsc_n)
-                call work_even%copy(even)
-                call work_odd%copy(odd)
-                call work_even%zero_env_background(envmask)
-                call work_odd%zero_env_background(envmask)
-                call work_even%mul(envmask)
-                call work_odd%mul(envmask)
-                deallocate(fsc_t, fsc_n)
-                call envmask%kill_bimg
-            else
-                call work_even%copy(even)
-                call work_odd%copy(odd)
-                call work_even%mask3D_soft(params%msk_crop, backgr=0.0)
-                call work_odd%mask3D_soft(params%msk_crop, backgr=0.0)
-                allocate(fsc_out(nyq), source=0.0)
-            endif
-            call cones%new(work_even, 256, 20.0, 0.143, 1)
-            call cones%calc_fsc_area_score(work_even, work_odd, state=state_here)
-            cfar = cones%cfar
-            if( .not. params%l_envfsc ) call work_even%fsc(work_odd, fsc_out)
-            res = avg%get_res()
-            call get_resolution(fsc_out, res, res05, res0143)
-            res05   = max(res05,   2.0 * params%smpd_crop)
-            res0143 = max(res0143, 2.0 * params%smpd_crop)
-            write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG RECONSTRUCT3D: STATE ', state_here, &
-                &' FSC=0.500 RESOLUTION = ', res05
-            write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG RECONSTRUCT3D: STATE ', state_here, &
-                &' FSC=0.143 RESOLUTION = ', res0143
-            call cones%kill
-            call work_even%kill
-            call work_odd%kill
-            deallocate(res)
-        end subroutine calculate_state_fsc
-
-        subroutine write_fsc_summary( state_here, avg, fsc_in, res05, res0143, cfar )
-            integer,     intent(in) :: state_here
-            type(image), intent(in) :: avg
-            real,        intent(in) :: fsc_in(:), res05, res0143, cfar
-            type(string) :: fname
-            real, allocatable :: res(:)
-            integer :: funit, k
-            fname = refine3D_resolution_txt_fbody(state_here)
-            res   = avg%get_res()
-            call fopen(funit, file=fname, status='replace', action='write')
-            do k = 1, min(size(res),size(fsc_in))
-                write(funit,'(A,1X,F6.2,1X,A,1X,F7.3)') &
-                    &'>>> RESOLUTION:', res(k), '>>> CORRELATION:', fsc_in(k)
-            enddo
-            write(funit,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res05
-            write(funit,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res0143
-            write(funit,'(A,1X,F6.2)') '>>> CONICAL FSC AREA RATIO (cFAR) SCORE  :', cfar
-            call fclose(funit)
-            call fname%kill
-            deallocate(res)
-        end subroutine write_fsc_summary
 
         subroutine write_half_diagnostics( state_here, half, solve_kind, nptcls, result, history, &
                 &metadata, particles, accum_init, accum, finalize, solve_time, total, data_scale, lambda_eff, &
@@ -1474,6 +1438,8 @@ contains
         type(image), pointer :: fsc_pair_even, fsc_pair_odd, fsc_pair_merged
         character(len=32)    :: evidence_source_here
         type(string) :: fname_even, fname_odd, fname_even_unfil, fname_odd_unfil, fname_vol, fname_fsc, raw_fname
+        type(string) :: fname_restxt
+        type(halfmap_diagnostics_result) :: hm_diag
         real, allocatable :: fsc(:), res0143s(:)
         real, allocatable :: realized_fractions(:), update_weights(:), ship05s(:), ship0143s(:)
         real, allocatable :: nu_band_w(:,:,:,:), nu_supps(:)
@@ -1482,7 +1448,6 @@ contains
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
         integer :: n_active_state, n_sampled_state
-        real :: res05, cfar
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_nu_replay
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output
@@ -1608,10 +1573,15 @@ contains
                 fsc_pair_merged      => merged
                 evidence_source_here =  NU_EVIDENCE_SOURCE_BASE
             endif
-            call calculate_distributed_fsc(state, fsc_pair_even, fsc_pair_odd, fsc_pair_merged, &
-                &fsc, res05, res0143s(state), cfar)
+            call calculate_pcg_state_diagnostics(params, state, 'DISTRIBUTED', fsc_pair_even, &
+                &fsc_pair_odd, fsc_pair_merged, hm_diag)
+            fsc             = hm_diag%fsc
+            res0143s(state) = hm_diag%res_fsc0143
             call arr2file(fsc, fname_fsc)
-            call write_distributed_fsc_summary(state, fsc_pair_merged, fsc, res05, res0143s(state), cfar)
+            fname_restxt = refine3D_resolution_txt_fbody(state)
+            call write_halfmap_diagnostics(hm_diag, params%box_crop, params%smpd_crop, fname_restxt)
+            call fname_restxt%kill
+            call hm_diag%kill
             time_fsc_output = real(toc(t_state_phase),dp)
 
             if( params%l_ml_reg )then
@@ -1978,76 +1948,6 @@ contains
             call pcgop%kill
             deallocate(x, rel_res_hist)
         end subroutine reduce_solve_state_half
-
-        subroutine calculate_distributed_fsc( state_here, even, odd, avg, fsc_out, res05, res0143, cfar )
-            integer,     intent(in)    :: state_here
-            type(image), intent(in)    :: even, odd, avg
-            real, allocatable, intent(out) :: fsc_out(:)
-            real,                    intent(out) :: res05, res0143, cfar
-            type(image)     :: work_even, work_odd
-            type(image_msk) :: envmask
-            type(fsc_area_score_result) :: cones
-            real, allocatable :: fsc_t(:), fsc_n(:), res(:)
-            integer :: nyq
-            nyq = even%get_filtsz()
-            if( params%l_envfsc )then
-                call envmask%automask3D(params, avg, .false., lp_override=params%envmsklp)
-                call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state_here,2)//MRC_EXT))
-                call phase_rand_fsc(even, odd, envmask, state_here, nyq, fsc_out, fsc_t, fsc_n)
-                call work_even%copy(even)
-                call work_odd%copy(odd)
-                call work_even%zero_env_background(envmask)
-                call work_odd%zero_env_background(envmask)
-                call work_even%mul(envmask)
-                call work_odd%mul(envmask)
-                deallocate(fsc_t, fsc_n)
-                call envmask%kill_bimg
-            else
-                call work_even%copy(even)
-                call work_odd%copy(odd)
-                call work_even%mask3D_soft(params%msk_crop, backgr=0.0)
-                call work_odd%mask3D_soft(params%msk_crop, backgr=0.0)
-                allocate(fsc_out(nyq), source=0.0)
-            endif
-            call cones%new(work_even, 256, 20.0, 0.143, 1)
-            call cones%calc_fsc_area_score(work_even, work_odd, state=state_here)
-            cfar = cones%cfar
-            if( .not. params%l_envfsc ) call work_even%fsc(work_odd, fsc_out)
-            res = avg%get_res()
-            call get_resolution(fsc_out, res, res05, res0143)
-            res05   = max(res05,   2.0 * params%smpd_crop)
-            res0143 = max(res0143, 2.0 * params%smpd_crop)
-            write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG DISTRIBUTED: STATE ', state_here, &
-                &' FSC=0.500 RESOLUTION = ', res05
-            write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG DISTRIBUTED: STATE ', state_here, &
-                &' FSC=0.143 RESOLUTION = ', res0143
-            call cones%kill
-            call work_even%kill
-            call work_odd%kill
-            deallocate(res)
-        end subroutine calculate_distributed_fsc
-
-        subroutine write_distributed_fsc_summary( state_here, avg, fsc_in, res05, res0143, cfar )
-            integer,     intent(in) :: state_here
-            type(image), intent(in) :: avg
-            real,        intent(in) :: fsc_in(:), res05, res0143, cfar
-            type(string) :: fname
-            real, allocatable :: res(:)
-            integer :: funit, k
-            fname = refine3D_resolution_txt_fbody(state_here)
-            res   = avg%get_res()
-            call fopen(funit, file=fname, status='replace', action='write')
-            do k = 1, min(size(res),size(fsc_in))
-                write(funit,'(A,1X,F6.2,1X,A,1X,F7.3)') &
-                    &'>>> RESOLUTION:', res(k), '>>> CORRELATION:', fsc_in(k)
-            enddo
-            write(funit,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res05
-            write(funit,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res0143
-            write(funit,'(A,1X,F6.2)') '>>> CONICAL FSC AREA RATIO (cFAR) SCORE  :', cfar
-            call fclose(funit)
-            call fname%kill
-            deallocate(res)
-        end subroutine write_distributed_fsc_summary
 
         subroutine write_distributed_diagnostics( state_here, half, solve_kind, nptcls, result, history, &
                 &reduce_time, finalize_time, solve_time, data_scale, lambda_eff, prior_npositive, &
