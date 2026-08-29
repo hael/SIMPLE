@@ -27,6 +27,7 @@ public :: POSE_LM_ACCEPTED_IMPROVEMENT, POSE_LM_FINITE_NO_IMPROVEMENT
 public :: POSE_LM_NO_RELIABLE_UPDATE, POSE_LM_STEP_BOUND_REJECTED
 public :: POSE_LM_INVALID_NUMERICS, POSE_LM_ITERATION_LIMIT
 public :: right_increment_rotation
+public :: pcg_raw_accum_compatible
 private
 #include "simple_local_flags.inc"
 
@@ -2732,10 +2733,63 @@ contains
         d_relerr = real(sqrt(dnum / max(1.0_dp,dden)))
     end subroutine compare_raw_accum
 
+    !> Non-destructive header compatibility check for a persisted raw
+    !! accumulator artifact against the current reconstruction geometry and
+    !! continuation identity. Constant-FOV crop continuity applies: a chain
+    !! persisted at a SMALLER crop with the same physical field of view is
+    !! compatible (add_raw_accum_weighted embeds it by index-aligned
+    !! zero-extension). A larger-crop chain, a field-of-view change, an
+    !! identity/provenance change, or any read failure counts as incompatible:
+    !! callers must discard such a chain and re-seed (bootstrap) instead of
+    !! reducing it.
+    logical function pcg_raw_accum_compatible( fname, box, smpd, provenance ) result( l_compatible )
+        class(string),    intent(in) :: fname
+        integer,          intent(in) :: box
+        real,             intent(in) :: smpd
+        character(len=*), intent(in) :: provenance
+        character(len=16) :: magic
+        character(len=PCG_RAW_PROV_LEN) :: prov_file, prov_expected
+        integer :: funit, ierr, version, state_file, eo_file, part_file, nparts_file, nptcls_file
+        integer :: box_file, boxpd_file, padf_file, lims_file(3,2)
+        real    :: smpd_file, fov_file, fov_cur
+        l_compatible = .false.
+        if( .not. file_exists(fname) ) return
+        call fopen(funit, file=fname, status='OLD', action='READ', access='STREAM', iostat=ierr)
+        if( ierr /= 0 ) return
+        read(funit, iostat=ierr) magic, version
+        if( ierr == 0 ) read(funit, iostat=ierr) state_file, eo_file, part_file, nparts_file, nptcls_file
+        if( ierr == 0 ) read(funit, iostat=ierr) box_file, boxpd_file, padf_file, lims_file, smpd_file
+        if( ierr == 0 ) read(funit, iostat=ierr) prov_file
+        call fclose(funit)
+        if( ierr /= 0 ) return
+        if( magic /= PCG_RAW_ACCUM_MAGIC .or. version /= PCG_RAW_ACCUM_VERSION ) return
+        if( box_file > box .or. padf_file /= OSMPL_PAD_FAC .or. boxpd_file /= padf_file*box_file ) return
+        fov_file = real(box_file) * smpd_file
+        fov_cur  = real(box) * smpd
+        if( abs(fov_file-fov_cur) > 1.0e-4*fov_cur ) return
+        prov_expected = ' '
+        if( len_trim(provenance) > 0 )then
+            prov_expected(1:min(len_trim(provenance),PCG_RAW_PROV_LEN)) = &
+                &provenance(1:min(len_trim(provenance),PCG_RAW_PROV_LEN))
+        endif
+        if( prov_file /= prov_expected ) return
+        l_compatible = .true.
+    end function pcg_raw_accum_compatible
+
     !> Add one complete raw artifact with an explicit continuation weight.
     !! Unlike add_raw_accum this routine does not participate in worker-part
     !! ordering. It is for deterministic algebra on already reduced current
     !! and previous chains after the worker reduction has completed.
+    !!
+    !! Constant-FOV crop continuity: under box*smpd == box_crop*smpd_crop the
+    !! padded lattices of consecutive crops share their frequency step, so a
+    !! SMALLER previous grid is an index-aligned central subset of the current
+    !! one and its (B,D) statistics embed exactly by zero-extension -- the same
+    !! autoscale ramp the gridding trailing chain performs. The one
+    !! approximation is the old lattice's wrap rim: KB windows that wrapped
+    !! around the old period carry aliased mass in the outermost old shells,
+    !! at/beyond the producing stage's matching band and decaying as (1-u)^k.
+    !! Larger-than-current grids cannot be restricted and are rejected.
     subroutine add_raw_accum_weighted( self, fname, state, eo, part, nparts, provenance, weight, nptcls )
         class(reconstructor_pcg), intent(inout) :: self
         class(string),            intent(in)    :: fname
@@ -2749,7 +2803,7 @@ contains
         real,    allocatable :: dslice(:,:)
         integer :: funit, ierr, m, version, state_file, eo_file, part_file
         integer :: nparts_file, box_file, boxpd_file, padf_file, lims_file(3,2)
-        real    :: smpd_file
+        real    :: smpd_file, fov_file, fov_self
         integer(int64) :: file_size, stream_pos
         if( .not. self%l_accum ) THROW_HARD('raw PCG accumulator is not open; add_raw_accum_weighted')
         if( .not. ieee_is_finite(weight) .or. weight < 0.0 ) THROW_HARD('invalid weighted raw PCG contribution')
@@ -2772,35 +2826,47 @@ contains
         if( magic /= PCG_RAW_ACCUM_MAGIC .or. version /= PCG_RAW_ACCUM_VERSION ) THROW_HARD('weighted raw PCG format mismatch')
         if( state_file /= state .or. eo_file /= eo .or. part_file /= part ) THROW_HARD('weighted raw PCG identity mismatch')
         if( nparts_file /= nparts .or. nptcls < 0 ) THROW_HARD('weighted raw PCG accumulator partition mismatch')
-        if( box_file /= self%box .or. boxpd_file /= self%boxpd .or. padf_file /= self%padf ) THROW_HARD('weighted raw box mismatch')
-        if( any(lims_file /= self%lims3) ) THROW_HARD('weighted raw PCG accumulator lattice mismatch')
-        if( abs(smpd_file-self%smpd) > max(1.0e-6,1.0e-6*abs(self%smpd)) ) THROW_HARD('weighted raw PCG sampling mismatch')
+        if( box_file > self%box .or. padf_file /= self%padf .or. boxpd_file /= padf_file*box_file )then
+            THROW_HARD('weighted raw box mismatch')
+        endif
+        fov_file = real(box_file) * smpd_file
+        fov_self = real(self%box) * self%smpd
+        if( abs(fov_file-fov_self) > 1.0e-4*fov_self ) THROW_HARD('weighted raw PCG field-of-view mismatch')
+        if( any(lims_file(:,1) < self%lims3(:,1)) .or. any(lims_file(:,2) > self%lims3(:,2)) )then
+            THROW_HARD('weighted raw PCG accumulator lattice is not nested in the current one')
+        endif
         if( prov_file /= prov_expected ) THROW_HARD('weighted raw PCG accumulator provenance mismatch')
+        if( box_file /= self%box .and. nptcls > 0 .and. weight > 0.0 )then
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> PCG TRAIL: EMBEDDING PREVIOUS-CROP CHAIN (box ', &
+                &box_file, ' -> ', self%box, ', CONSTANT-FOV ZERO-EXTENSION)'
+        endif
         if( nptcls > 0 .and. weight > 0.0 )then
-            allocate(bslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
-            allocate(dslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
-            do m = self%lims3(3,1), self%lims3(3,2)
+            allocate(bslice(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2)))
+            allocate(dslice(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2)))
+            do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) bslice
                 if( ierr /= 0 ) exit
-                self%b_work(:,:,m) = self%b_work(:,:,m) + weight * bslice
+                self%b_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) = &
+                    &self%b_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) + weight * bslice
             enddo
             call fileiochk('add_raw_accum_weighted reading B', ierr)
-            do m = self%lims3(3,1), self%lims3(3,2)
+            do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) dslice
                 if( ierr /= 0 ) exit
-                self%acc_work(:,:,m) = self%acc_work(:,:,m) + weight * dslice
+                self%acc_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) = &
+                    &self%acc_work(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2), m) + weight * dslice
             enddo
             call fileiochk('add_raw_accum_weighted reading D', ierr)
             deallocate(bslice, dslice)
         else if( nptcls > 0 )then
-            allocate(bslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
-            allocate(dslice(self%lims3(1,1):self%lims3(1,2), self%lims3(2,1):self%lims3(2,2)))
-            do m = self%lims3(3,1), self%lims3(3,2)
+            allocate(bslice(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2)))
+            allocate(dslice(lims_file(1,1):lims_file(1,2), lims_file(2,1):lims_file(2,2)))
+            do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) bslice
                 if( ierr /= 0 ) exit
             enddo
             call fileiochk('add_raw_accum_weighted skipping B', ierr)
-            do m = self%lims3(3,1), self%lims3(3,2)
+            do m = lims_file(3,1), lims_file(3,2)
                 read(funit, iostat=ierr) dslice
                 if( ierr /= 0 ) exit
             enddo

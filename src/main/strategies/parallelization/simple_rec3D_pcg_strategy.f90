@@ -5,7 +5,8 @@ use simple_core_module_api
 use simple_builder,           only: builder
 use simple_cmdline,           only: cmdline
 use simple_parameters,        only: parameters
-use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL
+use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, &
+    &pcg_raw_accum_compatible
 use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, &
     &discrete_read_imgbatch_source, killimgbatch
 use simple_ptcl_cache,        only: ptcl_cache_read_batch
@@ -1540,6 +1541,13 @@ contains
         do state = 1, params%nstates
             l_bootstrap = .false.
             if( params%l_trail_rec )then
+                ! constant-FOV crop growth keeps the chain continuous (the
+                ! reader embeds a smaller previous grid by zero-extension);
+                ! only a true identity change -- provenance, field of view,
+                ! a shrinking box, or a pre-v2 chain format -- discards the
+                ! pair and re-seeds through the bootstrap blend, mirroring
+                ! the gridding backend's manifest validation policy
+                call discard_stale_trail_chain_pair(state)
                 raw_fname = refine3D_pcg_trail_accum_fname(state, 'even')
                 l_even_chain = file_exists(raw_fname)
                 raw_fname = refine3D_pcg_trail_accum_fname(state, 'odd')
@@ -1746,6 +1754,37 @@ contains
                 if( build%spproj_field%get_sampled(p) == sample_ind ) n_sampled = n_sampled + 1
             enddo
         end subroutine count_state_sampling
+
+        !> Discard a trailing chain pair that is genuinely unusable: a
+        !! continuation-identity (provenance) change, a field-of-view change,
+        !! a chain persisted at a LARGER crop than the current one, or an
+        !! unreadable/old-format artifact. Constant-FOV crop growth (the
+        !! abinitio3D stage ramp) is NOT stale -- the weighted reader embeds
+        !! the smaller previous grid by index-aligned zero-extension. Both
+        !! halves are removed together so a stale half can never combine with
+        !! a fresh one; the caller then re-enters the bootstrap blend.
+        subroutine discard_stale_trail_chain_pair( state_here )
+            integer, intent(in) :: state_here
+            type(string) :: even_fname, odd_fname
+            logical      :: l_even_here, l_odd_here, l_stale
+            even_fname  = refine3D_pcg_trail_accum_fname(state_here, 'even')
+            odd_fname   = refine3D_pcg_trail_accum_fname(state_here, 'odd')
+            l_even_here = file_exists(even_fname)
+            l_odd_here  = file_exists(odd_fname)
+            l_stale     = .false.
+            if( l_even_here ) l_stale = .not. pcg_raw_accum_compatible(even_fname, &
+                &params%box_crop, params%smpd_crop, chain_provenance)
+            if( .not. l_stale .and. l_odd_here ) l_stale = .not. pcg_raw_accum_compatible(odd_fname, &
+                &params%box_crop, params%smpd_crop, chain_provenance)
+            if( l_stale )then
+                if( l_even_here ) call del_file(even_fname)
+                if( l_odd_here  ) call del_file(odd_fname)
+                write(logfhandle,'(A,I0,A)') '>>> PCG DISTRIBUTED: DISCARDING STALE TRAILING CHAIN, STATE ', &
+                    &state_here, ' (GEOMETRY/IDENTITY CHANGE); RE-SEEDING VIA BOOTSTRAP'
+            endif
+            call even_fname%kill
+            call odd_fname%kill
+        end subroutine discard_stale_trail_chain_pair
 
         subroutine load_previous_state_halves( state_here, even, odd, avg )
             integer,     intent(in)    :: state_here
@@ -2245,16 +2284,18 @@ contains
             &'|msk='//trim(real2str(params%msk))//'|ctf='//trim(params%ctf)
     end function pcg_raw_provenance
 
-    ! Continuation identity deliberately excludes which_iter: the chain must
-    ! survive iteration boundaries, while geometry, objective and particle
-    ! source changes must invalidate it.
+    ! Continuation identity deliberately excludes which_iter AND the crop
+    ! geometry: the chain must survive iteration boundaries and constant-FOV
+    ! crop changes (stage transitions; the reader embeds a smaller previous
+    ! grid by zero-extension and validates the field of view structurally),
+    ! while native geometry, objective and particle source changes must
+    ! invalidate it.
     function pcg_chain_provenance( params ) result(provenance)
         type(parameters), intent(in) :: params
         character(len=256) :: provenance
-        provenance = 'pcgtrail-v1|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
+        provenance = 'pcgtrail-v2|pgrp='//trim(params%pgrp)//'|objfun='//trim(params%objfun)// &
             &'|ptcl_src='//trim(params%ptcl_src)//'|box='//trim(int2str(params%box))// &
-            &'|smpd='//trim(real2str(params%smpd))//'|box_crop='//trim(int2str(params%box_crop))// &
-            &'|smpd_crop='//trim(real2str(params%smpd_crop))// &
+            &'|smpd='//trim(real2str(params%smpd))// &
             &'|msk='//trim(real2str(params%msk))//'|ctf='//trim(params%ctf)
     end function pcg_chain_provenance
 
