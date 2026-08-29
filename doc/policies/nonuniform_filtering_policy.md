@@ -274,13 +274,21 @@ qualify evidence to parameterize a precision. The PCG replay consumes the expand
 the `Q_NU` precision when `pcg_nu_lambda_rel > 0`
 (`doc/implementation_notes/pcg_priors.md` Stage 6). Since 2026-08-28 this is
 the DEFAULT whenever `rec_backend=pcg` runs with NU filtering and the euclid
-ML replay; in that mode the post-hoc NU filter, its `_nu_filt`/`_nu_locres`
-products, and the evidence envelope are NOT generated -- the in-solve
-precision already performs the local regularization, and the LP-set matching
-handoff derives from the frozen replay evidence (finest evidenced local
-cutoff). The full post-hoc NU filtering path described in this document
-remains the production behavior for the gridding backend and for PCG with an
-explicit `pcg_nu_lambda_rel=0`.
+ML replay; in that mode the post-hoc NU filter and its
+`_nu_filt`/`_nu_locres` products are NOT generated -- the in-solve precision
+already performs the local regularization, and the LP-set matching handoff
+derives from the frozen replay evidence (finest evidenced local cutoff).
+With `automsk` enabled the NU-evidence envelope IS still produced
+(2026-08-29): it is regenerated at replay-evidence construction time, while
+the raw per-voxel evidence margins are live, so the matching-reference
+envelope derives from the same frozen evidence as the `Q_NU` precision --
+one analysis, two consumers. Cadence and artifact naming follow the same
+`plan_state_postprocess` contract as the post-hoc paths, and all three
+regeneration sites (gridding volassemble, PCG post-hoc, PCG replay) share
+the single producer `write_nu_evidence_envmask` in `simple_nu_filter`. The
+full post-hoc NU filtering path described in this document remains the
+production behavior for the gridding backend and for PCG with an explicit
+`pcg_nu_lambda_rel=0`.
 
 Auxiliary replacement is conservative. If supplied, the auxiliary pair replaces
 the finest discrete label only when its effective resolution is finer than that

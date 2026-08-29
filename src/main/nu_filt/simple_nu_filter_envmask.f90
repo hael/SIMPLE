@@ -19,8 +19,11 @@
 !
 ! Segmentation is a binary MRF solved with the same parallel 8-color ICM schedule
 ! the ordered-label Potts prior uses. beta regularizes boundary area only; it does
-! not enforce a connected result. Topology is the caller's job, via the connected
-! component and morphology tail in simple_image_msk.
+! not enforce a connected result. Topology is applied by the connected component
+! and morphology tail in simple_image_msk: piecewise callers invoke it themselves
+! after nu_evidence_envelope, while write_nu_evidence_envmask runs the complete
+! evidence -> segmentation -> topology -> artifact chain as the one shared
+! producer for every workflow that regenerates the envelope from live evidence.
 !
 submodule (simple_nu_filter) simple_nu_filter_envmask
 implicit none
@@ -292,6 +295,57 @@ contains
         if( allocated(margin) ) deallocate(margin)
         if( allocated(score)  ) deallocate(score)
     end subroutine nu_evidence_envelope
+
+    !> The one shared NU-evidence envelope producer: build the envelope from
+    !! the LIVE raw evidence (setup_nu_dmats plus a completed candidate
+    !! evaluation must have run), apply the connected-component/morphology
+    !! topology tail, and write the artifact to the explicit filename. Policy
+    !! stays with the caller: whether and when to regenerate is decided by
+    !! plan_state_postprocess at the call site, and the filename is passed in.
+    !! An empty evidence field warns and writes nothing; every envelope
+    !! consumer handles absence.
+    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname )
+        use simple_image_msk, only: image_msk
+        real,          intent(in) :: nsigma, lp_smooth, smpd
+        integer,       intent(in) :: state
+        class(string), intent(in) :: fname
+        type(nu_envmask_params) :: envp
+        type(nu_envmask_stats)  :: envstats
+        type(image_msk)         :: envmask
+        logical, allocatable    :: l_env(:,:,:)
+        integer :: grow_px, edge_px, n_ccs, n_ccs_kept
+        envp%nsigma      = nsigma
+        envp%beta        = NU_ENVMASK_BETA
+        envp%dens_weight = NU_ENVMASK_DENS_WEIGHT
+        envp%lp_smooth   = lp_smooth
+        envp%l_relative  = NU_ENVMASK_RELATIVE
+        call nu_evidence_envelope(envp, l_env, envstats)
+        call print_nu_envmask_stats(envstats)
+        grow_px = max(1, nint(NU_ENVMASK_GROW_A / smpd))
+        edge_px = max(1, nint(NU_ENVMASK_EDGE_A / smpd))
+        call envmask%envmask3D_from_lmask(l_env, smpd, grow_px, edge_px, &
+            &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
+        ! an empty evidence field returns without constructing the mask image;
+        ! writing it would abort on invalid MRC dimensions. Skip the write --
+        ! every envelope consumer handles absence.
+        if( n_ccs_kept < 1 )then
+            THROW_WARN('NU evidence envelope is empty; no envelope mask written this iteration')
+        else
+            call envmask%write(fname, del_if_exists=.true.)
+            call wait_for_closure(fname)
+            write(logfhandle,'(A,I0,A,1X,A)') &
+                &'>>> NU EVIDENCE ENVELOPE: STATE ', state, ', MASK', fname%to_char()
+        endif
+        ! One greppable line per state per cycle. The envelope is allowed to
+        ! shrink as resolution improves, but reference masking suppresses
+        ! whatever it excludes, so a monotonically falling occupancy is the
+        ! signal that it is clipping rather than tightening.
+        write(logfhandle,'(A,I0,A,F8.3,A,I0,A,I0)') &
+            &'>>> NU ENVELOPE OCCUPANCY: STATE ', state, ', SUPPORT FRACTION ', &
+            &envstats%pct_signal, ' %, COMPONENTS KEPT ', n_ccs_kept, ' OF ', n_ccs
+        call envmask%kill_bimg
+        if( allocated(l_env) ) deallocate(l_env)
+    end subroutine write_nu_evidence_envmask
 
     module subroutine write_nu_evidence_map( fname, lp_smooth, l_relative )
         class(string),     intent(in) :: fname

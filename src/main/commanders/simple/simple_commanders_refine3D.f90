@@ -103,7 +103,18 @@ contains
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',        'yes')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
-        if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
+        ! NU shell extension is obsolete under the PCG backend: the in-solve
+        ! Q_NU replay performs the local regularization, so nu_refine defaults
+        ! off there, mirroring the abinitio3D stage policy (an explicit
+        ! nu_refine=yes with rec_backend=pcg still hard-errors in the strategy
+        ! guard). The gridding competition default is unchanged.
+        if( .not. cline%defined('nu_refine') )then
+            if( cline%defined('rec_backend') .and. cline%get_carg('rec_backend') .eq. 'pcg' )then
+                call cline%set('nu_refine', 'no')
+            else
+                call cline%set('nu_refine', 'yes') ! allow conservative NU resolution-bank expansion
+            endif
+        endif
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! envelope masking for background flattening
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then
@@ -335,6 +346,24 @@ contains
                 call raw_even%kill
                 call raw_odd%kill
                 call candidate%kill
+                call vol_even_raw%kill
+                call vol_odd_raw%kill
+                return
+            endif
+            ! PCG backend: the Q_NU replay regularizes in-solve, so the
+            ! competition NU prefilter of the validated init halves is
+            ! bypassed exactly like the post-hoc filter; no _nu_filt startup
+            ! references are produced and the first-iteration matching
+            ! references come from the raw init halves, as every later Q_NU
+            ! iteration feeds them. The raw-pair validation and its
+            ! reconstruct-startup fallback above stay backend-neutral.
+            if( trim(params%rec_backend) == 'pcg' )then
+                write(logfhandle,'(A)') &
+                    &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: PCG backend; raw native E/O startup references used without NU prefiltering'
+                call init_even%kill
+                call init_odd%kill
+                call raw_even%kill
+                call raw_odd%kill
                 call vol_even_raw%kill
                 call vol_odd_raw%kill
                 return

@@ -764,12 +764,14 @@ contains
         end subroutine restore_gridding_pair
 
         !> Gridding adapter for the backend-neutral half-map evaluator: builds
-        !! the merged average, selects the legacy broad spherical FSC mask
-        !! radius, and writes the automask artifact on the envfsc path. The
-        !! ordinary restoration path passes the real-space undeapodized base
-        !! pair from restore_base (the legacy gridding FSC representation);
-        !! the trailing bootstrap passes the previous final half maps, which
-        !! already satisfy the real-space contract.
+        !! the merged average, selects the spherical FSC mask radius, and
+        !! writes the automask artifact on the envfsc path. The mask radius is
+        !! the user mask (msk_crop), unified with the PCG backend (2026-08-28;
+        !! previously the broad rim radius box_crop/2 - COSMSKHALFWIDTH - 1).
+        !! The ordinary restoration path passes the real-space undeapodized
+        !! base pair from restore_base (the legacy gridding FSC
+        !! representation); the trailing bootstrap passes the previous final
+        !! half maps, which already satisfy the real-space contract.
         subroutine calc_gridding_pair_diagnostics( params, even, odd, state, diagnostics, cones )
             use simple_fsc, only: fsc_area_score_result
             class(parameters),                      intent(in)    :: params
@@ -779,7 +781,7 @@ contains
             class(fsc_area_score_result), optional, intent(inout) :: cones
             type(image) :: average, envmask
             real        :: msk
-            msk = real(params%box_crop / 2) - COSMSKHALFWIDTH - 1.
+            msk = params%msk_crop
             call average%copy(even)
             call average%add(odd)
             call average%mul(0.5)
@@ -807,9 +809,7 @@ contains
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &set_nu_filter_report, NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, &
-            &write_nu_local_resolution_map, nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, &
-            &print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT, NU_ENVMASK_RELATIVE, &
-            &NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
+            &write_nu_local_resolution_map, write_nu_evidence_envmask
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
             &NU_ENVMASK_ACTION_REGENERATE
         type(parameters), intent(in)    :: params
@@ -819,17 +819,13 @@ contains
         type(image)                   :: vol_base_even, vol_base_odd, vol_aux_even, vol_aux_odd
         type(image)                   :: vol_even_nu, vol_odd_nu
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
-        type(image_msk)               :: nu_envmask
         type(vol_pproc_plan)          :: pp_plan
-        type(nu_envmask_params)       :: envp
-        type(nu_envmask_stats)        :: envstats
         type(string)                  :: eonames(2), volname, eonames_nu(2), volname_nu, locres_name
         type(string)                  :: fsc_fname
         real, allocatable             :: fsc(:), res(:), nu_align_lps(:)
         integer, allocatable          :: state_pops(:)
-        logical, allocatable          :: l_env(:,:,:)
         logical, allocatable          :: l_included(:)
-        integer                       :: state, i, n_ccs, n_ccs_kept, grow_px, edge_px, ldim(3)
+        integer                       :: state, i, ldim(3)
         real                          :: fsc05, fsc0143, aux_resolution, align_lp, selected_lp
 
         if( .not. params%l_nonuniform ) return
@@ -838,11 +834,14 @@ contains
             &THROW_HARD('PCG nonuniform trailing-bootstrap state input has invalid size')
         ! Policy (2026-08-28, pcg_priors.md): with the Q_NU replay active the
         ! shipped maps are already locally regularized in-solve, so the
-        ! post-hoc NU filter is redundant -- no second NU analysis, no
-        ! _nu_filt/_nu_locres products, no evidence envelope. Only the LP-set
-        ! matching handoff survives, derived from the frozen replay evidence
-        ! (the finest evidenced local cutoff per state) instead of a second
-        ! filter-bank optimization.
+        ! post-hoc NU filter is redundant -- no second NU analysis and no
+        ! _nu_filt/_nu_locres products. Only the LP-set matching handoff
+        ! survives, derived from the frozen replay evidence (the finest
+        ! evidenced local cutoff per state) instead of a second filter-bank
+        ! optimization. With automsk enabled the NU evidence envelope is
+        ! regenerated at replay-evidence construction time inside the PCG
+        ! strategy (build_nu_replay_evidence, policy 2026-08-29), from the
+        ! same frozen evidence -- never here.
         if( params%l_ml_reg .and. params%pcg_nu_lambda_rel > 0.0 )then
             if( .not. present(nu_replay_lps) ) &
                 &THROW_HARD('NU replay is active but no evidence-derived LP handoff was supplied')
@@ -920,31 +919,8 @@ contains
                     &pp_plan%nu_envmask_file%to_char()
             endif
             if( pp_plan%nu_envmask_action == NU_ENVMASK_ACTION_REGENERATE )then
-                envp%nsigma      = params%nu_msk_sig
-                envp%beta        = NU_ENVMASK_BETA
-                envp%dens_weight = NU_ENVMASK_DENS_WEIGHT
-                envp%lp_smooth   = params%amsklp
-                envp%l_relative  = NU_ENVMASK_RELATIVE
-                call nu_evidence_envelope(envp, l_env, envstats)
-                call print_nu_envmask_stats(envstats)
-                grow_px = max(1, nint(NU_ENVMASK_GROW_A / params%smpd_crop))
-                edge_px = max(1, nint(NU_ENVMASK_EDGE_A / params%smpd_crop))
-                call nu_envmask%kill_bimg
-                call nu_envmask%envmask3D_from_lmask(l_env, params%smpd_crop, grow_px, edge_px, &
-                    &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
-                ! an empty evidence field returns without constructing the mask
-                ! image; writing it would abort on invalid MRC dimensions. Skip
-                ! the write -- every envelope consumer handles absence.
-                if( n_ccs_kept < 1 )then
-                    THROW_WARN('NU evidence envelope is empty; no envelope mask written this iteration')
-                else
-                    call nu_envmask%write(pp_plan%nu_envmask_file, del_if_exists=.true.)
-                    call wait_for_closure(pp_plan%nu_envmask_file)
-                endif
-                write(logfhandle,'(A,I0,A,F8.3,A,I0,A,I0)') &
-                    &'>>> NU ENVELOPE OCCUPANCY: STATE ', state, ', SUPPORT FRACTION ', &
-                    &envstats%pct_signal, ' %, COMPONENTS KEPT ', n_ccs_kept, ' OF ', n_ccs
-                if( allocated(l_env) ) deallocate(l_env)
+                call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, params%smpd_crop, &
+                    &state, pp_plan%nu_envmask_file)
             endif
 
             call vol_base_even%kill
@@ -970,7 +946,6 @@ contains
             call vol_even_nu%kill
             call vol_odd_nu%kill
             call cleanup_nu_filter()
-            call nu_envmask%kill_bimg
             call pp_plan%nu_envmask_file%kill
             call eonames(1)%kill
             call eonames(2)%kill
@@ -997,7 +972,6 @@ contains
         call vol_even_nu%kill
         call vol_odd_nu%kill
         call cleanup_nu_filter()
-        call nu_envmask%kill_bimg
         call pp_plan%nu_envmask_file%kill
         if( allocated(fsc) ) deallocate(fsc)
         if( allocated(res) ) deallocate(res)
@@ -1030,9 +1004,7 @@ contains
             &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
             &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
             &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, &
-            &nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, print_nu_envmask_stats, &
-            &NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT, NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, &
-            &NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A
+            &write_nu_evidence_envmask
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
             &NU_ENVMASK_ACTION_REGENERATE
         class(commander_volassemble), intent(inout) :: self
@@ -1044,7 +1016,6 @@ contains
         type(image)                   :: vol_even_nu, vol_odd_nu
         type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
-        type(image_msk)               :: nu_envmask
         type(string)                  :: volname, eonames(2)
         type(restore_timings_t)       :: restore_timings
         type(vol_pproc_plan)          :: pp_plan
@@ -1265,43 +1236,10 @@ contains
         end subroutine run_state_nonuniform_filter
 
         subroutine generate_state_nu_envmask()
-            type(nu_envmask_params) :: envp
-            type(nu_envmask_stats)  :: envstats
-            logical, allocatable    :: l_env(:,:,:)
-            integer                 :: n_ccs, n_ccs_kept, grow_px, edge_px
             if( pp_plan%nu_envmask_action /= NU_ENVMASK_ACTION_REGENERATE ) return
             if( L_BENCH_GLOB ) t_nu_envmask = tic()
-            envp%nsigma      = params%nu_msk_sig
-            envp%beta        = NU_ENVMASK_BETA
-            envp%dens_weight = NU_ENVMASK_DENS_WEIGHT
-            envp%lp_smooth   = params%amsklp
-            envp%l_relative  = NU_ENVMASK_RELATIVE
-            call nu_evidence_envelope(envp, l_env, envstats)
-            call print_nu_envmask_stats(envstats)
-            grow_px = max(1, nint(NU_ENVMASK_GROW_A / vol_nu_base_even%get_smpd()))
-            edge_px = max(1, nint(NU_ENVMASK_EDGE_A / vol_nu_base_even%get_smpd()))
-            call nu_envmask%kill_bimg
-            call nu_envmask%envmask3D_from_lmask(l_env, vol_nu_base_even%get_smpd(), grow_px, edge_px, &
-                &NU_ENVMASK_MINVOL_FRAC, .true., n_ccs, n_ccs_kept)
-            ! an empty evidence field returns without constructing the mask
-            ! image; writing it would abort on invalid MRC dimensions. Skip the
-            ! write -- every envelope consumer handles absence.
-            if( n_ccs_kept < 1 )then
-                THROW_WARN('NU evidence envelope is empty; no envelope mask written this iteration')
-            else
-                call nu_envmask%write(pp_plan%nu_envmask_file, del_if_exists=.true.)
-                call wait_for_closure(pp_plan%nu_envmask_file)
-                write(logfhandle,'(A,I0,A,1X,A)') &
-                    &'>>> NU EVIDENCE ENVELOPE: STATE ', state, ', MASK', pp_plan%nu_envmask_file%to_char()
-            endif
-            ! One greppable line per state per cycle. The envelope is allowed to
-            ! shrink as resolution improves, but reference masking suppresses
-            ! whatever it excludes, so a monotonically falling occupancy is the
-            ! signal that it is clipping rather than tightening.
-            write(logfhandle,'(A,I0,A,F8.3,A,I0,A,I0)') &
-                &'>>> NU ENVELOPE OCCUPANCY: STATE ', state, ', SUPPORT FRACTION ', &
-                &envstats%pct_signal, ' %, COMPONENTS KEPT ', n_ccs_kept, ' OF ', n_ccs
-            if( allocated(l_env) ) deallocate(l_env)
+            call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, &
+                &vol_nu_base_even%get_smpd(), state, pp_plan%nu_envmask_file)
             if( L_BENCH_GLOB ) rt_nu_envmask = rt_nu_envmask + toc(t_nu_envmask)
         end subroutine generate_state_nu_envmask
 
@@ -1596,7 +1534,6 @@ contains
             if( allocated(update_frac_trail_recs) ) deallocate(update_frac_trail_recs)
             if( allocated(realized_update_fracs)  ) deallocate(realized_update_fracs)
             call cleanup_nu_filter()
-            call nu_envmask%kill_bimg
             call pp_plan%nu_envmask_file%kill
             call volname%kill
             call eonames(1)%kill

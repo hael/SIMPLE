@@ -272,8 +272,8 @@ contains
                 ! each carries a different total kernel weight, so the difference between two states is
                 ! dominated by a constant baseline offset rather than by the conformational change
                 ! (zero_background reads the level off the box faces, shape-preserving), and solvent noise
-                ! dominates any unmasked comparison. Radius convention is the platform's broad
-                ! spherical FSC mask (see the gridding adapter in simple_commanders_rec_distr).
+                ! dominates any unmasked comparison. Radius is the broadest soft-maskable
+                ! sphere in the box (box/2 - COSMSKHALFWIDTH - 1).
                 call state_img%zero_background
                 call state_img%mask3D_soft(real(box_rec/2) - COSMSKHALFWIDTH - 1., backgr=0.)
                 call write_state(params, state_img, state, state_vol_fname)

@@ -3,7 +3,7 @@
 ## Module: CPlot2D_wrapper_module
 
 Files:
-- `extlibs/CPlot2D/simple_CPlot2D_wrapper.f90`
+- `../scripts/../src/extlibs/CPlot2D/simple_CPlot2D_wrapper.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -70,13 +70,13 @@ Private symbols:
 ## Module: curl
 
 Files:
-- `extlibs/curl/src/curl.f90`
+- `../scripts/../src/extlibs/curl/src/curl.f90`
 
 ---
 ## Module: curl_easy
 
 Files:
-- `extlibs/curl/src/curl_easy.f90`
+- `../scripts/../src/extlibs/curl/src/curl_easy.f90`
 
 Public symbols:
 - `curl_easy_cleanup` — subroutine
@@ -123,7 +123,7 @@ Private symbols:
 ## Module: curl_multi
 
 Files:
-- `extlibs/curl/src/curl_multi.f90`
+- `../scripts/../src/extlibs/curl/src/curl_multi.f90`
 
 Public symbols:
 - `curl_multi_add_handle` — function
@@ -145,7 +145,7 @@ Private symbols:
 ## Module: curl_urlapi
 
 Files:
-- `extlibs/curl/src/curl_urlapi.f90`
+- `../scripts/../src/extlibs/curl/src/curl_urlapi.f90`
 
 Public symbols:
 - `curl_url` — function
@@ -164,7 +164,7 @@ Private symbols:
 ## Module: curl_util
 
 Files:
-- `extlibs/curl/src/curl_util.f90`
+- `../scripts/../src/extlibs/curl/src/curl_util.f90`
 
 Public symbols:
 - `c_f_str_ptr` — subroutine
@@ -176,15 +176,15 @@ Private symbols:
 ## Module: elemental
 
 Files:
-- `main/image/simple_image.f90`
-- `main/image/simple_image_access.f90`
-- `main/image/simple_image_arith.f90`
+- `../scripts/../src/main/image/simple_image.f90`
+- `../scripts/../src/main/image/simple_image_access.f90`
+- `../scripts/../src/main/image/simple_image_arith.f90`
 
 ---
 ## Module: FoX_common
 
 Files:
-- `extlibs/xml/common/FoX_common.F90`
+- `../scripts/../src/extlibs/xml/common/FoX_common.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -198,7 +198,7 @@ Uses:
 ## Module: FoX_dom
 
 Files:
-- `extlibs/xml/dom/FoX_dom.f90`
+- `../scripts/../src/extlibs/xml/dom/FoX_dom.f90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -213,7 +213,7 @@ Uses:
 ## Module: fox_m_fsys_abort_flush
 
 Files:
-- `extlibs/xml/fsys/fox_m_fsys_abort_flush.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_abort_flush.F90`
 
 Uses:
 - `f90_unix_io`
@@ -229,13 +229,13 @@ Public symbols:
 ## Module: fox_m_fsys_array_str
 
 Files:
-- `extlibs/xml/fsys/fox_m_fsys_array_str.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_array_str.F90`
 
 ---
 ## Module: fox_m_fsys_count_parse_input
 
 Files:
-- `extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -244,7 +244,7 @@ Uses:
 ## Module: fox_m_fsys_format
 
 Files:
-- `extlibs/xml/fsys/fox_m_fsys_format.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_format.F90`
 
 Uses:
 - `fox_m_fsys_abort_flush`
@@ -254,7 +254,7 @@ Uses:
 ## Module: fox_m_fsys_parse_input
 
 Files:
-- `extlibs/xml/fsys/fox_m_fsys_parse_input.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_parse_input.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -263,13 +263,13 @@ Uses:
 ## Module: fox_m_fsys_realtypes
 
 Files:
-- `extlibs/xml/fsys/fox_m_fsys_realtypes.f90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_realtypes.f90`
 
 ---
 ## Module: fox_m_fsys_string
 
 Files:
-- `extlibs/xml/fsys/fox_m_fsys_string.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_string.F90`
 
 Public symbols:
 - `toLower` — function
@@ -278,7 +278,7 @@ Public symbols:
 ## Module: fox_m_fsys_string_list
 
 Files:
-- `extlibs/xml/fsys/fox_m_fsys_string_list.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_string_list.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -287,7 +287,7 @@ Uses:
 ## Module: fox_m_utils_mtprng
 
 Files:
-- `extlibs/xml/utils/fox_m_utils_mtprng.F90`
+- `../scripts/../src/extlibs/xml/utils/fox_m_utils_mtprng.F90`
 
 Private symbols:
 - `mtprng_init` — subroutine
@@ -303,7 +303,7 @@ Private symbols:
 ## Module: fox_m_utils_uri
 
 Files:
-- `extlibs/xml/utils/fox_m_utils_uri.F90`
+- `../scripts/../src/extlibs/xml/utils/fox_m_utils_uri.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -360,7 +360,7 @@ Private symbols:
 ## Module: fox_m_utils_uuid
 
 Files:
-- `extlibs/xml/utils/fox_m_utils_uuid.F90`
+- `../scripts/../src/extlibs/xml/utils/fox_m_utils_uuid.F90`
 
 Uses:
 - `fox_m_utils_mtprng`
@@ -378,7 +378,7 @@ Private symbols:
 ## Module: FoX_sax
 
 Files:
-- `extlibs/xml/sax/FoX_sax.f90`
+- `../scripts/../src/extlibs/xml/sax/FoX_sax.f90`
 
 Uses:
 - `fox_common`
@@ -388,7 +388,7 @@ Uses:
 ## Module: FoX_utils
 
 Files:
-- `extlibs/xml/utils/FoX_utils.f90`
+- `../scripts/../src/extlibs/xml/utils/FoX_utils.f90`
 
 Uses:
 - `fox_m_utils_uri`
@@ -398,7 +398,7 @@ Uses:
 ## Module: FoX_wcml
 
 Files:
-- `extlibs/xml/wcml/FoX_wcml.f90`
+- `../scripts/../src/extlibs/xml/wcml/FoX_wcml.f90`
 
 Uses:
 - `fox_wxml`
@@ -417,7 +417,7 @@ Uses:
 ## Module: FoX_wkml
 
 Files:
-- `extlibs/xml/wkml/FoX_wkml.f90`
+- `../scripts/../src/extlibs/xml/wkml/FoX_wkml.f90`
 
 Uses:
 - `fox_wxml`
@@ -434,7 +434,7 @@ Uses:
 ## Module: FoX_wxml
 
 Files:
-- `extlibs/xml/wxml/FoX_wxml.f90`
+- `../scripts/../src/extlibs/xml/wxml/FoX_wxml.f90`
 
 Uses:
 - `m_wxml_core`
@@ -444,38 +444,38 @@ Uses:
 ## Module: function
 
 Files:
-- `main/image/simple_image.f90`
-- `main/image/simple_image_access.f90`
-- `main/image/simple_image_arith.f90`
-- `main/image/simple_image_calc.f90`
-- `main/image/simple_image_checks.f90`
-- `main/image/simple_image_fft.f90`
-- `main/image/simple_image_filt.f90`
-- `main/image/simple_image_freq_anal.f90`
-- `main/image/simple_image_geom.f90`
-- `main/image/simple_image_seg.f90`
-- `main/nu_filt/simple_nu_filter.f90`
-- `main/nu_filt/simple_nu_filter_state.f90`
-- `main/ori/simple_oris.f90`
-- `main/ori/simple_oris_dists.f90`
-- `main/ori/simple_oris_getters.f90`
-- `main/ori/simple_oris_life.f90`
-- `main/ori/simple_oris_neig.f90`
-- `main/ori/simple_oris_sampling.f90`
-- `main/ori/simple_oris_stats.f90`
-- `main/params/simple_parameters.f90`
-- `main/params/simple_parameters_core.f90`
-- `main/pftc/simple_polarft_access.f90`
-- `main/pftc/simple_polarft_calc.f90`
-- `main/pftc/simple_polarft_memo.f90`
-- `main/project/simple_sp_project.f90`
-- `main/project/simple_sp_project_cls.f90`
-- `main/project/simple_sp_project_core.f90`
-- `main/project/simple_sp_project_io.f90`
-- `main/project/simple_sp_project_mic.f90`
-- `main/project/simple_sp_project_stk.f90`
-- `main/simple_abinitio_controller.f90`
-- `main/simple_abinitio_utils.f90`
+- `../scripts/../src/main/image/simple_image.f90`
+- `../scripts/../src/main/image/simple_image_access.f90`
+- `../scripts/../src/main/image/simple_image_arith.f90`
+- `../scripts/../src/main/image/simple_image_calc.f90`
+- `../scripts/../src/main/image/simple_image_checks.f90`
+- `../scripts/../src/main/image/simple_image_fft.f90`
+- `../scripts/../src/main/image/simple_image_filt.f90`
+- `../scripts/../src/main/image/simple_image_freq_anal.f90`
+- `../scripts/../src/main/image/simple_image_geom.f90`
+- `../scripts/../src/main/image/simple_image_seg.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
+- `../scripts/../src/main/ori/simple_oris.f90`
+- `../scripts/../src/main/ori/simple_oris_dists.f90`
+- `../scripts/../src/main/ori/simple_oris_getters.f90`
+- `../scripts/../src/main/ori/simple_oris_life.f90`
+- `../scripts/../src/main/ori/simple_oris_neig.f90`
+- `../scripts/../src/main/ori/simple_oris_sampling.f90`
+- `../scripts/../src/main/ori/simple_oris_stats.f90`
+- `../scripts/../src/main/params/simple_parameters.f90`
+- `../scripts/../src/main/params/simple_parameters_core.f90`
+- `../scripts/../src/main/pftc/simple_polarft_access.f90`
+- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
+- `../scripts/../src/main/pftc/simple_polarft_memo.f90`
+- `../scripts/../src/main/project/simple_sp_project.f90`
+- `../scripts/../src/main/project/simple_sp_project_cls.f90`
+- `../scripts/../src/main/project/simple_sp_project_core.f90`
+- `../scripts/../src/main/project/simple_sp_project_io.f90`
+- `../scripts/../src/main/project/simple_sp_project_mic.f90`
+- `../scripts/../src/main/project/simple_sp_project_stk.f90`
+- `../scripts/../src/main/simple_abinitio_controller.f90`
+- `../scripts/../src/main/simple_abinitio_utils.f90`
 
 Uses:
 - `simple_online_var`
@@ -484,30 +484,30 @@ Uses:
 ## Module: gnufor2
 
 Files:
-- `extlibs/gnufor/gnufor2.f90`
+- `../scripts/../src/extlibs/gnufor/gnufor2.f90`
 
 ---
 ## Module: integer
 
 Files:
-- `main/nu_filt/simple_nu_filter.f90`
-- `main/nu_filt/simple_nu_filter_bank.f90`
-- `main/nu_filt/simple_nu_filter_potts.f90`
-- `main/nu_filt/simple_nu_filter_state.f90`
-- `main/pftc/simple_polarft_access.f90`
-- `main/pftc/simple_polarft_calc.f90`
-- `main/project/simple_sp_project.f90`
-- `main/project/simple_sp_project_core.f90`
-- `main/project/simple_sp_project_mic.f90`
-- `main/project/simple_sp_project_out.f90`
-- `main/project/simple_sp_project_ptcl.f90`
-- `main/project/simple_sp_project_stk.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_bank.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_potts.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
+- `../scripts/../src/main/pftc/simple_polarft_access.f90`
+- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
+- `../scripts/../src/main/project/simple_sp_project.f90`
+- `../scripts/../src/main/project/simple_sp_project_core.f90`
+- `../scripts/../src/main/project/simple_sp_project_mic.f90`
+- `../scripts/../src/main/project/simple_sp_project_out.f90`
+- `../scripts/../src/main/project/simple_sp_project_ptcl.f90`
+- `../scripts/../src/main/project/simple_sp_project_stk.f90`
 
 ---
 ## Module: json_file_module
 
 Files:
-- `extlibs/json/json_file_module.f90`
+- `../scripts/../src/extlibs/json/json_file_module.f90`
 
 Uses:
 - `json_kinds`
@@ -522,13 +522,13 @@ Private symbols:
 ## Module: json_kinds
 
 Files:
-- `extlibs/json/json_kinds.f90`
+- `../scripts/../src/extlibs/json/json_kinds.f90`
 
 ---
 ## Module: json_module
 
 Files:
-- `extlibs/json/json_module.f90`
+- `../scripts/../src/extlibs/json/json_module.f90`
 
 Uses:
 - `json_file_module`
@@ -541,7 +541,7 @@ Uses:
 ## Module: json_parameters
 
 Files:
-- `extlibs/json/json_parameters.f90`
+- `../scripts/../src/extlibs/json/json_parameters.f90`
 
 Uses:
 - `json_kinds`
@@ -550,7 +550,7 @@ Uses:
 ## Module: json_string_utilities
 
 Files:
-- `extlibs/json/json_string_utilities.f90`
+- `../scripts/../src/extlibs/json/json_string_utilities.f90`
 
 Uses:
 - `json_kinds`
@@ -560,7 +560,7 @@ Uses:
 ## Module: json_value_module
 
 Files:
-- `extlibs/json/json_value_module.f90`
+- `../scripts/../src/extlibs/json/json_value_module.f90`
 
 Uses:
 - `json_kinds`
@@ -575,25 +575,25 @@ Private symbols:
 ## Module: logical
 
 Files:
-- `main/image/simple_image.f90`
-- `main/image/simple_image_calc.f90`
-- `main/image/simple_image_checks.f90`
-- `main/nu_filt/simple_nu_filter.f90`
-- `main/nu_filt/simple_nu_filter_evidence.f90`
-- `main/nu_filt/simple_nu_filter_potts.f90`
-- `main/nu_filt/simple_nu_filter_state.f90`
-- `main/pftc/simple_polarft_access.f90`
-- `main/pftc/simple_polarft_calc.f90`
-- `main/project/simple_sp_project.f90`
-- `main/project/simple_sp_project_mic.f90`
-- `main/project/simple_sp_project_out.f90`
-- `main/project/simple_sp_project_ptcl.f90`
+- `../scripts/../src/main/image/simple_image.f90`
+- `../scripts/../src/main/image/simple_image_calc.f90`
+- `../scripts/../src/main/image/simple_image_checks.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_evidence.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_potts.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
+- `../scripts/../src/main/pftc/simple_polarft_access.f90`
+- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
+- `../scripts/../src/main/project/simple_sp_project.f90`
+- `../scripts/../src/main/project/simple_sp_project_mic.f90`
+- `../scripts/../src/main/project/simple_sp_project_out.f90`
+- `../scripts/../src/main/project/simple_sp_project_ptcl.f90`
 
 ---
 ## Module: m_common_attrs
 
 Files:
-- `extlibs/xml/common/m_common_attrs.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_attrs.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -604,7 +604,7 @@ Uses:
 ## Module: m_common_buffer
 
 Files:
-- `extlibs/xml/common/m_common_buffer.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_buffer.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -615,7 +615,7 @@ Uses:
 ## Module: m_common_charset
 
 Files:
-- `extlibs/xml/common/m_common_charset.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_charset.F90`
 
 Uses:
 - `fox_m_fsys_string`
@@ -638,7 +638,7 @@ Public symbols:
 ## Module: m_common_content_model
 
 Files:
-- `extlibs/xml/common/m_common_content_model.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_content_model.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -666,7 +666,7 @@ Private symbols:
 ## Module: m_common_element
 
 Files:
-- `extlibs/xml/common/m_common_element.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_element.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -680,7 +680,7 @@ Uses:
 ## Module: m_common_elstack
 
 Files:
-- `extlibs/xml/common/m_common_elstack.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_elstack.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -695,7 +695,7 @@ Private symbols:
 ## Module: m_common_entities
 
 Files:
-- `extlibs/xml/common/m_common_entities.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_entities.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -708,7 +708,7 @@ Uses:
 ## Module: m_common_entity_expand
 
 Files:
-- `extlibs/xml/common/m_common_entity_expand.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_entity_expand.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -724,7 +724,7 @@ Public symbols:
 ## Module: m_common_error
 
 Files:
-- `extlibs/xml/common/m_common_error.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_error.F90`
 
 Uses:
 - `fox_m_fsys_abort_flush`
@@ -734,7 +734,7 @@ Uses:
 ## Module: m_common_io
 
 Files:
-- `extlibs/xml/common/m_common_io.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_io.F90`
 
 Uses:
 - `f90_iostat`
@@ -751,7 +751,7 @@ Private symbols:
 ## Module: m_common_namecheck
 
 Files:
-- `extlibs/xml/common/m_common_namecheck.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_namecheck.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -783,7 +783,7 @@ Public symbols:
 ## Module: m_common_namespaces
 
 Files:
-- `extlibs/xml/common/m_common_namespaces.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_namespaces.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -798,7 +798,7 @@ Uses:
 ## Module: m_common_notations
 
 Files:
-- `extlibs/xml/common/m_common_notations.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_notations.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -814,7 +814,7 @@ Public symbols:
 ## Module: m_common_struct
 
 Files:
-- `extlibs/xml/common/m_common_struct.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_struct.F90`
 
 Uses:
 - `fox_utils`
@@ -835,7 +835,7 @@ Public symbols:
 ## Module: m_contours
 
 Files:
-- `extlibs/xml/wkml/m_contours.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_contours.F90`
 
 Uses:
 - `fox_common`
@@ -879,7 +879,7 @@ Private symbols:
 ## Module: m_dom_dom
 
 Files:
-- `extlibs/xml/dom/m_dom_dom.F90`
+- `../scripts/../src/extlibs/xml/dom/m_dom_dom.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -896,7 +896,7 @@ Uses:
 ## Module: m_dom_error
 
 Files:
-- `extlibs/xml/dom/m_dom_error.f90`
+- `../scripts/../src/extlibs/xml/dom/m_dom_error.f90`
 
 Uses:
 - `fox_m_fsys_abort_flush`
@@ -917,7 +917,7 @@ Private symbols:
 ## Module: m_dom_extras
 
 Files:
-- `extlibs/xml/dom/m_dom_extras.F90`
+- `../scripts/../src/extlibs/xml/dom/m_dom_extras.F90`
 
 Uses:
 - `fox_m_fsys_parse_input`
@@ -929,7 +929,7 @@ Uses:
 ## Module: m_dom_parse
 
 Files:
-- `extlibs/xml/dom/m_dom_parse.f90`
+- `../scripts/../src/extlibs/xml/dom/m_dom_parse.f90`
 
 Uses:
 - `fox_common`
@@ -977,7 +977,7 @@ Private symbols:
 ## Module: m_dom_utils
 
 Files:
-- `extlibs/xml/dom/m_dom_utils.f90`
+- `../scripts/../src/extlibs/xml/dom/m_dom_utils.f90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -1001,7 +1001,7 @@ Private symbols:
 ## Module: m_ieee
 
 Files:
-- `extlibs/xml/fsys/m_ieee.f90`
+- `../scripts/../src/extlibs/xml/fsys/m_ieee.f90`
 
 Public symbols:
 - `generate_nan` — function
@@ -1010,7 +1010,7 @@ Public symbols:
 ## Module: m_sax_operate
 
 Files:
-- `extlibs/xml/sax/m_sax_operate.F90`
+- `../scripts/../src/extlibs/xml/sax/m_sax_operate.F90`
 
 Uses:
 - `fox_common`
@@ -1058,7 +1058,7 @@ Private symbols:
 ## Module: m_sax_parser
 
 Files:
-- `extlibs/xml/sax/m_sax_parser.F90`
+- `../scripts/../src/extlibs/xml/sax/m_sax_parser.F90`
 
 Uses:
 - `fox_common`
@@ -1133,7 +1133,7 @@ Private symbols:
 ## Module: m_sax_reader
 
 Files:
-- `extlibs/xml/sax/m_sax_reader.F90`
+- `../scripts/../src/extlibs/xml/sax/m_sax_reader.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -1168,7 +1168,7 @@ Private symbols:
 ## Module: m_sax_tokenizer
 
 Files:
-- `extlibs/xml/sax/m_sax_tokenizer.F90`
+- `../scripts/../src/extlibs/xml/sax/m_sax_tokenizer.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -1192,7 +1192,7 @@ Private symbols:
 ## Module: m_sax_types
 
 Files:
-- `extlibs/xml/sax/m_sax_types.F90`
+- `../scripts/../src/extlibs/xml/sax/m_sax_types.F90`
 
 Uses:
 - `m_common_attrs`
@@ -1208,7 +1208,7 @@ Uses:
 ## Module: m_sax_xml_source
 
 Files:
-- `extlibs/xml/sax/m_sax_xml_source.F90`
+- `../scripts/../src/extlibs/xml/sax/m_sax_xml_source.F90`
 
 Uses:
 - `fox_m_fsys_array_str`
@@ -1231,7 +1231,7 @@ Private symbols:
 ## Module: m_wcml_coma
 
 Files:
-- `extlibs/xml/wcml/m_wcml_coma.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_coma.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1243,7 +1243,7 @@ Uses:
 ## Module: m_wcml_core
 
 Files:
-- `extlibs/xml/wcml/m_wcml_core.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_core.F90`
 
 Uses:
 - `fox_common`
@@ -1263,7 +1263,7 @@ Public symbols:
 ## Module: m_wcml_geometry
 
 Files:
-- `extlibs/xml/wcml/m_wcml_geometry.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_geometry.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1274,7 +1274,7 @@ Uses:
 ## Module: m_wcml_lattice
 
 Files:
-- `extlibs/xml/wcml/m_wcml_lattice.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_lattice.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1285,7 +1285,7 @@ Uses:
 ## Module: m_wcml_lists
 
 Files:
-- `extlibs/xml/wcml/m_wcml_lists.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_lists.F90`
 
 Uses:
 - `fox_common`
@@ -1311,7 +1311,7 @@ Public symbols:
 ## Module: m_wcml_metadata
 
 Files:
-- `extlibs/xml/wcml/m_wcml_metadata.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_metadata.F90`
 
 Uses:
 - `fox_wxml`
@@ -1323,7 +1323,7 @@ Public symbols:
 ## Module: m_wcml_molecule
 
 Files:
-- `extlibs/xml/wcml/m_wcml_molecule.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_molecule.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -1336,7 +1336,7 @@ Uses:
 ## Module: m_wcml_parameter
 
 Files:
-- `extlibs/xml/wcml/m_wcml_parameter.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_parameter.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1348,7 +1348,7 @@ Uses:
 ## Module: m_wcml_property
 
 Files:
-- `extlibs/xml/wcml/m_wcml_property.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_property.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1360,7 +1360,7 @@ Uses:
 ## Module: m_wcml_stml
 
 Files:
-- `extlibs/xml/wcml/m_wcml_stml.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_stml.F90`
 
 Uses:
 - `fox_wxml`
@@ -1370,7 +1370,7 @@ Uses:
 ## Module: m_wkml_chart
 
 Files:
-- `extlibs/xml/wkml/m_wkml_chart.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_chart.F90`
 
 Uses:
 - `fox_common`
@@ -1382,7 +1382,7 @@ Uses:
 ## Module: m_wkml_color
 
 Files:
-- `extlibs/xml/wkml/m_wkml_color.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_color.F90`
 
 Uses:
 - `fox_common`
@@ -1394,13 +1394,13 @@ Uses:
 ## Module: m_wkml_color_def
 
 Files:
-- `extlibs/xml/wkml/m_wkml_color_def.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_color_def.F90`
 
 ---
 ## Module: m_wkml_contours
 
 Files:
-- `extlibs/xml/wkml/m_wkml_contours.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_contours.F90`
 
 Uses:
 - `fox_common`
@@ -1417,7 +1417,7 @@ Uses:
 ## Module: m_wkml_core
 
 Files:
-- `extlibs/xml/wkml/m_wkml_core.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_core.F90`
 
 Uses:
 - `fox_wxml`
@@ -1433,7 +1433,7 @@ Public symbols:
 ## Module: m_wkml_coverage
 
 Files:
-- `extlibs/xml/wkml/m_wkml_coverage.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_coverage.F90`
 
 Uses:
 - `fox_common`
@@ -1450,7 +1450,7 @@ Uses:
 ## Module: m_wkml_features
 
 Files:
-- `extlibs/xml/wkml/m_wkml_features.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_features.F90`
 
 Uses:
 - `fox_common`
@@ -1466,7 +1466,7 @@ Uses:
 ## Module: m_wkml_lowlevel
 
 Files:
-- `extlibs/xml/wkml/m_wkml_lowlevel.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_lowlevel.F90`
 
 Uses:
 - `fox_common`
@@ -1479,7 +1479,7 @@ Uses:
 ## Module: m_wkml_styling
 
 Files:
-- `extlibs/xml/wkml/m_wkml_styling.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_styling.F90`
 
 Uses:
 - `fox_m_fsys_realtypes`
@@ -1492,7 +1492,7 @@ Uses:
 ## Module: m_wxml_core
 
 Files:
-- `extlibs/xml/wxml/m_wxml_core.F90`
+- `../scripts/../src/extlibs/xml/wxml/m_wxml_core.F90`
 
 Uses:
 - `fox_m_fsys_abort_flush`
@@ -1517,7 +1517,7 @@ Uses:
 ## Module: m_wxml_escape
 
 Files:
-- `extlibs/xml/wxml/m_wxml_escape.F90`
+- `../scripts/../src/extlibs/xml/wxml/m_wxml_escape.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -1532,7 +1532,7 @@ Public symbols:
 ## Module: m_wxml_overloads
 
 Files:
-- `extlibs/xml/wxml/m_wxml_overloads.F90`
+- `../scripts/../src/extlibs/xml/wxml/m_wxml_overloads.F90`
 
 Uses:
 - `fox_m_fsys_format`
@@ -1543,7 +1543,7 @@ Uses:
 ## Module: mod_phasecorr
 
 Files:
-- `main/commanders/test/simple_test_mod_phasecorr.f90`
+- `../scripts/../src/main/commanders/test/simple_test_mod_phasecorr.f90`
 
 Uses:
 - `simple_image`
@@ -1561,82 +1561,82 @@ Public symbols:
 ## Module: procedure
 
 Files:
-- `defs/simple_type_defs.f90`
-- `extlibs/curl/src/curl_easy.f90`
-- `extlibs/gnufor/gnufor2.f90`
-- `extlibs/json/json_file_module.f90`
-- `extlibs/json/json_string_utilities.f90`
-- `extlibs/json/json_value_module.f90`
-- `extlibs/unix/src/unix.f90`
-- `extlibs/xml/common/m_common_attrs.F90`
-- `extlibs/xml/common/m_common_buffer.F90`
-- `extlibs/xml/common/m_common_element.F90`
-- `extlibs/xml/common/m_common_elstack.F90`
-- `extlibs/xml/common/m_common_entities.F90`
-- `extlibs/xml/common/m_common_error.F90`
-- `extlibs/xml/common/m_common_namespaces.F90`
-- `extlibs/xml/dom/m_dom_dom.F90`
-- `extlibs/xml/dom/m_dom_extras.F90`
-- `extlibs/xml/fsys/fox_m_fsys_array_str.F90`
-- `extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90`
-- `extlibs/xml/fsys/fox_m_fsys_format.F90`
-- `extlibs/xml/fsys/fox_m_fsys_parse_input.F90`
-- `extlibs/xml/fsys/fox_m_fsys_string_list.F90`
-- `extlibs/xml/wcml/m_wcml_coma.F90`
-- `extlibs/xml/wcml/m_wcml_geometry.F90`
-- `extlibs/xml/wcml/m_wcml_lattice.F90`
-- `extlibs/xml/wcml/m_wcml_molecule.F90`
-- `extlibs/xml/wcml/m_wcml_parameter.F90`
-- `extlibs/xml/wcml/m_wcml_property.F90`
-- `extlibs/xml/wcml/m_wcml_stml.F90`
-- `extlibs/xml/wkml/m_wkml_chart.F90`
-- `extlibs/xml/wkml/m_wkml_color.F90`
-- `extlibs/xml/wkml/m_wkml_contours.F90`
-- `extlibs/xml/wkml/m_wkml_coverage.F90`
-- `extlibs/xml/wkml/m_wkml_features.F90`
-- `extlibs/xml/wkml/m_wkml_lowlevel.F90`
-- `extlibs/xml/wkml/m_wkml_styling.F90`
-- `extlibs/xml/wxml/m_wxml_core.F90`
-- `extlibs/xml/wxml/m_wxml_overloads.F90`
-- `fileio/simple_fileio.f90`
-- `main/ctf/simple_ctf.f90`
-- `main/image/simple_ftiter.f90`
-- `main/image/simple_image.f90`
-- `main/interp/simple_edges_sqwins.f90`
-- `main/interp/simple_kbinterpol.f90`
-- `main/interp/simple_winfuns.f90`
-- `main/ori/simple_ori.f90`
-- `main/ori/simple_oris.f90`
-- `main/simple_abinitio_controller.f90`
-- `main/simple_eul_prob_tab_utils.f90`
-- `main/simple_sym.f90`
-- `main/strategies/search/simple_matcher_ptcl_io.f90`
-- `main/stream/simple_stream_watcher.f90`
-- `utils/filter/simple_butterworth.f90`
-- `utils/filter/simple_opt_filter.f90`
-- `utils/math/simple_linalg.f90`
-- `utils/math/simple_math.f90`
-- `utils/math/simple_math_ft.f90`
-- `utils/math/simple_neighs.f90`
-- `utils/math/simple_ran_tabu.f90`
-- `utils/math/simple_rnd.f90`
-- `utils/math/simple_srch_sort_loc.f90`
-- `utils/math/simple_stat.f90`
-- `utils/qsys/simple_qsys_ctrl.f90`
-- `utils/qsys/simple_qsys_funs.f90`
-- `utils/simple_corrmat.f90`
-- `utils/simple_gauss2Dfit.f90`
-- `utils/simple_gpu_utils.f90`
-- `utils/simple_imgarr_utils.f90`
-- `utils/simple_is_check_assert.f90`
-- `utils/simple_jiffys.f90`
-- `utils/simple_magic_boxes.f90`
-- `utils/simple_sauron.f90`
-- `utils/simple_segmentation.f90`
-- `utils/simple_string.f90`
-- `utils/simple_string_utils.f90`
-- `utils/structs/simple_chash.f90`
-- `utils/structs/simple_hash.f90`
+- `../scripts/../src/defs/simple_type_defs.f90`
+- `../scripts/../src/extlibs/curl/src/curl_easy.f90`
+- `../scripts/../src/extlibs/gnufor/gnufor2.f90`
+- `../scripts/../src/extlibs/json/json_file_module.f90`
+- `../scripts/../src/extlibs/json/json_string_utilities.f90`
+- `../scripts/../src/extlibs/json/json_value_module.f90`
+- `../scripts/../src/extlibs/unix/src/unix.f90`
+- `../scripts/../src/extlibs/xml/common/m_common_attrs.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_buffer.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_element.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_elstack.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_entities.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_error.F90`
+- `../scripts/../src/extlibs/xml/common/m_common_namespaces.F90`
+- `../scripts/../src/extlibs/xml/dom/m_dom_dom.F90`
+- `../scripts/../src/extlibs/xml/dom/m_dom_extras.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_array_str.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_count_parse_input.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_format.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_parse_input.F90`
+- `../scripts/../src/extlibs/xml/fsys/fox_m_fsys_string_list.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_coma.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_geometry.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_lattice.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_molecule.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_parameter.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_property.F90`
+- `../scripts/../src/extlibs/xml/wcml/m_wcml_stml.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_chart.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_color.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_contours.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_coverage.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_features.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_lowlevel.F90`
+- `../scripts/../src/extlibs/xml/wkml/m_wkml_styling.F90`
+- `../scripts/../src/extlibs/xml/wxml/m_wxml_core.F90`
+- `../scripts/../src/extlibs/xml/wxml/m_wxml_overloads.F90`
+- `../scripts/../src/fileio/simple_fileio.f90`
+- `../scripts/../src/main/ctf/simple_ctf.f90`
+- `../scripts/../src/main/image/simple_ftiter.f90`
+- `../scripts/../src/main/image/simple_image.f90`
+- `../scripts/../src/main/interp/simple_edges_sqwins.f90`
+- `../scripts/../src/main/interp/simple_kbinterpol.f90`
+- `../scripts/../src/main/interp/simple_winfuns.f90`
+- `../scripts/../src/main/ori/simple_ori.f90`
+- `../scripts/../src/main/ori/simple_oris.f90`
+- `../scripts/../src/main/simple_abinitio_controller.f90`
+- `../scripts/../src/main/simple_eul_prob_tab_utils.f90`
+- `../scripts/../src/main/simple_sym.f90`
+- `../scripts/../src/main/strategies/search/simple_matcher_ptcl_io.f90`
+- `../scripts/../src/main/stream/simple_stream_watcher.f90`
+- `../scripts/../src/utils/filter/simple_butterworth.f90`
+- `../scripts/../src/utils/filter/simple_opt_filter.f90`
+- `../scripts/../src/utils/math/simple_linalg.f90`
+- `../scripts/../src/utils/math/simple_math.f90`
+- `../scripts/../src/utils/math/simple_math_ft.f90`
+- `../scripts/../src/utils/math/simple_neighs.f90`
+- `../scripts/../src/utils/math/simple_ran_tabu.f90`
+- `../scripts/../src/utils/math/simple_rnd.f90`
+- `../scripts/../src/utils/math/simple_srch_sort_loc.f90`
+- `../scripts/../src/utils/math/simple_stat.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_ctrl.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_funs.f90`
+- `../scripts/../src/utils/simple_corrmat.f90`
+- `../scripts/../src/utils/simple_gauss2Dfit.f90`
+- `../scripts/../src/utils/simple_gpu_utils.f90`
+- `../scripts/../src/utils/simple_imgarr_utils.f90`
+- `../scripts/../src/utils/simple_is_check_assert.f90`
+- `../scripts/../src/utils/simple_jiffys.f90`
+- `../scripts/../src/utils/simple_magic_boxes.f90`
+- `../scripts/../src/utils/simple_sauron.f90`
+- `../scripts/../src/utils/simple_segmentation.f90`
+- `../scripts/../src/utils/simple_string.f90`
+- `../scripts/../src/utils/simple_string_utils.f90`
+- `../scripts/../src/utils/structs/simple_chash.f90`
+- `../scripts/../src/utils/structs/simple_hash.f90`
 
 Uses:
 - `fox_common`
@@ -3970,20 +3970,20 @@ Private symbols:
 ## Module: pure
 
 Files:
-- `main/class/simple_classaverager.f90`
-- `main/class/simple_classaverager_restore.f90`
-- `main/image/simple_image.f90`
-- `main/image/simple_image_access.f90`
-- `main/image/simple_image_arith.f90`
-- `main/image/simple_image_calc.f90`
-- `main/image/simple_image_checks.f90`
-- `main/ori/simple_oris.f90`
-- `main/ori/simple_oris_dists.f90`
-- `main/ori/simple_oris_getters.f90`
-- `main/pftc/simple_polarft_access.f90`
-- `main/pftc/simple_polarft_calc.f90`
-- `main/pftc/simple_polarft_core.f90`
-- `main/pftc/simple_polarft_geom.f90`
+- `../scripts/../src/main/class/simple_classaverager.f90`
+- `../scripts/../src/main/class/simple_classaverager_restore.f90`
+- `../scripts/../src/main/image/simple_image.f90`
+- `../scripts/../src/main/image/simple_image_access.f90`
+- `../scripts/../src/main/image/simple_image_arith.f90`
+- `../scripts/../src/main/image/simple_image_calc.f90`
+- `../scripts/../src/main/image/simple_image_checks.f90`
+- `../scripts/../src/main/ori/simple_oris.f90`
+- `../scripts/../src/main/ori/simple_oris_dists.f90`
+- `../scripts/../src/main/ori/simple_oris_getters.f90`
+- `../scripts/../src/main/pftc/simple_polarft_access.f90`
+- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
+- `../scripts/../src/main/pftc/simple_polarft_core.f90`
+- `../scripts/../src/main/pftc/simple_polarft_geom.f90`
 
 Uses:
 - `simple_type_defs`
@@ -3995,20 +3995,20 @@ Public symbols:
 ## Module: real
 
 Files:
-- `main/image/simple_image.f90`
-- `main/image/simple_image_calc.f90`
-- `main/nu_filt/simple_nu_filter.f90`
-- `main/nu_filt/simple_nu_filter_bank.f90`
-- `main/nu_filt/simple_nu_filter_envmask.f90`
-- `main/nu_filt/simple_nu_filter_potts.f90`
-- `main/nu_filt/simple_nu_filter_state.f90`
-- `main/nu_filt/simple_nu_filter_stats.f90`
-- `main/ori/simple_oris.f90`
-- `main/ori/simple_oris_neig.f90`
-- `main/pftc/simple_polarft_calc.f90`
-- `main/pftc/simple_polarft_corr.f90`
-- `main/project/simple_sp_project.f90`
-- `main/project/simple_sp_project_core.f90`
+- `../scripts/../src/main/image/simple_image.f90`
+- `../scripts/../src/main/image/simple_image_calc.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_bank.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_envmask.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_potts.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_stats.f90`
+- `../scripts/../src/main/ori/simple_oris.f90`
+- `../scripts/../src/main/ori/simple_oris_neig.f90`
+- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
+- `../scripts/../src/main/pftc/simple_polarft_corr.f90`
+- `../scripts/../src/main/project/simple_sp_project.f90`
+- `../scripts/../src/main/project/simple_sp_project_core.f90`
 
 Public symbols:
 - `test_oris` — subroutine
@@ -4017,14 +4017,14 @@ Public symbols:
 ## Module: recursive
 
 Files:
-- `main/image/simple_image.f90`
-- `main/image/simple_image_geom.f90`
+- `../scripts/../src/main/image/simple_image.f90`
+- `../scripts/../src/main/image/simple_image_geom.f90`
 
 ---
 ## Module: simple_abinitio2D_controller
 
 Files:
-- `main/simple_abinitio2D_controller.f90`
+- `../scripts/../src/main/simple_abinitio2D_controller.f90`
 
 Uses:
 - `simple_cmdline`
@@ -4051,7 +4051,7 @@ Private symbols:
 ## Module: simple_abinitio_utils
 
 Files:
-- `main/simple_abinitio_utils.f90`
+- `../scripts/../src/main/simple_abinitio_utils.f90`
 
 Uses:
 - `simple_class_frcs`
@@ -4069,7 +4069,7 @@ Uses:
 ## Module: simple_aff_prop
 
 Files:
-- `utils/clustering/simple_aff_prop.f90`
+- `../scripts/../src/utils/clustering/simple_aff_prop.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4087,7 +4087,7 @@ Private symbols:
 ## Module: simple_ansi_ctrls
 
 Files:
-- `defs/simple_ansi_ctrls.f90`
+- `../scripts/../src/defs/simple_ansi_ctrls.f90`
 
 Public symbols:
 - `format_str` — function
@@ -4096,7 +4096,7 @@ Public symbols:
 ## Module: simple_atoms
 
 Files:
-- `main/nano/simple_atoms.f90`
+- `../scripts/../src/main/nano/simple_atoms.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4163,7 +4163,7 @@ Private symbols:
 ## Module: simple_binary_tree
 
 Files:
-- `utils/structs/simple_binary_tree.f90`
+- `../scripts/../src/utils/structs/simple_binary_tree.f90`
 
 Uses:
 - `simple_error`
@@ -4187,7 +4187,7 @@ Private symbols:
 ## Module: simple_binary_tree_tester
 
 Files:
-- `utils/structs/simple_binary_tree_tester.f90`
+- `../scripts/../src/utils/structs/simple_binary_tree_tester.f90`
 
 Uses:
 - `simple_binary_tree`
@@ -4210,7 +4210,7 @@ Private symbols:
 ## Module: simple_binoris
 
 Files:
-- `fileio/simple_binoris.f90`
+- `../scripts/../src/fileio/simple_binoris.f90`
 
 Uses:
 - `simple_defs`
@@ -4251,7 +4251,7 @@ Private symbols:
 ## Module: simple_binoris_io
 
 Files:
-- `fileio/simple_binoris_io.f90`
+- `../scripts/../src/fileio/simple_binoris_io.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4267,7 +4267,7 @@ Public symbols:
 ## Module: simple_block_tree
 
 Files:
-- `utils/simple_block_tree.f90`
+- `../scripts/../src/utils/simple_block_tree.f90`
 
 Uses:
 - `simple_binary_tree`
@@ -4294,7 +4294,7 @@ Private symbols:
 ## Module: simple_block_tree_corr
 
 Files:
-- `utils/simple_block_tree_corr.f90`
+- `../scripts/../src/utils/simple_block_tree_corr.f90`
 
 Uses:
 - `simple_aff_prop`
@@ -4315,7 +4315,7 @@ Public symbols:
 ## Module: simple_block_tree_io
 
 Files:
-- `fileio/simple_block_tree_io.f90`
+- `../scripts/../src/fileio/simple_block_tree_io.f90`
 
 Uses:
 - `simple_error`
@@ -4332,7 +4332,7 @@ Public symbols:
 ## Module: simple_bspline_smoother
 
 Files:
-- `utils/filter/simple_bspline_smoother.f90`
+- `../scripts/../src/utils/filter/simple_bspline_smoother.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4362,7 +4362,7 @@ Private symbols:
 ## Module: simple_builder
 
 Files:
-- `main/simple_builder.f90`
+- `../scripts/../src/main/simple_builder.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -4400,7 +4400,7 @@ Private symbols:
 ## Module: simple_butterworth
 
 Files:
-- `utils/filter/simple_butterworth.f90`
+- `../scripts/../src/utils/filter/simple_butterworth.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4409,7 +4409,7 @@ Uses:
 ## Module: simple_calc_pspec_strategy
 
 Files:
-- `main/strategies/parallelization/simple_calc_pspec_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_calc_pspec_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -4454,7 +4454,7 @@ Private symbols:
 ## Module: simple_cavg_quality_analysis
 
 Files:
-- `main/cavg_quality/simple_cavg_quality_analysis.f90`
+- `../scripts/../src/main/cavg_quality/simple_cavg_quality_analysis.f90`
 
 Uses:
 - `simple_cavg_quality_feats`
@@ -4491,7 +4491,7 @@ Private symbols:
 ## Module: simple_cavg_quality_feats
 
 Files:
-- `main/cavg_quality/simple_cavg_quality_feats.f90`
+- `../scripts/../src/main/cavg_quality/simple_cavg_quality_feats.f90`
 
 Uses:
 - `simple_cavg_quality_types`
@@ -4521,7 +4521,7 @@ Private symbols:
 ## Module: simple_cavg_quality_helpers
 
 Files:
-- `main/cavg_quality/simple_cavg_quality_helpers.f90`
+- `../scripts/../src/main/cavg_quality/simple_cavg_quality_helpers.f90`
 
 Uses:
 - `simple_cavg_quality_types`
@@ -4534,7 +4534,7 @@ Public symbols:
 ## Module: simple_cavg_quality_learn
 
 Files:
-- `main/cavg_quality/simple_cavg_quality_learn.f90`
+- `../scripts/../src/main/cavg_quality/simple_cavg_quality_learn.f90`
 
 Uses:
 - `simple_cavg_quality_feats`
@@ -4609,7 +4609,7 @@ Private symbols:
 ## Module: simple_cavg_quality_model
 
 Files:
-- `main/cavg_quality/simple_cavg_quality_model.f90`
+- `../scripts/../src/main/cavg_quality/simple_cavg_quality_model.f90`
 
 Uses:
 - `simple_cavg_quality_feats`
@@ -4671,7 +4671,7 @@ Private symbols:
 ## Module: simple_cavg_quality_relations
 
 Files:
-- `main/cavg_quality/simple_cavg_quality_relations.f90`
+- `../scripts/../src/main/cavg_quality/simple_cavg_quality_relations.f90`
 
 Uses:
 - `simple_cavg_quality_types`
@@ -4700,7 +4700,7 @@ Private symbols:
 ## Module: simple_cavg_quality_stats
 
 Files:
-- `main/cavg_quality/simple_cavg_quality_stats.f90`
+- `../scripts/../src/main/cavg_quality/simple_cavg_quality_stats.f90`
 
 Uses:
 - `simple_cavg_quality_types`
@@ -4716,7 +4716,7 @@ Public symbols:
 ## Module: simple_cavg_quality_types
 
 Files:
-- `main/cavg_quality/simple_cavg_quality_types.f90`
+- `../scripts/../src/main/cavg_quality/simple_cavg_quality_types.f90`
 
 Uses:
 - `simple_defs`
@@ -4734,7 +4734,7 @@ Public symbols:
 ## Module: simple_chash
 
 Files:
-- `utils/structs/simple_chash.f90`
+- `../scripts/../src/utils/structs/simple_chash.f90`
 
 Uses:
 - `simple_ansi_ctrls`
@@ -4752,7 +4752,7 @@ Public symbols:
 ## Module: simple_chash_tester
 
 Files:
-- `utils/structs/simple_chash_tester.f90`
+- `../scripts/../src/utils/structs/simple_chash_tester.f90`
 
 Uses:
 - `simple_chash`
@@ -4779,7 +4779,7 @@ Private symbols:
 ## Module: simple_class_compatibility
 
 Files:
-- `main/class/simple_class_compatibility.f90`
+- `../scripts/../src/main/class/simple_class_compatibility.f90`
 
 Uses:
 - `simple_defs`
@@ -4816,7 +4816,7 @@ Private symbols:
 ## Module: simple_class_compatibility_tester
 
 Files:
-- `main/class/simple_class_compatibility_tester.f90`
+- `../scripts/../src/main/class/simple_class_compatibility_tester.f90`
 
 Uses:
 - `simple_class_compatibility`
@@ -4846,7 +4846,7 @@ Private symbols:
 ## Module: simple_class_frcs
 
 Files:
-- `main/class/simple_class_frcs.f90`
+- `../scripts/../src/main/class/simple_class_frcs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -4879,7 +4879,7 @@ Private symbols:
 ## Module: simple_class_sample_io
 
 Files:
-- `fileio/simple_class_sample_io.f90`
+- `../scripts/../src/fileio/simple_class_sample_io.f90`
 
 Uses:
 - `simple_error`
@@ -4903,7 +4903,7 @@ Private symbols:
 ## Module: simple_classaverager
 
 Files:
-- `main/class/simple_classaverager.f90`
+- `../scripts/../src/main/class/simple_classaverager.f90`
 
 Uses:
 - `simple_builder`
@@ -4928,7 +4928,7 @@ Private symbols:
 ## Module: simple_cls_split_strategy
 
 Files:
-- `main/strategies/parallelization/simple_cls_split_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_cls_split_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -5006,7 +5006,7 @@ Private symbols:
 ## Module: simple_cluster2D_strategy
 
 Files:
-- `main/strategies/parallelization/simple_cluster2D_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_cluster2D_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -5066,7 +5066,7 @@ Private symbols:
 ## Module: simple_cluster_seed
 
 Files:
-- `utils/clustering/simple_cluster_seed.f90`
+- `../scripts/../src/utils/clustering/simple_cluster_seed.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -5089,7 +5089,7 @@ Private symbols:
 ## Module: simple_clustering_utils
 
 Files:
-- `utils/clustering/simple_clustering_utils.f90`
+- `../scripts/../src/utils/clustering/simple_clustering_utils.f90`
 
 Uses:
 - `simple_aff_prop`
@@ -5110,7 +5110,7 @@ Private symbols:
 ## Module: simple_cmdline
 
 Files:
-- `main/simple_cmdline.f90`
+- `../scripts/../src/main/simple_cmdline.f90`
 
 Uses:
 - `simple_args`
@@ -5154,7 +5154,7 @@ Private symbols:
 ## Module: simple_cmdline_tester
 
 Files:
-- `main/simple_cmdline_tester.f90`
+- `../scripts/../src/main/simple_cmdline_tester.f90`
 
 Uses:
 - `simple_chash`
@@ -5181,7 +5181,7 @@ Private symbols:
 ## Module: simple_commander_base
 
 Files:
-- `main/commanders/simple/simple_commander_base.f90`
+- `../scripts/../src/main/commanders/simple/simple_commander_base.f90`
 
 Uses:
 - `simple_cmdline`
@@ -5198,7 +5198,7 @@ Private symbols:
 ## Module: simple_commanders_abinitio
 
 Files:
-- `main/commanders/simple/simple_commanders_abinitio.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_abinitio.f90`
 
 Uses:
 - `simple_abinitio_utils`
@@ -5243,7 +5243,7 @@ Private symbols:
 ## Module: simple_commanders_abinitio2D
 
 Files:
-- `main/commanders/simple/simple_commanders_abinitio2D.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_abinitio2D.f90`
 
 Uses:
 - `simple_abinitio2d_controller`
@@ -5280,7 +5280,7 @@ Private symbols:
 ## Module: simple_commanders_abinitio2d_sgd
 
 Files:
-- `main/commanders/simple/simple_commanders_abinitio2d_sgd.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_abinitio2d_sgd.f90`
 
 Uses:
 - `simple_commanders_abinitio2d`
@@ -5299,7 +5299,7 @@ Private symbols:
 ## Module: simple_commanders_api
 
 Files:
-- `main/apis/simple_commanders_api.f90`
+- `../scripts/../src/main/apis/simple_commanders_api.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -5325,7 +5325,7 @@ Uses:
 ## Module: simple_commanders_atoms
 
 Files:
-- `main/commanders/simple/simple_commanders_atoms.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_atoms.f90`
 
 Uses:
 - `simple_atoms`
@@ -5373,7 +5373,7 @@ Public symbols:
 ## Module: simple_commanders_cavgs
 
 Files:
-- `main/commanders/simple/simple_commanders_cavgs.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_cavgs.f90`
 
 Uses:
 - `simple_cavg_quality_analysis`
@@ -5424,7 +5424,7 @@ Public symbols:
 ## Module: simple_commanders_checks
 
 Files:
-- `main/commanders/simple/simple_commanders_checks.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_checks.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5451,7 +5451,7 @@ Public symbols:
 ## Module: simple_commanders_cluster2D
 
 Files:
-- `main/commanders/simple/simple_commanders_cluster2D.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_cluster2D.f90`
 
 Uses:
 - `simple_classaverager`
@@ -5486,7 +5486,7 @@ Public symbols:
 ## Module: simple_commanders_denoise
 
 Files:
-- `main/commanders/simple/simple_commanders_denoise.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_denoise.f90`
 
 Uses:
 - `simple_cls_split_strategy`
@@ -5511,7 +5511,7 @@ Public symbols:
 ## Module: simple_commanders_distr
 
 Files:
-- `main/commanders/simple/simple_commanders_distr.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_distr.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5525,7 +5525,7 @@ Public symbols:
 ## Module: simple_commanders_euclid
 
 Files:
-- `main/commanders/simple/simple_commanders_euclid.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_euclid.f90`
 
 Uses:
 - `simple_calc_pspec_strategy`
@@ -5543,7 +5543,7 @@ Public symbols:
 ## Module: simple_commanders_euclid_distr
 
 Files:
-- `main/commanders/simple/simple_commanders_euclid_distr.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_euclid_distr.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5558,7 +5558,7 @@ Public symbols:
 ## Module: simple_commanders_flex_pca
 
 Files:
-- `main/commanders/simple/simple_commanders_flex_pca.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_flex_pca.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5574,7 +5574,7 @@ Public symbols:
 ## Module: simple_commanders_imgops
 
 Files:
-- `main/commanders/simple/simple_commanders_imgops.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_imgops.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -5610,7 +5610,7 @@ Public symbols:
 ## Module: simple_commanders_imgproc
 
 Files:
-- `main/commanders/simple/simple_commanders_imgproc.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_imgproc.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5637,7 +5637,7 @@ Public symbols:
 ## Module: simple_commanders_mask
 
 Files:
-- `main/commanders/simple/simple_commanders_mask.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_mask.f90`
 
 Uses:
 - `simple_atoms`
@@ -5658,7 +5658,7 @@ Public symbols:
 ## Module: simple_commanders_misc
 
 Files:
-- `main/commanders/simple/simple_commanders_misc.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_misc.f90`
 
 Uses:
 - `simple_class_frcs`
@@ -5692,7 +5692,7 @@ Public symbols:
 ## Module: simple_commanders_mkcavgs
 
 Files:
-- `main/commanders/simple/simple_commanders_mkcavgs.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_mkcavgs.f90`
 
 Uses:
 - `simple_classaverager`
@@ -5735,7 +5735,7 @@ Public symbols:
 ## Module: simple_commanders_ori
 
 Files:
-- `main/commanders/simple/simple_commanders_ori.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_ori.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5762,7 +5762,7 @@ Public symbols:
 ## Module: simple_commanders_pick
 
 Files:
-- `main/commanders/simple/simple_commanders_pick.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_pick.f90`
 
 Uses:
 - `simple_cmdline`
@@ -5792,7 +5792,7 @@ Private symbols:
 ## Module: simple_commanders_preprocess
 
 Files:
-- `main/commanders/simple/simple_commanders_preprocess.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_preprocess.f90`
 
 Uses:
 - `simple_cmdline`
@@ -5820,7 +5820,7 @@ Public symbols:
 ## Module: simple_commanders_prob
 
 Files:
-- `main/commanders/simple/simple_commanders_prob.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_prob.f90`
 
 Uses:
 - `simple_builder`
@@ -5860,7 +5860,7 @@ Public symbols:
 ## Module: simple_commanders_project_cls
 
 Files:
-- `main/commanders/simple/simple_commanders_project_cls.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_project_cls.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5877,7 +5877,7 @@ Public symbols:
 ## Module: simple_commanders_project_core
 
 Files:
-- `main/commanders/simple/simple_commanders_project_core.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_project_core.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5930,7 +5930,7 @@ Public symbols:
 ## Module: simple_commanders_project_mov
 
 Files:
-- `main/commanders/simple/simple_commanders_project_mov.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_project_mov.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5946,7 +5946,7 @@ Public symbols:
 ## Module: simple_commanders_project_ptcl
 
 Files:
-- `main/commanders/simple/simple_commanders_project_ptcl.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_project_ptcl.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -5976,7 +5976,7 @@ Public symbols:
 ## Module: simple_commanders_rec
 
 Files:
-- `main/commanders/simple/simple_commanders_rec.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_rec.f90`
 
 Uses:
 - `simple_builder`
@@ -6010,7 +6010,7 @@ Public symbols:
 ## Module: simple_commanders_rec_distr
 
 Files:
-- `main/commanders/simple/simple_commanders_rec_distr.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_rec_distr.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6084,7 +6084,7 @@ Private symbols:
 ## Module: simple_commanders_refine3D
 
 Files:
-- `main/commanders/simple/simple_commanders_refine3D.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_refine3D.f90`
 
 Uses:
 - `simple_abinitio_utils`
@@ -6157,7 +6157,7 @@ Public symbols:
 ## Module: simple_commanders_relion
 
 Files:
-- `main/commanders/simple/simple_commanders_relion.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_relion.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6171,7 +6171,7 @@ Public symbols:
 ## Module: simple_commanders_reproject
 
 Files:
-- `main/commanders/simple/simple_commanders_reproject.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_reproject.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6187,7 +6187,7 @@ Public symbols:
 ## Module: simple_commanders_resolest
 
 Files:
-- `main/commanders/simple/simple_commanders_resolest.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_resolest.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6221,7 +6221,7 @@ Public symbols:
 ## Module: simple_commanders_sieve
 
 Files:
-- `main/commanders/simple/simple_commanders_sieve.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_sieve.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6237,7 +6237,7 @@ Public symbols:
 ## Module: simple_commanders_sim
 
 Files:
-- `main/commanders/simple/simple_commanders_sim.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_sim.f90`
 
 Uses:
 - `simple_atoms`
@@ -6267,7 +6267,7 @@ Public symbols:
 ## Module: simple_commanders_starproject
 
 Files:
-- `main/commanders/simple/simple_commanders_starproject.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_starproject.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6288,7 +6288,7 @@ Public symbols:
 ## Module: simple_commanders_stkops
 
 Files:
-- `main/commanders/simple/simple_commanders_stkops.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_stkops.f90`
 
 Uses:
 - `simple_clustering_utils`
@@ -6317,7 +6317,7 @@ Public symbols:
 ## Module: simple_commanders_test_class
 
 Files:
-- `main/commanders/test/simple_commanders_test_class.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_class.f90`
 
 Uses:
 - `simple_aff_prop`
@@ -6372,7 +6372,7 @@ Public symbols:
 ## Module: simple_commanders_test_fft
 
 Files:
-- `main/commanders/test/simple_commanders_test_fft.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_fft.f90`
 
 Uses:
 - `gnufor2`
@@ -6413,7 +6413,7 @@ Public symbols:
 ## Module: simple_commanders_test_geometry
 
 Files:
-- `main/commanders/test/simple_commanders_test_geometry.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_geometry.f90`
 
 Uses:
 - `json_kinds`
@@ -6444,7 +6444,7 @@ Public symbols:
 ## Module: simple_commanders_test_highlevel
 
 Files:
-- `main/commanders/test/simple_commanders_test_highlevel.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_highlevel.f90`
 
 Uses:
 - `simple_atoms`
@@ -6514,7 +6514,7 @@ Public symbols:
 ## Module: simple_commanders_test_io
 
 Files:
-- `main/commanders/test/simple_commanders_test_io.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_io.f90`
 
 Uses:
 - `simple_cmdline`
@@ -6553,7 +6553,7 @@ Public symbols:
 ## Module: simple_commanders_test_masks
 
 Files:
-- `main/commanders/test/simple_commanders_test_masks.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_masks.f90`
 
 Uses:
 - `simple_cmdline`
@@ -6589,7 +6589,7 @@ Public symbols:
 ## Module: simple_commanders_test_network
 
 Files:
-- `main/commanders/test/simple_commanders_test_network.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_network.f90`
 
 Uses:
 - `json_kinds`
@@ -6615,7 +6615,7 @@ Public symbols:
 ## Module: simple_commanders_test_numerics
 
 Files:
-- `main/commanders/test/simple_commanders_test_numerics.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_numerics.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6646,7 +6646,7 @@ Public symbols:
 ## Module: simple_commanders_test_optimize
 
 Files:
-- `main/commanders/test/simple_commanders_test_optimize.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_optimize.f90`
 
 Uses:
 - `simple_builder`
@@ -6682,7 +6682,7 @@ Public symbols:
 ## Module: simple_commanders_test_parallel
 
 Files:
-- `main/commanders/test/simple_commanders_test_parallel.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_parallel.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6704,7 +6704,7 @@ Public symbols:
 ## Module: simple_commanders_test_single
 
 Files:
-- `main/commanders/test/simple_commanders_test_single.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_single.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -6729,7 +6729,7 @@ Public symbols:
 ## Module: simple_commanders_test_stats
 
 Files:
-- `main/commanders/test/simple_commanders_test_stats.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_stats.f90`
 
 Uses:
 - `simple_aff_prop`
@@ -6775,7 +6775,7 @@ Public symbols:
 ## Module: simple_commanders_test_stream
 
 Files:
-- `main/commanders/test/simple_commanders_test_stream.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_stream.f90`
 
 Uses:
 - `simple_commanders_abinitio2d`
@@ -6816,7 +6816,7 @@ Public symbols:
 ## Module: simple_commanders_test_utils
 
 Files:
-- `main/commanders/test/simple_commanders_test_utils.f90`
+- `../scripts/../src/main/commanders/test/simple_commanders_test_utils.f90`
 
 Uses:
 - `simple_ansi_ctrls`
@@ -6867,7 +6867,7 @@ Public symbols:
 ## Module: simple_commanders_validate
 
 Files:
-- `main/commanders/simple/simple_commanders_validate.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_validate.f90`
 
 Uses:
 - `simple_commanders_abinitio2d`
@@ -6892,7 +6892,7 @@ Private symbols:
 ## Module: simple_commanders_volops
 
 Files:
-- `main/commanders/simple/simple_commanders_volops.f90`
+- `../scripts/../src/main/commanders/simple/simple_commanders_volops.f90`
 
 Uses:
 - `simple_atoms`
@@ -6948,7 +6948,7 @@ Public symbols:
 ## Module: simple_complex_ppca
 
 Files:
-- `main/pca/simple_complex_ppca.f90`
+- `../scripts/../src/main/pca/simple_complex_ppca.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -6978,7 +6978,7 @@ Private symbols:
 ## Module: simple_convergence
 
 Files:
-- `main/simple_convergence.f90`
+- `../scripts/../src/main/simple_convergence.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -7001,7 +7001,7 @@ Private symbols:
 ## Module: simple_core_module_api
 
 Files:
-- `main/apis/simple_core_api.f90`
+- `../scripts/../src/main/apis/simple_core_api.f90`
 
 Uses:
 - `simple_binoris`
@@ -7044,7 +7044,7 @@ Uses:
 ## Module: simple_corrmat
 
 Files:
-- `utils/simple_corrmat.f90`
+- `../scripts/../src/utils/simple_corrmat.f90`
 
 Uses:
 - `simple_builder`
@@ -7056,7 +7056,7 @@ Uses:
 ## Module: simple_ctf
 
 Files:
-- `main/ctf/simple_ctf.f90`
+- `../scripts/../src/main/ctf/simple_ctf.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7065,7 +7065,7 @@ Uses:
 ## Module: simple_ctf_estimate_cost
 
 Files:
-- `main/ctf/simple_ctf_estimate_cost.f90`
+- `../scripts/../src/main/ctf/simple_ctf_estimate_cost.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7094,7 +7094,7 @@ Private symbols:
 ## Module: simple_ctf_estimate_fit
 
 Files:
-- `main/ctf/simple_ctf_estimate_fit.f90`
+- `../scripts/../src/main/ctf/simple_ctf_estimate_fit.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -7145,7 +7145,7 @@ Private symbols:
 ## Module: simple_ctf_estimate_iter
 
 Files:
-- `main/ctf/simple_ctf_estimate_iter.f90`
+- `../scripts/../src/main/ctf/simple_ctf_estimate_iter.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7165,7 +7165,7 @@ Private symbols:
 ## Module: simple_ctf_estimate_strategy
 
 Files:
-- `main/strategies/parallelization/simple_ctf_estimate_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_ctf_estimate_strategy.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -7204,7 +7204,7 @@ Private symbols:
 ## Module: simple_decay_funs
 
 Files:
-- `utils/math/simple_decay_funs.f90`
+- `../scripts/../src/utils/math/simple_decay_funs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7222,7 +7222,7 @@ Public symbols:
 ## Module: simple_default_clines
 
 Files:
-- `defs/simple_default_clines.f90`
+- `../scripts/../src/defs/simple_default_clines.f90`
 
 Uses:
 - `simple_cmdline`
@@ -7237,7 +7237,7 @@ Public symbols:
 ## Module: simple_defs
 
 Files:
-- `defs/simple_defs.f90`
+- `../scripts/../src/defs/simple_defs.f90`
 
 Public symbols:
 - `exit_cleanup_iface` — subroutine
@@ -7246,7 +7246,7 @@ Public symbols:
 ## Module: simple_defs_atoms
 
 Files:
-- `defs/simple_defs_atoms.f90`
+- `../scripts/../src/defs/simple_defs_atoms.f90`
 
 Public symbols:
 - `get_element_Z_and_radius` — subroutine
@@ -7256,25 +7256,25 @@ Public symbols:
 ## Module: simple_defs_conv
 
 Files:
-- `defs/simple_defs_conv.f90`
+- `../scripts/../src/defs/simple_defs_conv.f90`
 
 ---
 ## Module: simple_defs_environment
 
 Files:
-- `defs/simple_defs_environment.f90`
+- `../scripts/../src/defs/simple_defs_environment.f90`
 
 ---
 ## Module: simple_defs_fname
 
 Files:
-- `defs/simple_defs_fname.f90`
+- `../scripts/../src/defs/simple_defs_fname.f90`
 
 ---
 ## Module: simple_defs_ori
 
 Files:
-- `defs/simple_defs_ori.f90`
+- `../scripts/../src/defs/simple_defs_ori.f90`
 
 Public symbols:
 - `get_oriparam_flag` — function
@@ -7283,19 +7283,19 @@ Public symbols:
 ## Module: simple_defs_stream
 
 Files:
-- `defs/simple_defs_stream.f90`
+- `../scripts/../src/defs/simple_defs_stream.f90`
 
 ---
 ## Module: simple_defs_string
 
 Files:
-- `defs/simple_defs_string.f90`
+- `../scripts/../src/defs/simple_defs_string.f90`
 
 ---
 ## Module: simple_denoise_movies
 
 Files:
-- `main/motion/simple_denoise_movies.f90`
+- `../scripts/../src/main/motion/simple_denoise_movies.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7314,7 +7314,7 @@ Private symbols:
 ## Module: simple_denoise_project_strategy
 
 Files:
-- `main/strategies/parallelization/simple_denoise_project_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_denoise_project_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -7396,7 +7396,7 @@ Private symbols:
 ## Module: simple_diff_map_denoise
 
 Files:
-- `main/pca/simple_diff_map_denoise.f90`
+- `../scripts/../src/main/pca/simple_diff_map_denoise.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7432,7 +7432,7 @@ Private symbols:
 ## Module: simple_diff_map_graphs
 
 Files:
-- `main/pca/simple_diff_map_graphs.f90`
+- `../scripts/../src/main/pca/simple_diff_map_graphs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7467,7 +7467,7 @@ Private symbols:
 ## Module: simple_diffusion_maps
 
 Files:
-- `main/pca/simple_diffusion_maps.f90`
+- `../scripts/../src/main/pca/simple_diffusion_maps.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7487,7 +7487,7 @@ Private symbols:
 ## Module: simple_discrete_stack_io
 
 Files:
-- `fileio/simple_discrete_stack_io.f90`
+- `../scripts/../src/fileio/simple_discrete_stack_io.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7507,7 +7507,7 @@ Private symbols:
 ## Module: simple_distr_comm
 
 Files:
-- `utils/comm/simple_distr_comm.f90`
+- `../scripts/../src/utils/comm/simple_distr_comm.f90`
 
 Uses:
 - `simple_socket_comm`
@@ -7525,7 +7525,7 @@ Private symbols:
 ## Module: simple_dock_vols
 
 Files:
-- `main/volume/simple_dock_vols.f90`
+- `../scripts/../src/main/volume/simple_dock_vols.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7552,7 +7552,7 @@ Private symbols:
 ## Module: simple_edges_sqwins
 
 Files:
-- `main/interp/simple_edges_sqwins.f90`
+- `../scripts/../src/main/interp/simple_edges_sqwins.f90`
 
 Uses:
 - `simple_defs`
@@ -7562,7 +7562,7 @@ Uses:
 ## Module: simple_eer_factory
 
 Files:
-- `fileio/simple_eer_factory.f90`
+- `../scripts/../src/fileio/simple_eer_factory.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7589,7 +7589,7 @@ Private symbols:
 ## Module: simple_error
 
 Files:
-- `fileio/simple_error.f90`
+- `../scripts/../src/fileio/simple_error.f90`
 
 Uses:
 - `simple_defs`
@@ -7602,7 +7602,7 @@ Public symbols:
 ## Module: simple_estimate_ssnr
 
 Files:
-- `utils/filter/simple_estimate_ssnr.f90`
+- `../scripts/../src/utils/filter/simple_estimate_ssnr.f90`
 
 Uses:
 - `simple_defs`
@@ -7646,7 +7646,7 @@ Private symbols:
 ## Module: simple_euclid_sigma2
 
 Files:
-- `main/simple_euclid_sigma2.f90`
+- `../scripts/../src/main/simple_euclid_sigma2.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7689,7 +7689,7 @@ Private symbols:
 ## Module: simple_eul_prob_tab
 
 Files:
-- `main/simple_eul_prob_tab.f90`
+- `../scripts/../src/main/simple_eul_prob_tab.f90`
 
 Uses:
 - `simple_builder`
@@ -7747,7 +7747,7 @@ Private symbols:
 ## Module: simple_eul_prob_tab2D
 
 Files:
-- `main/simple_eul_prob_tab2D.f90`
+- `../scripts/../src/main/simple_eul_prob_tab2D.f90`
 
 Uses:
 - `simple_builder`
@@ -7805,7 +7805,7 @@ Private symbols:
 ## Module: simple_eul_prob_tab_neigh
 
 Files:
-- `main/simple_eul_prob_tab_neigh.f90`
+- `../scripts/../src/main/simple_eul_prob_tab_neigh.f90`
 
 Uses:
 - `simple_builder`
@@ -7875,7 +7875,7 @@ Private symbols:
 ## Module: simple_eul_prob_tab_utils
 
 Files:
-- `main/simple_eul_prob_tab_utils.f90`
+- `../scripts/../src/main/simple_eul_prob_tab_utils.f90`
 
 Uses:
 - `simple_defs`
@@ -7894,7 +7894,7 @@ Public symbols:
 ## Module: simple_eulspace_neigh_map
 
 Files:
-- `utils/simple_eulspace_neigh_map.f90`
+- `../scripts/../src/utils/simple_eulspace_neigh_map.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -7916,7 +7916,7 @@ Private symbols:
 ## Module: simple_exec_abinitio3D
 
 Files:
-- `main/exec/simple_exec_abinitio3D.f90`
+- `../scripts/../src/main/exec/simple_exec_abinitio3D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -7933,7 +7933,7 @@ Public symbols:
 ## Module: simple_exec_api
 
 Files:
-- `main/apis/simple_exec_api.f90`
+- `../scripts/../src/main/apis/simple_exec_api.f90`
 
 Uses:
 - `iso_fortran_env`
@@ -7968,7 +7968,7 @@ Uses:
 ## Module: simple_exec_cavgproc
 
 Files:
-- `main/exec/simple_exec_cavgproc.f90`
+- `../scripts/../src/main/exec/simple_exec_cavgproc.f90`
 
 Uses:
 - `simple_cmdline`
@@ -7982,7 +7982,7 @@ Public symbols:
 ## Module: simple_exec_cluster2D
 
 Files:
-- `main/exec/simple_exec_cluster2D.f90`
+- `../scripts/../src/main/exec/simple_exec_cluster2D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8003,7 +8003,7 @@ Public symbols:
 ## Module: simple_exec_denoise
 
 Files:
-- `main/exec/simple_exec_denoise.f90`
+- `../scripts/../src/main/exec/simple_exec_denoise.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8021,7 +8021,7 @@ Public symbols:
 ## Module: simple_exec_dock
 
 Files:
-- `main/exec/simple_exec_dock.f90`
+- `../scripts/../src/main/exec/simple_exec_dock.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8034,7 +8034,7 @@ Public symbols:
 ## Module: simple_exec_filter
 
 Files:
-- `main/exec/simple_exec_filter.f90`
+- `../scripts/../src/main/exec/simple_exec_filter.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8048,7 +8048,7 @@ Public symbols:
 ## Module: simple_exec_helpers
 
 Files:
-- `utils/simple_exec_helpers.f90`
+- `../scripts/../src/utils/simple_exec_helpers.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8071,7 +8071,7 @@ Public symbols:
 ## Module: simple_exec_image
 
 Files:
-- `main/exec/simple_exec_image.f90`
+- `../scripts/../src/main/exec/simple_exec_image.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8086,7 +8086,7 @@ Public symbols:
 ## Module: simple_exec_mask
 
 Files:
-- `main/exec/simple_exec_mask.f90`
+- `../scripts/../src/main/exec/simple_exec_mask.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8099,7 +8099,7 @@ Public symbols:
 ## Module: simple_exec_ori
 
 Files:
-- `main/exec/simple_exec_ori.f90`
+- `../scripts/../src/main/exec/simple_exec_ori.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8112,7 +8112,7 @@ Public symbols:
 ## Module: simple_exec_other
 
 Files:
-- `main/exec/simple_exec_other.f90`
+- `../scripts/../src/main/exec/simple_exec_other.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8128,7 +8128,7 @@ Public symbols:
 ## Module: simple_exec_preproc
 
 Files:
-- `main/exec/simple_exec_preproc.f90`
+- `../scripts/../src/main/exec/simple_exec_preproc.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8143,7 +8143,7 @@ Public symbols:
 ## Module: simple_exec_print
 
 Files:
-- `main/exec/simple_exec_print.f90`
+- `../scripts/../src/main/exec/simple_exec_print.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8157,7 +8157,7 @@ Public symbols:
 ## Module: simple_exec_project
 
 Files:
-- `main/exec/simple_exec_project.f90`
+- `../scripts/../src/main/exec/simple_exec_project.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8176,7 +8176,7 @@ Public symbols:
 ## Module: simple_exec_refine3D
 
 Files:
-- `main/exec/simple_exec_refine3D.f90`
+- `../scripts/../src/main/exec/simple_exec_refine3D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8194,7 +8194,7 @@ Public symbols:
 ## Module: simple_exec_res
 
 Files:
-- `main/exec/simple_exec_res.f90`
+- `../scripts/../src/main/exec/simple_exec_res.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8207,7 +8207,7 @@ Public symbols:
 ## Module: simple_exec_sieve
 
 Files:
-- `main/exec/simple_exec_sieve.f90`
+- `../scripts/../src/main/exec/simple_exec_sieve.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8220,7 +8220,7 @@ Public symbols:
 ## Module: simple_exec_sim
 
 Files:
-- `main/exec/simple_exec_sim.f90`
+- `../scripts/../src/main/exec/simple_exec_sim.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8234,7 +8234,7 @@ Public symbols:
 ## Module: simple_exec_sym
 
 Files:
-- `main/exec/simple_exec_sym.f90`
+- `../scripts/../src/main/exec/simple_exec_sym.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8247,7 +8247,7 @@ Public symbols:
 ## Module: simple_exec_validate
 
 Files:
-- `main/exec/simple_exec_validate.f90`
+- `../scripts/../src/main/exec/simple_exec_validate.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8261,7 +8261,7 @@ Public symbols:
 ## Module: simple_exec_volume
 
 Files:
-- `main/exec/simple_exec_volume.f90`
+- `../scripts/../src/main/exec/simple_exec_volume.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8275,7 +8275,7 @@ Public symbols:
 ## Module: simple_extract_strategy
 
 Files:
-- `main/strategies/parallelization/simple_extract_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_extract_strategy.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8319,7 +8319,7 @@ Private symbols:
 ## Module: simple_fftw3
 
 Files:
-- `defs/simple_fftw3.f90`
+- `../scripts/../src/defs/simple_fftw3.f90`
 
 Public symbols:
 - `fftw_cleanup` — subroutine
@@ -8370,7 +8370,7 @@ Public symbols:
 ## Module: simple_fileio
 
 Files:
-- `fileio/simple_fileio.f90`
+- `../scripts/../src/fileio/simple_fileio.f90`
 
 Uses:
 - `simple_defs`
@@ -8383,7 +8383,7 @@ Uses:
 ## Module: simple_fileio_tester
 
 Files:
-- `fileio/simple_fileio_tester.f90`
+- `../scripts/../src/fileio/simple_fileio_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -8421,7 +8421,7 @@ Private symbols:
 ## Module: simple_finch
 
 Files:
-- `utils/clustering/simple_finch.f90`
+- `../scripts/../src/utils/clustering/simple_finch.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8457,7 +8457,7 @@ Private symbols:
 ## Module: simple_flex_pca_columns
 
 Files:
-- `main/flex/simple_flex_pca_columns.f90`
+- `../scripts/../src/main/flex/simple_flex_pca_columns.f90`
 
 Uses:
 - `simple_builder`
@@ -8548,7 +8548,7 @@ Private symbols:
 ## Module: simple_flex_pca_distr
 
 Files:
-- `main/flex/simple_flex_pca_distr.f90`
+- `../scripts/../src/main/flex/simple_flex_pca_distr.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8566,7 +8566,7 @@ Public symbols:
 ## Module: simple_flex_pca_merge
 
 Files:
-- `main/flex/simple_flex_pca_merge.f90`
+- `../scripts/../src/main/flex/simple_flex_pca_merge.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8588,7 +8588,7 @@ Private symbols:
 ## Module: simple_flex_pca_model
 
 Files:
-- `main/flex/simple_flex_pca_model.f90`
+- `../scripts/../src/main/flex/simple_flex_pca_model.f90`
 
 Uses:
 - `simple_builder`
@@ -8652,7 +8652,7 @@ Private symbols:
 ## Module: simple_flex_pca_parts
 
 Files:
-- `main/flex/simple_flex_pca_parts.f90`
+- `../scripts/../src/main/flex/simple_flex_pca_parts.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8689,7 +8689,7 @@ Public symbols:
 ## Module: simple_flex_pca_rec3D
 
 Files:
-- `main/flex/simple_flex_pca_rec3D.f90`
+- `../scripts/../src/main/flex/simple_flex_pca_rec3D.f90`
 
 Uses:
 - `simple_builder`
@@ -8718,7 +8718,7 @@ Private symbols:
 ## Module: simple_flex_projected_latent_model
 
 Files:
-- `main/flex/simple_flex_projected_latent_model.f90`
+- `../scripts/../src/main/flex/simple_flex_projected_latent_model.f90`
 
 Uses:
 - `simple_builder`
@@ -8756,7 +8756,7 @@ Private symbols:
 ## Module: simple_flex_reconstructor_latent_ops
 
 Files:
-- `main/flex/simple_flex_reconstructor_latent_ops.f90`
+- `../scripts/../src/main/flex/simple_flex_reconstructor_latent_ops.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8792,7 +8792,7 @@ Private symbols:
 ## Module: simple_forked_process
 
 Files:
-- `utils/simple_forked_process.f90`
+- `../scripts/../src/utils/simple_forked_process.f90`
 
 Uses:
 - `simple_cmdline`
@@ -8829,7 +8829,7 @@ Private symbols:
 ## Module: simple_forked_process_tester
 
 Files:
-- `utils/simple_forked_process_tester.f90`
+- `../scripts/../src/utils/simple_forked_process_tester.f90`
 
 Uses:
 - `simple_forked_process`
@@ -8855,7 +8855,7 @@ Private symbols:
 ## Module: simple_fsc
 
 Files:
-- `utils/filter/simple_fsc.f90`
+- `../scripts/../src/utils/filter/simple_fsc.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -8891,7 +8891,7 @@ Private symbols:
 ## Module: simple_ft_expanded
 
 Files:
-- `main/image/simple_ft_expanded.f90`
+- `../scripts/../src/main/image/simple_ft_expanded.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8933,7 +8933,7 @@ Private symbols:
 ## Module: simple_ftexp_shsrch
 
 Files:
-- `main/image/simple_ftexp_shsrch.f90`
+- `../scripts/../src/main/image/simple_ftexp_shsrch.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8964,7 +8964,7 @@ Private symbols:
 ## Module: simple_ftiter
 
 Files:
-- `main/image/simple_ftiter.f90`
+- `../scripts/../src/main/image/simple_ftiter.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8976,7 +8976,7 @@ Public symbols:
 ## Module: simple_gauss2Dfit
 
 Files:
-- `utils/simple_gauss2Dfit.f90`
+- `../scripts/../src/utils/simple_gauss2Dfit.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -8986,7 +8986,7 @@ Uses:
 ## Module: simple_gen_pspecs_and_thumbs_strategy
 
 Files:
-- `main/strategies/parallelization/simple_gen_pspecs_and_thumbs_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_gen_pspecs_and_thumbs_strategy.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -9025,7 +9025,7 @@ Private symbols:
 ## Module: simple_gpu_utils
 
 Files:
-- `utils/simple_gpu_utils.f90`
+- `../scripts/../src/utils/simple_gpu_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9037,7 +9037,7 @@ Public symbols:
 ## Module: simple_gridding
 
 Files:
-- `main/interp/simple_gridding.f90`
+- `../scripts/../src/main/interp/simple_gridding.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9055,7 +9055,7 @@ Public symbols:
 ## Module: simple_gui_assembler
 
 Files:
-- `utils/gui/simple_gui_assembler.f90`
+- `../scripts/../src/utils/gui/simple_gui_assembler.f90`
 
 Uses:
 - `simple_forked_process`
@@ -9087,7 +9087,7 @@ Private symbols:
 ## Module: simple_gui_assembler_tester
 
 Files:
-- `utils/gui/simple_gui_assembler_tester.f90`
+- `../scripts/../src/utils/gui/simple_gui_assembler_tester.f90`
 
 Uses:
 - `simple_gui_assembler`
@@ -9115,7 +9115,7 @@ Private symbols:
 ## Module: simple_gui_metadata_api
 
 Files:
-- `main/apis/simple_gui_metadata_api.f90`
+- `../scripts/../src/main/apis/simple_gui_metadata_api.f90`
 
 Uses:
 - `json_kinds`
@@ -9141,7 +9141,7 @@ Uses:
 ## Module: simple_gui_metadata_base
 
 Files:
-- `utils/gui/metadata/simple_gui_metadata_base.f90`
+- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_base.f90`
 
 Uses:
 - `json_module`
@@ -9164,7 +9164,7 @@ Private symbols:
 ## Module: simple_gui_metadata_cavg2D
 
 Files:
-- `utils/gui/metadata/simple_gui_metadata_cavg2D.f90`
+- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_cavg2D.f90`
 
 Uses:
 - `json_module`
@@ -9190,7 +9190,7 @@ Private symbols:
 ## Module: simple_gui_metadata_histogram
 
 Files:
-- `utils/gui/metadata/simple_gui_metadata_histogram.f90`
+- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_histogram.f90`
 
 Uses:
 - `json_module`
@@ -9211,7 +9211,7 @@ Private symbols:
 ## Module: simple_gui_metadata_micrograph
 
 Files:
-- `utils/gui/metadata/simple_gui_metadata_micrograph.f90`
+- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_micrograph.f90`
 
 Uses:
 - `json_module`
@@ -9236,7 +9236,7 @@ Private symbols:
 ## Module: simple_gui_metadata_optics_group
 
 Files:
-- `utils/gui/metadata/simple_gui_metadata_optics_group.f90`
+- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_optics_group.f90`
 
 Uses:
 - `json_module`
@@ -9258,7 +9258,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_opening2D
 
 Files:
-- `utils/gui/metadata/stream/simple_gui_metadata_stream_opening2D.f90`
+- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_opening2D.f90`
 
 Uses:
 - `json_kinds`
@@ -9282,7 +9282,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_optics_assignment
 
 Files:
-- `utils/gui/metadata/stream/simple_gui_metadata_stream_optics_assignment.f90`
+- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_optics_assignment.f90`
 
 Uses:
 - `json_kinds`
@@ -9305,7 +9305,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_particle_sieving
 
 Files:
-- `utils/gui/metadata/stream/simple_gui_metadata_stream_particle_sieving.f90`
+- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_particle_sieving.f90`
 
 Uses:
 - `json_module`
@@ -9330,7 +9330,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_picking
 
 Files:
-- `utils/gui/metadata/stream/simple_gui_metadata_stream_picking.f90`
+- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_picking.f90`
 
 Uses:
 - `json_kinds`
@@ -9353,7 +9353,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_pool2D
 
 Files:
-- `utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D.f90`
+- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D.f90`
 
 Uses:
 - `json_module`
@@ -9377,7 +9377,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_pool2D_snapshot
 
 Files:
-- `utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D_snapshot.f90`
+- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_pool2D_snapshot.f90`
 
 Uses:
 - `json_module`
@@ -9399,7 +9399,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_preprocess
 
 Files:
-- `utils/gui/metadata/stream/simple_gui_metadata_stream_preprocess.f90`
+- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_preprocess.f90`
 
 Uses:
 - `json_kinds`
@@ -9421,7 +9421,7 @@ Private symbols:
 ## Module: simple_gui_metadata_stream_update
 
 Files:
-- `utils/gui/metadata/stream/simple_gui_metadata_stream_update.f90`
+- `../scripts/../src/utils/gui/metadata/stream/simple_gui_metadata_stream_update.f90`
 
 Uses:
 - `json_kinds`
@@ -9463,7 +9463,7 @@ Private symbols:
 ## Module: simple_gui_metadata_tester
 
 Files:
-- `utils/gui/metadata/simple_gui_metadata_tester.f90`
+- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_tester.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -9522,7 +9522,7 @@ Private symbols:
 ## Module: simple_gui_metadata_timeplot
 
 Files:
-- `utils/gui/metadata/simple_gui_metadata_timeplot.f90`
+- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_timeplot.f90`
 
 Uses:
 - `json_module`
@@ -9543,13 +9543,13 @@ Private symbols:
 ## Module: simple_gui_metadata_types
 
 Files:
-- `utils/gui/metadata/simple_gui_metadata_types.f90`
+- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_types.f90`
 
 ---
 ## Module: simple_gui_metadata_utils
 
 Files:
-- `utils/gui/metadata/simple_gui_metadata_utils.f90`
+- `../scripts/../src/utils/gui/metadata/simple_gui_metadata_utils.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -9561,7 +9561,7 @@ Public symbols:
 ## Module: simple_gui_utils
 
 Files:
-- `utils/gui/simple_gui_utils.f90`
+- `../scripts/../src/utils/gui/simple_gui_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9576,7 +9576,7 @@ Public symbols:
 ## Module: simple_guistats
 
 Files:
-- `utils/gui/simple_guistats.f90`
+- `../scripts/../src/utils/gui/simple_guistats.f90`
 
 Uses:
 - `json_module`
@@ -9608,7 +9608,7 @@ Private symbols:
 ## Module: simple_halfmap_diagnostics
 
 Files:
-- `main/volume/simple_halfmap_diagnostics.f90`
+- `../scripts/../src/main/volume/simple_halfmap_diagnostics.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9629,7 +9629,7 @@ Private symbols:
 ## Module: simple_hash
 
 Files:
-- `utils/structs/simple_hash.f90`
+- `../scripts/../src/utils/structs/simple_hash.f90`
 
 Uses:
 - `simple_defs`
@@ -9644,7 +9644,7 @@ Public symbols:
 ## Module: simple_hash_tester
 
 Files:
-- `utils/structs/simple_hash_tester.f90`
+- `../scripts/../src/utils/structs/simple_hash_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -9670,7 +9670,7 @@ Private symbols:
 ## Module: simple_hclust
 
 Files:
-- `utils/clustering/simple_hclust.f90`
+- `../scripts/../src/utils/clustering/simple_hclust.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9689,7 +9689,7 @@ Private symbols:
 ## Module: simple_histogram
 
 Files:
-- `utils/math/simple_histogram.f90`
+- `../scripts/../src/utils/math/simple_histogram.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -9720,7 +9720,7 @@ Private symbols:
 ## Module: simple_http_post
 
 Files:
-- `utils/comm/simple_http_post.f90`
+- `../scripts/../src/utils/comm/simple_http_post.f90`
 
 Uses:
 - `curl`
@@ -9742,7 +9742,7 @@ Private symbols:
 ## Module: simple_http_post_tester
 
 Files:
-- `utils/comm/simple_http_post_tester.f90`
+- `../scripts/../src/utils/comm/simple_http_post_tester.f90`
 
 Uses:
 - `simple_http_post`
@@ -9762,7 +9762,7 @@ Private symbols:
 ## Module: simple_image
 
 Files:
-- `main/image/simple_image.f90`
+- `../scripts/../src/main/image/simple_image.f90`
 
 Uses:
 - `gnufor2`
@@ -9781,7 +9781,7 @@ Public symbols:
 ## Module: simple_image_bin
 
 Files:
-- `main/image/simple_image_bin.f90`
+- `../scripts/../src/main/image/simple_image_bin.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9836,7 +9836,7 @@ Private symbols:
 ## Module: simple_image_msk
 
 Files:
-- `main/image/simple_image_msk.f90`
+- `../scripts/../src/main/image/simple_image_msk.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9865,7 +9865,7 @@ Private symbols:
 ## Module: simple_imgarr_utils
 
 Files:
-- `utils/simple_imgarr_utils.f90`
+- `../scripts/../src/utils/simple_imgarr_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9877,7 +9877,7 @@ Uses:
 ## Module: simple_imgfile
 
 Files:
-- `fileio/simple_imgfile.f90`
+- `../scripts/../src/fileio/simple_imgfile.f90`
 
 Uses:
 - `gnufor2`
@@ -9916,7 +9916,7 @@ Private symbols:
 ## Module: simple_imghead
 
 Files:
-- `fileio/simple_imghead.f90`
+- `../scripts/../src/fileio/simple_imghead.f90`
 
 Uses:
 - `simple_defs`
@@ -9977,7 +9977,7 @@ Private symbols:
 ## Module: simple_imgproc
 
 Files:
-- `utils/simple_imgproc.f90`
+- `../scripts/../src/utils/simple_imgproc.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -9991,7 +9991,7 @@ Public symbols:
 ## Module: simple_ipc_tcp_socket_client
 
 Files:
-- `utils/comm/simple_ipc_tcp_socket_client.f90`
+- `../scripts/../src/utils/comm/simple_ipc_tcp_socket_client.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10014,7 +10014,7 @@ Private symbols:
 ## Module: simple_ipc_tcp_socket_helpers
 
 Files:
-- `utils/comm/simple_ipc_tcp_socket_helpers.f90`
+- `../scripts/../src/utils/comm/simple_ipc_tcp_socket_helpers.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10033,7 +10033,7 @@ Private symbols:
 ## Module: simple_ipc_tcp_socket_server
 
 Files:
-- `utils/comm/simple_ipc_tcp_socket_server.f90`
+- `../scripts/../src/utils/comm/simple_ipc_tcp_socket_server.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10061,7 +10061,7 @@ Private symbols:
 ## Module: simple_ipc_tcp_socket_tester
 
 Files:
-- `utils/comm/simple_ipc_tcp_socket_tester.f90`
+- `../scripts/../src/utils/comm/simple_ipc_tcp_socket_tester.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10096,7 +10096,7 @@ Private symbols:
 ## Module: simple_is_check_assert
 
 Files:
-- `utils/simple_is_check_assert.f90`
+- `../scripts/../src/utils/simple_is_check_assert.f90`
 
 Uses:
 - `simple_defs`
@@ -10106,7 +10106,7 @@ Uses:
 ## Module: simple_jiffys
 
 Files:
-- `utils/simple_jiffys.f90`
+- `../scripts/../src/utils/simple_jiffys.f90`
 
 Uses:
 - `simple_defs`
@@ -10117,7 +10117,7 @@ Uses:
 ## Module: simple_jpg
 
 Files:
-- `extlibs/jpg/simple_jpg.f90`
+- `../scripts/../src/extlibs/jpg/simple_jpg.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10147,7 +10147,7 @@ Private symbols:
 ## Module: simple_kbinterpol
 
 Files:
-- `main/interp/simple_kbinterpol.f90`
+- `../scripts/../src/main/interp/simple_kbinterpol.f90`
 
 Uses:
 - `iso_c_binding`
@@ -10161,7 +10161,7 @@ Public symbols:
 ## Module: simple_kd_tree
 
 Files:
-- `utils/structs/simple_kd_tree.f90`
+- `../scripts/../src/utils/structs/simple_kd_tree.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10192,7 +10192,7 @@ Private symbols:
 ## Module: simple_kmedoids
 
 Files:
-- `utils/clustering/simple_kmedoids.f90`
+- `../scripts/../src/utils/clustering/simple_kmedoids.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10215,7 +10215,7 @@ Private symbols:
 ## Module: simple_kpca_svd
 
 Files:
-- `main/pca/simple_kpca_svd.f90`
+- `../scripts/../src/main/pca/simple_kpca_svd.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10252,7 +10252,7 @@ Private symbols:
 ## Module: simple_linalg
 
 Files:
-- `utils/math/simple_linalg.f90`
+- `../scripts/../src/utils/math/simple_linalg.f90`
 
 Uses:
 - `simple_defs`
@@ -10265,7 +10265,7 @@ Private symbols:
 ## Module: simple_linked_list
 
 Files:
-- `utils/structs/simple_linked_list.f90`
+- `../scripts/../src/utils/structs/simple_linked_list.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10311,7 +10311,7 @@ Private symbols:
 ## Module: simple_linked_list_tester
 
 Files:
-- `utils/structs/simple_linked_list_tester.f90`
+- `../scripts/../src/utils/structs/simple_linked_list_tester.f90`
 
 Uses:
 - `simple_linked_list`
@@ -10348,7 +10348,7 @@ Private symbols:
 ## Module: simple_magic_boxes
 
 Files:
-- `utils/simple_magic_boxes.f90`
+- `../scripts/../src/utils/simple_magic_boxes.f90`
 
 Uses:
 - `simple_defs`
@@ -10359,7 +10359,7 @@ Uses:
 ## Module: simple_make_cavgs_strategy
 
 Files:
-- `main/strategies/parallelization/simple_make_cavgs_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_make_cavgs_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -10418,7 +10418,7 @@ Private symbols:
 ## Module: simple_map_reduce
 
 Files:
-- `utils/simple_map_reduce.f90`
+- `../scripts/../src/utils/simple_map_reduce.f90`
 
 Uses:
 - `simple_defs`
@@ -10436,7 +10436,7 @@ Public symbols:
 ## Module: simple_matcher_2Dprep
 
 Files:
-- `main/strategies/search/simple_matcher_2Dprep.f90`
+- `../scripts/../src/main/strategies/search/simple_matcher_2Dprep.f90`
 
 Uses:
 - `simple_builder`
@@ -10458,7 +10458,7 @@ Public symbols:
 ## Module: simple_matcher_3Drec
 
 Files:
-- `main/strategies/search/simple_matcher_3Drec.f90`
+- `../scripts/../src/main/strategies/search/simple_matcher_3Drec.f90`
 
 Uses:
 - `simple_builder`
@@ -10495,7 +10495,7 @@ Private symbols:
 ## Module: simple_matcher_pftc_prep
 
 Files:
-- `main/strategies/search/simple_matcher_pftc_prep.f90`
+- `../scripts/../src/main/strategies/search/simple_matcher_pftc_prep.f90`
 
 Uses:
 - `simple_builder`
@@ -10514,7 +10514,7 @@ Public symbols:
 ## Module: simple_matcher_ptcl_batch
 
 Files:
-- `main/strategies/search/simple_matcher_ptcl_batch.f90`
+- `../scripts/../src/main/strategies/search/simple_matcher_ptcl_batch.f90`
 
 Uses:
 - `simple_builder`
@@ -10541,7 +10541,7 @@ Private symbols:
 ## Module: simple_matcher_ptcl_io
 
 Files:
-- `main/strategies/search/simple_matcher_ptcl_io.f90`
+- `../scripts/../src/main/strategies/search/simple_matcher_ptcl_io.f90`
 
 Uses:
 - `simple_builder`
@@ -10554,7 +10554,7 @@ Uses:
 ## Module: simple_matcher_refvol_utils
 
 Files:
-- `main/strategies/search/simple_matcher_refvol_utils.f90`
+- `../scripts/../src/main/strategies/search/simple_matcher_refvol_utils.f90`
 
 Uses:
 - `simple_builder`
@@ -10591,7 +10591,7 @@ Private symbols:
 ## Module: simple_matcher_smpl_and_lplims
 
 Files:
-- `main/strategies/search/simple_matcher_smpl_and_lplims.f90`
+- `../scripts/../src/main/strategies/search/simple_matcher_smpl_and_lplims.f90`
 
 Uses:
 - `simple_abinitio2d_controller`
@@ -10611,7 +10611,7 @@ Public symbols:
 ## Module: simple_math
 
 Files:
-- `utils/math/simple_math.f90`
+- `../scripts/../src/utils/math/simple_math.f90`
 
 Uses:
 - `simple_defs`
@@ -10624,7 +10624,7 @@ Uses:
 ## Module: simple_math_ctf
 
 Files:
-- `utils/math/simple_math_ctf.f90`
+- `../scripts/../src/utils/math/simple_math_ctf.f90`
 
 Uses:
 - `simple_defs`
@@ -10634,7 +10634,7 @@ Uses:
 ## Module: simple_math_ft
 
 Files:
-- `utils/math/simple_math_ft.f90`
+- `../scripts/../src/utils/math/simple_math_ft.f90`
 
 Uses:
 - `simple_defs`
@@ -10646,7 +10646,7 @@ Uses:
 ## Module: simple_mem_estimator
 
 Files:
-- `utils/simple_mem_estimator.f90`
+- `../scripts/../src/utils/simple_mem_estimator.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10667,7 +10667,7 @@ Public symbols:
 ## Module: simple_memoize_ft_maps
 
 Files:
-- `utils/simple_memoize_ft_maps.f90`
+- `../scripts/../src/utils/simple_memoize_ft_maps.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10682,7 +10682,7 @@ Public symbols:
 ## Module: simple_memory_monitor
 
 Files:
-- `utils/simple_memory_monitor.f90`
+- `../scripts/../src/utils/simple_memory_monitor.f90`
 
 Uses:
 - `simple_cmdline`
@@ -10703,7 +10703,7 @@ Private symbols:
 ## Module: simple_micproc
 
 Files:
-- `utils/simple_micproc.f90`
+- `../scripts/../src/utils/simple_micproc.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -10731,7 +10731,7 @@ Public symbols:
 ## Module: simple_micrograph_generator
 
 Files:
-- `main/simple_micrograph_generator.f90`
+- `../scripts/../src/main/simple_micrograph_generator.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10761,7 +10761,7 @@ Private symbols:
 ## Module: simple_mini_stream_utils
 
 Files:
-- `main/stream/simple_mini_stream_utils.f90`
+- `../scripts/../src/main/stream/simple_mini_stream_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -10789,7 +10789,7 @@ Public symbols:
 ## Module: simple_molecule_data
 
 Files:
-- `main/nano/simple_molecule_data.f90`
+- `../scripts/../src/main/nano/simple_molecule_data.f90`
 
 Public symbols:
 - `betagal_1jyx` — function
@@ -10800,7 +10800,7 @@ Public symbols:
 ## Module: simple_motion_align_hybrid
 
 Files:
-- `main/motion/simple_motion_align_hybrid.f90`
+- `../scripts/../src/main/motion/simple_motion_align_hybrid.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10850,7 +10850,7 @@ Private symbols:
 ## Module: simple_motion_align_nano
 
 Files:
-- `main/motion/simple_motion_align_nano.f90`
+- `../scripts/../src/main/motion/simple_motion_align_nano.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10880,7 +10880,7 @@ Private symbols:
 ## Module: simple_motion_correct
 
 Files:
-- `main/motion/simple_motion_correct.f90`
+- `../scripts/../src/main/motion/simple_motion_correct.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -10917,7 +10917,7 @@ Private symbols:
 ## Module: simple_motion_correct_iter
 
 Files:
-- `main/motion/simple_motion_correct_iter.f90`
+- `../scripts/../src/main/motion/simple_motion_correct_iter.f90`
 
 Uses:
 - `simple_cmdline`
@@ -10939,7 +10939,7 @@ Private symbols:
 ## Module: simple_motion_correct_strategy
 
 Files:
-- `main/strategies/parallelization/simple_motion_correct_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_motion_correct_strategy.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -10979,7 +10979,7 @@ Private symbols:
 ## Module: simple_motion_correct_utils
 
 Files:
-- `main/motion/simple_motion_correct_utils.f90`
+- `../scripts/../src/main/motion/simple_motion_correct_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -10996,7 +10996,7 @@ Public symbols:
 ## Module: simple_motion_gain_analysis
 
 Files:
-- `main/motion/simple_motion_gain_analysis.f90`
+- `../scripts/../src/main/motion/simple_motion_gain_analysis.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11014,7 +11014,7 @@ Private symbols:
 ## Module: simple_motion_gain_helpers
 
 Files:
-- `main/motion/simple_motion_gain_helpers.f90`
+- `../scripts/../src/main/motion/simple_motion_gain_helpers.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11028,7 +11028,7 @@ Public symbols:
 ## Module: simple_motion_gain_tester
 
 Files:
-- `main/motion/simple_motion_gain_tester.f90`
+- `../scripts/../src/main/motion/simple_motion_gain_tester.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11051,7 +11051,7 @@ Private symbols:
 ## Module: simple_motion_patched
 
 Files:
-- `main/motion/simple_motion_patched.f90`
+- `../scripts/../src/main/motion/simple_motion_patched.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -11102,7 +11102,7 @@ Private symbols:
 ## Module: simple_multi_dendro
 
 Files:
-- `utils/structs/simple_multi_dendro.f90`
+- `../scripts/../src/utils/structs/simple_multi_dendro.f90`
 
 Uses:
 - `simple_binary_tree`
@@ -11132,7 +11132,7 @@ Private symbols:
 ## Module: simple_multi_dendro_tester
 
 Files:
-- `utils/structs/simple_multi_dendro_tester.f90`
+- `../scripts/../src/utils/structs/simple_multi_dendro_tester.f90`
 
 Uses:
 - `simple_binary_tree`
@@ -11161,7 +11161,7 @@ Private symbols:
 ## Module: simple_nanoparticle
 
 Files:
-- `main/nano/simple_nanoparticle.f90`
+- `../scripts/../src/main/nano/simple_nanoparticle.f90`
 
 Uses:
 - `simple_atoms`
@@ -11233,7 +11233,7 @@ Private symbols:
 ## Module: simple_nanoparticle_utils
 
 Files:
-- `main/nano/simple_nanoparticle_utils.f90`
+- `../scripts/../src/main/nano/simple_nanoparticle_utils.f90`
 
 Uses:
 - `simple_atoms`
@@ -11270,7 +11270,7 @@ Private symbols:
 ## Module: simple_neighs
 
 Files:
-- `utils/math/simple_neighs.f90`
+- `../scripts/../src/utils/math/simple_neighs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11279,7 +11279,7 @@ Uses:
 ## Module: simple_nice
 
 Files:
-- `utils/gui/simple_nice.f90`
+- `../scripts/../src/utils/gui/simple_nice.f90`
 
 Uses:
 - `json_kinds`
@@ -11347,7 +11347,7 @@ Public symbols:
 ## Module: simple_nrtxtfile
 
 Files:
-- `fileio/simple_nrtxtfile.f90`
+- `../scripts/../src/fileio/simple_nrtxtfile.f90`
 
 Uses:
 - `simple_defs`
@@ -11372,7 +11372,7 @@ Private symbols:
 ## Module: simple_nu_filter
 
 Files:
-- `main/nu_filt/simple_nu_filter.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
 
 Uses:
 - `simple_butterworth`
@@ -11392,7 +11392,7 @@ Private symbols:
 ## Module: simple_online_var
 
 Files:
-- `utils/math/simple_online_var.f90`
+- `../scripts/../src/utils/math/simple_online_var.f90`
 
 Uses:
 - `simple_defs`
@@ -11416,7 +11416,7 @@ Private symbols:
 ## Module: simple_opt_bfgs
 
 Files:
-- `main/opt/simple_opt_bfgs.f90`
+- `../scripts/../src/main/opt/simple_opt_bfgs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11437,7 +11437,7 @@ Private symbols:
 ## Module: simple_opt_bfgs2
 
 Files:
-- `main/opt/simple_opt_bfgs2.f90`
+- `../scripts/../src/main/opt/simple_opt_bfgs2.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11477,7 +11477,7 @@ Private symbols:
 ## Module: simple_opt_bforce
 
 Files:
-- `main/opt/simple_opt_bforce.f90`
+- `../scripts/../src/main/opt/simple_opt_bforce.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11497,7 +11497,7 @@ Private symbols:
 ## Module: simple_opt_de
 
 Files:
-- `main/opt/simple_opt_de.f90`
+- `../scripts/../src/main/opt/simple_opt_de.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11516,7 +11516,7 @@ Private symbols:
 ## Module: simple_opt_factory
 
 Files:
-- `main/opt/simple_opt_factory.f90`
+- `../scripts/../src/main/opt/simple_opt_factory.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11539,7 +11539,7 @@ Private symbols:
 ## Module: simple_opt_filter
 
 Files:
-- `utils/filter/simple_opt_filter.f90`
+- `../scripts/../src/utils/filter/simple_opt_filter.f90`
 
 Uses:
 - `simple_butterworth`
@@ -11550,7 +11550,7 @@ Uses:
 ## Module: simple_opt_fr_cg
 
 Files:
-- `main/opt/simple_opt_fr_cg.f90`
+- `../scripts/../src/main/opt/simple_opt_fr_cg.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11574,7 +11574,7 @@ Private symbols:
 ## Module: simple_opt_helpers
 
 Files:
-- `main/opt/simple_opt_helpers.f90`
+- `../scripts/../src/main/opt/simple_opt_helpers.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11590,7 +11590,7 @@ Public symbols:
 ## Module: simple_opt_image_weights
 
 Files:
-- `main/motion/simple_opt_image_weights.f90`
+- `../scripts/../src/main/motion/simple_opt_image_weights.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11629,7 +11629,7 @@ Private symbols:
 ## Module: simple_opt_lbfgsb
 
 Files:
-- `main/opt/simple_opt_lbfgsb.f90`
+- `../scripts/../src/main/opt/simple_opt_lbfgsb.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11674,7 +11674,7 @@ Private symbols:
 ## Module: simple_opt_mask
 
 Files:
-- `utils/simple_opt_mask.f90`
+- `../scripts/../src/utils/simple_opt_mask.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11687,7 +11687,7 @@ Public symbols:
 ## Module: simple_opt_particle_swarm
 
 Files:
-- `main/opt/simple_opt_particle_swarm.f90`
+- `../scripts/../src/main/opt/simple_opt_particle_swarm.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11708,7 +11708,7 @@ Private symbols:
 ## Module: simple_opt_powell
 
 Files:
-- `main/opt/simple_opt_powell.f90`
+- `../scripts/../src/main/opt/simple_opt_powell.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11729,7 +11729,7 @@ Private symbols:
 ## Module: simple_opt_pr_cg
 
 Files:
-- `main/opt/simple_opt_pr_cg.f90`
+- `../scripts/../src/main/opt/simple_opt_pr_cg.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11753,7 +11753,7 @@ Private symbols:
 ## Module: simple_opt_simplex
 
 Files:
-- `main/opt/simple_opt_simplex.f90`
+- `../scripts/../src/main/opt/simple_opt_simplex.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11774,7 +11774,7 @@ Private symbols:
 ## Module: simple_opt_spec
 
 Files:
-- `main/opt/simple_opt_spec.f90`
+- `../scripts/../src/main/opt/simple_opt_spec.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11819,7 +11819,7 @@ Private symbols:
 ## Module: simple_opt_stde
 
 Files:
-- `main/opt/simple_opt_stde.f90`
+- `../scripts/../src/main/opt/simple_opt_stde.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11843,7 +11843,7 @@ Private symbols:
 ## Module: simple_opt_subs
 
 Files:
-- `main/opt/simple_opt_subs.f90`
+- `../scripts/../src/main/opt/simple_opt_subs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -11867,7 +11867,7 @@ Private symbols:
 ## Module: simple_optimizer
 
 Files:
-- `main/opt/simple_optimizer.f90`
+- `../scripts/../src/main/opt/simple_optimizer.f90`
 
 Uses:
 - `simple_opt_spec`
@@ -11884,7 +11884,7 @@ Private symbols:
 ## Module: simple_ori
 
 Files:
-- `main/ori/simple_ori.f90`
+- `../scripts/../src/main/ori/simple_ori.f90`
 
 Uses:
 - `simple_ori_api`
@@ -11896,7 +11896,7 @@ Public symbols:
 ## Module: simple_ori_api
 
 Files:
-- `main/apis/simple_ori_api.f90`
+- `../scripts/../src/main/apis/simple_ori_api.f90`
 
 Uses:
 - `json_kinds`
@@ -11925,7 +11925,7 @@ Uses:
 ## Module: simple_ori_tester
 
 Files:
-- `main/ori/simple_ori_tester.f90`
+- `../scripts/../src/main/ori/simple_ori_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -11964,7 +11964,7 @@ Private symbols:
 ## Module: simple_ori_utils
 
 Files:
-- `main/ori/simple_ori_utils.f90`
+- `../scripts/../src/main/ori/simple_ori_utils.f90`
 
 Uses:
 - `simple_defs`
@@ -11991,7 +11991,7 @@ Private symbols:
 ## Module: simple_oris
 
 Files:
-- `main/ori/simple_oris.f90`
+- `../scripts/../src/main/ori/simple_oris.f90`
 
 Uses:
 - `simple_ori`
@@ -12004,7 +12004,7 @@ Public symbols:
 ## Module: simple_oris_tester
 
 Files:
-- `main/ori/simple_oris_tester.f90`
+- `../scripts/../src/main/ori/simple_oris_tester.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12030,7 +12030,7 @@ Private symbols:
 ## Module: simple_parameters
 
 Files:
-- `main/params/simple_parameters.f90`
+- `../scripts/../src/main/params/simple_parameters.f90`
 
 Uses:
 - `simple_atoms`
@@ -12048,7 +12048,7 @@ Public symbols:
 ## Module: simple_parameters_registry
 
 Files:
-- `main/params/simple_parameters_registry.f90`
+- `../scripts/../src/main/params/simple_parameters_registry.f90`
 
 Uses:
 - `simple_cmdline`
@@ -12083,7 +12083,7 @@ Private symbols:
 ## Module: simple_particle_extractor
 
 Files:
-- `main/simple_particle_extractor.f90`
+- `../scripts/../src/main/simple_particle_extractor.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12116,7 +12116,7 @@ Private symbols:
 ## Module: simple_pca
 
 Files:
-- `main/pca/simple_pca.f90`
+- `../scripts/../src/main/pca/simple_pca.f90`
 
 Public symbols:
 - `pca` — type
@@ -12132,7 +12132,7 @@ Private symbols:
 ## Module: simple_pca_svd
 
 Files:
-- `main/pca/simple_pca_svd.f90`
+- `../scripts/../src/main/pca/simple_pca_svd.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12154,7 +12154,7 @@ Private symbols:
 ## Module: simple_pcg_pose_polisher
 
 Files:
-- `main/strategies/search/simple_pcg_pose_polisher.f90`
+- `../scripts/../src/main/strategies/search/simple_pcg_pose_polisher.f90`
 
 Uses:
 - `ieee_arithmetic`
@@ -12174,7 +12174,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_base
 
 Files:
-- `utils/persistent_worker/message/simple_persistent_worker_message_base.f90`
+- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_base.f90`
 
 Public symbols:
 - `qsys_persistent_worker_message_base` — type
@@ -12188,7 +12188,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_heartbeat
 
 Files:
-- `utils/persistent_worker/message/simple_persistent_worker_message_heartbeat.f90`
+- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_heartbeat.f90`
 
 Uses:
 - `simple_persistent_worker_message_base`
@@ -12206,7 +12206,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_status
 
 Files:
-- `utils/persistent_worker/message/simple_persistent_worker_message_status.f90`
+- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_status.f90`
 
 Uses:
 - `simple_defs`
@@ -12225,7 +12225,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_task
 
 Files:
-- `utils/persistent_worker/message/simple_persistent_worker_message_task.f90`
+- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_task.f90`
 
 Uses:
 - `simple_defs`
@@ -12244,7 +12244,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_terminate
 
 Files:
-- `utils/persistent_worker/message/simple_persistent_worker_message_terminate.f90`
+- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_terminate.f90`
 
 Uses:
 - `simple_defs`
@@ -12263,7 +12263,7 @@ Private symbols:
 ## Module: simple_persistent_worker_message_tester
 
 Files:
-- `utils/persistent_worker/message/simple_persistent_worker_message_tester.f90`
+- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_tester.f90`
 
 Uses:
 - `simple_persistent_worker_message_base`
@@ -12289,13 +12289,13 @@ Private symbols:
 ## Module: simple_persistent_worker_message_types
 
 Files:
-- `utils/persistent_worker/message/simple_persistent_worker_message_types.f90`
+- `../scripts/../src/utils/persistent_worker/message/simple_persistent_worker_message_types.f90`
 
 ---
 ## Module: simple_persistent_worker_server
 
 Files:
-- `utils/persistent_worker/simple_persistent_worker_server.f90`
+- `../scripts/../src/utils/persistent_worker/simple_persistent_worker_server.f90`
 
 Uses:
 - `iso_c_binding`
@@ -12340,7 +12340,7 @@ Private symbols:
 ## Module: simple_persistent_worker_server_tester
 
 Files:
-- `utils/persistent_worker/simple_persistent_worker_server_tester.f90`
+- `../scripts/../src/utils/persistent_worker/simple_persistent_worker_server_tester.f90`
 
 Uses:
 - `simple_persistent_worker_message_task`
@@ -12371,7 +12371,7 @@ Private symbols:
 ## Module: simple_pftc_api
 
 Files:
-- `main/apis/simple_pftc_api.f90`
+- `../scripts/../src/main/apis/simple_pftc_api.f90`
 
 Uses:
 - `gnufor2`
@@ -12389,7 +12389,7 @@ Uses:
 ## Module: simple_pftc_shsrch_grad
 
 Files:
-- `main/pftc/simple_pftc_shsrch_grad.f90`
+- `../scripts/../src/main/pftc/simple_pftc_shsrch_grad.f90`
 
 Uses:
 - `iso_fortran_env`
@@ -12432,7 +12432,7 @@ Private symbols:
 ## Module: simple_pftc_srch_api
 
 Files:
-- `main/apis/simple_pftc_srch_api.f90`
+- `../scripts/../src/main/apis/simple_pftc_srch_api.f90`
 
 Uses:
 - `simple_class_frcs`
@@ -12454,7 +12454,7 @@ Uses:
 ## Module: simple_pick_strategy
 
 Files:
-- `main/strategies/parallelization/simple_pick_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_pick_strategy.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -12503,7 +12503,7 @@ Private symbols:
 ## Module: simple_picker_iter
 
 Files:
-- `main/pick/simple_picker_iter.f90`
+- `../scripts/../src/main/pick/simple_picker_iter.f90`
 
 Uses:
 - `simple_cmdline`
@@ -12524,7 +12524,7 @@ Private symbols:
 ## Module: simple_picker_utils
 
 Files:
-- `main/pick/simple_picker_utils.f90`
+- `../scripts/../src/main/pick/simple_picker_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12546,7 +12546,7 @@ Public symbols:
 ## Module: simple_pickref
 
 Files:
-- `main/pick/simple_pickref.f90`
+- `../scripts/../src/main/pick/simple_pickref.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12584,7 +12584,7 @@ Private symbols:
 ## Module: simple_pickref_corr_batch
 
 Files:
-- `main/pick/simple_pickref_corr_batch.f90`
+- `../scripts/../src/main/pick/simple_pickref_corr_batch.f90`
 
 Uses:
 - `simple_defs`
@@ -12605,7 +12605,7 @@ Private symbols:
 ## Module: simple_pickseg
 
 Files:
-- `main/pick/simple_pickseg.f90`
+- `../scripts/../src/main/pick/simple_pickseg.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -12629,7 +12629,7 @@ Private symbols:
 ## Module: simple_picksegdiam
 
 Files:
-- `main/pick/simple_picksegdiam.f90`
+- `../scripts/../src/main/pick/simple_picksegdiam.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12654,7 +12654,7 @@ Private symbols:
 ## Module: simple_polarft_calc
 
 Files:
-- `main/pftc/simple_polarft_calc.f90`
+- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
 
 Uses:
 - `simple_pftc_api`
@@ -12666,7 +12666,7 @@ Public symbols:
 ## Module: simple_ppca
 
 Files:
-- `main/pca/simple_ppca.f90`
+- `../scripts/../src/main/pca/simple_ppca.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12696,7 +12696,7 @@ Private symbols:
 ## Module: simple_preprocess_strategy
 
 Files:
-- `main/strategies/parallelization/simple_preprocess_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_preprocess_strategy.f90`
 
 Uses:
 - `fox_dom`
@@ -12739,7 +12739,7 @@ Private symbols:
 ## Module: simple_private_exec_api
 
 Files:
-- `main/apis/simple_private_exec_api.f90`
+- `../scripts/../src/main/apis/simple_private_exec_api.f90`
 
 Uses:
 - `simple_cmdline`
@@ -12778,7 +12778,7 @@ Uses:
 ## Module: simple_private_prgs
 
 Files:
-- `utils/simple_private_prgs.f90`
+- `../scripts/../src/utils/simple_private_prgs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12803,7 +12803,7 @@ Private symbols:
 ## Module: simple_procimgstk
 
 Files:
-- `utils/simple_procimgstk.f90`
+- `../scripts/../src/utils/simple_procimgstk.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -12849,7 +12849,7 @@ Public symbols:
 ## Module: simple_progress
 
 Files:
-- `utils/simple_progress.f90`
+- `../scripts/../src/utils/simple_progress.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12869,7 +12869,7 @@ Public symbols:
 ## Module: simple_project_merge_tester
 
 Files:
-- `main/project/simple_project_merge_tester.f90`
+- `../scripts/../src/main/project/simple_project_merge_tester.f90`
 
 Uses:
 - `simple_oris`
@@ -12898,7 +12898,7 @@ Private symbols:
 ## Module: simple_projector
 
 Files:
-- `main/image/simple_projector.f90`
+- `../scripts/../src/main/image/simple_projector.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12921,7 +12921,7 @@ Private symbols:
 ## Module: simple_projector_pft
 
 Files:
-- `main/image/simple_projector_pft.f90`
+- `../scripts/../src/main/image/simple_projector_pft.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12936,7 +12936,7 @@ Public symbols:
 ## Module: simple_projector_pft_batch
 
 Files:
-- `main/image/simple_projector_pft_batch.f90`
+- `../scripts/../src/main/image/simple_projector_pft_batch.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -12956,7 +12956,7 @@ Private symbols:
 ## Module: simple_projfile_utils
 
 Files:
-- `fileio/simple_projfile_utils.f90`
+- `../scripts/../src/fileio/simple_projfile_utils.f90`
 
 Uses:
 - `simple_class_frcs`
@@ -13004,7 +13004,7 @@ Public symbols:
 ## Module: simple_pspec_thumb_iter
 
 Files:
-- `main/simple_pspec_thumb_iter.f90`
+- `../scripts/../src/main/simple_pspec_thumb_iter.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13022,7 +13022,7 @@ Private symbols:
 ## Module: simple_pspecs
 
 Files:
-- `main/simple_pspecs.f90`
+- `../scripts/../src/main/simple_pspecs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13041,7 +13041,7 @@ Private symbols:
 ## Module: simple_ptcl_cache
 
 Files:
-- `main/strategies/search/simple_ptcl_cache.f90`
+- `../scripts/../src/main/strategies/search/simple_ptcl_cache.f90`
 
 Uses:
 - `simple_builder`
@@ -13081,7 +13081,7 @@ Private symbols:
 ## Module: simple_ptcl_sieve
 
 Files:
-- `main/sieve/simple_ptcl_sieve.f90`
+- `../scripts/../src/main/sieve/simple_ptcl_sieve.f90`
 
 Uses:
 - `simple_cavg_quality_analysis`
@@ -13149,7 +13149,7 @@ Private symbols:
 ## Module: simple_ptcl_sieve_tester
 
 Files:
-- `main/sieve/simple_ptcl_sieve_tester.f90`
+- `../scripts/../src/main/sieve/simple_ptcl_sieve_tester.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13181,7 +13181,7 @@ Private symbols:
 ## Module: simple_ptcl_sieve_utils
 
 Files:
-- `main/sieve/simple_ptcl_sieve_utils.f90`
+- `../scripts/../src/main/sieve/simple_ptcl_sieve_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13200,7 +13200,7 @@ Public symbols:
 ## Module: simple_qsys_base
 
 Files:
-- `utils/qsys/simple_qsys_base.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_base.f90`
 
 Uses:
 - `simple_chash`
@@ -13220,7 +13220,7 @@ Private symbols:
 ## Module: simple_qsys_coarray
 
 Files:
-- `utils/qsys/simple_qsys_coarray.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_coarray.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13240,7 +13240,7 @@ Private symbols:
 ## Module: simple_qsys_ctrl
 
 Files:
-- `utils/qsys/simple_qsys_ctrl.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_ctrl.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13263,7 +13263,7 @@ Private symbols:
 ## Module: simple_qsys_env
 
 Files:
-- `utils/qsys/simple_qsys_env.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_env.f90`
 
 Uses:
 - `simple_cmdline`
@@ -13313,7 +13313,7 @@ Private symbols:
 ## Module: simple_qsys_factory
 
 Files:
-- `utils/qsys/simple_qsys_factory.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_factory.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13337,7 +13337,7 @@ Private symbols:
 ## Module: simple_qsys_funs
 
 Files:
-- `utils/qsys/simple_qsys_funs.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_funs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13347,7 +13347,7 @@ Uses:
 ## Module: simple_qsys_local
 
 Files:
-- `utils/qsys/simple_qsys_local.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_local.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13367,7 +13367,7 @@ Private symbols:
 ## Module: simple_qsys_lsf
 
 Files:
-- `utils/qsys/simple_qsys_lsf.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_lsf.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13387,7 +13387,7 @@ Private symbols:
 ## Module: simple_qsys_pbs
 
 Files:
-- `utils/qsys/simple_qsys_pbs.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_pbs.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13408,7 +13408,7 @@ Private symbols:
 ## Module: simple_qsys_persistent_worker
 
 Files:
-- `utils/qsys/simple_qsys_persistent_worker.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_persistent_worker.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13429,7 +13429,7 @@ Private symbols:
 ## Module: simple_qsys_sge
 
 Files:
-- `utils/qsys/simple_qsys_sge.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_sge.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13449,7 +13449,7 @@ Private symbols:
 ## Module: simple_qsys_slurm
 
 Files:
-- `utils/qsys/simple_qsys_slurm.f90`
+- `../scripts/../src/utils/qsys/simple_qsys_slurm.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13469,7 +13469,7 @@ Private symbols:
 ## Module: simple_r8lib
 
 Files:
-- `utils/math/simple_r8lib.f90`
+- `../scripts/../src/utils/math/simple_r8lib.f90`
 
 Public symbols:
 - `r8mat_cholesky_factor` — subroutine
@@ -13483,7 +13483,7 @@ Private symbols:
 ## Module: simple_ran_tabu
 
 Files:
-- `utils/math/simple_ran_tabu.f90`
+- `../scripts/../src/utils/math/simple_ran_tabu.f90`
 
 Uses:
 - `simple_defs`
@@ -13497,7 +13497,7 @@ Public symbols:
 ## Module: simple_rec3D_pcg_strategy
 
 Files:
-- `main/strategies/parallelization/simple_rec3D_pcg_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_rec3D_pcg_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -13514,6 +13514,7 @@ Uses:
 - `simple_reconstructor_pcg`
 - `simple_refine3d_fnames`
 - `simple_sigma2_files`
+- `simple_vol_pproc_policy`
 
 Public symbols:
 - `execute_rec3D_pcg_distributed_master` — subroutine
@@ -13569,7 +13570,7 @@ Private symbols:
 ## Module: simple_rec3D_strategy
 
 Files:
-- `main/strategies/parallelization/simple_rec3D_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_rec3D_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -13614,7 +13615,7 @@ Private symbols:
 ## Module: simple_rec_list
 
 Files:
-- `utils/structs/simple_rec_list.f90`
+- `../scripts/../src/utils/structs/simple_rec_list.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13671,7 +13672,7 @@ Private symbols:
 ## Module: simple_rec_list_tester
 
 Files:
-- `utils/structs/simple_rec_list_tester.f90`
+- `../scripts/../src/utils/structs/simple_rec_list_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -13700,7 +13701,7 @@ Private symbols:
 ## Module: simple_reconstructor
 
 Files:
-- `main/volume/simple_reconstructor.f90`
+- `../scripts/../src/main/volume/simple_reconstructor.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13765,7 +13766,7 @@ Private symbols:
 ## Module: simple_reconstructor_openmpoffload
 
 Files:
-- `main/volume/simple_reconstructor_openmpoffload.f90`
+- `../scripts/../src/main/volume/simple_reconstructor_openmpoffload.f90`
 
 Uses:
 - `simple_builder`
@@ -13791,7 +13792,7 @@ Private symbols:
 ## Module: simple_reconstructor_pcg
 
 Files:
-- `main/volume/simple_reconstructor_pcg.f90`
+- `../scripts/../src/main/volume/simple_reconstructor_pcg.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -13915,7 +13916,7 @@ Private symbols:
 ## Module: simple_reextract_strategy
 
 Files:
-- `main/strategies/parallelization/simple_reextract_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_reextract_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -13957,7 +13958,7 @@ Private symbols:
 ## Module: simple_refine3D_fnames
 
 Files:
-- `defs/simple_refine3D_fnames.f90`
+- `../scripts/../src/defs/simple_refine3D_fnames.f90`
 
 Uses:
 - `simple_defs_fname`
@@ -13971,7 +13972,7 @@ Public symbols:
 ## Module: simple_refine3D_strategy
 
 Files:
-- `main/strategies/parallelization/simple_refine3D_strategy.f90`
+- `../scripts/../src/main/strategies/parallelization/simple_refine3D_strategy.f90`
 
 Uses:
 - `simple_builder`
@@ -14045,7 +14046,7 @@ Private symbols:
 ## Module: simple_relion
 
 Files:
-- `main/star/simple_relion.f90`
+- `../scripts/../src/main/star/simple_relion.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -14071,7 +14072,7 @@ Private symbols:
 ## Module: simple_rnd
 
 Files:
-- `utils/math/simple_rnd.f90`
+- `../scripts/../src/utils/math/simple_rnd.f90`
 
 Uses:
 - `simple_defs`
@@ -14082,7 +14083,7 @@ Uses:
 ## Module: simple_sauron
 
 Files:
-- `utils/simple_sauron.f90`
+- `../scripts/../src/utils/simple_sauron.f90`
 
 Uses:
 - `simple_chash`
@@ -14095,7 +14096,7 @@ Uses:
 ## Module: simple_segmentation
 
 Files:
-- `utils/simple_segmentation.f90`
+- `../scripts/../src/utils/simple_segmentation.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14107,7 +14108,7 @@ Uses:
 ## Module: simple_sigma2_binfile
 
 Files:
-- `fileio/simple_sigma2_binfile.f90`
+- `../scripts/../src/fileio/simple_sigma2_binfile.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14128,7 +14129,7 @@ Private symbols:
 ## Module: simple_sigma2_files
 
 Files:
-- `fileio/simple_sigma2_files.f90`
+- `../scripts/../src/fileio/simple_sigma2_files.f90`
 
 Uses:
 - `simple_cmdline`
@@ -14150,7 +14151,7 @@ Private symbols:
 ## Module: simple_simple_volinterp
 
 Files:
-- `main/volume/simple_volinterp.f90`
+- `../scripts/../src/main/volume/simple_volinterp.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14166,7 +14167,7 @@ Public symbols:
 ## Module: simple_simulator
 
 Files:
-- `main/simple_simulator.f90`
+- `../scripts/../src/main/simple_simulator.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14180,7 +14181,7 @@ Public symbols:
 ## Module: simple_socket_comm
 
 Files:
-- `utils/comm/simple_socket_comm.f90`
+- `../scripts/../src/utils/comm/simple_socket_comm.f90`
 
 Public symbols:
 - `simple_socket` — type
@@ -14216,7 +14217,7 @@ Private symbols:
 ## Module: simple_sp_project
 
 Files:
-- `main/project/simple_sp_project.f90`
+- `../scripts/../src/main/project/simple_sp_project.f90`
 
 Uses:
 - `json_kinds`
@@ -14238,7 +14239,7 @@ Uses:
 ## Module: simple_srch_sort_loc
 
 Files:
-- `utils/math/simple_srch_sort_loc.f90`
+- `../scripts/../src/utils/math/simple_srch_sort_loc.f90`
 
 Uses:
 - `simple_defs`
@@ -14248,7 +14249,7 @@ Uses:
 ## Module: simple_srchspace_map
 
 Files:
-- `utils/simple_srchspace_map.f90`
+- `../scripts/../src/utils/simple_srchspace_map.f90`
 
 Uses:
 - `simple_error`
@@ -14269,7 +14270,7 @@ Private symbols:
 ## Module: simple_srchspace_map2D_io
 
 Files:
-- `fileio/simple_srchspace_map2D_io.f90`
+- `../scripts/../src/fileio/simple_srchspace_map2D_io.f90`
 
 Uses:
 - `simple_error`
@@ -14286,7 +14287,7 @@ Public symbols:
 ## Module: simple_stack_io
 
 Files:
-- `fileio/simple_stack_io.f90`
+- `../scripts/../src/fileio/simple_stack_io.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14311,7 +14312,7 @@ Private symbols:
 ## Module: simple_stackops
 
 Files:
-- `utils/simple_stackops.f90`
+- `../scripts/../src/utils/simple_stackops.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14332,7 +14333,7 @@ Private symbols:
 ## Module: simple_starfile
 
 Files:
-- `main/star/simple_starfile.f90`
+- `../scripts/../src/main/star/simple_starfile.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14354,7 +14355,7 @@ Private symbols:
 ## Module: simple_starfile_tester
 
 Files:
-- `main/star/simple_starfile_tester.f90`
+- `../scripts/../src/main/star/simple_starfile_tester.f90`
 
 Uses:
 - `omp_lib`
@@ -14400,7 +14401,7 @@ Private symbols:
 ## Module: simple_starfile_wrappers
 
 Files:
-- `main/star/simple_starfile_wrapper.f90`
+- `../scripts/../src/main/star/simple_starfile_wrapper.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14477,7 +14478,7 @@ Private symbols:
 ## Module: simple_starproject
 
 Files:
-- `main/star/simple_starproject.f90`
+- `../scripts/../src/main/star/simple_starproject.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -14528,7 +14529,7 @@ Private symbols:
 ## Module: simple_starproject_stream
 
 Files:
-- `main/star/simple_starproject_stream.f90`
+- `../scripts/../src/main/star/simple_starproject_stream.f90`
 
 Uses:
 - `cplot2d_wrapper_module`
@@ -14573,7 +14574,7 @@ Private symbols:
 ## Module: simple_starproject_tester
 
 Files:
-- `main/star/simple_starproject_tester.f90`
+- `../scripts/../src/main/star/simple_starproject_tester.f90`
 
 Uses:
 - `omp_lib`
@@ -14624,7 +14625,7 @@ Private symbols:
 ## Module: simple_starproject_utils
 
 Files:
-- `main/star/simple_starproject_utils.f90`
+- `../scripts/../src/main/star/simple_starproject_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -14644,7 +14645,7 @@ Public symbols:
 ## Module: simple_stat
 
 Files:
-- `utils/math/simple_stat.f90`
+- `../scripts/../src/utils/math/simple_stat.f90`
 
 Uses:
 - `simple_defs`
@@ -14657,7 +14658,7 @@ Uses:
 ## Module: simple_strategy2D
 
 Files:
-- `main/strategies/search/simple_strategy2D.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D.f90`
 
 Uses:
 - `simple_builder`
@@ -14678,7 +14679,7 @@ Private symbols:
 ## Module: simple_strategy2D_alloc
 
 Files:
-- `main/strategies/search/simple_strategy2D_alloc.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_alloc.f90`
 
 Uses:
 - `simple_eul_prob_tab_utils`
@@ -14695,7 +14696,7 @@ Public symbols:
 ## Module: simple_strategy2D_eval
 
 Files:
-- `main/strategies/search/simple_strategy2D_eval.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_eval.f90`
 
 Uses:
 - `simple_builder`
@@ -14717,7 +14718,7 @@ Private symbols:
 ## Module: simple_strategy2D_greedy
 
 Files:
-- `main/strategies/search/simple_strategy2D_greedy.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_greedy.f90`
 
 Uses:
 - `simple_builder`
@@ -14740,7 +14741,7 @@ Private symbols:
 ## Module: simple_strategy2D_greedy_smpl
 
 Files:
-- `main/strategies/search/simple_strategy2D_greedy_smpl.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_greedy_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -14764,7 +14765,7 @@ Private symbols:
 ## Module: simple_strategy2D_inpl
 
 Files:
-- `main/strategies/search/simple_strategy2D_inpl.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_inpl.f90`
 
 Uses:
 - `simple_builder`
@@ -14784,7 +14785,7 @@ Private symbols:
 ## Module: simple_strategy2D_inpl_smpl
 
 Files:
-- `main/strategies/search/simple_strategy2D_inpl_smpl.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_inpl_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -14806,7 +14807,7 @@ Private symbols:
 ## Module: simple_strategy2D_matcher
 
 Files:
-- `main/strategies/search/simple_strategy2D_matcher.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_matcher.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -14866,7 +14867,7 @@ Private symbols:
 ## Module: simple_strategy2D_prob
 
 Files:
-- `main/strategies/search/simple_strategy2D_prob.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_prob.f90`
 
 Uses:
 - `simple_builder`
@@ -14889,7 +14890,7 @@ Private symbols:
 ## Module: simple_strategy2D_snhc
 
 Files:
-- `main/strategies/search/simple_strategy2D_snhc.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_snhc.f90`
 
 Uses:
 - `simple_builder`
@@ -14910,7 +14911,7 @@ Private symbols:
 ## Module: simple_strategy2D_snhc_smpl
 
 Files:
-- `main/strategies/search/simple_strategy2D_snhc_smpl.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_snhc_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -14932,7 +14933,7 @@ Private symbols:
 ## Module: simple_strategy2D_snhc_smpl_many
 
 Files:
-- `main/strategies/search/simple_strategy2D_snhc_smpl_many.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_snhc_smpl_many.f90`
 
 Uses:
 - `simple_builder`
@@ -14954,7 +14955,7 @@ Private symbols:
 ## Module: simple_strategy2D_srch
 
 Files:
-- `main/strategies/search/simple_strategy2D_srch.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_srch.f90`
 
 Uses:
 - `simple_builder`
@@ -14981,7 +14982,7 @@ Private symbols:
 ## Module: simple_strategy2D_tseries
 
 Files:
-- `main/strategies/search/simple_strategy2D_tseries.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_tseries.f90`
 
 Uses:
 - `simple_builder`
@@ -15003,7 +15004,7 @@ Private symbols:
 ## Module: simple_strategy2D_utils
 
 Files:
-- `main/strategies/search/simple_strategy2D_utils.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy2D_utils.f90`
 
 Uses:
 - `simple_builder`
@@ -15052,7 +15053,7 @@ Private symbols:
 ## Module: simple_strategy3D
 
 Files:
-- `main/strategies/search/simple_strategy3D.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D.f90`
 
 Uses:
 - `simple_builder`
@@ -15073,7 +15074,7 @@ Private symbols:
 ## Module: simple_strategy3D_alloc
 
 Files:
-- `main/strategies/search/simple_strategy3D_alloc.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_alloc.f90`
 
 Uses:
 - `simple_builder`
@@ -15090,7 +15091,7 @@ Public symbols:
 ## Module: simple_strategy3D_eval
 
 Files:
-- `main/strategies/search/simple_strategy3D_eval.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_eval.f90`
 
 Uses:
 - `simple_builder`
@@ -15114,7 +15115,7 @@ Private symbols:
 ## Module: simple_strategy3D_greedy
 
 Files:
-- `main/strategies/search/simple_strategy3D_greedy.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_greedy.f90`
 
 Uses:
 - `simple_builder`
@@ -15139,7 +15140,7 @@ Private symbols:
 ## Module: simple_strategy3D_greedy_inpl
 
 Files:
-- `main/strategies/search/simple_strategy3D_greedy_inpl.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_greedy_inpl.f90`
 
 Uses:
 - `simple_builder`
@@ -15164,7 +15165,7 @@ Private symbols:
 ## Module: simple_strategy3D_greedy_smpl
 
 Files:
-- `main/strategies/search/simple_strategy3D_greedy_smpl.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_greedy_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -15191,7 +15192,7 @@ Private symbols:
 ## Module: simple_strategy3D_greedy_sub
 
 Files:
-- `main/strategies/search/simple_strategy3D_greedy_sub.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_greedy_sub.f90`
 
 Uses:
 - `simple_builder`
@@ -15218,7 +15219,7 @@ Private symbols:
 ## Module: simple_strategy3D_matcher
 
 Files:
-- `main/strategies/search/simple_strategy3D_matcher.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_matcher.f90`
 
 Uses:
 - `simple_binoris_io`
@@ -15269,7 +15270,7 @@ Private symbols:
 ## Module: simple_strategy3D_prob
 
 Files:
-- `main/strategies/search/simple_strategy3D_prob.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_prob.f90`
 
 Uses:
 - `simple_builder`
@@ -15296,7 +15297,7 @@ Private symbols:
 ## Module: simple_strategy3D_shc
 
 Files:
-- `main/strategies/search/simple_strategy3D_shc.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_shc.f90`
 
 Uses:
 - `simple_builder`
@@ -15321,7 +15322,7 @@ Private symbols:
 ## Module: simple_strategy3D_shc_smpl
 
 Files:
-- `main/strategies/search/simple_strategy3D_shc_smpl.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_shc_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -15348,7 +15349,7 @@ Private symbols:
 ## Module: simple_strategy3D_snhc_smpl
 
 Files:
-- `main/strategies/search/simple_strategy3D_snhc_smpl.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_snhc_smpl.f90`
 
 Uses:
 - `simple_builder`
@@ -15376,7 +15377,7 @@ Private symbols:
 ## Module: simple_strategy3D_srch
 
 Files:
-- `main/strategies/search/simple_strategy3D_srch.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_srch.f90`
 
 Uses:
 - `simple_builder`
@@ -15405,7 +15406,7 @@ Private symbols:
 ## Module: simple_strategy3D_utils
 
 Files:
-- `main/strategies/search/simple_strategy3D_utils.f90`
+- `../scripts/../src/main/strategies/search/simple_strategy3D_utils.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -15421,7 +15422,7 @@ Public symbols:
 ## Module: simple_stream2D_state
 
 Files:
-- `main/stream/simple_stream2D_state.f90`
+- `../scripts/../src/main/stream/simple_stream2D_state.f90`
 
 Uses:
 - `json_module`
@@ -15436,7 +15437,7 @@ Uses:
 ## Module: simple_stream_abinitio2D_chunks
 
 Files:
-- `main/stream/simple_stream_abinitio2D_chunks.f90`
+- `../scripts/../src/main/stream/simple_stream_abinitio2D_chunks.f90`
 
 Uses:
 - `simple_stream_api`
@@ -15453,7 +15454,7 @@ Public symbols:
 ## Module: simple_stream_api
 
 Files:
-- `main/apis/simple_stream_api.f90`
+- `../scripts/../src/main/apis/simple_stream_api.f90`
 
 Uses:
 - `json_kinds`
@@ -15489,7 +15490,7 @@ Uses:
 ## Module: simple_stream_chunk
 
 Files:
-- `main/stream/simple_stream_chunk.f90`
+- `../scripts/../src/main/stream/simple_stream_chunk.f90`
 
 Uses:
 - `simple_cmdline`
@@ -15528,7 +15529,7 @@ Private symbols:
 ## Module: simple_stream_chunk2D_utils
 
 Files:
-- `main/stream/simple_stream_chunk2D_utils.f90`
+- `../scripts/../src/main/stream/simple_stream_chunk2D_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -15555,7 +15556,7 @@ Private symbols:
 ## Module: simple_stream_cluster2D_utils
 
 Files:
-- `main/stream/simple_stream_cluster2D_utils.f90`
+- `../scripts/../src/main/stream/simple_stream_cluster2D_utils.f90`
 
 Uses:
 - `json_kinds`
@@ -15605,7 +15606,7 @@ Private symbols:
 ## Module: simple_stream_communicator
 
 Files:
-- `utils/comm/simple_stream_communicator.f90`
+- `../scripts/../src/utils/comm/simple_stream_communicator.f90`
 
 Uses:
 - `json_kinds`
@@ -15647,7 +15648,7 @@ Private symbols:
 ## Module: simple_stream_p00_master
 
 Files:
-- `main/stream/simple_stream_p00_master.f90`
+- `../scripts/../src/main/stream/simple_stream_p00_master.f90`
 
 Uses:
 - `simple_forked_process`
@@ -15718,7 +15719,7 @@ Private symbols:
 ## Module: simple_stream_p01_preprocess_new
 
 Files:
-- `main/stream/simple_stream_p01_preprocess_new.f90`
+- `../scripts/../src/main/stream/simple_stream_p01_preprocess_new.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -15753,7 +15754,7 @@ Private symbols:
 ## Module: simple_stream_p02_assign_optics_new
 
 Files:
-- `main/stream/simple_stream_p02_assign_optics_new.f90`
+- `../scripts/../src/main/stream/simple_stream_p02_assign_optics_new.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -15774,7 +15775,7 @@ Private symbols:
 ## Module: simple_stream_p03_initial_analysis
 
 Files:
-- `main/stream/simple_stream_p03_initial_analysis.f90`
+- `../scripts/../src/main/stream/simple_stream_p03_initial_analysis.f90`
 
 Uses:
 - `simple_abinitio_utils`
@@ -15840,7 +15841,7 @@ Private symbols:
 ## Module: simple_stream_p04_refpick_extract_new
 
 Files:
-- `main/stream/simple_stream_p04_refpick_extract_new.f90`
+- `../scripts/../src/main/stream/simple_stream_p04_refpick_extract_new.f90`
 
 Uses:
 - `simple_commanders_pick`
@@ -15872,7 +15873,7 @@ Private symbols:
 ## Module: simple_stream_p05_sieve_cavgs_new
 
 Files:
-- `main/stream/simple_stream_p05_sieve_cavgs_new.f90`
+- `../scripts/../src/main/stream/simple_stream_p05_sieve_cavgs_new.f90`
 
 Uses:
 - `simple_fileio`
@@ -15898,7 +15899,7 @@ Private symbols:
 ## Module: simple_stream_p06_pool2D_new
 
 Files:
-- `main/stream/simple_stream_p06_pool2D_new.f90`
+- `../scripts/../src/main/stream/simple_stream_p06_pool2D_new.f90`
 
 Uses:
 - `simple_gui_metadata_api`
@@ -15928,7 +15929,7 @@ Private symbols:
 ## Module: simple_stream_pool2D_utils
 
 Files:
-- `main/stream/simple_stream_pool2D_utils.f90`
+- `../scripts/../src/main/stream/simple_stream_pool2D_utils.f90`
 
 Uses:
 - `simple_classaverager`
@@ -15964,13 +15965,13 @@ Private symbols:
 ## Module: simple_stream_state
 
 Files:
-- `main/stream/simple_stream_state.f90`
+- `../scripts/../src/main/stream/simple_stream_state.f90`
 
 ---
 ## Module: simple_stream_utils
 
 Files:
-- `main/stream/simple_stream_utils.f90`
+- `../scripts/../src/main/stream/simple_stream_utils.f90`
 
 Uses:
 - `json_kinds`
@@ -16005,7 +16006,7 @@ Public symbols:
 ## Module: simple_stream_watcher
 
 Files:
-- `main/stream/simple_stream_watcher.f90`
+- `../scripts/../src/main/stream/simple_stream_watcher.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -16015,7 +16016,7 @@ Uses:
 ## Module: simple_string
 
 Files:
-- `utils/simple_string.f90`
+- `../scripts/../src/utils/simple_string.f90`
 
 Uses:
 - `simple_defs`
@@ -16026,7 +16027,7 @@ Uses:
 ## Module: simple_string_tester
 
 Files:
-- `utils/simple_string_tester.f90`
+- `../scripts/../src/utils/simple_string_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -16063,7 +16064,7 @@ Private symbols:
 ## Module: simple_string_utils
 
 Files:
-- `utils/simple_string_utils.f90`
+- `../scripts/../src/utils/simple_string_utils.f90`
 
 Uses:
 - `simple_defs`
@@ -16075,7 +16076,7 @@ Uses:
 ## Module: simple_sym
 
 Files:
-- `main/simple_sym.f90`
+- `../scripts/../src/main/simple_sym.f90`
 
 Uses:
 - `simple_ori`
@@ -16086,7 +16087,7 @@ Uses:
 ## Module: simple_symanalyzer
 
 Files:
-- `main/simple_symanalyzer.f90`
+- `../scripts/../src/main/simple_symanalyzer.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -16110,7 +16111,7 @@ Private symbols:
 ## Module: simple_syslib
 
 Files:
-- `fileio/simple_syslib.f90`
+- `../scripts/../src/fileio/simple_syslib.f90`
 
 Uses:
 - `iso_c_binding`
@@ -16180,7 +16181,7 @@ Public symbols:
 ## Module: simple_syslib_tester
 
 Files:
-- `fileio/simple_syslib_tester.f90`
+- `../scripts/../src/fileio/simple_syslib_tester.f90`
 
 Uses:
 - `simple_defs`
@@ -16220,7 +16221,7 @@ Private symbols:
 ## Module: simple_tent_smooth
 
 Files:
-- `utils/filter/simple_tent_smooth.f90`
+- `../scripts/../src/utils/filter/simple_tent_smooth.f90`
 
 Public symbols:
 - `box_filter_1d` — subroutine
@@ -16233,7 +16234,7 @@ Public symbols:
 ## Module: simple_test_exec_api
 
 Files:
-- `main/apis/simple_test_exec_api.f90`
+- `../scripts/../src/main/apis/simple_test_exec_api.f90`
 
 Uses:
 - `iso_fortran_env`
@@ -16262,7 +16263,7 @@ Uses:
 ## Module: simple_test_exec_class
 
 Files:
-- `main/exec/simple_test_exec_class.f90`
+- `../scripts/../src/main/exec/simple_test_exec_class.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16275,7 +16276,7 @@ Public symbols:
 ## Module: simple_test_exec_fft
 
 Files:
-- `main/exec/simple_test_exec_fft.f90`
+- `../scripts/../src/main/exec/simple_test_exec_fft.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16288,7 +16289,7 @@ Public symbols:
 ## Module: simple_test_exec_geometry
 
 Files:
-- `main/exec/simple_test_exec_geometry.f90`
+- `../scripts/../src/main/exec/simple_test_exec_geometry.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16301,7 +16302,7 @@ Public symbols:
 ## Module: simple_test_exec_highlevel
 
 Files:
-- `main/exec/simple_test_exec_highlevel.f90`
+- `../scripts/../src/main/exec/simple_test_exec_highlevel.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16314,7 +16315,7 @@ Public symbols:
 ## Module: simple_test_exec_io
 
 Files:
-- `main/exec/simple_test_exec_io.f90`
+- `../scripts/../src/main/exec/simple_test_exec_io.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16327,7 +16328,7 @@ Public symbols:
 ## Module: simple_test_exec_masks
 
 Files:
-- `main/exec/simple_test_exec_masks.f90`
+- `../scripts/../src/main/exec/simple_test_exec_masks.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16340,7 +16341,7 @@ Public symbols:
 ## Module: simple_test_exec_network
 
 Files:
-- `main/exec/simple_test_exec_network.f90`
+- `../scripts/../src/main/exec/simple_test_exec_network.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16353,7 +16354,7 @@ Public symbols:
 ## Module: simple_test_exec_numerics
 
 Files:
-- `main/exec/simple_test_exec_numerics.f90`
+- `../scripts/../src/main/exec/simple_test_exec_numerics.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16366,7 +16367,7 @@ Public symbols:
 ## Module: simple_test_exec_optimize
 
 Files:
-- `main/exec/simple_test_exec_optimize.f90`
+- `../scripts/../src/main/exec/simple_test_exec_optimize.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16379,7 +16380,7 @@ Public symbols:
 ## Module: simple_test_exec_parallel
 
 Files:
-- `main/exec/simple_test_exec_parallel.f90`
+- `../scripts/../src/main/exec/simple_test_exec_parallel.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16392,7 +16393,7 @@ Public symbols:
 ## Module: simple_test_exec_single
 
 Files:
-- `main/exec/simple_test_exec_single.f90`
+- `../scripts/../src/main/exec/simple_test_exec_single.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16405,7 +16406,7 @@ Public symbols:
 ## Module: simple_test_exec_stats
 
 Files:
-- `main/exec/simple_test_exec_stats.f90`
+- `../scripts/../src/main/exec/simple_test_exec_stats.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16418,7 +16419,7 @@ Public symbols:
 ## Module: simple_test_exec_stream
 
 Files:
-- `main/exec/simple_test_exec_stream.f90`
+- `../scripts/../src/main/exec/simple_test_exec_stream.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16431,7 +16432,7 @@ Public symbols:
 ## Module: simple_test_exec_utils
 
 Files:
-- `main/exec/simple_test_exec_utils.f90`
+- `../scripts/../src/main/exec/simple_test_exec_utils.f90`
 
 Uses:
 - `simple_cmdline`
@@ -16444,7 +16445,7 @@ Public symbols:
 ## Module: simple_test_ui_class
 
 Files:
-- `main/ui/simple_test/simple_test_ui_class.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_class.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16458,7 +16459,7 @@ Public symbols:
 ## Module: simple_test_ui_fft
 
 Files:
-- `main/ui/simple_test/simple_test_ui_fft.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_fft.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16478,7 +16479,7 @@ Public symbols:
 ## Module: simple_test_ui_geometry
 
 Files:
-- `main/ui/simple_test/simple_test_ui_geometry.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_geometry.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16496,7 +16497,7 @@ Public symbols:
 ## Module: simple_test_ui_highlevel
 
 Files:
-- `main/ui/simple_test/simple_test_ui_highlevel.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_highlevel.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16519,7 +16520,7 @@ Public symbols:
 ## Module: simple_test_ui_io
 
 Files:
-- `main/ui/simple_test/simple_test_ui_io.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_io.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16541,7 +16542,7 @@ Public symbols:
 ## Module: simple_test_ui_masks
 
 Files:
-- `main/ui/simple_test/simple_test_ui_masks.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_masks.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16561,7 +16562,7 @@ Public symbols:
 ## Module: simple_test_ui_network
 
 Files:
-- `main/ui/simple_test/simple_test_ui_network.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_network.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16577,7 +16578,7 @@ Public symbols:
 ## Module: simple_test_ui_numerics
 
 Files:
-- `main/ui/simple_test/simple_test_ui_numerics.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_numerics.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16594,7 +16595,7 @@ Public symbols:
 ## Module: simple_test_ui_optimize
 
 Files:
-- `main/ui/simple_test/simple_test_ui_optimize.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_optimize.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16611,7 +16612,7 @@ Public symbols:
 ## Module: simple_test_ui_parallel
 
 Files:
-- `main/ui/simple_test/simple_test_ui_parallel.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_parallel.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16627,7 +16628,7 @@ Public symbols:
 ## Module: simple_test_ui_single
 
 Files:
-- `main/ui/simple_test/simple_test_ui_single.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_single.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16643,7 +16644,7 @@ Public symbols:
 ## Module: simple_test_ui_stats
 
 Files:
-- `main/ui/simple_test/simple_test_ui_stats.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_stats.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16664,7 +16665,7 @@ Public symbols:
 ## Module: simple_test_ui_stream
 
 Files:
-- `main/ui/simple_test/simple_test_ui_stream.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_stream.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16683,7 +16684,7 @@ Public symbols:
 ## Module: simple_test_ui_utils
 
 Files:
-- `main/ui/simple_test/simple_test_ui_utils.f90`
+- `../scripts/../src/main/ui/simple_test/simple_test_ui_utils.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16708,7 +16709,7 @@ Public symbols:
 ## Module: simple_test_utils
 
 Files:
-- `utils/simple_test_utils.f90`
+- `../scripts/../src/utils/simple_test_utils.f90`
 
 Uses:
 - `simple_defs`
@@ -16728,7 +16729,7 @@ Public symbols:
 ## Module: simple_testfuns
 
 Files:
-- `utils/math/simple_testfuns.f90`
+- `../scripts/../src/utils/math/simple_testfuns.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -16773,7 +16774,7 @@ Public symbols:
 ## Module: simple_tifflib
 
 Files:
-- `fileio/simple_tifflib.f90`
+- `../scripts/../src/fileio/simple_tifflib.f90`
 
 Uses:
 - `iso_c_binding`
@@ -16814,7 +16815,7 @@ Public symbols:
 ## Module: simple_timer
 
 Files:
-- `utils/simple_timer.f90`
+- `../scripts/../src/utils/simple_timer.f90`
 
 Uses:
 - `ifport`
@@ -16839,7 +16840,7 @@ Public symbols:
 ## Module: simple_timer_omp
 
 Files:
-- `utils/simple_timer_omp.f90`
+- `../scripts/../src/utils/simple_timer_omp.f90`
 
 Uses:
 - `simple_defs`
@@ -16852,7 +16853,7 @@ Public symbols:
 ## Module: simple_tseries_graphene_subtr
 
 Files:
-- `main/nano/simple_tseries_graphene_subtr.f90`
+- `../scripts/../src/main/nano/simple_tseries_graphene_subtr.f90`
 
 Uses:
 - `simple_atoms`
@@ -16875,7 +16876,7 @@ Private symbols:
 ## Module: simple_type_defs
 
 Files:
-- `defs/simple_type_defs.f90`
+- `../scripts/../src/defs/simple_type_defs.f90`
 
 Uses:
 - `simple_defs`
@@ -16885,7 +16886,7 @@ Uses:
 ## Module: simple_ui
 
 Files:
-- `main/ui/simple_ui.f90`
+- `../scripts/../src/main/ui/simple_ui.f90`
 
 Uses:
 - `json_file_module`
@@ -16927,7 +16928,7 @@ Private symbols:
 ## Module: simple_ui_abinitio3D
 
 Files:
-- `main/ui/simple/simple_ui_abinitio3D.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_abinitio3D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16943,7 +16944,7 @@ Public symbols:
 ## Module: simple_ui_cavgproc
 
 Files:
-- `main/ui/simple/simple_ui_cavgproc.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_cavgproc.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16962,7 +16963,7 @@ Public symbols:
 ## Module: simple_ui_cluster2D
 
 Files:
-- `main/ui/simple/simple_ui_cluster2D.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_cluster2D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -16985,7 +16986,7 @@ Public symbols:
 ## Module: simple_ui_denoise
 
 Files:
-- `main/ui/simple/simple_ui_denoise.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_denoise.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17006,7 +17007,7 @@ Public symbols:
 ## Module: simple_ui_descriptor_types
 
 Files:
-- `main/ui/simple_ui_descriptor_types.f90`
+- `../scripts/../src/main/ui/simple_ui_descriptor_types.f90`
 
 Uses:
 - `simple_string`
@@ -17021,7 +17022,7 @@ Private symbols:
 ## Module: simple_ui_dock
 
 Files:
-- `main/ui/simple/simple_ui_dock.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_dock.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17036,7 +17037,7 @@ Public symbols:
 ## Module: simple_ui_filter
 
 Files:
-- `main/ui/simple/simple_ui_filter.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_filter.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17052,7 +17053,7 @@ Public symbols:
 ## Module: simple_ui_hash
 
 Files:
-- `main/ui/simple_ui_hash.f90`
+- `../scripts/../src/main/ui/simple_ui_hash.f90`
 
 Uses:
 - `simple_string`
@@ -17077,7 +17078,7 @@ Private symbols:
 ## Module: simple_ui_image
 
 Files:
-- `main/ui/simple/simple_ui_image.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_image.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17097,7 +17098,7 @@ Public symbols:
 ## Module: simple_ui_mask
 
 Files:
-- `main/ui/simple/simple_ui_mask.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_mask.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17112,7 +17113,7 @@ Public symbols:
 ## Module: simple_ui_modules
 
 Files:
-- `main/ui/simple_ui_modules.f90`
+- `../scripts/../src/main/ui/simple_ui_modules.f90`
 
 Uses:
 - `simple_ansi_ctrls`
@@ -17128,7 +17129,7 @@ Uses:
 ## Module: simple_ui_ori
 
 Files:
-- `main/ui/simple/simple_ui_ori.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_ori.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17144,7 +17145,7 @@ Public symbols:
 ## Module: simple_ui_other
 
 Files:
-- `main/ui/simple/simple_ui_other.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_other.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17160,7 +17161,7 @@ Public symbols:
 ## Module: simple_ui_param
 
 Files:
-- `main/ui/simple_ui_param.f90`
+- `../scripts/../src/main/ui/simple_ui_param.f90`
 
 Uses:
 - `simple_error`
@@ -17183,7 +17184,7 @@ Public symbols:
 ## Module: simple_ui_params_common
 
 Files:
-- `main/ui/simple_ui_params_common.f90`
+- `../scripts/../src/main/ui/simple_ui_params_common.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17197,7 +17198,7 @@ Public symbols:
 ## Module: simple_ui_preproc
 
 Files:
-- `main/ui/simple/simple_ui_preproc.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_preproc.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17218,7 +17219,7 @@ Public symbols:
 ## Module: simple_ui_print
 
 Files:
-- `main/ui/simple/simple_ui_print.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_print.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17235,7 +17236,7 @@ Public symbols:
 ## Module: simple_ui_program
 
 Files:
-- `main/ui/simple_ui_program.f90`
+- `../scripts/../src/main/ui/simple_ui_program.f90`
 
 Uses:
 - `json_module`
@@ -17296,7 +17297,7 @@ Public symbols:
 ## Module: simple_ui_project
 
 Files:
-- `main/ui/simple/simple_ui_project.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_project.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17330,7 +17331,7 @@ Public symbols:
 ## Module: simple_ui_refine3D
 
 Files:
-- `main/ui/simple/simple_ui_refine3D.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_refine3D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17350,7 +17351,7 @@ Public symbols:
 ## Module: simple_ui_res
 
 Files:
-- `main/ui/simple/simple_ui_res.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_res.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17364,7 +17365,7 @@ Public symbols:
 ## Module: simple_ui_sim
 
 Files:
-- `main/ui/simple/simple_ui_sim.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_sim.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17381,7 +17382,7 @@ Public symbols:
 ## Module: simple_ui_simple_group
 
 Files:
-- `main/ui/simple_ui_simple_group.f90`
+- `../scripts/../src/main/ui/simple_ui_simple_group.f90`
 
 Uses:
 - `simple_ui_abinitio3d`
@@ -17412,7 +17413,7 @@ Public symbols:
 ## Module: simple_ui_single_group
 
 Files:
-- `main/ui/simple_ui_single_group.f90`
+- `../scripts/../src/main/ui/simple_ui_single_group.f90`
 
 Uses:
 - `simple_ui_hash`
@@ -17431,7 +17432,7 @@ Public symbols:
 ## Module: simple_ui_stream
 
 Files:
-- `main/ui/simple/simple_ui_stream.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_stream.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17450,7 +17451,7 @@ Public symbols:
 ## Module: simple_ui_stream_group
 
 Files:
-- `main/ui/simple_ui_stream_group.f90`
+- `../scripts/../src/main/ui/simple_ui_stream_group.f90`
 
 Uses:
 - `simple_ui_hash`
@@ -17463,7 +17464,7 @@ Public symbols:
 ## Module: simple_ui_sym
 
 Files:
-- `main/ui/simple/simple_ui_sym.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_sym.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17478,7 +17479,7 @@ Public symbols:
 ## Module: simple_ui_test_group
 
 Files:
-- `main/ui/simple_ui_test_group.f90`
+- `../scripts/../src/main/ui/simple_ui_test_group.f90`
 
 Uses:
 - `simple_test_ui_class`
@@ -17504,7 +17505,7 @@ Public symbols:
 ## Module: simple_ui_utils
 
 Files:
-- `main/ui/simple_ui_utils.f90`
+- `../scripts/../src/main/ui/simple_ui_utils.f90`
 
 Uses:
 - `simple_error`
@@ -17518,7 +17519,7 @@ Public symbols:
 ## Module: simple_ui_validate
 
 Files:
-- `main/ui/simple/simple_ui_validation.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_validation.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17533,7 +17534,7 @@ Public symbols:
 ## Module: simple_ui_visibility
 
 Files:
-- `main/ui/simple_ui_visibility.f90`
+- `../scripts/../src/main/ui/simple_ui_visibility.f90`
 
 Public symbols:
 - `ui_visibility_name` — function
@@ -17542,7 +17543,7 @@ Public symbols:
 ## Module: simple_ui_volume
 
 Files:
-- `main/ui/simple/simple_ui_volume.f90`
+- `../scripts/../src/main/ui/simple/simple_ui_volume.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -17557,7 +17558,7 @@ Public symbols:
 ## Module: simple_vol_pproc_policy
 
 Files:
-- `main/volume/simple_vol_pproc_policy.f90`
+- `../scripts/../src/main/volume/simple_vol_pproc_policy.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17572,7 +17573,7 @@ Public symbols:
 ## Module: simple_volanalyzer
 
 Files:
-- `main/volume/simple_volanalyzer.f90`
+- `../scripts/../src/main/volume/simple_volanalyzer.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17591,7 +17592,7 @@ Public symbols:
 ## Module: simple_volcluster
 
 Files:
-- `main/volume/simple_volcluster.f90`
+- `../scripts/../src/main/volume/simple_volcluster.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17610,7 +17611,7 @@ Private symbols:
 ## Module: simple_volpft_corrcalc
 
 Files:
-- `main/volume/simple_volpft_corrcalc.f90`
+- `../scripts/../src/main/volume/simple_volpft_corrcalc.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17636,7 +17637,7 @@ Private symbols:
 ## Module: simple_volpft_symsrch
 
 Files:
-- `main/volume/simple_volpft_symsrch.f90`
+- `../scripts/../src/main/volume/simple_volpft_symsrch.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -17660,7 +17661,7 @@ Private symbols:
 ## Module: simple_vrefhash
 
 Files:
-- `utils/structs/simple_vrefhash.f90`
+- `../scripts/../src/utils/structs/simple_vrefhash.f90`
 
 Uses:
 - `simple_error`
@@ -17691,7 +17692,7 @@ Private symbols:
 ## Module: simple_vrefhash_tester
 
 Files:
-- `utils/structs/simple_vrefhash_tester.f90`
+- `../scripts/../src/utils/structs/simple_vrefhash_tester.f90`
 
 Uses:
 - `simple_string`
@@ -17720,7 +17721,7 @@ Private symbols:
 ## Module: simple_winfuns
 
 Files:
-- `main/interp/simple_winfuns.f90`
+- `../scripts/../src/main/interp/simple_winfuns.f90`
 
 Uses:
 - `simple_defs`
@@ -17736,7 +17737,7 @@ Private symbols:
 ## Module: single_commanders_experimental
 
 Files:
-- `main/commanders/single/single_commanders_experimental.f90`
+- `../scripts/../src/main/commanders/single/single_commanders_experimental.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -17764,7 +17765,7 @@ Public symbols:
 ## Module: single_commanders_nano2D
 
 Files:
-- `main/commanders/single/single_commanders_nano2D.f90`
+- `../scripts/../src/main/commanders/single/single_commanders_nano2D.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -17785,7 +17786,7 @@ Public symbols:
 ## Module: single_commanders_nano3D
 
 Files:
-- `main/commanders/single/single_commanders_nano3D.f90`
+- `../scripts/../src/main/commanders/single/single_commanders_nano3D.f90`
 
 Uses:
 - `simple_abinitio_utils`
@@ -17814,7 +17815,7 @@ Public symbols:
 ## Module: single_commanders_trajectory
 
 Files:
-- `main/commanders/single/single_commanders_trajectory.f90`
+- `../scripts/../src/main/commanders/single/single_commanders_trajectory.f90`
 
 Uses:
 - `simple_commanders_api`
@@ -17844,7 +17845,7 @@ Public symbols:
 ## Module: single_commanders_tseries
 
 Files:
-- `main/commanders/single/single_commanders_tseries.f90`
+- `../scripts/../src/main/commanders/single/single_commanders_tseries.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -17874,7 +17875,7 @@ Public symbols:
 ## Module: single_exec_api
 
 Files:
-- `main/apis/single_exec_api.f90`
+- `../scripts/../src/main/apis/single_exec_api.f90`
 
 Uses:
 - `iso_fortran_env`
@@ -17896,7 +17897,7 @@ Uses:
 ## Module: single_exec_atom
 
 Files:
-- `main/exec/single_exec_atom.f90`
+- `../scripts/../src/main/exec/single_exec_atom.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17910,7 +17911,7 @@ Public symbols:
 ## Module: single_exec_map
 
 Files:
-- `main/exec/single_exec_map.f90`
+- `../scripts/../src/main/exec/single_exec_map.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17924,7 +17925,7 @@ Public symbols:
 ## Module: single_exec_nano2D
 
 Files:
-- `main/exec/single_exec_nano2D.f90`
+- `../scripts/../src/main/exec/single_exec_nano2D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17938,7 +17939,7 @@ Public symbols:
 ## Module: single_exec_nano3D
 
 Files:
-- `main/exec/single_exec_nano3D.f90`
+- `../scripts/../src/main/exec/single_exec_nano3D.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17953,7 +17954,7 @@ Public symbols:
 ## Module: single_exec_trajectory
 
 Files:
-- `main/exec/single_exec_trajectory.f90`
+- `../scripts/../src/main/exec/single_exec_trajectory.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17968,7 +17969,7 @@ Public symbols:
 ## Module: single_exec_tseries
 
 Files:
-- `main/exec/single_exec_tseries.f90`
+- `../scripts/../src/main/exec/single_exec_tseries.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17982,7 +17983,7 @@ Public symbols:
 ## Module: single_exec_validate
 
 Files:
-- `main/exec/single_exec_validate.f90`
+- `../scripts/../src/main/exec/single_exec_validate.f90`
 
 Uses:
 - `simple_cmdline`
@@ -17995,7 +17996,7 @@ Public symbols:
 ## Module: single_tseries_extractor
 
 Files:
-- `main/nano/single_tseries_extractor.f90`
+- `../scripts/../src/main/nano/single_tseries_extractor.f90`
 
 Uses:
 - `simple_core_module_api`
@@ -18018,7 +18019,7 @@ Private symbols:
 ## Module: single_tseries_tracker
 
 Files:
-- `main/nano/single_tseries_tracker.f90`
+- `../scripts/../src/main/nano/single_tseries_tracker.f90`
 
 Uses:
 - `simple_bspline_smoother`
@@ -18046,7 +18047,7 @@ Private symbols:
 ## Module: single_ui_atom
 
 Files:
-- `main/ui/single/single_ui_atom.f90`
+- `../scripts/../src/main/ui/single/single_ui_atom.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18065,7 +18066,7 @@ Public symbols:
 ## Module: single_ui_map
 
 Files:
-- `main/ui/single/single_ui_map.f90`
+- `../scripts/../src/main/ui/single/single_ui_map.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18079,7 +18080,7 @@ Public symbols:
 ## Module: single_ui_nano2D
 
 Files:
-- `main/ui/single/single_ui_nano2D.f90`
+- `../scripts/../src/main/ui/single/single_ui_nano2D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18095,7 +18096,7 @@ Public symbols:
 ## Module: single_ui_nano3D
 
 Files:
-- `main/ui/single/single_ui_nano3D.f90`
+- `../scripts/../src/main/ui/single/single_ui_nano3D.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18110,7 +18111,7 @@ Public symbols:
 ## Module: single_ui_trajectory
 
 Files:
-- `main/ui/single/single_ui_trajectory.f90`
+- `../scripts/../src/main/ui/single/single_ui_trajectory.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18129,7 +18130,7 @@ Public symbols:
 ## Module: single_ui_tseries
 
 Files:
-- `main/ui/single/single_ui_tseries.f90`
+- `../scripts/../src/main/ui/single/single_ui_tseries.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18147,7 +18148,7 @@ Public symbols:
 ## Module: single_ui_validate
 
 Files:
-- `main/ui/single/single_ui_validate.f90`
+- `../scripts/../src/main/ui/single/single_ui_validate.f90`
 
 Uses:
 - `simple_ui_modules`
@@ -18163,68 +18164,68 @@ Public symbols:
 ## Module: subroutine
 
 Files:
-- `main/class/simple_classaverager.f90`
-- `main/class/simple_classaverager_core.f90`
-- `main/class/simple_classaverager_restore.f90`
-- `main/image/simple_image.f90`
-- `main/image/simple_image_access.f90`
-- `main/image/simple_image_arith.f90`
-- `main/image/simple_image_calc.f90`
-- `main/image/simple_image_core.f90`
-- `main/image/simple_image_ctf.f90`
-- `main/image/simple_image_fft.f90`
-- `main/image/simple_image_filt.f90`
-- `main/image/simple_image_freq_anal.f90`
-- `main/image/simple_image_geom.f90`
-- `main/image/simple_image_io.f90`
-- `main/image/simple_image_norm.f90`
-- `main/image/simple_image_ops.f90`
-- `main/image/simple_image_polar.f90`
-- `main/image/simple_image_seg.f90`
-- `main/image/simple_image_vis.f90`
-- `main/nu_filt/simple_nu_filter.f90`
-- `main/nu_filt/simple_nu_filter_apply.f90`
-- `main/nu_filt/simple_nu_filter_bank.f90`
-- `main/nu_filt/simple_nu_filter_envmask.f90`
-- `main/nu_filt/simple_nu_filter_evidence.f90`
-- `main/nu_filt/simple_nu_filter_extend.f90`
-- `main/nu_filt/simple_nu_filter_potts.f90`
-- `main/nu_filt/simple_nu_filter_state.f90`
-- `main/nu_filt/simple_nu_filter_stats.f90`
-- `main/ori/simple_oris.f90`
-- `main/ori/simple_oris_dists.f90`
-- `main/ori/simple_oris_getters.f90`
-- `main/ori/simple_oris_io.f90`
-- `main/ori/simple_oris_life.f90`
-- `main/ori/simple_oris_neig.f90`
-- `main/ori/simple_oris_reshape.f90`
-- `main/ori/simple_oris_sampling.f90`
-- `main/ori/simple_oris_setters.f90`
-- `main/ori/simple_oris_stats.f90`
-- `main/ori/simple_oris_transform.f90`
-- `main/params/simple_parameters.f90`
-- `main/params/simple_parameters_core.f90`
-- `main/params/simple_parameters_parse.f90`
-- `main/params/simple_parameters_phases.f90`
-- `main/pftc/simple_polarft_access.f90`
-- `main/pftc/simple_polarft_calc.f90`
-- `main/pftc/simple_polarft_core.f90`
-- `main/pftc/simple_polarft_corr.f90`
-- `main/pftc/simple_polarft_ctf.f90`
-- `main/pftc/simple_polarft_geom.f90`
-- `main/pftc/simple_polarft_memo.f90`
-- `main/pftc/simple_polarft_ops_io.f90`
-- `main/project/simple_sp_project.f90`
-- `main/project/simple_sp_project_cls.f90`
-- `main/project/simple_sp_project_core.f90`
-- `main/project/simple_sp_project_io.f90`
-- `main/project/simple_sp_project_mic.f90`
-- `main/project/simple_sp_project_optics.f90`
-- `main/project/simple_sp_project_out.f90`
-- `main/project/simple_sp_project_ptcl.f90`
-- `main/project/simple_sp_project_stk.f90`
-- `main/simple_abinitio_controller.f90`
-- `main/simple_abinitio_utils.f90`
+- `../scripts/../src/main/class/simple_classaverager.f90`
+- `../scripts/../src/main/class/simple_classaverager_core.f90`
+- `../scripts/../src/main/class/simple_classaverager_restore.f90`
+- `../scripts/../src/main/image/simple_image.f90`
+- `../scripts/../src/main/image/simple_image_access.f90`
+- `../scripts/../src/main/image/simple_image_arith.f90`
+- `../scripts/../src/main/image/simple_image_calc.f90`
+- `../scripts/../src/main/image/simple_image_core.f90`
+- `../scripts/../src/main/image/simple_image_ctf.f90`
+- `../scripts/../src/main/image/simple_image_fft.f90`
+- `../scripts/../src/main/image/simple_image_filt.f90`
+- `../scripts/../src/main/image/simple_image_freq_anal.f90`
+- `../scripts/../src/main/image/simple_image_geom.f90`
+- `../scripts/../src/main/image/simple_image_io.f90`
+- `../scripts/../src/main/image/simple_image_norm.f90`
+- `../scripts/../src/main/image/simple_image_ops.f90`
+- `../scripts/../src/main/image/simple_image_polar.f90`
+- `../scripts/../src/main/image/simple_image_seg.f90`
+- `../scripts/../src/main/image/simple_image_vis.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_apply.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_bank.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_envmask.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_evidence.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_extend.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_potts.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_stats.f90`
+- `../scripts/../src/main/ori/simple_oris.f90`
+- `../scripts/../src/main/ori/simple_oris_dists.f90`
+- `../scripts/../src/main/ori/simple_oris_getters.f90`
+- `../scripts/../src/main/ori/simple_oris_io.f90`
+- `../scripts/../src/main/ori/simple_oris_life.f90`
+- `../scripts/../src/main/ori/simple_oris_neig.f90`
+- `../scripts/../src/main/ori/simple_oris_reshape.f90`
+- `../scripts/../src/main/ori/simple_oris_sampling.f90`
+- `../scripts/../src/main/ori/simple_oris_setters.f90`
+- `../scripts/../src/main/ori/simple_oris_stats.f90`
+- `../scripts/../src/main/ori/simple_oris_transform.f90`
+- `../scripts/../src/main/params/simple_parameters.f90`
+- `../scripts/../src/main/params/simple_parameters_core.f90`
+- `../scripts/../src/main/params/simple_parameters_parse.f90`
+- `../scripts/../src/main/params/simple_parameters_phases.f90`
+- `../scripts/../src/main/pftc/simple_polarft_access.f90`
+- `../scripts/../src/main/pftc/simple_polarft_calc.f90`
+- `../scripts/../src/main/pftc/simple_polarft_core.f90`
+- `../scripts/../src/main/pftc/simple_polarft_corr.f90`
+- `../scripts/../src/main/pftc/simple_polarft_ctf.f90`
+- `../scripts/../src/main/pftc/simple_polarft_geom.f90`
+- `../scripts/../src/main/pftc/simple_polarft_memo.f90`
+- `../scripts/../src/main/pftc/simple_polarft_ops_io.f90`
+- `../scripts/../src/main/project/simple_sp_project.f90`
+- `../scripts/../src/main/project/simple_sp_project_cls.f90`
+- `../scripts/../src/main/project/simple_sp_project_core.f90`
+- `../scripts/../src/main/project/simple_sp_project_io.f90`
+- `../scripts/../src/main/project/simple_sp_project_mic.f90`
+- `../scripts/../src/main/project/simple_sp_project_optics.f90`
+- `../scripts/../src/main/project/simple_sp_project_out.f90`
+- `../scripts/../src/main/project/simple_sp_project_ptcl.f90`
+- `../scripts/../src/main/project/simple_sp_project_stk.f90`
+- `../scripts/../src/main/simple_abinitio_controller.f90`
+- `../scripts/../src/main/simple_abinitio_utils.f90`
 
 Uses:
 - `simple_commanders_euclid`
@@ -18232,6 +18233,7 @@ Uses:
 - `simple_euclid_sigma2`
 - `simple_gpu_utils`
 - `simple_gridding`
+- `simple_image_msk`
 - `simple_imgarr_utils`
 - `simple_jpg`
 - `simple_linalg`
@@ -18334,13 +18336,13 @@ Public symbols:
 ## Module: unix
 
 Files:
-- `extlibs/unix/src/unix.f90`
+- `../scripts/../src/extlibs/unix/src/unix.f90`
 
 ---
 ## Module: unix_dirent
 
 Files:
-- `extlibs/unix/src/unix_dirent.F90`
+- `../scripts/../src/extlibs/unix/src/unix_dirent.F90`
 
 Public symbols:
 - `c_closedir` — function
@@ -18355,7 +18357,7 @@ Private symbols:
 ## Module: unix_errno
 
 Files:
-- `extlibs/unix/src/unix_errno.F90`
+- `../scripts/../src/extlibs/unix/src/unix_errno.F90`
 
 Public symbols:
 - `c_errno` — function
@@ -18364,7 +18366,7 @@ Public symbols:
 ## Module: unix_fcntl
 
 Files:
-- `extlibs/unix/src/unix_fcntl.F90`
+- `../scripts/../src/extlibs/unix/src/unix_fcntl.F90`
 
 Public symbols:
 - `c_fcntl` — function
@@ -18374,7 +18376,7 @@ Public symbols:
 ## Module: unix_inet
 
 Files:
-- `extlibs/unix/src/unix_inet.F90`
+- `../scripts/../src/extlibs/unix/src/unix_inet.F90`
 
 Public symbols:
 - `c_htonl` — function
@@ -18385,7 +18387,7 @@ Public symbols:
 ## Module: unix_ioctl
 
 Files:
-- `extlibs/unix/src/unix_ioctl.F90`
+- `../scripts/../src/extlibs/unix/src/unix_ioctl.F90`
 
 Public symbols:
 - `c_ioctl` — function
@@ -18394,7 +18396,7 @@ Public symbols:
 ## Module: unix_ipc
 
 Files:
-- `extlibs/unix/src/unix_ipc.F90`
+- `../scripts/../src/extlibs/unix/src/unix_ipc.F90`
 
 Public symbols:
 - `c_ftok` — function
@@ -18403,7 +18405,7 @@ Public symbols:
 ## Module: unix_mqueue
 
 Files:
-- `extlibs/unix/src/unix_mqueue.F90`
+- `../scripts/../src/extlibs/unix/src/unix_mqueue.F90`
 
 Public symbols:
 - `c_mq_close` — function
@@ -18423,7 +18425,7 @@ Private symbols:
 ## Module: unix_msg
 
 Files:
-- `extlibs/unix/src/unix_msg.F90`
+- `../scripts/../src/extlibs/unix/src/unix_msg.F90`
 
 Public symbols:
 - `c_msgctl` — function
@@ -18435,7 +18437,7 @@ Public symbols:
 ## Module: unix_netdb
 
 Files:
-- `extlibs/unix/src/unix_netdb.F90`
+- `../scripts/../src/extlibs/unix/src/unix_netdb.F90`
 
 Public symbols:
 - `c_freeaddrinfo` — subroutine
@@ -18455,7 +18457,7 @@ Private symbols:
 ## Module: unix_pthread
 
 Files:
-- `extlibs/unix/src/unix_pthread.F90`
+- `../scripts/../src/extlibs/unix/src/unix_pthread.F90`
 
 Public symbols:
 - `c_pthread_cancel` — function
@@ -18479,7 +18481,7 @@ Private symbols:
 ## Module: unix_regex
 
 Files:
-- `extlibs/unix/src/unix_regex.F90`
+- `../scripts/../src/extlibs/unix/src/unix_regex.F90`
 
 Public symbols:
 - `c_regcomp` — function
@@ -18496,7 +18498,7 @@ Private symbols:
 ## Module: unix_semaphore
 
 Files:
-- `extlibs/unix/src/unix_semaphore.F90`
+- `../scripts/../src/extlibs/unix/src/unix_semaphore.F90`
 
 Public symbols:
 - `c_sem_close` — function
@@ -18517,7 +18519,7 @@ Private symbols:
 ## Module: unix_signal
 
 Files:
-- `extlibs/unix/src/unix_signal.F90`
+- `../scripts/../src/extlibs/unix/src/unix_signal.F90`
 
 Public symbols:
 - `c_kill` — function
@@ -18527,7 +18529,7 @@ Public symbols:
 ## Module: unix_socket
 
 Files:
-- `extlibs/unix/src/unix_socket.F90`
+- `../scripts/../src/extlibs/unix/src/unix_socket.F90`
 
 Public symbols:
 - `c_accept` — function
@@ -18542,7 +18544,7 @@ Public symbols:
 ## Module: unix_stat
 
 Files:
-- `extlibs/unix/src/unix_stat.F90`
+- `../scripts/../src/extlibs/unix/src/unix_stat.F90`
 
 Public symbols:
 - `c_fstat` — function
@@ -18561,7 +18563,7 @@ Private symbols:
 ## Module: unix_stdio
 
 Files:
-- `extlibs/unix/src/unix_stdio.F90`
+- `../scripts/../src/extlibs/unix/src/unix_stdio.F90`
 
 Public symbols:
 - `c_fclose` — function
@@ -18588,7 +18590,7 @@ Public symbols:
 ## Module: unix_stdlib
 
 Files:
-- `extlibs/unix/src/unix_stdlib.F90`
+- `../scripts/../src/extlibs/unix/src/unix_stdlib.F90`
 
 Public symbols:
 - `c_exit` — subroutine
@@ -18598,7 +18600,7 @@ Public symbols:
 ## Module: unix_string
 
 Files:
-- `extlibs/unix/src/unix_string.F90`
+- `../scripts/../src/extlibs/unix/src/unix_string.F90`
 
 Public symbols:
 - `c_memcpy` — function
@@ -18610,7 +18612,7 @@ Public symbols:
 ## Module: unix_syslog
 
 Files:
-- `extlibs/unix/src/unix_syslog.F90`
+- `../scripts/../src/extlibs/unix/src/unix_syslog.F90`
 
 Public symbols:
 - `c_closelog` — subroutine
@@ -18621,7 +18623,7 @@ Public symbols:
 ## Module: unix_termios
 
 Files:
-- `extlibs/unix/src/unix_termios.F90`
+- `../scripts/../src/extlibs/unix/src/unix_termios.F90`
 
 Public symbols:
 - `c_cfgetispeed` — function
@@ -18645,7 +18647,7 @@ Private symbols:
 ## Module: unix_time
 
 Files:
-- `extlibs/unix/src/unix_time.F90`
+- `../scripts/../src/extlibs/unix/src/unix_time.F90`
 
 Public symbols:
 - `c_asctime` — function
@@ -18671,13 +18673,13 @@ Private symbols:
 ## Module: unix_types
 
 Files:
-- `extlibs/unix/src/unix_types.F90`
+- `../scripts/../src/extlibs/unix/src/unix_types.F90`
 
 ---
 ## Module: unix_unistd
 
 Files:
-- `extlibs/unix/src/unix_unistd.F90`
+- `../scripts/../src/extlibs/unix/src/unix_unistd.F90`
 
 Public symbols:
 - `c_chdir` — function
@@ -18698,7 +18700,7 @@ Public symbols:
 ## Module: unix_utsname
 
 Files:
-- `extlibs/unix/src/unix_utsname.F90`
+- `../scripts/../src/extlibs/unix/src/unix_utsname.F90`
 
 Public symbols:
 - `c_uname` — function
@@ -18711,7 +18713,7 @@ Private symbols:
 ## Module: unix_wait
 
 Files:
-- `extlibs/unix/src/unix_wait.F90`
+- `../scripts/../src/extlibs/unix/src/unix_wait.F90`
 
 Public symbols:
 - `c_wait` — function
