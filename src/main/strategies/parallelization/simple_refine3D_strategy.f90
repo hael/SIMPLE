@@ -208,8 +208,13 @@ contains
     subroutine validate_refine3D_pcg_integration( params )
         type(parameters), intent(in) :: params
         if( trim(params%rec_backend) /= 'pcg' ) return
-        if( params%l_nonuniform .and. params%l_nu_refine ) &
-            &THROW_HARD('PCG nonuniform filtering does not yet support nu_refine=yes')
+        ! nu_refine=yes on the pcg path means Q_NU evidence-bank shell
+        ! extension (Stage 6.6, the mirror of the gridding challenger) and
+        ! requires the Q_NU replay; the post-hoc P_tau+NU pcg path still has
+        ! no extension support.
+        if( params%l_nonuniform .and. params%l_nu_refine .and. &
+            &.not. (params%l_ml_reg .and. params%pcg_nu_lambda_rel > 0.0) ) &
+            &THROW_HARD('nu_refine=yes on the PCG backend requires the Q_NU replay (euclid ml_reg, pcg_nu_lambda_rel > 0)')
     end subroutine validate_refine3D_pcg_integration
 
     subroutine remove_pcg_raw_files( params )

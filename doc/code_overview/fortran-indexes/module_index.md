@@ -5789,6 +5789,20 @@ Private symbols:
 - `exec_reextract` — subroutine
 
 ---
+## Module: simple_commanders_postprocess_nu
+
+Files:
+- `../scripts/../src/main/commanders/simple/simple_commanders_postprocess_nu.f90`
+
+Uses:
+- `simple_commanders_api`
+- `simple_nu_filter`
+
+Public symbols:
+- `commander_postprocess_nu` — type
+- `exec_postprocess_nu` — subroutine
+
+---
 ## Module: simple_commanders_preprocess
 
 Files:
@@ -8039,6 +8053,7 @@ Files:
 Uses:
 - `simple_cmdline`
 - `simple_commanders_imgops`
+- `simple_commanders_postprocess_nu`
 - `simple_commanders_resolest`
 
 Public symbols:
@@ -17046,6 +17061,7 @@ Public symbols:
 - `construct_filter_programs` — subroutine
 - `new_filter` — subroutine
 - `new_nu_filt3D` — subroutine
+- `new_postprocess_nu` — subroutine
 - `new_uniform_filter2D` — subroutine
 - `new_uniform_filter3D` — subroutine
 
@@ -18190,6 +18206,7 @@ Files:
 - `../scripts/../src/main/nu_filt/simple_nu_filter_evidence.f90`
 - `../scripts/../src/main/nu_filt/simple_nu_filter_extend.f90`
 - `../scripts/../src/main/nu_filt/simple_nu_filter_potts.f90`
+- `../scripts/../src/main/nu_filt/simple_nu_filter_sharpen.f90`
 - `../scripts/../src/main/nu_filt/simple_nu_filter_state.f90`
 - `../scripts/../src/main/nu_filt/simple_nu_filter_stats.f90`
 - `../scripts/../src/main/ori/simple_oris.f90`

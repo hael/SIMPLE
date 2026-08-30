@@ -829,7 +829,11 @@ contains
         real                          :: fsc05, fsc0143, aux_resolution, align_lp, selected_lp
 
         if( .not. params%l_nonuniform ) return
-        if( params%l_nu_refine ) THROW_HARD('PCG nonuniform filtering does not yet support nu_refine=yes')
+        ! nu_refine=yes on pcg belongs to the Q_NU replay (evidence-bank shell
+        ! extension inside build_nu_replay_evidence, Stage 6.6); on the
+        ! post-hoc P_tau+NU pcg path it remains unsupported
+        if( params%l_nu_refine .and. .not. (params%l_ml_reg .and. params%pcg_nu_lambda_rel > 0.0) ) &
+            &THROW_HARD('nu_refine=yes on the PCG backend requires the Q_NU replay (euclid ml_reg, pcg_nu_lambda_rel > 0)')
         if( size(l_trail_bootstrap) /= params%nstates ) &
             &THROW_HARD('PCG nonuniform trailing-bootstrap state input has invalid size')
         ! Policy (2026-08-28, pcg_priors.md): with the Q_NU replay active the

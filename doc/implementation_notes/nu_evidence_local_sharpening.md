@@ -2,12 +2,20 @@
 
 ## Status
 
-Proposal (2026-08-27), not yet scheduled. Recorded now so the idea is
-specified while the Stage 6 NU replay work is fresh; implementation must not
-begin before the direct NU-evidence prior clears its Gate C/D program
-(`pcg_priors.md` §8, §10) — this is a postprocessing experiment that consumes
-Stage 6 infrastructure, not a competitor to it. No solver, base-solve, replay,
-or artifact behavior changes are proposed here.
+Proposal (2026-08-27), **SCHEDULED as PRESSING (2026-08-29, user
+direction)** — item 1 on the active dev list in `pcg_priors.md`
+(Stage 6.6 run records). The original precondition is met: the direct
+NU-evidence prior cleared its Gate C/D program and the Stage 6.6
+nu_refine evidence-bank extension validated on 1WCM. The motivation is
+now empirical, not speculative: on real data (PfCRT and others) a single
+isotropic B-factor does not produce acceptable postprocessed maps — only
+bgal- and streptavidin-like specimens tolerate it. This remains a
+postprocessing experiment that consumes Stage 6 infrastructure, not a
+competitor to it. No solver, base-solve, replay, or artifact behavior
+changes are proposed here. Note the Wilson-target variant 2.3(c) is
+DEAD: the Wilson prior was adjudicated against and removed from the
+codebase (2026-08-29, `pcg_priors.md` Stage 7 record); variants 2.3(a)
+evidence-derived and 2.3(b) local-B remain the candidates.
 
 ## 1. The idea
 
@@ -120,6 +128,109 @@ changes change the operator and must be measured, not assumed invariant).
   (assembly-owned, per the nonuniform filtering policy — matchers and
   search never sharpen). Products are derived (`_nu_sharp` naming beside
   `_nu_filt`/`_nu_locres`), never replacements for base reconstructions.
+
+## 3b. Implementation v1 (2026-08-29, user-directed design decisions)
+
+User-directed: the path is ISOLATED from the standard postprocess commander
+(global B-factor + FSC filter, unchanged) behind a dedicated `postprocess_nu`
+commander. What was built:
+
+- **Commander** `postprocess_nu`
+  (`src/main/commanders/simple/simple_commanders_postprocess_nu.f90`, routed
+  in `simple_exec_filter`, UI in `simple_ui_filter` beside `nu_filt3D`).
+  Standalone file interface, no sp_project: `vol1` (odd) / `vol2` (even)
+  UNREGULARIZED half maps, `smpd`, `mskdiam`, optional `outvol`, `nthr`,
+  `nu_refine` (default **yes** here — finer evidence granularity is
+  affordable post-hoc, §2.4; the cost is paid once per map, not per CG
+  iteration). Evidence lifecycle mirrors the Q_NU replay exactly:
+  `setup_nu_dmats -> optimize_nu_cutoff_finds -> [accepted shell walk] ->
+  build_nu_evidence_state -> assert_nu_evidence_replay_ready` — one evidence
+  identity, no second NU analysis. Outputs: `_nu_sharp` even/odd/merged.
+- **Gain synthesis** (`simple_nu_filter_sharpen.f90`, submodule of
+  `simple_nu_filter`): `x_sharp = mean(x) + sum_b g_b(v) * B_b(x - mean(x))`
+  with disjoint radial bands from the evidence ladder using the identical
+  coarse-to-fine first-match partition as `ensure_nu_band_index`, and
+  mean-centering standing in for the Q_NU `C` projector (`apply_filter`
+  would otherwise ride DC on every band). Per band:
+  `g_b = a_b * (1 + a_b * (min(CAP, max(1, t_b / max(e_b(v), eps))) - 1))`
+  where `a_b = 1 - band_w` is the calibrated support confidence (§2.2 Wiener
+  layer), `e_b(v)` the local band RMS (squared band component low-passed at
+  `NU_SHARP_ENERGY_SMOOTH_FAC=2.0` x the band limit, floored at
+  `NU_SHARP_ENERGY_EPS_REL=0.05` x in-support band RMS), and the target
+  `t_b` the RMS of `e_b` over voxels with `a_b >= NU_SHARP_REF_CONFIDENCE=0.9`
+  (§2.3(a) self-referential); restoration disables for a band with fewer
+  than `NU_SHARP_MIN_REF_VOXELS=1000` reference voxels or a target below the
+  floor. Restoration cap `NU_SHARP_MAX_GAIN=4.0` (amplitude ratio). Gains
+  are computed once from the merged pair and applied identically to both
+  halves. No user gain knob exists, per the design mandate; the constants
+  are recorded design, and changing them is an experiment.
+- **Known v1 limitations, recorded up front:** (i) the gain field steps to
+  zero at the spherical evidence-support edge (the sharpened map decays to
+  its mean outside `mskdiam`) — acceptable for a display product, revisit
+  with a soft support taper if edge artifacts show; (ii) the uncertainty/
+  entropy taper of §2.2 is not yet in the gains (confidence-only taper);
+  (iii) restoration targets are per-band scalars (variant 2.3(a)), the
+  local-B interpolation of 2.3(b) remains the upgrade path if band
+  coarseness limits.
+
+### v1 outcome (2026-08-29, PfCRT, FAILED -- recorded, superseded by v2)
+
+First real-data run (PfCRT unfil pair, box 300): the evidence envelope was
+genuinely good -- flat-zero solvent tracking the molecular shape, and the
+shell walk found a real high-resolution core (10 accepted steps to ~3 A).
+But the periphery collapsed to coarse-band blobs and the core was
+over-sharpened salt-and-pepper noise. Root cause, confirmed by design
+review: the v1 Wiener layer used band support confidence `a_b` as the
+shrinkage, but confidence is a calibrated SUPPORT PROBABILITY that
+saturates to 1 wherever evidence exists -- it carries no SSNR. So the
+finest bands of the raw unfiltered input passed at full noise power, and
+the ratio-restoration layer then boosted local amplitude dips toward a
+noise-level regional RMS target by up to 4x. Confidence != SSNR; v1
+conflated them. (Operational note from the same session: the first run
+crashed because `setup_nu_dmats` was called without `evidence_source` --
+the provenance contract guard worked as intended -- and a run on
+mismatched inputs showed that the mskdiam-too-large fallback warning must
+be treated as an input error: check the half-map box/smpd headers.)
+
+## 3c. Implementation v2 (2026-08-29): classical shrink-then-sharpen, localized
+
+What the classical pipeline gets right and v1 skipped: shrinkage and
+sharpening are always coupled, in that order (the standard postprocess
+applies the FSC-derived per-shell Wiener `fsc2optlp` and only sharpens
+inside that rolloff); LocScale's boost is implicitly bounded by the
+reference's physical amplitude falloff; and the B-factor is a smooth
+two-parameter Guinier fit, not a per-band amplitude ratio. v2 is that
+recipe with the evidence deciding WHERE each ingredient acts:
+
+1. **Sharpen:** one classical Guinier B-factor from the merged map
+   (`guinier_bfac(HPLIM_GUINIER, finest_evidenced_cutoff)`), applied only
+   when the finest evidenced cutoff is finer than
+   `NU_SHARP_BFAC_FINEST_A = 5 A` -- the standard postprocess gate.
+2. **Filter (the local Wiener surrogate):** per-voxel Butterworth
+   low-pass at the frozen state's evidenced local cutoff
+   (`selected_cutoff`, from the Potts-smoothed label optimization),
+   composed production-NU-filter style from the <=24 distinct per-cutoff
+   filtered versions. Sharpening therefore never extends beyond the local
+   passband.
+3. **Solvent:** null-claimed voxels (cutoff 0) and voxels outside the
+   spherical support flatten to the map mean -- the evidence
+   envelope behavior the v1 run validated.
+
+Output (user-directed, 2026-08-29): the shipped product is a SINGLE
+sharpened merged volume, classical-postprocess style. Every v2 operation
+is linear, so sharpening the merged map is identical to averaging two
+identically-processed halves; per-half `_nu_sharp` outputs were dropped.
+The half pair still supplies the evidence and the resolution authority.
+
+A global `fsc2optlp` is deliberately NOT applied: the global FSC averages
+over the map and would erase exactly the core detail the walk validated;
+the Butterworth rolloff at the calibrated local cutoff is the local
+shrinkage surrogate. The v1 restoration layer (ratio boost toward a
+regional target) is retired; if v2's single global B proves too blunt
+across regions of very different decay, the recorded upgrade path is the
+local-B fit 2.3(b) -- per-region Guinier, still inside the local
+passband. The v1 `NU_SHARP_*` band-gain constants were removed from the
+code with the design.
 
 ## 4. Validation plan
 

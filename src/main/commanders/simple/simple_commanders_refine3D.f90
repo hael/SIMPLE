@@ -103,18 +103,12 @@ contains
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',        'yes')
         if( .not. cline%defined('filt_mode')   ) call cline%set('filt_mode', 'nonuniform') ! obvioulsy
-        ! NU shell extension is obsolete under the PCG backend: the in-solve
-        ! Q_NU replay performs the local regularization, so nu_refine defaults
-        ! off there, mirroring the abinitio3D stage policy (an explicit
-        ! nu_refine=yes with rec_backend=pcg still hard-errors in the strategy
-        ! guard). The gridding competition default is unchanged.
-        if( .not. cline%defined('nu_refine') )then
-            if( cline%defined('rec_backend') .and. cline%get_carg('rec_backend') .eq. 'pcg' )then
-                call cline%set('nu_refine', 'no')
-            else
-                call cline%set('nu_refine', 'yes') ! allow conservative NU resolution-bank expansion
-            endif
-        endif
+        ! nu_refine=yes means conservative resolution-bank expansion on BOTH
+        ! backends (Stage 6.6): the gridding filter challenger, or its mirror
+        ! on the pcg path -- Q_NU evidence-bank shell extension with the same
+        ! proven win-fraction acceptance. abinitio3D keeps the discrete
+        ! static ladder via its stage policy.
+        if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! envelope masking for background flattening
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then

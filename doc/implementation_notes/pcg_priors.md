@@ -1969,6 +1969,302 @@ diagnostics, and wall-clock/cost. On acceptance: remove the retired solvent
 prior code, the post-hoc NU competition path for pcg, and revisit
 `nu_refine`'s existence; record removals here.
 
+### Stage 6.6 — always-on adaptive band granularity (IMPLEMENTED 2026-08-29; build/runtime gates user-side pending)
+
+The replay-setting successor to `nu_refine`-style resolution extension,
+designed and implemented 2026-08-29. The problem: the
+solver's finest band spans 8 A to Nyquist as ONE weight block (the
+evidence probes stop at ~5-4 A), so high-resolution refinement pays a
+granularity tax -- one confidence governs the whole fine tail, and the
+matching-lp handoff is quantized to the candidate ladder near the
+frontier. The competition path solved this with the shell challenger
+(`nu_refine=yes`), which had to be OPT-IN because filter-side acceptance
+was irreversible within the iteration: a wrongly accepted shell passed
+its noise directly into the references.
+
+Design: make the band structure a deterministic function of the current
+evidence state, ALWAYS ON -- no flag, no successor to `nu_refine=yes|no`.
+Keep the static 20/12/8/5 A ladder and extend it geometrically (the
+existing ~0.6-0.67 per-step spacing) until the next boundary would pass
+max(current base FSC=0.143 crossing x margin, crop Nyquist), with
+matching evidence candidates per new boundary. Band count then grows with
+resolution the way the abinitio crops do; the structure is derived from
+the pair, shared by both halves, and frozen before either replay, per the
+existing evidence contract.
+
+Why always-on is safe where the shell challenger was not (risk
+inversion): subdivision has NO acceptance step. A new finest band earning
+low confidence adds penalty to the fine tail (the conservative direction
+-- today's one-block band 4 under-penalizes fine noise inside a
+partially-evidenced region); earning high confidence, the penalty
+retreats exactly where evidence supports it. Nothing is passed, nothing
+is cut, and the structure is refrozen from fresh evidence every
+iteration, so a poorly placed boundary self-corrects.
+
+Implementation surface is evidence-side only: the solver
+(`set_nu_prior`, band index, operator, preconditioner approximation) is
+already nbands-generic. Changes: derive the ladder/limits per iteration
+(replacing the `NU_EVIDENCE_BAND_LIMITS` constant as the sole source),
+pack them in the compact state, generalize
+`expand_nu_evidence_band_weights` past the fixed four, and thread the
+state-carried limits to `set_nu_prior` (the provenance string already
+records `bands_A`/`candidates_A`, so the evidence identity hash tracks
+the structure for free). Side benefit: the matching-lp handoff steps
+refine with the ladder (the 4.01/4.12/4.42 A staircase in the msp1 log
+smooths out).
+
+Gates: the Gate A partition test at each band-count transition (the bank
+is not a tight frame; refining the partition changes the operator --
+measured, not assumed); the suppression readout watched across
+transitions (a mid-refinement subdivision redistributes where
+suppression concentrates); one lambda-ladder recheck at high band count.
+Cost note: two padded FFT pairs per extra band per application (~75%
+more Q_NU application cost at ~7 bands), fixed per solve and independent
+of particle count; a few extra candidates in the once-per-iteration
+evidence analysis.
+
+IMPLEMENTATION RECORD (2026-08-29). As designed, evidence-side only:
+
+- Constants `NU_EVIDENCE_MAX_NBANDS=8`, `NU_EVIDENCE_BAND_RATIO=0.64`,
+  `NU_EVIDENCE_FRONTIER_MARGIN=0.8` and the module-state active ladder
+  `nu_evidence_band_limits_active` in `simple_nu_filter`;
+  `nu_evidence_summary%band_limits`/`supported_fraction` are now
+  allocatable (band count is part of the frozen state).
+- `derive_adaptive_evidence_bands` (bank submodule): always sets the
+  active ladder -- static without a frontier (exact pre-6.6 behavior,
+  which is what every non-replay caller and `simple_test_nu_envmask`
+  get), extended geometrically toward
+  max(0.8 x frontier, 2 x smpd) otherwise, two candidate probes per
+  appended band (geometric midpoint + boundary). `setup_nu_dmats` gains
+  optional `evidence_frontier_lp` (requires `evidence_source`);
+  `init_nu_filter` gains optional `extra_candidate_lps`, appended
+  strictly monotone past the static ladder, grid-snapped duplicates
+  dropped, Nyquist- and cap-clamped.
+- `build_nu_evidence_state` sizes band support, summary, provenance
+  (`bands_A` now dynamic), and the identity checksum from the active
+  ladder; `nu_evidence_state_is_valid` checks band count in
+  [4, NU_EVIDENCE_MAX_NBANDS], strictly decreasing positive limits, and
+  that the first four entries ARE the static ladder;
+  `expand_nu_evidence_band_weights` and the solver
+  (`set_nu_prior`/band index/operator/preconditioner) were already
+  nbands-generic and are untouched.
+- `build_nu_replay_evidence` takes the evidence pair's FSC=0.143
+  crossing as the frontier and returns the state-carried `band_limits`
+  alongside `band_w`; both PCG execution paths thread
+  `res0143s(state)` in and pass the returned ladder to `set_nu_prior`,
+  so operator and evidence can never disagree
+  (`NU_EVIDENCE_BAND_LIMITS` no longer reaches the strategy). The log
+  line `>>> NU ADAPTIVE EVIDENCE BANDS: <n> bands, finest boundary ...`
+  fires whenever the ladder extends.
+- No new parameter anywhere; `nu_refine` has no successor knob.
+
+Runtime observables for the user-side gates: the adaptive-bands log line
+appearing once resolution passes ~6 A (finest static boundary 5 A,
+margin 0.8: first extension at frontier ~4 A / floor permitting);
+`pcg_nu_supported_fraction_band05+` lines and a longer `bands_A` list in
+the evidence block; smoother matching-lp handoff steps; suppression
+percentage continuity across a band-count transition.
+
+### Stage 6.6 first run: 1WCM truth-judged (2026-08-29) — unguarded subdivision DEGRADES; evidence-gated retention added
+
+First adaptive-bands run, same fixture and budget as the Stage 6 Gate C
+runs. The mechanism fired exactly per the rule: frontier 2.943 A ->
+5 bands, finest boundary 3.2 A (next step 2.05 A below the 2.35 A floor,
+correctly stopped); 10 candidates (the appended midpoint probe snapped
+to the existing 4 A find and was correctly deduplicated, only 3.2 A
+appended); dynamic `bands_A`/`candidates_A` in the provenance; all
+harness gates PASSED. But the truth verdict is a clean DEGRADATION
+against the 4-band control across the entire fine band, dropping below
+even the gridding reference from ~3.7 A (truth-FSC at k=79/89/99/109:
+0.739/0.440/0.219/0.098 vs the 4-band 0.813/0.550/0.308/0.148 and
+gridding 0.766/0.472/0.227/0.117).
+
+Diagnosis, visible in one line: `band05 support = 0.000000`. In the
+solver partition the new band 5 spans EVERYTHING finer than 5 A, so the
+zero-support subdivision replaced the fine tail's partially evidenced
+weight ((1-0.19)^2 ~ 0.65) with the full penalty 1.0 -- over-suppressing
+genuine 3-5 A signal band-wide. The design argument that low confidence
+in a new band is "the conservative direction" was right about direction
+and wrong about magnitude. The zero reading also exposes a detector
+limitation: band confidence is softmax WINNER MASS on candidates at
+least that fine, and at fine candidate spacing (3.2 vs 4.0 A) the
+whitened objective barely separates neighbors, so the mass dilutes
+toward zero at the frontier even where signal demonstrably extends (the
+pair's crossing is 2.94 A). Suppression readout moved 35.9 -> 31.3%
+across the partition change -- the predicted discontinuity, now
+measured.
+
+Fix (implemented): EVIDENCE-GATED RETENTION, the always-on form of
+"subdivide when evidence supports it". After band support is computed,
+appended bands are pruned finest-first unless their mean support reaches
+`NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01`; the static four are never pruned,
+so pre-6.6 behavior is the guaranteed floor and a zero-support
+subdivision self-neutralizes to the 4-band operator (logged as
+'pruned to N band(s)'). Still no flag, no acceptance step on KEPT bands,
+per-iteration refreeze unchanged.
+
+VERIFIED (2026-08-29, same-day rerun): the guard behaves exactly as
+designed. Extension proposed (5 bands, 3.2 A), then
+'pruned to 4 band(s); appended band(s) earned no support'; `bands_A`
+back to the static four while `candidates_A` retains the 3.2 A probe
+(which keeps informing selected cutoffs and the LP handoff without
+penalizing); suppression restored to 36.0/36.9% (4-band control:
+35.9/36.8 -- continuity recovered); shipped-pair crossings identical to
+the 4-band control (3.241/2.844); truth-FSC matches the 4-band control
+to the fourth decimal across the band; all gates PASS. The retained
+extra candidate perturbs the softmax slightly (band01 support 0.9227 vs
+0.9279, temperature 4.18e-3 vs 6.04e-3) with no measurable truth effect
+-- the acknowledged and acceptable footprint of a pruned proposal.
+
+OPEN (Stage 6.6b, if adaptive granularity is to ever engage usefully):
+the fine-band confidence criterion needs a spacing-aware form -- winner
+mass systematically underestimates support as candidate spacing shrinks;
+a margin-based criterion (as the envelope uses) or cumulative-mass
+calibration against the null are the candidates. Until then, adaptive
+banding is expected to read as a no-op on most data (extension proposed,
+then pruned), which is safe and honest.
+
+### Stage 6.6 FINAL FORM (2026-08-29, user-directed): nu_refine mirror of the gridding challenger
+
+The 6.6b spacing-aware criterion (a pairwise-margin sigmoid) was briefly
+implemented and WITHDRAWN unmeasured on user direction: too complicated,
+and unnecessary -- the codebase already contains the proven answer. The
+final design mirrors the gridding path exactly:
+
+- The a-priori frontier-tracked candidate proposal (the
+  `evidence_frontier_lp` plumbing) is REMOVED. Candidate-bank extension
+  in the evidence analysis is instead the existing nu_refine
+  high-resolution shell walk (`extend_nu_filter_highres_shells`): one
+  Fourier shell at a time from the populated frontier, accepted only on
+  strict unary WIN-FRACTION at the tested frontier (>= 5% plus an
+  absolute seed floor) -- the spacing-robust criterion that has gated
+  gridding resolution extension all along, and precisely why winner-mass
+  confidence is sound here: a band is only ever created over candidates
+  that WIN somewhere, and dilution only zeroes dominated candidates.
+- Gated by the EXISTING `nu_refine` flag, with its established meaning
+  and workflow split: abinitio3D keeps the discrete static ladder (its
+  stage policy pins nu_refine=no; the validated default-on Q_NU
+  configuration is untouched); refine3D_auto restores its unconditional
+  nu_refine=yes default on BOTH backends -- the gridding filter
+  challenger there, the Q_NU evidence-bank extension here. No new
+  parameter; the earlier backend-conditional nu_refine default is
+  reverted.
+- The walk runs inside `build_nu_replay_evidence` between
+  `optimize_nu_cutoff_finds` and `build_nu_evidence_state` (the exact
+  sequence of refine3D_auto's gridding bootstrap), logged as
+  'EVIDENCE BANK EXTENDED BY n ACCEPTED SHELL STEP(S) TO x A'.
+- The band ladder is derived from the ACTUAL bank at evidence-build
+  time: the static four bands, extended geometrically (x0.64, cap 8)
+  only while an accepted candidate is at least as fine as the next
+  boundary. Static bank => exactly the four-band behavior; no band can
+  exist without a challenger-validated probe. The evidence-gated
+  retention guard stays as belt-and-braces behind the challenger gate.
+- Guards updated: `nu_refine=yes` on the pcg backend now requires the
+  Q_NU replay (clear hard error otherwise, replacing the blanket
+  'does not yet support' errors); the post-hoc P_tau+NU pcg path keeps
+  no extension support.
+
+VALIDATED on the 1WCM harness (2026-08-29, both runs, all gates PASS):
+
+- nu_refine=no control: EXACT parity with the verified four-band Q_NU
+  Gate C result -- support fractions, suppression (35.9/36.8%), shipped
+  crossings (3.241/2.844), and truth-FSC identical to all printed
+  digits. With no walk there is no candidate footprint at all, so
+  abinitio3D's discrete-ladder mode is the validated configuration
+  verbatim.
+- nu_refine=yes: the walk accepted 30 shell steps to 2.72 A (bank at the
+  24-candidate cap), band 5 (3.2 A boundary) earned REAL support (0.064,
+  vs 0.000 under the a-priori proposal) because it sits over
+  challenger-validated candidates that win at frontier voxels; ladder
+  correctly stopped at 5 bands (next boundary 2.05 A below the finest
+  accepted candidate). Truth verdict: IMPROVEMENT over the already
+  dominant Q_NU control at every shell finer than ~3.3 A (2.91 A: 0.587
+  vs 0.578; 2.61 A: 0.344 vs 0.335; 2.49 A: 0.237 vs 0.227; gains
+  persist to the band edge) against a ~0.003 truth-FSC dip in the
+  3.8-4.4 A region -- the intended granularity trade, favorable for a
+  refinement tool. Suppression continuous (34.6/35.6%); shipped-pair
+  inflation 4.6% vs the control's 3.4% (diagnostic only, inside
+  guidance).
+- One defect found and fixed by the first nu_refine=yes attempt: the
+  provenance and identity-seed buffers (LONGSTRLEN=1024) overflowed with
+  the 24-candidate provenance ('End of record' at the identity internal
+  write); both are now XLONGSTRLEN.
+
+### Run record (2026-08-29): PfCRT abinitio3D -- Q_NU INERT at lambda_rel=0.1 on real data
+
+First real-data abinitio3D with the Q_NU replay on PfCRT (EMPIAR-10330
+final refined particle stack, mskdiam 160 A;
+`Processing/pcg_integration/PfCRT/ABINITIO3D_OUTPUT_RESTART1`, code at
+the pre-6.6 state -- equivalent here since abinitio3D pins
+nu_refine=no). Outcome: map quality NOT competitive with gridding + NU
+filter. Diagnosis from the output doc:
+
+- Stages 1-5 (LP 20 -> 11): Q_NU off by design (filter mode none),
+  mirroring the gridding path's NU-off early stages. Correct behavior.
+- Stages 6-8 (LP 9.7 -> 6.0): Q_NU on at the dynamic default
+  lambda_rel=0.1, evidence rebuilt per iteration with sensible band
+  trajectories (band 1-3 support growing 0.76->0.83 / 0.69->0.78 /
+  0.15->0.67; band 4 low, 0.001->0.05), BUT prior-energy suppression
+  never exceeded 4.8% (0.3% at NU onset, 1.6% at the final rec) vs ~35%
+  on the 1WCM harness and the bgal run at the same lambda_rel. The
+  `PCG NU PRIOR INERT (< 5%)` diagnostic fired at essentially every
+  NU-era iteration, recommending ~3x lambda.
+- Failure mechanism: on the pcg path Q_NU is the ONLY spatial
+  regularization (post-hoc NU filtering skipped by design), so an inert
+  prior means refinement aligns against effectively unshaped ML maps
+  while the gridding path aligns against NU-filtered references. The
+  data-scale anchoring of lambda_eff evidently does not normalize
+  regularization strength across datasets.
+- Secondary observations: null calibration much noisier than 1WCM
+  (null_bias_median 0.46 vs 0.06), only 9 candidates survived, and the
+  matching low-pass sat pinned at the static bank's 3.98 A floor
+  through stage 8.
+
+Next step (user-directed): rerun PfCRT at higher lambda_rel (0.3, then
+1.0 if suppression still lands under ~15-20%; suppression is sublinear
+in lambda so the 3x hint may be conservative) to establish empirically
+what a suitable suppression target is. A suppression-targeted
+closed-loop auto-lambda (the replay already measures suppression every
+reconstruction) is the candidate long-term fix, to be designed only
+after the scan fixes the target band.
+
+### Active dev list (2026-08-29, user-prioritized)
+
+Follow-on note: some PfCRT maps look acceptable, but with the prior
+inert that is the unregularized ML solve doing the work, not Q_NU --
+the acceptable-looking outputs do not validate the prior.
+
+1. **PRESSING -- NU-evidence locscale-style nonuniform postprocessing**
+   (`nu_evidence_local_sharpening.md`). A single isotropic B-factor
+   does not work for most maps other than bgal and streptavidin; graded
+   local amplitude scaling from the frozen NU evidence is the
+   model-free fix. The proposal's Gate C/D precondition is now met
+   (Q_NU cleared its gate program and the Stage 6.6 walk validated), so
+   implementation is unblocked and elevated to the top of the queue.
+   **IMPLEMENTED (2026-08-29)** as the isolated `postprocess_nu`
+   commander + `simple_nu_filter_sharpen` submodule (user-directed
+   isolation from the standard postprocess path). v1 (confidence-gain
+   band stack) over-sharpened the PfCRT core and is RETIRED as a
+   recorded failure; v2 is the classical shrink-then-sharpen localized
+   by the evidence (Guinier B inside the evidenced local Butterworth
+   passband, null-flattened solvent). Design and records in
+   `nu_evidence_local_sharpening.md` §3b/§3c; validation per its §4
+   plan pending.
+2. **Auto-lambda design after regularization parameter testing.** The
+   PfCRT lambda_rel scan (0.3, then 1.0; in flight) establishes the
+   target suppression band empirically; only then design the
+   suppression-targeted closed-loop lambda_eff controller (the replay
+   already measures suppression every reconstruction). R9: record the
+   target band here before implementing the controller.
+3. **Test nu_refine=yes with rec_backend=pcg in abinitio3D.** The
+   nu_refine=no rationale was gridding-specific (the ML-regularized aux
+   competitor supplied beyond-bank resolution implicitly,
+   `l_use_aux = l_ml_reg .and. .not. l_nu_refine`); the pcg path has no
+   aux channel, so nu_refine=no is a hard 4 A evidence/matching-lp
+   ceiling. The walk is gold-standard-gated so early noisy stages
+   should accept nothing; verify on the bgal replay first, watching
+   per-stage extension lines against the stage lp schedule.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery
