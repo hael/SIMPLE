@@ -894,6 +894,10 @@ contains
             if( trim(self%rec_backend) == 'pcg' .and. self%l_nonuniform )then
                 if( self%l_ml_reg )then
                     self%pcg_nu_lambda_rel = 0.1
+                    ! strength left to the default -> the suppression-targeted
+                    ! auto-lambda controller owns it (pcg_priors.md, 60% target);
+                    ! an explicit pcg_nu_lambda_rel pins the strength instead
+                    self%l_pcg_nu_autolambda = .true.
                 else
                     THROW_WARN('rec_backend=pcg with NU filtering but no euclid ML replay; Q_NU prior DISABLED')
                 endif

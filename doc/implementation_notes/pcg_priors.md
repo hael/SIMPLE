@@ -2325,6 +2325,55 @@ the acceptable-looking outputs do not validate the prior.
    Discriminating test once a ~30-40% PfCRT point exists: does
    fine-shell anchoring alone collapse the PfCRT and 1WCM operating
    points onto one lambda_rel?
+
+   **TARGET RECORDED (2026-08-30, user, R9): aim for ~60% prior energy
+   suppressed.** Empirical basis: at that operating point the NU
+   effects are clearly visible on real data (msp1). This sits at the
+   top of the diagnostic banner's NOMINAL band (5-60%), so the banner
+   thresholds should be re-centered around the 60% target when the
+   auto-lambda controller is designed; the controller's setpoint is
+   60%, not the 1WCM harness's ~35%.
+
+   **AUTO-LAMBDA IMPLEMENTED (2026-08-30).** Design recorded before
+   first run (R9):
+   - Plant model: one-pole amplitude-suppression law
+     s = g*lambda/(1+g*lambda), validated on the scan (PfCRT g=0.336
+     from the 0.1 point predicts s(0.3)=9.2% vs 8.6% measured; 1WCM
+     g=5.4 -- a 16x cross-dataset gain spread, which is why no fixed
+     lambda_rel can work).
+   - Controller: memoryless one-step secant per refinement iteration,
+     `resolve_nu_autolambda` in `simple_rec3D_pcg_strategy` (both exec
+     paths, before attachment): reads the previous iteration's
+     `PCG_NU_STATS_FILE` (lambda used + state-mean suppression, the
+     file the replay already persists), identifies g, solves for the
+     60% target. Deadband hold at 60 +/- 5%; multiplicative step clamp
+     x5; lambda_rel bounds [0.01, 30]; suppression floored at 0.1% and
+     capped at 99% for finite identification. Both halves and all
+     states share one lambda, same freezing discipline as the evidence.
+   - Activation: ONLY when pcg_nu_lambda_rel was left to its dynamic
+     default (`l_pcg_nu_autolambda`, set in the parameters dynamic
+     default block). An explicit strength pins lambda -- every recorded
+     control, harness run, and ladder point stays reproducible, and
+     explicit 0 = P_tau control is untouched (R5/R10 preserved). Cold
+     start (no stats file) keeps the 0.1 default, so single-shot
+     reconstructions in fresh directories are deterministic.
+   - Diagnostics: stats file gains a PCG_NU_AUTOLAMBDA key; the
+     convergence banner is re-centered on the target (INERT <5%, BELOW
+     TARGET <45%, ON TARGET 45-75% aim 60%, OVER >75%) and, in auto
+     mode, reports the lambda in use instead of advising manual
+     changes; the controller logs MEASURED/HOLDING/adapted-lambda lines
+     per reconstruction.
+   - Deliberately NOT done: fine-shell re-anchoring of data_scale
+     (operator-meaning change, would force re-baselining per R2; the
+     closed loop absorbs the anchoring error in one update). Recorded
+     as the cold-start improvement to revisit only if convergence to
+     target proves too slow on some dataset class.
+   - Validation plan: (i) 1WCM harness with explicit lambda -- must be
+     bit-identical to the verified control (controller inert when
+     pinned); (ii) PfCRT/msp1 refine3D or abinitio3D WITHOUT a lambda
+     flag -- expect convergence to 55-65% suppression within ~3
+     iterations from cold start, then station-keeping; watch the
+     shipped-pair inflation diagnostic while the controller holds.
 3. **Test nu_refine=yes with rec_backend=pcg in abinitio3D.** The
    nu_refine=no rationale was gridding-specific (the ML-regularized aux
    competitor supplied beyond-bank resolution implicitly,
