@@ -17,10 +17,12 @@ use simple_image,             only: image
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
     &write_halfmap_diagnostics
 use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
-    &build_nu_evidence_state, nu_evidence_state, expand_nu_evidence_band_weights, &
+    &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp, &
+    &build_nu_evidence_state, nu_evidence_state, nu_evidence_summary, get_nu_evidence_summary, &
+    &expand_nu_evidence_band_weights, &
     &print_nu_evidence_summary, assert_nu_evidence_replay_ready, unpack_nu_evidence_state, &
     &write_nu_evidence_envmask, &
-    &NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
+    &NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
 use simple_vol_pproc_policy,  only: vol_pproc_plan, plan_state_postprocess, &
     &NU_ENVMASK_ACTION_REGENERATE
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
@@ -208,25 +210,44 @@ contains
     !! derives from the same frozen evidence as the Q_NU precision, without
     !! a second NU analysis; cadence and artifact naming follow the same
     !! plan_state_postprocess contract as the post-hoc NU paths.
-    subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, band_w, &
-            &finest_lp, evidence_source )
+    subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, &
+            &band_w, band_limits, finest_lp, evidence_source )
         class(parameters),          intent(in)  :: params
         integer,                    intent(in)  :: state_here
         character(len=*),           intent(in)  :: context
         type(image),                intent(in)  :: vol_even, vol_odd
         real, allocatable,          intent(out) :: band_w(:,:,:,:)
+        real, allocatable,          intent(out) :: band_limits(:)
         real, optional,             intent(out) :: finest_lp
         character(len=*), optional, intent(in)  :: evidence_source
-        type(nu_evidence_state) :: evstate
-        type(vol_pproc_plan)    :: pp_plan
+        type(nu_evidence_state)   :: evstate
+        type(nu_evidence_summary) :: evsumm
+        type(vol_pproc_plan)      :: pp_plan
         real, allocatable :: cutoffs(:)
         character(len=32) :: source_here
+        integer :: nsteps_ext
         source_here = NU_EVIDENCE_SOURCE_BASE
         if( present(evidence_source) ) source_here = trim(evidence_source)
         write(logfhandle,'(A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): BUILDING EVIDENCE FROM THE '//&
             &'FSC HALF PAIR OF STATE ', state_here, ' (source='//trim(source_here)//')'
         call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source=trim(source_here))
         call optimize_nu_cutoff_finds()
+        ! Stage 6.6 (pcg_priors.md): with nu_refine=yes the evidence candidate
+        ! bank is extended by the proven high-resolution shell walk -- one
+        ! Fourier shell at a time from the populated frontier, accepted only
+        ! on strict unary win-fraction, exactly as on the gridding path
+        ! (refine3D_auto mirrors its gridding bootstrap; abinitio3D keeps the
+        ! discrete static ladder via its stage policy pinning nu_refine=no).
+        ! The band ladder then grows over ACCEPTED candidates only, inside
+        ! build_nu_evidence_state, and rides the frozen state.
+        if( params%l_nu_refine )then
+            call extend_nu_filter_highres_shells(vol_even, vol_odd, nsteps=nsteps_ext)
+            if( nsteps_ext > 0 )then
+                write(logfhandle,'(A,I0,A,F8.3,A)') '>>> PCG NU REPLAY ('//trim(context)//&
+                    &'): EVIDENCE BANK EXTENDED BY ', nsteps_ext, ' ACCEPTED SHELL STEP(S) TO ', &
+                    &get_nu_filter_bank_finest_lp(), ' A'
+            endif
+        endif
         call plan_state_postprocess(params, state_here, params%which_iter, pp_plan)
         if( pp_plan%l_nu_envmask_incompatible )then
             write(logfhandle,'(A,1X,A)') &
@@ -247,6 +268,10 @@ contains
         call print_nu_evidence_summary(evstate)
         write(logfhandle,'(A)') '    pcg_replay_prior_mode=nu_evidence'
         call expand_nu_evidence_band_weights(evstate, band_w)
+        ! the active band ladder rides the frozen state; hand it to the caller
+        ! for set_nu_prior so operator and evidence can never disagree
+        call get_nu_evidence_summary(evstate, evsumm)
+        band_limits = evsumm%band_limits
         ! finest evidenced local cutoff, for the LP-set matching handoff --
         ! the compact state replaces the retired second NU analysis of the
         ! postprocess (pcg_priors.md S6.3 evidence-state sharing)
@@ -347,7 +372,7 @@ contains
         type(halfmap_diagnostics_result) :: hm_diag
         integer, allocatable :: selected_pinds(:), half_pinds(:)
         real, allocatable :: fsc(:), res0143s(:)
-        real, allocatable :: ship05s(:), ship0143s(:), nu_band_w(:,:,:,:), nu_supps(:)
+        real, allocatable :: ship05s(:), ship0143s(:), nu_band_w(:,:,:,:), nu_band_limits(:), nu_supps(:)
         integer, allocatable :: nu_supp_cnts(:)
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
@@ -428,12 +453,16 @@ contains
 
             if( params%l_ml_reg )then
                 ! NU mode: evidence from the current base pair, frozen before
-                ! either replay; no envelope artifact is read or written
+                ! either replay; with nu_refine=yes the evidence bank is
+                ! extended by the shell walk (Stage 6.6), and with automsk
+                ! enabled the evidence envelope is regenerated inside from
+                ! the same frozen evidence (no envelope artifact is ever read)
                 if( l_nu_replay ) call build_nu_replay_evidence(params, state, 'shared', &
-                    &half_even, half_odd, nu_band_w)
+                    &half_even, half_odd, nu_band_w, nu_band_limits)
                 call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
                 call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
-                if( allocated(nu_band_w) ) deallocate(nu_band_w)
+                if( allocated(nu_band_w)      ) deallocate(nu_band_w)
+                if( allocated(nu_band_limits) ) deallocate(nu_band_limits)
                 ! shipped-pair crossing: the over-regularization diagnostic
                 ! (never a resolution claim)
                 if( l_nu_replay )then
@@ -730,7 +759,8 @@ contains
             ! the relative ridge lambda.
             if( l_nu_replay )then
                 if( .not. allocated(nu_band_w) ) THROW_HARD('NU replay evidence was not constructed before the replay')
-                call pcgop%set_nu_prior(nu_band_w, NU_EVIDENCE_BAND_LIMITS, params%pcg_nu_lambda_rel)
+                if( .not. allocated(nu_band_limits) ) THROW_HARD('NU replay band ladder was not constructed before the replay')
+                call pcgop%set_nu_prior(nu_band_w, nu_band_limits, params%pcg_nu_lambda_rel)
             else
                 call pcgop%set_ml_prior(fsc_here, params%tau, params%hp)
             endif
@@ -1462,7 +1492,7 @@ contains
         type(halfmap_diagnostics_result) :: hm_diag
         real, allocatable :: fsc(:), res0143s(:)
         real, allocatable :: realized_fractions(:), update_weights(:), ship05s(:), ship0143s(:)
-        real, allocatable :: nu_band_w(:,:,:,:), nu_supps(:)
+        real, allocatable :: nu_band_w(:,:,:,:), nu_band_limits(:), nu_supps(:)
         integer, allocatable :: nu_supp_cnts(:)
         logical, allocatable :: state_written(:)
         character(len=256) :: provenance, chain_provenance
@@ -1606,19 +1636,23 @@ contains
 
             if( params%l_ml_reg )then
                 if( l_nu_replay )then
-                    ! the evidence pair is the FSC pair, selected once above
+                    ! the evidence pair is the FSC pair, selected once above;
+                    ! its FSC=0.143 crossing steers the adaptive band ladder
                     if( present(nu_replay_finest_lps) )then
                         call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
-                            &fsc_pair_odd, nu_band_w, finest_lp=nu_replay_finest_lps(state), &
+                            &fsc_pair_odd, nu_band_w, nu_band_limits, &
+                            &finest_lp=nu_replay_finest_lps(state), &
                             &evidence_source=trim(evidence_source_here))
                     else
                         call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
-                            &fsc_pair_odd, nu_band_w, evidence_source=trim(evidence_source_here))
+                            &fsc_pair_odd, nu_band_w, nu_band_limits, &
+                            &evidence_source=trim(evidence_source_here))
                     endif
                 endif
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
                 call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
-                if( allocated(nu_band_w) ) deallocate(nu_band_w)
+                if( allocated(nu_band_w)      ) deallocate(nu_band_w)
+                if( allocated(nu_band_limits) ) deallocate(nu_band_limits)
                 ! shipped-pair crossing: the over-regularization diagnostic
                 ! (never a resolution claim)
                 if( l_nu_replay )then
@@ -1909,7 +1943,9 @@ contains
                 if( l_nu_replay )then
                     if( .not. allocated(nu_band_w) ) &
                         &THROW_HARD('NU replay evidence was not constructed before the replay')
-                    call pcgop%set_nu_prior(nu_band_w, NU_EVIDENCE_BAND_LIMITS, params%pcg_nu_lambda_rel)
+                    if( .not. allocated(nu_band_limits) ) &
+                        &THROW_HARD('NU replay band ladder was not constructed before the replay')
+                    call pcgop%set_nu_prior(nu_band_w, nu_band_limits, params%pcg_nu_lambda_rel)
                 else
                     call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
                 endif

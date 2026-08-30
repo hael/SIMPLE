@@ -8,6 +8,7 @@ type(ui_program), target :: filter
 type(ui_program), target :: uniform_filter2D
 type(ui_program), target :: uniform_filter3D
 type(ui_program), target :: nu_filt3D
+type(ui_program), target :: postprocess_nu
 
 contains
 
@@ -17,6 +18,7 @@ contains
         call new_uniform_filter2D(prgtab)
         call new_uniform_filter3D(prgtab)
         call new_nu_filt3D(prgtab)
+        call new_postprocess_nu(prgtab)
     end subroutine construct_filter_programs
 
 subroutine new_filter( prgtab )
@@ -217,5 +219,43 @@ subroutine new_filter( prgtab )
         ! add to ui_hash
         call add_ui_program('nu_filt3D', nu_filt3D, prgtab, UI_CATEGORY)
     end subroutine new_nu_filt3D
+
+    subroutine new_postprocess_nu( prgtab )
+        class(ui_hash), intent(inout) :: prgtab
+        ! PROGRAM SPECIFICATION
+        call postprocess_nu%new(&
+        &'postprocess_nu',&                                    ! name
+        &'Nonuniform evidence-bounded postprocessing of even/odd half-maps',& ! summary
+        &'is a program for NU-evidence local sharpening of a 3D reconstruction: local amplitude restoration in which &
+        &both the confidence field and the target spectrum derive from cross-half NU evidence (model-free LocScale &
+        &analogue). Feed the UNREGULARIZED even/odd half pair; outputs carry the _nu_sharp suffix and are &
+        &display/interpretation maps only, never inputs to FSC correction or resolution estimation. Isolated from the &
+        &standard postprocess program (global B-factor), which is unchanged',& ! help
+        &'simple_exec',&                                       ! executable
+        &.false., &
+        &visibility=UI_VIS_ADVANCED)                           ! requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call postprocess_nu%add_input(UI_IMG, 'vol1', 'file', 'Odd volume',  'Unregularized odd half-map',  'vol1.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call postprocess_nu%add_input(UI_IMG, 'vol2', 'file', 'Even volume', 'Unregularized even half-map', 'vol2.mrc file', .true., '', &
+        &visibility=UI_VIS_STANDARD)
+        call postprocess_nu%add_input(UI_IMG, outvol, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        ! parameter input/output
+        call postprocess_nu%add_input(UI_PARM, smpd, &
+        &visibility=UI_VIS_STANDARD)
+        ! filter controls
+        call postprocess_nu%add_input(UI_FILT, nu_refine, required_override=.false., &
+        &visibility=UI_VIS_ADVANCED)
+        ! mask controls
+        call postprocess_nu%add_input(UI_MASK, mskdiam, &
+        &visibility=UI_VIS_STANDARD)
+        ! computer controls
+        call postprocess_nu%add_input(UI_COMP, nthr, &
+        &visibility=UI_VIS_STANDARD)
+        ! add to ui_hash
+        call add_ui_program('postprocess_nu', postprocess_nu, prgtab, UI_CATEGORY)
+    end subroutine new_postprocess_nu
 
 end module simple_ui_filter

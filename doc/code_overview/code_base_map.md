@@ -272,6 +272,7 @@
           - `simple_commanders_mkcavgs.f90` — for producing class averages
           - `simple_commanders_ori.f90` — for operating on orientations
           - `simple_commanders_pick.f90` — for picking, extraction, and making picking references
+          - `simple_commanders_postprocess_nu.f90` — NU-evidence nonuniform postprocessing (isolated from the standard postprocess path)
           - `simple_commanders_preprocess.f90` — for pre-processing (motion correction, CTF estimation etc.)
           - `simple_commanders_prob.f90`
           - `simple_commanders_project_cls.f90` — project commanders for dealing with 2D class-related things
@@ -427,6 +428,7 @@
         - `simple_nu_filter_evidence.f90` — compact immutable evidence state for the direct NU-conditioned PCG replay
         - `simple_nu_filter_extend.f90` — simple nu filter extend implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_potts.f90` — simple nu filter potts implementation for volume-domain nonuniform filtering
+        - `simple_nu_filter_sharpen.f90` — NU-evidence nonuniform postprocessing, v2 (classical pipeline, local)
         - `simple_nu_filter_state.f90` — simple nu filter state implementation for volume-domain nonuniform filtering
         - `simple_nu_filter_stats.f90` — simple nu filter stats implementation for volume-domain nonuniform filtering
       - **opt/** — home of modules implementing various non-linear optimizations of a scalar objective function

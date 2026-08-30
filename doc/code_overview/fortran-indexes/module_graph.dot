@@ -146,6 +146,7 @@ digraph module_graph {
   "simple_commanders_mkcavgs";
   "simple_commanders_ori";
   "simple_commanders_pick";
+  "simple_commanders_postprocess_nu";
   "simple_commanders_preprocess";
   "simple_commanders_prob";
   "simple_commanders_project_cls";
@@ -1350,6 +1351,8 @@ digraph module_graph {
   "simple_commanders_pick" -> "simple_pick_strategy";
   "simple_commanders_pick" -> "simple_picker_iter";
   "simple_commanders_pick" -> "simple_reextract_strategy";
+  "simple_commanders_postprocess_nu" -> "simple_commanders_api";
+  "simple_commanders_postprocess_nu" -> "simple_nu_filter";
   "simple_commanders_preprocess" -> "simple_cmdline";
   "simple_commanders_preprocess" -> "simple_commanders_api";
   "simple_commanders_preprocess" -> "simple_core_module_api";
@@ -1902,6 +1905,7 @@ digraph module_graph {
   "simple_exec_dock" -> "simple_commanders_volops";
   "simple_exec_filter" -> "simple_cmdline";
   "simple_exec_filter" -> "simple_commanders_imgops";
+  "simple_exec_filter" -> "simple_commanders_postprocess_nu";
   "simple_exec_filter" -> "simple_commanders_resolest";
   "simple_exec_helpers" -> "simple_cmdline";
   "simple_exec_helpers" -> "simple_core_module_api";

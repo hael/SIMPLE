@@ -122,7 +122,7 @@ type :: parameters
     character(len=3)          :: norm='no'            !< do statistical normalisation avg
     character(len=3)          :: nu_envmsk='no'       !< derive an envelope mask from the nonuniform filter evidence margin(yes|no){no}
     character(len=3)          :: nu_msk_rel='no'      !< nu_filt3D only: scale-free NU evidence margin(yes|no){no}
-    character(len=3)          :: nu_refine='no'       !< enable one-step high-resolution expansion refinement in the nonuniform filter(yes|no){no}
+    character(len=3)          :: nu_refine='no'       !< enable high-resolution shell-walk expansion of the nonuniform resolution bank: the filter challenger on the gridding backend, the Q_NU evidence-bank extension on the pcg backend(yes|no){no}
     character(len=3)          :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)          :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)          :: pad='no'

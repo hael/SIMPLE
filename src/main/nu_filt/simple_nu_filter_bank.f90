@@ -141,6 +141,7 @@ contains
         call release_nu_smooth_norm()
     end subroutine setup_nu_dmats
 
+
     module subroutine setup_nu_candidate_coords( n_candidates )
         integer, intent(in) :: n_candidates
         integer :: i, n_base

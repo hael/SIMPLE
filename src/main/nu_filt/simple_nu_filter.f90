@@ -55,6 +55,7 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
           expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
+          nu_evidence_sharpen_vol,&
           NU_EVIDENCE_NBANDS, NU_EVIDENCE_BAND_LIMITS, NU_EVIDENCE_MIN_NULL_FRAC,&
           NU_EVIDENCE_MAX_NULL_FRAC, NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
 private
@@ -134,7 +135,28 @@ real,             parameter   :: NU_EVIDENCE_INVALID         = 0.5 * huge(1.)
 ! non-increasing from coarse to fine.
 integer,          parameter   :: NU_EVIDENCE_NBANDS = 4
 real,             parameter   :: NU_EVIDENCE_BAND_LIMITS(NU_EVIDENCE_NBANDS) = [20., 12., 8., 5.]
+! Adaptive band granularity (pcg_priors.md Stage 6.6, final form): the band
+! ladder is derived from the ACTUAL candidate bank at evidence-build time --
+! the static four bands when the bank is the discrete ladder (abinitio3D's
+! mode), extended geometrically only over candidates the nu_refine shell walk
+! has ACCEPTED (refine3D_auto with nu_refine=yes, mirroring the gridding
+! path's proven challenger: strict unary win-fraction at the frontier, one
+! shell at a time). No band can exist without a challenger-validated probe.
+integer,          parameter   :: NU_EVIDENCE_MAX_NBANDS      = 8    !< band-count cap (cost: 2 padded FFT pairs per band per Q_NU application)
+real,             parameter   :: NU_EVIDENCE_BAND_RATIO      = 0.64 !< geometric step, matching the 20->12->8->5 spacing
+!> Evidence-gated retention (belt-and-braces behind the challenger gate): an
+!! appended band is KEPT only if its mean support reaches this fraction;
+!! otherwise it is pruned finest-first so a zero-support subdivision
+!! self-neutralizes to the static ladder (measured over-suppression on 1WCM,
+!! pcg_priors.md S6.6 record).
+real,             parameter   :: NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01
 real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
+! NU-evidence nonuniform postprocessing v2 (nu_evidence_local_sharpening.md,
+! postprocess_nu commander): classical shrink-then-sharpen, localized by the
+! evidence. One Guinier B-factor inside the evidenced local passband; no user
+! gain knob. The v1 band-gain constants (MAX_GAIN etc.) were removed with the
+! v1 design after the PfCRT over-sharpening record.
+real,             parameter   :: NU_SHARP_BFAC_FINEST_A = 5.0 !< Guinier sharpening only when the finest evidenced cutoff is finer (mirrors the standard postprocess lp<5A gate)
 ! Replay-readiness contract, both directions. The generous spherical support
 ! always contains substantial solvent AND substantial molecule, so a compact
 ! state whose explicit null wins less than the floor (the zero-null failure
@@ -254,7 +276,7 @@ type :: nu_evidence_summary
     integer :: ldim(3) = 0
     integer :: n_support = 0
     integer :: n_candidates = 0
-    integer :: n_bands = NU_EVIDENCE_NBANDS
+    integer :: n_bands = 0
     real    :: smpd = 0.
     real    :: mskdiam = 0.
     real    :: null_fraction = 0.
@@ -265,11 +287,13 @@ type :: nu_evidence_summary
     real    :: null_bias_median = 0.
     real    :: null_bias_mad = 0.
     real    :: null_bias_threshold = 0.
-    real    :: supported_fraction(NU_EVIDENCE_NBANDS) = 0.
-    real    :: band_limits(NU_EVIDENCE_NBANDS) = NU_EVIDENCE_BAND_LIMITS
+    ! band count is adaptive (Stage 6.6): NU_EVIDENCE_NBANDS static entries,
+    ! plus frontier-tracked extensions up to NU_EVIDENCE_MAX_NBANDS
+    real, allocatable :: supported_fraction(:)
+    real, allocatable :: band_limits(:)
     character(len=32) :: source = ''
     character(len=16) :: identity = ''
-    character(len=LONGSTRLEN) :: provenance = ''
+    character(len=XLONGSTRLEN) :: provenance = ''
 end type nu_evidence_summary
 
 type :: nu_evidence_state
@@ -471,6 +495,13 @@ interface
     module subroutine assert_nu_evidence_replay_ready( state )
         type(nu_evidence_state), intent(in) :: state
     end subroutine assert_nu_evidence_replay_ready
+
+    ! In submodule: simple_nu_filter_sharpen.f90
+    module subroutine nu_evidence_sharpen_vol( state, vol_even, vol_odd, vol_sharp )
+        type(nu_evidence_state), intent(in)    :: state
+        type(image),             intent(in)    :: vol_even, vol_odd
+        type(image),             intent(inout) :: vol_sharp
+    end subroutine nu_evidence_sharpen_vol
 
     ! In submodule: simple_nu_filter_potts.f90
     module subroutine refine_nu_candidate_map_ordered_labels( candmap, n_candidates )

@@ -20,14 +20,17 @@ contains
         type(string) :: identity_seed_string, identity_hash
         integer(kind=NU_LABEL_KIND), allocatable :: evidence_map(:,:,:)
         real, allocatable :: null_full(:,:,:), smooth_tmp(:,:,:), null_cost(:), coords(:), signal_lps(:)
-        real, allocatable :: gaps(:), probs(:)
+        real, allocatable :: gaps(:), probs(:), band_support_tmp(:,:)
+        real, allocatable :: band_limits_active(:)
+        real    :: nextb
         real(kind=8) :: fingerprint(6), cutoff_checksum, uncertainty_checksum, support_checksum
         real(kind=8) :: whitening_checksum
         real :: beta, temperature, best_e, second_e, e, prob_sum, entropy, null_lp
         real :: null_bias_median, null_bias_mad, null_bias_threshold
         integer :: n_signal, n_candidates, imask, icand, iband, i, j, k, label, n_uncertain, k25
+        integer :: nb_active
         character(len=32) :: value_text
-        character(len=LONGSTRLEN) :: identity_seed
+        character(len=XLONGSTRLEN) :: identity_seed
 
         if( .not.nu_evidence_requested ) &
             &THROW_HARD('NU evidence setup was not requested with an evidence source')
@@ -174,10 +177,27 @@ contains
             &THROW_HARD('NU evidence calibration temperature is invalid')
         deallocate(gaps)
 
+        ! Stage 6.6 band ladder from the ACTUAL bank: the static four bands,
+        ! extended geometrically only while an accepted candidate is at least
+        ! as fine as the next boundary. With the static bank (abinitio3D's
+        ! discrete-ladder mode, nu_refine=no) this is exactly the pre-6.6
+        ! four-band behavior; when the nu_refine shell walk has extended the
+        ! bank (refine3D_auto, mirroring the gridding path), the ladder grows
+        ! over the ACCEPTED candidates only, so no band can exist without a
+        ! covering, challenger-validated probe.
+        allocate(band_limits_active(NU_EVIDENCE_NBANDS), source=NU_EVIDENCE_BAND_LIMITS)
+        do
+            nb_active = size(band_limits_active)
+            if( nb_active >= NU_EVIDENCE_MAX_NBANDS ) exit
+            nextb = band_limits_active(nb_active) * NU_EVIDENCE_BAND_RATIO
+            if( signal_lps(n_signal) > nextb + TINY ) exit
+            band_limits_active = [band_limits_active, nextb]
+        enddo
+        nb_active = size(band_limits_active)
         allocate(state%selected_label(n_nu_mask), source=0_NU_LABEL_KIND)
         allocate(state%selected_cutoff(n_nu_mask), source=0.)
         allocate(state%uncertainty(n_nu_mask), source=0.)
-        allocate(state%band_support(n_nu_mask,NU_EVIDENCE_NBANDS), source=0.)
+        allocate(state%band_support(n_nu_mask,nb_active), source=0.)
         allocate(probs(n_candidates), source=0.)
         n_uncertain = 0
         do imask = 1, n_nu_mask
@@ -213,9 +233,9 @@ contains
             label = int(evidence_map(i,j,k)) - 1
             state%selected_label(imask) = int(label, kind=NU_LABEL_KIND)
             if( label > 0 ) state%selected_cutoff(imask) = signal_lps(label)
-            do iband = 1, NU_EVIDENCE_NBANDS
+            do iband = 1, nb_active
                 do icand = 1, n_signal
-                    if( signal_lps(icand) <= NU_EVIDENCE_BAND_LIMITS(iband) + TINY ) &
+                    if( signal_lps(icand) <= band_limits_active(iband) + TINY ) &
                         &state%band_support(imask,iband) = state%band_support(imask,iband) + probs(icand+1)
                 enddo
                 state%band_support(imask,iband) = min(1., max(0., state%band_support(imask,iband)))
@@ -229,7 +249,27 @@ contains
         state%summary%mskdiam = nu_support_mskdiam
         state%summary%n_support = n_nu_mask
         state%summary%n_candidates = n_candidates
-        state%summary%n_bands = NU_EVIDENCE_NBANDS
+        ! Stage 6.6 evidence-gated retention: an appended (frontier-tracked)
+        ! band is KEPT only if it actually earns support; otherwise the
+        ! subdivision would replace the fine tail's partially evidenced
+        ! weight with the full penalty and over-suppress genuine signal
+        ! (measured on 1WCM, pcg_priors.md S6.6 run record). Pruning
+        ! truncates finest-first; the static bands are never pruned, so
+        ! pre-6.6 behavior is the guaranteed floor.
+        do while( nb_active > NU_EVIDENCE_NBANDS )
+            if( sum(state%band_support(:,nb_active)) / real(n_nu_mask) >= NU_EVIDENCE_MIN_BAND_SUPPORT ) exit
+            nb_active = nb_active - 1
+        enddo
+        if( nb_active < size(state%band_support,2) )then
+            if( nu_l_report ) write(logfhandle,'(A,I0,A)') &
+                &'>>> NU ADAPTIVE EVIDENCE BANDS: pruned to ', nb_active, &
+                &' band(s); appended band(s) earned no support'
+            band_support_tmp = state%band_support(:,1:nb_active)
+            call move_alloc(band_support_tmp, state%band_support)
+        endif
+        state%summary%n_bands = nb_active
+        allocate(state%summary%band_limits(nb_active), source=band_limits_active(1:nb_active))
+        allocate(state%summary%supported_fraction(nb_active), source=0.)
         state%summary%source = nu_evidence_source
         state%summary%null_fraction = real(count(state%selected_label == 0_NU_LABEL_KIND)) / real(n_nu_mask)
         state%summary%uncertain_fraction = real(n_uncertain) / real(n_nu_mask)
@@ -239,7 +279,7 @@ contains
         state%summary%null_bias_median = null_bias_median
         state%summary%null_bias_mad = null_bias_mad
         state%summary%null_bias_threshold = null_bias_threshold
-        do iband = 1, NU_EVIDENCE_NBANDS
+        do iband = 1, nb_active
             state%summary%supported_fraction(iband) = min(1., max(0., &
                 &sum(state%band_support(:,iband)) / real(n_nu_mask)))
         enddo
@@ -251,7 +291,13 @@ contains
             &'null_smooth_A='//trim(adjustl(value_text))//&
             &';confidence=spatial_softmax_gap_temperature;'//&
             &'uncertainty=normalized_entropy;candidate_order=coarse_to_fine_validated;'//&
-            &'smooth_awf=3;smooth_max_A=30;bands_A=20,12,8,5;candidates_A='
+            &'smooth_awf=3;smooth_max_A=30;bands_A='
+        do iband = 1, nb_active
+            write(value_text,'(F10.4)') band_limits_active(iband)
+            if( iband > 1 ) state%summary%provenance = trim(state%summary%provenance)//','
+            state%summary%provenance = trim(state%summary%provenance)//trim(adjustl(value_text))
+        enddo
+        state%summary%provenance = trim(state%summary%provenance)//';candidates_A='
         do icand = 1, n_signal
             write(value_text,'(F10.4)') signal_lps(icand)
             if( icand > 1 ) state%summary%provenance = trim(state%summary%provenance)//','
@@ -287,7 +333,7 @@ contains
             cutoff_checksum = cutoff_checksum + real(1 + mod(imask,104729),8) * real(state%selected_cutoff(imask),8)
             uncertainty_checksum = uncertainty_checksum + &
                 &real(1 + mod(imask,104723),8) * real(state%uncertainty(imask),8)
-            do iband = 1, NU_EVIDENCE_NBANDS
+            do iband = 1, nb_active
                 support_checksum = support_checksum + real(iband + mod(imask,104717),8) * &
                     &real(state%band_support(imask,iband),8)
             enddo
@@ -333,7 +379,21 @@ contains
         if( any(state%summary%ldim < 1) .or. state%summary%smpd <= TINY ) return
         if( state%summary%n_support < 1 ) return
         if( state%summary%mskdiam <= TINY ) return
-        if( state%summary%n_candidates < 2 .or. state%summary%n_bands /= NU_EVIDENCE_NBANDS ) return
+        ! band count is adaptive (Stage 6.6): the static ladder is the floor,
+        ! frontier-tracked extensions are bounded by the declared cap
+        if( state%summary%n_candidates < 2 ) return
+        if( state%summary%n_bands < NU_EVIDENCE_NBANDS .or. &
+            &state%summary%n_bands > NU_EVIDENCE_MAX_NBANDS ) return
+        if( .not.allocated(state%summary%band_limits) .or. &
+            &.not.allocated(state%summary%supported_fraction) ) return
+        if( size(state%summary%band_limits)        /= state%summary%n_bands ) return
+        if( size(state%summary%supported_fraction) /= state%summary%n_bands ) return
+        if( any(.not.ieee_is_finite(state%summary%band_limits)) .or. &
+            &any(state%summary%band_limits <= 0.) ) return
+        do iband = 2, state%summary%n_bands
+            if( state%summary%band_limits(iband) >= state%summary%band_limits(iband-1) ) return
+        enddo
+        if( any(abs(state%summary%band_limits(1:NU_EVIDENCE_NBANDS) - NU_EVIDENCE_BAND_LIMITS) > 1.e-4) ) return
         if( trim(state%summary%source) /= NU_EVIDENCE_SOURCE_BASE .and. &
             &trim(state%summary%source) /= NU_EVIDENCE_SOURCE_PREV ) return
         if( len_trim(state%summary%identity) /= 16 ) return
@@ -352,7 +412,7 @@ contains
         if( size(state%selected_label) /= state%summary%n_support ) return
         if( size(state%selected_cutoff) /= state%summary%n_support ) return
         if( size(state%uncertainty) /= state%summary%n_support ) return
-        if( any(shape(state%band_support) /= [state%summary%n_support,NU_EVIDENCE_NBANDS]) ) return
+        if( any(shape(state%band_support) /= [state%summary%n_support,state%summary%n_bands]) ) return
         if( any(state%selected_label < 0_NU_LABEL_KIND) .or. &
             &any(int(state%selected_label) >= state%summary%n_candidates) ) return
         if( any(.not.ieee_is_finite(state%selected_cutoff)) .or. any(state%selected_cutoff < 0.) ) return
@@ -362,7 +422,7 @@ contains
             &any(state%uncertainty < 0.) .or. any(state%uncertainty > 1.) ) return
         if( any(.not.ieee_is_finite(state%band_support)) .or. &
             &any(state%band_support < 0.) .or. any(state%band_support > 1.) ) return
-        do iband = 2, NU_EVIDENCE_NBANDS
+        do iband = 2, state%summary%n_bands
             if( any(state%band_support(:,iband) > state%band_support(:,iband-1) + 1.e-6) ) return
         enddo
         nu_evidence_state_is_valid = .true.
@@ -469,7 +529,7 @@ contains
         write(logfhandle,'(A,A)')    '    pcg_nu_evidence_identity=', trim(state%summary%identity)
         write(logfhandle,'(A,I0)')   '    pcg_nu_candidate_count=', state%summary%n_candidates
         write(logfhandle,'(A,F10.6)') '    pcg_nu_null_fraction=', state%summary%null_fraction
-        do iband = 1, NU_EVIDENCE_NBANDS
+        do iband = 1, state%summary%n_bands
             write(logfhandle,'(A,I2.2,A,F10.6)') '    pcg_nu_supported_fraction_band', iband, '=', &
                 &state%summary%supported_fraction(iband)
         enddo
