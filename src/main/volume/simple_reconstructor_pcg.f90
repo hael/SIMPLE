@@ -205,6 +205,17 @@ type :: reconstructor_pcg
     real              :: nu_lambda_rel = 0.0          !< strength relative to the data scale
     real              :: lambda_nu = 0.0              !< effective absolute strength
     logical           :: l_nu_prior = .false.
+    ! ---- persistent Q_NU matvec workspaces (allocated once per solve shape;
+    !      the padded complex arrays are the size of wimg's cmat). nu_winhat is
+    !      FFT(pad(1)), the fixed centering spectrum that lets the kernel
+    !      matvec share its forward FFT with the prior: FFT(pad(x - mean)) =
+    !      FFT(pad(x)) - mean*nu_winhat. ----
+    complex, allocatable :: nu_cmat0(:,:,:)           !< centered input spectrum
+    complex, allocatable :: nu_cacc(:,:,:)            !< Fourier-side adjoint accumulator
+    complex, allocatable :: nu_cband(:,:,:)           !< per-band masked spectrum staging
+    complex, allocatable :: nu_winhat(:,:,:)          !< FFT(pad(1)) centering spectrum
+    real,    allocatable :: nu_xb(:,:,:)              !< native-box band component
+    logical           :: l_nu_cmat0_valid = .false.   !< a stashed forward spectrum awaits consumption
     ! ---- per-phase profiling, accumulated over a solve. Exists to answer one
     !      question before any further optimization: of the seconds an iteration
     !      costs, how many are the particle loop (which the kernelized operator
@@ -318,6 +329,8 @@ type :: reconstructor_pcg
     procedure, private :: build_ml_prior_from_density
     procedure, private :: apply_fourier_diagonal
     procedure, private :: ensure_nu_band_index
+    procedure, private :: ensure_nu_workspaces
+    procedure          :: stash_nu_forward
     procedure, private :: nu_precond_shell_diag
 end type reconstructor_pcg
 
@@ -820,67 +833,143 @@ contains
     !!          every summand is symmetric PSD. The per-band results are
     !!          accumulated in real space so only two padded complex
     !!          workspaces are live at a time.
+    !>  \brief  allocate the persistent Q_NU matvec workspaces once per solve
+    !!          shape; the FFT count, not allocator traffic, then dominates
+    subroutine ensure_nu_workspaces( self )
+        class(reconstructor_pcg), intent(inout) :: self
+        integer :: cdim(3)
+        call self%ensure_wimg
+        if( allocated(self%nu_cacc) ) return
+        cdim = self%wimg%get_array_shape()
+        allocate(self%nu_cmat0(cdim(1),cdim(2),cdim(3)))
+        allocate(self%nu_cacc(cdim(1),cdim(2),cdim(3)))
+        allocate(self%nu_cband(cdim(1),cdim(2),cdim(3)))
+        allocate(self%nu_xb(self%box,self%box,self%box))
+    end subroutine ensure_nu_workspaces
+
+    !>  \brief  stash a pristine forward spectrum FFT(pad(x)) of the CURRENT
+    !!          iterate so the next apply_nu_precision skips its own forward
+    !!          FFT. The kernel matvec calls this right after its forward
+    !!          transform (deapodization on, so its spectrum is of the iterate
+    !!          itself); centering is completed inside apply_nu_precision via
+    !!          the precomputed nu_winhat. Consumed (and invalidated) by
+    !!          exactly one apply_nu_precision call.
+    subroutine stash_nu_forward( self, cmat )
+        class(reconstructor_pcg), intent(inout) :: self
+        complex,                  intent(in)    :: cmat(:,:,:)
+        real(kind=c_float), pointer :: rmat_ptr(:,:,:)
+        integer :: cdim(3), o
+        call self%ensure_nu_workspaces
+        cdim = self%wimg%get_array_shape()
+        if( any(shape(cmat) /= cdim) ) THROW_HARD('spectrum shape mismatch; stash_nu_forward')
+        if( .not. allocated(self%nu_winhat) )then
+            ! one-time centering spectrum: FFT(pad(1)), the box window. The
+            ! caller (kernel matvec) restores wimg's cmat right after, so
+            ! clobbering wimg here is safe.
+            o = self%pad_off
+            call self%wimg%zero_and_unflag_ft
+            call self%wimg%get_rmat_ptr(rmat_ptr)
+            rmat_ptr(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box) = 1.0
+            nullify(rmat_ptr)
+            call self%wimg%fft()
+            self%nu_winhat = self%wimg%get_cmat()
+        endif
+        self%nu_cmat0 = cmat
+        self%l_nu_cmat0_valid = .true.
+    end subroutine stash_nu_forward
+
     function apply_nu_precision( self, x ) result( qx )
         class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)    :: x(self%box,self%box,self%box)
-        real,    allocatable :: qx(:,:,:), xb(:,:,:), xc(:,:,:)
-        complex, allocatable :: cmat0(:,:,:), cband(:,:,:)
+        real,    allocatable :: qx(:,:,:)
+        real(kind=c_float), pointer :: rmat_ptr(:,:,:)
         real(dp) :: mean_dp
-        integer :: cdim(3), b, nb, i, j, k
+        real     :: mean_x
+        integer  :: cdim(3), b, nb, i, j, k, o
         if( .not. self%l_nu_prior ) THROW_HARD('set_nu_prior has not been called; apply_nu_precision')
         call self%ensure_wimg
         call self%ensure_nu_band_index
+        call self%ensure_nu_workspaces
         cdim = self%wimg%get_array_shape()
+        o    = self%pad_off
         ! left application of C: remove the native mean before the band bank
         mean_dp = sum(real(x,dp)) / real(self%box,dp)**3
-        allocate(xc(self%box,self%box,self%box), source=x)
-        xc = xc - real(mean_dp)
-        call self%wimg%set_rmat(self%pad_vol(xc), .false.)
-        call self%wimg%fft()
-        cmat0 = self%wimg%get_cmat()
-        allocate(qx(self%box,self%box,self%box), source=0.0)
-        allocate(cband(cdim(1),cdim(2),cdim(3)))
+        mean_x  = real(mean_dp)
+        if( self%l_nu_cmat0_valid )then
+            ! shared forward: complete the centering in Fourier space,
+            ! FFT(pad(x - mean)) = FFT(pad(x)) - mean * FFT(pad(1))
+            self%l_nu_cmat0_valid = .false.
+            !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
+            do k = 1, cdim(3)
+                do j = 1, cdim(2)
+                    do i = 1, cdim(1)
+                        self%nu_cmat0(i,j,k) = self%nu_cmat0(i,j,k) - mean_x * self%nu_winhat(i,j,k)
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+        else
+            call self%wimg%zero_and_unflag_ft
+            call self%wimg%get_rmat_ptr(rmat_ptr)
+            rmat_ptr(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box) = x - mean_x
+            nullify(rmat_ptr)
+            call self%wimg%fft()
+            self%nu_cmat0 = self%wimg%get_cmat()
+        endif
         nb = size(self%nu_band_w,4)
+        self%nu_cacc = cmplx(0.0,0.0)
         do b = 1, nb
             !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
             do k = 1, cdim(3)
                 do j = 1, cdim(2)
                     do i = 1, cdim(1)
                         if( self%nu_band_idx(i,j,k) == int(b,kind=1) )then
-                            cband(i,j,k) = cmat0(i,j,k)
+                            self%nu_cband(i,j,k) = self%nu_cmat0(i,j,k)
                         else
-                            cband(i,j,k) = cmplx(0.0,0.0)
+                            self%nu_cband(i,j,k) = cmplx(0.0,0.0)
                         endif
                     enddo
                 enddo
             enddo
             !$omp end parallel do
-            call self%wimg%set_cmat(cband)
+            call self%wimg%set_cmat(self%nu_cband)
             call self%wimg%ifft()
-            xb = self%crop_vol(self%wimg%get_rmat())
-            xb = self%nu_band_w(:,:,:,b) * xb
-            call self%wimg%set_rmat(self%pad_vol(xb), .false.)
+            call self%wimg%get_rmat_ptr(rmat_ptr)
+            self%nu_xb = self%nu_band_w(:,:,:,b) * &
+                &rmat_ptr(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box)
+            nullify(rmat_ptr)
+            call self%wimg%zero_and_unflag_ft
+            call self%wimg%get_rmat_ptr(rmat_ptr)
+            rmat_ptr(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box) = self%nu_xb
+            nullify(rmat_ptr)
             call self%wimg%fft()
-            cband = self%wimg%get_cmat()
+            ! bands are disjoint in Fourier space, so masked assignment into
+            ! the accumulator is the exact adjoint sum
+            self%nu_cband = self%wimg%get_cmat()
             !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
             do k = 1, cdim(3)
                 do j = 1, cdim(2)
                     do i = 1, cdim(1)
-                        if( self%nu_band_idx(i,j,k) /= int(b,kind=1) ) cband(i,j,k) = cmplx(0.0,0.0)
+                        if( self%nu_band_idx(i,j,k) == int(b,kind=1) ) &
+                            &self%nu_cacc(i,j,k) = self%nu_cband(i,j,k)
                     enddo
                 enddo
             enddo
             !$omp end parallel do
-            call self%wimg%set_cmat(cband)
-            call self%wimg%ifft()
-            qx = qx + self%crop_vol(self%wimg%get_rmat())
-            deallocate(xb)
         enddo
+        ! single synthesis transform: the adjoint accumulates in Fourier
+        ! space (IFFT is linear, so this is the identical operator with
+        ! nb-1 fewer inverse transforms)
+        call self%wimg%set_cmat(self%nu_cacc)
+        call self%wimg%ifft()
+        allocate(qx(self%box,self%box,self%box))
+        call self%wimg%get_rmat_ptr(rmat_ptr)
+        qx = rmat_ptr(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box)
+        nullify(rmat_ptr)
         ! right application of C: re-center the output (C is symmetric, so
         ! this completes C Q~ C and restores the exact adjoint identity)
         mean_dp = sum(real(qx,dp)) / real(self%box,dp)**3
         qx = qx - real(mean_dp)
-        deallocate(cmat0, cband, xc)
     end function apply_nu_precision
 
     !>  \brief  NU replay diagnostics of a final map: the penalty
@@ -1065,6 +1154,12 @@ contains
         if( allocated(self%nu_band_limits) ) deallocate(self%nu_band_limits)
         if( allocated(self%nu_band_wmean)  ) deallocate(self%nu_band_wmean)
         if( allocated(self%nu_band_idx)    ) deallocate(self%nu_band_idx)
+        if( allocated(self%nu_cmat0)  ) deallocate(self%nu_cmat0)
+        if( allocated(self%nu_cacc)   ) deallocate(self%nu_cacc)
+        if( allocated(self%nu_cband)  ) deallocate(self%nu_cband)
+        if( allocated(self%nu_winhat) ) deallocate(self%nu_winhat)
+        if( allocated(self%nu_xb)     ) deallocate(self%nu_xb)
+        self%l_nu_cmat0_valid = .false.
         if( allocated(self%acc_work) ) deallocate(self%acc_work)
         if( allocated(self%b_work)   ) deallocate(self%b_work)
         if( allocated(self%b_rhs)    ) deallocate(self%b_rhs)
@@ -2336,6 +2431,11 @@ contains
         if( self%l_profile ) tp = tic()
         cmat = self%wimg%get_cmat()
         if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + real(toc(tp),dp)
+        ! with deapodization on, this spectrum is FFT(pad(p)) of the iterate
+        ! itself -- stash it so the Q_NU application below skips its own
+        ! forward transform (shared-forward optimization; the prior completes
+        ! the mean-centering in Fourier space via nu_winhat)
+        if( self%l_nu_prior .and. self%l_deapod ) call self%stash_nu_forward(cmat)
         cdim = self%wimg%get_array_shape()
         if( self%l_profile ) tp = tic()
         !$omp parallel do collapse(3) default(shared) private(i,j,k,kv) &
