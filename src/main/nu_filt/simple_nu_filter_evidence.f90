@@ -455,6 +455,35 @@ contains
         endif
     end subroutine unpack_nu_evidence_state
 
+    !> Matching low-pass handoff with assignment support: the finest selected
+    !! cutoff such that at least min_pct percent of the assigned (non-null)
+    !! support voxels selected that cutoff or a finer one — the fine-end
+    !! percentile of the assigned cutoffs. Robust against a single-voxel
+    !! selection pinning the matching bandwidth, and against crop-Nyquist
+    !! candidate aliasing, because duplicate finds pool naturally in the
+    !! cumulative tail. min_pct=0 reproduces the raw finest-selected value.
+    module real function nu_evidence_finest_supported_lp( state, min_pct )
+        type(nu_evidence_state), intent(in) :: state
+        real,                    intent(in) :: min_pct
+        real, allocatable :: vals(:)
+        integer :: n_assigned, imask, cnt, k
+        nu_evidence_finest_supported_lp = 0.
+        if( .not.nu_evidence_state_is_valid(state) ) return
+        n_assigned = count(state%selected_label > 0_NU_LABEL_KIND)
+        if( n_assigned == 0 ) return
+        allocate(vals(n_assigned))
+        cnt = 0
+        do imask = 1, size(state%selected_label)
+            if( state%selected_label(imask) > 0_NU_LABEL_KIND )then
+                cnt = cnt + 1
+                vals(cnt) = state%selected_cutoff(imask)
+            endif
+        enddo
+        k = min(n_assigned, max(1, ceiling(real(n_assigned) * max(0., min_pct) / 100.)))
+        nu_evidence_finest_supported_lp = selec(k, n_assigned, vals)
+        deallocate(vals)
+    end function nu_evidence_finest_supported_lp
+
     !> Replay-readiness contract (pcg_priors.md S6.2): a valid compact state
     !! is necessary but not sufficient to parameterize the replay precision.
     !! The spherical evidence support is deliberately generous and always

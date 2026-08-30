@@ -53,6 +53,7 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
           NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
+          nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT,&
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
           expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
           nu_evidence_sharpen_vol,&
@@ -150,6 +151,16 @@ real,             parameter   :: NU_EVIDENCE_BAND_RATIO      = 0.64 !< geometric
 !! self-neutralizes to the static ladder (measured over-suppression on 1WCM,
 !! pcg_priors.md S6.6 record).
 real,             parameter   :: NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01
+!> Matching low-pass handoff support gate (the PCG mirror of the gridding
+!! design intent: promote the finest bank member to which a minimum fraction
+!! of observations was assigned). The promoted matching low-pass is the
+!! finest evidenced cutoff such that at least this percentage of the assigned
+!! (non-null) support voxels selected that cutoff or a finer one. A raw
+!! per-voxel minimum lets a single selection pin the global matching
+!! bandwidth and saturates at the finest candidates, which alias onto the
+!! crop Nyquist at intermediate stage boxes. Strength mirrors the shell
+!! walk's NU_HIGHRES_EXTENSION_ACCEPT_PCT.
+real,             parameter   :: NU_ALIGN_LP_MIN_ASSIGNED_PCT = 5.0
 real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
 ! NU-evidence nonuniform postprocessing v2 (nu_evidence_local_sharpening.md,
 ! postprocess_nu commander): classical shrink-then-sharpen, localized by the
@@ -482,6 +493,11 @@ interface
         integer, allocatable, optional, intent(out) :: selected_label(:)
         real,    allocatable, optional, intent(out) :: selected_cutoff(:), uncertainty(:), band_support(:,:)
     end subroutine unpack_nu_evidence_state
+
+    module real function nu_evidence_finest_supported_lp( state, min_pct )
+        type(nu_evidence_state), intent(in) :: state
+        real,                    intent(in) :: min_pct
+    end function nu_evidence_finest_supported_lp
 
     module subroutine print_nu_evidence_summary( state )
         type(nu_evidence_state), intent(in) :: state

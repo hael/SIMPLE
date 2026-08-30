@@ -110,7 +110,7 @@ def write_summary(rows: Dict[int, Dict[str, object]], outpath: Path) -> None:
     columns = [
         "iteration", "nspace", "kto", "strategy_total_s", "strategy_setup_init_s",
         "reprojection_model_s", "group_sigma_consolidation_s", "probabilistic_prestep_s",
-        "matcher_scheduler_s", "assembly_postprocess_s",
+        "matcher_scheduler_s", "assembly_postprocess_s", "assembly_nu_evidence_s",
         "worker_total_s", "volassemble_total_s", "volassemble_nonuniform_filter_s",
         "stage_initialization_total_s", "stage_entry_calc_pspec_s",
     ]
@@ -132,6 +132,9 @@ def write_summary(rows: Dict[int, Dict[str, object]], outpath: Path) -> None:
                 "probabilistic_prestep_s": as_float(row, "refine3D probabilistic pre-step"),
                 "matcher_scheduler_s": as_float(row, "refine3D matcher/scheduler"),
                 "assembly_postprocess_s": as_float(row, "refine3D assembly/postprocess"),
+                # contained within assembly_postprocess_s (pcg NU replay only;
+                # 0.0 on the gridding backend) -- attribution, not additive
+                "assembly_nu_evidence_s": as_float(row, "refine3D pcg nu-evidence phase"),
                 "worker_total_s": as_float(row, "match3D total time"),
                 "volassemble_total_s": as_float(row, "volassemble total time"),
                 "volassemble_nonuniform_filter_s": as_float(row, "volassemble nonuniform_filter"),
