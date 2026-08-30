@@ -117,9 +117,21 @@ contains
         end do
     end subroutine calc_filtmap_lowpass_histogram
 
+    !> Matching low-pass handoff with assignment support: the same gate as
+    !! the PCG evidence handoff (NU_ALIGN_LP_MIN_ASSIGNED_PCT). Returns the
+    !! finest bank low-pass limit such that at least that percentage of the
+    !! assigned voxels selected that member or a finer one -- the fine-end
+    !! percentile of the assigned label limits. A raw finest-label promotion
+    !! lets a single voxel pin the matching bandwidth at a candidate aliased
+    !! onto the crop Nyquist. Labels are ranked by their low-pass limits, not
+    !! their indices, so an auxiliary-replacement member at an FSC-derived
+    !! resolution orders correctly among the bank members.
     module real function get_nu_filtmap_finest_selected_lp( mask )
         logical, optional, intent(in) :: mask(:,:,:)
-        integer :: i, j, k, imask, finest_label, cur_label
+        integer, allocatable :: counts(:)
+        real,    allocatable :: percentages(:), label_lps(:)
+        logical, allocatable :: visited(:)
+        integer :: ilabel, pick, n_assigned, needed, cum
         if( .not.allocated(filtmap) )then
             THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before get_nu_filtmap_finest_selected_lp')
         endif
@@ -128,33 +140,38 @@ contains
         endif
         call require_valid_stats_mask(mask, 'get_nu_filtmap_finest_selected_lp')
         get_nu_filtmap_finest_selected_lp = 0.
-        finest_label = 0
-        if( present(mask) )then
-            !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,cur_label) reduction(max:finest_label) proc_bind(close)
-            do k = 1, ldim(3)
-                do j = 1, ldim(2)
-                    do i = 1, ldim(1)
-                        if( .not.active_nu_mask_at(mask, i, j, k) ) cycle
-                        cur_label = int(filtmap(i,j,k))
-                        if( cur_label >= 1 .and. cur_label <= size(cutoff_finds) ) &
-                            &finest_label = max(finest_label, cur_label)
-                    end do
+        allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
+        call calc_filtmap_lowpass_histogram(counts, percentages, mask)
+        n_assigned = sum(counts)
+        if( n_assigned > 0 )then
+            needed = min(n_assigned, max(1, ceiling(real(n_assigned) * NU_ALIGN_LP_MIN_ASSIGNED_PCT / 100.)))
+            allocate(label_lps(size(cutoff_finds)), visited(size(cutoff_finds)))
+            do ilabel = 1, size(cutoff_finds)
+                label_lps(ilabel) = nu_label_lowpass_limit(ilabel)
+            end do
+            visited = .false.
+            cum     = 0
+            do
+                pick = 0
+                do ilabel = 1, size(cutoff_finds)
+                    if( visited(ilabel) ) cycle
+                    if( pick == 0 )then
+                        pick = ilabel
+                    else if( label_lps(ilabel) < label_lps(pick) )then
+                        pick = ilabel
+                    endif
                 end do
+                if( pick == 0 ) exit
+                visited(pick) = .true.
+                cum = cum + counts(pick)
+                if( cum >= needed )then
+                    get_nu_filtmap_finest_selected_lp = label_lps(pick)
+                    exit
+                endif
             end do
-            !$omp end parallel do
-        else
-            !$omp parallel do schedule(static) default(shared) private(imask,i,j,k,cur_label) reduction(max:finest_label) proc_bind(close)
-            do imask = 1, n_nu_mask
-                i = nu_mask_vox(1,imask)
-                j = nu_mask_vox(2,imask)
-                k = nu_mask_vox(3,imask)
-                cur_label = int(filtmap(i,j,k))
-                if( cur_label >= 1 .and. cur_label <= size(cutoff_finds) ) &
-                    &finest_label = max(finest_label, cur_label)
-            end do
-            !$omp end parallel do
+            deallocate(label_lps, visited)
         endif
-        if( finest_label > 0 ) get_nu_filtmap_finest_selected_lp = nu_label_lowpass_limit(finest_label)
+        deallocate(counts, percentages)
     end function get_nu_filtmap_finest_selected_lp
 
     module subroutine print_filtmap_lowpass_histogram( mask )

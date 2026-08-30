@@ -20,7 +20,8 @@ use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cl
     &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp, &
     &build_nu_evidence_state, nu_evidence_state, nu_evidence_summary, get_nu_evidence_summary, &
     &expand_nu_evidence_band_weights, &
-    &print_nu_evidence_summary, assert_nu_evidence_replay_ready, unpack_nu_evidence_state, &
+    &print_nu_evidence_summary, assert_nu_evidence_replay_ready, &
+    &nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT, &
     &write_nu_evidence_envmask, &
     &NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
 use simple_vol_pproc_policy,  only: vol_pproc_plan, plan_state_postprocess, &
@@ -31,7 +32,7 @@ use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state
 implicit none
 
 public :: execute_rec3D_pcg_shared, execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
-public :: validate_rec3D_pcg_fractional_updates
+public :: validate_rec3D_pcg_fractional_updates, get_pcg_nu_evidence_bench_seconds
 private
 #include "simple_local_flags.inc"
 
@@ -53,7 +54,36 @@ real,    parameter :: NU_AUTOLAMBDA_LAMBDA_MAX   = 30.0
 real,    parameter :: NU_AUTOLAMBDA_SUPP_FLOOR   = 0.1  !< % floor so a near-zero readout cannot divide the model
 logical, parameter :: DEBUG = .false.
 
+! Rebuild-on-advance cadence for the NU replay evidence (streptavidin
+! benchmark 2026-08-30: the per-iteration evidence build is a leading term of
+! the pcg assembly overhead). The frozen compact evidence state rides across
+! refinement iterations and is rebuilt only when the resolution state
+! advances (the FSC=0.143 crossing reaches a finer shell than the ridden
+! evidence was built at), the evidence geometry or source changes, the
+! envmask cadence requires regeneration from live margins, or the age cap is
+! hit. The cache is in-memory and master-side only: a restart or a fresh
+! process rebuilds on first use.
+integer, parameter :: NU_EVIDENCE_REBUILD_MAX_LAG = 5 !< iterations a frozen evidence state may ride before a forced rebuild
+type :: nu_evidence_cache_entry
+    logical :: valid = .false.
+    integer :: box = 0
+    integer :: fsc_find = 0
+    integer :: iter_built = -1
+    character(len=32) :: source = ''
+    type(nu_evidence_state) :: evstate
+end type nu_evidence_cache_entry
+type(nu_evidence_cache_entry), allocatable :: nu_evidence_cache(:)
+! per-invocation NU-evidence wall-clock accumulator, surfaced to the
+! standardized refine3D benchmark report (plot_refine3d_bench.py)
+real(dp) :: nu_evidence_bench_seconds = 0.0_dp
+
 contains
+
+    !> Total NU replay evidence-phase seconds of the most recent PCG
+    !! execution (all states), for the strategy-level benchmark report.
+    real function get_pcg_nu_evidence_bench_seconds() result( seconds )
+        seconds = real(nu_evidence_bench_seconds)
+    end function get_pcg_nu_evidence_bench_seconds
 
     !> Cross-iteration ML warm start (drop_legacy_box_division.md S7/S11.2).
     !! The ML replay used to start from the unregularized base solution, which
@@ -226,78 +256,145 @@ contains
     !! a second NU analysis; cadence and artifact naming follow the same
     !! plan_state_postprocess contract as the post-hoc NU paths.
     subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, &
-            &band_w, band_limits, finest_lp, evidence_source )
+            &res0143, band_w, band_limits, finest_lp, evidence_source, evidence_seconds )
         class(parameters),          intent(in)  :: params
         integer,                    intent(in)  :: state_here
         character(len=*),           intent(in)  :: context
         type(image),                intent(in)  :: vol_even, vol_odd
+        real,                       intent(in)  :: res0143 !< FSC=0.143 crossing of the evidence pair; steers the rebuild cadence
         real, allocatable,          intent(out) :: band_w(:,:,:,:)
         real, allocatable,          intent(out) :: band_limits(:)
         real, optional,             intent(out) :: finest_lp
         character(len=*), optional, intent(in)  :: evidence_source
+        real(dp), optional,         intent(out) :: evidence_seconds
         type(nu_evidence_state)   :: evstate
         type(nu_evidence_summary) :: evsumm
         type(vol_pproc_plan)      :: pp_plan
-        real, allocatable :: cutoffs(:)
         character(len=32) :: source_here
-        integer :: nsteps_ext
+        integer :: nsteps_ext, ldim_here(3), fsc_find
+        logical :: l_rebuild, l_envmask_regen
+        integer(timer_int_kind) :: t_evidence
+        real(dp) :: seconds_here
+        t_evidence  = tic()
         source_here = NU_EVIDENCE_SOURCE_BASE
         if( present(evidence_source) ) source_here = trim(evidence_source)
-        write(logfhandle,'(A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): BUILDING EVIDENCE FROM THE '//&
-            &'FSC HALF PAIR OF STATE ', state_here, ' (source='//trim(source_here)//')'
-        call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source=trim(source_here))
-        call optimize_nu_cutoff_finds()
-        ! Stage 6.6 (pcg_priors.md): with nu_refine=yes the evidence candidate
-        ! bank is extended by the proven high-resolution shell walk -- one
-        ! Fourier shell at a time from the populated frontier, accepted only
-        ! on strict unary win-fraction, exactly as on the gridding path
-        ! (refine3D_auto mirrors its gridding bootstrap; abinitio3D keeps the
-        ! discrete static ladder by default, with an explicit pcg-only
-        ! nu_refine=yes opt-in enabling this extension on its NU stages).
-        ! The band ladder then grows over ACCEPTED candidates only, inside
-        ! build_nu_evidence_state, and rides the frozen state.
-        if( params%l_nu_refine )then
-            call extend_nu_filter_highres_shells(vol_even, vol_odd, nsteps=nsteps_ext)
-            if( nsteps_ext > 0 )then
-                write(logfhandle,'(A,I0,A,F8.3,A)') '>>> PCG NU REPLAY ('//trim(context)//&
-                    &'): EVIDENCE BANK EXTENDED BY ', nsteps_ext, ' ACCEPTED SHELL STEP(S) TO ', &
-                    &get_nu_filter_bank_finest_lp(), ' A'
-            endif
-        endif
+        ldim_here = vol_even%get_ldim()
+        fsc_find  = calc_fourier_index(res0143, ldim_here(1), vol_even%get_smpd())
+        ! envmask cadence decides first: a required regeneration forces a
+        ! rebuild, because the envelope derives from the live per-voxel
+        ! margins that only exist during evidence construction
         call plan_state_postprocess(params, state_here, params%which_iter, pp_plan)
-        if( pp_plan%l_nu_envmask_incompatible )then
-            write(logfhandle,'(A,1X,A)') &
-                &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
-                &pp_plan%nu_envmask_file%to_char()
-        endif
-        if( pp_plan%nu_envmask_action == NU_ENVMASK_ACTION_REGENERATE )then
-            call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, vol_even%get_smpd(), &
-                &state_here, pp_plan%nu_envmask_file)
+        l_envmask_regen = pp_plan%nu_envmask_action == NU_ENVMASK_ACTION_REGENERATE
+        l_rebuild       = nu_evidence_needs_rebuild(params, state_here, ldim_here(1), source_here, &
+            &fsc_find, l_envmask_regen)
+        if( l_rebuild )then
+            write(logfhandle,'(A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): BUILDING EVIDENCE FROM THE '//&
+                &'FSC HALF PAIR OF STATE ', state_here, ' (source='//trim(source_here)//')'
+            call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source=trim(source_here))
+            call optimize_nu_cutoff_finds()
+            ! Stage 6.6 (pcg_priors.md): with nu_refine=yes the evidence candidate
+            ! bank is extended by the proven high-resolution shell walk -- one
+            ! Fourier shell at a time from the populated frontier, accepted only
+            ! on strict unary win-fraction, exactly as on the gridding path
+            ! (refine3D_auto mirrors its gridding bootstrap; abinitio3D keeps the
+            ! discrete static ladder by default, with an explicit pcg-only
+            ! nu_refine=yes opt-in enabling this extension on its NU stages).
+            ! The band ladder then grows over ACCEPTED candidates only, inside
+            ! build_nu_evidence_state, and rides the frozen state.
+            if( params%l_nu_refine )then
+                call extend_nu_filter_highres_shells(vol_even, vol_odd, nsteps=nsteps_ext)
+                if( nsteps_ext > 0 )then
+                    write(logfhandle,'(A,I0,A,F8.3,A)') '>>> PCG NU REPLAY ('//trim(context)//&
+                        &'): EVIDENCE BANK EXTENDED BY ', nsteps_ext, ' ACCEPTED SHELL STEP(S) TO ', &
+                        &get_nu_filter_bank_finest_lp(), ' A'
+                endif
+            endif
+            if( pp_plan%l_nu_envmask_incompatible )then
+                write(logfhandle,'(A,1X,A)') &
+                    &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
+                    &pp_plan%nu_envmask_file%to_char()
+            endif
+            if( l_envmask_regen )then
+                call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, vol_even%get_smpd(), &
+                    &state_here, pp_plan%nu_envmask_file)
+            endif
+            call build_nu_evidence_state(vol_even, vol_odd, evstate)
+            call cleanup_nu_filter()
+            ! store the frozen state for the rebuild-on-advance cadence
+            nu_evidence_cache(state_here)%valid      = .true.
+            nu_evidence_cache(state_here)%box        = ldim_here(1)
+            nu_evidence_cache(state_here)%fsc_find   = fsc_find
+            nu_evidence_cache(state_here)%iter_built = params%which_iter
+            nu_evidence_cache(state_here)%source     = source_here
+            nu_evidence_cache(state_here)%evstate    = evstate
+        else
+            evstate = nu_evidence_cache(state_here)%evstate
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): STATE ', state_here, &
+                &' RIDING FROZEN EVIDENCE (age ', params%which_iter - nu_evidence_cache(state_here)%iter_built, &
+                &' iterations; no resolution advance)'
         endif
         call pp_plan%nu_envmask_file%kill
-        call build_nu_evidence_state(vol_even, vol_odd, evstate)
-        call cleanup_nu_filter()
         ! readiness contract: a valid state with an inadequate null population
         ! (the observed zero-null calibration failure) must hard-error before
         ! either replay, never attach silently
         call assert_nu_evidence_replay_ready(evstate)
-        call print_nu_evidence_summary(evstate)
+        if( l_rebuild ) call print_nu_evidence_summary(evstate)
         write(logfhandle,'(A)') '    pcg_replay_prior_mode=nu_evidence'
         call expand_nu_evidence_band_weights(evstate, band_w)
         ! the active band ladder rides the frozen state; hand it to the caller
         ! for set_nu_prior so operator and evidence can never disagree
         call get_nu_evidence_summary(evstate, evsumm)
         band_limits = evsumm%band_limits
-        ! finest evidenced local cutoff, for the LP-set matching handoff --
-        ! the compact state replaces the retired second NU analysis of the
-        ! postprocess (pcg_priors.md S6.3 evidence-state sharing)
+        ! finest evidenced local cutoff with assignment support, for the
+        ! LP-set matching handoff -- the compact state replaces the retired
+        ! second NU analysis of the postprocess (pcg_priors.md S6.3
+        ! evidence-state sharing). The support gate is the PCG mirror of the
+        ! gridding design intent (finest bank member with a minimum assigned
+        ! fraction): a raw per-voxel minimum lets one selection pin the
+        ! matching bandwidth at the Nyquist-aliased finest candidate.
         if( present(finest_lp) )then
-            call unpack_nu_evidence_state(evstate, selected_cutoff=cutoffs)
-            finest_lp = 0.0
-            if( any(cutoffs > TINY) ) finest_lp = minval(cutoffs, mask=cutoffs > TINY)
-            deallocate(cutoffs)
+            finest_lp = nu_evidence_finest_supported_lp(evstate, NU_ALIGN_LP_MIN_ASSIGNED_PCT)
         endif
+        seconds_here = real(toc(t_evidence),dp)
+        nu_evidence_bench_seconds = nu_evidence_bench_seconds + seconds_here
+        write(logfhandle,'(A,I0,A,A,A,F9.3,A)') '>>> PCG NU REPLAY ('//trim(context)//'): STATE ', state_here, &
+            &' EVIDENCE PHASE (', merge('rebuilt','cached ', l_rebuild), ') took ', real(seconds_here), ' s'
+        if( present(evidence_seconds) ) evidence_seconds = seconds_here
     end subroutine build_nu_replay_evidence
+
+    !> Rebuild-on-advance decision for the frozen NU replay evidence. Rebuild
+    !! when there is no valid cached state, the evidence geometry or source
+    !! changed, the envmask cadence requires regeneration from live margins,
+    !! the FSC=0.143 crossing reached a FINER shell than the ridden evidence
+    !! was built at (an advance; the oscillating tail around a plateau does
+    !! not retrigger), the iteration counter is non-monotone (restart or stage
+    !! reset), or the age cap NU_EVIDENCE_REBUILD_MAX_LAG is hit.
+    logical function nu_evidence_needs_rebuild( params, state_here, box_here, source_here, &
+            &fsc_find, l_envmask_regen ) result( l_rebuild )
+        class(parameters), intent(in) :: params
+        integer,           intent(in) :: state_here, box_here, fsc_find
+        character(len=*),  intent(in) :: source_here
+        logical,           intent(in) :: l_envmask_regen
+        l_rebuild = .true.
+        if( .not. allocated(nu_evidence_cache) )then
+            allocate(nu_evidence_cache(params%nstates))
+            return
+        endif
+        if( size(nu_evidence_cache) /= params%nstates )then
+            deallocate(nu_evidence_cache)
+            allocate(nu_evidence_cache(params%nstates))
+            return
+        endif
+        if( state_here < 1 .or. state_here > params%nstates ) THROW_HARD('invalid state for NU evidence cache')
+        if( .not. nu_evidence_cache(state_here)%valid                          ) return
+        if( nu_evidence_cache(state_here)%box /= box_here                      ) return
+        if( trim(nu_evidence_cache(state_here)%source) /= trim(source_here)    ) return
+        if( l_envmask_regen                                                    ) return
+        if( fsc_find > nu_evidence_cache(state_here)%fsc_find                  ) return
+        if( params%which_iter <= nu_evidence_cache(state_here)%iter_built      ) return
+        if( params%which_iter - nu_evidence_cache(state_here)%iter_built >= NU_EVIDENCE_REBUILD_MAX_LAG ) return
+        l_rebuild = .false.
+    end function nu_evidence_needs_rebuild
 
     !> Hard activation contract for the direct NU replay (no silent fallback):
     !! a defined pcg_nu_lambda_rel must be finite and non-negative, and a
@@ -450,12 +547,13 @@ contains
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         logical :: l_nu_replay
         integer(timer_int_kind) :: t_state_phase
-        real(dp) :: time_map_output, time_fsc_output
+        real(dp) :: time_map_output, time_fsc_output, time_evidence
         logical :: l_sigma_loaded
 
         call validate_supported_mode()
         call validate_nu_replay_request(params)
         call resolve_nu_autolambda(params)
+        nu_evidence_bench_seconds = 0.0_dp
         ! replay precision mode: pcg_nu_lambda_rel > 0 selects the direct
         ! NU-evidence replay (Q_NU), replacing P_tau (mode-exclusive,
         ! pcg_priors.md R10); validated above, so a positive strength here
@@ -503,6 +601,7 @@ contains
             call merged%add(half_odd)
             call merged%mul(0.5)
             time_map_output = 0.0_dp
+            time_evidence   = 0.0_dp
             if( params%l_ml_reg )then
                 fname_even_unfil = refine3D_state_halfvol_fname(state, 'even', unfil=.true.)
                 fname_odd_unfil  = refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.)
@@ -531,7 +630,8 @@ contains
                 ! enabled the evidence envelope is regenerated inside from
                 ! the same frozen evidence (no envelope artifact is ever read)
                 if( l_nu_replay ) call build_nu_replay_evidence(params, state, 'shared', &
-                    &half_even, half_odd, nu_band_w, nu_band_limits)
+                    &half_even, half_odd, res0143s(state), nu_band_w, nu_band_limits, &
+                    &evidence_seconds=time_evidence)
                 call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
                 call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
                 if( allocated(nu_band_w)      ) deallocate(nu_band_w)
@@ -556,7 +656,7 @@ contains
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
-            call write_output_diagnostics(state, 'shared', time_map_output, time_fsc_output)
+            call write_output_diagnostics(state, 'shared', time_map_output, time_fsc_output, time_evidence)
 
             params%vols(state)      = fname_vol
             params%vols_even(state) = fname_even
@@ -1573,11 +1673,12 @@ contains
         integer :: n_active_state, n_sampled_state
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_nu_replay
         integer(timer_int_kind) :: t_state_phase
-        real(dp) :: time_map_output, time_fsc_output
+        real(dp) :: time_map_output, time_fsc_output, time_evidence
 
         call validate_pcg_common(params)
         call validate_nu_replay_request(params)
         call resolve_nu_autolambda(params)
+        nu_evidence_bench_seconds = 0.0_dp
         ! replay precision mode: Q_NU replaces P_tau (mode-exclusive,
         ! pcg_priors.md R10); same rule as the shared path, validated above
         ! so a positive strength implies the ML replay is active
@@ -1670,6 +1771,7 @@ contains
             call merged%add(half_odd)
             call merged%mul(0.5)
             time_map_output = 0.0_dp
+            time_evidence   = 0.0_dp
             if( params%l_ml_reg )then
                 fname_even_unfil = refine3D_state_halfvol_fname(state, 'even', unfil=.true.)
                 fname_odd_unfil  = refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.)
@@ -1714,13 +1816,15 @@ contains
                     ! its FSC=0.143 crossing steers the adaptive band ladder
                     if( present(nu_replay_finest_lps) )then
                         call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
-                            &fsc_pair_odd, nu_band_w, nu_band_limits, &
+                            &fsc_pair_odd, res0143s(state), nu_band_w, nu_band_limits, &
                             &finest_lp=nu_replay_finest_lps(state), &
-                            &evidence_source=trim(evidence_source_here))
+                            &evidence_source=trim(evidence_source_here), &
+                            &evidence_seconds=time_evidence)
                     else
                         call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
-                            &fsc_pair_odd, nu_band_w, nu_band_limits, &
-                            &evidence_source=trim(evidence_source_here))
+                            &fsc_pair_odd, res0143s(state), nu_band_w, nu_band_limits, &
+                            &evidence_source=trim(evidence_source_here), &
+                            &evidence_seconds=time_evidence)
                     endif
                 endif
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
@@ -1767,7 +1871,7 @@ contains
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
-            call write_output_diagnostics(state, 'distributed', time_map_output, time_fsc_output)
+            call write_output_diagnostics(state, 'distributed', time_map_output, time_fsc_output, time_evidence)
             params%vols(state)      = fname_vol
             params%vols_even(state) = fname_even
             params%vols_odd(state)  = fname_odd
@@ -2254,10 +2358,11 @@ contains
         call flush(logfhandle)
     end subroutine report_solve_summary
 
-    subroutine write_output_diagnostics( state, execution_mode, map_time, fsc_time )
-        integer,          intent(in) :: state
-        character(len=*), intent(in) :: execution_mode
-        real(dp),         intent(in) :: map_time, fsc_time
+    subroutine write_output_diagnostics( state, execution_mode, map_time, fsc_time, evidence_time )
+        integer,            intent(in) :: state
+        character(len=*),   intent(in) :: execution_mode
+        real(dp),           intent(in) :: map_time, fsc_time
+        real(dp), optional, intent(in) :: evidence_time
         type(string) :: fname
         integer :: funit
         fname = 'reconstruct3D_pcg_state'//int2str_pad(state,2)//'_output_diagnostics.txt'
@@ -2265,6 +2370,7 @@ contains
         write(funit,'(A,A)')     'execution_mode=', trim(execution_mode)
         write(funit,'(A,F12.6)') 'halfmap_merged_output_seconds=', map_time
         write(funit,'(A,F12.6)') 'fsc_cfar_summary_seconds=', fsc_time
+        if( present(evidence_time) ) write(funit,'(A,F12.6)') 'nu_evidence_phase_seconds=', evidence_time
         call fclose(funit)
         call fname%kill
     end subroutine write_output_diagnostics

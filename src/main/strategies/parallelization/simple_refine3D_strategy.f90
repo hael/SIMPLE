@@ -12,7 +12,7 @@ use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap
 use simple_ptcl_cache,    only: ptcl_cache_ensure
-use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master
+use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master, get_pcg_nu_evidence_bench_seconds
 implicit none
 
 public :: refine3D_strategy, refine3D_inmem_strategy, refine3D_distr_strategy
@@ -548,6 +548,9 @@ contains
         write(fnr,'(a,1x,f0.2)') 'refine3D probabilistic pre-step     :', bench%rt_prob
         write(fnr,'(a,1x,f0.2)') 'refine3D matcher/scheduler          :', bench%rt_sched
         write(fnr,'(a,1x,f0.2)') 'refine3D assembly/postprocess       :', bench%rt_assemble
+        ! contained WITHIN assembly/postprocess (pcg backend only; 0.0 on
+        ! gridding) -- reported for attribution, never stacked on top of it
+        write(fnr,'(a,1x,f0.2)') 'refine3D pcg nu-evidence phase      :', get_pcg_nu_evidence_bench_seconds()
         write(fnr,'(a,1x,f0.2)') 'refine3D total time                 :', bench%rt_tot
         write(fnr,'(a,1x,f0.2)') 'refine3D % accounted for            :', rt_accounted
         call fclose(fnr)
