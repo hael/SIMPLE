@@ -36,6 +36,21 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: PCG_LAMBDA = 1.0e-3
+! Suppression-targeted auto-lambda controller (pcg_priors.md dev item 2,
+! target recorded 2026-08-30). Plant model validated on the PfCRT/1WCM scan:
+! amplitude suppression follows the one-pole law s = g*lambda/(1+g*lambda),
+! so one secant step lands near target. The controller is memoryless: it
+! reads the PREVIOUS iteration's stats file (lambda used + measured
+! suppression), identifies g, and solves for the target. Active only when
+! pcg_nu_lambda_rel was left to its dynamic default (l_pcg_nu_autolambda);
+! an explicit strength pins lambda and keeps every recorded control
+! reproducible.
+real,    parameter :: NU_AUTOLAMBDA_TARGET_SUPP  = 60.0 !< % prior energy suppressed (user-recorded operating point, R9)
+real,    parameter :: NU_AUTOLAMBDA_DEADBAND_PCT = 5.0  !< hold inside target +/- deadband
+real,    parameter :: NU_AUTOLAMBDA_STEP_CLAMP   = 5.0  !< max multiplicative step per iteration
+real,    parameter :: NU_AUTOLAMBDA_LAMBDA_MIN   = 0.01 !< hard strength bounds
+real,    parameter :: NU_AUTOLAMBDA_LAMBDA_MAX   = 30.0
+real,    parameter :: NU_AUTOLAMBDA_SUPP_FLOOR   = 0.1  !< % floor so a near-zero readout cannot divide the model
 logical, parameter :: DEBUG = .false.
 
 contains
@@ -350,6 +365,7 @@ contains
         if( .not. any(cnts > 0) ) return
         call os%new(1, is_ptcl=.false.)
         call os%set(1, 'PCG_NU_LAMBDA_REL', params%pcg_nu_lambda_rel)
+        call os%set(1, 'PCG_NU_AUTOLAMBDA', merge(1.0, 0.0, params%l_pcg_nu_autolambda))
         do state = 1, size(supps)
             if( cnts(state) < 1 ) cycle
             key = 'PCG_NU_SUPP_STATE'//int2str_pad(state,2)
@@ -361,6 +377,61 @@ contains
         call os%kill
         call key%kill
     end subroutine write_nu_convergence_stats
+
+    !> Suppression-targeted auto-lambda: one secant step on the one-pole
+    !! plant model, driven by the previous iteration's persisted readout.
+    !! Memoryless by construction -- the stats file carries the lambda that
+    !! produced the measurement, so continuity needs no extra state. Cold
+    !! start (no stats file yet) keeps the dynamic default. Single-shot
+    !! reconstructions in a fresh directory are therefore deterministic.
+    subroutine resolve_nu_autolambda( params )
+        class(parameters), intent(inout) :: params
+        type(oris)   :: os
+        type(string) :: key
+        real    :: lam_prev, lam_new, s_frac, s_t, supp_sum, ratio
+        integer :: state, nsupp
+        if( .not. params%l_pcg_nu_autolambda   ) return
+        if( params%pcg_nu_lambda_rel <= 0.0    ) return
+        if( .not. file_exists(PCG_NU_STATS_FILE) ) return
+        call os%new(1, is_ptcl=.false.)
+        call os%read(string(PCG_NU_STATS_FILE))
+        if( .not. os%isthere('PCG_NU_LAMBDA_REL') )then
+            call os%kill
+            return
+        endif
+        lam_prev = os%get(1, 'PCG_NU_LAMBDA_REL')
+        supp_sum = 0.0
+        nsupp    = 0
+        do state = 1, params%nstates
+            key = 'PCG_NU_SUPP_STATE'//int2str_pad(state,2)
+            if( os%isthere(key%to_char()) )then
+                supp_sum = supp_sum + os%get(1, key%to_char())
+                nsupp    = nsupp + 1
+            endif
+        enddo
+        call os%kill
+        call key%kill
+        if( nsupp < 1 .or. lam_prev <= 0.0 ) return
+        ! measured suppression as an amplitude fraction, floored and capped
+        ! so the one-pole identification stays finite
+        s_frac = max(NU_AUTOLAMBDA_SUPP_FLOOR, min(99.0, supp_sum / real(nsupp))) / 100.0
+        s_t    = NU_AUTOLAMBDA_TARGET_SUPP / 100.0
+        if( abs(s_frac*100.0 - NU_AUTOLAMBDA_TARGET_SUPP) <= NU_AUTOLAMBDA_DEADBAND_PCT )then
+            ! on target: hold the previous strength (continuity, not the default)
+            params%pcg_nu_lambda_rel = lam_prev
+            write(logfhandle,'(A,F7.1,A,F8.4)') '>>> PCG NU AUTO-LAMBDA: ON TARGET (supp ', &
+                &s_frac*100.0, ' %); HOLDING LAMBDA_REL', lam_prev
+            return
+        endif
+        ! secant on s = g*lambda/(1+g*lambda): lambda_new = lambda_prev *
+        ! [s_t(1-s)] / [s(1-s_t)], step-clamped and bounded
+        ratio   = (s_t * (1.0 - s_frac)) / (s_frac * (1.0 - s_t))
+        ratio   = min(NU_AUTOLAMBDA_STEP_CLAMP, max(1.0/NU_AUTOLAMBDA_STEP_CLAMP, ratio))
+        lam_new = min(NU_AUTOLAMBDA_LAMBDA_MAX, max(NU_AUTOLAMBDA_LAMBDA_MIN, lam_prev * ratio))
+        write(logfhandle,'(A,F7.1,A,F8.4,A,F8.4)') '>>> PCG NU AUTO-LAMBDA: MEASURED supp ', &
+            &s_frac*100.0, ' % (target 60); LAMBDA_REL ', lam_prev, ' ->', lam_new
+        params%pcg_nu_lambda_rel = lam_new
+    end subroutine resolve_nu_autolambda
 
     subroutine execute_rec3D_pcg_shared( params, build, cline )
         type(parameters), intent(inout) :: params
@@ -383,6 +454,7 @@ contains
 
         call validate_supported_mode()
         call validate_nu_replay_request(params)
+        call resolve_nu_autolambda(params)
         ! replay precision mode: pcg_nu_lambda_rel > 0 selects the direct
         ! NU-evidence replay (Q_NU), replacing P_tau (mode-exclusive,
         ! pcg_priors.md R10); validated above, so a positive strength here
@@ -1504,6 +1576,7 @@ contains
 
         call validate_pcg_common(params)
         call validate_nu_replay_request(params)
+        call resolve_nu_autolambda(params)
         ! replay precision mode: Q_NU replaces P_tau (mode-exclusive,
         ! pcg_priors.md R10); same rule as the shared path, validated above
         ! so a positive strength implies the ML replay is active

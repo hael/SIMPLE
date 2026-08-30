@@ -13568,6 +13568,7 @@ Private symbols:
 - `report_nu_solve_stats` — subroutine
 - `report_solve_summary` — subroutine
 - `require_raw` — subroutine
+- `resolve_nu_autolambda` — subroutine
 - `shipped_pair_res` — subroutine
 - `solve_state_half` — subroutine
 - `split_complementary` — subroutine
@@ -13858,6 +13859,7 @@ Private symbols:
 - `dot_real_volume` — function
 - `end_accum` — subroutine
 - `ensure_nu_band_index` — subroutine
+- `ensure_nu_workspaces` — subroutine
 - `ensure_wimg` — subroutine
 - `extract_native_plane` — function
 - `finalize_density_accum` — subroutine
@@ -13922,6 +13924,7 @@ Private symbols:
 - `solve_accum` — subroutine
 - `solve_core` — subroutine
 - `solve_pose_cholesky` — subroutine
+- `stash_nu_forward` — subroutine
 - `transfer_plane_cmplx` — subroutine
 - `update_lambda_from_density` — subroutine
 - `whiten_observation` — function
@@ -18343,6 +18346,7 @@ Public symbols:
 - `set_symmetry_class_vars` — subroutine
 - `shift_stack_slice2D` — subroutine
 - `sort_oris` — function
+- `strip_pcg_backend_keys` — subroutine
 - `strip_refine3D_planning_keys` — subroutine
 - `symmetrize` — subroutine
 - `validate_compact_evidence_state` — subroutine

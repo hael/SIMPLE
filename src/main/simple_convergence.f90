@@ -14,8 +14,12 @@ private
 ! base solution, so an inert prior reads ~0%). Provisional bounds inherited
 ! from the retired solvent-prior readout; recalibrate with a
 ! pcg_nu_lambda_rel strength ladder now that the readout is reported per run.
-real, parameter :: PCG_NU_SUPP_INERT_PCT = 5.0  !< below: prior inert, increase pcg_nu_lambda_rel
-real, parameter :: PCG_NU_SUPP_OVER_PCT  = 60.0 !< above: over-regularization risk, decrease pcg_nu_lambda_rel
+! Thresholds re-centered on the recorded ~60% suppression operating target
+! (pcg_priors.md, 2026-08-30). With auto-lambda active the banner reports the
+! controller instead of advising manual changes.
+real, parameter :: PCG_NU_SUPP_INERT_PCT = 5.0  !< below: prior inert
+real, parameter :: PCG_NU_SUPP_LOW_PCT   = 45.0 !< below: clearly under the 60% target
+real, parameter :: PCG_NU_SUPP_OVER_PCT  = 75.0 !< above: over-regularization risk
 
 type convergence
     private
@@ -281,7 +285,8 @@ contains
         logical, allocatable :: mask(:), state_mask(:), pcg_nu_mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
-        real    :: pcg_nu_supp_avg, pcg_nu_ship0143_avg
+        real    :: pcg_nu_supp_avg, pcg_nu_ship0143_avg, pcg_nu_lambda_used
+        logical :: l_pcg_nu_auto
         logical :: l_pcg_nu
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
@@ -293,6 +298,7 @@ contains
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         609 format(A)
+        610 format(A,1X,F8.4,A)
         states         = os%get_all('state')
         scores         = os%get_all('corr')
         updatecnts     = os%get_all('updatecnt')
@@ -385,7 +391,8 @@ contains
         pcg_nu_ship0143_avg = 0.
         allocate(pcg_nu_supps(params%nstates), pcg_nu_ship0143s(params%nstates), pcg_nu_mask(params%nstates))
         if( trim(params%rec_backend) == 'pcg' )then
-            call read_pcg_nu_stats(params%nstates, pcg_nu_supps, pcg_nu_ship0143s, pcg_nu_mask, l_pcg_nu)
+            call read_pcg_nu_stats(params%nstates, pcg_nu_supps, pcg_nu_ship0143s, pcg_nu_mask, l_pcg_nu, &
+                &pcg_nu_lambda_used, l_pcg_nu_auto)
         endif
         if( l_pcg_nu )then
             pcg_nu_supp_avg     = sum(pcg_nu_supps,     mask=pcg_nu_mask) / real(count(pcg_nu_mask))
@@ -399,12 +406,17 @@ contains
                     write(logfhandle,604) res_state_label, pcg_nu_supps(istate), pcg_nu_ship0143s(istate)
                 end do
             endif
-            if( pcg_nu_supp_avg < PCG_NU_SUPP_INERT_PCT )then
-                write(logfhandle,609) '>>> PCG NU PRIOR INERT (< 5%); INCREASE PCG_NU_LAMBDA_REL (~3X)'
+            if( l_pcg_nu_auto )then
+                write(logfhandle,610) '>>> PCG NU AUTO-LAMBDA (TARGET 60%): LAMBDA_REL', pcg_nu_lambda_used, &
+                    &'; ADAPTS NEXT ITERATION'
+            else if( pcg_nu_supp_avg < PCG_NU_SUPP_INERT_PCT )then
+                write(logfhandle,609) '>>> PCG NU PRIOR INERT (< 5%); INCREASE PCG_NU_LAMBDA_REL (~10X) OR UNSET IT FOR AUTO-LAMBDA'
+            else if( pcg_nu_supp_avg < PCG_NU_SUPP_LOW_PCT )then
+                write(logfhandle,609) '>>> PCG NU PRIOR BELOW THE 60% TARGET (< 45%); INCREASE PCG_NU_LAMBDA_REL'
             else if( pcg_nu_supp_avg > PCG_NU_SUPP_OVER_PCT )then
-                write(logfhandle,609) '>>> PCG NU PRIOR OVER-REGULARIZING (> 60%); DECREASE PCG_NU_LAMBDA_REL (~3X)'
+                write(logfhandle,609) '>>> PCG NU PRIOR OVER-REGULARIZING (> 75%); DECREASE PCG_NU_LAMBDA_REL'
             else
-                write(logfhandle,609) '>>> PCG NU PRIOR NOMINAL (5-60%); KEEP PCG_NU_LAMBDA_REL'
+                write(logfhandle,609) '>>> PCG NU PRIOR ON TARGET (45-75%, AIM 60%); KEEP PCG_NU_LAMBDA_REL'
             endif
         endif
         ! score
@@ -619,19 +631,23 @@ contains
     !! strategy leaves behind after each NU-replay volassemble. The file is
     !! rewritten (or removed) every reconstruction, so presence means the
     !! Q_NU replay fired this iteration.
-    subroutine read_pcg_nu_stats( nstates, supps, ship0143s, supp_mask, available )
+    subroutine read_pcg_nu_stats( nstates, supps, ship0143s, supp_mask, available, lambda_rel, l_auto )
         integer, intent(in)  :: nstates
         real,    intent(out) :: supps(nstates)
         real,    intent(out) :: ship0143s(nstates)
         logical, intent(out) :: supp_mask(nstates)
         logical, intent(out) :: available
+        real,    intent(out) :: lambda_rel
+        logical, intent(out) :: l_auto
         type(oris)   :: os
         type(string) :: key
         integer :: state
-        supps     = 0.
-        ship0143s = 0.
-        supp_mask = .false.
-        available = .false.
+        supps      = 0.
+        ship0143s  = 0.
+        supp_mask  = .false.
+        available  = .false.
+        lambda_rel = 0.
+        l_auto     = .false.
         if( .not. file_exists(PCG_NU_STATS_FILE) ) return
         call os%new(1, is_ptcl=.false.)
         call os%read(string(PCG_NU_STATS_FILE))
@@ -644,6 +660,8 @@ contains
             key = 'PCG_NU_SHIP0143_STATE'//int2str_pad(state,2)
             if( os%isthere(key%to_char()) ) ship0143s(state) = os%get(1, key%to_char())
         enddo
+        if( os%isthere('PCG_NU_LAMBDA_REL') ) lambda_rel = os%get(1, 'PCG_NU_LAMBDA_REL')
+        if( os%isthere('PCG_NU_AUTOLAMBDA') ) l_auto = os%get(1, 'PCG_NU_AUTOLAMBDA') > 0.5
         available = any(supp_mask)
         call os%kill
         call key%kill
