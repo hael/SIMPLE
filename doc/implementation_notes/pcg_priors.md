@@ -2228,6 +2228,51 @@ closed-loop auto-lambda (the replay already measures suppression every
 reconstruction) is the candidate long-term fix, to be designed only
 after the scan fixes the target band.
 
+### Q_NU operator performance pass (2026-08-30, operator-preserving)
+
+`apply_nu_precision` cost 3*nb+1 padded FFTs per matvec (16 at nb=5)
+against the kernelized data operator's 2 -- the prior was ~8x the data
+term per PCG iteration. Two operator-preserving fixes landed (identical
+operator up to floating-point reordering):
+
+- **Fourier-side adjoint accumulation:** the bands are disjoint radial
+  partitions, so the per-band masked spectra are assigned into one
+  accumulator and synthesized with a SINGLE final inverse transform
+  (IFFT is linear). Saves nb-1 inverse FFTs.
+- **Shared forward FFT (kernel path):** the kernel matvec stashes its
+  pristine FFT(pad(p)) via `stash_nu_forward` before the Khat multiply
+  (deapodization on, so the spectrum is of the iterate itself); the
+  prior completes the mean-centering in Fourier space with the
+  precomputed box-window spectrum `nu_winhat = FFT(pad(1))`, since
+  FFT(pad(p - m)) = FFT(pad(p)) - m*FFT(pad(1)). Saves the prior's own
+  forward FFT. The matrix-free path cannot share (its spectrum is of
+  the deapodized iterate) and keeps its own forward.
+
+Net: 3nb+1 -> 2nb+1 padded transforms on the kernel path (16 -> 11 at
+nb=5), 2nb+2 on matrix-free. Allocator churn also removed: persistent
+workspaces (`nu_cmat0/nu_cacc/nu_cband/nu_xb`, `ensure_nu_workspaces`)
+replace the per-matvec allocations and all hot-path `pad_vol`/`crop_vol`
+temporaries (direct `get_rmat_ptr` interior writes on a zeroed wimg).
+Back-pocket option NOT taken (operator-changing, needs its own 1WCM
+validation): running the radial band frame at the native box instead of
+the padded lattice (~8x cheaper FFTs at padf=2). Memory flag stands:
+`nu_band_w` is box^3 x nb (~2 GB at box 400, nb 8).
+
+Verification requirement (R5-adjacent): rerun the 1WCM Q_NU control --
+suppression, support fractions, and truth-FSC must reproduce the
+verified values to printed digits (FP reordering may wiggle the last
+digit); any larger deviation means the rewrite changed the operator.
+
+**PARITY VERIFIED (2026-08-30, 1WCM control, all gates PASS):**
+suppression 35.89/36.82 and shipped crossings 3.241/2.844 identical to
+the verified control to all printed digits; all 129 truth-FSC shells
+bit-identical as printed; support fractions differ only in the sixth
+decimal (0.927938 vs 0.927939 etc.) -- exactly the FP-reordering
+signature expected from Fourier-side accumulation. Wall-clock not
+comparable on this run (host under load ~11 from concurrent jobs);
+judge the speedup from NU-era iteration timings in the next quiet
+PfCRT/refine3D run.
+
 ### Active dev list (2026-08-29, user-prioritized)
 
 Follow-on note: some PfCRT maps look acceptable, but with the prior
@@ -2256,6 +2301,30 @@ the acceptable-looking outputs do not validate the prior.
    suppression-targeted closed-loop lambda_eff controller (the replay
    already measures suppression every reconstruction). R9: record the
    target band here before implementing the controller.
+
+   Scan record and root-cause analysis (2026-08-30). PfCRT suppression:
+   lambda_rel=0.1 -> 3.25%, lambda_rel=0.3 -> 8.6% (shipped-pair 3.93 A,
+   diagnostic banner NOMINAL). The x2.65 response to x3 lambda is almost
+   perfectly LINEAR -- the weak-prior perturbative regime, so 1WCM-like
+   shaping (~35%) needs an order of magnitude, not small multiples;
+   next points lambda_rel=1.0 and 3.0 to bracket, and where the
+   response bends sublinear is the saturation information the
+   controller needs. Root cause of the cross-dataset failure:
+   `update_lambda_from_density` anchors `data_scale` to the LOW-BAND
+   mean of the raw data diagonal D, so lambda_eff = lambda_rel *
+   mean(D_lowband) -- but the prior competes against D in the FINE
+   shells where the unsupported-band content lives. The effective
+   strength is lambda_rel * D_low/D_fine, and that spectral falloff
+   ratio is a dataset property (CTF envelopes, particle count, ice,
+   crop grid): gentle on the 1WCM phantom (0.1 -> 35%), ~10x steeper
+   on PfCRT (0.1 -> 3%). Candidate fixes, to be decided AFTER the
+   scan: (a) anchor data_scale to the prior-active shells (mean D over
+   shells finer than the coarsest band boundary, or D weighted by the
+   prior's spectral footprint), making lambda_rel dataset-invariant by
+   construction; (b) close the loop on measured suppression.
+   Discriminating test once a ~30-40% PfCRT point exists: does
+   fine-shell anchoring alone collapse the PfCRT and 1WCM operating
+   points onto one lambda_rel?
 3. **Test nu_refine=yes with rec_backend=pcg in abinitio3D.** The
    nu_refine=no rationale was gridding-specific (the ML-regularized aux
    competitor supplied beyond-bank resolution implicitly,

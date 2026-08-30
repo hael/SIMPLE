@@ -177,7 +177,7 @@ contains
         call cline_refine3D%delete('smpd_crop')
         ! symmetrization
         call cline_symmap%set('prg',                'symmetrize_map')
-        call cline_symmap%delete('rec_backend')
+        call strip_pcg_backend_keys(cline_symmap)
         call cline_symmap%set('pgrp',                    params%pgrp)
         call cline_symmap%set('projfile',                   projfile)
         call cline_symmap%set('center',                        'yes')
@@ -201,7 +201,7 @@ contains
         call cline_reconstruct3D%delete('refs_odd')
         ! re-project volume, only with cavgs
         call cline_reproject%set('prg',                  'reproject')
-        call cline_reproject%delete('rec_backend')
+        call strip_pcg_backend_keys(cline_reproject)
         call cline_reproject%set('pgrp',                 params%pgrp)
         call cline_reproject%set('outstk',        'reprojs'//MRC_EXT)
         call cline_reproject%set('smpd',                 params%smpd)
@@ -228,6 +228,21 @@ contains
         call child_cline%delete('smpd')
         call child_cline%delete('smpd_crop')
     end subroutine strip_refine3D_planning_keys
+
+    ! Remove the PCG backend key together with every PCG-only control. Any
+    ! child command line that leaves the PCG backend must go through here:
+    ! the reconstruct3D commander hard-errors on a positive pcg_nu_lambda_rel
+    ! without rec_backend=pcg (explicit-activation contract, pcg_priors.md
+    ! S6.2). This list is the strip-side dual of the PCG subset copied by
+    ! apply_refine3D_reconstruction_controls below -- extend both together.
+    subroutine strip_pcg_backend_keys( child_cline )
+        class(cmdline), intent(inout) :: child_cline
+        call child_cline%delete('rec_backend')
+        call child_cline%delete('pcgop')
+        call child_cline%delete('maxits_pcg')
+        call child_cline%delete('rtol')
+        call child_cline%delete('pcg_nu_lambda_rel')
+    end subroutine strip_pcg_backend_keys
 
     ! Copy only controls that genuinely define the reconstruction performed at
     ! the current refinement stage. refine3D maxits is an outer alignment count
@@ -742,7 +757,7 @@ contains
         if( cline_refine3D%get_carg('ml_reg').eq.'yes' )then
             cline_calc_group_sigmas = cline_refine3D
             call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
-            call cline_calc_group_sigmas%delete('rec_backend')
+            call strip_pcg_backend_keys(cline_calc_group_sigmas)
             call xcalc_group_sigmas%execute(cline_calc_group_sigmas)
             call cline_calc_group_sigmas%kill
         endif
