@@ -384,7 +384,14 @@ contains
                 &(istage < GOLD_STD_STAGE .or. params%nstates > 1) ) cfg%filt_mode = 'nonuniform_lpset'
             if( cfg%filt_mode.eq.'nonuniform_lpset' .and. &
                 &params%nstates == 1 .and. istage >= GOLD_STD_STAGE ) cfg%filt_mode = 'nonuniform'
-            cfg%nu_refine = 'no'
+            ! nu_refine is an explicit opt-in and pcg-only in abinitio3D: it
+            ! enables the Q_NU evidence-bank shell extension (Stage 6.6),
+            ! which rides the euclid ML replay (ml_reg=yes holds from
+            ! ML_REG_START_STAGE, so on every NU-filter stage). The
+            ! gridding-path challenger stays off; the commander rejects
+            ! nu_refine=yes without rec_backend=pcg.
+            if( trim(params%nu_refine).eq.'yes' .and. cfg%rec_backend.eq.'pcg' .and. &
+                &istage >= ML_REG_START_STAGE ) cfg%nu_refine = 'yes'
         endif
     end subroutine set_refine3D_filtering_policy
 

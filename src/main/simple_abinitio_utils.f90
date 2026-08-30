@@ -221,6 +221,7 @@ contains
         call child_cline%delete('endit')
         call child_cline%delete('automsk')
         call child_cline%delete('filt_mode')
+        call child_cline%delete('nu_refine')
         call child_cline%delete('refs')
         call child_cline%delete('refs_even')
         call child_cline%delete('refs_odd')

@@ -252,7 +252,8 @@ contains
         ! Fourier shell at a time from the populated frontier, accepted only
         ! on strict unary win-fraction, exactly as on the gridding path
         ! (refine3D_auto mirrors its gridding bootstrap; abinitio3D keeps the
-        ! discrete static ladder via its stage policy pinning nu_refine=no).
+        ! discrete static ladder by default, with an explicit pcg-only
+        ! nu_refine=yes opt-in enabling this extension on its NU stages).
         ! The band ladder then grows over ACCEPTED candidates only, inside
         ! build_nu_evidence_state, and rides the frozen state.
         if( params%l_nu_refine )then

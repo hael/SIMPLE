@@ -136,6 +136,12 @@ contains
             &NU frontier into an explicit merged-reference LP-set matching run','', .false., 'nonuniform', &
             &group="filter", visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=16) :: 'none', 'nonuniform', 'nonuniform_lpset']))
+        call abinitio3D%add_input(UI_FILT, 'nu_refine', 'binary', 'NU resolution expansion refinement', &
+        &'Q_NU evidence-bank shell extension on the pcg backend: allow proven high-resolution expansion of the &
+        &nonuniform resolution bank beyond the stage ladder; requires rec_backend=pcg with the NU replay &
+        &active(yes|no){no}','', .false., 'no', group="filter", &
+        &choices=ui_choices([character(len=3) :: 'yes', 'no']), visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_FILT, envfsc, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call abinitio3D%add_input(UI_FILT, envmsklp, group="filter", &
