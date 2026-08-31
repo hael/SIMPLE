@@ -135,12 +135,21 @@ subroutine exec_test_single_workflow( self, cline )
     type(commander_analysis2D_nano)       :: xan2Dnano
     type(commander_autorefine3D_nano)     :: xaref3Dnano
     type(string)                          :: projname, projfile, project_dir, startvol
+    type(string)                          :: simulated_vol, reprojections, trajectory, denoised_trajectory
     character(len=*), parameter           :: REPROJECTIONS_STK = 'reprojections.mrc'
     character(len=*), parameter           :: TRAJECTORY_STK    = 'simulated_trajectory.mrc'
     character(len=*), parameter           :: DENOISED_STK      = 'denoised_trajectory.mrc'
     character(len=*), parameter           :: TRAJECTORY_ORITAB = 'glc_trajectory_oris.txt'
+    character(len=*), parameter           :: SIMULATION_DIR    = '1_simulate_nanoparticle'
+    character(len=*), parameter           :: REPROJECTION_DIR  = '2_generate_reprojections'
+    character(len=*), parameter           :: TRAJECTORY_DIR    = '3_generate_trajectory'
+    character(len=*), parameter           :: DENOISE_DIR       = '4_trajectory_denoise'
+    character(len=*), parameter           :: IMPORT_DIR        = '5_import_particles'
+    character(len=*), parameter           :: ANALYSIS2D_DIR    = '6_analysis2D_nano'
+    character(len=*), parameter           :: AUTOREFINE3D_DIR  = '7_autorefine3D_nano'
     integer,          parameter           :: NREPROJS = 5000, MASKDIAM = 40
     integer,          parameter           :: NFRAMES_PER_GROUP = 50
+    integer                               :: chdir_status
     real,             parameter           :: TRAJECTORY_SNR    = 0.2
     write(logfhandle,'(a)') '>>> TEST_SINGLE_WORKFLOW:'
     projname = 'test_single_workflow'
@@ -151,8 +160,13 @@ subroutine exec_test_single_workflow( self, cline )
     call xnproj%execute(cline_nproj)
     call simple_getcwd(project_dir)
     projfile = filepath(project_dir, projfile)
-    startvol = filepath(project_dir, 'startvol.mrc')
-
+    simulated_vol       = filepath(filepath(project_dir, SIMULATION_DIR), 'outvol.mrc')
+    reprojections       = filepath(filepath(project_dir, REPROJECTION_DIR), REPROJECTIONS_STK)
+    trajectory          = filepath(filepath(project_dir, TRAJECTORY_DIR), TRAJECTORY_STK)
+    denoised_trajectory = filepath(filepath(project_dir, DENOISE_DIR), DENOISED_STK)
+    startvol            = filepath(filepath(project_dir, ANALYSIS2D_DIR), 'startvol.mrc')
+    
+    call enter_workflow_stage(SIMULATION_DIR)
     call cline_sim%set('prg',               'simulate_nanoparticle')
     call cline_sim%set('box',                                   BOX)
     call cline_sim%set('smpd',                          params%smpd)
@@ -160,43 +174,53 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_sim%set('element',                    params%element)
     call cline_sim%set('nthr',                                 NTHR)
     call xsim_nptcl%execute(cline_sim)
+    call return_to_project_dir
 
+    call enter_workflow_stage(REPROJECTION_DIR)
     call make_glc_trajectory_oris(TRAJECTORY_ORITAB, NREPROJS, NFRAMES_PER_GROUP)
     call cline_reproject%set('prg',                     'reproject')
     call cline_reproject%set('pgrp',                           'c1')
-    call cline_reproject%set('vol1',                   'outvol.mrc')
+    call cline_reproject%set('vol1',        simulated_vol%to_char())
     call cline_reproject%set('smpd',                    params%smpd)
     call cline_reproject%set('oritab',            TRAJECTORY_ORITAB)
     call cline_reproject%set('mskdiam',                          20)
     call cline_reproject%set('outstk',            REPROJECTIONS_STK)
     call cline_reproject%set('nthr',                           NTHR)
     call xreproject%execute(cline_reproject)
+    call return_to_project_dir
 
+    call enter_workflow_stage(TRAJECTORY_DIR)
     call cline_trajectory%set('prg',                     'stackops')
     call cline_trajectory%set('mkdir',                         'no')
-    call cline_trajectory%set('stk',              REPROJECTIONS_STK)
+    call cline_trajectory%set('stk',         reprojections%to_char())
     call cline_trajectory%set('outstk',              TRAJECTORY_STK)
     call cline_trajectory%set('smpd',                   params%smpd)
     call cline_trajectory%set('snr',                 TRAJECTORY_SNR)
     call cline_trajectory%set('nthr',                          NTHR)
     call xtrajectory%execute(cline_trajectory)
+    call return_to_project_dir
 
+    call enter_workflow_stage(DENOISE_DIR)
     call cline_denoise%set('prg',              'trajectory_denoise')
     call cline_denoise%set('mkdir',                            'no')
-    call cline_denoise%set('stk',                    TRAJECTORY_STK)
+    call cline_denoise%set('stk',              trajectory%to_char())
     call cline_denoise%set('outstk',                   DENOISED_STK)
     call cline_denoise%set('smpd',                      params%smpd)
     call cline_denoise%set('nthr',                             NTHR)
     call xdenoise%execute(cline_denoise)
+    call return_to_project_dir
 
+    call enter_workflow_stage(IMPORT_DIR)
     call cline_imptcls%set('prg',                'import_particles')
     call cline_imptcls%set('mkdir',                            'no')
     call cline_imptcls%set('projfile',           projfile%to_char())
-    call cline_imptcls%set('stk',                       DENOISED_STK)
+    call cline_imptcls%set('stk',     denoised_trajectory%to_char())
     call cline_imptcls%set('smpd',                      params%smpd)
     call cline_imptcls%set('ctf',                              'no')
     call ximptcls%execute(cline_imptcls)
+    call return_to_project_dir
 
+    call enter_workflow_stage(ANALYSIS2D_DIR)
     call cline_an2Dnano%set('prg',                'analysis2D_nano')
     call cline_an2Dnano%set('mkdir',                           'no')
     call cline_an2Dnano%set('projfile',          projfile%to_char())
@@ -204,7 +228,9 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_an2Dnano%set('nthr',                            NTHR)
     call xan2Dnano%execute(cline_an2Dnano)
     if( .not. file_exists(startvol) ) THROW_HARD('analysis2D_nano did not generate '//startvol%to_char())
+    call return_to_project_dir
 
+    call enter_workflow_stage(AUTOREFINE3D_DIR)
     call cline_aref3Dnano%set('prg',            'autorefine3D_nano')
     call cline_aref3Dnano%set('projfile',        projfile%to_char())
     call cline_aref3Dnano%set('vol1',            startvol%to_char())
@@ -215,7 +241,20 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_aref3Dnano%set('lp',                             1.5)  
     call cline_aref3Dnano%set('mskdiam',                   MASKDIAM)
     call xaref3Dnano%execute(cline_aref3Dnano)
+    call return_to_project_dir
     call simple_end('**** SIMPLE_TEST_SINGLE_WORKFLOW NORMAL STOP ****')
+contains
+    subroutine enter_workflow_stage( stage )
+        character(len=*), intent(in) :: stage
+        call simple_mkdir(filepath(project_dir, stage))
+        call simple_chdir(filepath(project_dir, stage), chdir_status)
+        if( chdir_status /= 0 ) THROW_HARD('Could not enter single_workflow stage')
+    end subroutine enter_workflow_stage
+
+    subroutine return_to_project_dir
+        call simple_chdir(project_dir, chdir_status)
+        if( chdir_status /= 0 ) THROW_HARD('Could not return to the single_workflow project directory')
+    end subroutine return_to_project_dir
 end subroutine exec_test_single_workflow
 
 subroutine make_glc_trajectory_oris( oritab, nreprojs, nframes_per_group )
