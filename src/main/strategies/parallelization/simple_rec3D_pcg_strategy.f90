@@ -20,7 +20,7 @@ use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cl
     &build_nu_evidence_state, nu_evidence_state, nu_evidence_summary, get_nu_evidence_summary, &
     &expand_nu_evidence_band_weights, &
     &print_nu_evidence_summary, assert_nu_evidence_replay_ready, &
-    &nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT, &
+    &nu_evidence_finest_supported_lp, &
     &write_nu_evidence_envmask, &
     &NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
 use simple_vol_pproc_policy,  only: vol_pproc_plan, plan_state_postprocess, &
@@ -70,17 +70,23 @@ logical, parameter :: DEBUG = .false.
 ! Rebuild-on-advance cadence for the NU replay evidence (streptavidin
 ! benchmark 2026-08-30: the per-iteration evidence build is a leading term of
 ! the pcg assembly overhead). The frozen compact evidence state rides across
-! refinement iterations and is rebuilt only when the resolution state
-! advances (the FSC=0.143 crossing reaches a finer shell than the ridden
-! evidence was built at), the evidence geometry or source changes, the
-! envmask cadence requires regeneration from live margins, or the age cap is
-! hit. The cache is in-memory and master-side only: a restart or a fresh
-! process rebuilds on first use.
+! refinement iterations and is rebuilt when the resolution state advances
+! (the FSC=0.143 crossing reaches a finer shell than the ridden evidence was
+! built at), when the alignment band is the binding constraint (the crossing
+! sits within one shell of the matching low-pass the evidence handed off --
+! riding then would seal a search-bandwidth stall, PfCRT regression record
+! 2026-08-31), when the evidence geometry or source changes, when the
+! envmask cadence requires regeneration from live margins, or when the age
+! cap is hit. The cache is in-memory and master-side only: a restart or a
+! fresh process rebuilds on first use. The cache may only ever trade speed
+! for staleness in the Q_NU band weights; it must never govern the search
+! bandwidth from a frozen statistic.
 integer, parameter :: NU_EVIDENCE_REBUILD_MAX_LAG = 5 !< iterations a frozen evidence state may ride before a forced rebuild
 type :: nu_evidence_cache_entry
     logical :: valid = .false.
     integer :: box = 0
     integer :: fsc_find = 0
+    integer :: handoff_find = 0 !< Fourier index of the matching low-pass this evidence handed off
     integer :: iter_built = -1
     character(len=32) :: source = ''
     type(nu_evidence_state) :: evstate
@@ -285,6 +291,7 @@ contains
         type(vol_pproc_plan)      :: pp_plan
         character(len=32) :: source_here
         integer :: nsteps_ext, ldim_here(3), fsc_find
+        real    :: handoff_lp
         logical :: l_rebuild, l_envmask_regen
         integer(timer_int_kind) :: t_evidence
         real(dp) :: seconds_here
@@ -333,13 +340,21 @@ contains
             endif
             call build_nu_evidence_state(vol_even, vol_odd, evstate)
             call cleanup_nu_filter()
-            ! store the frozen state for the rebuild-on-advance cadence
-            nu_evidence_cache(state_here)%valid      = .true.
-            nu_evidence_cache(state_here)%box        = ldim_here(1)
-            nu_evidence_cache(state_here)%fsc_find   = fsc_find
-            nu_evidence_cache(state_here)%iter_built = params%which_iter
-            nu_evidence_cache(state_here)%source     = source_here
-            nu_evidence_cache(state_here)%evstate    = evstate
+            ! store the frozen state for the rebuild-on-advance cadence,
+            ! together with the matching low-pass it hands off: when the
+            ! FSC crossing later reaches this band, the alignment search is
+            ! band-limited by the ridden evidence and the cache must not be
+            ! allowed to seal the stall (PfCRT regression record 2026-08-31)
+            handoff_lp = nu_evidence_finest_supported_lp(evstate, 0.)
+            nu_evidence_cache(state_here)%valid        = .true.
+            nu_evidence_cache(state_here)%box          = ldim_here(1)
+            nu_evidence_cache(state_here)%fsc_find     = fsc_find
+            nu_evidence_cache(state_here)%handoff_find = 0
+            if( handoff_lp > TINY ) nu_evidence_cache(state_here)%handoff_find = &
+                &calc_fourier_index(handoff_lp, ldim_here(1), vol_even%get_smpd())
+            nu_evidence_cache(state_here)%iter_built   = params%which_iter
+            nu_evidence_cache(state_here)%source       = source_here
+            nu_evidence_cache(state_here)%evstate      = evstate
         else
             evstate = nu_evidence_cache(state_here)%evstate
             write(logfhandle,'(A,I0,A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): STATE ', state_here, &
@@ -358,15 +373,18 @@ contains
         ! for set_nu_prior so operator and evidence can never disagree
         call get_nu_evidence_summary(evstate, evsumm)
         band_limits = evsumm%band_limits
-        ! finest evidenced local cutoff with assignment support, for the
-        ! LP-set matching handoff -- the compact state replaces the retired
-        ! second NU analysis of the postprocess (pcg_priors.md S6.3
-        ! evidence-state sharing). The support gate is the PCG mirror of the
-        ! gridding design intent (finest bank member with a minimum assigned
-        ! fraction): a raw per-voxel minimum lets one selection pin the
-        ! matching bandwidth at the Nyquist-aliased finest candidate.
+        ! finest evidenced local cutoff, for the LP-set matching handoff --
+        ! the compact state replaces the retired second NU analysis of the
+        ! postprocess (pcg_priors.md S6.3 evidence-state sharing). RAW finest
+        ! selected cutoff (min_pct=0), NOT the assignment-support percentile:
+        ! on small membrane proteins only a small core carries fine-resolution
+        ! evidence, and the support gate collapsed the matching bandwidth to
+        ! the FSC crossing, sealing the alignment/evidence stall (PfCRT
+        ! regression record 2026-08-31). Sparse-but-real fine evidence must be
+        ! allowed to pull the search band forward; over-extension merely
+        ! widens the search, over-restriction deadlocks it.
         if( present(finest_lp) )then
-            finest_lp = nu_evidence_finest_supported_lp(evstate, NU_ALIGN_LP_MIN_ASSIGNED_PCT)
+            finest_lp = nu_evidence_finest_supported_lp(evstate, 0.)
         endif
         seconds_here = real(toc(t_evidence),dp)
         nu_evidence_bench_seconds = nu_evidence_bench_seconds + seconds_here
@@ -380,8 +398,12 @@ contains
     !! changed, the envmask cadence requires regeneration from live margins,
     !! the FSC=0.143 crossing reached a FINER shell than the ridden evidence
     !! was built at (an advance; the oscillating tail around a plateau does
-    !! not retrigger), the iteration counter is non-monotone (restart or stage
-    !! reset), or the age cap NU_EVIDENCE_REBUILD_MAX_LAG is hit.
+    !! not retrigger), the alignment band is the BINDING constraint (the FSC
+    !! crossing has come within one shell of the matching low-pass this
+    !! evidence handed off, so riding further would seal a search-bandwidth
+    !! stall -- PfCRT regression record 2026-08-31), the iteration counter is
+    !! non-monotone (restart or stage reset), or the age cap
+    !! NU_EVIDENCE_REBUILD_MAX_LAG is hit.
     logical function nu_evidence_needs_rebuild( params, state_here, box_here, source_here, &
             &fsc_find, l_envmask_regen ) result( l_rebuild )
         class(parameters), intent(in) :: params
@@ -404,6 +426,12 @@ contains
         if( trim(nu_evidence_cache(state_here)%source) /= trim(source_here)    ) return
         if( l_envmask_regen                                                    ) return
         if( fsc_find > nu_evidence_cache(state_here)%fsc_find                  ) return
+        ! binding-band test: the matching low-pass handed off by the ridden
+        ! evidence caps the alignment search; once the FSC crossing sits
+        ! within one shell of that cap, no advance can be measured under the
+        ! frozen evidence and riding it would deadlock the stall
+        if( nu_evidence_cache(state_here)%handoff_find > 0 .and. &
+            &fsc_find >= nu_evidence_cache(state_here)%handoff_find - 1        ) return
         if( params%which_iter <= nu_evidence_cache(state_here)%iter_built      ) return
         if( params%which_iter - nu_evidence_cache(state_here)%iter_built >= NU_EVIDENCE_REBUILD_MAX_LAG ) return
         l_rebuild = .false.

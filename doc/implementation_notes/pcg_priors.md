@@ -2462,6 +2462,52 @@ the acceptable-looking outputs do not validate the prior.
      data-scale-relative and transfers across the crop->native box
      change); a missing stats file falls back to the 0.1 cold start.
      Explicit keys pin as usual.
+
+   **PfCRT REGRESSION ROOT CAUSE -- HANDOFF GATE + FROZEN-EVIDENCE
+   DEADLOCK (2026-08-31).** The post-auto-target PfCRT abinitio3D run
+   (9b2424b5) still stalled at 5.86 A with the matching low-pass pinned
+   at 5.97 A, "RIDING FROZEN EVIDENCE (no resolution advance)" and
+   "SHIPPED PAIR STALLED" every iteration -- the controllers were
+   holding on a stall they could not break, so the prior strength was
+   never the driver. Git bisection of the record: both offending
+   changes landed together in a6a5cc1e/9f3c3c9e ("PCG NU prior
+   optimizations for speed"), the first commit after the good pinned
+   b082ef4a runs (3.93/3.98 A):
+   - The LP-set matching handoff switched from the raw finest selected
+     per-voxel cutoff (`minval(cutoffs)`) to the 5% assignment-support
+     percentile (`nu_evidence_finest_supported_lp` at
+     `NU_ALIGN_LP_MIN_ASSIGNED_PCT`). On a small membrane protein only
+     a small core carries fine evidence while the micelle belt
+     dominates the assigned support, so the gate collapsed the matching
+     bandwidth to ~the FSC crossing. streptavidin/msp1/FlhB resolve
+     compactly and uniformly, so the percentile ~= the minimum and they
+     were unaffected.
+   - The frozen evidence cache rebuilds on FSC=0.143 ADVANCE -- but the
+     alignment search is capped at the evidence-derived low-pass, so no
+     advance can occur: a self-sealing loop (the age-5 forced rebuild
+     regenerates from maps aligned under the cap and the gate
+     re-collapses the handoff). The plateau then reads as convergence.
+   Fixes (both, user-directed):
+   - Handoff decoupled from the support gate: raw finest selected
+     cutoff (`min_pct=0`), restoring the proven b082ef4a behavior.
+     Sparse-but-real fine evidence must be allowed to pull the search
+     band forward; over-extension widens the search, over-restriction
+     deadlocks it. The gridding-path gate
+     (`get_nu_filtmap_finest_selected_lp`) is untouched.
+   - Binding-band rebuild condition in `nu_evidence_needs_rebuild`: the
+     cache entry records the Fourier index of the matching low-pass it
+     handed off (`handoff_find`); once the FSC crossing comes within
+     one shell of that cap, the alignment band is the binding
+     constraint and the evidence rebuilds from the live pair (with the
+     nu_refine shell walk re-attempted). Principle: the cache may trade
+     staleness for speed in the Q_NU band weights, but the SEARCH
+     BANDWIDTH must never be governed by a frozen statistic.
+   - Validation plan: PfCRT abinitio3D, no prior flags -- expect the
+     matching low-pass to extend ahead of the FSC again and the run to
+     recover the ~3.9 A result; streptavidin/msp1/FlhB reruns -- expect
+     no change (gate inert for compact particles, cache rides only
+     while non-binding, so the speed win survives where it was ever
+     legitimate).
 3. **Test nu_refine=yes with rec_backend=pcg in abinitio3D.** The
    nu_refine=no rationale was gridding-specific (the ML-regularized aux
    competitor supplied beyond-bank resolution implicitly,
