@@ -2374,6 +2374,64 @@ the acceptable-looking outputs do not validate the prior.
      flag -- expect convergence to 55-65% suppression within ~3
      iterations from cold start, then station-keeping; watch the
      shipped-pair inflation diagnostic while the controller holds.
+
+   **FIXED 60% SETPOINT FALSIFIED -- PfCRT REGRESSION (2026-08-31).**
+   First production abinitio3D runs of the auto-lambda controller
+   (c2b419ad, no lambda flag, nu_refine=yes): PfCRT regressed from
+   3.93/3.98 A shipped pairs (b082ef4a, pinned lambda_rel=0.3, supp
+   8.6%) to 5.86 A with the transmembrane helices resolved as sausages
+   -- the controller drove lambda toward the 60% setpoint (g=0.336
+   implies lambda ~4.5, ~15x the proven strength). streptavidin, msp1
+   and FlhB held or improved at the same commits. Conclusion: the
+   plant GAIN spread (16x) that motivated auto-lambda extends to the
+   TARGET -- the good operating point is a dataset property (PfCRT
+   ~9%, 1WCM ~35%, msp1 ~60%), so no fixed suppression setpoint
+   transfers.
+
+   **AUTO-TARGET IMPLEMENTED (2026-08-31, user-directed).** The
+   setpoint itself is now controlled; design recorded before first run
+   (R9):
+   - Structure: cascade. Inner loop unchanged (one-step secant
+     auto-lambda tracking the setpoint). New outer loop
+     (`resolve_nu_supp_target` logic inside `resolve_nu_autolambda`)
+     owns the setpoint, driven by the shipped-pair FSC=0.143
+     trajectory -- the persisted over-regularization diagnostic, never
+     a resolution claim.
+   - Law: AIMD (additive-increase / multiplicative-decrease). Per
+     reconstruction, comparing the previous iteration's state-mean
+     shipped-pair crossing to the one before it (2% relative
+     deadband): improved -> setpoint +5 percentage points; degraded ->
+     setpoint x0.6; stalled -> hold. lp-limited stage plateaus stall
+     and therefore hold; crop/box changes that perturb the crossing at
+     stage transitions can only trigger a conservative back-off.
+   - Bounds [5, 75]% (banner inert floor to banner over ceiling); cold
+     start 15% -- gentle by construction (above PfCRT's proven 8.6%,
+     ramping toward msp1-class operating points only while the shipped
+     pair keeps improving: 60% is reachable in 9 improving
+     iterations).
+   - State: memoryless via `PCG_NU_STATS_FILE`, which now also carries
+     PCG_NU_SUPP_TARGET, PCG_NU_AUTOTARGET, PCG_NU_SHIP0143_AVG and
+     the one-step history PCG_NU_SHIP0143_PREV (lifted before each
+     rewrite).
+   - Activation: ONLY when `pcg_nu_supp_target` is left to its dynamic
+     default (`l_pcg_nu_autotarget`); an explicit value in [5,75] pins
+     the setpoint (reproducible controls, R2), and requires the
+     auto-lambda controller (an explicit lambda pins the strength
+     outright, hard error otherwise). Registered on refine3D and
+     abinitio3D (forwarded to the refine3D stages; stripped with the
+     other PCG-only keys off non-PCG child command lines).
+   - Diagnostics: the convergence banner reports AUTO-TARGET/PINNED
+     TARGET with the live setpoint; the manual-lambda advisory bands
+     are re-centered on the reported setpoint (default 60 when
+     absent); the controller logs IMPROVED/DEGRADED/STALLED setpoint
+     lines per reconstruction.
+   - Validation plan: (i) pinned lambda -- both controllers inert,
+     bit-identical to the verified control; (ii) PfCRT abinitio3D with
+     no flags -- expect the setpoint to hold near the cold start while
+     shipped pairs march, back off on any inflation, and the run to
+     recover the ~3.9 A pinned-lambda result; (iii) msp1 -- expect the
+     setpoint to ratchet toward its known-good ~60% while shipped
+     pairs improve, with no regression vs the fixed-60% runs.
 3. **Test nu_refine=yes with rec_backend=pcg in abinitio3D.** The
    nu_refine=no rationale was gridding-specific (the ML-regularized aux
    competitor supplied beyond-bank resolution implicitly,

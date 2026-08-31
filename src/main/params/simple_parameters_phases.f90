@@ -911,14 +911,30 @@ contains
                 if( self%l_ml_reg )then
                     self%pcg_nu_lambda_rel = 0.1
                     ! strength left to the default -> the suppression-targeted
-                    ! auto-lambda controller owns it (pcg_priors.md, 60% target);
-                    ! an explicit pcg_nu_lambda_rel pins the strength instead
+                    ! auto-lambda controller owns it (pcg_priors.md); an
+                    ! explicit pcg_nu_lambda_rel pins the strength instead
                     self%l_pcg_nu_autolambda = .true.
+                    ! the suppression setpoint the controller tracks: pinned
+                    ! by an explicit pcg_nu_supp_target, otherwise owned by
+                    ! the AIMD auto-target outer loop from a gentle cold start
+                    ! (no fixed setpoint transfers across datasets: PfCRT ~9%,
+                    ! 1WCM ~35%, msp1 ~60% -- pcg_priors.md dev item 2)
+                    if( cline%defined('pcg_nu_supp_target') )then
+                        if( self%pcg_nu_supp_target < 5.0 .or. self%pcg_nu_supp_target > 75.0 )&
+                            &THROW_HARD('pcg_nu_supp_target must be in [5,75] %')
+                    else
+                        self%pcg_nu_supp_target = 15.0
+                        self%l_pcg_nu_autotarget = .true.
+                    endif
                 else
                     THROW_WARN('rec_backend=pcg with NU filtering but no euclid ML replay; Q_NU prior DISABLED')
                 endif
             endif
         endif
+        ! an explicit setpoint outside the auto-lambda activation branch is
+        ! validated at the PCG execution point (validate_nu_replay_request),
+        ! where the filtering policy is final -- the abinitio3D parent only
+        ! forwards the key to its refine3D stages
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')
         if( cline%defined('element') )then

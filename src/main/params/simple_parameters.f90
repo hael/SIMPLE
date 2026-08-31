@@ -624,7 +624,8 @@ type :: parameters
     real    :: phshift_step=10.    !< phase-shift grid step(in degrees){10}
     real    :: prob_athres=10.     !< angle threshold for prob distribution samplings
     real    :: rec_athres=10.      !< angle threshold for reconstruction
-    real    :: pcg_nu_lambda_rel=0.  !< direct NU-evidence replay precision strength relative to the PCG data scale; replaces the FSC/SSNR P_tau replay precision (mode-exclusive, pcg_priors.md S5); defaults to 0.1 when rec_backend=pcg with NU filtering and euclid ml_reg active, 0 otherwise; explicit 0 keeps the ordinary global-ML replay; when left unset the suppression-targeted auto-lambda controller adapts the strength across refinement iterations toward ~60% prior-energy suppression, while an explicit value pins it{0|auto in NU mode}
+    real    :: pcg_nu_lambda_rel=0.  !< direct NU-evidence replay precision strength relative to the PCG data scale; replaces the FSC/SSNR P_tau replay precision (mode-exclusive, pcg_priors.md S5); defaults to 0.1 when rec_backend=pcg with NU filtering and euclid ml_reg active, 0 otherwise; explicit 0 keeps the ordinary global-ML replay; when left unset the suppression-targeted auto-lambda controller adapts the strength across refinement iterations toward the suppression setpoint, while an explicit value pins it{0|auto in NU mode}
+    real    :: pcg_nu_supp_target=0. !< prior-energy suppression setpoint (%) the auto-lambda controller tracks; when left unset the AIMD auto-target outer loop adapts it per dataset from the shipped-pair FSC=0.143 trajectory (cold start 15%), while an explicit value pins the setpoint; requires the auto-lambda controller (unset pcg_nu_lambda_rel){auto in NU mode}
     real    :: res_target = 3.     !< resolution target in A
     real    :: res_threshold=-1.   !< resolution threshold in A (-1 means no threshold)
     real    :: rtol=0.             !< PCG relative residual tolerance; <=0 runs exactly maxits_pcg{0}
@@ -690,6 +691,7 @@ type :: parameters
     logical :: l_nonuniform_lpset = .false.
     logical :: l_nu_refine       = .false.
     logical :: l_pcg_nu_autolambda = .false. !< Q_NU strength left to the dynamic default -> suppression-targeted auto-lambda active (explicit pcg_nu_lambda_rel pins the strength)
+    logical :: l_pcg_nu_autotarget = .false. !< suppression setpoint left to the dynamic default -> AIMD auto-target outer loop active (explicit pcg_nu_supp_target pins the setpoint)
     logical :: l_objfun_den      = .false.
     logical :: l_prob_inpl       = .false.
     logical :: l_prob_align_mode = .false.

@@ -14,12 +14,14 @@ private
 ! base solution, so an inert prior reads ~0%). Provisional bounds inherited
 ! from the retired solvent-prior readout; recalibrate with a
 ! pcg_nu_lambda_rel strength ladder now that the readout is reported per run.
-! Thresholds re-centered on the recorded ~60% suppression operating target
-! (pcg_priors.md, 2026-08-30). With auto-lambda active the banner reports the
-! controller instead of advising manual changes.
-real, parameter :: PCG_NU_SUPP_INERT_PCT = 5.0  !< below: prior inert
-real, parameter :: PCG_NU_SUPP_LOW_PCT   = 45.0 !< below: clearly under the 60% target
-real, parameter :: PCG_NU_SUPP_OVER_PCT  = 75.0 !< above: over-regularization risk
+! The advisory bands are centered on the setpoint the stats file reports
+! (the auto-target outer loop or a pinned pcg_nu_supp_target); when no
+! setpoint is available the manual-lambda default band center of 60% holds.
+! With auto-lambda active the banner reports the controller instead of
+! advising manual changes.
+real, parameter :: PCG_NU_SUPP_INERT_PCT    = 5.0  !< below: prior inert
+real, parameter :: PCG_NU_SUPP_BAND_HALF    = 15.0 !< half-width of the on-target advisory band around the setpoint
+real, parameter :: PCG_NU_SUPP_TARGET_DFLT  = 60.0 !< band center when the stats file carries no setpoint
 
 type convergence
     private
@@ -285,8 +287,8 @@ contains
         logical, allocatable :: mask(:), state_mask(:), pcg_nu_mask(:)
         real    :: min_state_mi_joint, overlap_lim, fracsrch_lim, trail_rec_ufrac
         real    :: percen_sampled, percen_updated, percen_avg, sampled_lb
-        real    :: pcg_nu_supp_avg, pcg_nu_ship0143_avg, pcg_nu_lambda_used
-        logical :: l_pcg_nu_auto
+        real    :: pcg_nu_supp_avg, pcg_nu_ship0143_avg, pcg_nu_lambda_used, pcg_nu_target
+        logical :: l_pcg_nu_auto, l_pcg_nu_autotarget
         logical :: l_pcg_nu
         type(string) :: numstr
         character(len=KEYLEN) :: res_key
@@ -298,7 +300,8 @@ contains
         602 format(A,1X,F12.3,1X,A)
         604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         609 format(A)
-        610 format(A,1X,F8.4,A)
+        611 format(A,1X,F5.1,A,1X,F8.4,A)
+        612 format(A,1X,F5.1,A)
         states         = os%get_all('state')
         scores         = os%get_all('corr')
         updatecnts     = os%get_all('updatecnt')
@@ -389,10 +392,12 @@ contains
         l_pcg_nu            = .false.
         pcg_nu_supp_avg     = 0.
         pcg_nu_ship0143_avg = 0.
+        pcg_nu_target       = 0.
+        l_pcg_nu_autotarget = .false.
         allocate(pcg_nu_supps(params%nstates), pcg_nu_ship0143s(params%nstates), pcg_nu_mask(params%nstates))
         if( trim(params%rec_backend) == 'pcg' )then
             call read_pcg_nu_stats(params%nstates, pcg_nu_supps, pcg_nu_ship0143s, pcg_nu_mask, l_pcg_nu, &
-                &pcg_nu_lambda_used, l_pcg_nu_auto)
+                &pcg_nu_lambda_used, l_pcg_nu_auto, pcg_nu_target, l_pcg_nu_autotarget)
         endif
         if( l_pcg_nu )then
             pcg_nu_supp_avg     = sum(pcg_nu_supps,     mask=pcg_nu_mask) / real(count(pcg_nu_mask))
@@ -406,17 +411,23 @@ contains
                     write(logfhandle,604) res_state_label, pcg_nu_supps(istate), pcg_nu_ship0143s(istate)
                 end do
             endif
+            if( pcg_nu_target <= 0. ) pcg_nu_target = PCG_NU_SUPP_TARGET_DFLT
             if( l_pcg_nu_auto )then
-                write(logfhandle,610) '>>> PCG NU AUTO-LAMBDA (TARGET 60%): LAMBDA_REL', pcg_nu_lambda_used, &
-                    &'; ADAPTS NEXT ITERATION'
+                if( l_pcg_nu_autotarget )then
+                    write(logfhandle,611) '>>> PCG NU AUTO-LAMBDA (AUTO-TARGET', pcg_nu_target, &
+                        &' %): LAMBDA_REL', pcg_nu_lambda_used, '; ADAPTS NEXT ITERATION'
+                else
+                    write(logfhandle,611) '>>> PCG NU AUTO-LAMBDA (PINNED TARGET', pcg_nu_target, &
+                        &' %): LAMBDA_REL', pcg_nu_lambda_used, '; ADAPTS NEXT ITERATION'
+                endif
             else if( pcg_nu_supp_avg < PCG_NU_SUPP_INERT_PCT )then
                 write(logfhandle,609) '>>> PCG NU PRIOR INERT (< 5%); INCREASE PCG_NU_LAMBDA_REL (~10X) OR UNSET IT FOR AUTO-LAMBDA'
-            else if( pcg_nu_supp_avg < PCG_NU_SUPP_LOW_PCT )then
-                write(logfhandle,609) '>>> PCG NU PRIOR BELOW THE 60% TARGET (< 45%); INCREASE PCG_NU_LAMBDA_REL'
-            else if( pcg_nu_supp_avg > PCG_NU_SUPP_OVER_PCT )then
-                write(logfhandle,609) '>>> PCG NU PRIOR OVER-REGULARIZING (> 75%); DECREASE PCG_NU_LAMBDA_REL'
+            else if( pcg_nu_supp_avg < pcg_nu_target - PCG_NU_SUPP_BAND_HALF )then
+                write(logfhandle,612) '>>> PCG NU PRIOR BELOW THE', pcg_nu_target, ' % TARGET; INCREASE PCG_NU_LAMBDA_REL'
+            else if( pcg_nu_supp_avg > pcg_nu_target + PCG_NU_SUPP_BAND_HALF )then
+                write(logfhandle,612) '>>> PCG NU PRIOR OVER-REGULARIZING (TARGET', pcg_nu_target, ' %); DECREASE PCG_NU_LAMBDA_REL'
             else
-                write(logfhandle,609) '>>> PCG NU PRIOR ON TARGET (45-75%, AIM 60%); KEEP PCG_NU_LAMBDA_REL'
+                write(logfhandle,612) '>>> PCG NU PRIOR ON TARGET (AIM', pcg_nu_target, ' %); KEEP PCG_NU_LAMBDA_REL'
             endif
         endif
         ! score
@@ -606,6 +617,7 @@ contains
             call ostats%set(1,'PCG_NU_SUPPRESSION_PCT', pcg_nu_supp_avg)
             call ostats%set(1,'PCG_NU_SHIP0143',        pcg_nu_ship0143_avg)
             call ostats%set(1,'PCG_NU_LAMBDA_REL',      params%pcg_nu_lambda_rel)
+            if( pcg_nu_target > 0. ) call ostats%set(1,'PCG_NU_SUPP_TARGET', pcg_nu_target)
             do istate = 1, params%nstates
                 if( .not. pcg_nu_mask(istate) ) cycle
                 write(res_key,'(A,I2.2)') 'PCG_NU_SUPP_STATE', istate
@@ -631,7 +643,8 @@ contains
     !! strategy leaves behind after each NU-replay volassemble. The file is
     !! rewritten (or removed) every reconstruction, so presence means the
     !! Q_NU replay fired this iteration.
-    subroutine read_pcg_nu_stats( nstates, supps, ship0143s, supp_mask, available, lambda_rel, l_auto )
+    subroutine read_pcg_nu_stats( nstates, supps, ship0143s, supp_mask, available, lambda_rel, l_auto, &
+            &supp_target, l_autotarget )
         integer, intent(in)  :: nstates
         real,    intent(out) :: supps(nstates)
         real,    intent(out) :: ship0143s(nstates)
@@ -639,15 +652,19 @@ contains
         logical, intent(out) :: available
         real,    intent(out) :: lambda_rel
         logical, intent(out) :: l_auto
+        real,    intent(out) :: supp_target
+        logical, intent(out) :: l_autotarget
         type(oris)   :: os
         type(string) :: key
         integer :: state
-        supps      = 0.
-        ship0143s  = 0.
-        supp_mask  = .false.
-        available  = .false.
-        lambda_rel = 0.
-        l_auto     = .false.
+        supps        = 0.
+        ship0143s    = 0.
+        supp_mask    = .false.
+        available    = .false.
+        lambda_rel   = 0.
+        l_auto       = .false.
+        supp_target  = 0.
+        l_autotarget = .false.
         if( .not. file_exists(PCG_NU_STATS_FILE) ) return
         call os%new(1, is_ptcl=.false.)
         call os%read(string(PCG_NU_STATS_FILE))
@@ -660,8 +677,10 @@ contains
             key = 'PCG_NU_SHIP0143_STATE'//int2str_pad(state,2)
             if( os%isthere(key%to_char()) ) ship0143s(state) = os%get(1, key%to_char())
         enddo
-        if( os%isthere('PCG_NU_LAMBDA_REL') ) lambda_rel = os%get(1, 'PCG_NU_LAMBDA_REL')
-        if( os%isthere('PCG_NU_AUTOLAMBDA') ) l_auto = os%get(1, 'PCG_NU_AUTOLAMBDA') > 0.5
+        if( os%isthere('PCG_NU_LAMBDA_REL') )  lambda_rel = os%get(1, 'PCG_NU_LAMBDA_REL')
+        if( os%isthere('PCG_NU_AUTOLAMBDA') )  l_auto = os%get(1, 'PCG_NU_AUTOLAMBDA') > 0.5
+        if( os%isthere('PCG_NU_SUPP_TARGET') ) supp_target = os%get(1, 'PCG_NU_SUPP_TARGET')
+        if( os%isthere('PCG_NU_AUTOTARGET') )  l_autotarget = os%get(1, 'PCG_NU_AUTOTARGET') > 0.5
         available = any(supp_mask)
         call os%kill
         call key%kill

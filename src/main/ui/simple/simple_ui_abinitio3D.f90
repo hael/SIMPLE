@@ -51,6 +51,13 @@ contains
         &'global-ML replay', 'strength{0.1 in NU mode}', &
         &.false., 0.0, group="search", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call abinitio3D%add_input(UI_PARM, 'pcg_nu_supp_target', 'num', 'PCG NU prior suppression setpoint', &
+        &'Prior-energy suppression setpoint (%) tracked by the auto-lambda controller in the refine3D stages; '//&
+        &'when left unset the AIMD auto-target outer loop adapts the setpoint per dataset from the shipped-pair '//&
+        &'FSC=0.143 trajectory (cold start 15%), while an explicit value in [5,75] pins it; requires the '//&
+        &'auto-lambda controller (unset pcg_nu_lambda_rel)', 'percent{auto in NU mode}', &
+        &.false., 0.0, group="search", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call abinitio3D%add_input(UI_PARM, 'cavg_ini', 'binary', '3D initialization on class averages', '3D initialization on class averages(yes|no){no}','', .false., 'no', group="model", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)

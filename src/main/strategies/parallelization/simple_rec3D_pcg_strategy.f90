@@ -36,21 +36,35 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: PCG_LAMBDA = 1.0e-3
-! Suppression-targeted auto-lambda controller (pcg_priors.md dev item 2,
-! target recorded 2026-08-30). Plant model validated on the PfCRT/1WCM scan:
-! amplitude suppression follows the one-pole law s = g*lambda/(1+g*lambda),
-! so one secant step lands near target. The controller is memoryless: it
-! reads the PREVIOUS iteration's stats file (lambda used + measured
-! suppression), identifies g, and solves for the target. Active only when
+! Suppression-targeted auto-lambda controller (pcg_priors.md dev item 2).
+! Plant model validated on the PfCRT/1WCM scan: amplitude suppression
+! follows the one-pole law s = g*lambda/(1+g*lambda), so one secant step
+! lands near the setpoint. The controller is memoryless: it reads the
+! PREVIOUS iteration's stats file (lambda used + measured suppression),
+! identifies g, and solves for the setpoint. Active only when
 ! pcg_nu_lambda_rel was left to its dynamic default (l_pcg_nu_autolambda);
 ! an explicit strength pins lambda and keeps every recorded control
-! reproducible.
-real,    parameter :: NU_AUTOLAMBDA_TARGET_SUPP  = 60.0 !< % prior energy suppressed (user-recorded operating point, R9)
+! reproducible. The setpoint is owned by the auto-target outer loop below
+! unless pinned via pcg_nu_supp_target.
 real,    parameter :: NU_AUTOLAMBDA_DEADBAND_PCT = 5.0  !< hold inside target +/- deadband
 real,    parameter :: NU_AUTOLAMBDA_STEP_CLAMP   = 5.0  !< max multiplicative step per iteration
 real,    parameter :: NU_AUTOLAMBDA_LAMBDA_MIN   = 0.01 !< hard strength bounds
 real,    parameter :: NU_AUTOLAMBDA_LAMBDA_MAX   = 30.0
 real,    parameter :: NU_AUTOLAMBDA_SUPP_FLOOR   = 0.1  !< % floor so a near-zero readout cannot divide the model
+! Auto-target outer loop (pcg_priors.md dev item 2, PfCRT regression record
+! 2026-08-31): no fixed suppression setpoint transfers across datasets (PfCRT
+! best at ~9%, 1WCM ~35%, msp1 ~60%), so the setpoint itself is controlled.
+! AIMD on the shipped-pair FSC=0.143 trajectory (the persisted
+! over-regularization diagnostic): the target ratchets up additively only
+! while the shipped-pair crossing improves, backs off multiplicatively when
+! it degrades, and holds when it stalls (lp-limited stage plateaus therefore
+! hold). Cold start is gentle by construction; an explicit pcg_nu_supp_target
+! pins the setpoint and keeps recorded controls reproducible.
+real,    parameter :: NU_AUTOTARGET_MIN      = 5.0  !< setpoint bounds; low bound = the banner's inert threshold
+real,    parameter :: NU_AUTOTARGET_MAX      = 75.0
+real,    parameter :: NU_AUTOTARGET_STEP_ADD = 5.0  !< additive setpoint increase per improving iteration (% points)
+real,    parameter :: NU_AUTOTARGET_BACKOFF  = 0.6  !< multiplicative setpoint decrease on shipped-pair degradation
+real,    parameter :: NU_AUTOTARGET_SHIP_TOL = 0.02 !< relative deadband on the shipped-pair crossing (stall band)
 logical, parameter :: DEBUG = .false.
 
 ! Rebuild-on-advance cadence for the NU replay evidence (streptavidin
@@ -408,6 +422,13 @@ contains
         if( params%pcg_nu_lambda_rel > 0.0 .and. .not. params%l_ml_reg )then
             THROW_HARD('pcg_nu_lambda_rel > 0 requires the regularized replay: objfun=euclid ml_reg=yes')
         endif
+        ! setpoint contract: an explicit pcg_nu_supp_target is only meaningful
+        ! when the auto-lambda controller tracks it -- an explicit lambda pins
+        ! the strength outright and would silently ignore the setpoint
+        if( params%pcg_nu_supp_target > 0.0 .and. .not. params%l_pcg_nu_autotarget .and. &
+            &.not. params%l_pcg_nu_autolambda )then
+            THROW_HARD('pcg_nu_supp_target requires the auto-lambda controller; unset pcg_nu_lambda_rel')
+        endif
     end subroutine validate_nu_replay_request
 
     !> NU-replay firing readout of a final map: the prior energy of the ML
@@ -455,14 +476,41 @@ contains
         real,              intent(in) :: supps(:)
         integer,           intent(in) :: cnts(:)
         real,              intent(in) :: ship0143s(:)
-        type(oris)   :: os
+        type(oris)   :: os_old, os
         type(string) :: key
-        integer :: state
+        integer :: state, nship
+        real    :: ship_avg, ship_prev
+        logical :: l_ship_prev
+        ! the auto-target outer loop needs one step of shipped-pair history:
+        ! lift the previous iteration's average crossing before the rewrite
+        ship_prev   = 0.0
+        l_ship_prev = .false.
+        if( file_exists(PCG_NU_STATS_FILE) )then
+            call os_old%new(1, is_ptcl=.false.)
+            call os_old%read(string(PCG_NU_STATS_FILE))
+            if( os_old%isthere('PCG_NU_SHIP0143_AVG') )then
+                ship_prev   = os_old%get(1, 'PCG_NU_SHIP0143_AVG')
+                l_ship_prev = .true.
+            endif
+            call os_old%kill
+        endif
         call del_file(PCG_NU_STATS_FILE)
         if( .not. any(cnts > 0) ) return
+        ship_avg = 0.0
+        nship    = 0
+        do state = 1, size(supps)
+            if( cnts(state) < 1 ) cycle
+            ship_avg = ship_avg + ship0143s(state)
+            nship    = nship + 1
+        end do
+        ship_avg = ship_avg / real(nship)
         call os%new(1, is_ptcl=.false.)
-        call os%set(1, 'PCG_NU_LAMBDA_REL', params%pcg_nu_lambda_rel)
-        call os%set(1, 'PCG_NU_AUTOLAMBDA', merge(1.0, 0.0, params%l_pcg_nu_autolambda))
+        call os%set(1, 'PCG_NU_LAMBDA_REL',   params%pcg_nu_lambda_rel)
+        call os%set(1, 'PCG_NU_AUTOLAMBDA',   merge(1.0, 0.0, params%l_pcg_nu_autolambda))
+        call os%set(1, 'PCG_NU_SUPP_TARGET',  params%pcg_nu_supp_target)
+        call os%set(1, 'PCG_NU_AUTOTARGET',   merge(1.0, 0.0, params%l_pcg_nu_autotarget))
+        call os%set(1, 'PCG_NU_SHIP0143_AVG', ship_avg)
+        if( l_ship_prev ) call os%set(1, 'PCG_NU_SHIP0143_PREV', ship_prev)
         do state = 1, size(supps)
             if( cnts(state) < 1 ) cycle
             key = 'PCG_NU_SUPP_STATE'//int2str_pad(state,2)
@@ -481,12 +529,16 @@ contains
     !! produced the measurement, so continuity needs no extra state. Cold
     !! start (no stats file yet) keeps the dynamic default. Single-shot
     !! reconstructions in a fresh directory are therefore deterministic.
+    !! The setpoint itself is resolved first: the AIMD outer loop when the
+    !! target was left to its dynamic default, the pinned value otherwise.
     subroutine resolve_nu_autolambda( params )
         class(parameters), intent(inout) :: params
         type(oris)   :: os
         type(string) :: key
-        real    :: lam_prev, lam_new, s_frac, s_t, supp_sum, ratio
+        real    :: lam_prev, lam_new, s_frac, s_t, supp_sum, ratio, target
+        real    :: target_prev, target_new, ship_curr, ship_prev
         integer :: state, nsupp
+        logical :: l_ship_curr, l_ship_prev
         if( .not. params%l_pcg_nu_autolambda   ) return
         if( params%pcg_nu_lambda_rel <= 0.0    ) return
         if( .not. file_exists(PCG_NU_STATS_FILE) ) return
@@ -506,18 +558,52 @@ contains
                 nsupp    = nsupp + 1
             endif
         enddo
+        ! setpoint continuity and the shipped-pair trajectory for the outer loop
+        target_prev = params%pcg_nu_supp_target
+        if( os%isthere('PCG_NU_SUPP_TARGET') ) target_prev = os%get(1, 'PCG_NU_SUPP_TARGET')
+        ship_curr   = 0.0
+        ship_prev   = 0.0
+        l_ship_curr = os%isthere('PCG_NU_SHIP0143_AVG')
+        l_ship_prev = os%isthere('PCG_NU_SHIP0143_PREV')
+        if( l_ship_curr ) ship_curr = os%get(1, 'PCG_NU_SHIP0143_AVG')
+        if( l_ship_prev ) ship_prev = os%get(1, 'PCG_NU_SHIP0143_PREV')
         call os%kill
         call key%kill
         if( nsupp < 1 .or. lam_prev <= 0.0 ) return
+        if( params%l_pcg_nu_autotarget )then
+            ! AIMD outer loop on the setpoint, gated by the shipped-pair
+            ! FSC=0.143 trajectory (crossings in Angstrom, finer = smaller):
+            ! ratchet up only while the crossing improves, back off fast when
+            ! it degrades, hold when it stalls (lp-limited plateaus hold)
+            target_new = min(NU_AUTOTARGET_MAX, max(NU_AUTOTARGET_MIN, target_prev))
+            if( l_ship_curr .and. l_ship_prev .and. ship_prev > 0.0 .and. ship_curr > 0.0 )then
+                if( ship_curr > ship_prev * (1.0 + NU_AUTOTARGET_SHIP_TOL) )then
+                    target_new = max(NU_AUTOTARGET_MIN, target_prev * NU_AUTOTARGET_BACKOFF)
+                    write(logfhandle,'(A,F6.2,A,F6.2,A,F5.1,A,F5.1)') &
+                        &'>>> PCG NU AUTO-TARGET: SHIPPED PAIR DEGRADED (', ship_prev, ' ->', ship_curr, &
+                        &' A); SUPP TARGET ', target_prev, ' ->', target_new
+                else if( ship_curr < ship_prev * (1.0 - NU_AUTOTARGET_SHIP_TOL) )then
+                    target_new = min(NU_AUTOTARGET_MAX, target_prev + NU_AUTOTARGET_STEP_ADD)
+                    write(logfhandle,'(A,F6.2,A,F6.2,A,F5.1,A,F5.1)') &
+                        &'>>> PCG NU AUTO-TARGET: SHIPPED PAIR IMPROVED (', ship_prev, ' ->', ship_curr, &
+                        &' A); SUPP TARGET ', target_prev, ' ->', target_new
+                else
+                    write(logfhandle,'(A,F5.1)') &
+                        &'>>> PCG NU AUTO-TARGET: SHIPPED PAIR STALLED; HOLDING SUPP TARGET ', target_new
+                endif
+            endif
+            params%pcg_nu_supp_target = target_new
+        endif
+        target = params%pcg_nu_supp_target
         ! measured suppression as an amplitude fraction, floored and capped
         ! so the one-pole identification stays finite
         s_frac = max(NU_AUTOLAMBDA_SUPP_FLOOR, min(99.0, supp_sum / real(nsupp))) / 100.0
-        s_t    = NU_AUTOLAMBDA_TARGET_SUPP / 100.0
-        if( abs(s_frac*100.0 - NU_AUTOLAMBDA_TARGET_SUPP) <= NU_AUTOLAMBDA_DEADBAND_PCT )then
+        s_t    = target / 100.0
+        if( abs(s_frac*100.0 - target) <= NU_AUTOLAMBDA_DEADBAND_PCT )then
             ! on target: hold the previous strength (continuity, not the default)
             params%pcg_nu_lambda_rel = lam_prev
-            write(logfhandle,'(A,F7.1,A,F8.4)') '>>> PCG NU AUTO-LAMBDA: ON TARGET (supp ', &
-                &s_frac*100.0, ' %); HOLDING LAMBDA_REL', lam_prev
+            write(logfhandle,'(A,F7.1,A,F5.1,A,F8.4)') '>>> PCG NU AUTO-LAMBDA: ON TARGET (supp ', &
+                &s_frac*100.0, ' %, target ', target, ' %); HOLDING LAMBDA_REL', lam_prev
             return
         endif
         ! secant on s = g*lambda/(1+g*lambda): lambda_new = lambda_prev *
@@ -525,8 +611,8 @@ contains
         ratio   = (s_t * (1.0 - s_frac)) / (s_frac * (1.0 - s_t))
         ratio   = min(NU_AUTOLAMBDA_STEP_CLAMP, max(1.0/NU_AUTOLAMBDA_STEP_CLAMP, ratio))
         lam_new = min(NU_AUTOLAMBDA_LAMBDA_MAX, max(NU_AUTOLAMBDA_LAMBDA_MIN, lam_prev * ratio))
-        write(logfhandle,'(A,F7.1,A,F8.4,A,F8.4)') '>>> PCG NU AUTO-LAMBDA: MEASURED supp ', &
-            &s_frac*100.0, ' % (target 60); LAMBDA_REL ', lam_prev, ' ->', lam_new
+        write(logfhandle,'(A,F7.1,A,F5.1,A,F8.4,A,F8.4)') '>>> PCG NU AUTO-LAMBDA: MEASURED supp ', &
+            &s_frac*100.0, ' % (target ', target, ' %); LAMBDA_REL ', lam_prev, ' ->', lam_new
         params%pcg_nu_lambda_rel = lam_new
     end subroutine resolve_nu_autolambda
 

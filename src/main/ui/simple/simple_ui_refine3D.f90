@@ -355,6 +355,13 @@ subroutine new_automask( prgtab )
         &'euclid ml_reg are active, explicit 0 restores the ordinary global-ML replay', &
         &'strength{0.1 in NU mode}', .false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call refine3D%add_input(UI_FILT, 'pcg_nu_supp_target', 'num', 'PCG NU prior suppression setpoint', &
+        &'Prior-energy suppression setpoint (%) tracked by the auto-lambda controller; when left unset the '//&
+        &'AIMD auto-target outer loop adapts the setpoint per dataset from the shipped-pair FSC=0.143 '//&
+        &'trajectory (cold start 15%), while an explicit value in [5,75] pins it; requires the auto-lambda '//&
+        &'controller (unset pcg_nu_lambda_rel)', 'percent{auto in NU mode}', &
+        &.false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, conical_fsc, group="filter", visibility=UI_VIS_ADVANCED)
         call refine3D%add_input(UI_FILT, nu_refine, group="filter", &
         &visibility=UI_VIS_ADVANCED)

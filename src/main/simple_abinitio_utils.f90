@@ -244,6 +244,7 @@ contains
         call child_cline%delete('maxits_pcg')
         call child_cline%delete('rtol')
         call child_cline%delete('pcg_nu_lambda_rel')
+        call child_cline%delete('pcg_nu_supp_target')
     end subroutine strip_pcg_backend_keys
 
     ! Copy only controls that genuinely define the reconstruction performed at
@@ -262,6 +263,9 @@ contains
         endif
         if( cline_refine3D%defined('pcg_nu_lambda_rel') )then
             call child_cline%set('pcg_nu_lambda_rel', cline_refine3D%get_rarg('pcg_nu_lambda_rel'))
+        endif
+        if( cline_refine3D%defined('pcg_nu_supp_target') )then
+            call child_cline%set('pcg_nu_supp_target', cline_refine3D%get_rarg('pcg_nu_supp_target'))
         endif
         if( cline_refine3D%defined('ml_reg') )then
             call child_cline%set('ml_reg', cline_refine3D%get_carg('ml_reg'))
