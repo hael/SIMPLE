@@ -1,4 +1,6 @@
 ! Acceptance test for the prepared Cartesian pose objective and normal equations.
+! The fused production result is checked against explicit Fourier-sample loops
+! and a separately accumulated real-stacked BLAS least-squares system.
 module pose_cont_refinement_objective_normals_test
     use pose_cont_refinement_calibration_helpers, only: calibration_fixture, ACCEPTANCE_BOXES, &
         &FROZEN_ABSOLUTE_TOLERANCES, FROZEN_RELATIVE_TOLERANCES, build_acceptance_fixture, &
@@ -22,14 +24,14 @@ module pose_cont_refinement_objective_normals_test
         &'exact', 'nonstationary']
 
     interface
-        subroutine dgemm(transa,transb,m,n,k,alpha,a,lda,b,ldb,beta,c,ldc)
+        subroutine dgemm(transa, transb, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc)
             character(len=1), intent(in) :: transa, transb
             integer(kind=4), intent(in) :: m, n, k, lda, ldb, ldc
-            real(kind=8), intent(in) :: alpha, beta, a(lda,*), b(ldb,*)
-            real(kind=8), intent(inout) :: c(ldc,*)
+            real(kind=8), intent(in) :: alpha, beta, a(lda, *), b(ldb, *)
+            real(kind=8), intent(inout) :: c(ldc, *)
         end subroutine dgemm
 
-        function ddot(n,x,incx,y,incy) result(value)
+        function ddot(n, x, incx, y, incy) result(value)
             integer(kind=4), intent(in) :: n, incx, incy
             real(kind=8), intent(in) :: x(*), y(*)
             real(kind=8) :: value
@@ -38,7 +40,9 @@ module pose_cont_refinement_objective_normals_test
 
 contains
 
-!> Compare the fused implementation with an independently accumulated scalar oracle.
+!> Compare the fused implementation with independently accumulated oracles.
+!! Every residual and Jacobian column is compared before testing
+!! f=1/2 r^H r, g=Re(J^H r), and H=Re(J^H J).
     subroutine run_objective_normals()
         type(calibration_fixture) :: fixture
         character(len=:), allocatable :: evidence_directory
@@ -156,7 +160,7 @@ contains
         real(dp) :: actual_objective, expected_objective
         real(dp) :: actual_gradient(5), expected_gradient(5)
         real(dp) :: actual_hessian(5, 5), expected_hessian(5, 5)
-        real(dp) :: blas_objective, blas_gradient(5), blas_hessian(5,5)
+        real(dp) :: blas_objective, blas_gradient(5), blas_hessian(5, 5)
         real(dp) :: actual_margin, expected_margin
         real(dp) :: max_residual_error, max_jacobian_error, max_gradient_error, max_hessian_error
         real(dp) :: hessian_asymmetry
@@ -180,8 +184,8 @@ contains
         call independent_normal_terms(workspace, fixture%box, rotmat, pose(4:5), raw_observed, sigma2, &
             &expected_residual, expected_jacobian, expected_objective, expected_gradient, &
             &expected_hessian, expected_margin, active_samples)
-        call blas_normal_terms(fixture%box,expected_residual,expected_jacobian,blas_objective, &
-            &blas_gradient,blas_hessian,blas_active_samples)
+        call blas_normal_terms(fixture%box, expected_residual, expected_jacobian, blas_objective, &
+            &blas_gradient, blas_hessian, blas_active_samples)
         call assert_true(blas_active_samples == active_samples, &
             &'BLAS accumulation used a different active sample count')
 
@@ -206,21 +210,21 @@ contains
             &'prepared JHr vector differs from independent accumulation')
         call assert_true(hessian_asymmetry <= FROZEN_ABSOLUTE_TOLERANCES(ALGEBRAIC_TOLERANCE), &
             &'prepared Gauss-Newton matrix is not symmetric')
-        call assert_true(combined_real_passes([blas_objective],[expected_objective], &
+        call assert_true(combined_real_passes([blas_objective], [expected_objective], &
             &FROZEN_ABSOLUTE_TOLERANCES(ALGEBRAIC_TOLERANCE), &
             &FROZEN_RELATIVE_TOLERANCES(ALGEBRAIC_TOLERANCE)), &
             &'BLAS objective differs from the explicit accumulation')
-        call assert_true(combined_real_passes(blas_gradient,expected_gradient, &
+        call assert_true(combined_real_passes(blas_gradient, expected_gradient, &
             &FROZEN_ABSOLUTE_TOLERANCES(ALGEBRAIC_TOLERANCE), &
             &FROZEN_RELATIVE_TOLERANCES(ALGEBRAIC_TOLERANCE)), &
             &'BLAS JHr differs from the explicit accumulation')
-        call assert_true(combined_real_passes(reshape(blas_hessian,[25]), &
-            &reshape(expected_hessian,[25]),FROZEN_ABSOLUTE_TOLERANCES(ALGEBRAIC_TOLERANCE), &
+        call assert_true(combined_real_passes(reshape(blas_hessian, [25]), &
+            &reshape(expected_hessian, [25]), FROZEN_ABSOLUTE_TOLERANCES(ALGEBRAIC_TOLERANCE), &
             &FROZEN_RELATIVE_TOLERANCES(ALGEBRAIC_TOLERANCE)), &
             &'BLAS JHJ differs from the explicit accumulation')
-        call write_blas_summary(blas_unit,fixture%box,variance_profile,pose_state,active_samples, &
-            &actual_objective,expected_objective,blas_objective,actual_gradient,expected_gradient, &
-            &blas_gradient,actual_hessian,expected_hessian,blas_hessian)
+        call write_blas_summary(blas_unit, fixture%box, variance_profile, pose_state, active_samples, &
+            &actual_objective, expected_objective, blas_objective, actual_gradient, expected_gradient, &
+            &blas_gradient, actual_hessian, expected_hessian, blas_hessian)
         call write_summary(summary_unit, fixture%box, variance_profile, pose_state, active_samples, &
             &actual_objective, expected_objective, max_residual_error, max_jacobian_error, &
             &max_gradient_error, max_hessian_error, hessian_asymmetry, actual_margin)
@@ -276,6 +280,7 @@ contains
                 end do
                 frequency = 2._dp*real(PI, dp)*real([h, k], dp)/real(box, dp)
                 jacobian(h, k, 4:5) = cmplx(0._dp, frequency, kind=dp)*model
+                ! Accumulate f=1/2 r^H r, g=Re(J^H r), and H=Re(J^H J).
                 objective = objective + 0.5_dp*real(conjg(residual(h, k))*residual(h, k), dp)
                 do axis = 1, 5
                     gradient(axis) = gradient(axis) + &
@@ -291,23 +296,23 @@ contains
     end subroutine independent_normal_terms
 
 !> Accumulate the real-stacked complex least-squares system through BLAS.
-    subroutine blas_normal_terms(box,residual,jacobian,objective,gradient,hessian,active_samples)
+    subroutine blas_normal_terms(box, residual, jacobian, objective, gradient, hessian, active_samples)
         integer, intent(in) :: box
-        complex(dp), intent(in) :: residual(-box/2:,-box/2:)
-        complex(dp), intent(in) :: jacobian(-box/2:,-box/2:,:)
-        real(dp), intent(out) :: objective, gradient(5), hessian(5,5)
+        complex(dp), intent(in) :: residual(-box/2:, -box/2:)
+        complex(dp), intent(in) :: jacobian(-box/2:, -box/2:, :)
+        real(dp), intent(out) :: objective, gradient(5), hessian(5, 5)
         integer, intent(out) :: active_samples
-        real(dp), allocatable :: design(:,:), rhs(:,:), gradient_matrix(:,:)
+        real(dp), allocatable :: design(:, :), rhs(:, :), gradient_matrix(:, :)
         integer :: h, k, row, rows
 
         active_samples = 0
         do k = -box/2, box/2
             do h = -box/2, box/2
-                if( h*h+k*k <= (box/2)**2 ) active_samples = active_samples+1
-            enddo
-        enddo
+                if (h*h + k*k <= (box/2)**2) active_samples = active_samples + 1
+            end do
+        end do
         rows = 2*active_samples
-        allocate(design(rows,5),rhs(rows,1),gradient_matrix(5,1))
+        allocate (design(rows, 5), rhs(rows, 1), gradient_matrix(5, 1))
         design = 0._dp
         rhs = 0._dp
         gradient_matrix = 0._dp
@@ -315,39 +320,40 @@ contains
         row = 0
         do k = -box/2, box/2
             do h = -box/2, box/2
-                if( h*h+k*k > (box/2)**2 ) cycle
-                row = row+1
-                design(2*row-1,:) = real(jacobian(h,k,:),dp)
-                design(2*row,:) = aimag(jacobian(h,k,:))
-                rhs(2*row-1,1) = real(residual(h,k),dp)
-                rhs(2*row,1) = aimag(residual(h,k))
-            enddo
-        enddo
-        call assert_true(row == active_samples,'BLAS packing omitted active samples')
-        objective = 0.5_dp*ddot(rows,rhs(1,1),1,rhs(1,1),1)
-        call dgemm('T','N',5,1,rows,1._dp,design,rows,rhs,rows,0._dp, &
-            &gradient_matrix,5)
-        call dgemm('T','N',5,5,rows,1._dp,design,rows,design,rows,0._dp,hessian,5)
-        gradient = gradient_matrix(:,1)
+                if (h*h + k*k > (box/2)**2) cycle
+                row = row + 1
+                design(2*row - 1, :) = real(jacobian(h, k, :), dp)
+                design(2*row, :) = aimag(jacobian(h, k, :))
+                rhs(2*row - 1, 1) = real(residual(h, k), dp)
+                rhs(2*row, 1) = aimag(residual(h, k))
+            end do
+        end do
+        call assert_true(row == active_samples, 'BLAS packing omitted active samples')
+        ! Stack real and imaginary parts so BLAS computes the same real system.
+        objective = 0.5_dp*ddot(rows, rhs(1, 1), 1, rhs(1, 1), 1)
+        call dgemm('T', 'N', 5, 1, rows, 1._dp, design, rows, rhs, rows, 0._dp, &
+            &gradient_matrix, 5)
+        call dgemm('T', 'N', 5, 5, rows, 1._dp, design, rows, design, rows, 0._dp, hessian, 5)
+        gradient = gradient_matrix(:, 1)
     end subroutine blas_normal_terms
 
 !> Retain the pairwise fused, explicit, and BLAS accumulation errors.
-    subroutine write_blas_summary(unit,box,variance_profile,pose_state,active_samples, &
-        &actual_objective,expected_objective,blas_objective,actual_gradient,expected_gradient, &
-        &blas_gradient,actual_hessian,expected_hessian,blas_hessian)
+    subroutine write_blas_summary(unit, box, variance_profile, pose_state, active_samples, &
+        &actual_objective, expected_objective, blas_objective, actual_gradient, expected_gradient, &
+        &blas_gradient, actual_hessian, expected_hessian, blas_hessian)
         integer, intent(in) :: unit, box, variance_profile, pose_state, active_samples
         real(dp), intent(in) :: actual_objective, expected_objective, blas_objective
         real(dp), intent(in) :: actual_gradient(5), expected_gradient(5), blas_gradient(5)
-        real(dp), intent(in) :: actual_hessian(5,5), expected_hessian(5,5), blas_hessian(5,5)
+        real(dp), intent(in) :: actual_hessian(5, 5), expected_hessian(5, 5), blas_hessian(5, 5)
 
-        write(unit,'(i0,a,a,a,a,a,i0,6(a,es24.16))') box,achar(9), &
-            &trim(VARIANCE_NAMES(variance_profile)),achar(9),trim(POSE_NAMES(pose_state)), &
-            &achar(9),active_samples,achar(9),abs(blas_objective-actual_objective), &
-            &achar(9),abs(blas_objective-expected_objective),achar(9), &
-            &maxval(abs(blas_gradient-actual_gradient)),achar(9), &
-            &maxval(abs(blas_gradient-expected_gradient)),achar(9), &
-            &maxval(abs(blas_hessian-actual_hessian)),achar(9), &
-            &maxval(abs(blas_hessian-expected_hessian))
+        write (unit, '(i0,a,a,a,a,a,i0,6(a,es24.16))') box, achar(9), &
+            &trim(VARIANCE_NAMES(variance_profile)), achar(9), trim(POSE_NAMES(pose_state)), &
+            &achar(9), active_samples, achar(9), abs(blas_objective - actual_objective), &
+            &achar(9), abs(blas_objective - expected_objective), achar(9), &
+            &maxval(abs(blas_gradient - actual_gradient)), achar(9), &
+            &maxval(abs(blas_gradient - expected_gradient)), achar(9), &
+            &maxval(abs(blas_hessian - actual_hessian)), achar(9), &
+            &maxval(abs(blas_hessian - expected_hessian))
     end subroutine write_blas_summary
 
 !> Check and retain all active complex residual and Jacobian components.

@@ -1,222 +1,224 @@
 program simple_test_pose_cont_refinement
-use pose_cont_refinement_test_helpers, only: CASE_SKIP_EXIT_STATUS
-use pose_cont_refinement_shift_test, only: run_shift_gradient
-use pose_cont_refinement_shift_polish_test, only: run_shift_polish
-use pose_cont_refinement_rotation_test, only: run_rotation_gradient
-use pose_cont_refinement_recovery_test, only: run_pose_recovery
-use pose_cont_refinement_pose_contract_test, only: run_pose_contract
-use pose_cont_refinement_fixed_reference_test, only: run_fixed_reference_diagnostic
-use pose_cont_refinement_forward_path_test, only: run_forward_path_diagnostic
-use pose_cont_refinement_matched_window_test, only: run_matched_window_diagnostic
-use pose_cont_refinement_reference_bias_test, only: run_reference_bias_diagnostic
-use pose_cont_refinement_operator_contract_test, only: run_operator_contract_diagnostic
-use pose_cont_refinement_pose_capture_test, only: run_pose_capture_range
-use pose_cont_refinement_pose_mechanism_test, only: run_pose_capture_mechanism
-use pose_cont_refinement_calibration_test, only: run_tolerance_calibration
-use pose_cont_refinement_objective_normals_test, only: run_objective_normals
-use pose_cont_refinement_lm_transactions_test, only: run_lm_transactions
-use pose_cont_refinement_ctf_sigma_test, only: run_ctf_sigma
-use pose_cont_refinement_forward_hierarchy_test, only: run_forward_hierarchy
-use pose_cont_refinement_configuration_matrix_test, only: run_configuration_matrix
-implicit none
+    use pose_cont_refinement_test_helpers, only: CASE_SKIP_EXIT_STATUS
+    use pose_cont_refinement_shift_test, only: run_shift_gradient
+    use pose_cont_refinement_shift_polish_test, only: run_shift_polish
+    use pose_cont_refinement_rotation_test, only: run_rotation_gradient
+    use pose_cont_refinement_recovery_test, only: run_pose_recovery
+    use pose_cont_refinement_pose_contract_test, only: run_pose_contract
+    use pose_cont_refinement_fixed_reference_test, only: run_fixed_reference_diagnostic
+    use pose_cont_refinement_forward_path_test, only: run_forward_path_diagnostic
+    use pose_cont_refinement_matched_window_test, only: run_matched_window_diagnostic
+    use pose_cont_refinement_reference_bias_test, only: run_reference_bias_diagnostic
+    use pose_cont_refinement_operator_contract_test, only: run_operator_contract_diagnostic
+    use pose_cont_refinement_pose_capture_test, only: run_pose_capture_range
+    use pose_cont_refinement_pose_mechanism_test, only: run_pose_capture_mechanism
+    use pose_cont_refinement_calibration_test, only: run_tolerance_calibration
+    use pose_cont_refinement_objective_normals_test, only: run_objective_normals
+    use pose_cont_refinement_lm_transactions_test, only: run_lm_transactions
+    use pose_cont_refinement_ctf_sigma_test, only: run_ctf_sigma
+    use pose_cont_refinement_forward_hierarchy_test, only: run_forward_hierarchy
+    use pose_cont_refinement_configuration_matrix_test, only: run_configuration_matrix
+    implicit none
 
-character(len=256) :: selected_case
-integer :: case_argument_count
+    character(len=256) :: selected_case
+    integer :: case_argument_count
 
-call find_selected_case(selected_case, case_argument_count)
-if( case_argument_count > 1 ) &
-    &error stop 'pose-continuous suite accepts only one case= argument'
-if( case_argument_count == 1 .and. len_trim(selected_case) == 0 ) &
-    &error stop 'pose-continuous suite requires a nonempty case= value'
+    call find_selected_case(selected_case, case_argument_count)
+    if (case_argument_count > 1) &
+        &error stop 'pose-continuous suite accepts only one case= argument'
+    if (case_argument_count == 1 .and. len_trim(selected_case) == 0) &
+        &error stop 'pose-continuous suite requires a nonempty case= value'
 
-if( case_argument_count == 1 )then
-    call run_case(selected_case)
-else
-    call run_suite()
-endif
+    if (case_argument_count == 1) then
+        call run_case(selected_case)
+    else
+        call run_suite()
+    end if
 
 contains
 
 !> Parse one optional case key and reject ambiguous child selection.
-subroutine find_selected_case(case_name, occurrences)
-    character(len=*), intent(out) :: case_name
-    integer,          intent(out) :: occurrences
-    character(len=4096) :: argument
-    integer :: iarg, argument_status, separator
+    subroutine find_selected_case(case_name, occurrences)
+        character(len=*), intent(out) :: case_name
+        integer, intent(out) :: occurrences
+        character(len=4096) :: argument
+        integer :: iarg, argument_status, separator
 
-    case_name = ''
-    occurrences = 0
-    do iarg = 1, command_argument_count()
-        call get_command_argument(iarg, argument, status=argument_status)
-        if( argument_status /= 0 ) error stop 'could not read continuous 3D pose suite argument'
-        separator = index(argument, '=')
-        if( separator <= 0 ) cycle
-        if( trim(argument(:separator-1)) /= 'case' ) cycle
-        occurrences = occurrences + 1
-        case_name = trim(argument(separator+1:))
-    enddo
-end subroutine find_selected_case
+        case_name = ''
+        occurrences = 0
+        do iarg = 1, command_argument_count()
+            call get_command_argument(iarg, argument, status=argument_status)
+            if (argument_status /= 0) error stop 'could not read continuous 3D pose suite argument'
+            separator = index(argument, '=')
+            if (separator <= 0) cycle
+            if (trim(argument(:separator - 1)) /= 'case') cycle
+            occurrences = occurrences + 1
+            case_name = trim(argument(separator + 1:))
+        end do
+    end subroutine find_selected_case
 
 !> Report whether one command argument is a case selector.
-logical function is_case_argument(argument) result(is_case)
-    character(len=*), intent(in) :: argument
-    integer :: separator
+    logical function is_case_argument(argument) result(is_case)
+        character(len=*), intent(in) :: argument
+        integer :: separator
 
-    separator = index(argument, '=')
-    is_case = separator > 0
-    if( is_case ) is_case = trim(argument(:separator-1)) == 'case'
-end function is_case_argument
+        separator = index(argument, '=')
+        is_case = separator > 0
+        if (is_case) is_case = trim(argument(:separator - 1)) == 'case'
+    end function is_case_argument
 
 !> Schedule each scientific case in a separate child process and summarize outcomes.
-subroutine run_suite()
-    character(len=*), parameter :: labels(*) = [character(len=24) :: &
-        &'shift_gradient', 'shift_polish', 'rotation_gradient', 'pose_recovery', 'pose_contract']
-    integer :: failures, groups_passed, groups_run, groups_skipped, i
+!! Process isolation lets the mother continue after one ERROR STOP and preserves
+!! one independently attributable status for every scientific child case.
+    subroutine run_suite()
+        character(len=*), parameter :: labels(*) = [character(len=24) :: &
+            &'shift_gradient', 'shift_polish', 'rotation_gradient', 'pose_recovery', 'pose_contract']
+        integer :: failures, groups_passed, groups_run, groups_skipped, i
 
-    failures = 0
-    groups_passed = 0
-    groups_run = 0
-    groups_skipped = 0
-    write(*,'(a)') 'Continuous 3D pose refinement test suite: START'
-    do i = 1, size(labels)
-        call run_case_in_child(trim(labels(i)), groups_run, groups_passed, &
-            &groups_skipped, failures)
-    enddo
+        failures = 0
+        groups_passed = 0
+        groups_run = 0
+        groups_skipped = 0
+        write (*, '(a)') 'Continuous 3D pose refinement test suite: START'
+        do i = 1, size(labels)
+            call run_case_in_child(trim(labels(i)), groups_run, groups_passed, &
+                &groups_skipped, failures)
+        end do
 
-    write(*,'(/,a)') 'Continuous 3D pose refinement test suite: SUMMARY'
-    write(*,'(a,i0)') '  Test groups scheduled: ', size(labels)
-    write(*,'(a,i0)') '  Test groups run:       ', groups_run
-    write(*,'(a,i0)') '  Test groups passed:    ', groups_passed
-    write(*,'(a,i0)') '  Test groups skipped:   ', groups_skipped
-    write(*,'(a,i0)') '  Test groups failed:    ', failures
-    if( failures /= 0 )then
-        write(*,'(a)') 'Continuous 3D pose refinement test suite: FAIL'
-        error stop 1
-    endif
-    write(*,'(a)') 'Continuous 3D pose refinement test suite: PASS'
-end subroutine run_suite
+        write (*, '(/,a)') 'Continuous 3D pose refinement test suite: SUMMARY'
+        write (*, '(a,i0)') '  Test groups scheduled: ', size(labels)
+        write (*, '(a,i0)') '  Test groups run:       ', groups_run
+        write (*, '(a,i0)') '  Test groups passed:    ', groups_passed
+        write (*, '(a,i0)') '  Test groups skipped:   ', groups_skipped
+        write (*, '(a,i0)') '  Test groups failed:    ', failures
+        if (failures /= 0) then
+            write (*, '(a)') 'Continuous 3D pose refinement test suite: FAIL'
+            error stop 1
+        end if
+        write (*, '(a)') 'Continuous 3D pose refinement test suite: PASS'
+    end subroutine run_suite
 
 !> Run one named case in an isolated child so one failure does not hide later cases.
-subroutine run_case_in_child(label, groups_run, groups_passed, groups_skipped, failures)
-    character(len=*), intent(in) :: label
-    integer, intent(inout) :: groups_run, groups_passed, groups_skipped, failures
-    character(len=:), allocatable :: child_command, executable
-    character(len=4096) :: parent_argument
-    character(len=1024) :: command_message
-    integer :: argument_status, command_status, executable_len, exit_status, iarg
+    subroutine run_case_in_child(label, groups_run, groups_passed, groups_skipped, failures)
+        character(len=*), intent(in) :: label
+        integer, intent(inout) :: groups_run, groups_passed, groups_skipped, failures
+        character(len=:), allocatable :: child_command, executable
+        character(len=4096) :: parent_argument
+        character(len=1024) :: command_message
+        integer :: argument_status, command_status, executable_len, exit_status, iarg
 
-    call get_command_argument(0, length=executable_len, status=argument_status)
-    if( argument_status /= 0 .or. executable_len < 1 ) &
-        &error stop 'could not determine continuous 3D pose suite executable path'
-    allocate(character(len=executable_len) :: executable)
-    call get_command_argument(0, executable, status=argument_status)
-    if( argument_status /= 0 ) &
-        &error stop 'could not read continuous 3D pose suite executable path'
+        call get_command_argument(0, length=executable_len, status=argument_status)
+        if (argument_status /= 0 .or. executable_len < 1) &
+            &error stop 'could not determine continuous 3D pose suite executable path'
+        allocate (character(len=executable_len) :: executable)
+        call get_command_argument(0, executable, status=argument_status)
+        if (argument_status /= 0) &
+            &error stop 'could not read continuous 3D pose suite executable path'
 
-    child_command = executable_command(executable)//' '//quoted_shell_token('case='//trim(label))
-    do iarg = 1, command_argument_count()
-        call get_command_argument(iarg, parent_argument, status=argument_status)
-        if( argument_status /= 0 ) error stop 'could not forward continuous 3D pose suite argument'
-        if( is_case_argument(parent_argument) ) cycle
-        child_command = child_command//' '//quoted_shell_token(trim(parent_argument))
-    enddo
+        child_command = executable_command(executable)//' '//quoted_shell_token('case='//trim(label))
+        do iarg = 1, command_argument_count()
+            call get_command_argument(iarg, parent_argument, status=argument_status)
+            if (argument_status /= 0) error stop 'could not forward continuous 3D pose suite argument'
+            if (is_case_argument(parent_argument)) cycle
+            child_command = child_command//' '//quoted_shell_token(trim(parent_argument))
+        end do
 
-    groups_run = groups_run + 1
-    command_status = -1
-    exit_status = -1
-    command_message = ''
-    write(*,'(/,a)') '>>> TEST ['//trim(label)//'] START'
-    call execute_command_line(child_command, wait=.true., exitstat=exit_status, &
-        &cmdstat=command_status, cmdmsg=command_message)
-    if( command_status /= 0 )then
-        failures = failures + 1
-        write(*,'(a,i0,a)') '>>> TEST ['//trim(label)//'] FAIL (cmdstat=', command_status, ')'
-        if( len_trim(command_message) > 0 ) write(*,'(a)') '    '//trim(command_message)
-    else if( exit_status == 0 )then
-        groups_passed = groups_passed + 1
-        write(*,'(a)') '>>> TEST ['//trim(label)//'] PASS'
-    else if( exit_status == CASE_SKIP_EXIT_STATUS )then
-        groups_skipped = groups_skipped + 1
-        write(*,'(a)') '>>> TEST ['//trim(label)//'] SKIP'
-    else
-        failures = failures + 1
-        write(*,'(a,i0,a)') '>>> TEST ['//trim(label)//'] FAIL (exitstat=', exit_status, ')'
-    endif
-end subroutine run_case_in_child
+        groups_run = groups_run + 1
+        command_status = -1
+        exit_status = -1
+        command_message = ''
+        write (*, '(/,a)') '>>> TEST ['//trim(label)//'] START'
+        call execute_command_line(child_command, wait=.true., exitstat=exit_status, &
+            &cmdstat=command_status, cmdmsg=command_message)
+        if (command_status /= 0) then
+            failures = failures + 1
+            write (*, '(a,i0,a)') '>>> TEST ['//trim(label)//'] FAIL (cmdstat=', command_status, ')'
+            if (len_trim(command_message) > 0) write (*, '(a)') '    '//trim(command_message)
+        else if (exit_status == 0) then
+            groups_passed = groups_passed + 1
+            write (*, '(a)') '>>> TEST ['//trim(label)//'] PASS'
+        else if (exit_status == CASE_SKIP_EXIT_STATUS) then
+            groups_skipped = groups_skipped + 1
+            write (*, '(a)') '>>> TEST ['//trim(label)//'] SKIP'
+        else
+            failures = failures + 1
+            write (*, '(a,i0,a)') '>>> TEST ['//trim(label)//'] FAIL (exitstat=', exit_status, ')'
+        end if
+    end subroutine run_case_in_child
 
 !> Quote the current executable path for safe child-process invocation.
-function executable_command(executable) result(command)
-    character(len=*), intent(in) :: executable
-    character(len=:), allocatable :: command
+    function executable_command(executable) result(command)
+        character(len=*), intent(in) :: executable
+        character(len=:), allocatable :: command
 
 #if defined(_WIN32)
-    command = 'call '//quoted_shell_token(executable)
+        command = 'call '//quoted_shell_token(executable)
 #else
-    command = quoted_shell_token(executable)
+        command = quoted_shell_token(executable)
 #endif
-end function executable_command
+    end function executable_command
 
 !> Escape one shell token without changing its command-line value.
-function quoted_shell_token(value) result(quoted)
-    character(len=*), intent(in) :: value
-    character(len=:), allocatable :: quoted
+    function quoted_shell_token(value) result(quoted)
+        character(len=*), intent(in) :: value
+        character(len=:), allocatable :: quoted
 
 #if defined(_WIN32)
-    if( index(value, '"') > 0 ) &
-        &error stop 'continuous 3D pose suite cannot forward an argument containing a double quote'
-    quoted = '"'//trim(value)//'"'
+        if (index(value, '"') > 0) &
+            &error stop 'continuous 3D pose suite cannot forward an argument containing a double quote'
+        quoted = '"'//trim(value)//'"'
 #else
-    if( index(value, achar(39)) > 0 ) &
-        &error stop 'continuous 3D pose suite cannot forward an argument containing a single quote'
-    quoted = achar(39)//trim(value)//achar(39)
+        if (index(value, achar(39)) > 0) &
+            &error stop 'continuous 3D pose suite cannot forward an argument containing a single quote'
+        quoted = achar(39)//trim(value)//achar(39)
 #endif
-end function quoted_shell_token
+    end function quoted_shell_token
 
 !> Dispatch one case key to its owning child test module.
-subroutine run_case(label)
-    character(len=*), intent(in) :: label
+    subroutine run_case(label)
+        character(len=*), intent(in) :: label
 
-    write(*,'(a)') '>>> Continuous 3D pose refinement child case: '//trim(label)
-    select case(trim(label))
-    case('shift_gradient')
-        call run_shift_gradient()
-    case('shift_polish')
-        call run_shift_polish()
-    case('rotation_gradient')
-        call run_rotation_gradient()
-    case('pose_recovery')
-        call run_pose_recovery()
-    case('pose_contract')
-        call run_pose_contract()
-    case('fixed_reference')
-        call run_fixed_reference_diagnostic()
-    case('forward_path')
-        call run_forward_path_diagnostic()
-    case('matched_window')
-        call run_matched_window_diagnostic()
-    case('reference_bias')
-        call run_reference_bias_diagnostic()
-    case('operator_contract')
-        call run_operator_contract_diagnostic()
-    case('pose_capture_range')
-        call run_pose_capture_range()
-    case('pose_capture_mechanism')
-        call run_pose_capture_mechanism()
-    case('tolerance_calibration')
-        call run_tolerance_calibration()
-    case('objective_normals')
-        call run_objective_normals()
-    case('lm_transactions')
-        call run_lm_transactions()
-    case('ctf_sigma')
-        call run_ctf_sigma()
-    case('forward_hierarchy')
-        call run_forward_hierarchy()
-    case('configuration_matrix')
-        call run_configuration_matrix()
-    case default
-        error stop 'unknown continuous 3D pose refinement case: '//trim(label)
-    end select
-end subroutine run_case
+        write (*, '(a)') '>>> Continuous 3D pose refinement child case: '//trim(label)
+        select case (trim(label))
+        case ('shift_gradient')
+            call run_shift_gradient()
+        case ('shift_polish')
+            call run_shift_polish()
+        case ('rotation_gradient')
+            call run_rotation_gradient()
+        case ('pose_recovery')
+            call run_pose_recovery()
+        case ('pose_contract')
+            call run_pose_contract()
+        case ('fixed_reference')
+            call run_fixed_reference_diagnostic()
+        case ('forward_path')
+            call run_forward_path_diagnostic()
+        case ('matched_window')
+            call run_matched_window_diagnostic()
+        case ('reference_bias')
+            call run_reference_bias_diagnostic()
+        case ('operator_contract')
+            call run_operator_contract_diagnostic()
+        case ('pose_capture_range')
+            call run_pose_capture_range()
+        case ('pose_capture_mechanism')
+            call run_pose_capture_mechanism()
+        case ('tolerance_calibration')
+            call run_tolerance_calibration()
+        case ('objective_normals')
+            call run_objective_normals()
+        case ('lm_transactions')
+            call run_lm_transactions()
+        case ('ctf_sigma')
+            call run_ctf_sigma()
+        case ('forward_hierarchy')
+            call run_forward_hierarchy()
+        case ('configuration_matrix')
+            call run_configuration_matrix()
+        case default
+            error stop 'unknown continuous 3D pose refinement case: '//trim(label)
+        end select
+    end subroutine run_case
 
 end program simple_test_pose_cont_refinement
