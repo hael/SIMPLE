@@ -4,15 +4,28 @@
 
 **Execution plan status:** FINAL
 
-**Approved amendment:** Forward-validation recovery
-**Execution status:** IMPLEMENTATION IN PROGRESS — PHASES 4–8 COMPLETE<br>
-**Updated:** 2026-08-30<br>
+**Approved amendment:** Forward-validation recovery<br>
+**Execution status:** NUMERICAL VALIDATION COMPLETE — PHASES 0–11 COMPLETE; NO PRODUCTION CALLER<br>
+**Updated:** 2026-08-31<br>
 **Rebased two-document checkpoint:** `f78d9dff3`<br>
 **Completed history:** [completed/continuous_3D_pose_end_polishing_history_and_handoff.md](completed/continuous_3D_pose_end_polishing_history_and_handoff.md)<br>
 **Completed evidence:** [completed/continuous_3D_pose_end_polishing_validation_evidence.md](completed/continuous_3D_pose_end_polishing_validation_evidence.md)<br>
 **Scientific review:** [completed/continuous_3D_pose_end_polishing_scientific_review.md](completed/continuous_3D_pose_end_polishing_scientific_review.md)
 
 This is the single living development record. The approval-controlled requirements come first. The execution approach and progress record follow the contract approval boundary. After the contract becomes FINAL, the preceding requirements remain frozen unless a requirement review returns the contract to IN REVIEW; implementation discoveries and evidence update only the later execution portion.
+
+## How to test the completed numerical package
+
+Build SIMPLE through the normal Linux workflow, place the resulting `build/bin` and `build/scripts` directories on `PATH`, and run the single authoritative entry point from the stable project parent:
+
+```bash
+cd "$HOME/Projects"
+bash "$HOME/Projects/hael_SIMPLE-rsync-test/production/tests/pose_cont_validation/run_oracle_validation.sh"
+```
+
+The runner creates one timestamped `continuous_3D_pose_validation_*` directory directly below `~/Projects`, continues through independent cases after an individual failure, and writes the aggregate result to `STATUS.txt` and `analysis/summary.json`. A valid package ends with `STATUS.txt` equal to `PASS`. The retained PCG reconstruction mother suite is expected to return status 1 only for the exact frozen Phase 2 `halfset_fsc` disposition; the analyzer rejects any different PCG result. Python 3 is used only by this validation-package analyzer and is not a SIMPLE runtime dependency. The complete prerequisites, contents, and known-PCG rule are documented in [production/tests/pose_cont_validation/README.md](../../production/tests/pose_cont_validation/README.md).
+
+The latest authoritative handoff rerun is `~/Projects/continuous_3D_pose_validation_20260831_121306`. Passing this package establishes the numerical and regression contracts in this record. It does not activate `pose_cont`, add a `refine3D` caller, or establish real-data utility.
 
 ## Request and context
 
@@ -386,12 +399,12 @@ The live caller scan found:
 - four test source files use the batch wrappers from `simple_pcg_pose_polisher`;
 - `execute_final_pcg_pose_polish` has no caller and is private under the module's default visibility;
 - the mother executable schedules ten regression groups, while the fixed-reference, forward-path, matched-window, reference-bias, operator-contract, capture-range, and mechanism diagnostics are explicit keyed cases outside that default schedule;
-- `run_oracle_validation.sh`, `run_truth_diagnostic.sh`, and their README retain historical `pcg_pose_polish` production experiments and are not valid acceptance runners for this contract; and
+- the then-existing runners under `production/tests/continuous_3D_pcg_pose_validation/` retained historical `pcg_pose_polish` production experiments and were not valid acceptance runners for this contract; those runners were later retired and replaced by the authoritative `production/tests/pose_cont_validation/run_oracle_validation.sh`; and
 - the ignored local `.codex/codex_exec_resume.cmd` and its prompt still name the removed parallel SPEC and PLAN. They must be updated to this living note before unattended implementation is started.
 
 ### Current numerical anchors
 
-These line numbers are current at the review base and must be refreshed after any rebase:
+These were the numerical anchors at that review base; the implementation records in the completed phases below supersede their line numbers:
 
 - `src/main/interp/simple_kbinterpol.f90:181` — executed fast-KB value derivative;
 - `src/main/interp/simple_kbinterpol.f90:343` — normalized fixed-cell stencil derivative;

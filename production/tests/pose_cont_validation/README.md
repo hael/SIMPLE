@@ -1,6 +1,7 @@
 # Continuous 3-D pose-refinement Oracle validation
 
-`run_oracle_validation.sh` is the single Phase 10 runtime entry point. Run it
+`run_oracle_validation.sh` is the single authoritative runtime entry point for
+Phase 10 and the completed handoff rerun. Run it
 only after the authorized Oracle compilation and environment setup. It runs all
 retained focused cases, the pose and neutral mother suites, the PCG mother
 suite, and the `pcg_recon` and `pcg_priors` regressions.
@@ -23,7 +24,7 @@ After the workflow exports `SIMPLE_PATH` and updates `PATH`, run:
 
 ```bash
 cd "$HOME/Projects"
-"$HOME/Projects/hael_SIMPLE-rsync-test/production/tests/pose_cont_validation/run_oracle_validation.sh"
+bash "$HOME/Projects/hael_SIMPLE-rsync-test/production/tests/pose_cont_validation/run_oracle_validation.sh"
 ```
 
 The entry point does not compile, normalize source, synchronize files, invoke
