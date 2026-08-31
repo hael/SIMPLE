@@ -5,6 +5,7 @@ use pose_cont_refinement_calibration_helpers, only: calibration_fixture, FROZEN_
     &FROZEN_RELATIVE_TOLERANCES, build_acceptance_fixture, combined_real_passes
 use pose_cont_refinement_test_helpers, only: assert_true
 use simple_defs, only: dp, sp, PI, OSMPL_PAD_FAC
+use simple_linalg, only: hermitian_solve
 use simple_cartesian_pose_refiner, only: cartesian_pose_refiner, right_increment_rotation, &
     &pose_lm_system_test, pose_lm_transaction_test, POSE_LM_ACCEPTED_IMPROVEMENT, &
     &POSE_LM_FINITE_NO_IMPROVEMENT, POSE_LM_NO_RELIABLE_UPDATE, &
@@ -19,7 +20,7 @@ real(dp), parameter :: MU = 1.e-3_dp
 
 contains
 
-!> Compare the shared LM mechanism with a separate pivoted dense solve.
+!> Compare the shared LM mechanism with pivoted dense and LAPACK solves.
 subroutine run_lm_transactions()
     real(dp) :: hessian(5,5), gradient(5), singular_hessian(5,5), invalid_gradient(5)
     real(dp) :: input_rotmat(3,3), trial_rotmat(3,3), input_shift(2), trial_shift(2)
@@ -32,7 +33,8 @@ subroutine run_lm_transactions()
     open(newunit=transaction_unit,file=evidence_directory//'/pose_transactions.tsv', &
         &status='replace',action='write')
     write(system_unit,'(a)') 'case'//achar(9)//'target_ratio'//achar(9)//'actual_ratio'// &
-        &achar(9)//'backward_error'//achar(9)//'bounded'//achar(9)//'accepted'
+        &achar(9)//'pivoted_backward_error'//achar(9)//'lapack_backward_error'// &
+        &achar(9)//'lapack_info'//achar(9)//'bounded'//achar(9)//'accepted'
     write(transaction_unit,'(a)') 'status'//achar(9)//'rotation_exact'//achar(9)//'shift_exact'
 
     call build_reliable_system(hessian,gradient)
@@ -72,6 +74,7 @@ subroutine run_lm_transactions()
     close(transaction_unit)
 
     write(*,'(a)') 'POSE_CONT_REFINEMENT_LM_TRANSACTIONS ratios: accepted=0.80 rejected=0.10'
+    write(*,'(a)') 'POSE_CONT_REFINEMENT_LM_TRANSACTIONS solves: cholesky pivoted_gaussian lapack_dposv'
     write(*,'(a)') 'POSE_CONT_REFINEMENT_LM_TRANSACTIONS outcomes: finite singular invalid bounds limit'
     write(*,'(a)') 'POSE_CONT_REFINEMENT_LM_TRANSACTIONS: PASS'
 end subroutine run_lm_transactions
@@ -218,11 +221,21 @@ subroutine test_reliable_system(name,hessian,gradient,target_ratio,expect_bounde
     real(dp) :: actual_matrix(5,5), actual_scaled_step(5), actual_step(5)
     real(dp) :: expected_gradient(5), expected_hessian(5,5), expected_diagonal(5)
     real(dp) :: expected_matrix(5,5), expected_scaled_step(5), expected_step(5)
+    real(dp) :: lapack_scaled_step(5), lapack_step(5), lapack_residual(5)
     real(dp) :: objective, trial_objective, expected_predicted, actual_predicted
     real(dp) :: expected_actual, actual_reduction, actual_ratio, backward_error
+    real(dp) :: lapack_backward_error, lapack_denominator
+    integer :: lapack_info
     logical :: identifiable, stationary, reliable, bounded, accepted
     call independent_lm_system(hessian,gradient,expected_gradient,expected_hessian, &
         &expected_diagonal,expected_matrix,expected_scaled_step,expected_step,backward_error)
+    call hermitian_solve(expected_matrix,-expected_gradient,lapack_scaled_step,lapack_info)
+    call assert_true(lapack_info == 0,'LAPACK DPOSV rejected a reliable LM system')
+    call bound_physical_step(lapack_scaled_step,lapack_step)
+    lapack_residual = matmul(expected_matrix,lapack_scaled_step)+expected_gradient
+    lapack_denominator = maxval(sum(abs(expected_matrix),dim=2))* &
+        &maxval(abs(lapack_scaled_step))+maxval(abs(expected_gradient))
+    lapack_backward_error = maxval(abs(lapack_residual))/lapack_denominator
     expected_predicted = -dot_product(gradient,expected_step)-0.5_dp* &
         &dot_product(expected_step,matmul(hessian,expected_step))
     objective = 3._dp
@@ -245,12 +258,17 @@ subroutine test_reliable_system(name,hessian,gradient,target_ratio,expect_bounde
         &'damped matrix')
     call assert_combined(actual_scaled_step,expected_scaled_step,'scaled dense step')
     call assert_combined(actual_step,expected_step,'physical pose step')
+    call assert_combined(lapack_scaled_step,expected_scaled_step,'LAPACK scaled step')
+    call assert_combined(lapack_step,expected_step,'LAPACK physical pose step')
     call assert_combined([actual_predicted,actual_reduction,actual_ratio], &
         &[expected_predicted,expected_actual,target_ratio],'LM reductions and ratio')
     call assert_true(backward_error <= FROZEN_RELATIVE_TOLERANCES(LM_TOLERANCE), &
         &'independent dense solve has excessive backward error')
-    write(unit,'(a,3(a,es24.16),2(a,l1))') trim(name),achar(9),target_ratio,achar(9), &
-        &actual_ratio,achar(9),backward_error,achar(9),bounded,achar(9),accepted
+    call assert_true(lapack_backward_error <= FROZEN_RELATIVE_TOLERANCES(LM_TOLERANCE), &
+        &'LAPACK DPOSV solve has excessive backward error')
+    write(unit,'(a,4(a,es24.16),a,i0,2(a,l1))') trim(name),achar(9),target_ratio,achar(9), &
+        &actual_ratio,achar(9),backward_error,achar(9),lapack_backward_error,achar(9), &
+        &lapack_info,achar(9),bounded,achar(9),accepted
 end subroutine test_reliable_system
 
 !> Verify that singular and non-finite systems do not produce a reliable step.
@@ -268,8 +286,8 @@ subroutine test_unreliable_system(name,hessian,gradient,unit)
         &bounded,accepted)
     call assert_true(.not. reliable .and. .not. accepted, &
         &'singular or invalid LM fixture produced an accepted step')
-    write(unit,'(a,3(a,es24.16),2(a,l1))') trim(name),achar(9),0._dp,achar(9),ratio, &
-        &achar(9),0._dp,achar(9),bounded,achar(9),accepted
+    write(unit,'(a,4(a,es24.16),a,i0,2(a,l1))') trim(name),achar(9),0._dp,achar(9),ratio, &
+        &achar(9),0._dp,achar(9),0._dp,achar(9),-1,achar(9),bounded,achar(9),accepted
 end subroutine test_unreliable_system
 
 !> Solve the scaled damped system with pivoted Gaussian elimination.
@@ -279,7 +297,6 @@ subroutine independent_lm_system(hessian,gradient,scaled_gradient,scaled_hessian
     real(dp), intent(out) :: scaled_gradient(5), scaled_hessian(5,5), diagonal(5)
     real(dp), intent(out) :: matrix(5,5), scaled_step(5), physical_step(5), backward_error
     real(dp) :: coordinate_scale(5), hessian_scale, residual(5), denominator
-    real(dp) :: rotation_norm, shift_norm
     integer :: axis, jaxis
 
     coordinate_scale = [ROTATION_SCALE,ROTATION_SCALE,ROTATION_SCALE,1._dp,1._dp]
@@ -304,13 +321,23 @@ subroutine independent_lm_system(hessian,gradient,scaled_gradient,scaled_hessian
     denominator = maxval(sum(abs(matrix),dim=2))*maxval(abs(scaled_step))+ &
         &maxval(abs(scaled_gradient))
     backward_error = maxval(abs(residual))/denominator
+    call bound_physical_step(scaled_step,physical_step)
+end subroutine independent_lm_system
+
+!> Convert a scaled solution to the physical bounded pose step.
+subroutine bound_physical_step(scaled_step,physical_step)
+    real(dp), intent(in) :: scaled_step(5)
+    real(dp), intent(out) :: physical_step(5)
+    real(dp) :: coordinate_scale(5), rotation_norm, shift_norm
+
+    coordinate_scale = [ROTATION_SCALE,ROTATION_SCALE,ROTATION_SCALE,1._dp,1._dp]
     physical_step = coordinate_scale*scaled_step
     rotation_norm = sqrt(sum(physical_step(1:3)**2))
     if( rotation_norm > ROTATION_SCALE ) &
         &physical_step(1:3) = physical_step(1:3)*ROTATION_SCALE/rotation_norm
     shift_norm = sqrt(sum(physical_step(4:5)**2))
     if( shift_norm > 1._dp ) physical_step(4:5) = physical_step(4:5)/shift_norm
-end subroutine independent_lm_system
+end subroutine bound_physical_step
 
 !> Dense partial-pivot elimination independent of the production Cholesky path.
 subroutine gaussian_solve(matrix,rhs,solution)

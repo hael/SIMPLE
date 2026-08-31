@@ -80,6 +80,7 @@ contains
     procedure :: get_lims2 => get_fourier_workspace_lims2
     procedure :: set_shell_range => set_fourier_workspace_shell_range
     procedure :: sample_with_grad => sample_fourier_with_grad
+    procedure :: sample_slow_test => sample_fourier_slow_test
     procedure :: shift_residual
     procedure :: shift_jvp
     procedure :: shift_jhz
@@ -376,6 +377,64 @@ contains
         value       = self%padsc * value
         dvalue_dloc = self%padsc * dvalue_dloc
     end subroutine sample_fourier_with_grad
+
+    !> Independently traverse the prepared packed reference for acceptance tests.
+    !! This routine deliberately does not call the executed stencil builder or
+    !! the neutral packed gather. It repeats the frozen normalized-KB,
+    !! packed/Friedel, and periodic-wrap contracts in a structurally separate
+    !! slow path.
+    pure subroutine sample_fourier_slow_test(self,loc,value)
+        class(cartesian_pose_refiner), intent(in) :: self
+        real(sp), intent(in) :: loc(3)
+        complex(dp), intent(out) :: value
+        complex(dp) :: fcomp
+        real(dp) :: one_dimensional(self%wdim,3), weight
+        real(sp) :: weight_sum
+        integer :: coordinate, di, dj, dk, hh, kk, mm, ph, pk, pm
+        integer :: i0(3), ny, nz, tap
+
+        if( .not. self%exists ) error stop 'sample_slow_test called on an empty Fourier workspace'
+        i0 = nint(loc)-self%iwinsz
+        if( any(i0 < lbound(self%wrap,1)) .or. &
+            &any(i0+self%wdim-1 > ubound(self%wrap,1)) ) &
+            &error stop 'sample_slow_test location lies outside the periodic wrap table'
+        do coordinate = 1, 3
+            do tap = 1, self%wdim
+                one_dimensional(tap,coordinate) = real(self%kbwin%apod_fast( &
+                    &real(i0(coordinate)+tap-1,sp)-loc(coordinate)),dp)
+            enddo
+            weight_sum = real(sum(one_dimensional(:,coordinate)),sp)
+            one_dimensional(:,coordinate) = one_dimensional(:,coordinate)/real(weight_sum,dp)
+        enddo
+
+        ny = size(self%cmat,2)
+        nz = size(self%cmat,3)
+        value = cmplx(0._dp,0._dp,kind=dp)
+        do dk = 1, self%wdim
+            mm = self%wrap(i0(3)+dk-1)
+            do dj = 1, self%wdim
+                kk = self%wrap(i0(2)+dj-1)
+                do di = 1, self%wdim
+                    hh = self%wrap(i0(1)+di-1)
+                    if( hh >= 0 )then
+                        ph = hh+1
+                        pk = kk+1; if( kk < 0 ) pk = pk+ny
+                        pm = mm+1; if( mm < 0 ) pm = pm+nz
+                        fcomp = cmplx(self%cmat(ph,pk,pm),kind=dp)
+                    else
+                        ph = -hh+1
+                        pk = -kk+1; if( -kk < 0 ) pk = pk+ny
+                        pm = -mm+1; if( -mm < 0 ) pm = pm+nz
+                        fcomp = conjg(cmplx(self%cmat(ph,pk,pm),kind=dp))
+                    endif
+                    weight = one_dimensional(di,1)*one_dimensional(dj,2)* &
+                        &one_dimensional(dk,3)
+                    value = value+weight*fcomp
+                enddo
+            enddo
+        enddo
+        value = real(self%padsc,dp)*value
+    end subroutine sample_fourier_slow_test
 
     !>  \brief  Fixed-volume, CTF-free, unit-noise residual for a shifted
     !!          Fourier projection: r = S(t) G(R)V - y.

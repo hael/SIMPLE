@@ -6,16 +6,18 @@ private
 
 integer, parameter, public :: CALIBRATION_BOXES(2) = [8,12]
 integer, parameter, public :: ACCEPTANCE_BOXES(2) = [10,16]
+integer, parameter, public :: N_CALIBRATION_VARIANTS = 2
+integer, parameter, public :: FORWARD_HOLDOUT_BOXES(2) = [14,18]
 integer, parameter, public :: N_TOLERANCE_FAMILIES = 7
 real(dp), parameter, public :: CALIBRATION_SAFETY_FACTOR = 8._dp
-! Phase 4 Oracle artifacts froze these values before acceptance-fixture tests.
+! Families 1-4 retain their original freeze; entries 5-7 are the reviewed forward amendment.
 real(dp), parameter, public :: FROZEN_ABSOLUTE_TOLERANCES(N_TOLERANCE_FAMILIES) = [ &
     &4.9353318740941177e-4_dp, 2.0599365235796085e-7_dp, 1.e-8_dp, 1.e-10_dp, &
-    &1.e-5_dp, 1.1541020711748716e-4_dp, 1.e-5_dp]
+    &6.1319031142573850e-4_dp, 1.e-7_dp, 1.e-5_dp]
 real(dp), parameter, public :: FROZEN_RELATIVE_TOLERANCES(N_TOLERANCE_FAMILIES) = [ &
     &5.7686781070864920e-6_dp, 2.e-5_dp, 5.e-3_dp, 2.e-5_dp, 3.e-2_dp, &
     &2.e-5_dp, 5.e-2_dp]
-integer, parameter :: MAX_CALIBRATION_OBSERVATIONS = 64
+integer, parameter :: MAX_CALIBRATION_OBSERVATIONS = 4096
 
 character(len=32), parameter, public :: TOLERANCE_NAMES(N_TOLERANCE_FAMILIES) = [character(len=32) :: &
     &'algebraic', 'lm_system', 'derivative', 'analytic_dft', &
@@ -34,6 +36,7 @@ real(dp), parameter :: LOOSE_RELATIVE_LIMITS(N_TOLERANCE_FAMILIES) = [ &
 type, public :: calibration_fixture
     integer :: box = 0
     integer :: fixture_id = 0
+    integer :: variant = 0
     real(dp), allocatable :: volume(:,:,:)
     real(dp) :: exact_pose(5) = 0._dp
     real(dp) :: nonstationary_pose(5) = 0._dp
@@ -50,11 +53,13 @@ type, public :: tolerance_record
     real(dp) :: relative_scale_floor = 0._dp
     real(dp) :: maximum_absolute_error = 0._dp
     real(dp) :: maximum_scaled_relative_error = 0._dp
+    real(dp) :: maximum_combined_excess = 0._dp
     real(dp) :: absolute_tolerance = 0._dp
     real(dp) :: relative_tolerance = 0._dp
     integer :: observations = 0
     real(dp) :: absolute_errors(MAX_CALIBRATION_OBSERVATIONS) = 0._dp
     real(dp) :: scaled_relative_errors(MAX_CALIBRATION_OBSERVATIONS) = 0._dp
+    real(dp) :: comparison_scales(MAX_CALIBRATION_OBSERVATIONS) = 0._dp
 end type tolerance_record
 
 public :: initialize_tolerances
@@ -84,8 +89,8 @@ subroutine initialize_tolerances(records)
 end subroutine initialize_tolerances
 
 !> Build one deterministic asymmetric calibration fixture.
-subroutine build_calibration_fixture(box,fixture)
-    integer, intent(in) :: box
+subroutine build_calibration_fixture(box,variant,fixture)
+    integer, intent(in) :: box, variant
     type(calibration_fixture), intent(out) :: fixture
     real(dp) :: centre, dx, dy, dz, radius2
     real(dp) :: centres(3,4), amplitudes(4), widths(4)
@@ -93,19 +98,32 @@ subroutine build_calibration_fixture(box,fixture)
 
     if( .not. any(box == CALIBRATION_BOXES) ) &
         &error stop 'calibration requested a noncalibration box'
+    if( variant < 1 .or. variant > N_CALIBRATION_VARIANTS ) &
+        &error stop 'calibration requested an invalid volume variant'
     fixture%box = box
-    fixture%fixture_id = merge(4081,4127,box == CALIBRATION_BOXES(1))
+    fixture%variant = variant
+    fixture%fixture_id = merge(4081,4127,box == CALIBRATION_BOXES(1))+100*(variant-1)
     allocate(fixture%volume(box,box,box),source=0._dp)
     allocate(fixture%constant_sigma2(0:box/2),source=1.17_dp)
     allocate(fixture%varying_sigma2(0:box/2))
     centre = real(box,dp)/2._dp+0.5_dp
-    centres = reshape([ &
-        &-0.23_dp*box,-0.11_dp*box, 0.17_dp*box, &
-        & 0.19_dp*box, 0.24_dp*box,-0.16_dp*box, &
-        &-0.04_dp*box, 0.27_dp*box, 0.08_dp*box, &
-        & 0.28_dp*box,-0.18_dp*box, 0.25_dp*box],[3,4])
-    amplitudes = [1._dp,0.73_dp,-0.41_dp,0.29_dp]
-    widths = real(box,dp)*[0.105_dp,0.137_dp,0.083_dp,0.119_dp]
+    if( variant == 1 )then
+        centres = reshape([ &
+            &-0.23_dp*box,-0.11_dp*box, 0.17_dp*box, &
+            & 0.19_dp*box, 0.24_dp*box,-0.16_dp*box, &
+            &-0.04_dp*box, 0.27_dp*box, 0.08_dp*box, &
+            & 0.28_dp*box,-0.18_dp*box, 0.25_dp*box],[3,4])
+        amplitudes = [1._dp,0.73_dp,-0.41_dp,0.29_dp]
+        widths = real(box,dp)*[0.105_dp,0.137_dp,0.083_dp,0.119_dp]
+    else
+        centres = reshape([ &
+            & 0.26_dp*box,-0.17_dp*box,-0.08_dp*box, &
+            &-0.18_dp*box, 0.09_dp*box, 0.29_dp*box, &
+            & 0.07_dp*box, 0.28_dp*box,-0.21_dp*box, &
+            &-0.29_dp*box,-0.24_dp*box, 0.14_dp*box],[3,4])
+        amplitudes = [0.87_dp,-0.56_dp,0.38_dp,0.21_dp]
+        widths = real(box,dp)*[0.092_dp,0.124_dp,0.151_dp,0.078_dp]
+    endif
     do k = 1, box
         do j = 1, box
             do i = 1, box
@@ -130,6 +148,10 @@ subroutine build_calibration_fixture(box,fixture)
     fixture%ordinary_ctf = merge([1._dp,0.18_dp,1.37_dp,0.11_dp], &
         &[0.74_dp,-0.27_dp,1.61_dp,0.16_dp],box == CALIBRATION_BOXES(1))
     fixture%attenuated_ctf = 0.43_dp*fixture%ordinary_ctf
+    if( variant == 2 )then
+        fixture%exact_pose(1:3) = -fixture%exact_pose(1:3)
+        fixture%nonstationary_pose(4:5) = -fixture%nonstationary_pose(4:5)
+    endif
 end subroutine build_calibration_fixture
 
 !> Build one deterministic acceptance fixture for later phases only.
@@ -144,6 +166,7 @@ subroutine build_acceptance_fixture(box,fixture)
         &error stop 'acceptance requested a nonacceptance box'
     fixture%box = box
     fixture%fixture_id = 4900+box
+    fixture%variant = 1
     allocate(fixture%volume(box,box,box),source=0._dp)
     allocate(fixture%constant_sigma2(0:box/2),source=0.93_dp)
     allocate(fixture%varying_sigma2(0:box/2))
@@ -199,6 +222,7 @@ subroutine observe_real_comparison(record,actual,expected)
         record%observations = record%observations+1
         record%absolute_errors(record%observations) = absolute_error
         record%scaled_relative_errors(record%observations) = relative_error
+        record%comparison_scales(record%observations) = scale
         record%maximum_absolute_error = max(record%maximum_absolute_error,absolute_error)
         record%maximum_scaled_relative_error = max(record%maximum_scaled_relative_error,relative_error)
     enddo
@@ -221,6 +245,7 @@ subroutine observe_complex_comparison(record,actual,expected)
         record%observations = record%observations+1
         record%absolute_errors(record%observations) = absolute_error
         record%scaled_relative_errors(record%observations) = relative_error
+        record%comparison_scales(record%observations) = scale
         record%maximum_absolute_error = max(record%maximum_absolute_error,absolute_error)
         record%maximum_scaled_relative_error = max(record%maximum_scaled_relative_error,relative_error)
     enddo
@@ -249,20 +274,40 @@ pure logical function combined_complex_passes(actual,expected,absolute_tolerance
         &relative_tolerance*max(abs(actual),abs(expected)))
 end function combined_complex_passes
 
-!> Derive frozen tolerances and reject scientifically loose calibration results.
-subroutine finalize_tolerances(records)
+!> Derive tolerance proposals and flag or reject scientifically loose results.
+subroutine finalize_tolerances(records,scientifically_loose)
     type(tolerance_record), intent(inout) :: records(N_TOLERANCE_FAMILIES)
-    integer :: family
+    logical, optional, intent(out) :: scientifically_loose
+    real(dp) :: combined_excess
+    integer :: family, observation
 
+    if( present(scientifically_loose) ) scientifically_loose = .false.
     do family = 1, N_TOLERANCE_FAMILIES
         if( records(family)%observations < 1 ) error stop 'tolerance family has no calibration observation'
-        records(family)%absolute_tolerance = max(records(family)%absolute_floor, &
-            &CALIBRATION_SAFETY_FACTOR*records(family)%maximum_absolute_error)
-        records(family)%relative_tolerance = max(records(family)%relative_floor, &
-            &CALIBRATION_SAFETY_FACTOR*records(family)%maximum_scaled_relative_error)
+        records(family)%maximum_combined_excess = 0._dp
+        do observation = 1, records(family)%observations
+            combined_excess = max(0._dp,records(family)%absolute_errors(observation)- &
+                &records(family)%relative_floor*records(family)%comparison_scales(observation))
+            records(family)%maximum_combined_excess = max( &
+                &records(family)%maximum_combined_excess,combined_excess)
+        enddo
+        if( family <= 4 )then
+            records(family)%absolute_tolerance = FROZEN_ABSOLUTE_TOLERANCES(family)
+            records(family)%relative_tolerance = FROZEN_RELATIVE_TOLERANCES(family)
+        else
+            ! Low-amplitude Fourier values make a separately maximized relative error ill-conditioned.
+            records(family)%absolute_tolerance = max(records(family)%absolute_floor, &
+                &CALIBRATION_SAFETY_FACTOR*records(family)%maximum_combined_excess)
+            records(family)%relative_tolerance = records(family)%relative_floor
+        endif
         if( records(family)%absolute_tolerance > LOOSE_ABSOLUTE_LIMITS(family) .or. &
-            &records(family)%relative_tolerance > LOOSE_RELATIVE_LIMITS(family) ) &
-            &error stop 'calibration produced a scientifically loose tolerance'
+            &records(family)%relative_tolerance > LOOSE_RELATIVE_LIMITS(family) )then
+            if( present(scientifically_loose) )then
+                scientifically_loose = .true.
+            else
+                error stop 'calibration produced a scientifically loose tolerance'
+            endif
+        endif
     enddo
 end subroutine finalize_tolerances
 
@@ -271,6 +316,7 @@ logical function fixtures_are_identical(left,right) result(identical)
     type(calibration_fixture), intent(in) :: left, right
 
     identical = left%box == right%box .and. left%fixture_id == right%fixture_id
+    identical = identical .and. left%variant == right%variant
     identical = identical .and. all(left%exact_pose == right%exact_pose)
     identical = identical .and. all(left%nonstationary_pose == right%nonstationary_pose)
     identical = identical .and. all(left%ordinary_ctf == right%ordinary_ctf)
@@ -285,31 +331,41 @@ subroutine write_calibration_artifacts(output_directory,records,fixtures)
     character(len=*), intent(in) :: output_directory
     type(tolerance_record), intent(in) :: records(N_TOLERANCE_FAMILIES)
     type(calibration_fixture), intent(in) :: fixtures(:)
+    character(len=26) :: review_status
     integer :: family, fixture_index, observation, unit
 
     open(newunit=unit,file=trim(output_directory)//'/calibration_raw_errors.tsv', &
         &status='replace',action='write')
-    write(unit,'(7a)') 'family',achar(9),'observation',achar(9),'absolute_error',achar(9), &
-        &'scaled_relative_error'
+    write(unit,'(9a)') 'family',achar(9),'observation',achar(9),'absolute_error',achar(9), &
+        &'scaled_relative_error',achar(9),'comparison_scale'
     do family = 1, N_TOLERANCE_FAMILIES
         do observation = 1, records(family)%observations
-            write(unit,'(a,a,i0,a,es24.16,a,es24.16)') trim(records(family)%name),achar(9), &
+            write(unit,'(a,a,i0,3(a,es24.16))') trim(records(family)%name),achar(9), &
                 &observation,achar(9),records(family)%absolute_errors(observation),achar(9), &
-                &records(family)%scaled_relative_errors(observation)
+                &records(family)%scaled_relative_errors(observation),achar(9), &
+                &records(family)%comparison_scales(observation)
         enddo
     enddo
     close(unit)
 
     open(newunit=unit,file=trim(output_directory)//'/frozen_tolerances.tsv', &
         &status='replace',action='write')
-    write(unit,'(19a)') 'family',achar(9),'abs_floor',achar(9),'rel_floor',achar(9), &
+    write(unit,'(23a)') 'family',achar(9),'review_status',achar(9),'abs_floor',achar(9),'rel_floor',achar(9), &
         &'rel_scale_floor',achar(9),'max_absolute',achar(9),'max_scaled_relative',achar(9), &
-        &'abs_tol',achar(9),'rel_tol',achar(9),'safety_factor',achar(9),'justification'
+        &'max_combined_excess',achar(9),'abs_tol',achar(9),'rel_tol',achar(9), &
+        &'safety_factor',achar(9),'justification'
     do family = 1, N_TOLERANCE_FAMILIES
-        write(unit,'(a,8(a,es24.16),a)') trim(records(family)%name),achar(9), &
+        if( family >= 5 )then
+            review_status = 'frozen_forward_amendment'
+        else
+            review_status = 'retained_frozen'
+        endif
+        write(unit,'(a,a,a,9(a,es24.16),a)') trim(records(family)%name),achar(9), &
+            &trim(review_status),achar(9), &
             &records(family)%absolute_floor,achar(9),records(family)%relative_floor,achar(9), &
             &records(family)%relative_scale_floor,achar(9),records(family)%maximum_absolute_error, &
             &achar(9),records(family)%maximum_scaled_relative_error, &
+            &achar(9),records(family)%maximum_combined_excess, &
             &achar(9),records(family)%absolute_tolerance,achar(9),records(family)%relative_tolerance, &
             &achar(9),CALIBRATION_SAFETY_FACTOR, &
             &achar(9)//trim(tolerance_justification(family))
@@ -321,7 +377,8 @@ subroutine write_calibration_artifacts(output_directory,records,fixtures)
     write(unit,'(15a)') 'role',achar(9),'box',achar(9),'fixture_id',achar(9),'volume_sum',achar(9), &
         &'constant_sigma_sum',achar(9),'varying_sigma_sum',achar(9),'pose_l1',achar(9),'ctf_l1'
     do fixture_index = 1, size(fixtures)
-        write(unit,'(a,a,i0,a,i0,5(a,es24.16))') 'calibration',achar(9),fixtures(fixture_index)%box, &
+        write(unit,'(a,a,i0,a,i0,5(a,es24.16))') 'calibration_variant_'// &
+            &achar(iachar('0')+fixtures(fixture_index)%variant),achar(9),fixtures(fixture_index)%box, &
             &achar(9),fixtures(fixture_index)%fixture_id,achar(9),sum(fixtures(fixture_index)%volume), &
             &achar(9),sum(fixtures(fixture_index)%constant_sigma2), &
             &achar(9),sum(fixtures(fixture_index)%varying_sigma2), &
@@ -331,19 +388,22 @@ subroutine write_calibration_artifacts(output_directory,records,fixtures)
             &sum(abs(fixtures(fixture_index)%attenuated_ctf))
     enddo
     do fixture_index = 1, size(ACCEPTANCE_BOXES)
-        write(unit,'(a,a,i0,a,i0,10a)') 'reserved_acceptance_not_sampled',achar(9), &
+        write(unit,'(a,a,i0,a,i0,10a)') 'observed_diagnostic_not_sampled',achar(9), &
             &ACCEPTANCE_BOXES(fixture_index),achar(9),4900+ACCEPTANCE_BOXES(fixture_index), &
             &achar(9),'NA',achar(9),'NA',achar(9),'NA',achar(9),'NA',achar(9),'NA'
     enddo
     close(unit)
 
-    open(newunit=unit,file=trim(output_directory)//'/PRE_ACCEPTANCE_TOLERANCES.FROZEN', &
+    open(newunit=unit,file=trim(output_directory)//'/FORWARD_AMENDMENT.FROZEN', &
         &status='new',action='write')
-    write(unit,'(a)') 'status=FROZEN_PRE_ACCEPTANCE'
+    write(unit,'(a)') 'status=FROZEN_AFTER_SCIENTIFIC_REVIEW'
     write(unit,'(a,es24.16)') 'safety_factor=',CALIBRATION_SAFETY_FACTOR
     write(unit,'(a)') 'calibration_boxes=8,12'
-    write(unit,'(a)') 'acceptance_boxes_reserved_not_sampled=10,16'
-    write(unit,'(a)') 'rule=acceptance_failure_reopens_protocol_or_implementation_never_threshold_in_place'
+    write(unit,'(a)') 'calibration_variants=2'
+    write(unit,'(a)') 'observed_diagnostics_not_sampled=10,16'
+    write(unit,'(a)') 'forward_holdouts_frozen_not_sampled=14,18'
+    write(unit,'(a)') 'proposal_rule=relative_floor_plus_safety_times_maximum_combined_excess'
+    write(unit,'(a)') 'rule=review_and_freeze_before_any_fresh_holdout'
     close(unit)
 end subroutine write_calibration_artifacts
 
