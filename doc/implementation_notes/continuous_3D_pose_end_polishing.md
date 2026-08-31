@@ -2,7 +2,7 @@
 
 **Contract status:** FINAL (FROZEN)  
 **Execution plan status:** FINAL
-**Execution status:** IMPLEMENTATION IN PROGRESS — PHASE 5 COMPLETE
+**Execution status:** IMPLEMENTATION IN PROGRESS — PHASES 4–8 COMPLETE<br>
 **Updated:** 2026-08-27
 **Rebased two-document checkpoint:** `f78d9dff3`  
 **Completed history:** [completed/continuous_3D_pose_end_polishing_history_and_handoff.md](completed/continuous_3D_pose_end_polishing_history_and_handoff.md)  
@@ -1214,13 +1214,243 @@ Implement AC-5 under the approved pose transfer and variance-range contracts. Ke
 
 ### Phase 8 — verify the independent forward hierarchy
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
+
+**Handoff boundary — updated 2026-08-30:** Focused commit `8d619aaee` contains the completed Phase 4 calibration amendment, Phase 5 BLAS accumulation oracle, Phase 6 LAPACK solve oracle, and the structurally separate slow gather required by the frozen forward contract. Oracle package `~/Projects/pose_cont_revalidation_20260830_231612` confirms the frozen Phase 4 marker and passes the focused Phase 5 and Phase 6 revalidations. The uncommitted Phase 8 source is deliberately incomplete. A prepare turn must replace its old box-10/box-16 acceptance use and superseded arbitrary-rotation projection comparison before any synchronization, compilation, or runtime test. Do not validate the existing source unchanged.
+
+**Phase 8 implementation handoff:**
+
+1. Preserve the existing analytic-object convention tests, full redundant disk, executed gather, structurally separate slow gather, raw component retention, and fail-after-artifact behavior.
+2. Replace `ACCEPTANCE_BOXES` and `build_acceptance_fixture` in `simple_pose_cont_refinement_forward_hierarchy_test.f90` with a Phase-8-only forward-holdout fixture constructor for frozen boxes 14 and 18. Use at least two deterministic asymmetric physical volumes per box. The constructor must not be callable from Phase 4 calibration.
+3. Predeclare the holdout rotation matrices in source before the first Oracle run. Include identity for the convention control and at least three arbitrary rotations distinct from the Phase 4 calibration rotations. Do not change them after observing results.
+4. Replace the current finite-projection comparison `projection(original volume, rotation)` versus `DFT(original volume, rotated frequency)`. Resample one finite rotated object $X_R$, compare its line-sum/2-D FFT with the direct 3-D DFT of that same $X_R$ at $l=0$, and retain original-volume rotated-frequency disagreement, clipping fraction, interpolation error, support margin, and stencil switches as diagnostics only.
+5. Apply the frozen families componentwise: analytic DFT family 4, executed DFT family 5, slow gather family 6, and matched finite projection family 7. Record box, volume variant, rotation, sample count, maximum absolute and scaled-relative errors, frozen limits, diagnostics, and pass state.
+6. Run `case=forward_hierarchy` from `~/Projects` into one new timestamped evidence directory. Only after it passes, run the unchanged default pose mother suite. A failure must retain all tables and stop before Phase 9; no tolerance, fixture, or rotation may be adjusted in place.
+
+**Fresh-holdout prepare implementation — 2026-08-30:**
+
+- `run_forward_hierarchy` at `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:64` now owns the fresh Phase 8 matrix. It uses frozen boxes 14 and 18, four predeclared rotations, and two Phase-8-only asymmetric volumes per box. The analytic convention cases run once per box. The physical-volume cases run for every box, variant, and rotation. The expected total is 80 named comparisons.
+- `build_forward_holdout_fixture` at line 232 and `holdout_field` at line 256 are private to the Phase 8 child module. They cannot be called by Phase 4 calibration. Their volume definitions, fixture identifiers, and rotations at line 654 are fixed before the first Oracle run. The three arbitrary rotations differ from all Phase 4 calibration rotations.
+- `verify_volume_hierarchy` at line 123 preserves the executed gather, the structurally separate slow gather, and the direct DFT over the full redundant disk. `rotate_finite_volume` at line 408 resamples one finite object $X_R$. `finite_projection_fft` at line 439 compares the line-sum/2-D FFT of that object with the direct 3-D DFT of the same $X_R$ at $l=0$. Original-volume disagreement, clipping fraction, analytic-field interpolation error, KB support margin, and stencil switches are diagnostic fields only.
+- `write_forward_artifacts` at line 546 writes the 80-row aggregate table, raw complex sample table, frozen-contract manifest, and fixture manifest before the final assertion. Each aggregate row records its family, box, volume variant, rotation, sample count, maximum errors, frozen limits, diagnostics, and pass state. A failed comparison therefore retains the complete evidence package and stops before Phase 9.
+- Keyed dispatch is `production/tests/simple_test_pose_cont_refinement.f90:19,212`. The default five-case mother schedule is unchanged. The focused hypothesis is that every fresh holdout comparison satisfies its frozen combined absolute-plus-relative family. The regression hypothesis is that the keyed addition does not change the existing default pose suite.
+- Applicable policies are `doc/policies/KB_Interpolation_Policy.md` for padded coordinates, normalized KB gather, and `padf^3` scaling; `doc/policies/reconstruct3D_pcg_policy.md` for the full redundant disk, discrete envelope, and unchanged PCG-owner boundary; and `doc/policies/refine3D_policy.md` for particle-pose versus volume-domain ownership. No UI policy applies because Phase 8 adds no production caller or user-visible option.
+- Lightweight source checks are `PASS`. `git diff --check` exited `0`. Both Phase 8 Fortran files have zero lines longer than 132 columns, zero conflict markers, and zero tab characters. Static checks find no calibration-fixture constructor, old acceptance-box constant, PCG reconstructor import, or neutral gather call in the fresh-holdout module. `production/CMakeLists.txt` remains unchanged during this prepare implementation at SHA-256 `F850520E053180EA241C5B091D74C5358B87BFC118BA91E043BBA654059412EB`.
+- Compilation, focused runtime completion, mother-suite runtime completion, and AC-6 scientific acceptance remain `NEEDS MORE TESTING`. The next Oracle turn must compile incrementally, run the focused case from `~/Projects` into one new timestamped package, and run the unchanged mother suite only after the focused case passes. No fixture, rotation, tolerance, or comparison can change after this prepared dry run without returning Phase 8 to `REWORK REQUIRED`.
+- The exact approved rsync dry run is the final operation of this prepare turn. Its complete output and exit status remain in `codex_logs/pose_cont_20260826_144540_289/phase08/prepare_20260830_233136_657.events.jsonl`. No real synchronization, normalization, compilation, runtime test, scientific acceptance test, or commit occurs in this prepare turn.
+
+**Final Oracle validation — 2026-08-30:**
+
+- The independent gate passed with Phases 0 through 7 `COMPLETE` and Phase 8 `READY FOR ORACLE VALIDATION`. `.codex/codex_exec_source_state.ps1 -Repository . -CheckFile codex_logs/pose_cont_20260826_144540_289/phase08/prepare-source-state.txt` exited `0` and verified digest `EBD42CC645DD6C7A9E6E17415C4DC538F9A3E9BE646DC2DC096E4D4FDEA52492`, `HEAD=8d619aaee149ce131d4ce83940e125961f5e5640`, and `ORIGIN_MASTER=c2b419ad3a521588d152b8b43335b8488c905957`.
+- The exact synchronization command was `rsync -av --delete --info=progress2 --exclude='.git/' --exclude='.codex/.local-history.git/' --exclude='build/' --exclude='*.o' --exclude='*.mod' --exclude='*.a' --exclude='*.so' ~/hael_SIMPLE/ hossainm7@fwl-c143206.ncifcrf.gov:~/Projects/hael_SIMPLE-rsync-test`. It exited `0`, transferred 220 files, and reported no deletion. The transfer count includes current controller evidence that is outside the deterministic prepared-source digest. Remote normalization with `find . -type f \( -name '*.pl' -o -name '*.sh' \) -exec sed -i 's/\r$//' {} +` exited `0`; `.codex/compile_debug.sh` retained `#!/bin/bash` and had zero carriage returns.
+- With `module load gcc/15.2.0`, the default incremental command `cd ~/Projects/hael_SIMPLE-rsync-test && mkdir -p build && set -o pipefail && .codex/compile_debug.sh 2>&1 | tee build/build_debug.log` exited `0` with GNU Fortran 15.2.0. The conditional clean retry did not run. The compiler log is `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`.
+- From `/home/hossainm7/Projects`, `simple_test_pose_cont_refinement case=forward_hierarchy evidence_dir=/home/hossainm7/Projects/continuous_3D_phase8_forward_20260830_234914` exited `0` and wrote its PASS marker. Evidence is in `~/Projects/continuous_3D_phase8_forward_20260830_234914`: `command_manifest.tsv`, `executable.sha256`, `forward_hierarchy.log`, `forward_hierarchy.tsv`, `forward_hierarchy_components.tsv`, `forward_hierarchy_manifest.tsv`, `forward_holdout_fixtures.tsv`, and `forward_hierarchy_analysis.tsv`.
+- The focused scientific analysis exited `0`. All 80 aggregate rows passed: family counts were `32/16/16/16` for families 4 through 7; box counts were `40/40`; variant counts were `32/24/24`; every rotation had 20 rows; and the component table had 16,080 rows. Maximum absolute errors for families 4 through 7 were `1.626303258728E-19`, `3.511552303816E-04`, `5.269506286714E-09`, and `2.470709852229E-09`. Maximum scaled-relative errors were `8.147395520710E-16`, `8.917885800089E-02`, `5.318751461011E-07`, and `1.073789430090E-06`. Each row satisfied its frozen combined absolute-plus-relative gate. Diagnostic maxima were clipping fraction `3.330903790087E-01`, original-volume error `3.257326775186E-03`, interpolation error `1.946948203324E-01`, and 4,800 total stencil switches; these values are not acceptance gates. An initial evidence-analysis command exited `1` because it used planned rather than actual artifact names; the corrected analysis above did not rerun the executable.
+- From `/home/hossainm7/Projects`, the unchanged `simple_test_pose_cont_refinement` mother suite exited `0` with scheduled/run/passed/skipped/failed `5/5/5/0/0`. Evidence is `~/Projects/continuous_3D_phase8_regression_20260830_235047`, including `command_manifest.tsv`, `executable.sha256`, `mother_suite.log`, and `mother_suite_analysis.tsv`.
+- Post-test checks exited `0`. In both `~/Projects/hael_SIMPLE-rsync-test` and `~/Projects/SIMPLE`, top-level `validation/` was absent and the counts of top-level `continuous_3D_matrix_volumes_*` and Phase 8 evidence directories were zero. Direct `test -d`, `realpath`, and `stat` checks verified that both Phase 8 evidence packages are directories below `~/Projects`; no matrix-volume directory was generated. Source checks, synchronization, normalization, compilation, focused runtime completion, regression runtime completion, and AC-6 scientific acceptance are `PASS`.
+- Major implementation references are the focused runner at `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:64`, the physical hierarchy at line 123, the private holdout constructor and field at lines 232 and 256, the finite-volume rotation and matched projection at lines 408 and 439, artifact creation at line 546, and frozen rotations at line 654. Keyed dispatch is `production/tests/simple_test_pose_cont_refinement.f90:19,212`. The remaining limit is that Phase 8 verifies the frozen independent forward hierarchy only; the broader end-to-end matrix remains Phase 9 work.
+
+**Superseded Phase 8 attempts — historical evidence only:** The records below explain why the final validation was necessary. Their embedded phase statuses are historical outcomes and do not override the machine-readable `COMPLETE` status above.
+
+**Approved recovery plan — 2026-08-28:**
+
+1. Complete and freeze the Phase 4 forward-only amendment before changing or rerunning Phase 8 acceptance.
+2. Retain the 28-row box-$10^3$/box-$16^3$ result as diagnostic evidence. It cannot calibrate the amended tolerances or become fresh acceptance evidence.
+3. Update the finite-projection hierarchy so its acceptance comparison uses the same rotated/resampled finite object on both paths. Preserve original-volume rotated-frequency agreement, clipping, interpolation, and support margin as separate diagnostics.
+4. Run analytic, direct-DFT, executed-gather, slow-gather, and matched finite-projection comparisons over the full redundant disk on the fresh predeclared holdout boxes, volumes, and rotations.
+5. Run the unchanged mother suite only after the focused forward hierarchy passes. Do not start Phase 9 until AC-6 passes under the amended frozen contract.
+
+**Prepare evidence — 2026-08-27:**
+
+- Added the keyed `case=forward_hierarchy` acceptance diagnostic at
+  `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:35` and dispatched it from
+  `production/tests/simple_test_pose_cont_refinement.f90:212`. The default five-case mother schedule is
+  unchanged.
+- The analytic convention gate uses centered and off-center deltas, separated points, and a non-collinear
+  unequal-amplitude point set. It compares closed-form values with a full voxel-loop normalized DFT for
+  identity and arbitrary rotations over every point in the full redundant disk at boxes `10` and `16` in
+  `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:56,163`. The explicit disk
+  populations are `81` and `197`, including both logical Nyquist endpoints.
+- The physical-volume gate constructs the executed immutable `E^{-1}X` reference, compares
+  `G(E^{-1}X)` with a direct DFT of `X`, and separately compares the executed gather with a test-only slow
+  packed/Friedel traversal at
+  `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:79,136`. The slow traversal
+  repeats the normalized polynomial KB weights, periodic wrapping, packing, Friedel conjugation, and
+  `padf^3` scaling without calling the executed stencil builder or neutral gather helper at
+  `src/main/volume/simple_cartesian_pose_refiner.f90:386`. This preserves source independence while using
+  the same immutable prepared reference.
+- The finite-box gate forms line-sum projections, uses a normalized two-dimensional FFT with the explicit
+  `1/N` factor, and compares the result with the direct three-dimensional DFT at
+  `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:256`. Identity and arbitrary
+  rotations are distinct observations; the arbitrary case records the zero-clipped trilinear sample
+  fraction. Stencil-switch counts are recorded for the arbitrary gather instead of treating a switch as a
+  derivative observation.
+- Every comparison uses its Phase 4 frozen family at
+  `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:340`. The test writes
+  `forward_hierarchy.tsv` and `forward_hierarchy_manifest.tsv` to the caller's explicit `evidence_dir` at
+  `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:364`. No calibration fixture,
+  threshold derivation, or evaluator-generated direct observation appears in this acceptance case.
+- Applicable policies are `doc/policies/KB_Interpolation_Policy.md` for padded coordinates, normalized KB
+  gather, and `padf^3` scaling; `doc/policies/reconstruct3D_pcg_policy.md` for the full-disk, discrete
+  envelope, and unchanged PCG-owner boundary; and `doc/policies/refine3D_policy.md` for the particle-pose
+  versus volume-domain separation. No UI policy applies because Phase 8 adds no production caller or
+  user-visible option.
+- Lightweight source checks are `PASS`. `git diff --check` exited `0`. The three edited Fortran files have
+  zero lines longer than 132 columns, zero trailing-whitespace findings, zero conflict markers, and zero
+  multiline-macro hazards. The new filename matches the existing
+  `simple_pose_cont_refinement_*.[fF]90` dependency glob. Static inspection finds no calibration-fixture
+  call, no `simple_reconstructor_pcg` import, and no executed-stencil or neutral-gather call from the slow
+  oracle. `production/CMakeLists.txt` remains unchanged at SHA-256
+  `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- Oracle must create a timestamped evidence directory directly below `~/Projects`, then run
+  `simple_test_pose_cont_refinement case=forward_hierarchy evidence_dir=<absolute-phase8-directory>` from
+  `~/Projects`. The hypothesis is that all four frozen comparison families pass for both acceptance boxes
+  over the full redundant disk, while clipping fractions and stencil switches remain explicit diagnostics.
+  The complete `simple_test_pose_cont_refinement` mother suite then tests that the keyed diagnostic does
+  not change the five scheduled pose regressions.
+- Local controller evidence is
+  `codex_logs/pose_cont_20260826_144540_289/phase08/prepare_20260827_190558_667.events.jsonl` and its sibling
+  prompt and stderr files. The exact approved rsync dry run is the final operation of this turn; its
+  complete output and exit status remain in that JSONL record. No source or controller-input change is
+  permitted after the dry run. No real synchronization, normalization, compilation, runtime test,
+  scientific acceptance test, or commit occurs in this prepare turn.
+
+**First Oracle validation attempt — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 7 `COMPLETE` and Phase 8
+  `READY FOR ORACLE VALIDATION`. The controller source-state check exited `0` and verified
+  `HEAD=e836bf020d8508219740bc6f254fbe5ef05999d8`, 1512 files, and digest
+  `A3A4D2738920F95C24609ED80E0C89690179F24B003F2328547C1DCE6C993E6E`.
+  `production/CMakeLists.txt` remained unchanged at SHA-256
+  `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- The exact approved `rsync -av --delete --info=progress2` command exited `0`, transferred 84 files to
+  `~/Projects/hael_SIMPLE-rsync-test`, and reported no deletion. An initial PowerShell normalization
+  command failed locally with exit `1`, and one direct SSH form stalled before command execution. The
+  corrected one-argument UCRT64 invocation of
+  `find . -type f \( -name '*.pl' -o -name '*.sh' \) -exec sed -i 's/\r$//' {} +` exited `0`.
+- The first correctly delivered build command exited `126` before script execution because the earlier
+  normalization wrapper had not changed the CRLF compile-helper shebang. After the corrected normalization,
+  the default incremental `module load gcc/15.2.0` and
+  `.codex/compile_debug.sh 2>&1 | tee build/build_debug.log` command exited `0`. It compiled
+  `simple_cartesian_pose_refiner.f90`, the new forward-hierarchy module, and the keyed mother driver, then
+  linked and installed `simple_test_pose_cont_refinement`. The conditional `SIMPLE_CLEAN_BUILD=yes` retry
+  did not run. The compiler log is `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`.
+- Two pre-scientific runtime attempts are retained separately. The command in
+  `~/Projects/continuous_3D_phase8_forward_20260827_192614` reached `~/Projects` but exited `127` before
+  test execution because the nested PATH variables expanded in the outer SSH shell. The corrected command
+  in `~/Projects/continuous_3D_phase8_forward_20260827_192642` executed the stale pre-build binary and
+  exited `1` because that binary did not contain `case=forward_hierarchy`. Neither attempt is scientific
+  evidence for AC-6.
+- The current focused executable then ran from `~/Projects` with evidence at
+  `~/Projects/continuous_3D_phase8_forward_20260827_192839` and exited `1`. The analytic DFT, executed DFT,
+  and slow-gather comparisons reached the finite-projection gate, which stopped at
+  `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:127` with
+  `forward hierarchy comparison exceeded its frozen tolerance`. The stopping path did not write
+  `forward_hierarchy.tsv` or print the maximum error, family limits, comparison name, or clipping fraction.
+  Runtime completion is `FAIL`; AC-6 scientific acceptance is `NEEDS MORE TESTING`. The unchanged mother
+  suite did not run.
+- The smallest local rework now prints the failing comparison name, family, sample count, maximum absolute
+  and scaled-relative errors, frozen absolute and relative limits, and clipping fraction before the stop at
+  `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:342` and line 362. It does not
+  change a fixture, transform, tolerance, assertion, production algorithm, or frozen contract. Lightweight
+  checks are `PASS`: `git diff --check` exits `0`; the three Phase 8 Fortran files have zero lines longer
+  than 132 columns and zero conflict markers; and `production/CMakeLists.txt` remains unchanged at the
+  recorded SHA-256.
+- Post-test checks exited `0`. Neither `~/Projects/hael_SIMPLE-rsync-test` nor `~/Projects/SIMPLE` contains
+  a top-level `validation/`, `continuous_3D_matrix_volumes_*`, or Phase 8 evidence directory. The three
+  Phase 8 evidence directories are directly below `~/Projects`. Four earlier
+  `~/Projects/continuous_3D_matrix_volumes_*` directories remain from prior phases; Phase 8 created no new
+  matrix directory and no runtime evidence below a source checkout.
+- This diagnostic source change invalidates the synchronized source and prepared fingerprint. Phase 8 is
+  `REWORK REQUIRED`; no second synchronization, compilation, runtime test, mother suite, or commit is
+  permitted in this turn. The safe next action is a new Phase 8 prepare turn with a new source fingerprint
+  and authoritative rsync dry run. That turn must preserve every frozen tolerance and use the new failure
+  record to diagnose the finite-projection comparison before another Oracle validation.
+
+**Rework prepare evidence — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 7 `COMPLETE` and Phase 8 `REWORK REQUIRED`.
+  Applicable policies remain `doc/policies/KB_Interpolation_Policy.md` for padded coordinates, normalized
+  KB gathers, and `padf^3`; `doc/policies/reconstruct3D_pcg_policy.md` for the full redundant disk,
+  discrete envelope, and unchanged PCG-owner boundary; and `doc/policies/refine3D_policy.md` for the
+  particle-pose versus volume-domain ownership boundary. No UI policy applies.
+- The focused diagnostic now records all 28 declared comparisons before its final assertion at
+  `production/tests/simple_pose_cont_refinement_forward_hierarchy_test.f90:51`. Each comparison stores its
+  pass state at line 360; the compact log prints that state at line 414; and `forward_hierarchy.tsv` adds a
+  machine-readable `passed` column at line 377. A failed metric still makes the executable fail after the
+  table, manifest, and compact log are complete.
+- The rework does not change an analytic fixture, acceptance box, Fourier disk, rotation, prepared
+  reference, comparison definition, frozen tolerance, production algorithm, or frozen contract. The
+  executed gather remains at `src/main/volume/simple_cartesian_pose_refiner.f90:357`, and the structurally
+  separate slow traversal remains at line 386. Keyed dispatch remains at
+  `production/tests/simple_test_pose_cont_refinement.f90:212`; the five-case mother schedule is unchanged.
+- Lightweight source checks are `PASS`. `git diff --check` exited `0`; the three Phase 8 Fortran files have
+  zero lines longer than 132 columns, zero conflict markers, and zero multiline-macro hazards. Static checks
+  find no calibration-fixture call and no `simple_reconstructor_pcg` import in the focused diagnostic.
+  `production/CMakeLists.txt` remains unchanged at SHA-256
+  `014480DFF49255399E1462CE37B3FD490CCECE6F8C72336B6A6B671AA97A60A4`.
+- The next Oracle run must create one timestamped evidence package directly below `~/Projects`, run
+  `simple_test_pose_cont_refinement case=forward_hierarchy evidence_dir=<absolute-phase8-directory>` from
+  `~/Projects`, and retain the complete log, manifest, and 28-row table. The hypothesis is that the complete
+  record will either satisfy every frozen family or identify the exact comparison, error, limit, clipping
+  fraction, and stencil-switch count that needs a contract-consistent scientific decision. Run the unchanged
+  mother suite only if the focused case passes. Compilation, runtime completion, and AC-6 acceptance remain
+  `NEEDS MORE TESTING` in this prepare turn.
+- Local controller evidence is
+  `codex_logs/pose_cont_20260826_144540_289/phase08/prepare_20260827_193501_573.events.jsonl` and its sibling
+  prompt and stderr files. The exact approved rsync dry run is the final operation of this turn; its complete
+  output and exit status remain in that JSONL record. No source or controller-input change is permitted after
+  the dry run. No real synchronization, normalization, compilation, runtime test, scientific acceptance test,
+  or commit occurs in this rework prepare turn.
+
+**Second Oracle validation attempt — 2026-08-27:**
+
+- The independent gate passed with Phases 0 through 7 `COMPLETE` and Phase 8
+  `READY FOR ORACLE VALIDATION`. The prepared-state check exited `0` and verified
+  `HEAD=e836bf020d8508219740bc6f254fbe5ef05999d8`, 1512 files, and digest
+  `B4444B3EEC6DDB9BD80F972FE4A06F6B867479F9FC7AEED6DB282BB00D8A1390`.
+- The exact approved `rsync -av --delete --info=progress2` command exited `0`, transferred 82 files to
+  `~/Projects/hael_SIMPLE-rsync-test`, and reported no deletion. The five transfers beyond the reviewed
+  77-file dry run were current controller and prepared-state evidence. The approved line-ending normalization
+  exited `0`; the compile-helper shebang ended in LF byte `0a`.
+- With `module load gcc/15.2.0`, the default incremental logged `.codex/compile_debug.sh` command exited `0`.
+  It compiled and linked the complete Phase 8 diagnostic and installed the Debug tree. The conditional clean
+  retry did not run. The compiler log is `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`.
+- The focused command ran from `~/Projects` and wrote its log, manifest, and complete 28-row comparison table
+  to `~/Projects/continuous_3D_phase8_forward_20260827_194435`. The executable SHA-256 was
+  `0179747e22745c7252f70dc7b3f19c3248303f18b9aa4f8056958ac9e853c061`. The command exited `1` after
+  25 comparisons passed and three arbitrary-rotation comparisons failed their frozen componentwise rules.
+- `finite_projection_r2` failed for box 10 with maximum absolute error `3.1899879352969554E-03`, maximum
+  scaled-relative error `1.7953239260303799`, and clipping fraction `0.329`, against absolute and relative
+  limits `1.0E-05` and `5.0E-02`. For box 16 it failed with `1.8791978675879884E-03`,
+  `1.7268192905424458`, and clipping fraction `0.27294921875` against the same limits.
+  `executed_dft_r2` failed for box 16 with maximum absolute error `1.6409070760202703E-04` and maximum
+  scaled-relative error `1.9846476459230120E-01`, against limits `1.0E-05` and `3.0E-02`.
+- All 16 analytic-object comparisons passed. Both identity finite projections passed. All four independent
+  slow-gather comparisons passed with maximum absolute error at most `6.841045E-09`, including the arbitrary
+  rotations with 76 and 192 recorded stencil switches. The failures therefore are scientific comparison
+  results, not an incomplete runtime or a fast-versus-slow source-fidelity defect. The mother suite did not run
+  because the frozen focused gate failed.
+- Phase 4 calibrated the executed-DFT and finite-projection families with four identity probes at boxes 8 and
+  12. The frozen Phase 8 gate applies those families over full disks at boxes 10 and 16 and an arbitrary
+  rotation. The observed 27.3-32.9 percent finite-box clipping and the box-16 interpolation miss cannot be
+  accepted by changing a tolerance, fixture, comparison, or gate after the result. No local source correction
+  is justified by the frozen contract.
+- Post-test checks exited `0`. Neither `~/Projects/hael_SIMPLE-rsync-test` nor `~/Projects/SIMPLE` contains a
+  top-level `validation/` or `continuous_3D_matrix_volumes_*` directory. No Phase 8 evidence directory exists
+  below a source checkout, and no `continuous_3D_matrix_volumes_*` directory exists directly below
+  `~/Projects`.
+- Phase 8 is `BLOCKED`. Scientific ownership must choose one contract-level action: define a valid arbitrary-
+  rotation finite-box comparison that separates the declared clipping/interpolation effects; require a new
+  production interpolation/projection algorithm that satisfies the present frozen families; or return the
+  contract above its approval boundary to `IN REVIEW` and recalibrate before any new acceptance observation.
+  Do not start Phase 9, weaken a frozen gate, repeat unchanged validation, or make a failing-phase commit.
 
 Implement AC-6 under **Independent forward evidence and comparison contracts**.
 
-**Tests and reason:** use analytic deltas and point sets for convention checks; compare brute-force DFT with analytic values, executed $G(E^{-1}X)$ with direct DFT under interpolation tolerances, the independent slow gather with the executed gather, and finite-box projection/FFT with direct DFT under its separately declared sum/average and clipping contract. Record stencil switches instead of testing derivatives across them.
+**Tests and reason:** use analytic deltas and point sets for convention checks; compare brute-force DFT with analytic values, executed $G(E^{-1}X)$ with direct DFT under the amended interpolation tolerance, the independent slow gather with the executed gather, and projection/FFT of $X_R$ with the three-dimensional DFT of that same $X_R$ under the amended finite-projection tolerance. Record original-volume rotated-frequency error, clipping, interpolation, support margin, and stencil switches as separate diagnostics.
 
-**Gate:** AC-6 passes over the full redundant disk, and each comparison is reported under its own frozen tolerance family without an inverse crime.
+**Gate:** AC-6 passes on fresh holdout boxes, volumes, and rotations over the full redundant disk, and each comparison is reported under its own amended frozen tolerance family without an inverse crime. The observed box-$10^3$/box-$16^3$ cases remain diagnostics.
 
 ### Phase 9 — run the complete configuration and regression matrix
 
