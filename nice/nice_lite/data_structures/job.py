@@ -4,6 +4,7 @@ import os
 
 from ..helpers import directory_exists, ensure_directory, print_error
 from ..models import JobModel
+from .workspace import Workspace
 
 
 class Job:
@@ -64,8 +65,10 @@ class Job:
             print_error("failed to create trash directory")
             return False
         if directory_exists(trash_path):
-            print_error("trash directory already exists")
-            return False
+            trash_path = os.path.join(trashdir, f"{self.jobmodel.dirc}_{self.jobmodel.id}")
+            if directory_exists(trash_path):
+                print_error("trash directory already exists")
+                return False
         if not directory_exists(self.absdir):
             print_error("job directory doesn't exist")
             return False
@@ -75,7 +78,9 @@ class Job:
             print_error("failed to rename job directory: " + self.absdir)
             return False
 
+        workspace_id = self.jobmodel.dset_id
         self.jobmodel.delete()
+        Workspace(workspace_id).reconcile_job_counter()
         return True
 
     # ------------------------------------------------------------------

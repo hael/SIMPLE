@@ -13,7 +13,7 @@ from django.urls import path
 # local imports
 from .      import api
 from .      import views
-from .views import stream_views
+from .views import batch_views, stream_views
 
 app_name = "nice_lite"
 
@@ -43,6 +43,7 @@ urlpatterns = [
     # Project
     # ------------------------------------------------------------------
     path("newproject/<str:mode>",              views.view_new_project,                            name="new_project"),
+    path("closeprojectform",                   views.view_close_new_project,                       name="close_new_project"),
     path("createproject",                      views.view_create_project,                          name="create_project"),
 
     # ------------------------------------------------------------------
@@ -50,13 +51,16 @@ urlpatterns = [
     # ------------------------------------------------------------------
     path("workspace",                          views.view_workspace,                               name="workspace"),
     path("workspacejobs",                      views.view_workspace_jobs,                          name="workspace_jobs"),
+    path("refreshworkspacejobs",               views.view_refresh_workspace_jobs,                  name="refresh_workspace_jobs"),
     path("deleteworkspace",                    views.view_delete_workspace,                        name="delete_workspace"),
     path("updateworkspacename",                views.view_update_workspace_name,                   name="update_workspace_name"),
     path("updateworkspacedescription",         views.view_update_workspace_description,            name="update_workspace_description"),
 
-    # Stream job lifecycle
+    # Job lifecycle
     path("newstream",                          views.view_job_builder,                             name="new_stream"),
     path("createbatch",                        views.view_create_batch,                            name="create_batch"),
+    path("stopbatch",                          batch_views.view_batch_stop,                        name="stop_batch"),
+    path("deletebatch",                        batch_views.view_batch_delete,                      name="delete_batch"),
     path("createstream",                       stream_views.view_stream_create_stream,             name="create_stream"),
     path("termstream",                         stream_views.view_stream_terminate_stream,          name="terminate_stream"),
     path("deletestream",                       stream_views.view_stream_delete_stream,             name="delete_stream"),

@@ -21,6 +21,14 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("isJobBuilderVisible", content)
         self.assertIn("&& !isJobBuilderVisible()", content)
 
+    def test_workspace_refresh_button_posts_missing_directory_cleanup(self):
+        content = self._read_template("workspace.html")
+
+        self.assertIn("workspace_job_refresh_enabled", content)
+        self.assertIn('<form method="POST" action="{% url \'nice_lite:refresh_workspace_jobs\' %}">', content)
+        self.assertIn('title="refresh job cards"', content)
+        self.assertIn("{% csrf_token %}", content)
+
     def test_browser_messages_remain_visible(self):
         content = self._read_template("messages.html")
 
@@ -46,6 +54,13 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('onclick="openClassicFileBrowser(this, \'dir\')"', classic_newjob)
         self.assertIn('onclick="openClassicFileBrowser(this, \'file\')"', classic_newjob)
         self.assertIn('new URLSearchParams({ selectedpath: selectedPath })', classic_newjob)
+
+    def test_new_project_back_button_closes_form_in_parent_shell(self):
+        newproject = self._read_template("newproject.html")
+
+        self.assertIn("{% url 'nice_lite:close_new_project' %}", newproject)
+        self.assertIn('target="_parent" title="back"', newproject)
+        self.assertNotIn("href={% url 'nice_lite:workspace' %}", newproject)
 
     def test_file_browser_navigation_passes_paths_as_query_parameters(self):
         filebrowser = self._read_template("filebrowser.html")
@@ -118,6 +133,8 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('function submitSelectedBatch(packageName)', jobbuilder)
         self.assertIn('if (!form) return;', jobbuilder)
         self.assertIn('sourceInput.value = sourceSelector.value;', jobbuilder)
+        self.assertIn('projectFile.toLowerCase().endsWith(".simple")', jobbuilder)
+        self.assertIn('projectFileInput.value = projectFile;', jobbuilder)
         self.assertIn('form.requestSubmit();', jobbuilder)
         self.assertIn('function validateSelectedBatchForm(packageName, programKey, form)', jobbuilder)
         self.assertIn('form.reportValidity();', jobbuilder)
@@ -148,10 +165,11 @@ class TemplateIntegrationTests(SimpleTestCase):
             "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
             "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
             "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
-            "batch_snapshot_sources": [{
+            "batch_project_sources": [{
                 "key": "snapshot:12:3",
                 "label": "stream 2 - particle set 3",
             }],
+            "default_batch_source": "workspace",
         })
 
         self.assertEqual(rendered.count('value="workspace" selected>workspace project'), 2)
@@ -159,6 +177,64 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertEqual(rendered.count('name="batch_source" value="workspace"'), 2)
         self.assertIn('id="simple_batch_source"', rendered)
         self.assertIn('id="single_batch_source"', rendered)
+
+    def test_batch_project_source_defaults_to_latest_completed_job(self):
+        rendered = render_to_string("jobbuilder.html", {
+            "stream_user_inputs": [],
+            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "batch_project_sources": [{
+                "key": "job:8",
+                "label": "job 1 - Import Movie Data",
+            }],
+            "default_batch_source": "job:8",
+        })
+
+        self.assertEqual(rendered.count('value="job:8" selected'), 2)
+        self.assertEqual(rendered.count('name="batch_source" value="job:8"'), 2)
+        self.assertEqual(rendered.count('value="workspace" >workspace project'), 2)
+
+    def test_batch_project_file_selector_uses_inherited_simple_project(self):
+        project_path = "/workspace/1_import_movies/workspace.simple"
+        rendered = render_to_string("jobbuilder.html", {
+            "stream_user_inputs": [],
+            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
+            "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
+            "batch_project_file_selector_enabled": True,
+            "default_batch_project_file": project_path,
+        })
+
+        self.assertIn('id="simple_batch_project_file"', rendered)
+        self.assertIn('id="single_batch_project_file"', rendered)
+        self.assertNotIn('id="simple_batch_source"', rendered)
+        self.assertNotIn('id="single_batch_source"', rendered)
+        self.assertEqual(
+            rendered.count(f'name="batch_project_file" value="{project_path}"'),
+            2,
+        )
+        self.assertEqual(rendered.count('data-required-extension=".simple"'), 2)
+        self.assertEqual(
+            rendered.count("openWorkspaceBrowser('file', 'simple_batch_project_file', '.simple', 'project_file')"),
+            1,
+        )
+        self.assertEqual(
+            rendered.count("openWorkspaceBrowser('file', 'single_batch_project_file', '.simple', 'project_file')"),
+            1,
+        )
+
+    def test_file_browser_preserves_and_enforces_extension_filter(self):
+        filebrowser = self._read_template("filebrowser.html")
+
+        self.assertGreaterEqual(
+            filebrowser.count('name="extension" value="{{ required_extension }}"'),
+            3,
+        )
+        self.assertIn('const requiredExtension = "{{ required_extension|escapejs }}";', filebrowser)
+        self.assertIn('!selectedpath.value.toLowerCase().endsWith(requiredExtension)', filebrowser)
 
     def test_batch_inputs_render_current_ui_json_schema(self):
         context = {
@@ -207,7 +283,8 @@ class TemplateIntegrationTests(SimpleTestCase):
             }],
             "single_programs": [],
             "single_program_inputs": [],
-            "batch_snapshot_sources": [],
+            "batch_project_sources": [],
+            "default_batch_source": "workspace",
         }
 
         rendered = render_to_string("jobbuilder.html", context)
@@ -238,3 +315,72 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertEqual(jobbuilder.count('onclick="closeJobBuilder()"'), 3)
         self.assertEqual(jobbuilder.count('if (actions) actions.classList.add("hidden");'), 2)
         self.assertEqual(jobbuilder.count('if (actions) actions.classList.remove("hidden");'), 2)
+
+    def test_batch_cards_reuse_stream_stop_and_delete_controls(self):
+        batch_card = self._read_template("nice_classic/_batch_card.html")
+        jobs = self._read_template("jobs.html")
+
+        self.assertIn("batch_job_controls_enabled", batch_card)
+        self.assertIn("{% url 'nice_lite:stop_batch' %}", batch_card)
+        self.assertIn('onclick="stopBatchJob(this)"', batch_card)
+        self.assertIn('<circle cx="8" cy="8" r="6"/>', batch_card)
+        self.assertIn('<rect x="5.5" y="5.5" width="5" height="5"', batch_card)
+        self.assertIn("{% url 'nice_lite:delete_batch' %}", batch_card)
+        self.assertIn('onclick="deleteBatchJob(this)"', batch_card)
+        self.assertIn('<polyline points="2,4 14,4"/>', batch_card)
+        self.assertIn('<path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>', batch_card)
+        self.assertIn("const stopBatchJob = (button) => {", jobs)
+        self.assertIn("const deleteBatchJob = (button) => {", jobs)
+        self.assertIn("permanently delete batch job", jobs)
+        self.assertIn("This cannot be undone.", jobs)
+
+    def test_batch_card_controls_follow_opt_in_and_job_status(self):
+        job = {
+            "id": 7,
+            "disp": 1,
+            "name": "import movies",
+            "dirc": "1_import_movies",
+            "args": {},
+            "master_stats": {"package": "simple"},
+            "status": "running",
+        }
+
+        disabled = render_to_string("nice_classic/_batch_card.html", {
+            "job": job,
+            "batch_job_controls_enabled": False,
+        })
+        running = render_to_string("nice_classic/_batch_card.html", {
+            "job": job,
+            "batch_job_controls_enabled": True,
+        })
+        job["status"] = "queued"
+        queued = render_to_string("nice_classic/_batch_card.html", {
+            "job": job,
+            "batch_job_controls_enabled": True,
+        })
+        job["status"] = "finished"
+        finished = render_to_string("nice_classic/_batch_card.html", {
+            "job": job,
+            "batch_job_controls_enabled": True,
+        })
+
+        self.assertNotIn('title="stop batch job"', disabled)
+        self.assertNotIn('title="delete batch job"', disabled)
+        self.assertIn('title="stop batch job"', running)
+        self.assertNotIn('title="delete batch job"', running)
+        self.assertIn("rounded-full bg-streamaction/10 text-streamaction", running)
+        self.assertNotIn("w-1.5 h-1.5", running)
+        self.assertLess(
+            running.index('title="stop batch job"'),
+            running.index('job directory'),
+        )
+        self.assertNotIn('title="stop batch job"', queued)
+        self.assertIn('title="delete batch job"', queued)
+        self.assertIn("rounded-full bg-streamline/40 text-streamlabel", queued)
+        self.assertNotIn('title="stop batch job"', finished)
+        self.assertIn('title="delete batch job"', finished)
+        self.assertIn("rounded-full bg-streamring/10 text-streamaccent", finished)
+        self.assertLess(
+            finished.index('title="delete batch job"'),
+            finished.index('job directory'),
+        )

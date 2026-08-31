@@ -1,8 +1,10 @@
 from .project_views      import view_create_project
+from .project_views      import view_close_new_project
 from .project_views      import view_new_project
 from .file_browser_views import view_file_browser
 from .workspace_views    import view_workspace
 from .workspace_views    import view_workspace_jobs
+from .workspace_views    import view_refresh_workspace_jobs
 from .workspace_views    import view_delete_workspace
 from .workspace_views    import view_update_workspace_name
 from .workspace_views    import view_update_workspace_description
@@ -11,6 +13,8 @@ from .index_views        import view_user_login
 from .index_views        import view_user_logout
 from .job_builder_views  import view_job_builder
 from .job_builder_views  import view_create_batch
+from .batch_views        import view_batch_delete
+from .batch_views        import view_batch_stop
 from .stream_views       import view_stream_create_stream
 from .stream_views       import view_stream_terminate_stream
 from .stream_views       import view_stream_delete_stream
@@ -25,9 +29,11 @@ from .stream_views       import view_stream_movies
 
 __all__ = [
     "view_create_project",
+    "view_close_new_project",
     "view_file_browser",
     "view_workspace",
     "view_workspace_jobs",
+    "view_refresh_workspace_jobs",
     "view_delete_workspace",
     "view_update_workspace_name",
     "view_update_workspace_description",
@@ -37,6 +43,8 @@ __all__ = [
     "view_user_logout",
     "view_job_builder",
     "view_create_batch",
+    "view_batch_delete",
+    "view_batch_stop",
     "view_stream_create_stream",
     "view_stream_terminate_stream",
     "view_stream_delete_stream",

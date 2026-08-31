@@ -1,5 +1,7 @@
 # global imports
 import os
+import shutil
+import signal
 import time
 
 # django imports
@@ -11,10 +13,14 @@ from ..helpers import directory_exists, ensure_directory, print_error
 from ..models import JobModel, WorkspaceModel
 from .simple import SIMPLEBatch, SIMPLEProjFile, SIMPLEProject
 from .job import Job
+from .workspace import Workspace
 
 
 class BatchJob(Job):
     """Classic (non-stream) SIMPLE job attached to a workspace."""
+
+    TERMINAL_STATUSES = frozenset(("finished", "failed", "stopped"))
+    DELETABLE_STATUSES = TERMINAL_STATUSES | frozenset(("queued",))
 
     def __init__(self, pckg=None, id=None, request=None):
         super().__init__(id=None)
@@ -322,6 +328,153 @@ class BatchJob(Job):
     # Updates / completion
     # ------------------------------------------------------------------
 
+    def _local_process_is_running(self, pid):
+        """Return True while the generated local job process still exists."""
+        try:
+            process_dir = os.path.realpath(os.readlink(f"/proc/{pid}/cwd"))
+        except OSError:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return False
+            except PermissionError:
+                return True
+            return True
+        return process_dir == os.path.realpath(self.get_absdir() or "")
+
+    def queued_job_can_delete(self):
+        """Return True for a stale local queued job whose process has exited."""
+        jobmodel = JobModel.objects.filter(id=self.id).first()
+        if jobmodel is None or jobmodel.status != "queued":
+            return False
+
+        job_dir = self.get_absdir()
+        if job_dir is None:
+            return False
+
+        try:
+            with open(os.path.join(job_dir, "job.script"), encoding="utf-8") as script_file:
+                if "# localtemplate" not in script_file.read(4096):
+                    return False
+            with open(os.path.join(job_dir, "nice.pid"), encoding="utf-8") as pid_file:
+                pid = int(pid_file.read(32).strip())
+        except (OSError, ValueError):
+            return False
+
+        return pid > 1 and not self._local_process_is_running(pid)
+
+    def reconcile_local_completion(self):
+        """Mark a locally dispatched job finished after a verified normal exit.
+
+        This is a conservative fallback for local jobs whose final NICE callback
+        did not reach Django. Scheduler jobs and abnormal local exits are left
+        unchanged for their authoritative status path to handle.
+        """
+        if self.jobmodel is None or self.status not in ("queued", "running"):
+            return False
+
+        job_dir = self.get_absdir()
+        if job_dir is None:
+            return False
+
+        try:
+            with open(os.path.join(job_dir, "job.script"), encoding="utf-8") as script_file:
+                if "# localtemplate" not in script_file.read(4096):
+                    return False
+            with open(os.path.join(job_dir, "nice.pid"), encoding="utf-8") as pid_file:
+                pid = int(pid_file.read(32).strip())
+        except (OSError, ValueError):
+            return False
+
+        if pid <= 1 or self._local_process_is_running(pid):
+            return False
+
+        try:
+            stdout_path = os.path.join(job_dir, "stdout.log")
+            stdout_size = os.path.getsize(stdout_path)
+            with open(stdout_path, "rb") as stdout_file:
+                stdout_file.seek(max(0, stdout_size - 65536))
+                stdout_tail = stdout_file.read().decode("utf-8", errors="replace")
+        except OSError:
+            return False
+
+        normal_stop = any(
+            line.startswith("**** ") and line.endswith(" NORMAL STOP ****")
+            for line in stdout_tail.splitlines()
+        )
+        if not normal_stop:
+            return False
+
+        with transaction.atomic():
+            jobmodel = JobModel.objects.select_for_update().filter(id=self.id).first()
+            if jobmodel is None or jobmodel.status not in ("queued", "running"):
+                return False
+            jobmodel.status = "finished"
+            jobmodel.master_status = "finished"
+            jobmodel.save(update_fields=("status", "master_status"))
+
+        self.jobmodel = jobmodel
+        self.status = "finished"
+        return True
+
+    def _get_local_process_group(self, pid):
+        """Return an isolated process group owned by this job, or ``None``."""
+        job_dir = self.get_absdir()
+        if job_dir is None:
+            print_error("stop: job directory is unavailable")
+            return None
+
+        try:
+            process_dir = os.path.realpath(os.readlink(f"/proc/{pid}/cwd"))
+            job_dir = os.path.realpath(job_dir)
+            process_group = os.getpgid(pid)
+        except OSError:
+            print_error("stop: job process is not available on this host")
+            return None
+
+        if process_dir != job_dir:
+            print_error("stop: pid does not belong to the job directory")
+            return None
+        if process_group != pid:
+            print_error("stop: job process group is not isolated")
+            return None
+        return process_group
+
+    def stop(self):
+        """Stop a running local batch job by terminating its process group."""
+        with transaction.atomic():
+            jobmodel = JobModel.objects.select_for_update().filter(id=self.id).first()
+            if jobmodel is None or jobmodel.status != "running":
+                print_error("stop: batch job is not running")
+                return False
+
+            pid_path = os.path.join(self.get_absdir() or "", "nice.pid")
+            try:
+                with open(pid_path, encoding="utf-8") as pid_file:
+                    pid = int(pid_file.read(32).strip())
+            except (OSError, ValueError):
+                print_error("stop: nice.pid is missing or invalid")
+                return False
+            if pid <= 1:
+                print_error("stop: nice.pid contains an unsafe process id")
+                return False
+
+            process_group = self._get_local_process_group(pid)
+            if process_group is None:
+                return False
+            try:
+                os.killpg(process_group, signal.SIGTERM)
+            except OSError:
+                print_error("stop: failed to terminate the job process group")
+                return False
+
+            self.status = "stopped"
+            jobmodel.status = "stopped"
+            jobmodel.master_status = "stopped"
+            jobmodel.master_update = {}
+            jobmodel.save(update_fields=("status", "master_status", "master_update"))
+            return True
+
     def updateDescription(self, request):
         if "new_job_description" in request.POST:
             return self.set_description(request.POST["new_job_description"])
@@ -340,25 +493,35 @@ class BatchJob(Job):
 
     def updateStats(self, stats_json, project, workspace):
         del project, workspace
-        jobmodel = JobModel.objects.filter(id=self.id).first()
-        if jobmodel is None:
-            return {}
+        with transaction.atomic():
+            jobmodel = JobModel.objects.select_for_update().filter(id=self.id).first()
+            if jobmodel is None:
+                return {}
+            # Script-level and in-process callbacks can race at shutdown. Once
+            # one of them records a terminal state, do not let a later callback
+            # resurrect the job or replace the original outcome.
+            if jobmodel.status in self.TERMINAL_STATUSES:
+                return {}
 
-        response = {}
-        if "job_heartbeat" in stats_json:
-            jobmodel.master_heartbeat = int(time.time())
+            response = {}
+            if "job_heartbeat" in stats_json:
+                jobmodel.master_heartbeat = int(time.time())
 
-        if "job" in stats_json and "terminate" in stats_json["job"]:
-            jobmodel.status = "finished"
-            jobmodel.master_status = "finished"
-        else:
-            jobmodel.status = "running"
-            jobmodel.master_status = "running"
-            response = jobmodel.master_update or {}
-            jobmodel.master_update = {}
+            job_stats = stats_json.get("job")
+            if isinstance(job_stats, dict) and "terminate" in job_stats:
+                terminal_status = job_stats.get("status")
+                if not isinstance(terminal_status, str) or terminal_status not in self.TERMINAL_STATUSES:
+                    terminal_status = "finished"
+                jobmodel.status = terminal_status
+                jobmodel.master_status = terminal_status
+            else:
+                jobmodel.status = "running"
+                jobmodel.master_status = "running"
+                response = jobmodel.master_update or {}
+                jobmodel.master_update = {}
 
-        jobmodel.save()
-        return response
+            jobmodel.save()
+            return response
 
     # ------------------------------------------------------------------
     # Projfile helpers
@@ -383,28 +546,59 @@ class BatchJob(Job):
     # ------------------------------------------------------------------
 
     def delete(self, project, workspace):
+        """Permanently remove a batch job and reset its workspace job counter."""
         del project
         jobmodel = JobModel.objects.filter(id=self.id).first()
         if jobmodel is None:
             return False
-
-        workspace_dir = os.path.join(jobmodel.dset.proj.dirc, jobmodel.dset.dirc)
-        trash_dir = os.path.join(workspace_dir, "TRASH")
-        if not ensure_directory(trash_dir):
+        if jobmodel.status not in self.DELETABLE_STATUSES:
+            print_error("delete: batch job status is not deletable")
+            return False
+        if jobmodel.status == "queued" and not self.queued_job_can_delete():
+            print_error("delete: queued batch job is still active or unverifiable")
             return False
 
-        job_path = os.path.join(workspace_dir, self.dirc)
-        trash_path = os.path.join(trash_dir, self.dirc)
+        workspace_dir = os.path.realpath(
+            os.path.join(jobmodel.dset.proj.dirc, jobmodel.dset.dirc)
+        )
+        if not directory_exists(workspace_dir):
+            return False
+
+        job_dirc = jobmodel.dirc
+        if (
+            not isinstance(job_dirc, str)
+            or not job_dirc.strip()
+            or os.path.isabs(job_dirc)
+        ):
+            return False
+
+        raw_job_path = os.path.abspath(os.path.join(workspace_dir, job_dirc))
+        job_path = os.path.realpath(raw_job_path)
+        try:
+            path_is_safe = (
+                job_path != workspace_dir
+                and os.path.commonpath((workspace_dir, job_path)) == workspace_dir
+            )
+        except ValueError:
+            path_is_safe = False
+        if not path_is_safe or os.path.islink(raw_job_path):
+            print_error("delete: unsafe batch job directory")
+            return False
         if not directory_exists(job_path):
-            return False
-        if os.path.exists(trash_path):
             return False
 
         try:
-            os.rename(job_path, trash_path)
+            shutil.rmtree(job_path)
         except OSError:
-            print_error("delete: failed to move job to trash")
+            print_error("delete: failed to permanently remove batch job directory")
             return False
 
+        workspace_id = jobmodel.dset_id
         jobmodel.delete()
+        if (
+            getattr(workspace, "id", None) != workspace_id
+            or not callable(getattr(workspace, "reconcile_job_counter", None))
+        ):
+            workspace = Workspace(workspace_id)
+        workspace.reconcile_job_counter()
         return True

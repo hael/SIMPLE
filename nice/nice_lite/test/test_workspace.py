@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from ..data_structures.project   import Project
 from ..data_structures.workspace import Workspace
+from ..models                    import JobModel
 from ..models                    import ProjectModel
 from ..models                    import WorkspaceModel
 from .test_helpers               import assertProject
@@ -98,3 +99,33 @@ class WorkspaceTest(TestCase):
     )
     workspace = Workspace(id=1)
     assertWorkspace(workspace, id=1, desc=self.test_workspace_desc)
+
+  def test_workspace_reconciles_job_counter_to_highest_surviving_job(self):
+    workspace_model = WorkspaceModel.objects.get(id=1)
+    workspace_model.jcnt = 7
+    workspace_model.save(update_fields=["jcnt"])
+    JobModel.objects.create(
+      dset=workspace_model,
+      cdat=timezone.now(),
+      disp=2,
+    )
+    JobModel.objects.create(
+      dset=workspace_model,
+      cdat=timezone.now(),
+      disp=5,
+    )
+
+    workspace = Workspace(id=workspace_model.id)
+    self.assertTrue(workspace.reconcile_job_counter())
+    workspace_model.refresh_from_db()
+    self.assertEqual(workspace_model.jcnt, 5)
+
+    JobModel.objects.filter(dset=workspace_model, disp=5).delete()
+    self.assertTrue(workspace.reconcile_job_counter())
+    workspace_model.refresh_from_db()
+    self.assertEqual(workspace_model.jcnt, 2)
+
+    JobModel.objects.filter(dset=workspace_model).delete()
+    self.assertTrue(workspace.reconcile_job_counter())
+    workspace_model.refresh_from_db()
+    self.assertEqual(workspace_model.jcnt, 0)

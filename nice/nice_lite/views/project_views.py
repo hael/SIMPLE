@@ -2,6 +2,7 @@
 
 This module serves:
 - ``newproject.html`` rendering for project creation UI
+- close/restore navigation for the project creation UI
 - write endpoint that creates a project and an initial workspace
 """
 
@@ -12,7 +13,7 @@ import shutil
 # django imports
 from django.contrib                 import messages
 from django.shortcuts               import redirect, render
-from django.views.decorators.http   import require_POST
+from django.views.decorators.http   import require_GET, require_POST
 from django.contrib.auth.decorators import login_required
 
 # local imports
@@ -80,5 +81,14 @@ def view_new_project(request, mode):
     context = {"mode": mode}
     response = render(request, template, context)
     # New-project page should always clear stale checksums from prior views.
+    clear_checksum_cookies(request, response)
+    return response
+
+
+@login_required(login_url="/login")
+@require_GET
+def view_close_new_project(request):
+    """Close the form and return to the last selected project/workspace."""
+    response = redirect("nice_lite:index")
     clear_checksum_cookies(request, response)
     return response

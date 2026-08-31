@@ -115,19 +115,33 @@
                 </div>
             </div>
 
-            <!-- Delete workspace -->
-            <form method="POST" action="{% url 'nice_lite:delete_workspace' %}" target="_parent" class="self-end">
-                {% csrf_token %}
-                <input name="delete_workspace_id" value="{{ current_workspace_id }}" type="hidden">
-                <button onclick="return confirm('please confirm that you wish to delete workspace {{ current_workspace_name|escapejs }}')"
-                        type="submit" title="delete workspace"
-                        class="text-streamicon hover:text-streamerror transition-colors">
-                    <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <polyline points="2,4 14,4"/>
-                        <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
-                    </svg>
-                </button>
-            </form>
+            <div class="self-end flex items-center gap-3">
+                {% if workspace_job_refresh_enabled %}
+                    <form method="POST" action="{% url 'nice_lite:refresh_workspace_jobs' %}">
+                        {% csrf_token %}
+                        <button type="submit" title="refresh job cards" aria-label="refresh job cards"
+                                class="text-streamicon hover:text-streamaccent transition-colors">
+                            <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M13.5 4.5v-3m0 0h-3m3 0-2.1 2.1A5.5 5.5 0 1 0 13.2 10"/>
+                            </svg>
+                        </button>
+                    </form>
+                {% endif %}
+
+                <!-- Delete workspace -->
+                <form method="POST" action="{% url 'nice_lite:delete_workspace' %}" target="_parent">
+                    {% csrf_token %}
+                    <input name="delete_workspace_id" value="{{ current_workspace_id }}" type="hidden">
+                    <button onclick="return confirm('please confirm that you wish to delete workspace {{ current_workspace_name|escapejs }}')"
+                            type="submit" title="delete workspace"
+                            class="text-streamicon hover:text-streamerror transition-colors">
+                        <svg class="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                            <polyline points="2,4 14,4"/>
+                            <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
 
         </div>
     </div>

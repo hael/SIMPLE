@@ -134,11 +134,13 @@ def view_index(request):
     }
 
     # Persist current selection to keep the stream UI stateful across requests.
+    # Opening the new-project form is only a temporary navigation state, so keep
+    # the last valid project/workspace cookies for the Back action to restore.
     response = render(request, template, context)
-    response.set_cookie(key="selected_project_id", value=projectid)
-    response.set_cookie(key="selected_workspace_id", value=workspaceid)
+    if projectid != -1:
+        response.set_cookie(key="selected_project_id", value=projectid)
+        response.set_cookie(key="selected_workspace_id", value=workspaceid)
     response.set_cookie(key="mode", value="stream")
     clear_checksum_cookies(request, response)
     return response
-
 

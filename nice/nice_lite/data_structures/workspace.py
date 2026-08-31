@@ -4,11 +4,13 @@
 import os
 import re
 
+from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 
 # local imports
 from ..helpers import *
-from ..models import WorkspaceModel
+from ..models import JobModel, WorkspaceModel
 
 
 class Workspace:
@@ -88,6 +90,28 @@ class Workspace:
     # ------------------------------------------------------------------
     # Mutators
     # ------------------------------------------------------------------
+
+    def reconcile_job_counter(self):
+        """Reset the job counter to the highest surviving job display number."""
+        if self.workspacemodel is None:
+            print_error("workspacemodel is none")
+            return False
+
+        with transaction.atomic():
+            workspacemodel = WorkspaceModel.objects.select_for_update().filter(id=self.id).first()
+            if workspacemodel is None:
+                print_error("workspacemodel is none")
+                return False
+
+            highest_job_number = JobModel.objects.filter(dset=workspacemodel).aggregate(
+                highest=Max("disp")
+            )["highest"] or 0
+            if workspacemodel.jcnt != highest_job_number:
+                workspacemodel.jcnt = highest_job_number
+                workspacemodel.save(update_fields=["jcnt"])
+
+        self.workspacemodel.jcnt = highest_job_number
+        return True
 
     def new(self, project, user):
         """
