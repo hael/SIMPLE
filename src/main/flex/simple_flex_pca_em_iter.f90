@@ -705,8 +705,10 @@ contains
         ! memory survives them. The on-disk cache does survive: it stores the iteration-independent
         ! prefix (noise normalisation, FFT, crop to box_crop), which at box=360/box_crop=64 is where
         ! the measured 48% of probe time goes. Masking and the device prep both keep the full box.
-        l_pcache = ptcl_cache_in_use(params, build) .and. .not. l_gpu_prep .and. &
-            &cov_image_mask_radius(params) <= 0.0
+        ! Cache-served probe reads are disabled: the c5dae62b7 matcher refactor removed
+        ! init_rec's cached buffer sizing, so requesting cache reads here would fetch
+        ! cropped images into full-size planes. Re-enable together with matcher support.
+        l_pcache = .false.
         if( l_pcache )then
             write(logfhandle,'(A)') '>>> FLEX_PCA PROBE: particles served from the downscaled cache'
             call flush(logfhandle)
@@ -814,7 +816,7 @@ contains
                     &the shared-direction bank for ',nvalid_pol,' of ',npp
                 call flush(logfhandle)
             endif
-            call init_rec(params, build, MAXIMGBATCHSZ, fpls, cached=l_pcache)
+            call init_rec(params, build, MAXIMGBATCHSZ, fpls)
             ! ---- ACCUMULATE: distributed when the master has parts, in-process otherwise ----
             ! One qsys round per EM iteration, because the basis the E-step projects changes every
             ! iteration: workers are relaunched against the master's refreshed flex_pca_pc*.mrc
