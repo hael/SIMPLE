@@ -134,7 +134,7 @@ subroutine exec_test_single_workflow( self, cline )
     type(commander_import_particles)      :: ximptcls
     type(commander_analysis2D_nano)       :: xan2Dnano
     type(commander_autorefine3D_nano)     :: xaref3Dnano
-    type(string)                          :: projname, projfile
+    type(string)                          :: projname, projfile, project_dir, startvol
     character(len=*), parameter           :: REPROJECTIONS_STK = 'reprojections.mrc'
     character(len=*), parameter           :: TRAJECTORY_STK    = 'simulated_trajectory.mrc'
     character(len=*), parameter           :: DENOISED_STK      = 'denoised_trajectory.mrc'
@@ -178,7 +178,6 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_denoise%set('stk',                    TRAJECTORY_STK)
     call cline_denoise%set('outstk',                   DENOISED_STK)
     call cline_denoise%set('smpd',                      params%smpd)
-    call cline_denoise%set('pca_mode',                       'kpca')
     call cline_denoise%set('nthr',                             NTHR)
     call xdenoise%execute(cline_denoise)
 
@@ -186,6 +185,9 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_nproj%set('prg',                       'new_project')
     call cline_nproj%set('projname',             projname%to_char())
     call xnproj%execute(cline_nproj)
+    call simple_getcwd(project_dir)
+    projfile = filepath(project_dir, projfile)
+    startvol = filepath(project_dir, 'startvol.mrc')
 
     call cline_imptcls%set('prg',                'import_particles')
     call cline_imptcls%set('mkdir',                            'no')
@@ -201,10 +203,11 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_an2Dnano%set('element',               params%element)
     call cline_an2Dnano%set('nthr',                            NTHR)
     call xan2Dnano%execute(cline_an2Dnano)
+    if( .not. file_exists(startvol) ) THROW_HARD('analysis2D_nano did not generate '//startvol%to_char())
 
     call cline_aref3Dnano%set('prg',            'autorefine3D_nano')
     call cline_aref3Dnano%set('projfile',        projfile%to_char())
-    call cline_aref3Dnano%set('vol1',                'startvol.mrc')
+    call cline_aref3Dnano%set('vol1',            startvol%to_char())
     call cline_aref3Dnano%set('smpd',                   params%smpd)
     call cline_aref3Dnano%set('element',             params%element)
     call cline_aref3Dnano%set('nthr',                          NTHR)
