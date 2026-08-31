@@ -1,7 +1,6 @@
 !@descr: 3D strategy for probabilistic projection matching
 module simple_strategy3D_prob
 use simple_core_module_api
-use simple_strategy3D_alloc, only: s3D
 use simple_strategy3D_utils, only: assign_ori
 use simple_parameters,      only: parameters
 use simple_strategy3D,      only: strategy3D
@@ -40,8 +39,8 @@ contains
         class(oris),            intent(inout) :: os
         integer,                intent(in)    :: ithr
         integer :: iproj, iptcl_map, irot, istate, iref
-        real    :: corr, frac, sh(2), inpl_coord
-        logical :: inpl_valid
+        real    :: corr, frac, sh(2), inpl_coord, fixed_euler(3), assigned_euler(3)
+        logical :: inpl_valid, l_fixed_projection
         if( os%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
@@ -55,55 +54,39 @@ contains
                 ! keep its current orientation unchanged and move on
                 return
             endif
+            l_fixed_projection = trim(self%s%p_ptr%multivol_mode) == 'input_oris_fixed' .and. &
+                &trim(self%s%p_ptr%refine) == 'prob_state'
+            if( l_fixed_projection ) fixed_euler = self%s%b_ptr%spproj_field%get_euler(self%s%iptcl)
             iproj     =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%iproj
             corr      = eulprob_corr_switch(self%spec%eulprob_obj_part%assgn_map(iptcl_map)%dist, self%s%p_ptr%cc_objfun)
             irot      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%inpl
             frac      =                     self%spec%eulprob_obj_part%assgn_map(iptcl_map)%frac
             if( frac <= 0. ) frac = 100.
             iref      = (istate-1)*self%s%p_ptr%nspace + iproj
-            if( trim(self%s%p_ptr%multivol_mode).eq.'input_oris_fixed' .and. &
-                &trim(self%s%p_ptr%refine).eq.'prob_state' )then
-                call assign_state_fixed(self, istate, corr)
+            sh = 0.
+            if( self%s%doshift .and. &
+                &self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
+                sh = [self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
+                    & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y]
+            endif
+            if( self%s%uses_continuous_refinement() )then
+                call self%s%refine_assignment_continuously(iref, irot, corr, sh, &
+                    &inpl_coord, inpl_valid)
+                call assign_ori(self%s, iref, irot, corr, sh, inpl_coord, inpl_valid)
             else
-                sh = 0.
-                if( self%s%doshift .and. &
-                    &self%spec%eulprob_obj_part%assgn_map(iptcl_map)%has_sh )then
-                    sh = [self%spec%eulprob_obj_part%assgn_map(iptcl_map)%x,&
-                        & self%spec%eulprob_obj_part%assgn_map(iptcl_map)%y]
-                endif
-                if( self%s%uses_continuous_refinement() )then
-                    call self%s%refine_assignment_continuously(iref, irot, corr, sh, &
-                        &inpl_coord, inpl_valid)
-                    call assign_ori(self%s, iref, irot, corr, sh, inpl_coord, inpl_valid)
-                else
-                    call assign_ori(self%s, iref, irot, corr, sh)
-                endif
+                call assign_ori(self%s, iref, irot, corr, sh)
+            endif
+            if( l_fixed_projection )then
+                assigned_euler      = self%s%b_ptr%spproj_field%get_euler(self%s%iptcl)
+                assigned_euler(1:2) = fixed_euler(1:2)
+                call self%s%b_ptr%spproj_field%set_euler(self%s%iptcl, assigned_euler)
+                call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'mi_proj', 1.)
             endif
             call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac', frac)
         else
             call os%reject(self%s%iptcl)
         endif
     end subroutine srch_prob
-
-    subroutine assign_state_fixed( self, state, corr )
-        class(strategy3D_prob), intent(inout) :: self
-        integer,                intent(in)    :: state
-        real,                   intent(in)    :: corr
-        real :: mi_state
-        if( state < 1 .or. state > self%s%p_ptr%nstates )then
-            THROW_HARD('state index outside boundary; assign_state_fixed')
-        endif
-        if( .not. s3D%state_exists(state) )then
-            THROW_HARD('empty state: '//int2str(state)//'; assign_state_fixed')
-        endif
-        mi_state = 0.
-        if( self%s%prev_state == state ) mi_state = 1.
-        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'state',    real(state))
-        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'mi_state', mi_state)
-        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'corr',     corr)
-        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'mi_proj',  1.)
-        call self%s%b_ptr%spproj_field%set(self%s%iptcl, 'frac',     100.)
-    end subroutine assign_state_fixed
 
     subroutine oris_assign_prob( self )
         class(strategy3D_prob), intent(inout) :: self

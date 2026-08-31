@@ -3,6 +3,8 @@ module simple_commanders_refine3D
 use simple_commanders_api
 use simple_pftc_srch_api
 use simple_refine3D_fnames,   only: refine3D_state_vol_fname, refine3D_fsc_fname
+use simple_refine3D_stage_plan, only: refine3D_stage_plan_entry, plan_refine3D_frequency_stages
+use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
 implicit none
 #include "simple_local_flags.inc"
 
@@ -16,15 +18,15 @@ type, extends(commander_base) :: commander_refine3D_auto
     procedure :: execute      => exec_refine3D_auto
 end type commander_refine3D_auto
 
-type, extends(commander_base) :: commander_refine3D_multi
+type, extends(commander_base) :: commander_refine3D_states
   contains
-    procedure :: execute      => exec_refine3D_multi
-end type commander_refine3D_multi
+    procedure :: execute      => exec_refine3D_states
+end type commander_refine3D_states
 
-type, extends(commander_base) :: commander_refine3D_het
+type, extends(commander_base) :: commander_classify3D_refs
   contains
-    procedure :: execute      => exec_refine3D_het
-end type commander_refine3D_het
+    procedure :: execute      => exec_classify3D_refs
+end type commander_classify3D_refs
 
 type, extends(commander_base) :: commander_refine3D
   contains
@@ -56,8 +58,9 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_auto( self, cline )
-        use simple_abinitio_utils, only: write_final_rec_outputs
+        use simple_abinitio_utils, only: gen_ortho_reprojs4viz, write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
+        use simple_estimate_ssnr,  only: lpstages_setlims
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, NU_DEV_OUTPUT, &
             &extend_nu_filter_highres_shells, write_nu_local_resolution_map
@@ -67,6 +70,7 @@ contains
         type(parameters)            :: params, params_final_rec
         type(sp_project)            :: spproj
         type(string)                :: init_vol
+        type(string)                :: pose_init_refs(1), pose_init_checkpoint(1)
         integer, parameter :: NSAMPLE_REFINE3D_AUTO = 25000
         real,    parameter :: SMPD_TARGET_DEFAULT = 1.3
         real,    parameter :: TARGET_UPDATES_PER_PARTICLE_REFINE3D_AUTO = 4.0
@@ -78,10 +82,12 @@ contains
         real    :: smpd_target, smpd_crop, scale, trslim, init_smpd, update_frac_auto
         integer :: box_crop, init_box, nptcls_eff, nsample_target, maxits_user
         logical :: l_autoscale, l_have_init_vol, l_maxits_defined
+        logical :: l_external_input, l_ref_pose_init_requested
         ! commanders
         type(commander_rec3D)    :: xrec3D
         type(commander_refine3D) :: xrefine3D
         maxits_user      = 0
+        l_external_input = cline%defined('vol1')
         ! hard defaults
         call cline%set('balance',         'no') ! no balancing based on 2D clustering
         call cline%set('greedy_sampling', 'no') ! only active when balance is 'yes'`
@@ -97,7 +103,11 @@ contains
         if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',           'no') ! broad spherical FSC by default
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',            'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',            'no') ! 4 now, probably fine
-        if( .not. cline%defined('sigma_est')   ) call cline%set('sigma_est',     'global') ! 4 now, probably fine
+        if( cline%defined('ref_pose_init') .and. cline%get_carg('ref_pose_init').eq.'cc' )then
+            call cline%set('sigma_est', 'global')
+        else if( .not. cline%defined('sigma_est') )then
+            call cline%set('sigma_est', 'global') ! 4 now, probably fine
+        endif
         if( .not. cline%defined('combine_eo')  ) call cline%set('combine_eo',        'no') ! 4 now, to allow more rapid testing
         if( .not. cline%defined('prob_inpl')   ) call cline%set('prob_inpl',        'yes') ! no difference at this stage, so prefer 'yes'
         if( .not. cline%defined('nsample')     ) call cline%set('nsample', NSAMPLE_REFINE3D_AUTO)
@@ -122,6 +132,10 @@ contains
         endif
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol', 'no') ! we do not keep volumes for each iteration by deafult
         call params%new(cline)
+        l_ref_pose_init_requested = trim(params%ref_pose_init).eq.'cc'
+        if( l_ref_pose_init_requested .and. .not. l_external_input )then
+            THROW_HARD(WORKFLOW_LABEL//' ref_pose_init=cc requires an external vol1 input')
+        endif
         call cline%set('mkdir', 'no') ! to avoid nested directory structure
         call set_refine3D_auto_sampling()
         l_have_init_vol = .false.
@@ -136,6 +150,10 @@ contains
             l_have_init_vol = .true.
             call cline%delete('vol1') ! because now part of the project
             write(logfhandle,'(A,1X,A)') '>>> '//WORKFLOW_LABEL//' USING INPUT VOLUME:', init_vol%to_char()
+            if( .not. l_ref_pose_init_requested )then
+                write(logfhandle,'(A)') &
+                    &'>>> WARNING: EXTERNAL VOL1 IS TRUSTED WITHOUT CC POSE INITIALIZATION (REF_POSE_INIT=NONE)'
+            endif
         else
             call spproj%read_segment('out', params%projfile)
             if( spproj%isthere_in_osout('vol', 1) )then
@@ -189,6 +207,7 @@ contains
             call cline%delete('box_crop')
             call cline%delete('smpd_crop')
         endif
+        if( l_ref_pose_init_requested ) call initialize_external_reference_poses
         ! generate an initial 3D reconstruction
         cline_rec3D = cline
         call cline_rec3D%set('prg', 'reconstruct3D') ! required for distributed call
@@ -531,39 +550,58 @@ contains
             call new_vol%kill; call new_even%kill; call new_odd%kill
         end subroutine prepare_external_init_vol
 
+        subroutine initialize_external_reference_poses
+            type(sp_project) :: pose_init_proj
+            integer :: nactive
+            call pose_init_proj%read_segment('ptcl3D', params%projfile)
+            nactive = pose_init_proj%os_ptcl3D%count_state_gt_zero()
+            call pose_init_proj%kill
+            if( nactive < 1 ) THROW_HARD(WORKFLOW_LABEL//' pose initialization found no active particles')
+            pose_init_refs(1) = init_vol
+            call initialize_poses_against_external_references(params, cline, xrefine3D, xrec3D, &
+                &nactive, pose_init_refs, pose_init_checkpoint, 1)
+            init_vol = pose_init_checkpoint(1)
+            call cline%set('startit',    2)
+            call cline%set('which_iter', 2)
+            call cline%set('extr_iter',  2)
+            write(logfhandle,'(A)') &
+                &'>>> REFINE3D_AUTO POSE INITIALIZATION CHECKPOINT RECONSTRUCTED; ENTERING EUCLIDEAN REFINEMENT'
+        end subroutine initialize_external_reference_poses
+
     end subroutine exec_refine3D_auto
 
-    subroutine exec_refine3D_multi( self, cline )
-        use simple_abinitio_utils, only: write_final_rec_outputs
+    subroutine exec_refine3D_states( self, cline )
+        use simple_abinitio_utils, only: gen_ortho_reprojs4viz, write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,  only: lpstages_setlims
-        class(commander_refine3D_multi), intent(inout) :: self
+        class(commander_refine3D_states), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(cmdline)             :: cline_rec3D
         type(parameters)          :: params, params_final_rec
         type(sp_project)          :: spproj
         type(lp_crop_inf)         :: lpinfo_multi(2)
         type(string), allocatable :: init_vols(:)
-        type(string)              :: multivol_mode, flex_arg
-        integer, parameter :: NSAMPLE_PER_STATE_REFINE3D_MULTI = 10000
-        integer, parameter :: NSAMPLE_REFINE3D_MULTI_CAP       = 100000
+        type(string)              :: multivol_mode, flex_arg, pose_policy_arg
+        integer, parameter :: NSAMPLE_PER_STATE_REFINE3D_STATES = 10000
+        integer, parameter :: NSAMPLE_REFINE3D_STATES_CAP       = 100000
         integer, parameter :: STAGE1_NSPACE                    = 2500
         integer, parameter :: STAGE2_NSPACE                    = 5000
         integer, parameter :: STAGE2_NSPACE_SUB                = 500
-        integer, parameter :: INIT_MAXITS_REFINE3D_MULTI = 5
+        integer, parameter :: FREQUENCY_BLOCK_NITS             = 3
+        integer, parameter :: INIT_MAXITS_REFINE3D_STATES = 5
         integer, parameter :: STAGE2_MINITS              = 5
-        integer, parameter :: MINITS_REFINE3D_MULTI      = 10
-        integer, parameter :: MAXITS_REFINE3D_MULTI_CAP  = 50
-        real,    parameter :: TARGET_UPDATES_PER_PARTICLE_REFINE3D_MULTI = 4.0
-        real,    parameter :: STATE_OVERLAP_EARLY_REFINE3D_MULTI         = 0.95
-        real,    parameter :: STATE_OVERLAP_NEIGH_REFINE3D_MULTI         = 0.99
-        real,    parameter :: LPSTART_REFINE3D_MULTI = 10.0
-        real,    parameter :: LPSTOP_REFINE3D_MULTI  = 6.0
-        character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_MULTI'
-        integer :: nstates_project, nptcls_eff, nsample_target, nptcls_per_iter
+        integer, parameter :: MINITS_REFINE3D_STATES      = 10
+        integer, parameter :: MAXITS_REFINE3D_STATES_CAP  = 50
+        real,    parameter :: TARGET_UPDATES_PER_PARTICLE_REFINE3D_STATES = 4.0
+        real,    parameter :: STATE_OVERLAP_EARLY_REFINE3D_STATES         = 0.95
+        real,    parameter :: STATE_OVERLAP_NEIGH_REFINE3D_STATES         = 0.99
+        real,    parameter :: LPSTART_REFINE3D_STATES = 10.0
+        real,    parameter :: LPSTOP_REFINE3D_STATES  = 6.0
+        character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_STATES'
+        integer :: nstates_project, nptcls_eff, nsample_target, nptcls_per_iter, local_nspace_sub
         integer :: maxits_user, stage_cap, init_niters, stage2_niters, total_iter
         integer :: maxits_glob_multi, init_stage_cap, min_maxits_required
-        real    :: update_frac_auto, state_overlap
+        real    :: update_frac_auto, state_overlap, local_ang_bound, local_inpl_bound, local_shift_bound
         logical :: l_maxits_defined, l_init_state_assignment, l_nstates_on_cline, l_flex_requested, l_nsample_auto
         logical :: l_has_project_multistates, l_run_init_stage, l_run_prob_neigh_stage
         ! commanders
@@ -572,16 +610,54 @@ contains
         maxits_user    = 0
         init_niters    = 0
         stage2_niters  = 0
-        init_stage_cap = INIT_MAXITS_REFINE3D_MULTI
+        init_stage_cap = INIT_MAXITS_REFINE3D_STATES
         l_init_state_assignment   = .false.
         l_has_project_multistates = .false.
         l_run_init_stage          = .false.
         l_run_prob_neigh_stage    = .false.
         l_flex_requested          = .false.
         min_maxits_required       = STAGE2_MINITS
-        call cline%set('prg', 'refine3D_multi')
+        local_nspace_sub          = STAGE2_NSPACE_SUB
+        local_ang_bound           = -1.
+        local_inpl_bound          = -1.
+        local_shift_bound         = -1.
+        call cline%set('prg', 'refine3D_states')
         l_nstates_on_cline = cline%defined('nstates')
-        if( .not. cline%defined('multivol_mode') ) call cline%set('multivol_mode', 'input_oris_refine')
+        if( cline%defined('multivol_mode') ) THROW_HARD(WORKFLOW_LABEL//' uses pose_policy, not multivol_mode')
+        if( cline%defined('prob_neigh_mode') ) THROW_HARD(WORKFLOW_LABEL//' derives prob_neigh_mode from pose_policy')
+        if( .not. cline%defined('pose_policy') ) call cline%set('pose_policy', 'global')
+        pose_policy_arg = cline%get_carg('pose_policy')
+        select case(trim(pose_policy_arg%to_char()))
+            case('fixed')
+                call cline%set('multivol_mode', 'input_oris_fixed')
+                call cline%set('prob_neigh_mode', 'geom')
+            case('local')
+                call cline%set('multivol_mode', 'input_oris_refine')
+                call cline%set('prob_neigh_mode', 'geom')
+            case('global')
+                call cline%set('multivol_mode', 'input_oris_refine')
+                call cline%set('prob_neigh_mode', 'state')
+            case default
+                THROW_HARD(WORKFLOW_LABEL//' supports pose_policy=fixed|local|global')
+        end select
+        if( cline%defined('local_ang_bound') ) local_ang_bound = cline%get_rarg('local_ang_bound')
+        if( cline%defined('local_inpl_bound') ) local_inpl_bound = cline%get_rarg('local_inpl_bound')
+        if( cline%defined('local_shift_bound') ) local_shift_bound = cline%get_rarg('local_shift_bound')
+        if( trim(pose_policy_arg%to_char()).ne.'local' .and. &
+            &any([local_ang_bound, local_inpl_bound, local_shift_bound] >= 0.) )then
+            THROW_HARD('local pose-bound overrides require pose_policy=local')
+        endif
+        if( local_ang_bound >= 0. )then
+            if( local_ang_bound > 180. ) THROW_HARD('local_ang_bound must be between 0 and 180 degrees')
+            if( local_ang_bound < 0.01 )then
+                local_nspace_sub = STAGE2_NSPACE
+            else
+                local_nspace_sub = min(STAGE2_NSPACE, max(2, round2even(2. / &
+                    &max(1.e-6, 1. - cos(deg2rad(local_ang_bound))))))
+            endif
+        endif
+        if( local_inpl_bound >= 0. ) call cline%set('prob_athres', local_inpl_bound)
+        if( local_shift_bound >= 0. ) call cline%set('trs', local_shift_bound)
         multivol_mode = cline%get_carg('multivol_mode')
         if( .not. cline%defined('filt_mode')     ) call cline%set('filt_mode', 'nonuniform_lpset')
         if( cline%defined('flex') )then
@@ -595,7 +671,7 @@ contains
             nstates_project = cline%get_iarg('nstates')
             if( nstates_project < 3 ) THROW_HARD(WORKFLOW_LABEL//' flex=yes requires nstates >= 3')
         else
-            call set_refine3D_multi_nstates()
+            call set_refine3D_states_nstates()
         endif
         ! hard defaults
         call cline%set('balance',        'yes')
@@ -617,17 +693,20 @@ contains
         if( .not. cline%defined('center')          ) call cline%set('center',            'no')
         if( .not. cline%defined('sigma_est')       ) call cline%set('sigma_est',     'global')
         if( .not. cline%defined('prob_inpl')       ) call cline%set('prob_inpl',        'yes')
-        if( .not. cline%defined('prob_neigh_mode') ) call cline%set('prob_neigh_mode', 'geom')
         l_nsample_auto = .not. cline%defined('nsample')
         if( .not. l_nsample_auto ) l_nsample_auto = cline%get_iarg('nsample') <= 0
         if( l_nsample_auto )then
-            call cline%set('nsample', default_refine3D_multi_nsample())
+            call cline%set('nsample', default_refine3D_states_nsample())
         endif
-        if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',            'yes')
+        ! staged frequency marching always uses planner-driven downscaling
+        if( cline%defined('autoscale') ) write(logfhandle,'(A)') &
+            &'>>> '//WORKFLOW_LABEL//' IGNORES autoscale: frequency marching owns downscaling'
+        call cline%set('autoscale', 'yes')
         if( .not. cline%defined('ml_reg')      ) call cline%set('ml_reg',               'yes')
-        if( .not. cline%defined('lpstop')      ) call cline%set('lpstop',  LPSTOP_REFINE3D_MULTI)
+        if( .not. cline%defined('lpstart')     ) call cline%set('lpstart', LPSTART_REFINE3D_STATES)
+        if( .not. cline%defined('lpstop')      ) call cline%set('lpstop',  LPSTOP_REFINE3D_STATES)
         if( .not. cline%defined('automsk')     ) call cline%set('automsk',               'no')
-        if( .not. cline%defined('overlap')     ) call cline%set('overlap', STATE_OVERLAP_NEIGH_REFINE3D_MULTI)
+        if( .not. cline%defined('overlap')     ) call cline%set('overlap', STATE_OVERLAP_NEIGH_REFINE3D_STATES)
         if( .not. cline%defined('keepvol')     ) call cline%set('keepvol',               'no')
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then
@@ -638,38 +717,47 @@ contains
             endif
         endif
         call params%new(cline)
-        call validate_refine3D_multi_mode()
-        call validate_refine3D_multi_combine_eo()
-        call validate_refine3D_multi_filtering()
-        call validate_refine3D_multi_prob_neigh_mode()
+        write(logfhandle,'(A,A)') '>>> '//WORKFLOW_LABEL//' POSE_POLICY: ', trim(params%pose_policy)
+        call validate_refine3D_states_mode()
+        call validate_refine3D_states_combine_eo()
+        call validate_refine3D_states_filtering()
+        call validate_refine3D_states_prob_neigh_mode()
         call cline%set('mkdir', 'no')
         if( l_flex_requested )then
             call run_flex_pca()
-            call set_refine3D_multi_nstates()
+            call set_refine3D_states_nstates()
             params%nstates = nstates_project
             if( l_nsample_auto )then
-                params%nsample = default_refine3D_multi_nsample()
+                params%nsample = default_refine3D_states_nsample()
                 call cline%set('nsample', params%nsample)
             endif
         endif
-        call set_refine3D_multi_sampling()
-        call prepare_refine3D_multi_class_sampling()
-        call configure_refine3D_multi_stages()
-        call set_refine3D_multi_downscaling()
+        call set_refine3D_states_sampling()
+        call prepare_refine3D_states_class_sampling()
+        call configure_refine3D_states_stages()
+        call set_refine3D_states_downscaling()
         if( .not. l_flex_requested ) call initialize_state_volumes()
         call cline%set('prg', 'refine3D')
         maxits_glob_multi = 0
         if( l_run_init_stage       ) maxits_glob_multi = maxits_glob_multi + init_stage_cap
         if( l_run_prob_neigh_stage ) maxits_glob_multi = maxits_glob_multi + stage_cap
-        call cline%set('maxits_glob', max(1, maxits_glob_multi))
         total_iter = 0
+        if( cline%defined('startit') ) total_iter = max(0, cline%get_iarg('startit') - 1)
+        call cline%set('maxits_glob', max(1, total_iter + maxits_glob_multi))
         if( l_run_init_stage )then
-            call run_refine3D_multi_stage(0, 'prob_state', STAGE1_NSPACE, 0, 1, init_niters, &
-                &init_stage_cap, STATE_OVERLAP_EARLY_REFINE3D_MULTI)
+            if( trim(params%pose_policy).eq.'fixed' )then
+                call run_refine3D_states_frequency_march('prob_state', STAGE1_NSPACE, 0, 1, init_niters, &
+                    &init_stage_cap, STATE_OVERLAP_EARLY_REFINE3D_STATES)
+            else
+                call cline%set('lp', params%lpstart)
+                call cline%set('lpstop', params%lpstart)
+                call run_refine3D_states_stage(0, 'prob_state', STAGE1_NSPACE, 0, 1, init_niters, &
+                    &init_stage_cap, STATE_OVERLAP_EARLY_REFINE3D_STATES)
+            endif
         endif
         if( l_run_prob_neigh_stage )then
-            call run_refine3D_multi_stage(2, 'prob_neigh', STAGE2_NSPACE, STAGE2_NSPACE_SUB, STAGE2_MINITS, &
-                &stage2_niters, stage_cap, params%overlap)
+            call run_refine3D_states_frequency_march('prob_neigh', STAGE2_NSPACE, local_nspace_sub, &
+                &STAGE2_MINITS, stage2_niters, stage_cap, params%overlap)
         endif
         write(logfhandle,'(A,I0,A,I0,A,I0)') '>>> '//WORKFLOW_LABEL//' STAGE ITERATIONS INIT/PROB_NEIGH/TOTAL: ', &
             &init_niters, '/', stage2_niters, '/', total_iter
@@ -701,19 +789,21 @@ contains
         params_final_rec%smpd = params_final_rec%smpd_crop
         call spproj%read_segment('out', params_final_rec%projfile)
         call write_final_rec_outputs(params_final_rec, spproj, params_final_rec%lpstop)
+        call gen_ortho_reprojs4viz(params_final_rec, spproj)
         call spproj%kill
         call cleanup_init_vols()
+        call pose_policy_arg%kill
         call multivol_mode%kill
-        call simple_end('**** SIMPLE_REFINE3D_MULTI NORMAL STOP ****')
+        call simple_end('**** SIMPLE_REFINE3D_STATES NORMAL STOP ****')
 
     contains
 
-        integer function default_refine3D_multi_nsample() result(nsample_default)
-            nsample_default = min(NSAMPLE_REFINE3D_MULTI_CAP, &
-                &NSAMPLE_PER_STATE_REFINE3D_MULTI * nstates_project)
-        end function default_refine3D_multi_nsample
+        integer function default_refine3D_states_nsample() result(nsample_default)
+            nsample_default = min(NSAMPLE_REFINE3D_STATES_CAP, &
+                &NSAMPLE_PER_STATE_REFINE3D_STATES * nstates_project)
+        end function default_refine3D_states_nsample
 
-        subroutine validate_refine3D_multi_mode()
+        subroutine validate_refine3D_states_mode()
             select case(trim(params%multivol_mode))
                 case('input_oris_refine', 'input_oris_fixed')
                     ! supported
@@ -721,33 +811,33 @@ contains
                     THROW_HARD('Unsupported multivol_mode for '//WORKFLOW_LABEL//': '//trim(params%multivol_mode))
             end select
             write(logfhandle,'(A,A)') '>>> '//WORKFLOW_LABEL//' MULTIVOL_MODE: ', trim(params%multivol_mode)
-        end subroutine validate_refine3D_multi_mode
+        end subroutine validate_refine3D_states_mode
 
-        subroutine validate_refine3D_multi_combine_eo()
+        subroutine validate_refine3D_states_combine_eo()
             if( trim(params%combine_eo).ne.'no' )then
                 THROW_HARD(WORKFLOW_LABEL//' does not support combine_eo; it is an LP-set multi-state workflow')
             endif
-        end subroutine validate_refine3D_multi_combine_eo
+        end subroutine validate_refine3D_states_combine_eo
 
-        subroutine validate_refine3D_multi_filtering()
+        subroutine validate_refine3D_states_filtering()
             select case(trim(params%filt_mode))
                 case('fsc', 'nonuniform_lpset', 'none')
                     ! supported
                 case default
                     THROW_HARD(WORKFLOW_LABEL//' supports filt_mode=fsc|nonuniform_lpset|none')
             end select
-        end subroutine validate_refine3D_multi_filtering
+        end subroutine validate_refine3D_states_filtering
 
-        subroutine validate_refine3D_multi_prob_neigh_mode()
+        subroutine validate_refine3D_states_prob_neigh_mode()
             select case(trim(params%prob_neigh_mode))
                 case('geom', 'state')
                     ! supported
                 case default
                     THROW_HARD(WORKFLOW_LABEL//' supports prob_neigh_mode=geom|state')
             end select
-        end subroutine validate_refine3D_multi_prob_neigh_mode
+        end subroutine validate_refine3D_states_prob_neigh_mode
 
-        subroutine configure_refine3D_multi_stages()
+        subroutine configure_refine3D_states_stages()
             select case(trim(params%multivol_mode))
                 case('input_oris_fixed')
                     l_run_init_stage       = .true.
@@ -759,9 +849,9 @@ contains
             end select
             write(logfhandle,'(A,L1,A,L1)') '>>> '//WORKFLOW_LABEL//' STAGES INIT/PROB_NEIGH: ', &
                 &l_run_init_stage, '/', l_run_prob_neigh_stage
-        end subroutine configure_refine3D_multi_stages
+        end subroutine configure_refine3D_states_stages
 
-        subroutine set_refine3D_multi_nstates()
+        subroutine set_refine3D_states_nstates()
             type(sp_project) :: state_proj
             type(string)     :: projfile
             integer, allocatable :: pops(:)
@@ -817,9 +907,9 @@ contains
             if( allocated(pops) ) deallocate(pops)
             call state_proj%kill
             call projfile%kill
-        end subroutine set_refine3D_multi_nstates
+        end subroutine set_refine3D_states_nstates
 
-        subroutine set_refine3D_multi_sampling()
+        subroutine set_refine3D_states_sampling()
             type(sp_project) :: sampling_proj
             integer :: maxits_auto
             nsample_target = params%nsample
@@ -878,16 +968,16 @@ contains
                 write(logfhandle,'(A,I0)') &
                     &'>>> '//WORKFLOW_LABEL//' STAGE MAXITS COMMAND-LINE OVERRIDE: ', stage_cap
             else
-                maxits_auto = ceiling((TARGET_UPDATES_PER_PARTICLE_REFINE3D_MULTI * real(nptcls_eff)) / real(nptcls_per_iter))
-                stage_cap   = max(MINITS_REFINE3D_MULTI, min(MAXITS_REFINE3D_MULTI_CAP, max(STAGE2_MINITS, maxits_auto)))
+                maxits_auto = ceiling((TARGET_UPDATES_PER_PARTICLE_REFINE3D_STATES * real(nptcls_eff)) / real(nptcls_per_iter))
+                stage_cap   = max(MINITS_REFINE3D_STATES, min(MAXITS_REFINE3D_STATES_CAP, max(STAGE2_MINITS, maxits_auto)))
                 params%maxits = stage_cap
                 call cline%set('maxits', params%maxits)
                 write(logfhandle,'(A,I0,A,F5.1,A)') '>>> '//WORKFLOW_LABEL//' STAGE MAXITS: ', &
-                    &stage_cap, ' FOR ~', TARGET_UPDATES_PER_PARTICLE_REFINE3D_MULTI, ' UPDATES/PARTICLE'
+                    &stage_cap, ' FOR ~', TARGET_UPDATES_PER_PARTICLE_REFINE3D_STATES, ' UPDATES/PARTICLE'
             endif
-        end subroutine set_refine3D_multi_sampling
+        end subroutine set_refine3D_states_sampling
 
-        subroutine prepare_refine3D_multi_class_sampling()
+        subroutine prepare_refine3D_states_class_sampling()
             type(builder)    :: sampling_build
             type(cmdline)    :: cline_sampling
             type(parameters) :: params_sampling
@@ -913,7 +1003,7 @@ contains
             call deallocate_class_samples(clssmp)
             call sampling_build%kill_general_tbox
             call cline_sampling%kill
-        end subroutine prepare_refine3D_multi_class_sampling
+        end subroutine prepare_refine3D_states_class_sampling
 
         subroutine make_projdir_class_samples( sampling_build, clssmp, nproj_bins )
             type(builder),                    intent(inout) :: sampling_build
@@ -965,30 +1055,33 @@ contains
             if( allocated(proj_pops) ) deallocate(proj_pops)
         end subroutine make_projdir_class_samples
 
-        subroutine set_refine3D_multi_downscaling()
-            if( .not. params%l_autoscale )then
-                call cline%delete('box_crop')
-                call cline%delete('smpd_crop')
-                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' AUTOSCALE: off'
-                return
+        subroutine set_refine3D_states_downscaling()
+            lpinfo_multi(2)%trslim      = min(8., max(2.0, AHELIX_WIDTH / params%smpd))
+            lpinfo_multi(2)%box_crop    = params%box
+            lpinfo_multi(2)%smpd_crop   = params%smpd
+            lpinfo_multi(2)%l_autoscale = .false.
+            call lpstages_setlims(params%box, 2, params%smpd, params%lpstart, params%lpstop, lpinfo_multi)
+            if( local_shift_bound >= 0. .and. trim(params%pose_policy).eq.'local' )then
+                params%trs = local_shift_bound
+                call cline%set('trs', params%trs)
+            else
+                params%trs = lpinfo_multi(2)%trslim
+                call cline%set('trs', params%trs)
             endif
-            call lpstages_setlims(params%box, 2, params%smpd, LPSTART_REFINE3D_MULTI, params%lpstop, lpinfo_multi)
-            params%trs = lpinfo_multi(2)%trslim
-            call cline%set('trs', params%trs)
             if( lpinfo_multi(2)%l_autoscale )then
                 params%box_crop  = lpinfo_multi(2)%box_crop
                 params%smpd_crop = lpinfo_multi(2)%smpd_crop
                 call cline%set('box_crop', params%box_crop)
                 call cline%set('smpd_crop', params%smpd_crop)
                 write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
-                    &'>>> '//WORKFLOW_LABEL//' AUTOSCALE BOX/SMPD_CROP: ', &
+                    &'>>> '//WORKFLOW_LABEL//' DOWNSCALING BOX/SMPD_CROP: ', &
                     &params%box, '/', params%box_crop, '/', params%smpd_crop
             else
                 call cline%delete('box_crop')
                 call cline%delete('smpd_crop')
-                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' AUTOSCALE: native sampling retained'
+                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' DOWNSCALING: native sampling retained'
             endif
-        end subroutine set_refine3D_multi_downscaling
+        end subroutine set_refine3D_states_downscaling
 
         subroutine initialize_state_volumes()
             integer :: state
@@ -1148,14 +1241,26 @@ contains
         subroutine validate_input_volumes()
             type(string) :: vol
             integer :: state, ldim(3), nptcls_dummy
-            real    :: vol_smpd
+            real    :: vol_smpd, extent_native, extent_vol
             do state = 1,nstates_project
                 vol = cline%get_carg('vol'//int2str(state))
                 if( .not. file_exists(vol) ) THROW_HARD('Input volume does not exist: '//vol%to_char())
                 call find_ldim_nptcls(vol, ldim, nptcls_dummy)
                 vol_smpd = find_img_smpd(vol)
-                if( any(ldim /= [params%box,params%box,params%box]) .or. abs(vol_smpd - params%smpd) > 1.e-6 )then
-                    THROW_HARD('Input state volumes must have same dimensions/sampling as the project particles')
+                if( ldim(1) /= ldim(2) .or. ldim(1) /= ldim(3) )then
+                    THROW_HARD('Input state volumes must be cubic')
+                endif
+                if( ldim(1) > params%box )then
+                    THROW_HARD('Input state volumes cannot exceed the native project box')
+                endif
+                ! Any downscaled sampling of the native grid is acceptable — base
+                ! refine3D rescales references to the stage crop, and the abinitio3D
+                ! split checkpoint hands over volumes at the abinitio ladder crop,
+                ! which need not match this workflow's own frequency-stage crop.
+                extent_native = real(params%box) * params%smpd
+                extent_vol    = real(ldim(1))   * vol_smpd
+                if( abs(extent_vol - extent_native) > 0.01 * extent_native )then
+                    THROW_HARD('Input state volumes must cover the native physical extent (box*smpd)')
                 endif
             enddo
             call vol%kill
@@ -1176,7 +1281,15 @@ contains
                     call spproj%kill
                     return
                 endif
-                if( init_box /= params%box .or. init_smpd <= 0. .or. abs(init_smpd - params%smpd) > 1.e-6 )then
+                if( init_smpd <= 0. )then
+                    call spproj%kill
+                    return
+                endif
+                ! any downscaled sampling of the native grid is acceptable (see
+                ! validate_input_volumes); base refine3D rescales to the stage crop
+                if( init_box > params%box .or. &
+                    &abs(real(init_box)*init_smpd - real(params%box)*params%smpd) > &
+                    &0.01 * real(params%box)*params%smpd )then
                     call spproj%kill
                     return
                 endif
@@ -1185,7 +1298,49 @@ contains
             call spproj%kill
         end function project_state_volumes_compatible
 
-        subroutine run_refine3D_multi_stage( stage, refine_mode, nspace_stage, nspace_sub_stage, min_stage_iters, &
+        subroutine run_refine3D_states_frequency_march( refine_mode, nspace_stage, nspace_sub_stage, &
+            &min_total_iters, niters, max_total_iters, overlap_target )
+            character(len=*), intent(in)  :: refine_mode
+            integer,          intent(in)  :: nspace_stage, nspace_sub_stage, min_total_iters, max_total_iters
+            integer,          intent(out) :: niters
+            real,             intent(in)  :: overlap_target
+            type(refine3D_stage_plan_entry), allocatable :: stages(:)
+            integer :: block, block_niters, block_minits
+            niters = 0
+            if( max_total_iters < min_total_iters )then
+                THROW_HARD(WORKFLOW_LABEL//' frequency-stage cap is below its required minimum')
+            endif
+            call plan_refine3D_frequency_stages(params%box, params%smpd, params%lpstart, params%lpstop, &
+                &max_total_iters, FREQUENCY_BLOCK_NITS, total_iter + 1, lpinfo_multi(2), stages)
+            write(logfhandle,'(A,I0,A,F7.2,A,F7.2)') &
+                &'>>> '//WORKFLOW_LABEL//' FREQUENCY MARCHING NSTAGES/LPSTART/LPSTOP: ', &
+                &size(stages), '/', params%lpstart, '/', params%lpstop
+            do block = 1,size(stages)
+                call cline%set('trs',    stages(block)%lpinfo%trslim)
+                if( local_shift_bound >= 0. .and. trim(params%pose_policy).eq.'local' )then
+                    call cline%set('trs', local_shift_bound)
+                endif
+                call cline%set('lp',     stages(block)%lpinfo%lp)
+                call cline%set('lpstop', stages(block)%lpinfo%lp)
+                if( stages(block)%lpinfo%l_autoscale )then
+                    call cline%set('box_crop',  stages(block)%lpinfo%box_crop)
+                    call cline%set('smpd_crop', stages(block)%lpinfo%smpd_crop)
+                else
+                    call cline%delete('box_crop')
+                    call cline%delete('smpd_crop')
+                endif
+                ! Each block may stop early on the state-overlap target once the
+                ! march-wide iteration minimum is satisfied; the march still visits
+                ! every frequency block so the low-pass schedule completes.
+                block_minits = max(1, min(stages(block)%nits, min_total_iters - niters))
+                call run_refine3D_states_stage(block, refine_mode, nspace_stage, nspace_sub_stage, &
+                    &block_minits, block_niters, stages(block)%nits, overlap_target)
+                niters = niters + block_niters
+            enddo
+            deallocate(stages)
+        end subroutine run_refine3D_states_frequency_march
+
+        subroutine run_refine3D_states_stage( stage, refine_mode, nspace_stage, nspace_sub_stage, min_stage_iters, &
             &niters, max_stage_iters, stage_overlap_target )
             integer,          intent(in)  :: stage, nspace_stage, nspace_sub_stage, min_stage_iters
             character(len=*), intent(in)  :: refine_mode
@@ -1228,7 +1383,7 @@ contains
                 write(logfhandle,'(A,I0,A,F7.4)') '>>> '//WORKFLOW_LABEL//' STAGE ', stage, &
                     &' REACHED STAGE CAP BEFORE STATE_OVERLAP TARGET: ', state_overlap
             endif
-        end subroutine run_refine3D_multi_stage
+        end subroutine run_refine3D_states_stage
 
         subroutine ensure_all_active_particles_updated()
             integer :: nactive, nupdated, nmissing
@@ -1237,7 +1392,7 @@ contains
                 THROW_HARD(WORKFLOW_LABEL//' has no active particles after staged refinement')
             endif
             if( nmissing > 0 )then
-                call run_refine3D_multi_missing_update(nmissing, nactive)
+                call run_refine3D_states_missing_update(nmissing, nactive)
                 call read_update_coverage(nactive, nupdated, nmissing)
                 if( nmissing > 0 )then
                     THROW_HARD(WORKFLOW_LABEL//' final missing-update pass failed to update every active particle')
@@ -1267,11 +1422,11 @@ contains
             call update_proj%kill
         end subroutine read_update_coverage
 
-        subroutine run_refine3D_multi_missing_update( nmissing, nactive )
+        subroutine run_refine3D_states_missing_update( nmissing, nactive )
             integer, intent(in) :: nmissing, nactive
             type(cmdline) :: cline_missing
             integer       :: iter_missing
-            iter_missing = next_refine3D_multi_iteration()
+            iter_missing = next_refine3D_states_iteration()
             write(logfhandle,'(A,A,I0,A,I0,A,I0)') &
                 &'>>> '//WORKFLOW_LABEL//' FINAL MISSING-UPDATE ASSIGNMENT', &
                 &' MISSING/ACTIVE/ITER: ', nmissing, '/', nactive, '/', iter_missing
@@ -1307,9 +1462,9 @@ contains
             call del_file(DIST_FBODY//'.dat')
             call del_file(ASSIGNMENT_FBODY//'.dat')
             call cline_missing%kill
-        end subroutine run_refine3D_multi_missing_update
+        end subroutine run_refine3D_states_missing_update
 
-        integer function next_refine3D_multi_iteration() result(iter)
+        integer function next_refine3D_states_iteration() result(iter)
             iter = 1
             if( cline%defined('endit') )then
                 iter = cline%get_iarg('endit') + 1
@@ -1317,7 +1472,7 @@ contains
                 iter = cline%get_iarg('which_iter') + 1
             endif
             iter = max(1, iter)
-        end function next_refine3D_multi_iteration
+        end function next_refine3D_states_iteration
 
         real function read_state_overlap() result(overlap)
             type(sp_project) :: state_proj
@@ -1357,25 +1512,24 @@ contains
             endif
         end subroutine cleanup_init_vols
 
-    end subroutine exec_refine3D_multi
+    end subroutine exec_refine3D_states
 
-    subroutine exec_refine3D_het( self, cline )
+    subroutine exec_classify3D_refs( self, cline )
         use simple_abinitio_utils, only: write_final_rec_outputs, gen_ortho_reprojs4viz
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,  only: lpstages_setlims
-        class(commander_refine3D_het), intent(inout) :: self
+        class(commander_classify3D_refs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        integer, parameter :: NSAMPLE_PER_STATE_REFINE3D_HET = 10000
-        integer, parameter :: NSAMPLE_REFINE3D_HET_CAP       = 100000
-        integer, parameter :: NSPACE_FIRST_PASS              = 2500
+        integer, parameter :: NSAMPLE_PER_STATE_CLASSIFY3D_REFS = 10000
+        integer, parameter :: NSAMPLE_CLASSIFY3D_REFS_CAP       = 100000
         integer, parameter :: NSPACE                         = 5000
         integer, parameter :: NSPACE_SUB                     = 500
-        integer, parameter :: MINITS_REFINE3D_HET            = 10
-        integer, parameter :: MAXITS_REFINE3D_HET            = 50
+        integer, parameter :: MINITS_CLASSIFY3D_REFS            = 10
+        integer, parameter :: MAXITS_CLASSIFY3D_REFS            = 50
         real,    parameter :: TARGET_UPDATES_PER_PARTICLE    = 4.0
-        real,    parameter :: LPSTART_REFINE3D_HET           = 10.0
-        real,    parameter :: LPSTOP_REFINE3D_HET            = 6.0
-        character(len=*), parameter :: WORKFLOW_LABEL = 'REFINE3D_HET'
+        real,    parameter :: LPSTART_CLASSIFY3D_REFS           = 10.0
+        real,    parameter :: LPSTOP_CLASSIFY3D_REFS            = 6.0
+        character(len=*), parameter :: WORKFLOW_LABEL = 'CLASSIFY3D_REFS'
         type(commander_rec3D)     :: xrec3D
         type(commander_refine3D)  :: xrefine3D
         type(cmdline)             :: cline_rec3D
@@ -1384,9 +1538,8 @@ contains
         type(lp_crop_inf)         :: lpinfo_master(1)
         type(string), allocatable :: init_vols(:)
         integer,      allocatable :: state_pops(:)
-        integer :: nptcls_eff, iter_glob
-        logical :: l_input_vols_required
-        call cline%set('prg', 'refine3D_het')
+        integer :: nptcls_eff, iter_glob, state
+        call cline%set('prg', 'classify3D_refs')
         ! hard defaults
         call cline%set('balance',         'yes')
         call cline%set('greedy_sampling', 'no')
@@ -1403,16 +1556,19 @@ contains
         if( .not. cline%defined('envfsc')          ) call cline%set('envfsc',          'no')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',           'yes')
         if( .not. cline%defined('center')          ) call cline%set('center',          'no')
-        if( .not. cline%defined('sigma_est')       ) call cline%set('sigma_est',       'global')
+        call cline%set('sigma_est', 'global')
         if( .not. cline%defined('prob_inpl')       ) call cline%set('prob_inpl',       'yes')
         if( .not. cline%defined('refine')          ) call cline%set('refine',          'prob_neigh')
         if( .not. cline%defined('prob_neigh_mode') ) call cline%set('prob_neigh_mode', 'state')
-        if( .not. cline%defined('autoscale')       ) call cline%set('autoscale',       'yes')
+        ! staged frequency marching always uses planner-driven downscaling
+        if( cline%defined('autoscale') ) write(logfhandle,'(A)') &
+            &'>>> '//WORKFLOW_LABEL//' IGNORES autoscale: frequency marching owns downscaling'
+        call cline%set('autoscale', 'yes')
         if( .not. cline%defined('ml_reg')          ) call cline%set('ml_reg',          'yes')
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart', LPSTART_REFINE3D_HET)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',  LPSTOP_REFINE3D_HET)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart', LPSTART_CLASSIFY3D_REFS)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',  LPSTOP_CLASSIFY3D_REFS)
         if( .not. cline%defined('automsk')         ) call cline%set('automsk',         'no')
-        if( .not. cline%defined('nsample')         ) call cline%set('nsample', NSAMPLE_PER_STATE_REFINE3D_HET)
+        if( .not. cline%defined('nsample')         ) call cline%set('nsample', NSAMPLE_PER_STATE_CLASSIFY3D_REFS)
         if( .not. cline%defined('keepvol')         ) call cline%set('keepvol',         'no')
         if( .not. cline%defined('nspace')          ) call cline%set('nspace',          NSPACE)
         if( .not. cline%defined('nspace_sub')      ) call cline%set('nspace_sub',      NSPACE_SUB)
@@ -1422,15 +1578,14 @@ contains
         call spproj%read( params%projfile )
         ! Search planning
         iter_glob = 0
-        l_input_vols_required = .false.
-        call set_refine3D_het_nstates(nptcls_eff, state_pops)
-        call set_refine3D_het_nsample
-        call validate_refine3D_het_filtering
-        call validate_refine3D_het_search_mode
-        call set_refine3D_het_sampling
-        call prepare_refine3D_het_class_sampling
+        call set_classify3D_refs_nstates(nptcls_eff, state_pops)
+        call set_classify3D_refs_nsample
+        call validate_classify3D_refs_filtering
+        call validate_classify3D_refs_search_mode
+        call set_classify3D_refs_sampling
+        call prepare_classify3D_refs_class_sampling
         call spproj%os_ptcl2D%kill
-        call set_refine3D_het_downscaling
+        call set_classify3D_refs_downscaling
         if( spproj%os_ptcl3D%has_been_sampled() )then
             call spproj%os_ptcl3D%clean_entry('sampled', 'updatecnt')
         endif
@@ -1440,68 +1595,60 @@ contains
         call cline%set('prg',         'refine3D')
         call cline%set('maxits_glob', max(1, params%maxits_glob))
         call cline%set('balance',     params%balance)
-        call run_refine3D_het
+        call run_classify3D_refs
         ! Final particle mapping pass
         call ensure_all_active_particles_updated
         ! Final reconstruction
         call reconstruct_all_particles_volumes
+        if( allocated(state_pops) ) deallocate(state_pops)
+        if( allocated(init_vols) )then
+            do state = 1,size(init_vols)
+                call init_vols(state)%kill
+            enddo
+            deallocate(init_vols)
+        endif
         call spproj%kill
-        call simple_end('**** SIMPLE_REFINE3D_HET NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CLASSIFY3D_REFS NORMAL STOP ****')
     contains
 
-        subroutine set_refine3D_het_nstates( nptcls_eff, state_pops )
-            use simple_cluster_seed, only: gen_labelling
+        subroutine set_classify3D_refs_nstates( nptcls_eff, state_pops )
             integer,              intent(inout) :: nptcls_eff
             integer, allocatable, intent(inout) :: state_pops(:)
             integer :: state, nstates_labels
             nptcls_eff = spproj%os_ptcl3D%count_state_gt_zero()
             if( nptcls_eff < 1 ) THROW_HARD('no active particles available for '//WORKFLOW_LABEL)
             nstates_labels = spproj%os_ptcl3D%get_n('state')
-            if( nstates_labels == 1  )then
-                ! labels randomized, volumes to be provided
-                call gen_labelling(spproj%os_ptcl3D, params%nstates, 'uniform')
-                if( spproj%is_virgin_field('ptcl3D') ) call spproj%os_ptcl3D%rnd_oris
-                l_input_vols_required = .true.
+            if( nstates_labels == 1 )then
+                allocate(state_pops(params%nstates), source=0)
+                state_pops(1) = nptcls_eff
             elseif( nstates_labels == params%nstates )then
-                ! labels are present
-                if( spproj%is_virgin_field('ptcl3D') )then
-                    ! volumes: to be provided
-                    l_input_vols_required = .true.
-                    call spproj%os_ptcl3D%rnd_oris
-                else
-                    ! volumes: can be reconstructed
-                endif
+                call spproj%os_ptcl3D%get_pops(state_pops, 'state', maxn=params%nstates)
                 write(logfhandle,'(A,I0)') '>>> '//WORKFLOW_LABEL//' NSTATES FROM PROJECT: ', nstates_labels
             else
                 THROW_HARD('command-line nstates does not match project state labels for '//WORKFLOW_LABEL)
             endif
-            call spproj%os_ptcl3D%get_pops(state_pops, 'state', maxn=params%nstates)
-            do state = 1, params%nstates
-                if( state_pops(state) < 1 )then
-                    write(logfhandle,*) 'state, population: ', state, state_pops(state)
-                    THROW_HARD(WORKFLOW_LABEL//' requires every state label to have at least one active particle')
-                endif
+            do state = 1, size(state_pops)
                 write(logfhandle,'(A,I3,A,I0)') '>>> '//WORKFLOW_LABEL//' STATE POPULATION: ', state, '/', state_pops(state)
             enddo
-        end subroutine set_refine3D_het_nstates
+        end subroutine set_classify3D_refs_nstates
 
-        subroutine set_refine3D_het_nsample()
-            params%nsample = min(NSAMPLE_REFINE3D_HET_CAP, params%nsample * params%nstates)
+        subroutine set_classify3D_refs_nsample()
+            params%nsample = min(NSAMPLE_CLASSIFY3D_REFS_CAP, params%nsample * params%nstates)
             params%nsample = min(nptcls_eff, params%nsample)
             if( params%nsample < 1 ) THROW_HARD('nsample must be >= 1 for '//WORKFLOW_LABEL)
             write(logfhandle,'(A,I0,A,I0)')'>>> '//WORKFLOW_LABEL//' NSAMPLE: ', params%nsample
-        end subroutine set_refine3D_het_nsample
+        end subroutine set_classify3D_refs_nsample
 
-        subroutine validate_refine3D_het_filtering()
+        subroutine validate_classify3D_refs_filtering()
             select case(trim(params%filt_mode))
                 case('nonuniform_lpset', 'none', 'nonuniform')
                     ! supported
                 case default
                     THROW_HARD(WORKFLOW_LABEL//' supports filt_mode=nonuniform_lpset|none')
             end select
-        end subroutine validate_refine3D_het_filtering
+        end subroutine validate_classify3D_refs_filtering
 
-        subroutine validate_refine3D_het_search_mode()
+        subroutine validate_classify3D_refs_search_mode()
             select case(trim(params%refine))
                 case('prob_neigh', 'prob', 'shc')
                     call cline%set('refine', params%refine)
@@ -1517,9 +1664,9 @@ contains
                     THROW_HARD(WORKFLOW_LABEL//' supports prob_neigh_mode=geom|state')
                 end select
             endif
-        end subroutine validate_refine3D_het_search_mode
+        end subroutine validate_classify3D_refs_search_mode
 
-        subroutine set_refine3D_het_sampling()
+        subroutine set_classify3D_refs_sampling()
             real    :: update_frac_auto
             integer :: maxits_auto, nptcls_per_iter, stage_cap
             if( nptcls_eff < 1 ) THROW_HARD('no active particles available for '//WORKFLOW_LABEL)
@@ -1555,15 +1702,15 @@ contains
                     &'>>> '//WORKFLOW_LABEL//' STAGE MAXITS COMMAND-LINE OVERRIDE: ', params%maxits
             else
                 maxits_auto   = ceiling((TARGET_UPDATES_PER_PARTICLE * real(nptcls_eff)) / real(nptcls_per_iter))
-                stage_cap     = max(MINITS_REFINE3D_HET, min(MAXITS_REFINE3D_HET, maxits_auto))
+                stage_cap     = max(MINITS_CLASSIFY3D_REFS, min(MAXITS_CLASSIFY3D_REFS, maxits_auto))
                 params%maxits = stage_cap
                 call cline%set('maxits', params%maxits)
                 write(logfhandle,'(A,I0,A,F5.1,A)') '>>> '//WORKFLOW_LABEL//' STAGE MAXITS: ', &
                     &stage_cap, ' FOR ~', TARGET_UPDATES_PER_PARTICLE, ' UPDATES/PARTICLE'
             endif
-        end subroutine set_refine3D_het_sampling
+        end subroutine set_classify3D_refs_sampling
 
-        subroutine prepare_refine3D_het_class_sampling()
+        subroutine prepare_classify3D_refs_class_sampling()
             type(class_sample), allocatable :: clssmp(:)
             integer, allocatable :: tmpinds(:), clsinds(:), cls_states(:)
             integer              :: icls
@@ -1601,143 +1748,56 @@ contains
                     endif
                 endif
             endif
-        end subroutine prepare_refine3D_het_class_sampling
+        end subroutine prepare_classify3D_refs_class_sampling
 
-        subroutine set_refine3D_het_downscaling()
+        subroutine set_classify3D_refs_downscaling()
             lpinfo_master(1)%trslim      = min(8.,max(2.0, AHELIX_WIDTH/params%smpd))
             lpinfo_master(1)%box_crop    = params%box
             lpinfo_master(1)%smpd_crop   = params%smpd
             lpinfo_master(1)%l_autoscale = .false.
-            if( .not. params%l_autoscale )then
+            call lpstages_setlims(params%box, 1, params%smpd, params%lpstart, params%lpstop, lpinfo_master(1))
+            params%trs = lpinfo_master(1)%trslim
+            call cline%set('trs', params%trs)
+            if( lpinfo_master(1)%l_autoscale )then
+                params%box_crop  = lpinfo_master(1)%box_crop
+                params%smpd_crop = lpinfo_master(1)%smpd_crop
+                call cline%set('box_crop', params%box_crop)
+                call cline%set('smpd_crop', params%smpd_crop)
+                write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
+                    &'>>> '//WORKFLOW_LABEL//' DOWNSCALING BOX/SMPD_CROP: ', &
+                    &params%box, '/', params%box_crop, '/', params%smpd_crop
+            else
                 call cline%delete('box_crop')
                 call cline%delete('smpd_crop')
-                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' AUTOSCALE: off'
-            else
-                call lpstages_setlims(params%box, 1, params%smpd, params%lpstart, params%lpstop, lpinfo_master(1))
-                params%trs = lpinfo_master(1)%trslim
-                call cline%set('trs', params%trs)
-                if( lpinfo_master(1)%l_autoscale )then
-                    params%box_crop  = lpinfo_master(1)%box_crop
-                    params%smpd_crop = lpinfo_master(1)%smpd_crop
-                    call cline%set('box_crop', params%box_crop)
-                    call cline%set('smpd_crop', params%smpd_crop)
-                    write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
-                        &'>>> '//WORKFLOW_LABEL//' AUTOSCALE BOX/SMPD_CROP: ', &
-                        &params%box, '/', params%box_crop, '/', params%smpd_crop
-                else
-                    call cline%delete('box_crop')
-                    call cline%delete('smpd_crop')
-                    write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' AUTOSCALE: native sampling retained'
-                endif
+                write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' DOWNSCALING: native sampling retained'
             endif
-        end subroutine set_refine3D_het_downscaling
+        end subroutine set_classify3D_refs_downscaling
 
         subroutine initialize_state_volumes()
+            type(string), allocatable :: checkpoint_vols(:)
             logical :: vols_defined(params%nstates)
             integer :: state
             do state = 1,params%nstates
                 vols_defined(state) = cline%defined('vol'//int2str(state))
             enddo
-            if( (count(vols_defined)>0) .and. (count(vols_defined)<params%nstates) )then
-                THROW_HARD(WORKFLOW_LABEL//' requires either all vol1..volN inputs or none')
+            if( .not. all(vols_defined) )then
+                THROW_HARD(WORKFLOW_LABEL//' requires a complete external vol1..volN reference set')
             endif
-            allocate(init_vols(params%nstates))
-            if( all(vols_defined) )then
-                ! All volumes manually inputted
-                call validate_input_volumes()
-                init_vols(1:params%nstates) = params%vols(1:params%nstates)
-                if( params%l_trail_rec )then
-                    write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' USING INPUT REFERENCE VOLUMES FOR FIRST PASS'
-                    call map_ptcls_to_input_volumes()
-                else
-                    write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' USING INPUT REFERENCE VOLUMES'
-                endif
-            else
-                if( l_input_vols_required )then
-                    THROW_HARD(WORKFLOW_LABEL//' requires input volumes')
-                endif
-                if( project_state_volumes_compatible() )then
-                    ! Taking from project
-                    params%vols(1:params%nstates) = init_vols(1:params%nstates)
-                    write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' USING PROJECT STATE VOLUMES'
-                else
-                    call reconstruct_reference_volumes
-                endif
-            endif
+            allocate(init_vols(params%nstates), checkpoint_vols(params%nstates))
+            call validate_input_volumes()
+            init_vols(1:params%nstates) = params%vols(1:params%nstates)
+            write(logfhandle,'(A)') &
+                &'>>> CLASSIFY3D_REFS EXTERNAL REFERENCES ARE UNTRUSTED UNTIL CC POSE INITIALIZATION COMPLETES'
+            call initialize_poses_against_external_references(params, cline, xrefine3D, xrec3D, &
+                &nptcls_eff, init_vols, checkpoint_vols, 1)
+            params%vols(1:params%nstates) = checkpoint_vols
+            iter_glob = 1
             ! update command line
             do state = 1,params%nstates
                 call cline%set('vol'//int2str(state), params%vols(state))
             enddo
+            deallocate(checkpoint_vols)
         end subroutine initialize_state_volumes
-
-        subroutine map_ptcls_to_input_volumes()
-            use simple_refine3D_fnames,  only: refine3D_startvol_fname
-            type(cmdline) :: cline_mapping
-            real    :: ufrac
-            integer :: state, nsample
-            write(logfhandle,'(A)')&
-                &'>>> '//WORKFLOW_LABEL//' INITIATED INITIAL MAPPING OF PARTICLES TO INPUT VOLUMES'
-            nsample   = min(nptcls_eff, NSAMPLE_REFINE3D_HET_CAP)
-            ufrac     = real(nsample) / real(nptcls_eff)
-            iter_glob = 1
-            cline_mapping = cline
-            call cline_mapping%set('prg',            'refine3D')
-            call cline_mapping%set('mkdir',          'no')
-            call cline_mapping%set('balance',        'no')
-            call cline_mapping%set('frac_best',      1.0)
-            call cline_mapping%set('fillin',         'no')
-            call cline_mapping%set('update_frac',    ufrac)
-            call cline_mapping%set('trail_rec',      'no')
-            call cline_mapping%set('volrec',         'yes')
-            call cline_mapping%set('maxits',         1)
-            call cline_mapping%set('startit',        iter_glob)
-            call cline_mapping%set('which_iter',     iter_glob)
-            call cline_mapping%set('extr_iter',      iter_glob)
-            call cline_mapping%set('refine',         'greedy')
-            call cline_mapping%set('trs',            lpinfo_master(1)%trslim)
-            call cline_mapping%set('greedy_sampling','yes')
-            call cline_mapping%set('update_missing', 'no')
-            call cline_mapping%set('filt_mode',      'none')
-            call cline_mapping%set('nsample',        nsample)
-            call cline_mapping%set('lp',             params%lpstart)
-            call cline_mapping%set('nspace',         NSPACE_FIRST_PASS)
-            call cline_mapping%delete('endit')
-            call cline_mapping%delete('partition')
-            call xrefine3D%execute(cline_mapping)
-            do state = 1,params%nstates
-                params%vols(state) = refine3D_state_vol_fname(state)
-                call simple_copy_file(params%vols(state), refine3D_startvol_fname(state))
-            enddo
-            call cline_mapping%kill
-            write(logfhandle,'(A)')&
-                &'>>> '//WORKFLOW_LABEL//' EXITED INITIAL MAPPING OF PARTICLES TO INPUT VOLUMES'
-        end subroutine map_ptcls_to_input_volumes
-
-        subroutine reconstruct_reference_volumes()
-            type(cmdline) :: cline_rec3D
-            integer :: state
-            cline_rec3D = cline
-            call cline_rec3D%set('prg',        'reconstruct3D')
-            call cline_rec3D%set('objfun',     'cc')
-            call cline_rec3D%set('postprocess','no')
-            call cline_rec3D%set('nu_refine',  'no')
-            call cline_rec3D%set('nsample',    params%nsample)
-            call cline_rec3D%set('nstates',    params%nstates)
-            call cline_rec3D%delete('trail_rec')
-            call cline_rec3D%delete('refine')
-            call cline_rec3D%delete('objfun_den')
-            call cline_rec3D%delete('objfun_den_w')
-            call cline_rec3D%delete('sigma_est')
-            call cline_rec3D%delete('update_frac')
-            call cline_rec3D%delete('ufrac_trec')
-            call cline_rec3D%delete('endit')
-            call xrec3D%execute(cline_rec3D)
-            do state = 1,params%nstates
-                params%vols(state) = refine3D_state_vol_fname(state)
-            enddo
-            write(logfhandle,'(A)') '>>> '//WORKFLOW_LABEL//' INITIALIZED STATE VOLUMES BY RECONSTRUCTION'
-            call cline_rec3D%kill
-        end subroutine reconstruct_reference_volumes
 
         subroutine validate_input_volumes()
             type(string) :: vol
@@ -1755,78 +1815,39 @@ contains
             call vol%kill
         end subroutine validate_input_volumes
 
-        logical function project_state_volumes_compatible() result(l_compatible)
-            real    :: init_smpd
-            integer :: state, init_box
-            l_compatible = .false.
-            call spproj%read_segment('out', params%projfile)
-            do state = 1,params%nstates
-                if( .not. spproj%isthere_in_osout('vol', state) )then
-                    call spproj%kill
-                    return
-                endif
-                call spproj%get_vol('vol', state, init_vols(state), init_smpd, init_box)
-                if( .not. file_exists(init_vols(state)) )then
-                    call spproj%kill
-                    return
-                endif
-                if( init_box /= params%box .or. init_smpd <= 0. .or. abs(init_smpd - params%smpd) > 1.e-6 )then
-                    call spproj%kill
-                    return
-                endif
-            enddo
-            l_compatible = .true.
-            call spproj%kill
-        end function project_state_volumes_compatible
-
-        subroutine run_refine3D_het()
+        subroutine run_classify3D_refs()
             integer, parameter  :: STEP_IT = 3
-            type(lp_crop_inf), allocatable :: lpinfos(:)
-            real    :: rfind, rfind_incr
-            integer :: startit, lastit, nits, maxits
-            integer :: find_start, find_stop, stage, nstages
-            ! Frequency marching plan
-            find_start = max(5,              calc_fourier_index(params%lpstart, params%box, params%smpd))
-            find_stop  = min(params%box/2-2, calc_fourier_index(params%lpstop,  params%box, params%smpd))
-            nstages    = ceiling(real(params%maxits) / real(STEP_IT))
-            if( nstages > 2 )then
-                rfind_incr = real(find_stop - find_start) / real(nstages-2)
-            else
-                rfind_incr = real(find_stop - find_start)
-            endif
-            allocate(lpinfos(nstages))
-            lpinfos(:) = lpinfo_master(1)
+            type(refine3D_stage_plan_entry), allocatable :: stages(:)
+            integer :: startit, lastit, stage
+            call plan_refine3D_frequency_stages(params%box, params%smpd, params%lpstart, params%lpstop, &
+                &params%maxits, STEP_IT, iter_glob + 1, lpinfo_master(1), stages)
             write(logfhandle,'(A,I0,A,F7.2,A,F7.2)') &
                 &'>>> '//WORKFLOW_LABEL//' FREQUENCY MARCHING NSTAGES/LPSTART/LPSTOP: ',&
-                &nstages, '/', real(params%lpstart), '/', real(params%lpstop)
-            rfind   = real(find_start) - rfind_incr
-            stage   = 0
-            do startit = 1, params%maxits, STEP_IT
-                stage  = stage + 1
-                rfind  = rfind + rfind_incr
-                lpinfos(stage)%lp      = max(calc_lowpass_lim(nint(rfind), params%box, params%smpd), params%lpstop)
-                lpinfos(stage)%l_lpset = .true.
+                &size(stages), '/', real(params%lpstart), '/', real(params%lpstop)
+            do stage = 1,size(stages)
                 write(logfhandle,'(A,I3,A,F7.2)')'>>> '//WORKFLOW_LABEL//' PLANNED STAGE/LP: ',&
-                    & stage, ' / ', lpinfos(stage)%lp
+                    &stage, ' / ', stages(stage)%lpinfo%lp
             enddo
-            ! March
-            maxits = params%maxits + iter_glob
-            rfind  = real(find_start) - rfind_incr
-            stage  = 0
             lastit = 0
-            do stage = 1,nstages
+            do stage = 1,size(stages)
                 startit = iter_glob + 1
-                lastit  = min(startit+STEP_IT-1, maxits)
-                nits    = lastit - startit + 1
                 call cline%set('minits',     1)
-                call cline%set('maxits',     nits)
+                call cline%set('maxits',     stages(stage)%nits)
                 call cline%set('startit',    startit)
                 call cline%set('which_iter', startit)
                 call cline%set('extr_iter',  startit)
-                call cline%set('trs',        lpinfos(stage)%trslim)
-                call cline%set('lp',         lpinfos(stage)%lp)
-                call cline%set('lpstop',     lpinfos(stage)%lp)
-                write(logfhandle,'(A,I0,A,F7.2)')'>>> '//WORKFLOW_LABEL//' ENTERING STAGE ',stage,' LP: ',lpinfos(stage)%lp
+                call cline%set('trs',        stages(stage)%lpinfo%trslim)
+                call cline%set('lp',         stages(stage)%lpinfo%lp)
+                call cline%set('lpstop',     stages(stage)%lpinfo%lp)
+                if( stages(stage)%lpinfo%l_autoscale )then
+                    call cline%set('box_crop',  stages(stage)%lpinfo%box_crop)
+                    call cline%set('smpd_crop', stages(stage)%lpinfo%smpd_crop)
+                else
+                    call cline%delete('box_crop')
+                    call cline%delete('smpd_crop')
+                endif
+                write(logfhandle,'(A,I0,A,F7.2)')'>>> '//WORKFLOW_LABEL//' ENTERING STAGE ', &
+                    &stage, ' LP: ', stages(stage)%lpinfo%lp
                 call xrefine3D%execute(cline)
                 lastit    = cline%get_iarg('endit')
                 iter_glob = lastit
@@ -1837,8 +1858,8 @@ contains
             call del_file(DIST_FBODY//'.dat')
             call del_file(ASSIGNMENT_FBODY//'.dat')
             write(logfhandle,'(A,I0)') '>>> '//WORKFLOW_LABEL//' EXITING FREQUENCY MARCHING AT ITERATION ', iter_glob
-            deallocate(lpinfos)
-        end subroutine run_refine3D_het
+            deallocate(stages)
+        end subroutine run_classify3D_refs
 
         subroutine ensure_all_active_particles_updated()
             integer :: nactive, nupdated, nmissing
@@ -1847,7 +1868,7 @@ contains
                 THROW_HARD(WORKFLOW_LABEL//' has no active particles after staged refinement')
             endif
             if( nmissing > 0 )then
-                call run_refine3D_het_missing_update(nmissing, nactive)
+                call run_classify3D_refs_missing_update(nmissing, nactive)
                 call read_update_coverage(nactive, nupdated, nmissing)
                 if( nmissing > 0 )then
                     THROW_HARD(WORKFLOW_LABEL//' final missing-update pass failed to update every active particle')
@@ -1877,7 +1898,7 @@ contains
             call update_proj%kill
         end subroutine read_update_coverage
 
-        subroutine run_refine3D_het_missing_update( nmissing, nactive )
+        subroutine run_classify3D_refs_missing_update( nmissing, nactive )
             integer, intent(in) :: nmissing, nactive
             type(cmdline) :: cline_missing
             iter_glob = iter_glob + 1
@@ -1905,7 +1926,7 @@ contains
             call cline_missing%delete('partition')
             call xrefine3D%execute(cline_missing)
             call cline_missing%kill
-        end subroutine run_refine3D_het_missing_update
+        end subroutine run_classify3D_refs_missing_update
 
         subroutine reconstruct_all_particles_volumes
             cline_rec3D = cline
@@ -1937,7 +1958,7 @@ contains
             call gen_ortho_reprojs4viz(params_final_rec, spproj)
         end subroutine reconstruct_all_particles_volumes
 
-    end subroutine exec_refine3D_het
+    end subroutine exec_classify3D_refs
 
     !> Single entrypoint (shared-memory OR distributed master), driven by a strategy.
     subroutine exec_refine3D( self, cline )

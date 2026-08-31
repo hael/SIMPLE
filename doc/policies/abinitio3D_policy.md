@@ -93,26 +93,15 @@ Stage policy includes:
 - staged NU filtering from `NU_FILTER_STAGE`
 - staged automasking only from `AUTOMSK_STAGE`
 
-When the downscaled particle cache is requested (`cache=yes`), the stage
-controller uses the final active entry in the low-pass/downscaling ladder as
-`box_crop` for every emitted `refine3D` command. The stable crop keeps the cache
-key unchanged, so all eligible stages reuse one cache instead of rebuilding it
-at stage boundaries. Stage low-pass limits remain stage-specific. With
-`cache=no`, each stage retains its own cheaper crop from the ladder.
+The downscaled particle cache is a 2D-only feature: `abinitio3D` rejects
+`cache=yes`, and each stage uses its own crop from the low-pass/downscaling
+ladder.
 
 The effective crop and its physically equivalent pixel size are shared by
 starting-volume generation, matcher reconstruction, split-stage reconstruction,
 symmetry-map commands, FSC diagnostics, low-pass snapshots, and project volume
 registration. This preserves `box * smpd == box_crop * smpd_crop` across every
 particle-to-volume handoff.
-
-The controller still re-stamps the user's cache request onto every child, so a
-stage-local uniform fallback does not permanently disable later stages. A stage
-that cannot use the cache releases it; a later eligible stage may rebuild it at
-the same final crop. If the final crop is the native box, the existing
-`box_crop >= box` eligibility rule disables the cache. See
-[particle_cache_policy.md](particle_cache_policy.md) for the full cache
-contract.
 
 ### Full-Sampling Switch
 
@@ -158,6 +147,13 @@ multi-volume modes. It cannot be combined with class-average initialization or
 partitioned startup. User-supplied input volumes are assumed to be aligned to
 the target symmetry axis, so `pgrp_start` is set to `pgrp` and the particle
 workflow does not run symmetry-axis search on them.
+
+Input volumes are not assumed to share the particles' alignment provenance.
+Before the Euclidean stage ladder, this route calls the shared fixed-reference
+CC pose-initialization service: one pass over at most 100,000 active particles
+at a common 15 A limit, followed by residual-sigma consolidation and a
+data-derived checkpoint reconstruction. The external maps remain fixed during
+that pass and are not blended into the checkpoint.
 
 Normal particle-based starts treat `abinitio3D` as the producer of new
 `ptcl3D` orientation and multi-state information. The workflow resets `ptcl3D`
@@ -268,23 +264,16 @@ off in the full-sampling regime.
 `sampled == max(sampled)` continues to identify the exact current update, while
 `sampled > 0` identifies the persistent cohort.
 
-The split stage is a fractional stabilization stage. It uses
-`refine=prob_state`, retains the fixed post-split `update_frac` and `nsample`,
-and keeps `fillin=no`. From `TRAILREC_STAGE_SINGLE` onward, trailing
-reconstruction is enabled in this fractional regime and uses realized per-state
-fractions. The default split stage 6 is after that threshold and therefore
-trails against the state-specific split halfmaps reconstructed immediately
-after relabeling from the first post-split-sized subset; it must not reuse or
-blend the pre-split one-state halfmaps. With an uncapped 2.5-times cohort, the
-initial realized fraction is approximately `1 / 2.5`, with state-local and
-class-quota rounding. An earlier custom split stage does not enable trailing
-before `TRAILREC_STAGE_SINGLE`.
-
-The remaining post-split docked neighborhood stages use `refine=prob_neigh`
-with `prob_neigh_mode=geom`. This mode selects the geometric neighborhood
-containing each particle's previous best projection and evaluates that same
-neighborhood for every state. These stages keep the fixed post-split fractional
-target and trailing reconstruction.
+Checkpoint construction is isolated in
+`simple_abinitio3D_split_checkpoint`. Once the state-specific split maps and
+metadata exist, `abinitio3D` does not run another private post-split loop. It
+hands the checkpoint to `refine3D_states` with `pose_policy=local`, the fixed
+post-split update fraction, sticky cohort eligibility in the fractional
+regime, and the remaining iteration/frequency range. `refine3D_states` then
+owns all post-split matching, coverage enforcement, trailing policy, and final
+native-sampling reconstruction. Local policy maps to
+`refine=prob_neigh,prob_neigh_mode=geom`, so every state is evaluated in the
+same neighborhood around the particle's current projection direction.
 
 When `nsample/active_particles > 0.9`, the global full-sampling switch remains
 authoritative throughout docked refinement: emitted stage commands omit
@@ -357,15 +346,15 @@ automasking behavior belongs to [automasking_policy.md](automasking_policy.md).
 
 ## 9. Final Reconstruction
 
-After the staged `refine3D` loop, `abinitio3D` runs a fresh
-original-sampling reconstruction from selected particles for full schedules
-and for `multivol_mode=independent` schedules. Other explicit early-stop
-schedules skip this final all-particle reconstruction.
+For non-docked schedules, `abinitio3D` runs a fresh original-sampling
+reconstruction from selected particles for full schedules and for
+`multivol_mode=independent` schedules. Other explicit early-stop schedules skip
+this final all-particle reconstruction.
 
-For `docked` mode, the workflow first verifies post-split coverage: every
-active particle must have `updatecnt > 0` in the multi-state epoch before final
-reconstruction is allowed. This prevents final maps from being produced from
-state labels that were never refreshed after the split.
+For `docked` mode, `refine3D_states` owns completion. It verifies that every
+active particle has `updatecnt > 0` in the multi-state epoch before producing
+the final native-sampling maps. `abinitio3D` does not repeat that reconstruction
+after the nested workflow returns.
 
 The final reconstruction inherits only the scientific reconstruction policy it
 needs. It preserves the parent `envfsc` request so the original-sampling half

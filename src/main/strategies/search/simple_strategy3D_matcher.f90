@@ -13,7 +13,6 @@ use simple_matcher_2Dprep,          only: prepimg4align
 use simple_matcher_3Drec,           only: calc_3Drec, calc_projdir3Drec
 use simple_rec3D_pcg_strategy,      only: execute_rec3D_pcg_worker
 use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4missing3D, sample_ptcls4update3D
-use simple_ptcl_cache,              only: ptcl_cache_in_use, ptcl_cache_assert_ready
 use simple_qsys_funs,               only: qsys_job_finished
 use simple_refine3D_fnames,         only: refine3D_bench_fname
 use simple_syslib,                  only: get_peak_rss_bytes, get_current_rss_bytes
@@ -41,9 +40,9 @@ type :: refine3D_ctrl
     logical :: do_prob_align
     logical :: do_projrec
     logical :: do_sigma_mode
+    logical :: do_emit_sigma
     logical :: do_write_oris
     logical :: do_bench
-    logical :: l_cached
   contains
     procedure :: print_flags
 end type refine3D_ctrl
@@ -163,7 +162,7 @@ contains
                 strategy3Dspecs(iptcl_batch)%iptcl_map = iptcl_map
                 if( ctrl%do_prob_align ) strategy3Dspecs(iptcl_batch)%eulprob_obj_part => eulprob_obj_part
                 call choose_and_run_strategy(iptcl, iptcl_batch, ithr, has_been_searched)
-                if( p_ptr%cc_objfun == OBJFUN_EUCLID )then
+                if( ctrl%do_emit_sigma )then
                     call b_ptr%spproj_field%get_ori(iptcl, orientation)
                     call orientation%set_shift(incr_shifts(:,iptcl_batch))
                     call b_ptr%esig%calc_sigma2(b_ptr%pftc, iptcl, orientation, 'proj')
@@ -177,7 +176,7 @@ contains
             frac_greedy = real(sum(cnt_greedy)) / real(sum(cnt_all))
         endif
         call b_ptr%spproj_field%set_all2single('frac_greedy', frac_greedy)
-        if( p_ptr%cc_objfun == OBJFUN_EUCLID ) call b_ptr%esig%write_sigma2
+        if( ctrl%do_emit_sigma ) call b_ptr%esig%write_sigma2
         if( ctrl%do_projrec ) call b_ptr%spproj_field%set_projs(b_ptr%eulspace)
         call maybe_write_orientations()
         do iptcl_batch = 1, batchsz_max
@@ -200,11 +199,11 @@ contains
         if( ctrl%do_write_partial_recs )then
             if( ctrl%do_bench ) t_rec = tic()
             if( trim(params%rec_backend) == 'pcg' )then
-                call execute_rec3D_pcg_worker(params, build, cline, pinds, cached=ctrl%l_cached)
+                call execute_rec3D_pcg_worker(params, build, cline, pinds)
             else if( ctrl%do_projrec )then
-                call calc_projdir3Drec(params, build, cline, nptcls2update, pinds, cached=ctrl%l_cached)
+                call calc_projdir3Drec(params, build, cline, nptcls2update, pinds)
             else
-                call calc_3Drec(params, build, cline, nptcls2update, pinds, cached=ctrl%l_cached)
+                call calc_3Drec(params, build, cline, nptcls2update, pinds)
             endif
             if( ctrl%do_bench ) rt_rec_write = rt_rec_write + toc(t_rec)
         endif
@@ -267,6 +266,7 @@ contains
             ctrl%do_projrec    = trim(p_ptr%projrec) == 'yes'
             ctrl%do_bench      = L_BENCH_GLOB
             ctrl%do_sigma_mode = (ctrl%refine_mode == 'sigma')
+            ctrl%do_emit_sigma = p_ptr%cc_objfun == OBJFUN_EUCLID .or. trim(p_ptr%cc_emit_sigma) == 'yes'
             ctrl%do_write_oris = .not. ctrl%do_sigma_mode
             select case(ctrl%refine_mode)
                 case('eval','sigma')
@@ -274,13 +274,6 @@ contains
                 case default
                     ctrl%do_write_partial_recs = l_write_partial_recs
             end select
-            ! Alignment and reconstruction reads may both come from the downscaled
-            ! particle cache; the rec side mirrors the 2D cropped class-average
-            ! restoration (see prep_imgs4rec in simple_matcher_3Drec).
-            call ptcl_cache_assert_ready(p_ptr, b_ptr)
-            ctrl%l_cached = ptcl_cache_in_use(p_ptr, b_ptr)
-            if( ctrl%l_cached .and. p_ptr%part == 1 ) write(logfhandle,'(A)') &
-                &'>>> REFINE3D: reading particles from the downscaled cache'
         end subroutine init_ctrl
 
         subroutine ensure_even_odd_partition()
@@ -325,13 +318,7 @@ contains
             call prep_sigmas_objfun(p_ptr, b_ptr, .false.)
             if( ctrl%do_bench ) rt_prep_refs = toc(t_prep_refs)
             if( ctrl%do_bench ) t_alloc_ptcl_imgs = tic()
-            if( ctrl%l_cached )then
-                ! the read buffer holds cache entries, which live at box_crop
-                call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max, &
-                    &imgbatch_box=p_ptr%box_crop, imgbatch_smpd=p_ptr%smpd_crop)
-            else
-                call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
-            endif
+            call alloc_ptcl_imgs(p_ptr, b_ptr, ptcl_match_imgs, ptcl_match_imgs_pad, batchsz_max)
             if( ctrl%do_bench ) rt_alloc_ptcl_imgs = toc(t_alloc_ptcl_imgs)
             call build%vol%kill
             call build%vol_odd%kill
@@ -442,7 +429,6 @@ contains
         write(logfhandle,*) 'do_sigma_mode         : ', ctrl%do_sigma_mode
         write(logfhandle,*) 'do_write_oris         : ', ctrl%do_write_oris
         write(logfhandle,*) 'do_bench              : ', ctrl%do_bench
-        write(logfhandle,*) 'l_cached              : ', ctrl%l_cached
     end subroutine print_flags
 
 end module simple_strategy3D_matcher

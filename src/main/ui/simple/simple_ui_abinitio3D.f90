@@ -63,15 +63,6 @@ contains
         call abinitio3D%add_input(UI_PARM, 'projrec', 'binary', 'Projection-direction reconstruction', &
             &'Assemble raw 2D Fourier numerator/CTF-squared sums by projection direction before compact 3D reconstruction(yes|no){no}','', .false., 'no', visibility=UI_VIS_ADVANCED, &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']))
-        call abinitio3D%add_input(UI_PARM, 'cache', 'binary', 'Cache downscaled particles', &
-         &'Write Fourier-cropped particles once per stage and read those for alignment instead of the originals on &
-         &every iteration, trading disk space for I/O(yes|no){no}', '', &
-         &.false., 'no', choices=ui_choices([character(len=3) :: 'yes', 'no']), &
-         &visibility=UI_VIS_DEVELOPER)
-        call abinitio3D%add_input(UI_PARM, 'cache_dir', 'dir', 'Particle cache directory', &
-         &'Where to keep the downscaled particle cache; point it at a fast local disk when the project lives &
-         &on a slow one. Defaults to the execution directory', 'e.g. /scratch/ptcl_cache/', &
-         &.false., '', visibility=UI_VIS_DEVELOPER)
         ! <no additional inputs>
         ! <empty>
         ! search controls

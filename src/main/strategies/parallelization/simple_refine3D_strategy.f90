@@ -11,7 +11,6 @@ use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
 use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap
-use simple_ptcl_cache,    only: ptcl_cache_ensure
 use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master, get_pcg_nu_evidence_bench_seconds
 implicit none
 
@@ -60,6 +59,7 @@ type, extends(refine3D_strategy) :: refine3D_inmem_strategy
     type(cmdline)     :: cline_calc_group_sigmas
     type(convergence) :: conv
     logical :: l_sigma
+    logical :: l_sigma_transition_ready
 contains
     procedure :: initialize         => inmem_initialize
     procedure :: execute_iteration  => inmem_execute_iteration
@@ -80,6 +80,7 @@ type, extends(refine3D_strategy) :: refine3D_distr_strategy
     logical        :: have_oris
     logical        :: l_multistates
     logical        :: l_combine_eo
+    logical        :: l_sigma_transition_ready
     ! Prototypes / persistent command lines
     type(cmdline) :: cline_rec3D
     type(cmdline) :: cline_calc_pspec_distr
@@ -143,12 +144,6 @@ contains
     subroutine strip_refine3D_search_only_args( cline )
         type(cmdline), intent(inout) :: cline
         call cline%delete('inpl_cont')
-        ! The children stripped here never consume the particle cache: sigma/pspec/
-        ! postprocess/assembly read no particles, and the one-off starting-volume
-        ! rec3D deliberately reads the originals (it may run before the cache is
-        ! built, and reads each particle only once).
-        call cline%delete('cache')
-        call cline%delete('cache_dir')
     end subroutine strip_refine3D_search_only_args
 
     !> Strategy selection based on command-line shape.
@@ -603,6 +598,7 @@ contains
         if( l_proj_dirty ) call build%spproj%write_segment_inside(params%oritype)
         ! objfun=euclid initialisation
         self%l_sigma = (params%cc_objfun == OBJFUN_EUCLID)
+        self%l_sigma_transition_ready = trim(params%sigma_transition_ready) == 'yes'
         self%cline_calc_group_sigmas = cline
         call strip_refine3D_search_only_args(self%cline_calc_group_sigmas)
         call self%cline_calc_group_sigmas%set('prg', 'calc_group_sigmas')
@@ -626,10 +622,9 @@ contains
         params%which_iter = params%startit
         if( .not.cline%defined('extr_iter') ) params%extr_iter = params%startit
         params%outfile    = 'algndoc'//METADATA_EXT
-        ! Downscaled particle cache for the alignment reads, once per refine3D
-        ! invocation, before any iteration reads particles; may fall back to
-        ! cache=no on cline, which child commands inherit via their copy
-        call ptcl_cache_ensure(params, build, cline)
+        ! Particle caching is a 2D-only feature; fail loudly rather than silently
+        ! ignoring a stray cache=yes so callers adopt the 2D-only contract.
+        if( params%l_cache ) THROW_HARD('cache=yes (downscaled particle cache) is not supported for 3D workflows')
     end subroutine inmem_initialize
 
     subroutine inmem_execute_iteration(self, params, build, cline, converged)
@@ -692,7 +687,12 @@ contains
         call materialize_reprojection_model(params, cline, current_build=build)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! Per-iteration sigma update (euclid)
-        if( self%l_sigma )then
+        if( self%l_sigma .and. self%l_sigma_transition_ready )then
+            write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
+            self%l_sigma_transition_ready  = .false.
+            params%sigma_transition_ready = 'no'
+            call cline%set('sigma_transition_ready', 'no')
+        else if( self%l_sigma )then
             call self%cline_calc_group_sigmas%set('which_iter', &
                 sigma2_group_iter(params%which_iter, matcher_completed=.false.))
             if( L_BENCH_GLOB ) self%bench%t_sigma = tic()
@@ -882,6 +882,7 @@ contains
         endif
         ! final iteration with combined e/o
         self%l_combine_eo = .false.
+        self%l_sigma_transition_ready = trim(params%sigma_transition_ready) == 'yes'
         if( trim(params%combine_eo).eq.'yes' )then
             self%l_combine_eo = .true.
             call cline%set('combine_eo','no')
@@ -1059,10 +1060,9 @@ contains
                 call self%cline_calc_group_sigmas%set('nthr', self%nthr_master)
             endif
         endif
-        ! Downscaled particle cache for the alignment reads, master-side before any
-        ! job is scheduled so the workers find it ready; must precede gen_job_descr
-        ! below so a fallback to cache=no reaches the worker command lines
-        call ptcl_cache_ensure(params, build, cline)
+        ! Particle caching is a 2D-only feature; fail loudly rather than silently
+        ! ignoring a stray cache=yes so callers adopt the 2D-only contract.
+        if( params%l_cache ) THROW_HARD('cache=yes (downscaled particle cache) is not supported for 3D workflows')
         ! prepare job description
         call cline%gen_job_descr(self%job_descr)
         call self%job_descr%set('prg', 'refine3D')
@@ -1122,7 +1122,12 @@ contains
         call materialize_reprojection_model(params, cline, nthr=self%nthr_master)
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! per-iteration group sigmas (euclid)
-        if( trim(params%objfun).eq.'euclid' )then
+        if( trim(params%objfun).eq.'euclid' .and. self%l_sigma_transition_ready )then
+            write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
+            self%l_sigma_transition_ready  = .false.
+            params%sigma_transition_ready = 'no'
+            call cline%set('sigma_transition_ready', 'no')
+        else if( trim(params%objfun).eq.'euclid' )then
             call self%cline_calc_group_sigmas%set('which_iter', &
                 sigma2_group_iter(iter, matcher_completed=.false.))
             if( L_BENCH_GLOB ) self%bench%t_sigma = tic()

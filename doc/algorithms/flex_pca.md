@@ -62,7 +62,7 @@ FSC-compatible half products and merged state volumes are written.
 
 The winning state weight also becomes a hard `ptcl3D/state` label in the run's
 private project; unassigned particles remain state 0. This label and the state
-volumes can initialize `refine3D_multi`, where ordinary hard-assignment
+volumes can initialize `refine3D_states`, where ordinary hard-assignment
 multi-state refinement takes over.
 
 ## State merging

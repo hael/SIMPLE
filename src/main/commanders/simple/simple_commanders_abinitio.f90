@@ -2,11 +2,13 @@
 module simple_commanders_abinitio
 use simple_commanders_api
 use simple_abinitio_utils
+use simple_abinitio3D_split_checkpoint, only: build_abinitio3D_split_checkpoint
+use simple_external_reference_pose_initialization, only: initialize_poses_against_external_references
 use simple_procimgstk,              only: shift_imgfile
 use simple_commanders_project_core, only: commander_selection
 use simple_commanders_reproject,    only: commander_reproject
-use simple_commanders_refine3D,     only: commander_refine3D, commander_refine3D
-use simple_commanders_rec,          only: commander_rec3D, commander_rec3D
+use simple_commanders_refine3D,     only: commander_refine3D, commander_refine3D_states
+use simple_commanders_rec,          only: commander_rec3D
 use simple_cluster_seed,            only: gen_labelling
 use simple_refine3D_fnames,         only: refine3D_startvol_fname, refine3D_startvol_half_fname, &
     &refine3D_state_vol_fname, refine3D_state_halfvol_fname
@@ -490,24 +492,33 @@ contains
         class(cmdline),              intent(inout) :: cline
         ! commanders
         type(commander_refine3D)        :: xrefine3D
+        type(commander_refine3D_states) :: xrefine3D_states
         type(commander_rec3D)           :: xrec3D
         ! other
         integer,            allocatable :: tmpinds(:), clsinds(:), pinds(:), cls_states(:)
         type(class_sample), allocatable :: clssmp(:)
+        type(string),       allocatable :: external_refs(:), external_checkpoint(:)
         type(parameters)                :: params
         type(sp_project)                :: spproj
         type(simple_nice_comm)          :: nice_comm
         real    :: lprange(2)
         integer :: state, istage, icls, start_stage, nptcls2update, noris, nstates_on_cline
-        integer :: nstates_in_project, split_stage, last_stage, nptcls_cap
+        integer :: nstates_in_project, split_stage, last_stage, pose_init_iter
         logical :: l_cavg_ini_ext, l_vol_ini_ext, l_user_nstages, l_user_lpstop, l_run_final_rec
         logical :: l_state_continue
         logical :: l_force_full_sampling
+        logical :: l_states_handoff_complete
         real    :: sampled_active_frac
+        real    :: update_frac_post_split
         l_state_continue = cline%defined('state')
         l_force_full_sampling = .false.
+        l_states_handoff_complete = .false.
         sampled_active_frac   = 0.
         l_state_continue_mode = .false.
+        ! Particle caching is a 2D-only feature; reject rather than silently ignore
+        if( cline%defined('cache') .or. cline%defined('cache_dir') )then
+            THROW_HARD('cache=yes (downscaled particle cache) is not supported for 3D workflows')
+        endif
         call cline%set('objfun',    'euclid') ! use noise normalized Euclidean distances from the start
         call cline%set('sigma_est', 'global') ! obviously
         call cline%set('bfac',            0.) ! because initial models should not be sharpened
@@ -700,7 +711,7 @@ contains
             call cline%set('pgrp_start', params%pgrp)
             params%pgrp_start = params%pgrp
             start_stage = abinitio_symsrch_stage() + 1
-            l_ini3D     = .true.
+            ! CC pose initialization below owns the external-reference route.
             ! setting up random classes for particles sampling
             call spproj%os_ptcl2D%rnd_cls(100)
             call spproj%write_segment_inside('ptcl2D', params%projfile)
@@ -813,6 +824,20 @@ contains
             if( l_vol_ini_ext )then
                 ! user provided input volumes
                 call normalize_input_volumes(params, cline_refine3D)
+                call set_cline_refine3D(params, start_stage, l_cavgs=.false.)
+                pose_init_iter = max(1, cline_refine3D%get_iarg('startit') - 1)
+                allocate(external_refs(params%nstates), external_checkpoint(params%nstates))
+                external_refs = params%vols(1:params%nstates)
+                write(logfhandle,'(A)') &
+                    &'>>> ABINITIO3D EXTERNAL REFERENCES ARE UNTRUSTED UNTIL CC POSE INITIALIZATION COMPLETES'
+                call initialize_poses_against_external_references(params, cline_refine3D, xrefine3D, xrec3D, &
+                    &nptcls_eff, external_refs, external_checkpoint, pose_init_iter)
+                params%vols(1:params%nstates) = external_checkpoint
+                do state = 1,params%nstates
+                    call cline_refine3D%set('vol'//int2str(state), params%vols(state))
+                enddo
+                call cline_refine3D%set('endit', pose_init_iter)
+                deallocate(external_refs, external_checkpoint)
             else
                 ! create noise starting volume(s)
                 call generate_random_volumes(params, abinitio_stage_box_crop(params, 1), &
@@ -887,40 +912,33 @@ contains
                     endif
                     write(logfhandle,'(A,I0,A,F8.4)') &
                         &'>>> ABINITIO3D DOCKED SPLIT STAGE/PRE-SPLIT_UPDATE_FRAC: ',istage, '/',update_frac
-                else if( istage == split_stage )then
-                    if( l_force_full_sampling )then
-                        update_frac = 1.0
-                        call prepare_docked_particle_cohort(nptcls_eff, update_frac)
-                    else
-                        call calc_docked_multistate_max_sampling(params, nptcls_eff, nptcls_cap, update_frac)
-                        call prepare_docked_particle_cohort(nptcls_cap, update_frac)
-                        update_frac = real(nstates_glob * params%nsample) / real(nptcls_eff)
-                        update_frac = min(abinitio_update_frac_max(), update_frac)
-                    endif
-                    params%nstates = nstates_glob
-                    write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
-                        &'>>> ABINITIO3D DOCKED SPLIT STAGE/NSTATES/POSTSPLIT_UPDATE_FRAC: ', &
-                        &istage, '/', params%nstates, '/', update_frac
                 endif
             endif
             ! Preparation of command line for refinement
-            call set_cline_refine3D(params, istage, l_cavgs=.false.)
+            if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
+                ! A local receives the intent(out) update fraction: the checkpoint
+                ! routine reads the module-level update_frac through
+                ! set_cline_refine3D, so passing the module variable itself would
+                ! alias an intent(out) dummy with host-associated reads (F2018
+                ! 15.5.2.13).
+                call build_abinitio3D_split_checkpoint(params, spproj, xrefine3D, xrec3D, split_stage, &
+                    &nptcls_eff, nstates_glob, l_force_full_sampling, update_frac_post_split)
+                update_frac = update_frac_post_split
+            else
+                call set_cline_refine3D(params, istage, l_cavgs=.false.)
+            endif
             write(logfhandle,'(A)')'>>>'
             if( cline_refine3D%defined('lp') )then
                 write(logfhandle,'(A,I3,A9,F5.1)')'>>> STAGE ', istage,' WITH LP =', cline_refine3D%get_rarg('lp')
             else
                 write(logfhandle,'(A,I3,A)')'>>> STAGE ', istage,' WITH NU-SELECTED MATCHING LP'
             endif
-            ! Need to be here since rec cline depends on refine3D cline
             if( params%multivol_mode.eq.'docked' .and. istage == split_stage )then
-                call randomize_states(params, spproj, params%projfile, xrec3D, split_stage,&
-                    &clean_sampling=.false., reconstruct_states=.false.)
-                if( l_force_full_sampling )then
-                    call calc_rec(params, params%projfile, xrec3D, split_stage)
-                else
-                    call select_docked_split_reconstruction_sample
-                    call calc_rec(params, params%projfile, xrec3D, split_stage, current_sample_only=.true.)
-                endif
+                call handoff_split_checkpoint_to_refine3D_states
+                l_states_handoff_complete = .true.
+                call nice_comm%update_ini3D(last_stage_completed=.true.)
+                call nice_comm%cycle()
+                exit
             endif
             if( cline_refine3D%get_iarg('box_crop') < params%box )then
                 write(logfhandle,'(A,I3,A1,I3)')'>>> ORIGINAL/CROPPED IMAGE SIZE (pixels): ',params%box,'/',&
@@ -941,7 +959,10 @@ contains
             call nice_comm%update_ini3D(last_stage_completed=.true.) 
             call nice_comm%cycle()
         enddo
-        if( l_run_final_rec )then
+        if( l_states_handoff_complete )then
+            write(logfhandle,'(A)') &
+                &'>>> ABINITIO3D POST-SPLIT REFINEMENT AND FINAL RECONSTRUCTION OWNED BY REFINE3D_STATES'
+        else if( l_run_final_rec )then
             select case(trim(params%multivol_mode))
                 case('independent','docked')
                     call ensure_multistate_particle_assignments
@@ -966,6 +987,58 @@ contains
         call simple_end('**** SIMPLE_ABINITIO3D NORMAL STOP ****')
 
     contains
+
+        subroutine handoff_split_checkpoint_to_refine3D_states
+            type(cmdline) :: cline_states
+            integer       :: state, first_iter, remaining_niters, nsample_handoff
+            cline_states = cline_refine3D
+            first_iter = next_refine3D_iteration()
+            remaining_niters = abinitio_remaining_niters(split_stage, nstages_refine3D)
+            if( remaining_niters < 1 )then
+                THROW_HARD('abinitio3D split checkpoint has no remaining refine3D_states iterations')
+            endif
+            nsample_handoff = min(nptcls_eff, max(1, nint(update_frac * real(nptcls_eff))))
+            call cline_states%set('prg',          'refine3D_states')
+            call cline_states%set('mkdir',                       'no')
+            call cline_states%set('pose_policy',              'local')
+            call cline_states%set('nstates',            nstates_glob)
+            call cline_states%set('nsample',          nsample_handoff)
+            call cline_states%set('maxits',          remaining_niters)
+            call cline_states%set('lpstart',   lpinfo(split_stage)%lp)
+            call cline_states%set('lpstop', lpinfo(nstages_refine3D)%lp)
+            call cline_states%set('startit',              first_iter)
+            call cline_states%set('which_iter',           first_iter)
+            call cline_states%set('extr_iter',            first_iter)
+            call cline_states%set('filt_mode',    'nonuniform_lpset')
+            if( l_force_full_sampling )then
+                call cline_states%set('sticky_class_sampling', 'no')
+            else
+                call cline_states%set('sticky_class_sampling', 'yes')
+            endif
+            call cline_states%delete('multivol_mode')
+            call cline_states%delete('prob_neigh_mode')
+            call cline_states%delete('refine')
+            call cline_states%delete('nspace')
+            call cline_states%delete('nspace_sub')
+            call cline_states%delete('lp')
+            call cline_states%delete('minits')
+            call cline_states%delete('endit')
+            ! refine3D_states owns the state-overlap convergence policy; the
+            ! inherited abinitio stage target must not override its default
+            call cline_states%delete('overlap')
+            do state = 1,nstates_glob
+                if( .not. cline_states%defined('vol'//int2str(state)) )then
+                    THROW_HARD('abinitio3D split checkpoint did not produce every state volume')
+                endif
+            enddo
+            write(logfhandle,'(A,I0,A,I0,A,I0,A,F7.2,A,F7.2)') &
+                &'>>> ABINITIO3D -> REFINE3D_STATES FIRST_ITER/MAXITS/NSAMPLE/LPSTART/LPSTOP: ', &
+                &first_iter, '/', remaining_niters, '/', nsample_handoff, '/', &
+                &lpinfo(split_stage)%lp, '/', lpinfo(nstages_refine3D)%lp
+            call xrefine3D_states%execute(cline_states)
+            call spproj%read(params%projfile)
+            call cline_states%kill
+        end subroutine handoff_split_checkpoint_to_refine3D_states
 
         subroutine clean_ptcl3D_sampling
             call spproj%os_ptcl3D%clean_entry('updatecnt', 'sampled')
@@ -1056,82 +1129,6 @@ contains
                 endif
             endif
         end subroutine ensure_multistate_particle_assignments
-
-        subroutine prepare_docked_particle_cohort( nsample, ufrac )
-            integer, intent(in) :: nsample
-            real ,   intent(in) ::ufrac
-            integer,  parameter :: DOCKED_NITERS_MISSING = 1
-            type(cmdline)       :: cline_missing
-            integer             :: nupdated, nmissing, iter_missing, nactive
-            call spproj%read_segment('ptcl3D', params%projfile)
-            call clean_ptcl3D_sampling
-            call spproj%write_segment_inside(params%oritype, params%projfile)
-            iter_missing = next_refine3D_iteration()
-            write(logfhandle,'(A,A,I0,A,I0,A,I0)') &
-                &'>>> ABINITIO3D DOCKED PRE-SPLIT COHORT ASSIGNMENT', &
-                &' TARGET/ACTIVE/ITER: ', nsample, '/', nptcls_eff, '/', iter_missing
-            cline_missing = cline_refine3D
-            call cline_missing%set('prg',               'refine3D')
-            call cline_missing%set('mkdir',                   'no')
-            call cline_missing%set('refine',                'prob')
-            call cline_missing%set('balance',                'yes')
-            call cline_missing%set('nsample',              nsample)
-            call cline_missing%set('frac_best',                1.0)
-            call cline_missing%set('fillin',                  'no')
-            call cline_missing%set('update_frac',            ufrac)
-            call cline_missing%set('trail_rec',               'no')
-            call cline_missing%set('volrec',                  'no')
-            call cline_missing%set('sticky_class_sampling',   'no')
-            call cline_missing%set('maxits', DOCKED_NITERS_MISSING)
-            call cline_missing%set('startit',         iter_missing)
-            call cline_missing%set('which_iter',      iter_missing)
-            call cline_missing%set('extr_iter',       iter_missing)
-            call cline_missing%delete('endit')
-            call cline_missing%delete('greedy_sampling')
-            call xrefine3D%execute(cline_missing)
-            call del_files(DIST_FBODY,      params%nparts, ext='.dat')
-            call del_files(ASSIGNMENT_FBODY,params%nparts, ext='.dat')
-            call del_file(DIST_FBODY//'.dat')
-            call del_file(ASSIGNMENT_FBODY//'.dat')
-            call read_multistate_assignment_coverage(nactive, nupdated, nmissing)
-            if( nupdated < nsample )then
-                THROW_HARD('docked pre-split cohort assignment updated too few particles')
-            endif
-            call cline_missing%kill
-        end subroutine prepare_docked_particle_cohort
-
-        subroutine select_docked_split_reconstruction_sample
-            type(class_sample), allocatable :: split_clssmp(:)
-            integer, allocatable :: split_pinds(:), sampled(:), states(:)
-            integer :: noris, nrequested, nselected, sample_ind, split_state, state_pop
-            call spproj%read_segment('ptcl3D', params%projfile)
-            noris   = spproj%os_ptcl3D%get_noris()
-            if( nptcls_eff < 1 ) THROW_HARD('docked split reconstruction has no active particles')
-            call read_class_samples(split_clssmp, string(CLASS_SAMPLING_FILE))
-            call spproj%os_ptcl3D%sample4update_class(split_clssmp, [1,noris], update_frac,&
-                &nselected, split_pinds, .true., .false., sampled_only=.true.)
-            nrequested = nint(update_frac * real(nptcls_eff))
-            if( nselected /= nrequested )then
-                THROW_HARD('docked split reconstruction failed to select the exact requested sample')
-            endif
-            call spproj%write_segment_inside(params%oritype, params%projfile)
-            sampled   = spproj%os_ptcl3D%get_all_asint('sampled')
-            states    = spproj%os_ptcl3D%get_all_asint('state')
-            sample_ind = maxval(sampled)
-            do split_state = 1, params%nstates
-                state_pop = count(states == split_state .and. sampled == sample_ind)
-                if( state_pop <= 5 )then
-                    THROW_HARD('docked split reconstruction sample has insufficient state population')
-                endif
-            enddo
-            write(logfhandle,'(A,I0,A,I0,A,F8.4)') &
-                &'>>> ABINITIO3D DOCKED SPLIT RECONSTRUCTION SAMPLE SELECTED/COHORT/FRACTION: ',&
-                &nselected, '/', count(sampled > 0), '/', real(nselected) / real(count(sampled > 0))
-            if( allocated(sampled)    ) deallocate(sampled)
-            if( allocated(states)     ) deallocate(states)
-            if( allocated(split_pinds)) deallocate(split_pinds)
-            if( allocated(split_clssmp) ) call deallocate_class_samples(split_clssmp)
-        end subroutine select_docked_split_reconstruction_sample
 
         subroutine read_multistate_assignment_coverage( nactive, nupdated, nmissing )
             integer, intent(out) :: nactive, nupdated, nmissing

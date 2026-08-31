@@ -9,7 +9,6 @@ use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_O
     &pcg_raw_accum_compatible
 use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, &
     &discrete_read_imgbatch_source, killimgbatch
-use simple_ptcl_cache,        only: ptcl_cache_read_batch
 use simple_sigma2_files,      only: load_sigma2_groups
 use simple_math_ft,           only: resample_sigma2
 use simple_estimate_ssnr,     only: fsc2shrink_filter, get_resolution
@@ -1496,20 +1495,17 @@ contains
     !> Distributed worker: accumulate and atomically publish raw full-range B
     !! and real D for every local (state,half). Workers never call end_accum;
     !! folding and every nonlinear finalization step belong to the master.
-    subroutine execute_rec3D_pcg_worker( params, build, cline, selected_pinds, cached )
+    subroutine execute_rec3D_pcg_worker( params, build, cline, selected_pinds )
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
         integer,          intent(in)    :: selected_pinds(:)
-        logical, optional, intent(in)   :: cached
         integer, allocatable :: half_pinds(:)
         character(len=256) :: provenance
         integer :: state, eo, n_half
-        logical :: l_sigma_loaded, l_cached
+        logical :: l_sigma_loaded
 
         call validate_pcg_common(params, check_solver=.false.)
-        l_cached = .false.
-        if( present(cached) ) l_cached = cached
         provenance = pcg_raw_provenance(params)
         if( params%cc_objfun == OBJFUN_EUCLID )then
             l_sigma_loaded = allocated(build%esig%sigma2_noise)
@@ -1519,11 +1515,7 @@ contains
             if( .not. l_sigma_loaded ) THROW_HARD('PCG objfun=euclid requires sigma2 files')
         endif
         if( size(selected_pinds) > 0 )then
-            if( l_cached )then
-                call prepimgbatch(params, build, MAXIMGBATCHSZ, box=params%box_crop, smpd=params%smpd_crop)
-            else
-                call prepimgbatch(params, build, MAXIMGBATCHSZ)
-            endif
+            call prepimgbatch(params, build, MAXIMGBATCHSZ)
         endif
         do state = 1, params%nstates
             do eo = 0, 1
@@ -1619,16 +1611,14 @@ contains
             do ibatch = 1, size(pinds), MAXIMGBATCHSZ
                 batchlims = [ibatch, min(size(pinds),ibatch+MAXIMGBATCHSZ-1)]
                 batchsz   = batchlims(2) - batchlims(1) + 1
-                if( l_cached )then
-                    call ptcl_cache_read_batch(params, build, size(pinds), pinds, batchlims)
-                else if( params%l_ptcl_src_den )then
+                if( params%l_ptcl_src_den )then
                     call discrete_read_imgbatch_source(params, build, 'den', size(pinds), pinds, &
                         &batchlims, build%imgbatch(:batchsz))
                 else
                     call discrete_read_imgbatch(params, build, size(pinds), pinds, batchlims)
                 endif
                 do ii = 1, batchsz
-                    if( .not. l_cached ) call build%imgbatch(ii)%norm_noise(build%lmsk, sdev_noise)
+                    call build%imgbatch(ii)%norm_noise(build%lmsk, sdev_noise)
                     call build%imgbatch(ii)%taper_edges_particle(nint(COSMSKHALFWIDTH), edge_mean)
                     call build%imgbatch(ii)%fft
                     y_batch(:,:,ii) = pcgop%extract_native_plane(build%imgbatch(ii))

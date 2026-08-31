@@ -9,8 +9,8 @@ implicit none
 ! envelope, and which therefore require a nonuniform filt_mode when automsk is on.
 ! prepare_matching_reference_mask is the authoritative runtime check; this list
 ! exists only so the failure is reported at parameter-parse time instead.
-character(len=14), parameter :: NU_ENVMASK_REF_PRGS(5) = &
-    &[character(len=14) :: 'refine3D', 'refine3D_auto', 'refine3D_multi', 'refine3D_het', 'abinitio3D']
+character(len=15), parameter :: NU_ENVMASK_REF_PRGS(5) = &
+    &[character(len=15) :: 'refine3D', 'refine3D_auto', 'abinitio3D', 'refine3D_states', 'classify3D_refs']
 
 contains
 
@@ -692,6 +692,21 @@ contains
             case DEFAULT
                 THROW_HARD('sticky_class_sampling must be yes or no')
         end select
+        select case(trim(self%ref_pose_init))
+            case('cc','none')
+            case DEFAULT
+                THROW_HARD('ref_pose_init must be cc or none')
+        end select
+        select case(trim(self%cc_emit_sigma))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('internal cc_emit_sigma must be yes or no')
+        end select
+        select case(trim(self%sigma_transition_ready))
+            case('yes','no')
+            case DEFAULT
+                THROW_HARD('internal sigma_transition_ready must be yes or no')
+        end select
         if( self%memreport_interval < 1 ) THROW_HARD('memreport_interval must be at least 1 second')
         if( self%walltime <= 0 )then
             THROW_HARD('Walltime cannot be negative!')
@@ -928,6 +943,17 @@ contains
             case DEFAULT
                 THROW_HARD('unsupported prob_neigh_mode; expected state|geom|shc|snhc')
         end select
+        select case(trim(self%pose_policy))
+            case('fixed','local','global')
+            case DEFAULT
+                THROW_HARD('unsupported pose_policy; expected fixed|local|global')
+        end select
+        ! negative values other than the -1. automatic sentinel are invalid
+        if( (self%local_ang_bound   < 0. .and. abs(self%local_ang_bound   + 1.) > 1.e-6) .or. &
+            (self%local_inpl_bound  < 0. .and. abs(self%local_inpl_bound  + 1.) > 1.e-6) .or. &
+            (self%local_shift_bound < 0. .and. abs(self%local_shift_bound + 1.) > 1.e-6) )then
+            THROW_HARD('local pose bounds must be -1 (automatic) or non-negative')
+        endif
         self%l_neigh = .false.
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace_sub') ) self%nspace_sub = 500

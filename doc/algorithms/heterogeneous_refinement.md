@@ -1,100 +1,77 @@
-# Multi-State and Heterogeneous 3D Refinement
+# State Refinement and Reference-Guided Classification
 
-## Problem
+SIMPLE exposes two multi-state workflows over the same base projection-
+matching and reconstruction mechanisms. Their boundary is scientific intent
+and reference provenance.
 
-Estimate several 3D states and particle-state assignments while preserving
-pose coverage, preventing large views/classes from monopolizing fractional
-updates, and ensuring that final scientific maps use every active particle.
+## Conformational State Refinement
 
-SIMPLE exposes two production wrappers over base `refine3D`; neither implements
-a separate matcher or reconstructor.
+`refine3D_states` starts from a same-lineage particle orientation scaffold and
+state references. Its `pose_policy` determines the permitted geometry:
 
-## Prior-orientation multi-state refinement
+- `fixed`: preserve projection direction while optimizing in-plane angle and
+  x/y translations and choosing the state stochastically;
+- `local`: search the current geometric neighborhood across all states;
+- `global`: perform full state-pooled probabilistic pose matching.
 
-`refine3D_multi` starts from existing 3D orientations. It obtains `nstates`
-from compatible project labels or the command line, validates an all-or-none
-set of state volumes, and supports:
+`global` is the default. Local angular, in-plane, and shift limits are derived
+automatically and may be overridden individually.
 
-- `input_oris_refine`: refine state and pose; state-0/1 input first runs
-  `prob_state`, then `prob_neigh`, while an existing multi-state project starts
-  directly in `prob_neigh`;
-- `input_oris_fixed`: hold Euler angles, projection direction, in-plane angle,
-  and shifts fixed while `prob_state` updates state/correlation/accounting.
+Existing state labels/maps, stochastic initialization, FLEX initialization,
+and an `abinitio3D` split checkpoint are supported. The default sample target
+is 10,000 particles per state, capped at 100,000.
 
-The default outer target is
+## Reference-Guided 3D Classification
 
-```text
-N_sample = min(100000, 10000*nstates).
-```
-
-Fractional subsets are balanced across current projection directions and favor
-the lowest `updatecnt` tier within each direction. The default neighborhood is
-geometric around each particle's prior projection; pooled per-state
-neighborhoods are optional.
-
-## Competitive heterogeneous refinement
-
-`refine3D_het` can begin without trusted state labels. One-state input is
-uniformly randomized across the requested states; an already labeled project
-must contain exactly that state count. All states must remain populated.
-
-The public sample target is interpreted per state, then capped at 100000 and
-the active population. Fractional updates are class- or cluster-balanced when
-usable `ptcl2D` metadata exists. The default `prob_neigh_mode=state` scores
-coarse subspaces per state, pools selected neighborhoods, and evaluates the
-same pooled support for each state so state comparison uses a common candidate
-geometry.
-
-Frequency marching is divided into blocks of at most three iterations. The
-first block uses `lpstart`, later blocks advance in Fourier index toward
-`lpstop`, and the final two planned blocks share the stop limit. Crop and
-translation policy stay fixed across the blocks; only the active frequency
-limit changes.
-
-## State volumes and initialization
-
-Explicit `vol1..volN` input is all-or-none and must match native project box and
-sampling. Otherwise compatible project volumes are used or, where the wrapper
-allows it, a startup reconstruction builds state references. Fractional HET
-runs with explicit volumes perform one coarse greedy mapping pass to establish
-assignments and trailing-compatible reconstructed state references.
-
-`refine3D_multi flex=yes` is an additional state-0/1 initialization route. It
-runs projection-aware `flex_pca`, adopts its hard labels and state volumes, and
-then enters the ordinary multi-state stage plan.
-
-## Inherited iteration
-
-Every stage/block is a normal base `refine3D` call:
+`classify3D_refs` requires a complete external `vol1..volN` set. Because those
+references may not share the particle pose history, the workflow first runs
+one fixed-reference CC pose-initialization pass:
 
 ```text
-state/pose candidate table -> hard particle update -> partial halfmaps
--> volume assembly -> filtered next references.
+fixed 15 Å references + at most 100,000 particles
+    -> one broad CC pose/state assignment pass
+    -> residual sigma consolidation
+    -> data-derived checkpoint maps
+    -> Euclidean global probabilistic classification
 ```
 
-The wrappers own `nstates`, starting references, frequency schedules, outer
-sampling, balancing, and stage termination. Base refinement owns candidate
-scores, state/pose writes, sigma updates, partial reconstruction, FSC, trailing,
-NU filtering, and masks.
+No reconstruction modifies the supplied references during the CC pass. The
+checkpoint maps, not the external inputs, become the authoritative working
+references for subsequent Euclidean matching.
 
-## Filtering and final maps
+## Common Frequency Schedule
 
-Both wrappers default to ML-regularized `nonuniform_lpset` references with
-static NU filtering (`nu_refine=no`). Automasking is optional and, when enabled,
-uses state-specific NU-evidence envelopes through the base lag-by-one contract.
-Combined even/odd terminal alignment is disabled.
+Both workflows consume `simple_refine3D_stage_plan`. It divides the requested
+iteration budget into short blocks and returns a common per-block low-pass,
+crop, translation limit, and global iteration range. Every state uses the same
+bandwidth at a given block so competitive evidence is comparable.
 
-After staged work, a missing-update pass assigns any active particle with
-`updatecnt=0` without replacing the last staged volumes. Only after coverage is
-complete does a fresh all-particle `reconstruct3D` run at native sampling.
-Those all-particle per-state products—not an arbitrary fractional/trailing
-intermediate—are the authoritative maps for interpretation.
+Each block is a normal base-`refine3D` call:
 
-## Implementation
+```text
+candidate preparation -> hard pose/state update -> partial half maps
+-> volume assembly -> filtered references for the next block
+```
 
-- Wrappers: `src/main/commanders/simple/simple_commanders_refine3D.f90`.
-- Base estimator: `src/main/strategies/parallelization/simple_refine3D_strategy.f90`
-  and `src/main/strategies/search/simple_strategy3D_matcher.f90`.
-- Policies: `doc/policies/refine3D_multi_policy.md` and
-  `doc/policies/refine3D_het_policy.md`.
+## Coverage and Final Maps
 
+Stochastic fractional updates are balanced when suitable metadata exists. A
+final missing-update pass assigns active particles with `updatecnt=0` without
+replacing the last staged maps. Only then does a fresh all-particle
+`reconstruct3D` pass produce authoritative native-sampling state maps, half
+maps, FSCs, resolution products, and orthogonal reprojections.
+
+## Ownership
+
+- Workflow orchestration:
+  `src/main/commanders/simple/simple_commanders_refine3D.f90`
+- CC pose initialization:
+  `src/main/simple_external_reference_pose_initialization.f90`
+- Frequency planning: `src/main/simple_refine3D_stage_plan.f90`
+- Base refinement:
+  `src/main/strategies/parallelization/simple_refine3D_strategy.f90`
+- Search and assignment:
+  `src/main/strategies/search/simple_strategy3D_prob.f90` and
+  `src/main/strategies/search/simple_strategy3D_matcher.f90`
+- Policies: [refine3D_states_policy.md](../policies/refine3D_states_policy.md)
+  and [classify3D_refs_policy.md](../policies/classify3D_refs_policy.md)

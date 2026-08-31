@@ -3,7 +3,7 @@
 ## Status
 
 Active and implemented for normal CPU multi-state reconstruction in `refine3D`,
-`refine3D_auto`, `refine3D_multi`, `abinitio3D`, and shared reconstruction
+`refine3D_auto`, `refine3D_states`, `abinitio3D`, and shared reconstruction
 entry points. The auto and multi commanders execute their refinement stages
 through the common `refine3D` path.
 

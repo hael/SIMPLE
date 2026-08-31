@@ -2,42 +2,81 @@
 
 ## Status
 
-Proposal for discussion with Cyril, 2026-08-30. Hans has agreed to the
-workflow boundary, naming direction, frequency-marching consolidation,
-bounded-pose state sorting, and `abinitio3D` handoff described here.
+Implementation in progress, 2026-08-31. Cyril and Hans agreed to the workflow
+boundary, canonical names, frequency-marching consolidation, three scientific
+pose policies, focus-evidence boundary, and `abinitio3D` handoff described
+here. The canonical commands, pose policies, shared frequency planner,
+external-reference pose initialization path, reusable split-checkpoint builder, and
+`abinitio3D` handoff are implemented in the working tree. Compilation and
+runtime validation remain user-owned. This is the single living design,
+implementation, review, and validation record for the refactor.
 
-No implementation changes have been made. This is the single living design,
-review, implementation, and validation record for this refactor. Review
-findings and implementation decisions should be folded into this document
-rather than recorded in parallel specifications.
+Static review fixes applied 2026-08-31:
+
+- `classify3D_refs` pose initialization passed the full fixed-size
+  `params%vols(99)` where an `nstates`-sized checkpoint array was required; it
+  now uses a local `nstates`-sized array with copy-back (this also removes an
+  intent(out) aliasing of `params%vols` against `params`).
+- `refine3D_states` input-volume validation accepts any cubic downscaled
+  sampling covering the native physical extent (base `refine3D` rescales
+  references to the stage crop), so the `abinitio3D` split checkpoint volumes
+  reconstructed at the abinitio ladder crop pass validation.
+- The split-checkpoint routine now assigns the module-level `update_frac`
+  explicitly before emitting the split-stage cline, and the caller receives the
+  post-split fraction through a local rather than aliasing the module variable
+  with an intent(out) dummy.
+- The `refine3D_states` frequency march passes a real per-block `minits`
+  (1 once the march-wide minimum is satisfied) instead of `minits == maxits`,
+  so blocks can stop early on the state-overlap target while the march still
+  completes the low-pass schedule.
+- The abinitio3D handoff deletes the inherited `overlap` key: `refine3D_states`
+  owns the state-overlap convergence policy.
+- `local_*_bound` validation rejects negative values other than the `-1.`
+  automatic sentinel; `cc_emit_sigma=yes` with `objfun=euclid` throws.
+- The downscaled particle cache is now a 2D-only feature: `cache`/`cache_dir`
+  removed from all 3D UI programs, cache consumption removed from the 3D
+  matcher/reconstruction/prob paths, and the refine3D strategies and
+  `abinitio3D` throw on `cache=yes`.
+- `refine3D_states` and `classify3D_refs` no longer expose `autoscale`: staged
+  frequency marching always uses planner-driven downscaling (a user-supplied
+  `autoscale` is ignored with a notice). `refine3D`/`refine3D_auto` and the 2D
+  workflows keep their existing autoscale behavior.
+
+Known open parity deviations to weigh at the equivalence gate: the
+`classify3D_refs` planner varies crop and `trslim` per block where the old HET
+schedule held them constant; the handoff skips the old split-stage
+`prob_state` block (pose_policy=local starts the geom march directly); and
+`refine3D_states` rebalances sampling with projection-direction bins where the
+old post-split loop used 2D-class bins.
 
 ## Executive Summary
 
-The public names `refine3D_multi` and `refine3D_het` do not distinguish the
+The removed names `refine3D_multi` and `refine3D_het` did not distinguish the
 scientific jobs performed by the workflows. Both are multi-state workflows and
 both address structural heterogeneity. Their durable distinction is the
 relationship between particles, input orientations, and reference volumes:
 
 - **Conformational State Refinement** starts from a particle project with an
-  existing orientation scaffold. State assignments may change while particle
-  poses are fixed or refined in bounded neighborhoods. State references belong
-  to the same project lineage and may be initialized from an existing split,
-  stochastic labels, or FLEX.
+  existing orientation scaffold. State assignments may change while pose
+  search is restricted to in-plane degrees of freedom, constrained to a local
+  geometric neighborhood, or allowed to match globally. State references
+  belong to the same project lineage and may be initialized from an existing
+  split, stochastic labels, or FLEX.
 - **Reference-guided 3D Classification** competitively matches a particle set
   against supplied references that may have been produced independently of
   the particles. It does not assume a shared pose or state history.
 
-The proposed public commands are:
+The approved public commands are:
 
-| Current command | Proposed command | Display name |
+| Removed implementation-shaped command | Canonical command | Display name |
 | --- | --- | --- |
 | `refine3D_multi` | `refine3D_states` | Conformational State Refinement |
 | `refine3D_het` | `classify3D_refs` | Reference-guided 3D Classification |
 
 `refine3D_states` will retain stochastic, FLEX, and existing-state
-initialization; add explicit fixed and bounded-local pose policies; and consume
-a shared frequency-marching plan. `abinitio3D` will stop owning post-split
-multi-state refinement and will hand its split checkpoint to
+initialization; expose explicit `fixed`, `local`, and `global` pose policies;
+and consume a shared frequency-marching plan. `abinitio3D` will stop owning
+post-split multi-state refinement and will hand its split checkpoint to
 `refine3D_states`.
 
 `classify3D_refs` will retain independent-reference competitive matching. The
@@ -66,20 +105,21 @@ user inspects advanced parameters.
 
 ### The implementation already contains part of the desired boundary
 
-The current `refine3D_multi` policy is a docked, prior-orientation workflow. It
+The former `refine3D_multi` policy was a docked, prior-orientation workflow. It
 supports:
 
 - `input_oris_refine`, which updates state and pose from an existing
   orientation scaffold;
-- `input_oris_fixed`, which changes state/correlation/accounting fields while
-  preserving Euler angles, projection direction, in-plane angle, and shifts;
+- `input_oris_fixed`, which keeps the existing projection direction, optimizes
+  in-plane rotation and translation for each state candidate, and samples the
+  state assignment stochastically;
 - state initialization from labels, volumes, stochastic assignment, or
   `flex_pca`;
 - a state-initialization stage followed by probabilistic-neighborhood
   refinement;
 - final all-particle reconstruction at native sampling.
 
-The current `refine3D_het` policy already forces
+The former `refine3D_het` policy forced
 `multivol_mode=independent`. It supplies explicit references, initializes or
 recovers state labels, runs competitive matching through base `refine3D`,
 marches matching frequency in short blocks, and reconstructs final state maps.
@@ -87,7 +127,7 @@ marches matching frequency in short blocks, and reconstructs final state maps.
 The refactor should preserve these useful mechanisms while replacing their
 ambiguous public framing.
 
-## Decisions Fixed by This Proposal
+## Approved Design Decisions
 
 | Topic | Decision |
 | --- | --- |
@@ -95,12 +135,13 @@ ambiguous public framing.
 | Same-project workflow | `refine3D_states`, Conformational State Refinement |
 | Independent-reference workflow | `classify3D_refs`, Reference-guided 3D Classification |
 | State initialization | Retain existing-state, stochastic, explicit-volume, and FLEX routes |
-| State sorting pose freedom | Expose fixed and bounded-local policies explicitly |
+| State sorting pose freedom | Expose `fixed`, `local`, and `global` policies explicitly; default the new command to `global` |
+| Local search limits | Derive angular, in-plane, and shift bounds automatically from sampling; permit explicit user overrides |
 | Focused state sorting | Treat focus evidence separately from pose freedom |
 | Frequency marching | Shared planning mechanism consumed by both workflows where appropriate |
 | `abinitio3D` boundary | `abinitio3D` owns the ab initio pose scaffold and split checkpoint; `refine3D_states` owns post-split state refinement |
 | Base numerical ownership | Matching remains in search/matcher modules; volume assembly remains in `volassemble` and volume-domain modules |
-| Compatibility | Preserve old command names and mode spellings as hidden transitional aliases; never silently reinterpret them |
+| Migration policy | Make a clean break: expose and route only the canonical commands; test environments adopt the new contract |
 
 ## Target Public Workflow Contracts
 
@@ -139,36 +180,37 @@ before iterative state refinement begins.
 #### Pose policy
 
 Replace the implementation-shaped `input_oris_*` public choice with a
-scientific `pose_policy`:
+scientific `pose_policy` whose three values describe the permitted search:
 
-| `pose_policy` | State updates | Pose updates | Intended use |
-| --- | --- | --- | --- |
-| `fixed` | Allowed | Euler angles, projection direction, in-plane angle, and shifts remain unchanged | Pure state assignment and focused state sorting |
-| `local` | Allowed | Bounded around the input pose anchor | Default conformational state refinement |
+| `pose_policy` | State search | Pose search | Intended use | Base search mapping |
+| --- | --- | --- | --- | --- |
+| `fixed` | Stochastic search over states | Keep the projection direction fixed; optimize the in-plane angle and x/y translations | Pose-anchored state sorting and focused classification | State-only probabilistic preparation (`refine=prob_state`) with in-plane optimization enabled |
+| `local` | Search across states | Optimize projection direction within the geometric neighborhood plus in-plane degrees of freedom | Neighborhood-constrained state refinement | `refine=prob_neigh`, `prob_neigh_mode=geom` |
+| `global` | Search across states | Optimize all pose degrees of freedom through full probabilistic matching over state-pooled candidate neighborhoods | Wide conformational exploration and recovery from an uncertain pose scaffold | `refine=prob_neigh`, `prob_neigh_mode=state` |
 
-`fixed` is the target spelling for the current `input_oris_fixed` contract.
-`local` is the target state-swapping mode requested in this proposal: each
-particle keeps one input-pose anchor, all states are evaluated from the same
-bounded geometric neighborhood, and a state change must not create an
-unrelated pose solution.
+`fixed` names the state-only probability-table behavior directly. The path takes each particle's
+existing projection direction, evaluates every active state at that projection,
+optimizes in-plane rotation and translation for the state candidates, and
+samples the state choice stochastically. The rename introduces no new
+numerical behavior for this policy.
 
-The local policy needs explicit bounds for:
+`local` is the existing geometric-neighborhood scientific policy. Every active
+state is evaluated in the subspace containing the particle's current
+projection, with no coarse state-pooled peak search. The refactor should reuse
+`prob_neigh_mode=geom`. Angular, in-plane, and shift bounds are derived
+automatically from the active sampling and search geometry, with advanced
+user overrides for deliberate departures from the automatic policy. The
+overrides configure the existing geometric-neighborhood search; they do not
+create a parallel neighborhood implementation.
 
-- projection-direction deviation;
-- in-plane-angle deviation;
-- translational deviation.
-
-The exact parameter spellings and automatic defaults should be fixed during
-implementation review. The contract is more important than the names: bounds
-are measured from the input anchor, are applied consistently across states,
-and are checked after every hard assignment. The initial implementation must
-be opt-in until bounded-search parity and failure behavior are validated.
-
-A public `free` pose policy is deliberately out of scope for the first
-refactor. Broad matching of particles to independently derived references
-belongs to `classify3D_refs`. If later evidence supports a free-pose mode for
-same-lineage states, it can be added explicitly without weakening the meaning
-of `local`.
+`global` is the full probabilistic-matching policy. Coarse representatives are
+scored independently per state, selected neighborhoods are pooled, and the
+same pooled projection search space is evaluated for every active state. It
+optimizes all pose degrees of freedom, maps to `prob_neigh_mode=state`, and is
+the agreed default for the new
+`refine3D_states` command. Here `global` describes pose-search breadth; it does
+not imply independent reference provenance. Independent references still
+belong to `classify3D_refs`.
 
 #### Focused state sorting
 
@@ -179,13 +221,14 @@ Focused evidence and pose freedom are orthogonal controls:
   to state discrimination.
 
 The focus mask must not silently become the final reconstruction mask, redefine
-the global particle orientation, or replace the ordinary per-state automask
+the stored particle pose, or replace the ordinary per-state automask
 and nonuniform-filtering policy. Final authoritative maps remain ordinary
 all-particle reconstructions unless a separate, explicit reconstruction option
 is introduced.
 
-Focused state sorting must be valid with `pose_policy=fixed` and
-`pose_policy=local`.
+Focused state sorting must be valid with all three pose policies. The focus
+mask changes the evidence used to discriminate states, not the meaning of
+`fixed`, `local`, or `global`.
 
 #### Initialization and stage policy
 
@@ -241,15 +284,14 @@ that classification produces inspectable maps. The name emphasizes the user's
 primary scientific task rather than implying that supplied references and
 particles already form one refinement lineage.
 
-If review concludes that iterative improvement of the supplied references is
-the primary public promise rather than particle classification, the alternative
-name is `refine3D_refs`, with display name “Independent-reference 3D
-Refinement.” No other workflow boundary changes under that naming choice.
+The approved public name is `classify3D_refs`: classification is the primary
+user intent even though the workflow reconstructs and postprocesses the maps
+needed to inspect its hard assignments.
 
 ## Shared Frequency-Marching Contract
 
 Frequency marching is a mechanism, not an application boundary. The current
-frequency-block construction inside `exec_refine3D_het` should move to neutral
+frequency-block construction is now owned by neutral
 ownership and be reusable by `refine3D_states`, `classify3D_refs`, and future
 callers that need the same policy.
 
@@ -288,14 +330,16 @@ scaffold. In docked multi-state use it owns:
 
 1. the single-state ab initio stages;
 2. preparation of the pre-split pose coverage;
-3. construction of a valid split checkpoint;
+3. construction of a valid split checkpoint through a separate reusable
+   routine;
 4. selection of the starting frequency and remaining iteration horizon;
 5. dispatch to `refine3D_states`.
 
 `refine3D_states` owns:
 
 1. post-split state initialization validation;
-2. state-only or bounded-local state swapping;
+2. state refinement under the selected `fixed`, `local`, or `global` pose
+   policy;
 3. post-split frequency marching;
 4. state-overlap convergence and active-particle update coverage;
 5. final native-sampling reconstruction and state products.
@@ -326,11 +370,17 @@ resetting the update epoch accidentally. `sampled == max(sampled)` must
 continue to identify the current update and `sampled > 0` the persistent
 cohort until the cohort policy is deliberately retired.
 
+Checkpoint construction must be extracted as a separate reusable routine with
+explicit inputs and outputs. `abinitio3D` remains its first caller and retains
+the current split policy, but the routine must not depend on hidden controller
+state so future workflows can construct the same validated handoff.
+
 ### Migration sequence
 
-For parity, the first implementation should retain the existing split-
-checkpoint construction in `abinitio3D` and replace only the subsequent
-post-split loop with a `refine3D_states` call.
+For parity, the first implementation should extract the existing split-
+checkpoint construction unchanged into the reusable routine, call it from
+`abinitio3D`, and replace only the subsequent post-split loop with a
+`refine3D_states` call.
 
 After parity is established, review whether the stochastic split construction
 can move entirely into `refine3D_states`. That second move is desirable only if
@@ -355,9 +405,8 @@ text.
 
 ### Execution routing
 
-Update `src/main/exec/simple_exec_refine3D.f90` with explicit routes for the
-new commands. Transitional routes for `refine3D_multi` and `refine3D_het`
-should normalize to the legacy-compatible contracts before dispatch.
+`src/main/exec/simple_exec_refine3D.f90` routes only the canonical commands.
+There are no compatibility aliases or alternate defaults.
 
 ### Commander orchestration
 
@@ -370,9 +419,8 @@ Refactor `src/main/commanders/simple/simple_commanders_refine3D.f90` so that:
 - duplicated frequency-plan construction is replaced by the shared planner;
 - neither wrapper implements candidate scoring or volume postprocessing.
 
-Internal type and procedure names should follow the public names once the
-compatibility routes exist. Avoid preserving `multi` and `het` as the primary
-internal vocabulary after the contracts are renamed.
+Internal type and procedure names follow the canonical public names; `multi`
+and `het` are not retained as production workflow vocabulary.
 
 ### Base refinement and search
 
@@ -385,9 +433,11 @@ own:
 - partition-local partial reconstructions;
 - single-read particle batch reuse when reconstruction is active.
 
-Bounded-local pose support belongs in the owning search/candidate modules and
+Pose-policy mapping belongs in the owning search/candidate modules and
 parameter validation, not in the wrapper commander. The commander selects the
-policy and passes explicit bounds.
+policy; search ownership interprets `fixed` as state-plus-in-plane search,
+`local` as `prob_neigh_mode=geom`, and `global` as
+`prob_neigh_mode=state`.
 
 ### Volume domain
 
@@ -411,35 +461,22 @@ Update:
 - `doc/policies/abinitio3D_policy.md`;
 - related fractional-update and trailing-reconstruction policy notes.
 
-The controller should build and dispatch one explicit handoff command rather
-than continuing to emit post-split base-`refine3D` stages itself.
+The controller should call the reusable split-checkpoint routine and dispatch
+one explicit handoff command rather than continuing to emit post-split
+base-`refine3D` stages itself.
 
-## Compatibility and Migration
+## Clean-Break Migration
 
-### Command aliases
+The refactor intentionally does not preserve old command routes, hidden
+aliases, historical defaults, or public `multivol_mode`/
+`prob_neigh_mode` combinations. Test environments and scripts must adopt:
 
-For a transitional period:
+- `refine3D_states pose_policy=fixed|local|global`;
+- `classify3D_refs` for external-reference classification.
 
-- `refine3D_multi` remains accepted as a hidden alias;
-- `refine3D_het` remains accepted as a hidden alias;
-- logs identify the new canonical command and the compatibility mapping;
-- restart manifests created with an old command remain readable;
-- old aliases do not appear as separate standard UI applications.
-
-### Mode mapping
-
-Legacy mappings must be explicit:
-
-| Legacy command/mode | Transitional target |
-| --- | --- |
-| `refine3D_multi multivol_mode=input_oris_fixed` | `refine3D_states pose_policy=fixed` |
-| `refine3D_multi multivol_mode=input_oris_refine` | Existing pose-refinement behavior behind a compatibility path until bounded-local parity is demonstrated |
-| `refine3D_het` | `classify3D_refs` with independent-reference policy |
-
-Do not silently map `input_oris_refine` to a tighter bounded-local search in
-legacy runs. Introduce and validate `pose_policy=local` explicitly, then decide
-whether it becomes the new-command default. Old commands must retain old
-behavior unless the user opts into the new policy.
+`pose_policy=fixed` keeps the projection direction and commits optimized
+in-plane angle and translations together with the stochastic state choice. It
+does not freeze the full stored pose record.
 
 ### Artifact compatibility
 
@@ -448,28 +485,27 @@ reconstruction, cache, and final reconstruction names in the first
 implementation. Renaming public commands does not justify changing scientific
 artifact contracts in the same step.
 
-If execution-directory or restart naming embeds the program name, provide an
-explicit old-to-new lookup during migration and test continuation in both
-directions supported by policy.
+Restart and execution-directory validation targets the canonical names only.
 
 ## Implementation Plan
 
 ### Stage 1: Freeze public and scientific contracts
 
-1. Review this note with Cyril and settle the canonical name of the
-   independent-reference workflow.
-2. Fix the `pose_policy=local` bounds and focus-mask evidence contract.
+1. Record the approved canonical name `classify3D_refs` and the three-value
+   `pose_policy` contract.
+2. Record `global` as the command default and automatic, user-overridable
+   local bounds.
 3. Document the exact `abinitio3D` split-checkpoint fields and artifacts.
 4. Add no new numerical behavior in this stage.
 
-### Stage 2: Introduce canonical names and compatibility routes
+### Stage 2: Introduce canonical names
 
 1. Register `refine3D_states` and `classify3D_refs` in the UI and router.
 2. Give each command distinct summaries, help, required inputs, and standard
    parameters.
-3. Preserve old commands as hidden aliases.
-4. Rename commander types/procedures after routes are stable.
-5. Update policy and algorithm documentation without changing search behavior.
+3. Remove the old public routes.
+4. Rename commander types/procedures to the canonical vocabulary.
+5. Update policy and algorithm documentation.
 
 ### Stage 3: Extract the shared frequency-stage planner
 
@@ -483,30 +519,34 @@ directions supported by policy.
 
 ### Stage 4: Add explicit state pose policies
 
-1. Route `pose_policy=fixed` through the existing fixed-orientation behavior.
-2. Add opt-in bounded-local candidate generation around a common input anchor.
-3. Apply angular, in-plane, and shift bounds consistently across all states.
+1. Expose the existing `input_oris_fixed` behavior as `pose_policy=fixed`:
+   stochastic state search with projection direction fixed and only in-plane
+   degrees of freedom optimized.
+2. Implement `pose_policy=local` through `prob_neigh_mode=geom`, deriving its
+   angular, in-plane, and shift bounds automatically while accepting explicit
+   user overrides.
+3. Implement `pose_policy=global` through `prob_neigh_mode=state` and make it
+   the new-command default.
 4. Add focused state-scoring support without changing final reconstruction
-   masking or global pose ownership.
+   masking or stored-pose ownership.
 5. Preserve probabilistic preparation followed by hard assignment.
 
 ### Stage 5: Replace the `abinitio3D` post-split loop
 
-1. Materialize an explicit split checkpoint using the current docked policy.
+1. Extract the current docked split-checkpoint construction into a separate,
+   reusable routine without changing its policy.
 2. Dispatch `refine3D_states` with the checkpoint, remaining stage plan, and
    update-epoch metadata.
 3. Compare the handoff path with the current in-controller post-split path.
 4. Remove the duplicate post-split loop only after equivalence gates pass.
 5. Retain the pre-split ab initio and checkpoint-construction behavior.
 
-### Stage 6: Complete migration
+### Stage 6: Complete documentation and validation
 
 1. Update tutorials, examples, policy cross-links, generated UI reviews, and
    algorithm descriptions.
-2. Mark old commands deprecated in logs and release notes.
-3. Remove aliases only in a separately approved compatibility-breaking
-   release.
-4. Consider moving stochastic split construction from `abinitio3D` into
+2. Remove stale references to the old commands from active policy documents.
+3. Consider moving stochastic split construction from `abinitio3D` into
    `refine3D_states` only as a reviewed follow-up.
 
 ## Validation Plan
@@ -514,7 +554,7 @@ directions supported by policy.
 ### Static and interface validation
 
 - New commands are registered once and route to the intended commanders.
-- Old aliases remain routable but are not displayed as standard applications.
+- Removed command names are neither registered nor routed.
 - UI summaries distinguish same-lineage state refinement from independent-
   reference classification.
 - Every new command-line key is registered and validated before parsing.
@@ -538,13 +578,22 @@ directions supported by policy.
 - Existing populated state projects skip unnecessary state initialization.
 - Stochastic and FLEX initialization produce complete populated state sets.
 - Partial `vol1..volN` input is rejected.
-- `pose_policy=fixed` changes no Euler angle, projection direction, in-plane
-  angle, or shift while allowing state changes.
-- `pose_policy=local` never exceeds its angular, in-plane, or shift bounds,
-  including after state swaps.
-- Every state sees the same candidate geometry around each particle anchor.
+- `pose_policy=fixed` preserves the projection direction, optimizes only the
+  in-plane angle and translations, and performs stochastic state search.
+- `pose_policy=local` uses `prob_neigh_mode=geom`, evaluates every active state
+  in the geometric neighborhood containing the current projection, and never
+  invokes coarse state-pooled peak selection.
+- Automatic local angular, in-plane, and shift bounds reproduce the intended
+  sampling-derived neighborhood; each explicit override is honored and
+  validated without changing the other automatic limits.
+- `pose_policy=global` uses `prob_neigh_mode=state`, performs full
+  probabilistic matching over all pose degrees of freedom, and evaluates the
+  same pooled candidate geometry for every active state.
+- The `refine3D_states` default is `pose_policy=global`.
+- `pose_policy=fixed` preserves projection direction while committing the
+  optimized in-plane angle, translations, and stochastic state choice.
 - Focused state sorting affects classification evidence but not final map-mask
-  policy or the stored global pose outside permitted bounds.
+  policy or the stored pose beyond what the selected pose policy permits.
 - Every active particle has `updatecnt > 0` before final reconstruction.
 - Final maps are reconstructed at native project sampling.
 
@@ -604,11 +653,15 @@ This is the highest-risk item. Clearing or reinterpreting `sampled`,
 seen after the split and how trailing reconstructions are weighted. The
 checkpoint must make this policy explicit.
 
-### Pose drift masquerading as state separation
+### Pose-search breadth masquerading as state separation
 
-If each state searches a different broad pose neighborhood, the workflow may
-explain orientation error as conformational variation. `pose_policy=local`
-therefore requires one common particle anchor and explicit post-update bounds.
+Broad search can explain orientation error as conformational variation, while
+overly narrow search can lock in a poor scaffold. The three policies must
+therefore remain visible scientific choices: `fixed` anchors projection
+direction, `local` uses the current geometric neighborhood, and `global` uses
+state-pooled probabilistic matching. Within either neighborhood mode, every
+state must be compared over the same candidate geometry so state identity does
+not alter pose-search opportunity.
 
 ### Focus-mask leakage
 
@@ -622,36 +675,37 @@ Allowing different states to match at different effective bandwidths can bias
 competitive assignment toward the reference with more permissive evidence.
 The first implementation uses a common schedule across states.
 
-### Rename without migration
+### Clean-break adoption
 
-Scripts, restart manifests, UI policy tables, and documentation currently name
-`refine3D_multi` and `refine3D_het`. The aliases and artifact-preserving first
-stage are required to keep the naming improvement from becoming an avoidable
-workflow break.
+Scripts, restart manifests, UI policy tables, and documentation must adopt the
+canonical names and explicit pose policy. Validation must catch stale command
+names rather than silently selecting a historical contract.
 
-### Classification versus refinement terminology
+### Classification name obscuring map production
 
-`classify3D_refs` still reconstructs and postprocesses maps. Review should
-confirm that classification is the primary user intent. If users select the
-application principally to iteratively improve externally supplied references,
-`refine3D_refs` is the more honest name.
+`classify3D_refs` still reconstructs and postprocesses maps. Its UI summary and
+documentation must state this output contract clearly while keeping particle
+classification, rather than iterative improvement of independent references,
+as the primary scientific intent.
 
-## Questions for Cyril's Review
+## Resolved Review Decisions
 
-1. Is **Reference-guided 3D Classification** the right primary user intent, or
-   should the independent-reference command be named `refine3D_refs`?
-2. Should `pose_policy=local` become the default for the new
-   `refine3D_states` command after validation, while legacy aliases retain the
-   old behavior?
-3. Should local angular, in-plane, and shift bounds be explicit user values,
-   automatically derived from sampling, or automatic with advanced overrides?
-4. Is the proposed focus-mask contract correct: classification evidence only,
-   with authoritative reconstruction and global pose policy remaining
-   separate?
-5. Is one common frequency schedule across states sufficient initially, with
-   any state-specific adaptation deferred?
-6. For the first handoff, should `abinitio3D` retain construction of the split
-   checkpoint exactly as today, with only post-split refinement delegated?
+Cyril approved all review items on 2026-08-31:
+
+1. The independent-reference command is `classify3D_refs`, displayed as
+   **Reference-guided 3D Classification**.
+2. `refine3D_states` defaults to the wide search named
+   `pose_policy=global`; there are no legacy aliases.
+3. `pose_policy=local` reuses the existing geometric neighborhood policy
+   (`prob_neigh_mode=geom`); angular, in-plane, and shift bounds are automatic
+   and may be explicitly overridden by the user.
+4. A focus mask affects classification evidence only; authoritative
+   reconstruction, map masking, and pose policy remain separate.
+5. All states initially share one common frequency schedule; state-specific
+   adaptation is deferred.
+6. The first `abinitio3D` handoff retains current split-checkpoint behavior,
+   extracts its construction into a separate reusable routine, and delegates
+   only the post-split refinement.
 
 ## Completion Criteria
 
@@ -660,13 +714,13 @@ This refactor is complete when:
 - users see two purpose-specific applications with distinct input and pose
   contracts;
 - state refinement supports existing, stochastic, and FLEX initialization;
-- fixed and bounded-local state sorting are explicit and validated;
+- `fixed`, `local`, and `global` state sorting are explicit and validated,
+  with `global` the new-command default;
 - focus evidence is independent of pose and reconstruction masking policy;
 - both workflows consume shared frequency-stage planning rather than copied
   loops;
 - `abinitio3D` delegates post-split work to `refine3D_states` through a tested
-  checkpoint contract;
-- old aliases preserve legacy behavior through the agreed migration window;
+  checkpoint contract constructed by a separate reusable routine;
 - source, policies, algorithm descriptions, UI metadata, and restart behavior
   agree with the new names;
 - user-side build and runtime validation, including the `abinitio3D`

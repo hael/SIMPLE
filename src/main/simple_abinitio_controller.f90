@@ -176,6 +176,18 @@ contains
         nsample = NSAMPLE_ABINITIO3D_DEFAULT
     end function abinitio_nsample_default
 
+    module function abinitio_remaining_niters(first_stage, last_stage) result(niters)
+        integer, intent(in) :: first_stage, last_stage
+        integer :: niters, first, last
+        first = max(1, first_stage)
+        last  = min(size(MAXITS), last_stage)
+        if( last < first )then
+            niters = 0
+        else
+            niters = sum(MAXITS(first:last))
+        endif
+    end function abinitio_remaining_niters
+
     integer function active_refine3D_nstages() result(nstages_active)
         nstages_active = nstages_refine3D
         if( nstages_active <= 0 ) nstages_active = NSTAGES
@@ -535,10 +547,6 @@ contains
         else
             call cline_refine3D%delete('sticky_class_sampling')
         endif
-        ! A cache-enabled run uses the final (largest) ladder crop throughout so
-        ! every stage can reuse one particle cache. Uncached runs retain the
-        ! cheaper per-stage crop schedule.
-        call cline_refine3D%set('cache',                  trim(params%cache))
         call cline_refine3D%set('box_crop',               abinitio_stage_box_crop(params, istage))
         call cline_refine3D%set('startit',                cfg%iter)
         call cline_refine3D%set('which_iter',             cfg%iter)

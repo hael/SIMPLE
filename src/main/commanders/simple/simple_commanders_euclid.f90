@@ -61,6 +61,11 @@ contains
             real,     allocatable :: pspecs(:,:)
             real(dp), allocatable :: group_weights(:,:), group_pspecs(:,:,:)
             integer               :: kfromto(2),iptcl,ipart,eo,ngroups,igroup,fromp,top
+            logical               :: l_updated_only
+            l_updated_only = trim(params%cc_emit_sigma) == 'yes'
+            if( l_updated_only .and. (.not. build%spproj_field%isthere('updatecnt')) )then
+                THROW_HARD('CC residual sigma consolidation requires update counts')
+            endif
             do ipart = 1,params%nparts
                 sigma2_array%fname = trim(part_fbody)//int2str_pad(ipart,params%numlen)//'.dat'
                 call binfile%new_from_file(sigma2_array%fname)
@@ -86,6 +91,9 @@ contains
                 !$omp schedule(static) proc_bind(close) reduction(+:group_pspecs,group_weights)
                 do iptcl = 1,params%nptcls
                     if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+                    if( l_updated_only )then
+                        if( build%spproj_field%get(iptcl,'updatecnt') <= 0. ) cycle
+                    endif
                     eo = build%spproj_field%get_eo(iptcl) ! 0/1
                     group_pspecs(eo+1,1,:) = group_pspecs (eo+1,1,:) + real(pspecs(:,iptcl),dp)
                     group_weights(eo+1,1)  = group_weights(eo+1,1)   + 1.d0
@@ -97,6 +105,9 @@ contains
                 !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
                 do iptcl = 1,params%nptcls
                     if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+                    if( l_updated_only )then
+                        if( build%spproj_field%get(iptcl,'updatecnt') <= 0. ) cycle
+                    endif
                     igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
                     ngroups = max(igroup,ngroups)
                 enddo
@@ -104,6 +115,9 @@ contains
                 allocate(group_pspecs(2,ngroups,kfromto(1):kfromto(2)), group_weights(2,ngroups),source=0.d0)
                 do iptcl = 1,params%nptcls
                     if( build%spproj_field%get_state(iptcl) <= 0 ) cycle
+                    if( l_updated_only )then
+                        if( build%spproj_field%get(iptcl,'updatecnt') <= 0. ) cycle
+                    endif
                     eo     = build%spproj_field%get_eo(iptcl) ! 0/1
                     igroup = nint(build%spproj_field%get(iptcl,'stkind'))
                     group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + real(pspecs(:,iptcl),dp)

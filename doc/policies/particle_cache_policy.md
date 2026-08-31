@@ -4,8 +4,11 @@
 
 This document defines the policy for the downscaled particle disk cache
 (`cache=yes`, `cache_dir=<dir>`), implemented in
-`src/main/strategies/search/simple_ptcl_cache.f90` and consumed by the 2D and
-3D matcher workflows.
+`src/main/strategies/search/simple_ptcl_cache.f90` and consumed by the 2D
+matcher workflows only. The 3D workflows (`refine3D` family, `abinitio3D`,
+probabilistic 3D preparation, matcher reconstruction) do not consume the cache
+and reject `cache=yes` with a hard error; caching never worked reliably for 3D
+and was removed from those paths.
 
 The samplers draw a fresh ~nsample subset of the particles every iteration and
 each selected particle is read at full box and Fourier-cropped to `box_crop`.
@@ -41,28 +44,12 @@ directory).
   `cropped_ptcls=.true.`): deliberate numerics change — edge taper and
   gridding source grid live at `box_crop`, no second noise normalization,
   shift and CTF pixel size scaled to the cropped grid.
-- 3D alignment (`refine3D` search, `prob_tab`, `prob_tab_neigh` via
-  `build_batch_particles3D`): exact substitution through
-  `prepimg4align_cached`.
-- 3D matcher reconstruction (`calc_3Drec`, `calc_projdir3Drec` via
-  `prep_imgs4rec(cached=.true.)`): mirrors the 2D restoration treatment
-  exactly. Sound because `box*smpd == box_crop*smpd_crop` — the padded grids
-  cover the same physical extent, so a given Fourier index denotes the same
-  spatial frequency on either grid, making CTF and shift handling exact; the
-  only numerics delta versus uncached execution is the edge taper acting at
-  `box_crop`.
-
-Not consumers, by design: the one-off starting-volume `reconstruct3D`
-(may run before the cache exists; reads each particle once), `volassemble`
-(no particle reads), streaming 2D variants (long-lived processes over
-changing particle sets would thrash the validity fingerprint), and the flex /
-offload reconstruction paths. Cached reconstruction is opt-in by explicit
-argument at every level (`calc_3Drec`/`calc_projdir3Drec`, `init_rec`,
-`prep_imgs4rec` all take `cached`, defaulting to full-size behavior), and
-only the refine3D matcher passes a value — one that went through
-`ptcl_cache_assert_ready`, so an opportunistically visible leftover cache can
-never be picked up by standalone reconstruction or mix cached and uncached
-partials across ranks.
+Not consumers, by design: every 3D workflow (alignment, probabilistic
+preparation, and reconstruction all read the full-size originals; the
+`refine3D` execution strategies throw on `cache=yes`), the one-off
+starting-volume `reconstruct3D`, `volassemble` (no particle reads), streaming
+2D variants (long-lived processes over changing particle sets would thrash
+the validity fingerprint), and the flex / offload reconstruction paths.
 
 ## 4. Validity Contract
 

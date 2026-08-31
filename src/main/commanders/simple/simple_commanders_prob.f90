@@ -41,7 +41,6 @@ contains
         use simple_matcher_refvol_utils,    only: read_reprojection_model
         use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
         use simple_eul_prob_tab,            only: eul_prob_tab
-        use simple_ptcl_cache,              only: ptcl_cache_in_use, ptcl_cache_assert_ready
         class(commander_prob_tab), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -71,14 +70,7 @@ contains
         ! PREPARE REFERENCES, SIGMAS, POLAR_CORRCALC, PTCLS
         call read_reprojection_model(params, build, batchsz_max)
         call prep_sigmas_objfun(params, build, .false.)
-        ! scoring never keeps raws, so the batch can be served from the downscaled cache
-        call ptcl_cache_assert_ready(params, build)
-        if( ptcl_cache_in_use(params, build) )then
-            call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, batchsz_max, &
-                &imgbatch_box=params%box_crop, imgbatch_smpd=params%smpd_crop )
-        else
-            call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, batchsz_max )
-        endif
+        call alloc_ptcl_imgs( params, build, tmp_imgs, tmp_imgs_pad, batchsz_max )
         call build%pftc%memoize_refs(eulspace=build%eulspace)
         ! Fill the partition table in matcher-sized batches to cap particle PFT memo memory.
         l_state_only = str_has_substr(params%refine, 'prob_state')
@@ -111,7 +103,6 @@ contains
         use simple_matcher_refvol_utils,    only: read_reprojection_model
         use simple_matcher_ptcl_batch,      only: prep_sigmas_objfun, alloc_ptcl_imgs, build_batch_particles3D, clean_batch_particles3D
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
-        use simple_ptcl_cache,              only: ptcl_cache_in_use, ptcl_cache_assert_ready
         class(commander_prob_tab_neigh), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         integer,     allocatable :: pinds(:)
@@ -145,14 +136,7 @@ contains
             integer, intent(in) :: batchsz_here
             call read_reprojection_model(params, build, batchsz_here)
             call prep_sigmas_objfun(params, build, .false.)
-            ! scoring never keeps raws, so the batch can be served from the downscaled cache
-            call ptcl_cache_assert_ready(params, build)
-            if( ptcl_cache_in_use(params, build) )then
-                call alloc_ptcl_imgs(params, build, tmp_imgs, tmp_imgs_pad, batchsz_here, &
-                    &imgbatch_box=params%box_crop, imgbatch_smpd=params%smpd_crop)
-            else
-                call alloc_ptcl_imgs(params, build, tmp_imgs, tmp_imgs_pad, batchsz_here)
-            endif
+            call alloc_ptcl_imgs(params, build, tmp_imgs, tmp_imgs_pad, batchsz_here)
             call build%pftc%memoize_refs(eulspace=build%eulspace)
         end subroutine prepare_prob_neigh_workspace
 
@@ -191,7 +175,6 @@ contains
     subroutine exec_prob_align( self, cline )
         use simple_eul_prob_tab,            only: eul_prob_tab
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
-        use simple_ptcl_cache,              only: ptcl_cache_ensure
         use simple_builder,                 only: builder
         class(commander_prob_align), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
@@ -225,10 +208,6 @@ contains
         ! communicate to project file
         call build%spproj%write_segment_inside(params%oritype)
         call cleanup_prob_align_outputs(params, .false.)
-        ! Build the downscaled particle cache before the workers start, so they all
-        ! find it ready. A no-op once it exists. Must precede the cline copy below so
-        ! a fallback to cache=no reaches the prob_tab worker command lines.
-        call ptcl_cache_ensure(params, build, cline)
         ! generating all corrs on all parts
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab' ) ! required for distributed call
@@ -281,7 +260,6 @@ contains
     subroutine exec_prob_align_neigh( self, cline )
         use simple_eul_prob_tab_neigh,      only: eul_prob_tab_neigh
         use simple_matcher_smpl_and_lplims, only: sample_ptcls4fillin, sample_ptcls4update3D
-        use simple_ptcl_cache,              only: ptcl_cache_ensure
         use simple_builder,                 only: builder
         class(commander_prob_align_neigh), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
@@ -312,10 +290,6 @@ contains
         endif
         call build%spproj%write_segment_inside(params%oritype)
         call cleanup_prob_align_outputs(params, .true.)
-        ! Build the downscaled particle cache before the workers start, so they all
-        ! find it ready. A no-op once it exists. Must precede the cline copy below so
-        ! a fallback to cache=no reaches the prob_tab_neigh worker command lines.
-        call ptcl_cache_ensure(params, build, cline)
         cline_prob_tab = cline
         call cline_prob_tab%set('prg', 'prob_tab_neigh')
         if( .not. cline_prob_tab%defined('nparts') )then

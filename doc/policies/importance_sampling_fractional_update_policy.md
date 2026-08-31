@@ -217,7 +217,7 @@ min(active_particles,
         min(NSAMPLE_HET_SPLIT_CAP, round(2.5 * nstates * nsample))))
 ```
 
-`NSAMPLE_HET_SPLIT_CAP` is 100000 consistently with refine3D_multi. The
+`NSAMPLE_HET_SPLIT_CAP` is 100000 consistently with refine3D_states. The
 corresponding fraction remains capped by `UPDATE_FRAC_MAX`, so the effective
 target cannot exceed 90 percent of the active particles. The cap limits cohort
 expansion but cannot make the cohort smaller than the effective post-split update.

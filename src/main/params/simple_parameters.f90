@@ -84,7 +84,7 @@ type :: parameters
     character(len=3)          :: extractfrommov='no'  !< whether to extract particles from the movie(yes|no){no}
     character(len=3)          :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)          :: fillin='no'          !< fillin particle sampling
-    character(len=3)          :: flex='no'            !< initialize refine3D_multi states with flex_pca(yes|no){no}
+    character(len=3)          :: flex='no'            !< initialize refine3D_states states with flex_pca(yes|no){no}
     character(len=3)          :: update_missing='no'  !< update only active particles with updatecnt==0(yes|no){no}
     character(len=3)          :: force_lp_range='no'  !< force abinitio3D low-pass stages to use lpstart/lpstop directly(yes|no){no}
     character(len=3)          :: gauref='no'          !< Whether to apply a gaussian filter to the polar reference(yes|no){no}
@@ -163,6 +163,9 @@ type :: parameters
     character(len=3)          :: skip_rejection='no'  !< skip class-average rejection/update path(yes|no){no}
     character(len=3)          :: sort_asc='yes'       !< sort oris ascending
     character(len=3)          :: sticky_class_sampling='no' !< sticky class-sampling cohort(yes|no){no}
+    character(len=3)          :: cc_emit_sigma='no' !< internal: emit Euclidean residual sigmas after CC assignment(yes|no){no}
+    character(len=3)          :: sigma_transition_ready='no' !< internal: CC residual group sigma is ready(yes|no){no}
+    character(len=4)          :: ref_pose_init='none' !< external-reference pose initialization(cc|none){none}
     character(len=3)          :: stream='no'          !< stream (real time) execution mode(yes|no){no}
     character(len=3)          :: stream2d='no'        !< indicates streaming 2D clustering(yes|no){no}
     character(len=3)          :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
@@ -328,6 +331,7 @@ type :: parameters
     character(len=STDLEN)     :: particle_density='optimal' !< particle density level (low|optimal|high){optimal}
     character(len=STDLEN)     :: picker='new'         !< which picker to use (old|new|segdiam){new}
     character(len=STDLEN)     :: plot_key=''          !< plot using plot_key on y axis, sort on x
+    character(len=STDLEN)     :: pose_policy='global' !< state-refinement pose policy(fixed|local|global){global}
     character(len=STDLEN)     :: protocol=''          !< generic option
     character(len=STDLEN)     :: prob_neigh_mode='state' !< prob_neigh neighborhood mode(state|geom|shc|snhc){state}
     character(len=STDLEN)     :: ptcl_src='raw' !< particle source for matching and 3D rec(raw|den){raw}
@@ -586,6 +590,9 @@ type :: parameters
     real    :: lpstop_coarse=0.    !< stop low-pass limit(in A){0}
     real    :: lpstop_fine=0.      !< stop low-pass limit(in A){0}
     real    :: lpthres=STREAM_RES_THRESHOLD
+    real    :: local_ang_bound=-1. !< refine3D_states local projection-angle override in degrees; negative is automatic
+    real    :: local_inpl_bound=-1. !< refine3D_states local in-plane-angle override in degrees; negative is automatic
+    real    :: local_shift_bound=-1. !< refine3D_states local shift override in pixels; negative is automatic
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
     real    :: max_rad=0.          !< particle longest  dim (in pixels)
     real    :: min_rad=100.        !< particle shortest dim (in pixels)

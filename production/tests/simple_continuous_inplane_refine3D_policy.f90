@@ -23,8 +23,8 @@ if( .not. has_search_input('refine3D', 'inpl_cont', expected_default='yes') ) &
     &error stop 'refine3D UI does not expose inpl_cont=yes'
 if( .not. has_search_input('refine3D_auto', 'inpl_cont', expected_default='yes') ) &
     &error stop 'refine3D_auto UI does not expose inpl_cont=yes'
-if( .not. has_search_input('refine3D_multi', 'inpl_cont', expected_default='yes') ) &
-    &error stop 'refine3D_multi UI does not expose inpl_cont=yes'
+if( .not. has_search_input('refine3D_states', 'inpl_cont', expected_default='yes') ) &
+    &error stop 'refine3D_states UI does not expose inpl_cont=yes'
 
 call cline%set('prg', 'refine3D')
 call cline%set('inpl_cont', 'yes')

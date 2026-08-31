@@ -122,6 +122,11 @@ interface
         integer :: nsample
     end function abinitio_nsample_default
 
+    module function abinitio_remaining_niters(first_stage, last_stage) result(niters)
+        integer, intent(in) :: first_stage, last_stage
+        integer :: niters
+    end function abinitio_remaining_niters
+
     module subroutine set_cline_refine3D( params, istage, l_cavgs )
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage
@@ -142,11 +147,7 @@ contains
     integer function abinitio_stage_box_crop( params, istage ) result(box_crop)
         class(parameters), intent(in) :: params
         integer,           intent(in) :: istage
-        if( params%l_cache )then
-            box_crop = lpinfo(size(lpinfo))%box_crop
-        else
-            box_crop = lpinfo(istage)%box_crop
-        endif
+        box_crop = lpinfo(istage)%box_crop
     end function abinitio_stage_box_crop
 
     real function abinitio_stage_smpd_crop( params, istage ) result(smpd_crop)

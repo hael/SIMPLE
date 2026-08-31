@@ -138,6 +138,6 @@ The final reconstruction writes ordinary reconstruct3D products and then
 resolution target.
 
 `refine3D_auto` remains single-state. Multi-state automated refinement belongs
-to [refine3D_multi_policy.md](refine3D_multi_policy.md), the in-development
-[refine3D_het_policy.md](refine3D_het_policy.md), base `refine3D`, or the ab
+to [refine3D_states_policy.md](refine3D_states_policy.md), the in-development
+[classify3D_refs_policy.md](classify3D_refs_policy.md), base `refine3D`, or the ab
 initio workflows.

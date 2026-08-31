@@ -10,8 +10,8 @@ Related workflow policies:
 - [abinitio3D_cavgs_policy.md](abinitio3D_cavgs_policy.md)
 - [abinitio3D_cavgs_reject_policy.md](abinitio3D_cavgs_reject_policy.md)
 - [refine3D_auto_policy.md](refine3D_auto_policy.md)
-- [refine3D_multi_policy.md](refine3D_multi_policy.md)
-- [refine3D_het_policy.md](refine3D_het_policy.md)
+- [refine3D_states_policy.md](refine3D_states_policy.md)
+- [classify3D_refs_policy.md](classify3D_refs_policy.md)
 - [automasking_policy.md](automasking_policy.md)
 - [nonuniform_filtering_policy.md](nonuniform_filtering_policy.md)
 - [sigma_calculation_policy.md](sigma_calculation_policy.md)
@@ -372,11 +372,9 @@ teardown (the PFTC memory phase boundary makes retaining the raw images across
 phases prohibitive). Do not add further reads to either phase unless the
 performance contract is explicitly changed.
 
-When the downscaled particle cache is active (`cache=yes`), both phases read
-the cache instead of the original full-size stacks; the single-read-per-phase
-rule then applies to cache records. See
-`doc/policies/particle_cache_policy.md` for the cache contract, including why
-cached reconstruction is a deliberate, uniform-across-ranks numerics change.
+The downscaled particle cache is a 2D-only feature: `refine3D` rejects
+`cache=yes` and both phases always read the original full-size stacks (see
+`doc/policies/particle_cache_policy.md`).
 
 ## 9. Volume Assembly
 

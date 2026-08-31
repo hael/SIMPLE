@@ -6,8 +6,8 @@ use simple_exec_helpers,         only: restarted_exec
 use simple_commanders_mask,      only: commander_automask
 use simple_commanders_volops,    only: commander_postprocess
 use simple_commanders_rec,       only: commander_bootstrap_rec3D, commander_rec3D
-use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D_auto, commander_refine3D_multi, &
-    &commander_refine3D_het
+use simple_commanders_refine3D,  only: commander_refine3D, commander_refine3D_auto, commander_refine3D_states, &
+    &commander_classify3D_refs
 implicit none
 
 public :: exec_refine3D_commander
@@ -18,8 +18,8 @@ type(commander_postprocess)     :: xpostprocess
 type(commander_rec3D)           :: xrec3D
 type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
 type(commander_refine3D_auto)   :: xrefine3D_auto
-type(commander_refine3D_multi)  :: xrefine3D_multi
-type(commander_refine3D_het)    :: xrefine3D_het
+type(commander_refine3D_states) :: xrefine3D_states
+type(commander_classify3D_refs) :: xclassify3D_refs
 type(commander_refine3D)        :: xrefine3D
 
 contains
@@ -53,17 +53,17 @@ contains
                 else
                     call xrefine3D_auto%execute(cline)
                 endif
-            case( 'refine3D_multi' )
+            case( 'refine3D_states' )
                 if( cline%defined('nrestarts') )then
-                    call restarted_exec(cline, string('refine3D_multi'), string('simple_exec'))
+                    call restarted_exec(cline, string('refine3D_states'), string('simple_exec'))
                 else
-                    call xrefine3D_multi%execute(cline)
+                    call xrefine3D_states%execute(cline)
                 endif
-            case( 'refine3D_het' )
+            case( 'classify3D_refs' )
                 if( cline%defined('nrestarts') )then
-                    call restarted_exec(cline, string('refine3D_het'), string('simple_exec'))
+                    call restarted_exec(cline, string('classify3D_refs'), string('simple_exec'))
                 else
-                    call xrefine3D_het%execute(cline)
+                    call xclassify3D_refs%execute(cline)
                 endif
             case default
                 l_did_execute = .false.

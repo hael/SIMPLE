@@ -265,6 +265,9 @@ contains
         allocate(sigma_contrib(kfromto(1):kfromto(2)), source=0.)
         shvec = o%get_2Dshift()
         iref  = nint(o%get(trim(refkind)))
+        if( trim(refkind) == 'proj' .and. self%p_ptr%nstates > 1 )then
+            iref = (o%get_state() - 1) * self%p_ptr%nspace + iref
+        endif
         irot  = pftc%get_roind(360. - o%e3get())
         if( allocated(self%diag_v) )then
             allocate(ref_pow(kfromto(1):kfromto(2)), ptcl_pow(kfromto(1):kfromto(2)), source=0.)

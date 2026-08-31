@@ -14,13 +14,6 @@ public :: clean_batch_particles2D, clean_batch_particles3D
 private
 #include "simple_local_flags.inc"
 
-! Reusable full-size batch for the denoised objective when the primary batch is
-! served from the downscaled cache and build%imgbatch therefore holds box_crop
-! entries. Matcher lifetime: allocated by alloc_ptcl_imgs, freed by
-! clean_batch_particles3D, so large-box runs do not churn a full batchsz worth
-! of full-size images on every batch.
-type(image), allocatable :: den_imgbatch(:)
-
 contains
 
     subroutine prep_sigmas_objfun( params, build, l_stream )
@@ -29,16 +22,27 @@ contains
         logical,           intent(in)    :: l_stream
         type(string)      :: fname
         logical           :: l_group_only_init
-        if( params%cc_objfun == OBJFUN_EUCLID )then
+        ! cc_emit_sigma allocates the residual table without reading sigma values,
+        ! so a euclid objective would score against unpopulated sigmas
+        if( trim(params%cc_emit_sigma) == 'yes' .and. params%cc_objfun == OBJFUN_EUCLID )then
+            THROW_HARD('cc_emit_sigma=yes requires objfun=cc; euclid scoring would use unpopulated sigmas')
+        endif
+        if( params%cc_objfun == OBJFUN_EUCLID .or. trim(params%cc_emit_sigma) == 'yes' )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
             call build%esig%new(params, build%pftc, fname, params%box)
-            l_group_only_init = (.not. file_exists(fname)) .and. file_exists(sigma2_star_from_iter(params%which_iter))
-            if( l_stream .or. l_group_only_init )then
-                call build%esig%read_groups(build%spproj_field)
+            if( trim(params%cc_emit_sigma) == 'yes' )then
+                ! CC never consumes sigma values. Allocate only the particle
+                ! residual table populated after each committed assignment.
                 call build%esig%allocate_ptcls
             else
-                call build%esig%read_part(  build%spproj_field)
-                call build%esig%read_groups(build%spproj_field)
+                l_group_only_init = (.not. file_exists(fname)) .and. file_exists(sigma2_star_from_iter(params%which_iter))
+                if( l_stream .or. l_group_only_init )then
+                    call build%esig%read_groups(build%spproj_field)
+                    call build%esig%allocate_ptcls
+                else
+                    call build%esig%read_part(  build%spproj_field)
+                    call build%esig%read_groups(build%spproj_field)
+                endif
             endif
             call fname%kill
         end if
@@ -59,12 +63,6 @@ contains
         integer, optional,        intent(in)    :: imgbatch_box
         real,    optional,        intent(in)    :: imgbatch_smpd
         integer           :: ithr
-        if( present(imgbatch_box) .and. params%l_objfun_den )then
-            ! cached primary + denoised objective: the den images are read at full
-            ! box, which the box_crop-sized imgbatch cannot hold
-            if( allocated(den_imgbatch) ) call dealloc_imgarr(den_imgbatch)
-            call alloc_imgarr(batchsz, [params%box, params%box, 1], params%smpd, den_imgbatch)
-        endif
         if( present(imgbatch_box) )then
             if( present(imgbatch_smpd) )then
                 call prepimgbatch(params, build, batchsz, box=imgbatch_box, smpd=imgbatch_smpd)
@@ -89,54 +87,32 @@ contains
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
-        logical :: l_den_src, l_cached
+        logical :: l_den_src
         l_den_src     = params%l_ptcl_src_den
-        ! Cached batches serve the raw alignment reads; the reconstruction phase
-        ! reads the cache separately through calc_3Drec.
-        ! ptcl_cache_in_use itself refuses a denoised primary source (ptcl_src=den).
-        l_cached      = ptcl_cache_in_use(params, build)
         call build%pftc%reallocate_ptcls(nptcls_here, pinds_here)
-        if( l_cached )then
-            call ptcl_cache_read_batch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
-        elseif( .not. l_den_src )then
+        if( .not. l_den_src )then
             call discrete_read_imgbatch(params, build, nptcls_here, pinds_here, [1,nptcls_here])
         else
             call discrete_read_imgbatch_source(params, build, 'den', &
                 nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
         endif
         call polarize_batch_particles3D(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
-            tmp_imgs, tmp_imgs_pad, l_cached)
+            tmp_imgs, tmp_imgs_pad)
         if( params%l_objfun_den )then
-            if( l_cached )then
-                ! the denoised objective images are full-size but imgbatch holds
-                ! box_crop cache entries; use the matcher-lifetime den workspace
-                if( .not. allocated(den_imgbatch) )then
-                    THROW_HARD('denoised objective workspace not allocated; build_batch_particles3D')
-                endif
-                if( size(den_imgbatch) < nptcls_here )then
-                    THROW_HARD('denoised objective workspace smaller than batch; build_batch_particles3D')
-                endif
-                call discrete_read_imgbatch_source(params, build, 'den', &
-                    nptcls_here, pinds_here, [1,nptcls_here], den_imgbatch(:nptcls_here))
-                call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, den_imgbatch(:nptcls_here), &
-                    tmp_imgs, tmp_imgs_pad)
-            else
-                call discrete_read_imgbatch_source(params, build, 'den', &
-                    nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
-                call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
-                    tmp_imgs, tmp_imgs_pad)
-            endif
+            call discrete_read_imgbatch_source(params, build, 'den', &
+                nptcls_here, pinds_here, [1,nptcls_here], build%imgbatch(:nptcls_here))
+            call polarize_batch_particles3D_den(params, build, nptcls_here, pinds_here, build%imgbatch(:nptcls_here), &
+                tmp_imgs, tmp_imgs_pad)
         endif
     end subroutine build_batch_particles3D
 
-    subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad, cached )
+    subroutine polarize_batch_particles3D( params, build, nptcls_here, pinds_here, src_imgs, tmp_imgs, tmp_imgs_pad )
         class(parameters),      intent(in)    :: params
         class(builder),         intent(inout) :: build
         integer,                intent(in)    :: nptcls_here
         integer,                intent(in)    :: pinds_here(nptcls_here)
         class(image),           intent(inout) :: src_imgs(nptcls_here)
         class(image),           intent(inout) :: tmp_imgs(params%nthr), tmp_imgs_pad(params%nthr)
-        logical,                intent(in)    :: cached
         integer :: iptcl_batch, iptcl, ithr, pdim_interp(3)
         call tmp_imgs(1)%memoize_mask_coords
         call memoize_ft_maps(tmp_imgs(1)%get_ldim(), tmp_imgs(1)%get_smpd())
@@ -146,13 +122,7 @@ contains
         do iptcl_batch = 1,nptcls_here
             ithr  = omp_get_thread_num() + 1
             iptcl = pinds_here(iptcl_batch)
-            if( cached )then
-                ! src_imgs holds cache entries: already noise-normalized and
-                ! Fourier-cropped, so only the iteration-dependent suffix runs here
-                call prepimg4align_cached(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
-            else
-                call prepimg4align(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
-            endif
+            call prepimg4align(params, build, iptcl, src_imgs(iptcl_batch), tmp_imgs(ithr), tmp_imgs_pad(ithr))
             call build%pftc%polarize_ptcl_pft(tmp_imgs_pad(ithr), iptcl, pdim=pdim_interp, oversamp=.true.)
             call build%pftc%set_eo(iptcl, nint(build%spproj_field%get(iptcl,'eo'))<=0 )
         end do
@@ -250,7 +220,6 @@ contains
         type(image), allocatable, intent(inout) :: ptcl_imgs(:)
         type(image), allocatable, intent(inout) :: ptcl_imgs_pad(:)
         call killimgbatch(build)
-        if( allocated(den_imgbatch) ) call dealloc_imgarr(den_imgbatch)
         call dealloc_imgarr(ptcl_imgs)
         call dealloc_imgarr(ptcl_imgs_pad)
     end subroutine clean_batch_particles3D
