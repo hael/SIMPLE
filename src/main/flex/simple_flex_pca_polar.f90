@@ -26,7 +26,7 @@
 ! the grid, and `nspace` is a free knob that controls it (the bank is streamed direction by
 ! direction, so nspace costs almost nothing in memory).
 !
-! CONVENTIONS -- these must match simple_flex_pca_columns exactly or the two paths are not
+! CONVENTIONS -- these must match simple_flex_pca_em exactly or the two paths are not
 ! comparable:
 !   * the Cartesian inner product `cov_herm_inner` sums over the HALF-plane k<=0 of the UNPADDED
 !     lattice (the plane is stored on a stride-OSMPL_PAD_FAC grid) with unit weight per lattice

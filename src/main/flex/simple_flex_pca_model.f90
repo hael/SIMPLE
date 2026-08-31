@@ -5,7 +5,7 @@ use simple_core_module_api
 use simple_builder,                    only: builder
 use simple_cmdline,                    only: cmdline
 use simple_flex_pca_rec3D,         only: reconstruct_flex_weighted_states, flex_rec_box, flex_rec_smpd
-use simple_flex_pca_columns,    only: cov_env_int_pub, cov_perturb_project_poses, &
+use simple_flex_pca_em,         only: cov_env_int_pub, cov_perturb_project_poses, &
     &build_covariance_eigenbasis, embed_latents_with_contrast, &
     &estimate_covariance_mean, probe_subspace_iteration, align_basis_to_reference, probe_external_basis, &
     &save_probe_state, bag_basis_pool, basis_recs_from_images
@@ -18,7 +18,7 @@ use simple_srch_sort_loc,              only: hpsort
 use simple_flex_pca_distr,             only: flex_pca_is_worker, flex_pca_is_master, flex_pca_nparts, flex_pca_run_stage, &
     &flex_pca_set_fit, flex_pca_fit, FLEX_FIT_ALL, FLEX_FIT_A, FLEX_FIT_B
 use simple_flex_pca_parts,             only: write_sigma_state, check_sigma_state, &
-    &read_state_weights_round, write_embed_part
+    &read_state_weights_round
 use simple_flex_pca_distr,             only: PCA_STAGE_STATES, PCA_STAGE_EMBED
 use simple_finch,                      only: finch_hierarchy, fit_finch, finch_representatives, &
     &                                          select_finch_level, refine_finch_level
