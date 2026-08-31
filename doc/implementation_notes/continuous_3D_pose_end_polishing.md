@@ -1970,7 +1970,192 @@ The runner must snapshot this living note, the new pose and neutral owners, PCG 
 
 ### Phase 11 — handoff
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
+
+**Prepare handoff — 2026-08-31:**
+
+- The independent phase gate exited `0`: Phases 0 through 10 are `COMPLETE`,
+  and Phase 11 entered from `NOT STARTED`. The handoff baseline is focused
+  commit `cb1a4dc6f8651af4b9da5f4811209104413e745a` (`Add authoritative
+  continuous 3D pose validation`). The branch contains the complete local
+  phase sequence `016648550`, `264248c73`, `b709b905b`, `41928763f`,
+  `7140ddc02`, `e836bf020`, `8d619aaee`, `26818001e`, `397fad74f`, and
+  `cb1a4dc6f`; no phase commit was pushed by this controller.
+- The handoff covers one isolated fixed-volume, five-parameter Cartesian pose
+  refiner. `cartesian_pose_refiner` owns physical-volume preparation,
+  shift-free CTF/sigma transfer, full-disk objective/Jacobian/normal terms,
+  scaled damped LM proposals, bounds, accept/reject, and exact rollback in
+  `src/main/volume/simple_cartesian_pose_refiner.f90:56,197,633,945,1112`.
+  Neutral centered embedding/cropping, full-disk plane extraction, and packed
+  KB value/value-gradient gathers remain in
+  `src/main/interp/simple_cartesian_fourier.f90:15,32,49,66,101`. PCG keeps
+  reconstruction accumulation, Gram/kernel, prior, preconditioner, and solve
+  policy in `src/main/volume/simple_reconstructor_pcg.f90`; neither numerical
+  owner imports the other.
+- Current source comments and generated navigation already describe this
+  ownership. The `!@descr` records are at
+  `src/main/volume/simple_cartesian_pose_refiner.f90:1` and
+  `src/main/interp/simple_cartesian_fourier.f90:1`. The generated code map
+  records the neutral owner at `doc/code_overview/code_base_map.md:410`, the
+  pose owner at line 667, the pose test matrix at lines 37–59, and its entry
+  point at line 148. The generated API index records the neutral routines at
+  `doc/code_overview/fortran-indexes/api_index.md:2917` and the pose routines
+  at lines 2922–2955. No source-comment or generated-map rewrite is needed in
+  this phase because these current locations match the source and Git history.
+- The seven tolerance families are frozen, in order, as follows:
+
+  | Family | Absolute tolerance | Relative tolerance |
+  | --- | ---: | ---: |
+  | `algebraic` | `4.9353318740941177E-4` | `5.7686781070864920E-6` |
+  | `lm_system` | `2.0599365235796085E-7` | `2.0E-5` |
+  | `derivative` | `1.0E-8` | `5.0E-3` |
+  | `analytic_dft` | `1.0E-10` | `2.0E-5` |
+  | `executed_dft` | `6.1319031142573850E-4` | `3.0E-2` |
+  | `slow_gather` | `1.0E-7` | `2.0E-5` |
+  | `finite_projection` | `1.0E-5` | `5.0E-2` |
+
+  The constants and safety factor `8` are in
+  `production/tests/simple_pose_cont_refinement_calibration_helpers.f90:9-20`.
+  Calibration boxes are 8 and 12. Boxes 10 and 16 remain observed
+  diagnostics. Fresh acceptance holdouts are boxes 14 and 18.
+- The authoritative Phase 10 package is
+  `~/Projects/continuous_3D_pose_validation_20260831_112536`. It was generated
+  from prepared source `397fad74faea53fc046b2e765cf4b62fa218aa27` plus the
+  then-uncommitted Phase 10 validation package, whose complete snapshot is
+  hashed inside the evidence. Package analysis and `sha256sum -c
+  MANIFEST.sha256` exited `0`. The package contains 18 independently recorded
+  commands: 17 expected-success commands exited `0`, and the retained PCG
+  mother exited its expected status `1`.
+- Important authoritative results are: 1,296 configuration rows; 138 capture
+  trials with zero integrity failures; three mechanism volumes and five seeds
+  per volume; PCG best noisy lambda `10` for each half; PCG raw L2 errors
+  `0.6612755` and `0.6608928`; conventional raw L2 errors `0.6518738` and
+  `0.6388823`; pose-recovery correlation `0.97558`; deapodized/non-deapodized
+  correlations `0.95269`/`0.92741`; cropped-kernel relative error
+  `1.651648E-02`; ML-kernel relative error `1.017238E-02`; prior-adjoint
+  relative error `1.847703E-08`; and priored route-parity solution error
+  `3.260160E-05`.
+- Phase decisions are final for this development. Phase 2 established neutral
+  Cartesian and envelope parity and classified the absolute PCG
+  halfset-versus-gridding miss as unchanged from its control. Phase 3 moved
+  pose numerics to the particle owner and removed the obsolete route. Phases
+  4–8 froze and verified tolerance, objective, LM transaction, CTF/sigma, and
+  independent forward-hierarchy contracts. Phase 9 passed the complete
+  configuration and retained regression matrix. Phase 10 produced and
+  analyzed the authoritative Oracle package. No decision changed a frozen
+  threshold after an acceptance observation.
+- Residual limits are explicit. The derivatives are local to one fixed KB
+  stencil cell. The full redundant Fourier disk is retained. Capture evidence
+  is a matched deterministic numerical experiment, not a real-data benefit
+  claim. There is no UI key, production caller, persistence contract,
+  distributed orchestration, standalone `refine3D` mode, or automatic
+  activation. The known PCG halfset reconstruction result remains future work
+  and cannot change a pose fixture, metric, or tolerance. Any production
+  integration requires a new development record and matched real-data
+  validation.
+- Applicable policies are `KB_Interpolation_Policy.md` for the executed
+  normalized KB convention, `reconstruct3D_pcg_policy.md` for the unchanged
+  reconstruction boundary and AC-12 disposition, `refine3D_policy.md` for
+  particle/volume workflow ownership, `phase_shift_ctf_policy.md` for signed,
+  disabled, and phase-flipped transfer behavior, and
+  `sigma_calculation_policy.md` for positive native-shell variance. No UI
+  policy applies because the handoff adds no public route.
+- Phase 11 validation must use the existing single entry point at
+  `production/tests/pose_cont_validation/run_oracle_validation.sh:1`. Its
+  hypothesis is reproducibility: the exact final handoff source must again
+  pass all 18 independently status-checked commands, source-snapshot and
+  manifest integrity, removed-route absence, the 1,296-row configuration gate,
+  the frozen forward amendment, and the exact known PCG disposition. The
+  package must be created directly below `~/Projects`, every SIMPLE command
+  must run from `~/Projects`, and no runtime evidence may be created below the
+  source checkout. This repeat does not prove production or real-data benefit.
+- Lightweight source checks are `PASS`. Path-limited `git diff --check` exited
+  `0`. Import-boundary checks found no pose-owner import in PCG, no PCG import
+  in the pose owner, and no non-test caller of the pose owner. The removed
+  `pcg_pose_polish` and `simple_pcg_pose_polisher` routes are absent outside
+  the validation package's explicit negative checks. Current source-comment,
+  code-map, and API-index lookups all passed. The only changed file is this
+  living execution record. `production/CMakeLists.txt` remains unchanged at
+  SHA-256
+  `F850520E053180EA241C5B091D74C5358B87BFC118BA91E043BBA654059412EB`.
+  No compilation, runtime test, remote normalization, real transfer, or commit
+  occurs in this prepare turn. The authoritative rsync dry-run command and
+  complete output remain in the controller evidence; any later source or
+  controller-input change invalidates that review.
+
+**Oracle validation evidence — 2026-08-31:**
+
+- The independent phase-order gate exited `0`: Phases 0 through 10 were
+  `COMPLETE`, and Phase 11 was `READY FOR ORACLE VALIDATION`. The controller
+  source-state checker also exited `0` and verified
+  `HEAD=cb1a4dc6f8651af4b9da5f4811209104413e745a`,
+  `ORIGIN_MASTER=c5dae62b7ce4faeb320a6641126a5cc58dccce13`,
+  `FILE_COUNT=1516`, and
+  `SOURCE_DIGEST=5C3D69A2082C21661308A38068324BCDAC5C20D7F26A3FE08822B832EDE4FEBE`.
+- The exact approved `rsync -av --delete --info=progress2` command with the
+  exclusions for `.git/`, `.codex/.local-history.git/`, `build/`, `*.o`,
+  `*.mod`, `*.a`, and `*.so` exited `0`. It transferred 82 files, deleted no
+  path, sent `2,110,318` bytes, received `13,261` bytes, and reported total
+  size `152,752,148` bytes and speedup `71.93`. The five transfers beyond the
+  reviewed 77-file dry run were active Phase 11 controller evidence created by
+  this validation turn. The approved remote line-ending normalization exited
+  `0` and changed only copied Perl and shell scripts.
+- After `module load gcc/15.2.0`, the exact default incremental logged build
+  used `mkdir -p build`, `set -o pipefail`, and
+  `.codex/compile_debug.sh 2>&1 | tee build/build_debug.log`. It exited `0`,
+  completed the Debug install with GCC/GFortran 15.2.0, and did not use the
+  conditional clean retry. The generated Git-hash step printed the expected
+  nonfatal warning because the synchronized checkout excludes `.git/`.
+- The first runtime launcher exited `1` before the runner or a SIMPLE binary
+  started because PowerShell expanded the remote `${HOME}` into a Windows
+  path. It created no evidence directory and is an infrastructure attempt, not
+  a test result. The quote-corrected launcher preserved the remote variables,
+  changed to `~/Projects`, invoked
+  `production/tests/pose_cont_validation/run_oracle_validation.sh`, and exited
+  `0`. Its package is
+  `~/Projects/continuous_3D_pose_validation_20260831_121306`.
+- The runner independently resolved and hashed every executable and recorded
+  all 18 commands with `/usr/local/cache/mazhar/Projects` as the working
+  directory. The 17 expected-success commands exited `0`: the 1,296-row
+  configuration matrix; pose mother; fixed-reference, forward-path,
+  matched-window, reference-bias, operator-contract, capture-range,
+  capture-mechanism, tolerance-calibration, objective-normal, LM-transaction,
+  CTF/sigma, and forward-hierarchy cases; neutral Cartesian mother; and the
+  `pcg_recon` and `pcg_priors` regressions. Capture evidence retained 138
+  trials with zero integrity failures, three mechanism volumes, and five seeds
+  per volume. Calibration retained boxes 8 and 12, unsampled holdouts 14 and
+  18, and safety factor 8.
+- The retained PCG mother exited its declared status `1`. The analyzer accepted
+  it only after it reproduced the frozen Phase 2 disposition: best noisy
+  lambda `10` for each half, PCG raw L2 errors `0.6612755` and `0.6608928`,
+  conventional raw L2 errors `0.6518738` and `0.6388823`, and the same
+  scale-sensitive assertion. `pcg_recon` and `pcg_priors` exited `0`.
+  Representative retained values are recovery correlation `0.97558`,
+  deapodized/non-deapodized correlations `0.95269`/`0.92741`, cropped-kernel
+  relative error `1.651648E-02`, ML-kernel relative error `1.017238E-02`,
+  prior-adjoint relative error `1.847703E-08`, and priored route-parity solution
+  relative error `3.260160E-05`.
+- Package analysis exited `0` and reported `PASS` for every status, completion
+  marker, required artifact, source snapshot, removed-route check, frozen
+  forward amendment, 1,296-row count, capture analysis, exact PCG disposition,
+  and runtime-parent check. A separate `sha256sum -c MANIFEST.sha256` command
+  exited `0`. The compiler log is
+  `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`; the generated
+  matrix root is
+  `~/Projects/continuous_3D_matrix_volumes_20260831_121755418`.
+- The mandatory post-test path checks exited `0`. `~/Projects` resolves to
+  `/usr/local/cache/mazhar/Projects`. The only source checkout used by Phase
+  11, `~/Projects/hael_SIMPLE-rsync-test`, contains no top-level `validation/`
+  directory and no top-level `continuous_3D_matrix_volumes_*` directory. The
+  compiler log is the only permitted validation evidence below the checkout;
+  no A/B control checkout was used.
+- Source, synchronization, normalization, compilation, runtime completion,
+  package integrity, and scientific acceptance are `PASS`. The isolated
+  numerical component is reproducibly validated and remains separate from PCG
+  reconstruction. It adds no UI key, production caller, persistence,
+  distributed orchestration, standalone `refine3D` mode, automatic activation,
+  or real-data benefit claim. The local fixed-cell derivative boundary and the
+  known absolute PCG halfset-versus-gridding result remain explicit limits.
 
 Record commands, package path, source commit, derived/frozen tolerances, metrics, phase decisions, and residual limitations below. Update relevant source comments and code maps with major file and routine locations.
 
