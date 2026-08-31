@@ -1777,7 +1777,188 @@ Repeat the essential Phase 5–8 checks over the fresh holdout boxes plus the re
 
 ### Phase 10 — collect authoritative Oracle Linux evidence
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
+
+- Applicable policy review selected `KB_INTERPOLATION_POLICY.md` because the
+  retained gather and derivative cases use the padded normalized KB contract;
+  `RECONSTRUCT3D_PCG_POLICY.md` because AC-12 retains the PCG mother and both
+  high-level PCG regression suites; `REFINE3D_POLICY.md` because pose and
+  volume ownership must remain separate; `PHASE_SHIFT_CTF_POLICY.md` because
+  the retained CTF matrix must preserve disabled, signed, and phase-flipped
+  transfer semantics; and `SIGMA_CALCULATION_POLICY.md` because the variance
+  matrix must use positive native-shell sigma values. No UI policy applies:
+  this phase adds a test-only validation entry point and no public option.
+- `production/tests/pose_cont_validation/run_oracle_validation.sh:16` creates
+  one timestamped package directly below `~/Projects`; snapshots the living
+  note, pose owner, neutral Cartesian/envelope owners, PCG owner, all relevant
+  oracle/test modules, and both validation-script sets at line 89; hashes the
+  exact resolved executable before each invocation at line 141; runs every
+  retained test independently from `~/Projects` at lines 150 and 210; retains
+  failures instead of truncating the schedule; copies newly generated matrix
+  roots into the package; writes final analysis at line 246; and writes stable
+  package checksums at line 266 while excluding the active console transcript.
+  Its command manifests do not invoke `pcg_pose_polish` or a deleted
+  pose-polisher strategy.
+- `production/tests/pose_cont_validation/analyze_oracle_validation.py:13`
+  declares the complete 18-command matrix. It checks independent exit status
+  and completion markers, runs the retained pose-capture integrity analyzer,
+  requires all machine-readable comparison and frozen-tolerance files,
+  requires exactly 1,296 configuration rows at line 126, verifies source
+  snapshot hashes at line 186, and accepts PCG-mother status 1 only when it
+  reproduces the exact Phase 2 best lambda and decisive raw-L2 disposition at
+  line 171. Any other PCG outcome fails Phase 10 rather than weakening AC-12.
+- `production/tests/pose_cont_validation/README.md:3` documents the single
+  entry point, stable working-directory and package boundaries, frozen known
+  PCG disposition, and exact post-build invocation.
+- The test hypothesis is that all AC-1 through AC-12 numerical owners retain
+  their frozen assertions across the complete focused/configuration matrix,
+  the pose and neutral mother suites, and both high-level PCG regressions, and
+  that the one known reconstruction-owner failure remains numerically
+  identical to the Phase 2 control disposition.
+- Lightweight source evidence is `PASS`. Path-limited `git diff --check`
+  exited `0`; the Python analyzer AST check exited `0`; the first restricted
+  Bash parse and its post-correction repeat each stopped before script
+  execution at the documented MSYS2 `CreateFileMapping` host boundary with
+  wrapper status `256`; each corresponding exact elevated retry exited `0`.
+  Python 3.6 grammar parsing and the frozen PCG-line parser smoke check also
+  exited `0`. The new files contain no tab characters or CRLF line endings.
+  `production/CMakeLists.txt` remains unchanged.
+- Compilation, runtime completion, AC-9, the final AC-1 through AC-12 matrix,
+  and package scientific acceptance remain `NEEDS MORE TESTING`. This prepare
+  turn does not synchronize source, normalize remote files, compile, run a
+  SIMPLE executable, or commit. The approved rsync attempts and their complete
+  output and exit statuses are retained in the controller evidence.
+- The first attempted dry-run command was malformed at the PowerShell-to-Bash
+  quoting boundary and exited `1` at local rsync usage parsing without a remote
+  comparison. The corrected exact dry run exited `0`, proposed 83 file
+  transfers and no deletion, but included the unexpected agent-created
+  `production/tests/pose_cont_validation/__pycache__/analyze_oracle_validation.cpython-314.pyc`.
+  That cache was removed after review. This correction and the prior status
+  update invalidated that dry run. Do not reuse its transfer review.
+- The corrective prepare turn repeated all lightweight checks without creating
+  bytecode. Python 3.6 grammar parsing, `git diff --check`, the exact elevated
+  Bash parse retry after the restricted `CreateFileMapping` host failure, the
+  tab and CRLF scans, and the cache-artifact scan all passed. The protected
+  `production/CMakeLists.txt` SHA-256 remains
+  `F850520E053180EA241C5B091D74C5358B87BFC118BA91E043BBA654059412EB`.
+  The authoritative fresh rsync dry run is the final operation of this prepare
+  turn; its complete command, output, and exit status remain in the controller
+  JSONL evidence and supersede the rejected transfer review above.
+
+**Oracle validation attempt 1 — 2026-08-31:**
+
+- The independent phase-order gate passed, but the required prepared-source
+  fingerprint check failed before synchronization. The prepared record has
+  `HEAD=397fad74faea53fc046b2e765cf4b62fa218aa27` and
+  `ORIGIN_MASTER=c75e33151f027aeb524210a2bc838209427ecd08`; the current local `HEAD`
+  is unchanged, but the current remote-tracking `origin/master` is
+  `168b5f272b01e24a85a863394091c7f14dc8d353`. The source-state checker exited
+  `1` and classified the prepared state as stale.
+- No real rsync, remote line-ending normalization, compilation, runtime test,
+  scientific acceptance test, or commit ran. Synchronization, compilation,
+  runtime, AC-9, and the complete AC-1 through AC-12 matrix remain
+  `NEEDS MORE TESTING`.
+- Start a new Phase 10 prepare turn. It must record the current Git identity,
+  repeat the lightweight checks, and review a new exact rsync dry run against
+  the source state that the next validation turn will use. Do not reuse the
+  previous dry run or prepared fingerprint.
+
+**Rework prepare after Oracle validation attempt 1 — 2026-08-31:**
+
+- The independent phase-order gate passed with Phases 0 through 9 `COMPLETE`
+  and Phase 10 `REWORK REQUIRED`. The current Git identity is
+  `HEAD=397fad74faea53fc046b2e765cf4b62fa218aa27` and
+  `ORIGIN_MASTER=168b5f272b01e24a85a863394091c7f14dc8d353`.
+- No source correction was necessary. Python 3.6 grammar parsing,
+  path-limited `git diff --check`, tab, CRLF, and cache-artifact scans passed.
+  The restricted Bash parser stopped before script execution at the documented
+  MSYS2 `CreateFileMapping` host boundary; its one exact elevated retry exited
+  `0`. The protected `production/CMakeLists.txt` SHA-256 remains
+  `F850520E053180EA241C5B091D74C5358B87BFC118BA91E043BBA654059412EB`.
+- The authoritative fresh rsync dry run is the final external operation of
+  this prepare turn. Its complete command, output, and exit status remain in
+  the controller JSONL evidence. It supersedes all earlier Phase 10 dry runs
+  and is the only transfer review valid for the next validation turn.
+
+**Oracle validation evidence — 2026-08-31:**
+
+- The independent phase-order and prepared-source checks exited `0`. Phases 0
+  through 9 were `COMPLETE`, Phase 10 was `READY FOR ORACLE VALIDATION`, and
+  the validated fingerprint was
+  `HEAD=397fad74faea53fc046b2e765cf4b62fa218aa27`,
+  `ORIGIN_MASTER=168b5f272b01e24a85a863394091c7f14dc8d353`,
+  `FILE_COUNT=1516`, and
+  `SOURCE_DIGEST=7D340E54EBCEFD103F95595F0FBDB77E9A7D4787691C2F6882DD3F32F7D6032D`.
+- The exact `rsync -av --delete --info=progress2` command with exclusions for
+  `.git/`, `.codex/.local-history.git/`, `build/`, `*.o`, `*.mod`, `*.a`, and
+  `*.so` exited `0`. It transferred 99 files, proposed no deletion, sent
+  `7,233,044` bytes, received `11,960` bytes, and reported total size
+  `150,898,657` bytes and speedup `20.83`. The approved normalization command
+  `cd ~/Projects/hael_SIMPLE-rsync-test && find . -type f \\(
+  -name '*.pl' -o -name '*.sh' \\) -exec sed -i 's/\\r$//' {} +` exited `0`.
+- After `module load gcc/15.2.0`, the exact incremental logged build used
+  `mkdir -p build`, `set -o pipefail`, and
+  `.codex/compile_debug.sh 2>&1 | tee build/build_debug.log`. It exited `0`,
+  completed the Debug install with GCC/GFortran 15.2.0, and did not use the
+  conditional clean retry. The generated Git-hash step printed a non-fatal
+  `not a git repository` warning because rsync excludes `.git/`; compilation,
+  installation, and the pipeline status remained successful.
+- The first runtime launcher stopped before SSH or a SIMPLE invocation with
+  exit `1` because its nested quote boundary was incomplete. It created no
+  evidence directory and is classified as an infrastructure attempt, not a
+  test result. The quote-safe retry loaded GCC 15.2.0, exported the documented
+  SIMPLE environment, changed to `~/Projects`, and invoked
+  `~/Projects/hael_SIMPLE-rsync-test/production/tests/pose_cont_validation/run_oracle_validation.sh`.
+  It exited `0` and created
+  `~/Projects/continuous_3D_pose_validation_20260831_112536`.
+- The runner at `production/tests/pose_cont_validation/run_oracle_validation.sh:150`
+  independently resolved, checked, hashed, and invoked every executable from
+  `~/Projects`. All 17 expected-success commands exited `0`: the 1,296-row
+  configuration matrix; the pose mother; fixed-reference, forward-path,
+  matched-window, reference-bias, operator-contract, capture-range,
+  capture-mechanism, tolerance-calibration, objective-normal,
+  LM-transaction, CTF/sigma, and forward-hierarchy cases; the neutral
+  Cartesian mother; and the two high-level PCG suites. The pose-capture matrix
+  had 138 trials and zero integrity failures. Mechanism evidence used three
+  volumes and five seed cases per volume. Forward calibration used boxes 8 and
+  12, retained boxes 14 and 18 as unsampled holdouts, and retained factor 8.
+- The retained PCG mother exited `1` in its known `halfset_fsc` disposition.
+  The best noisy lambda was `10` for both halves; PCG raw L2 errors were
+  `0.6612755` and `0.6608928`, and conventional-gridding raw L2 errors were
+  `0.6518738` and `0.6388823`. The analyzer at
+  `production/tests/pose_cont_validation/analyze_oracle_validation.py:171`
+  accepted this exact Phase 2 control disposition and would reject any other
+  result. The operator-level `pcg_recon` and `pcg_priors` regressions exited
+  `0`; representative gates include recovery correlation `0.97558`,
+  deapodized correlation `0.95269` versus `0.92741` without deapodization,
+  cropped-kernel interior relative error `1.651648E-02`, ML-kernel relative
+  error `1.017238E-02`, prior adjoint relative error `1.847703E-08`, and
+  priored reduction-route solution relative error `3.260160E-05`.
+- Package analysis exited `0` and reported `PASS` for all required status rows,
+  completion markers, machine-readable artifacts, the 1,296-row matrix,
+  capture analysis, frozen forward amendment, source snapshot integrity,
+  removed-route absence, PCG disposition, and runtime-parent check. A separate
+  `sha256sum -c MANIFEST.sha256` check exited `0`. The package evidence is
+  `~/Projects/continuous_3D_pose_validation_20260831_112536`; the compiler log
+  is `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`; and the matrix
+  evidence root is
+  `~/Projects/continuous_3D_matrix_volumes_20260831_113044100`.
+- The required post-test path checks exited `0`. `~/Projects` resolves to
+  `/usr/local/cache/mazhar/Projects`. The only source checkout used by Phase 10,
+  `~/Projects/hael_SIMPLE-rsync-test`, has no top-level `validation/` directory
+  and no top-level `continuous_3D_matrix_volumes_*` directory. The exact
+  generated matrix directory is directly below `~/Projects`; no A/B control
+  checkout was used in this phase. The permitted compiler log is the only
+  validation evidence below the source checkout.
+- Source checks, synchronization, normalization, compilation, runtime
+  completion, package integrity, AC-9, and the complete AC-1 through AC-12
+  scientific matrix are `PASS`. The test-only runner and analyzer remain at
+  `production/tests/pose_cont_validation/run_oracle_validation.sh:16`,
+  `production/tests/pose_cont_validation/analyze_oracle_validation.py:13`, and
+  `production/tests/pose_cont_validation/README.md:3`. They add no production
+  caller, public option, or claim that the isolated pose refiner improves
+  reconstruction quality. The unresolved absolute PCG-versus-gridding result
+  remains the separate future-work item below.
 
 After source review and lightweight checks, the user compiles on Oracle Linux and runs one validation entry point that continues through all independent focused cases and the complete mother suite while recording failures. Store logs, machine-readable comparisons, tolerance files, source snapshots, environment, configuration, statuses, and checksums in one timestamped directory under the requested `~/Projects` parent.
 
