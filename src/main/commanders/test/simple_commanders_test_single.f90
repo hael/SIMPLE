@@ -145,6 +145,14 @@ subroutine exec_test_single_workflow( self, cline )
     write(logfhandle,'(a)') '>>> TEST_SINGLE_WORKFLOW:'
     projname = 'test_single_workflow'
     call params%new(cline)
+    projfile = projname%to_char()//'.simple'
+    call cline_nproj%set('prg',                       'new_project')
+    call cline_nproj%set('projname',             projname%to_char())
+    call xnproj%execute(cline_nproj)
+    call simple_getcwd(project_dir)
+    projfile = filepath(project_dir, projfile)
+    startvol = filepath(project_dir, 'startvol.mrc')
+
     call cline_sim%set('prg',               'simulate_nanoparticle')
     call cline_sim%set('box',                                   BOX)
     call cline_sim%set('smpd',                          params%smpd)
@@ -181,18 +189,10 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_denoise%set('nthr',                             NTHR)
     call xdenoise%execute(cline_denoise)
 
-    projfile = projname%to_char()//'.simple'
-    call cline_nproj%set('prg',                       'new_project')
-    call cline_nproj%set('projname',             projname%to_char())
-    call xnproj%execute(cline_nproj)
-    call simple_getcwd(project_dir)
-    projfile = filepath(project_dir, projfile)
-    startvol = filepath(project_dir, 'startvol.mrc')
-
     call cline_imptcls%set('prg',                'import_particles')
     call cline_imptcls%set('mkdir',                            'no')
     call cline_imptcls%set('projfile',           projfile%to_char())
-    call cline_imptcls%set('stk',               '../'//DENOISED_STK)
+    call cline_imptcls%set('stk',                       DENOISED_STK)
     call cline_imptcls%set('smpd',                      params%smpd)
     call cline_imptcls%set('ctf',                              'no')
     call ximptcls%execute(cline_imptcls)
