@@ -37,9 +37,14 @@
       - `simple_pose_cont_refinement_batch_helpers.f90`
       - `simple_pose_cont_refinement_calibration_helpers.f90`
       - `simple_pose_cont_refinement_calibration_test.f90`
+      - `simple_pose_cont_refinement_configuration_matrix_test.f90`
+      - `simple_pose_cont_refinement_ctf_sigma_test.f90`
       - `simple_pose_cont_refinement_fixed_reference_test.f90`
+      - `simple_pose_cont_refinement_forward_hierarchy_test.f90`
       - `simple_pose_cont_refinement_forward_path_test.f90`
+      - `simple_pose_cont_refinement_lm_transactions_test.f90`
       - `simple_pose_cont_refinement_matched_window_test.f90`
+      - `simple_pose_cont_refinement_objective_normals_test.f90`
       - `simple_pose_cont_refinement_operator_contract_support.f90`
       - `simple_pose_cont_refinement_operator_contract_test.f90`
       - `simple_pose_cont_refinement_pose_capture_test.f90`

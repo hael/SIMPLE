@@ -1,12 +1,15 @@
 # Continuous five-parameter pose refinement numerical validation
 
-**Contract status:** FINAL (FROZEN)  
+**Contract status:** FINAL (FROZEN)
+
 **Execution plan status:** FINAL
+
+**Approved amendment:** Forward-validation recovery
 **Execution status:** IMPLEMENTATION IN PROGRESS — PHASES 4–8 COMPLETE<br>
-**Updated:** 2026-08-27
-**Rebased two-document checkpoint:** `f78d9dff3`  
-**Completed history:** [completed/continuous_3D_pose_end_polishing_history_and_handoff.md](completed/continuous_3D_pose_end_polishing_history_and_handoff.md)  
-**Completed evidence:** [completed/continuous_3D_pose_end_polishing_validation_evidence.md](completed/continuous_3D_pose_end_polishing_validation_evidence.md)  
+**Updated:** 2026-08-30<br>
+**Rebased two-document checkpoint:** `f78d9dff3`<br>
+**Completed history:** [completed/continuous_3D_pose_end_polishing_history_and_handoff.md](completed/continuous_3D_pose_end_polishing_history_and_handoff.md)<br>
+**Completed evidence:** [completed/continuous_3D_pose_end_polishing_validation_evidence.md](completed/continuous_3D_pose_end_polishing_validation_evidence.md)<br>
 **Scientific review:** [completed/continuous_3D_pose_end_polishing_scientific_review.md](completed/continuous_3D_pose_end_polishing_scientific_review.md)
 
 This is the single living development record. The approval-controlled requirements come first. The execution approach and progress record follow the contract approval boundary. After the contract becomes FINAL, the preceding requirements remain frozen unless a requirement review returns the contract to IN REVIEW; implementation discoveries and evidence update only the later execution portion.
@@ -134,7 +137,7 @@ $$
 
 For complex values, $|\cdot|$ is complex magnitude. Relative comparison applies to every gradient component as well as values, residuals, and normal terms.
 
-Calibration fixtures use boxes $8^3$ and $12^3$; acceptance fixtures use boxes $10^3$ and $16^3$. The sets use different deterministic asymmetric volumes and poses, and both cover constant and varying sigma, ordinary and attenuated CTF, and exact and nonstationary poses. Before calibration, each family records its absolute floor, relative floor, and relative-scale floor. Calibration records maximum absolute and scaled-relative errors and sets
+The original calibration fixtures use boxes $8^3$ and $12^3$. The observed box-$10^3$ and box-$16^3$ forward-hierarchy cases are retained as diagnostic regressions, not reused as untouched acceptance evidence after the 2026-08-28 amendment. The amended forward calibration must predeclare fresh holdout boxes, volumes, and rotations before execution. Calibration and holdout sets use different deterministic asymmetric volumes and poses and cover the complete declared sampling domain for their tolerance family. Before calibration, each family records its absolute floor, relative floor, and relative-scale floor. Calibration records maximum absolute and scaled-relative errors and sets
 
 $$
 \mathrm{atol}=8E_{\mathrm{abs,max}},
@@ -154,6 +157,14 @@ $$
 Tight step agreement applies only to reliable systems; singular or poorly conditioned fixtures verify their terminal outcome instead. Ordinary decision fixtures remain away from the LM ratio threshold: for the current $0.25$ threshold, use ratios below approximately $0.20$ or above $0.30$ and test the boundary separately.
 
 Terminal status, sample counts, active masks, invalid-input classification, symmetry, and zero contracts remain exact. Rejected-trial rollback is bitwise identical where the representation permits it. The evidence package records fixtures, raw error tables, derived tolerances, safety factor, source commit, compiler, precision, and a pre-acceptance freeze marker. A failed acceptance test reopens the protocol or implementation; it never changes a threshold in place.
+
+#### Approved forward-model amendment — 2026-08-28
+
+Only the `executed_dft`, `slow_gather`, and `finite_projection` tolerance families are reopened. The algebraic, LM-system, derivative, and analytic-DFT families remain frozen. The amended calibration must sample multiple predeclared arbitrary rotations over every point in the full redundant Fourier disk at the calibration boxes, retain structurally separate direct-DFT and slow-gather paths, and report stencil-switch counts separately.
+
+The arbitrary-rotation finite-box comparison is split into two contracts. The acceptance contract compares the normalized two-dimensional DFT of a line-sum projection of a rotated/resampled finite volume $X_R$ with the three-dimensional DFT of that same $X_R$ at $l=0$. A separate diagnostic compares $X_R$ with the original physical volume evaluated at rotated frequencies and reports clipping fraction, real-space interpolation error, and support margin without requiring machine agreement.
+
+The expanded calibration derives and freezes new values for the three reopened families before any fresh holdout case runs. The already observed box-$10^3$ and box-$16^3$ results cannot set a tolerance and remain diagnostic evidence. Candidate fresh holdout boxes $14^3$ and $18^3$ require a static indexing and runtime-cost check before they are declared and frozen.
 
 ### Numerical ownership
 
@@ -323,7 +334,7 @@ Excluded:
 - **AC-3 — LM proposal:** accepted and rejected proposals agree with a separate dense five-by-five solve and acceptance calculation.
 - **AC-4 — State restoration:** rejected, invalid, singular, bounded-out, and finite-no-improvement trials preserve the complete input pose within the declared representation tolerance.
 - **AC-5 — CTF and sigma:** valid CTF/sigma configurations remain finite and agree with their oracles; short variance vectors cap the pose shell range; unusable variance returns the declared nonfatal outcome; the existing PCG fallback remains unchanged.
-- **AC-6 — Forward hierarchy:** analytic identities and each named pair of computational paths satisfy their separately frozen contracts over the full redundant disk; stencil switches are reported separately.
+- **AC-6 — Forward hierarchy:** analytic identities and each named pair of computational paths satisfy their separately frozen contracts over the full redundant disk on fresh holdout fixtures; the matched finite-box projection contract compares the same rotated/resampled finite object, while clipping, real-space interpolation, support margin, and stencil switches remain separately reported diagnostics.
 - **AC-7 — Robustness:** at least two boxes, two Fourier ranges, and three deterministic asymmetric volumes pass without post-result tolerance changes.
 - **AC-8 — Pose regression:** existing derivative, capture, pose-recovery, and contract cases pass or receive explicitly reviewed updates.
 - **AC-9 — Oracle evidence:** focused cases and the complete mother suite compile and pass on Oracle Linux with retained logs.
@@ -343,10 +354,10 @@ Known challenges are single precision and accumulated complex error, hidden reco
 
 Review decisions:
 
-- **RESOLVED — tolerance calibration:** the **Tolerance-calibration protocol** is approved.
-- **RESOLVED — executed forward model:** the forward-model and comparison-contract sections are approved.
+- **IN REVIEW — forward-only tolerance amendment:** `executed_dft`, `slow_gather`, and `finite_projection` require expanded arbitrary-rotation, full-disk calibration and fresh holdout fixtures. All other tolerance families remain frozen.
+- **IN REVIEW — finite-projection comparison:** the matched finite-object acceptance contract and separate clipping/interpolation diagnostic are approved for implementation but are not frozen until the amended calibration fixtures and derived tolerances are reviewed.
 - **RESOLVED — numerical ownership:** the approved routine-by-routine map separates particle, reconstruction, neutral, strategy, and test ownership.
-- **FINAL — contract approval:** the requirements, exclusions, acceptance criteria, and ownership boundaries above are frozen as of 2026-08-26.
+- **FINAL — unaffected contract:** the required outcome, scope exclusions, numerical ownership, AC-1 through AC-5, and AC-7 through AC-12 remain frozen as of 2026-08-26. Only the forward portions of the tolerance protocol and AC-6 are reopened by the 2026-08-28 amendment.
 
 ## Contract approval boundary
 
@@ -407,19 +418,19 @@ These line numbers are current at the review base and must be refreshed after an
 - Put substantive new test cases in separate child modules. Shared helpers contain only repeated fixture, assertion, oracle, or reporting code.
 - Keep `production/CMakeLists.txt` unchanged and off-limits. Name every test dependency with its mother suite's established `simple_<test_id>_*` prefix so the existing dependency glob discovers it. If two mothers need similar fixtures, give each suite an owning helper instead of adding a build-system exception.
 - Regenerate `doc/code_overview/code_base_map.md` and the Fortran indexes after adding or deleting source modules; verify a clean generated diff rather than editing generated indexes manually.
-- Before using the ignored Codex runner, update it and its prompt to read this one living note, require `Contract status: FINAL (FROZEN)` and `Execution plan status: FINAL`, and start at the first incomplete phase. This local-tool update is required execution preflight, not a source acceptance criterion.
+- Before using the ignored Codex runner, update it and its prompt to read this one living note and start at the first authorized incomplete or revalidation phase. While the forward amendment is in review, the runner may implement and validate only the approved Phase 4 calibration rework; it must not run a fresh holdout acceptance case. After the amended fixtures and derived tolerances are reviewed, frozen, and the contract status returns to `FINAL (FROZEN)`, it may continue with the Phase 5 BLAS revalidation, Phase 6 LAPACK revalidation, and revised Phase 8 acceptance. This local-tool update is required execution preflight, not a source acceptance criterion.
 - Historical runners that require `pcg_pose_polish=yes` must not be run as current evidence. Retain them only as clearly historical material or remove their obsolete execution path when the new validation package supersedes them.
 
 ### Acceptance-to-phase map
 
 | Criterion | Owning phase | Required evidence |
 | --- | --- | --- |
-| AC-1 | Phase 5 | independent weighted-objective accumulation |
-| AC-2 | Phase 5 | componentwise residual Jacobian, $J^Hr$, and $J^HJ$ |
-| AC-3 | Phase 6 | independent scaled dense solve and LM decision |
+| AC-1 | Phase 5 | explicit and BLAS weighted-objective accumulation |
+| AC-2 | Phase 5 | componentwise residual Jacobian plus explicit/BLAS $J^Hr$ and $J^HJ$ |
+| AC-3 | Phase 6 | production Cholesky, pivoted dense, and LAPACK reliable-system agreement plus LM decision |
 | AC-4 | Phase 6 | accepted/rejected transaction and rollback evidence |
 | AC-5 | Phase 7 | CTF modes, constant/varying/short/invalid variance evidence |
-| AC-6 | Phase 8 | analytic, DFT, slow-gather, and finite-projection hierarchy |
+| AC-6 | Phase 8 | analytic, DFT, slow-gather, matched finite-projection, and separate clipping/interpolation diagnostics |
 | AC-7 | Phase 9 | approved box, range, volume, and pose matrix |
 | AC-8 | Phase 3, finalized in Phase 9 | migrated legacy pose regressions and capture diagnostics |
 | AC-9 | Phase 10 | authoritative Oracle package and analysis |
@@ -714,6 +725,51 @@ The current inventory contains no orphaned Fortran test source under the old pre
 
 **Status:** COMPLETE
 
+**Approved forward-calibration rework — 2026-08-28:**
+
+- Preserve the completed algebraic, LM-system, derivative, and analytic-DFT calibration records and frozen tolerances.
+- Recalibrate `executed_dft`, `slow_gather`, and `finite_projection` over every point in the full redundant disk for multiple predeclared arbitrary rotations at boxes $8^3$ and $12^3$, using more than one deterministic asymmetric physical volume.
+- Keep the executed gather, structurally separate slow gather, and brute-force direct DFT as distinct computational paths. Record sample counts, stencil switches, absolute errors, and scaled-relative errors for every comparison.
+- Replace the arbitrary-rotation finite-projection acceptance comparison with the matched discrete contract defined in the approved forward-model amendment: projection/2-D DFT of $X_R$ versus the 3-D DFT of that same rotated/resampled finite $X_R$ at $l=0$.
+- Retain original-volume rotated-frequency agreement, clipping fraction, interpolation error, and support margin as diagnostics rather than forcing them into the matched finite-projection tolerance.
+- Treat the observed boxes $10^3$ and $16^3$ as diagnostics. Perform a static even-box indexing, full-disk population, memory, and brute-force operation-count review before declaring fresh holdout boxes; $14^3$ and $18^3$ are candidates, not yet frozen.
+- Derive the three amended tolerances with the existing componentwise metric, predeclared floors, and safety factor. Write a new forward-amendment freeze marker before any fresh holdout test runs. A loose calibration result stops for scientific review.
+
+**Rework gate:** the three reopened families have full-domain calibration records, the finite-projection acceptance paths operate on the same finite object, fresh holdout fixtures are declared but untouched, and the amended tolerances are reviewed and frozen before Phase 8 resumes.
+
+**Local rework implementation — 2026-08-28:**
+
+- `production/tests/simple_pose_cont_refinement_calibration_helpers.f90:9` declares two calibration-volume variants and candidate holdout boxes $14^3$ and $18^3$ while preserving boxes $10^3$ and $16^3$ as observed diagnostics. `build_calibration_fixture` at line 90 now produces two deterministic asymmetric volumes per calibration box. The artifact writer at line 313 emits proposed rather than frozen forward tolerances and an `AWAITING_SCIENTIFIC_REVIEW` marker; it does not sample a fresh holdout.
+- `production/tests/simple_pose_cont_refinement_calibration_test.f90:151` evaluates `executed_dft`, `slow_gather`, and `finite_projection` over four predeclared rotations and every point in the full redundant disk at boxes $8^3$ and $12^3$. The finite-projection comparison at lines 194–204 now uses the same rotated/resampled finite object on both sides. Original-volume disagreement, clipping fraction, interpolation-switch margin, and stencil-switch counts remain separate diagnostics.
+- The test repeats every calibration calculation and requires bitwise-identical records and aggregate diagnostics. It writes `forward_calibration.tsv`, `proposed_tolerances.tsv`, `fixture_manifest.tsv`, and `forward_holdout_static_review.tsv` before rejecting a scientifically loose proposal, so a failed run remains diagnosable.
+- Lightweight source inspection is complete: the changed Phase 4 sources contain no conflict markers or lines longer than 132 columns. Compilation and runtime evidence are not claimed. The next gate is the focused Oracle calibration run, followed by human review and explicit freezing of the three proposed families before any candidate holdout is constructed.
+
+**First amended calibration run and correction — 2026-08-30:**
+
+- Oracle package `~/Projects/pose_cont_revalidation_20260830_225501` completed all calibration calculations and stopped at the intended scientifically-loose gate. `slow_gather` reached maximum absolute error $2.5123\times10^{-8}$ and `finite_projection` reached $8.2444\times10^{-9}$; both contracts are strong. `executed_dft` reached maximum absolute error $4.0364\times10^{-4}$ under arbitrary rotation, while identity remained near $10^{-8}$. This is the expected distinction between exact-grid evaluation and interpolation, not a fast/slow gather inconsistency.
+- The rejection came from the tolerance derivation rather than the forward numerics. The implementation independently multiplied the maximum absolute error and the maximum scaled-relative error by the safety factor. For low-amplitude Fourier samples whose comparison scale was clamped to $10^{-3}$, an absolute error near $1.0665\times10^{-4}$ became a 10.66-percent relative maximum; multiplying that number by eight proposed the meaningless relative tolerance $0.85319$.
+- The corrected combined derivation keeps each predeclared relative floor $r_0$ and calculates the part of each component error not already covered by it,
+
+  $$
+  q_i=\max(0,e_i-r_0s_i),\qquad
+  a=\max(a_0,8\max_iq_i),\qquad r=r_0,
+  $$
+
+  where $e_i$ is absolute error, $s_i$ is the stored comparison scale, and $a_0$ is the absolute floor. This matches the approved acceptance inequality $e_i\le a+rs_i$ and avoids treating low-amplitude interpolation samples as a separately maximized relative-error contract. Families 1–4 retain their exact frozen tolerances.
+- `production/tests/simple_pose_cont_refinement_calibration_helpers.f90` now records every comparison scale and maximum combined excess, writes both to the evidence tables, and derives only the reopened forward proposals with the combined rule. `production/tests/simple_pose_cont_refinement_calibration_test.f90` requires every observation to pass that combined proposal and requires the forward relative tolerance to remain at its predeclared floor. The correction is source-checked only; Oracle must rebuild and rerun Phase 4 before scientific review.
+
+**Corrected calibration review and freeze — 2026-08-30:**
+
+- Oracle package `~/Projects/pose_cont_revalidation_20260830_230740` completed with `POSE_CONT_REFINEMENT_TOLERANCE_CALIBRATION: PASS`. It reproduced the earlier raw maxima exactly and confirmed deterministic coverage under the combined rule. The package's `STATUS.txt` has a blank value because the interactive shell did not populate Bash's `PIPESTATUS` array; the executable's terminal PASS marker is present in the complete log and is the runtime result.
+- Scientific review accepts and freezes `executed_dft` at absolute tolerance $6.1319031142573850\times10^{-4}$ and relative tolerance $0.03$; `slow_gather` at $10^{-7}$ and $2\times10^{-5}$; and `finite_projection` at $10^{-5}$ and $0.05$. The safety factor remains eight. These thresholds cover the calibration domain without hiding the distinction between exact-grid identity evaluation and arbitrary-rotation interpolation.
+- Boxes $14^3$ and $18^3$ are frozen as the fresh Phase 8 forward holdouts after static review of their even indexing, full-disk populations of 149 and 253, and direct-DFT costs of 408,856 and 1,475,496 voxel terms per plane. They remain unsampled. Boxes $10^3$ and $16^3$ remain prior observed diagnostics and cannot become fresh acceptance evidence.
+- `production/tests/simple_pose_cont_refinement_calibration_helpers.f90` now contains the reviewed constants and emits `frozen_tolerances.tsv` plus `FORWARD_AMENDMENT.FROZEN`. `production/tests/simple_pose_cont_refinement_calibration_test.f90` requires the derived values to equal the frozen values exactly before emitting PASS. One Oracle rebuild and focused Phase 4 rerun must confirm this frozen source state before Phases 5 and 6 run.
+
+**Frozen-source Oracle confirmation — 2026-08-30:**
+
+- `~/Projects/pose_cont_revalidation_20260830_231612/phase4` completed with exit status `0`, emitted `POSE_CONT_REFINEMENT_FORWARD_AMENDMENT: FROZEN` and `POSE_CONT_REFINEMENT_TOLERANCE_CALIBRATION: PASS`, and wrote `FORWARD_AMENDMENT.FROZEN` plus `frozen_tolerances.tsv`.
+- The derived values equal the reviewed source constants exactly. The four calibration fixtures, four full-disk rotations, diagnostic boxes 10 and 16, and unsampled frozen holdouts 14 and 18 were all reported as declared. Phase 4 is complete; no holdout observation was used to set a threshold.
+
 **Prepare evidence — 2026-08-27:**
 
 - Added the seven-family tolerance registry, predeclared absolute, relative, and relative-scale floors,
@@ -922,15 +978,30 @@ The current inventory contains no orphaned Fortran test source under the old pre
   `codex_logs/pose_cont_20260826_144540_289/phase04/validate_20260827_141110_192.events.jsonl` and its
   sibling prompt and stderr files.
 
-Implement the disjoint calibration and acceptance fixtures, combined error metric, tolerance families, raw error tables, safety factor, and freeze marker defined under **Tolerance-calibration protocol**. Implement reusable oracle helpers, but do not run formal acceptance fixtures before tolerances are frozen.
+Preserve the completed calibration infrastructure and implement the approved forward-only amendment under **Tolerance-calibration protocol**. Expand only the executed-DFT, slow-gather, and finite-projection calibration domains; keep all other families and their evidence unchanged. Do not run fresh holdout fixtures before the amended forward tolerances are frozen.
 
-**Tests and reason:** run calibration boxes $8^3$ and $12^3$ with their dedicated asymmetric volumes, poses, CTFs, and variance profiles. Check deterministic repeatability and prove that acceptance boxes $10^3$ and $16^3$ and their fixtures are not sampled during calibration.
+**Tests and reason:** run boxes $8^3$ and $12^3$ over multiple predeclared arbitrary rotations and the full redundant disk, using the direct DFT, executed gather, slow gather, and matched finite-projection paths. Check deterministic repeatability, retain clipping/interpolation diagnostics, and prove that no fresh holdout fixture is constructed during calibration.
 
-**Gate:** every tolerance has a recorded floor, observed calibration maximum, derived value, justification, and immutable pre-acceptance marker. A loose result stops for diagnosis rather than becoming a threshold.
+**Gate:** each reopened tolerance has a recorded floor, full-domain calibration maximum, derived value, justification, and new immutable forward-amendment marker; the fresh holdout fixtures remain untouched. A loose result stops for diagnosis rather than becoming a threshold.
 
 ### Phase 5 — verify the weighted objective and normal equations
 
 **Status:** COMPLETE
+
+The existing explicit accumulator and Oracle evidence remain valid. Add a test-only BLAS oracle by stacking the real and imaginary residual/Jacobian components into a real design matrix and using BLAS for $A^Tb$ and $A^TA$. Compare the production fused accumulation, existing explicit Fortran loops, and BLAS results under the unchanged algebraic tolerance. Do not expose a new production BLAS API solely for this test, and do not treat BLAS accumulation as an independent oracle for the sampled Jacobian values themselves.
+
+**Revalidation gate:** the BLAS objective, gradient, and normal matrix agree componentwise with both retained paths under the unchanged frozen algebraic tolerance, and the existing Phase 5 evidence files remain reproducible with the additional BLAS columns or a separate BLAS table.
+
+**Local BLAS revalidation implementation — 2026-08-28:**
+
+- `production/tests/simple_pose_cont_refinement_objective_normals_test.f90:24` declares test-only `DDOT` and `DGEMM` interfaces. `blas_normal_terms` at line 294 stacks each active complex residual and five-column Jacobian into a real $2N\times5$ design matrix, calculates $\frac12b^Tb$, $A^Tb$, and $A^TA$, and verifies that all active full-disk samples were packed.
+- The unchanged production fused path and explicit scalar-loop oracle remain authoritative for sampled values. The BLAS path is only an additional accumulation oracle. `blas_normal_equations.tsv` records BLAS-versus-fused and BLAS-versus-explicit objective, gradient, and Hessian errors for every retained variance and pose case.
+- Lightweight source inspection is complete: the changed test contains no conflict markers or lines longer than 132 columns. No compilation or runtime evidence is claimed; the focused Oracle `objective_normals` run must demonstrate agreement under the unchanged algebraic tolerance.
+
+**BLAS Oracle validation — 2026-08-30:**
+
+- `~/Projects/pose_cont_revalidation_20260830_231612/phase5` completed with exit status `0` and `POSE_CONT_REFINEMENT_OBJECTIVE_NORMALS: PASS` over boxes 10 and 16, unit/constant/varying variance, and exact/nonstationary poses.
+- BLAS versus explicit accumulation differed by at most $1.3553\times10^{-20}$ in objective, $9.7579\times10^{-19}$ in gradient, and $2.4287\times10^{-17}$ in the normal matrix. BLAS versus the production fused path differed by at most $5.8488\times10^{-12}$, $1.1493\times10^{-10}$, and $2.4287\times10^{-17}$, respectively. All are comfortably within the unchanged algebraic contract. AC-1 and AC-2 remain satisfied with the additional structurally separate accumulation path.
 
 **Prepare evidence — 2026-08-27:**
 
@@ -1094,6 +1165,22 @@ Implement AC-1 and AC-2 under **Pose, prepared reference, and weighted objective
 ### Phase 6 — verify LM proposal and pose transactions
 
 **Status:** COMPLETE
+
+The existing production Cholesky and independent partial-pivot Gaussian evidence remain valid. Add a test-only LAPACK `DPOSV` solve for reliable positive-definite damped five-by-five systems and compare the scaled solution, physical step, residual, and backward error under the unchanged LM-system tolerance. Keep the existing classification tests authoritative for deliberately singular or unreliable systems; LAPACK success alone must not override SIMPLE's stricter reliability decision.
+
+**Revalidation gate:** every reliable system agrees across production Cholesky, pivoted Gaussian elimination, and LAPACK; the existing accepted/rejected decisions and complete-pose rollback contracts remain unchanged.
+
+**Local LAPACK revalidation implementation — 2026-08-28:**
+
+- `production/tests/simple_pose_cont_refinement_lm_transactions_test.f90:8` uses SIMPLE's existing `hermitian_solve` wrapper, whose real path calls LAPACK `DPOSV`. For each reliable positive-definite damped system, the test compares LAPACK's scaled solution, bounded physical step, residual, and backward error with the retained pivoted-Gaussian oracle and production proposal.
+- Deliberately singular and invalid systems continue to test SIMPLE's classification directly and do not use LAPACK success as an acceptance rule. The existing accepted/rejected gain-ratio decisions and complete-pose transaction checks are unchanged. `lm_systems.tsv` now records both independent backward errors and the LAPACK status.
+- Lightweight source inspection is complete: the changed test contains no conflict markers or lines longer than 132 columns. No compilation or runtime evidence is claimed; the focused Oracle `lm_transactions` run must pass under the unchanged LM-system tolerance.
+
+**LAPACK Oracle validation — 2026-08-30:**
+
+- `~/Projects/pose_cont_revalidation_20260830_231612/phase6` completed with exit status `0` and `POSE_CONT_REFINEMENT_LM_TRANSACTIONS: PASS`.
+- Reliable accepted, rejected, and bounded systems returned LAPACK `info=0`. LAPACK and pivoted-Gaussian backward errors were at most $2.1554\times10^{-17}$; accepted and rejected gain ratios remained 0.80 and 0.10. Singular and invalid systems remained nonaccepted without using LAPACK as a policy override.
+- Rejected, finite-no-improvement, singular, invalid, cumulative-bound, step-bound, and iteration-limit transactions retained rotation and shift exactly; the accepted transaction committed both fields. AC-3 and AC-4 remain satisfied with the additional LAPACK solve oracle.
 
 **Prepare evidence — 2026-08-27:**
 
@@ -1454,9 +1541,235 @@ Implement AC-6 under **Independent forward evidence and comparison contracts**.
 
 ### Phase 9 — run the complete configuration and regression matrix
 
-**Status:** NOT STARTED
+**Status:** COMPLETE
 
-Repeat the essential Phase 5–8 checks over both acceptance boxes, two Fourier ranges, three deterministic asymmetric volumes, all rotation axes, both shift signs, exact and nonstationary poses, and the approved CTF/variance matrix. Re-run the complete mother suite and all retained keyed diagnostics.
+**Oracle validation attempt 3 — 2026-08-31:**
+
+- The independent gate passed with Phases 0 through 8 `COMPLETE` and Phase 9
+  `READY FOR ORACLE VALIDATION`. `.codex/codex_exec_source_state.ps1` exited `0` and verified
+  `HEAD=26818001e0d3a6366fc89c471eae73defda9c815`, 1,512 files, and digest
+  `5D7F2F40C897CAC7D9F2FE028A0BB239C8A79A6420A7003DDB4434241D51958B` against the
+  reviewed prepare state. The local `origin/master` reference was
+  `9695e1d365893efdd42a6bab87be28da770c71e5`.
+- The approved `rsync -av --delete --info=progress2` command exited `0`, transferred 83 files,
+  sent 1,165,575 bytes, received 8,206 bytes, and reported no deletion. The approved remote
+  `.pl`/`.sh` line-ending normalization exited `0`. With `module load gcc/15.2.0`, the default
+  incremental logged `.codex/compile_debug.sh` command exited `0` and installed the Debug tree.
+  The conditional clean retry did not run. The compiler log is
+  `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`.
+- Every accepted runtime command changed to `~/Projects`, verified and SHA-256 hashed its exact
+  executable, kept the executable separate from its argument array, and wrote a manifest and
+  status to a new timestamped directory directly below `~/Projects`. The physical path reported by
+  `pwd -P` is `/usr/local/cache/mazhar/Projects` because `/home/hossainm7/Projects` is a symlink to
+  that directory. The pose executable SHA-256 was
+  `985e49be685323ddbdb508807993af247e5607eead859e25d895b1b2cc62256d`.
+- `case=configuration_matrix` exited `0` at
+  `~/Projects/continuous_3D_phase9_configuration_matrix_20260831_092706_252085861`. All 1,296
+  declared rows passed. The maximum exact objective, nonstationary objective, gradient norm, and
+  independent slow-gather error were `9.1551045002523813E-17`,
+  `1.8107989702240634E-05`, `5.6559335524945656E-04`, and
+  `1.2274658592878375E-08`. Every row had LM status `1`, two attempted steps, and two accepted
+  steps; maximum rotation step, shift step, and stencil switches were
+  `2.9133946403983715E-02`, `1.0219846935161689E-01`, and 120.
+- The pose mother suite exited `0` with five of five cases passed at
+  `~/Projects/continuous_3D_phase9_pose_mother_20260831_092745_275612034`. All retained keyed
+  diagnostics exited `0` and reported `PASS` or `EVIDENCE COMPLETE`: `fixed_reference`,
+  `forward_path`, `matched_window`, `reference_bias`, `operator_contract`, `pose_capture_range`,
+  `pose_capture_mechanism`, `tolerance_calibration`, `objective_normals`, `lm_transactions`,
+  `ctf_sigma`, and `forward_hierarchy`. The accepted quote-safe replacements for the four initial
+  malformed manifests are under the `forward_path_rerun2`, `matched_window_rerun2`,
+  `reference_bias_rerun2`, and `operator_contract_rerun2` directories recorded in the aggregate
+  results table below.
+- The capture-range rerun exited `0` at
+  `~/Projects/continuous_3D_phase9_pose_capture_range_rerun_20260831_093600_283802280`. Its 138
+  trials had zero integrity failures and 138 monotone traces; 137 trials accepted an improvement,
+  and the exact-pose trial correctly reported finite no improvement. The mechanism case exited `0`
+  for three volumes and five seed cases per volume at
+  `~/Projects/continuous_3D_phase9_pose_capture_mechanism_20260831_093638_608351994`.
+- The Cartesian mother exited `0` with two of two cases passed at
+  `~/Projects/continuous_3D_phase9_cartesian_mother_20260831_093834_318179652`. Its executable
+  SHA-256 was `fbd716047cb07b174b0fea30a1e0da90d1266131d99e638a0d9c2689524351e1`.
+  `simple_test_exec test=pcg_recon` and `test=pcg_priors` each exited `0` and reported normal stops
+  at the `pcg_recon_20260831_095547_975523090` and `pcg_priors_20260831_095708_274698396`
+  evidence directories.
+- The PCG mother executable SHA-256 was
+  `46a3ad531cfe242e1b4c2cd9ef16d9602a54a0f8472d2f1194aa491b03971769`. It exited `1` at
+  `~/Projects/continuous_3D_phase9_pcg_mother_20260831_093910_581603048` with the exact frozen
+  Phase 2 disposition: `volume_fixture` and `volume_noise` passed, only `halfset_fsc` failed, and
+  best lambda was 10 for both halves. Raw PCG L2 errors were `6.612755E-01` and `6.608928E-01`;
+  gridding L2 errors were `6.518738E-01` and `6.388823E-01`. This exact parity passes AC-12; the
+  known absolute reconstruction-quality issue remains outside Phase 9 and is not weakened.
+- Infrastructure failures are retained and are not SIMPLE results. The first capture-range attempt
+  exited `1` because its required evidence-directory variable was absent. A later `forward_path`
+  evidence repair exited `1` before SIMPLE execution because the fresh shell lacked the GCC 15.2
+  runtime and used the wrong argument form. Four successful initial keyed runs had malformed
+  manifest separators. Each affected scientific case was rerun in a new directory with the
+  documented module, SIMPLE environment, exact arguments, executable hash, manifest, and status.
+- The aggregate review package is
+  `~/Projects/continuous_3D_phase9_review_20260831_101729_565124385`. Its
+  `phase9_results.tsv`, `scientific_summary.txt`, `infrastructure_attempts.tsv`,
+  `path_checks.txt`, and `evidence_manifest.sha256` separate runtime, scientific, and infrastructure
+  evidence. Post-test checks exited `0`: neither `~/Projects/hael_SIMPLE-rsync-test` nor the unused
+  `~/Projects/SIMPLE` checkout contains a top-level `validation/`, `continuous_3D_matrix_volumes_*`,
+  or Phase 9 evidence directory. The current PCG matrix directory is
+  `~/Projects/continuous_3D_matrix_volumes_20260831_094044954` with 29 top-level files. No Phase 9
+  process remains active.
+- Source checks, synchronization, normalization, compilation, runtime completion, and scientific
+  review are `PASS`. AC-7, AC-8, AC-10, AC-11, and AC-12 pass without a result-driven metric,
+  fixture, or gate change. Local controller evidence is
+  `codex_logs/pose_cont_20260826_144540_289/phase09/validate_20260831_091844_976.events.jsonl`
+  with its sibling prompt and stderr records. Phase 9 is `COMPLETE`.
+
+**Rework prepare after interrupted Oracle validation attempt 2 — 2026-08-31:**
+
+- The independent gate passed with Phases 0 through 8 `COMPLETE` and Phase 9 `REWORK REQUIRED`.
+  The applicable policies are `doc/policies/KB_Interpolation_Policy.md` for padded coordinates and
+  normalized Kaiser-Bessel gathers, `doc/policies/reconstruct3D_pcg_policy.md` for reconstruction
+  ownership and ordinary PCG, `doc/policies/refine3D_policy.md` for pose and volume ownership,
+  `doc/policies/phase_shift_ctf_policy.md` for disabled, signed, and flipped CTF states, and
+  `doc/policies/sigma_calculation_policy.md` for positive native-shell variance and bounded
+  consumption. No UI policy applies.
+- The prepared-source state had to be renewed because the local `origin/master` reference moved to
+  `9695e1d365893efdd42a6bab87be28da770c71e5` after attempt 2. No rebase, merge, checkout, reset,
+  source correction, or controller-input edit was made. The Phase 9 implementation remains the
+  1,296-case configuration matrix at
+  `production/tests/simple_pose_cont_refinement_configuration_matrix_test.f90:38`, with the
+  corrected complex slow-gather value at the same file's line 175 and keyed dispatch at
+  `production/tests/simple_test_pose_cont_refinement.f90:215`.
+- Lightweight source checks are `PASS`. Path-limited `git diff --check` exited `0`; the Phase 9
+  sources have zero tab characters and zero conflict markers. The dispatch and slow-gather
+  declarations are present. `production/CMakeLists.txt` remains unchanged at SHA-256
+  `F850520E053180EA241C5B091D74C5358B87BFC118BA91E043BBA654059412EB`.
+- Attempt 2 compilation is prior evidence only. The current prepare turn does not compile or run a
+  SIMPLE executable. Runtime and scientific acceptance remain `NEEDS MORE TESTING` because the two
+  pose-capture statuses, the PCG status, and the two unexecuted `simple_test_exec` cases do not yet
+  have a complete, scientifically reviewed evidence package.
+- The next validation must invoke each retained test through an independently status-checked,
+  quote-safe boundary. It must keep the executable path separate from its argument list, verify
+  that the executable exists, hash that executable path before execution, quote each path and
+  argument, use local and braced shell variables when a helper is necessary, and record the actual
+  command exit status. A manifest or wrapper failure is infrastructure evidence, not a SIMPLE test
+  result. Preserve attempt-2 directories and put each rerun in a new timestamped directory directly
+  below `~/Projects`.
+- The approved UCRT64 environment check and exact `rsync -n` dry run are the final external checks
+  for this turn. The controller JSONL retains their complete output and exit status. No source or
+  controller-input change is permitted after the dry run, and no real synchronization,
+  normalization, compilation, runtime test, scientific acceptance test, or commit occurs.
+
+**Interrupted Oracle validation attempt 2 — 2026-08-31:**
+
+- Phase 8 was already `COMPLETE` at focused commit `26818001e`. Phase 9 synchronized and compiled, then launched the declared regression batch from `~/Projects`. The batch did not reach a scientifically reviewable completion state and no Phase 9 commit was made.
+- `configuration_matrix`, the pose mother, `fixed_reference`, `forward_path`, `matched_window`, `reference_bias`, `operator_contract`, `tolerance_calibration`, `objective_normals`, `lm_transactions`, `ctf_sigma`, `forward_hierarchy`, and the Cartesian mother returned status `0`. These runtime statuses remain provisional until the complete Phase 9 evidence package and manifests are repaired and reviewed.
+- `pose_capture_range` and `pose_capture_mechanism` returned status `1`. Their logs were not retrieved before the connection failure, so their scientific meaning is `NEEDS MORE TESTING`, not an accepted regression failure.
+- The PCG mother returned its known status `1`. Its best-lambda and both half-set error tables were not compared with the frozen Phase 2 disposition before the turn ended, so AC-12 remains `NEEDS MORE TESTING`.
+- `simple_test_exec test=pcg_recon` and `simple_test_exec test=pcg_priors` returned status `127` without running. The ad hoc shell helper passed unquoted manifest arguments and allowed its `executable` variable to be overwritten by `test=...`. Several evidence-directory labels were also lost through unbraced shell-variable expansion. These are validation-harness defects; they are not SIMPLE test results.
+- The final read-only log inspection failed with SSH status `255` because the Oracle hostname could not be resolved. The Codex websocket then disconnected before a final report, phase decision, evidence-location audit, or focused commit could be produced.
+- The saved Phase 9 prepared-source state is stale because the local `origin/master` reference moved from `c2b419ad3a521588d152b8b43335b8488c905957` to `9695e1d365893efdd42a6bab87be28da770c71e5`. Do not rebase during this phase. A fresh prepare turn must record the current source and Git refs, run a new exact rsync dry run, and then repeat Phase 9 validation.
+- The next validation must run each retained test through a quote-safe command boundary. Use distinct local shell variables, brace variable names adjacent to underscores, quote every path and argument, verify and hash the executable path before execution, and record each command's actual exit status. Do not use one mutable helper variable for both an executable path and its arguments. Preserve the incomplete attempt-2 directories as historical evidence; write all reruns to new timestamped directories directly below `~/Projects`.
+
+**Rework prepare after Oracle validation attempt 1 — 2026-08-31:**
+
+- The independent gate passed with Phases 0 through 8 `COMPLETE` and Phase 9 `REWORK REQUIRED`.
+  The applicable policies remain `doc/policies/KB_Interpolation_Policy.md`,
+  `doc/policies/reconstruct3D_pcg_policy.md`, `doc/policies/refine3D_policy.md`,
+  `doc/policies/phase_shift_ctf_policy.md`, and `doc/policies/sigma_calculation_policy.md` for the
+  same interpolation, PCG ownership, pose ownership, CTF, and positive-variance contracts recorded
+  below. No UI policy applies.
+- Verified the validation-attempt correction at
+  `production/tests/simple_pose_cont_refinement_configuration_matrix_test.f90:175`. The corrected
+  `complex(dp)` declaration now matches the `sample_fourier_slow_test` output at
+  `src/main/volume/simple_cartesian_pose_refiner.f90:389`. The single-precision production gather,
+  derivative, phase, and observation are unchanged. No additional source change was required.
+- Lightweight source checks are `PASS`. Path-limited `git diff --check` exited `0`; the Phase 9
+  matrix source has zero lines longer than 132 columns, zero tab characters, zero conflict markers,
+  and zero multiline diagnostic-macro hazards. The keyed dispatch remains present, and
+  `production/CMakeLists.txt` remains unchanged at SHA-256
+  `F850520E053180EA241C5B091D74C5358B87BFC118BA91E043BBA654059412EB`.
+- The declaration-only correction changes no module, procedure, or dependency symbol, so the
+  Phase 9 generated code map and Fortran indexes remain current. Compilation and all runtime and
+  scientific gates remain `NEEDS MORE TESTING`; prepare turns do not compile or execute SIMPLE.
+- The approved UCRT64 environment check and exact `rsync -n` dry run are the final external checks
+  for this turn. The controller JSONL retains their complete output and exit status. No source or
+  controller-input change is permitted after the dry run, and no real synchronization,
+  normalization, compilation, runtime test, scientific acceptance test, or commit occurs.
+
+**Oracle validation attempt 1 — 2026-08-31:**
+
+- The prepared-source fingerprint gate passed. Phases 0 through 8 were `COMPLETE`, Phase 9 was
+  `READY FOR ORACLE VALIDATION`, and `.codex/codex_exec_source_state.ps1` verified source digest
+  `468669D7100E2C0766B19DBA32F2213D56C5581D72FC4FA82C2E55056E1D1B04` with exit status `0`.
+- The approved real `rsync -av --delete` exited `0`. It transferred 89 files and 5,542,303 bytes to
+  `~/Projects/hael_SIMPLE-rsync-test`, with no deletion. The five transfers added after the prepare dry
+  run were the active Phase 9 controller records. The approved remote `.pl`/`.sh` line-ending
+  normalization exited `0` after one local PowerShell quoting attempt failed before SSH execution.
+- The default incremental GCC 15.2.0 Debug compilation exited `2`. The authoritative compiler log is
+  `~/Projects/hael_SIMPLE-rsync-test/build/build_debug.log`. GCC diagnosed a kind mismatch at the
+  `sample_slow_test` call: the test supplied default `complex`, but the frozen slow gather returns
+  `complex(dp)`. A clean build cannot change this source-level mismatch, so the conditional clean retry
+  was not used.
+- Corrected only the local Phase 9 test declaration so `slow_value` has `complex(dp)` at
+  `production/tests/simple_pose_cont_refinement_configuration_matrix_test.f90:175`. This correction
+  matches `sample_fourier_slow_test` in `src/main/volume/simple_cartesian_pose_refiner.f90`; the
+  single-precision production gather value, derivative, phase, and observation remain unchanged.
+- No runtime test or scientific gate ran after the compilation failure. Compilation is `FAIL`; runtime
+  and AC-7, AC-8, AC-10, AC-11, and AC-12 are `NEEDS MORE TESTING`. The safe next action is a new
+  Phase 9 prepare turn, which must source-check this correction and review a new rsync dry run before a
+  second validation transfer.
+
+**Prepare implementation — 2026-08-31:**
+
+- The independent gate passed with Phases 0 through 8 `COMPLETE` and Phase 9 `NOT STARTED`.
+  Applicable policies are `doc/policies/KB_Interpolation_Policy.md` for padded coordinates, normalized
+  KB gather, and `padf^3` scaling; `doc/policies/reconstruct3D_pcg_policy.md` for the full redundant disk,
+  immutable ordinary-PCG numerical contract, and reconstruction-only ownership; `doc/policies/refine3D_policy.md`
+  for particle-pose versus volume ownership; `doc/policies/phase_shift_ctf_policy.md` for signed, phase-flipped,
+  and disabled CTF application with stored numerical phase; and `doc/policies/sigma_calculation_policy.md` for
+  positive native-shell variance and bounded consumption. No UI policy applies because Phase 9 adds no command,
+  option, or production caller.
+- Added the keyed `case=configuration_matrix` at
+  `production/tests/simple_pose_cont_refinement_configuration_matrix_test.f90:38` and dispatched it from
+  `production/tests/simple_test_pose_cont_refinement.f90:20,215`. The established five-case mother schedule is
+  unchanged. The filename matches the existing dependency glob at `production/CMakeLists.txt:200`; the protected
+  build file remains unchanged.
+- The frozen matrix has boxes 10, 14, 16, and 18; three deterministic asymmetric physical volumes; all three
+  rotation axes; both shift signs; exact and nonstationary pose evaluations; disabled, signed, and phase-flipped
+  CTF modes; constant, varying, and short positive native-shell variance; and full-disk and interior Fourier
+  ranges. It executes 1,296 declared combinations and writes one row per combination plus a dimension manifest.
+  Fixture construction is at
+  `production/tests/simple_pose_cont_refinement_configuration_matrix_test.f90:133`.
+- Each configuration prepares the production CTF/noise components, requires a finite exact-pose and
+  nonstationary objective, applies the frozen exact-pose algebraic rule, and runs the production prepared LM path
+  for up to two attempts. The accepted objective trace must be finite and monotone, and invalid-numerics status is
+  prohibited (`production/tests/simple_pose_cont_refinement_configuration_matrix_test.f90:286,302`). The executed
+  gather is also compared componentwise with the structurally separate slow gather under frozen family 6 for each
+  box, morphology, and rotation axis at line 167.
+- The configuration case retains `configuration_matrix.tsv` and `configuration_matrix_manifest.tsv` before its
+  final 1,296-row assertion (`production/tests/simple_pose_cont_refinement_configuration_matrix_test.f90:322`).
+  The focused hypothesis is that no box, range, morphology, packing, pose sign, CTF mode, or variance extent
+  changes the frozen prepared-objective, slow-gather, or LM transaction contracts.
+- Oracle validation must run from `~/Projects` with each command writing to a new timestamped evidence package
+  directly below `~/Projects`. Run `case=configuration_matrix`, the default pose mother suite, and every retained
+  keyed case: `fixed_reference`, `forward_path`, `matched_window`, `reference_bias`, `operator_contract`,
+  `pose_capture_range`, `pose_capture_mechanism`, `tolerance_calibration`, `objective_normals`, `lm_transactions`,
+  `ctf_sigma`, and `forward_hierarchy`. Also run `simple_test_cartesian_fourier`,
+  `simple_test_continuous_3D_pcg_reconstruction`, `simple_test_exec test=pcg_recon`, and
+  `simple_test_exec test=pcg_priors`. The known `halfset_fsc` absolute reconstruction failure must retain the exact
+  Phase 2 scientific-owner disposition; any different PCG result is blocking.
+- Regenerated `doc/code_overview/code_base_map.md` and all six Fortran indexes. Both restricted MSYS2 Perl
+  invocations failed before script execution with Win32 `CreateFileMapping` error 5; each exact elevated retry
+  exited `0`. The code map lists the new module at `doc/code_overview/code_base_map.md:40`.
+- Lightweight source checks are `PASS`. Path-limited `git diff --check` exited `0`; both Phase 9 Fortran files have
+  zero lines longer than 132 columns, zero tab characters, and zero conflict markers. Static ownership searches
+  find the pose owner only in its defining production module and test sources, with no production caller or
+  user-visible activation. `production/CMakeLists.txt` remains unchanged at SHA-256
+  `F850520E053180EA241C5B091D74C5358B87BFC118BA91E043BBA654059412EB`.
+- Compilation, runtime completion, AC-7, AC-8, AC-10, AC-11, and AC-12 scientific acceptance remain
+  `NEEDS MORE TESTING`. The exact approved rsync dry run is the final operation of this prepare turn. Its complete
+  output and exit status remain in the controller JSONL record. No source or controller-input change is permitted
+  after the dry run. No real synchronization, normalization, compilation, runtime test, scientific acceptance
+  test, or commit occurs in this prepare turn.
+
+Repeat the essential Phase 5–8 checks over the fresh holdout boxes plus the retained box-$10^3$/box-$16^3$ diagnostics, two Fourier ranges, three deterministic asymmetric volumes, all rotation axes, both shift signs, exact and nonstationary poses, and the approved CTF/variance matrix. Re-run the complete mother suite and all retained keyed diagnostics.
 
 **Tests and reason:** this phase detects hidden box, range, symmetry, morphology, packing, and configuration dependencies and rechecks ordinary PCG after every extraction and deletion is complete.
 
@@ -1497,5 +1810,8 @@ The deterministic `halfset_fsc` comparison fails identically in unchanged `origi
 - **2026-08-26:** the local persistent-session runner was updated to this living note and statically validated. It enforces Phases 2-11, separate prepare/validate turns, explicit Oracle approvals, post-turn phase gates, no prepare-turn commit, and exactly one focused local commit after a successful validate turn. No agent phase or external operation was run.
 - **2026-08-26:** the first attempted Phase 2 prepare launch stopped before session creation because Codex CLI rejected the simultaneous `-s workspace-write` and `--approve-for-me` options. The runner was aligned with the working RELION controller by retaining `--approve-for-me` and removing the conflicting explicit sandbox option. No source edit, rsync, compilation, runtime test, or phase-status change occurred; Phase 2 remains `NOT STARTED`.
 - **2026-08-27:** Phase 2 completed by scientific-owner decision after the matched A/B showed that neutral extraction preserved the decisive PCG reconstruction behavior. The unchanged control and Phase 2 arm both retain the same unresolved absolute `halfset_fsc` PCG-versus-gridding failure; that reconstruction issue is recorded separately and does not authorize a continuous-pose metric, fixture, or threshold change. Phase 3 will split and rename the tests under `pose_cont_refinement`, neutral Cartesian-Fourier, and explicit PCG-reconstruction owners.
+- **2026-08-28:** Phase 8's 25/28 result showed that the original identity/four-mode forward calibration did not cover the arbitrary-rotation full-disk acceptance domain. Scientific review reopened only `executed_dft`, `slow_gather`, and `finite_projection`; approved a matched finite-object projection contract and separate clipping/interpolation diagnostics; retained boxes 10 and 16 as observed diagnostics; and authorized Phase 5 BLAS and Phase 6 LAPACK reinforcement under their unchanged tolerances.
+- **2026-08-28:** The reopened Phase 4 source now proposes full-disk, four-rotation calibration over two asymmetric volumes at boxes 8 and 12, with matched finite-object projection comparison and separate clipping/interpolation diagnostics. Phase 5 adds a direct BLAS accumulation oracle, and Phase 6 adds a LAPACK `DPOSV` solve oracle. Static inspection passed; compilation, runtime, tolerance freezing, and fresh holdout acceptance remain pending. Phase 8 is the handoff boundary.
+- **2026-08-30:** Oracle package `pose_cont_revalidation_20260830_231612` confirmed the frozen forward amendment and passed the BLAS and LAPACK revalidations with all three exit statuses equal to zero. Focused commit `8d619aaee` records the Phase 4–6 implementation. Phase 8 is ready for rework on fresh boxes 14 and 18 under the explicit handoff above.
 
-Implementation is authorized only in phase order beginning with Phase 2. A failed gate stops later phases, and any requirement-changing discovery returns the contract to IN REVIEW.
+Implementation now resumes with the Phase 8 prepare turn. A failed gate stops later phases. The agent must implement the frozen fresh-holdout and matched finite-object contract before Oracle validation; Phase 9 remains prohibited until AC-6 passes.

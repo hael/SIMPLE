@@ -17,6 +17,7 @@ use pose_cont_refinement_objective_normals_test, only: run_objective_normals
 use pose_cont_refinement_lm_transactions_test, only: run_lm_transactions
 use pose_cont_refinement_ctf_sigma_test, only: run_ctf_sigma
 use pose_cont_refinement_forward_hierarchy_test, only: run_forward_hierarchy
+use pose_cont_refinement_configuration_matrix_test, only: run_configuration_matrix
 implicit none
 
 character(len=256) :: selected_case
@@ -211,6 +212,8 @@ subroutine run_case(label)
         call run_ctf_sigma()
     case('forward_hierarchy')
         call run_forward_hierarchy()
+    case('configuration_matrix')
+        call run_configuration_matrix()
     case default
         error stop 'unknown continuous 3D pose refinement case: '//trim(label)
     end select

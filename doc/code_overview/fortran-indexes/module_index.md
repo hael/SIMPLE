@@ -4505,26 +4505,35 @@ Uses:
 Public symbols:
 - `cartesian_pose_data` — type
 - `cartesian_pose_refiner` — type
+- `pose_lm_system_test` — subroutine
+- `pose_lm_transaction_test` — subroutine
 - `right_increment_rotation` — function
 
 Private symbols:
 - `apply_pose_parameter_mask` — subroutine
+- `build_pose_lm_system` — subroutine
 - `count_stencil_switches` — function
 - `get_fourier_workspace_lims2` — function
 - `kill_fourier_workspace` — subroutine
 - `load_pose_reference` — subroutine
 - `new_pose_refiner` — subroutine
 - `new_pose_refiner_prepared_test` — subroutine
+- `pose_data_copy_components_test` — subroutine
+- `pose_data_get_requested_shell_range` — function
 - `pose_data_get_shell_range` — function
 - `pose_normal_terms` — subroutine
 - `pose_objective_gradient` — subroutine
 - `prepare_pose_particle` — subroutine
+- `prepared_pose_normal_terms_test` — subroutine
 - `prepared_pose_objective_gradient` — subroutine
+- `prepared_pose_residual_jacobian_test` — subroutine
 - `refine_pose_lm` — subroutine
 - `refine_prepared_pose_lm` — subroutine
 - `refine_shift_lm` — subroutine
 - `rotation_jvp` — subroutine
+- `sample_fourier_slow_test` — subroutine
 - `sample_fourier_with_grad` — subroutine
+- `select_pose_lm_transaction` — subroutine
 - `set_fourier_workspace_shell_range` — subroutine
 - `shift_jhz` — subroutine
 - `shift_jvp` — subroutine
