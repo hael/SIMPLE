@@ -396,8 +396,11 @@ subroutine new_automask( prgtab )
         & for particle matching', 'input starting volume e.g. vol.mrc', .false., '', &
         &visibility=UI_VIS_ADVANCED)
         ! parameter input/output
-        ! <no additional inputs>
-        ! <empty>
+        call refine3D_auto%add_input(UI_PARM, 'rec_backend', 'multi', 'Reconstruction backend', &
+        &'Reconstruction backend for per-iteration half-map assembly, forwarded to the refine3D child and the '//&
+        &'bootstrap/final reconstructions(gridding|pcg){gridding}', &
+        &'', .false., 'gridding', group="search", &
+        &choices=ui_choices([character(len=8) :: 'gridding', 'pcg']), visibility=UI_VIS_ADVANCED)
         ! search controls
         call refine3D_auto%add_input(UI_SRCH, maxits,      required_override=.false., group="search", &
         &visibility=UI_VIS_ADVANCED)
@@ -447,6 +450,25 @@ subroutine new_automask( prgtab )
         & 'Allow one high-resolution nonuniform-filter bank expansion per refinement iteration(yes|no){yes}','', .false., 'yes', group="filter", &
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
+        call refine3D_auto%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
+        &'Maximum kernel PCG iterations; independent of the outer refinement iteration budget', 'iterations{2}', &
+        &.false., 2., group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call refine3D_auto%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
+        &'Direct NU-evidence replay precision strength relative to the PCG data scale, forwarded to the refine3D '//&
+        &'child (the bootstrap/final cc reconstructions run unregularized); when positive the regularized replay '//&
+        &'derives graded band-support evidence from the current base half pair and attaches Q_NU INSTEAD of the '//&
+        &'FSC/SSNR P_tau (mode-exclusive); default 0.1 when NU filtering and euclid ml_reg are active, explicit 0 '//&
+        &'restores the ordinary global-ML replay', &
+        &'strength{0.1 in NU mode}', .false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call refine3D_auto%add_input(UI_FILT, 'pcg_nu_supp_target', 'num', 'PCG NU prior suppression setpoint', &
+        &'Prior-energy suppression setpoint (%) tracked by the auto-lambda controller in the refine3D child; when '//&
+        &'left unset the AIMD auto-target outer loop adapts the setpoint per dataset from the shipped-pair '//&
+        &'FSC=0.143 trajectory (cold start 15%), while an explicit value in [5,75] pins it; requires the '//&
+        &'auto-lambda controller (unset pcg_nu_lambda_rel)', 'percent{auto in NU mode}', &
+        &.false., 0.0, group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D_auto%add_input(UI_FILT, envfsc, group="filter", &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_FILT, envmsklp, group="filter", &

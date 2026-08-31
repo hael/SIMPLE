@@ -2432,6 +2432,36 @@ the acceptable-looking outputs do not validate the prior.
      recover the ~3.9 A pinned-lambda result; (iii) msp1 -- expect the
      setpoint to ratchet toward its known-good ~60% while shipped
      pairs improve, with no regression vs the fixed-60% runs.
+
+   **FINAL-RECONSTRUCTION Q_NU POLICY (2026-08-31, user-directed).**
+   The original-sampling final reconstructions of abinitio3D and
+   refine3D_auto previously dropped the PCG backend and its prior
+   entirely (abinitio3D: `prep_final_rec_cline` rebuilt the child line
+   without `rec_backend`, shipping a gridding P_tau final map;
+   refine3D_auto: a plain unregularized objfun=cc rec3D). The
+   objfun=cc passes exist for sigma availability -- registration-box
+   sigmas are crop-incompatible at the final box, which is exactly
+   what `bootstrap_rec3D` solves (cc pass -> half-map sigma
+   derivation -> euclid ML pass). Policy now: **the final map is
+   reconstructed on the refinement's backend, and on pcg the Q_NU
+   replay regularizes it in-solve.** Implementation:
+   - `bootstrap_rec3D` strips the Q_NU keys off its unregularized
+     sigma pass (no ml_reg, activation contract) and lets them and
+     filt_mode flow into the regularized pass.
+   - abinitio3D `prep_final_rec_cline` forwards
+     rec_backend/maxits_pcg/rtol and, when the final stage uses
+     ml_reg, sets filt_mode=nonuniform and forwards the pinning keys.
+   - refine3D_auto's final rec now runs `bootstrap_rec3D` (previously
+     unregularized cc), with bootstrap sigmas written at endit+2 so no
+     crop-box sigma star is overwritten, and the same pcg/Q_NU
+     forwarding.
+   - Strength continuity: with auto-lambda active the final rec's
+     `resolve_nu_autolambda` reads the `PCG_NU_STATS_FILE` the last
+     refinement iteration persisted in the run directory, so the
+     final map is regularized at the CONVERGED lambda (lambda_rel is
+     data-scale-relative and transfers across the crop->native box
+     change); a missing stats file falls back to the 0.1 cold start.
+     Explicit keys pin as usual.
 3. **Test nu_refine=yes with rec_backend=pcg in abinitio3D.** The
    nu_refine=no rationale was gridding-specific (the ML-regularized aux
    competitor supplied beyond-bank resolution implicitly,

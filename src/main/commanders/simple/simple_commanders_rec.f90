@@ -139,6 +139,9 @@ contains
                 call cline_rec%delete('vol'//int2str(state))
             enddo
             if( l_regularized )then
+                ! the Q_NU keys (pcg_nu_lambda_rel/pcg_nu_supp_target) and
+                ! filt_mode flow through: on the pcg backend with NU filtering
+                ! the regularized pass runs the direct NU-evidence replay
                 call cline_rec%set('objfun', 'euclid')
                 call cline_rec%set('ml_reg',    'yes')
             else
@@ -147,6 +150,11 @@ contains
                 call cline_rec%set('postprocess',  'no')
                 call cline_rec%set('filt_mode',    'none')
                 call cline_rec%set('automsk',      'no')
+                ! no euclid ML replay in the unregularized pass, so the Q_NU
+                ! prior cannot engage; strip its keys or the PCG validator
+                ! hard-errors on the explicit-activation contract
+                call cline_rec%delete('pcg_nu_lambda_rel')
+                call cline_rec%delete('pcg_nu_supp_target')
             endif
         end subroutine prepare_bootstrap_rec_cline
 

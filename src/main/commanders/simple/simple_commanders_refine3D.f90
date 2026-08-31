@@ -64,6 +64,7 @@ contains
         use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, NU_DEV_OUTPUT, &
             &extend_nu_filter_highres_shells, write_nu_local_resolution_map
+        use simple_commanders_rec, only: commander_bootstrap_rec3D
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D
@@ -84,8 +85,9 @@ contains
         logical :: l_autoscale, l_have_init_vol, l_maxits_defined
         logical :: l_external_input, l_ref_pose_init_requested
         ! commanders
-        type(commander_rec3D)    :: xrec3D
-        type(commander_refine3D) :: xrefine3D
+        type(commander_rec3D)           :: xrec3D
+        type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
+        type(commander_refine3D)        :: xrefine3D
         maxits_user      = 0
         l_external_input = cline%defined('vol1')
         ! hard defaults
@@ -222,6 +224,14 @@ contains
         call cline_rec3D%set('objfun', 'cc') ! ugly, but this is how it works in parameters
         call cline_rec3D%set('postprocess', 'no')
         call cline_rec3D%set('nu_refine', 'no')
+        ! the initial bootstrap reconstruction runs objfun=cc, so the Q_NU
+        ! replay cannot engage there: strip the pinning keys or the PCG
+        ! validator hard-errors on the explicit-activation contract
+        ! (pcg_priors.md S6.2). The final reconstruction re-forwards them
+        ! explicitly below, where its regularized bootstrap pass can honor
+        ! them.
+        call cline_rec3D%delete('pcg_nu_lambda_rel')
+        call cline_rec3D%delete('pcg_nu_supp_target')
         if( l_have_init_vol ) call prepare_nu_bootstrap_refs_from_raw_halves()
         if( l_have_init_vol )then
             call cline%set('vol1', init_vol)
@@ -234,15 +244,43 @@ contains
         call cline%set('prg',                   'refine3D')
         call cline%set('maxits',             params%maxits)
         call xrefine3D%execute(cline)
-        ! re-reconstruct from all particle images
+        ! re-reconstruct from all particle images at original sampling: the
+        ! refinement sigmas are crop-box incompatible, so bootstrap_rec3D
+        ! derives compatible sigmas from an unregularized pass and ships a
+        ! euclid ML-regularized final map -- with the Q_NU replay in-solve
+        ! on the pcg backend
+        call cline_rec3D%set('prg', 'bootstrap_rec3D')
         call cline_rec3D%set('outfile', 'RESOLUTION_FINAL.txt')
         call cline_rec3D%set('postprocess', 'yes')
+        call cline_rec3D%delete('objfun') ! bootstrap_rec3D owns objfun/ml_reg per pass
+        call cline_rec3D%delete('ml_reg')
+        if( cline%defined('endit') )then
+            ! write bootstrap sigmas beyond the refinement's own iterations
+            ! so no crop-box sigma star is overwritten
+            call cline_rec3D%set('which_iter', cline%get_iarg('endit') + 2)
+        else
+            call cline_rec3D%set('which_iter', MAXITS_REFINE3D_AUTO_CAP + 2)
+        endif
         if( params%l_nonuniform )then
-            call cline_rec3D%set('filt_mode', 'none')
+            if( trim(params%rec_backend) == 'pcg' )then
+                ! keep the NU machinery: the Q_NU prior regularizes the final
+                ! map in-solve (post-hoc NU filtering is bypassed); the
+                ! auto-lambda controller resumes from the stats file the last
+                ! refinement iteration persisted in this directory, so the
+                ! final rec runs at the converged strength -- explicit keys
+                ! pin as usual
+                call cline_rec3D%set('filt_mode', 'nonuniform')
+                if( cline%defined('pcg_nu_lambda_rel') )&
+                    &call cline_rec3D%set('pcg_nu_lambda_rel', cline%get_rarg('pcg_nu_lambda_rel'))
+                if( cline%defined('pcg_nu_supp_target') )&
+                    &call cline_rec3D%set('pcg_nu_supp_target', cline%get_rarg('pcg_nu_supp_target'))
+            else
+                call cline_rec3D%set('filt_mode', 'none')
+            endif
             call cline_rec3D%set('automsk', 'no')
         endif
         call cline_rec3D%set('nu_refine', 'no')
-        call xrec3D%execute(cline_rec3D)
+        call xbootstrap_rec3D%execute(cline_rec3D)
         call params_final_rec%new(cline_rec3D)
         params_final_rec%box  = params%box
         params_final_rec%smpd = params%smpd

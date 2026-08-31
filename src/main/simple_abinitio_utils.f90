@@ -965,6 +965,29 @@ contains
                     call child_cline%set('objfun', 'cc')
                     call child_cline%set('ml_reg', 'no')
                 endif
+                ! PCG backend continuity: the final reconstruction runs on the
+                ! same backend as the refinement, and with the euclid ML replay
+                ! active the Q_NU prior regularizes the final map in-solve
+                ! (filt_mode=nonuniform selects the NU machinery; the
+                ! auto-lambda controller then resumes from the stats file the
+                ! last refinement iteration persisted in this directory, so
+                ! the final rec runs at the converged strength -- explicit
+                ! keys pin as usual, and bootstrap_rec3D strips the Q_NU keys
+                ! off its unregularized sigma pass itself)
+                if( trim(params%rec_backend) == 'pcg' )then
+                    call child_cline%set('rec_backend', 'pcg')
+                    if( cline_refine3D%defined('maxits_pcg') )&
+                        &call child_cline%set('maxits_pcg', cline_refine3D%get_iarg('maxits_pcg'))
+                    if( cline_refine3D%defined('rtol') )&
+                        &call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
+                    if( final_stage_uses_ml_reg() )then
+                        call child_cline%set('filt_mode', 'nonuniform')
+                        if( cline_refine3D%defined('pcg_nu_lambda_rel') )&
+                            &call child_cline%set('pcg_nu_lambda_rel', cline_refine3D%get_rarg('pcg_nu_lambda_rel'))
+                        if( cline_refine3D%defined('pcg_nu_supp_target') )&
+                            &call child_cline%set('pcg_nu_supp_target', cline_refine3D%get_rarg('pcg_nu_supp_target'))
+                    endif
+                endif
             end subroutine prep_final_rec_cline
 
             logical function final_stage_uses_ml_reg() result( l_ml_reg )
