@@ -113,23 +113,35 @@ subroutine exec_test_simulate_nanoparticle( self, cline )
 end subroutine exec_test_simulate_nanoparticle
 
 subroutine exec_test_single_workflow( self, cline )
-    use simple_commanders_sim,          only: commander_simulate_nanoparticle, commander_simulate_particles
+    use single_commanders_nano2D,       only: commander_analysis2D_nano
+    use simple_commanders_sim,          only: commander_simulate_nanoparticle
     use simple_commanders_reproject,    only: commander_reproject
-    use single_commanders_trajectory,   only: commander_import_trajectory
+    use simple_commanders_stkops,       only: commander_stackops
+    use single_commanders_trajectory,   only: commander_trajectory_denoise
+    use simple_commanders_project_ptcl, only: commander_import_particles
     use simple_commanders_project_core, only: commander_new_project
     use single_commanders_nano3D,       only: commander_autorefine3D_nano
     class(commander_test_single_workflow), intent(inout) :: self
     class(cmdline),                        intent(inout) :: cline
-    type(cmdline)                         :: cline_sim, cline_simptcls, cline_nproj, cline_imptrj, cline_aref3Dnano
+    type(cmdline)                         :: cline_sim, cline_reproject, cline_trajectory, cline_denoise
+    type(cmdline)                         :: cline_nproj, cline_imptcls, cline_an2Dnano, cline_aref3Dnano
     type(parameters)                      :: params
     type(commander_simulate_nanoparticle) :: xsim_nptcl
-    type(commander_reproject)             :: xsim_ptcls
-    !type(commander_simulate_particles)    :: xsim_ptcls
-    type(commander_import_trajectory)     :: ximptrj
+    type(commander_reproject)             :: xreproject
+    type(commander_stackops)              :: xtrajectory
+    type(commander_trajectory_denoise)    :: xdenoise
     type(commander_new_project)           :: xnproj
+    type(commander_import_particles)      :: ximptcls
+    type(commander_analysis2D_nano)       :: xan2Dnano
     type(commander_autorefine3D_nano)     :: xaref3Dnano
     type(string)                          :: projname, projfile
-    integer, parameter                    :: NPTCLS_SIM = 10000, MASKDIAM = 40
+    character(len=*), parameter           :: REPROJECTIONS_STK = 'reprojections.mrc'
+    character(len=*), parameter           :: TRAJECTORY_STK    = 'simulated_trajectory.mrc'
+    character(len=*), parameter           :: DENOISED_STK      = 'denoised_trajectory.mrc'
+    character(len=*), parameter           :: TRAJECTORY_ORITAB = 'glc_trajectory_oris.txt'
+    integer,          parameter           :: NREPROJS = 5000, MASKDIAM = 40
+    integer,          parameter           :: NFRAMES_PER_GROUP = 50
+    real,             parameter           :: TRAJECTORY_SNR    = 0.2
     write(logfhandle,'(a)') '>>> TEST_SINGLE_WORKFLOW:'
     projname = 'test_single_workflow'
     call params%new(cline)
@@ -141,38 +153,58 @@ subroutine exec_test_single_workflow( self, cline )
     call cline_sim%set('nthr',                                 NTHR)
     call xsim_nptcl%execute(cline_sim)
 
-    call cline_simptcls%set('prg',                      'reproject')
-    call cline_simptcls%set('pgrp',                            'c1')
-    call cline_simptcls%set('vol1',                    'outvol.mrc')
-    call cline_simptcls%set('smpd',                     params%smpd)
-    call cline_simptcls%set('nspace',                    NPTCLS_SIM)
-    call cline_simptcls%set('mskdiam',                           20)
-    call cline_simptcls%set('outstk',     'simulated_particles.mrc')
-    call cline_simptcls%set('nthr',                            NTHR)
-    call xsim_ptcls%execute(cline_simptcls)
+    call make_glc_trajectory_oris(TRAJECTORY_ORITAB, NREPROJS, NFRAMES_PER_GROUP)
+    call cline_reproject%set('prg',                     'reproject')
+    call cline_reproject%set('pgrp',                           'c1')
+    call cline_reproject%set('vol1',                   'outvol.mrc')
+    call cline_reproject%set('smpd',                    params%smpd)
+    call cline_reproject%set('oritab',            TRAJECTORY_ORITAB)
+    call cline_reproject%set('mskdiam',                          20)
+    call cline_reproject%set('outstk',            REPROJECTIONS_STK)
+    call cline_reproject%set('nthr',                           NTHR)
+    call xreproject%execute(cline_reproject)
 
-    ! call cline_simptcls%set('prg',             'simulate_particles')
-    ! call cline_simptcls%set('vol1',                    'outvol.mrc')
-    ! call cline_simptcls%set('smpd',                     params%smpd)
-    ! call cline_simptcls%set('nthr',                            NTHR)
-    ! call cline_simptcls%set('nptcls',                    NPTCLS_SIM)
-    ! call cline_simptcls%set('pgrp',                            'c1')
-    ! call cline_simptcls%set('snr',                              0.2)
-    ! call cline_simptcls%set('ctf',                             'no')
-    ! call xsim_ptcls%execute(cline_simptcls)
+    call cline_trajectory%set('prg',                     'stackops')
+    call cline_trajectory%set('mkdir',                         'no')
+    call cline_trajectory%set('stk',              REPROJECTIONS_STK)
+    call cline_trajectory%set('outstk',              TRAJECTORY_STK)
+    call cline_trajectory%set('smpd',                   params%smpd)
+    call cline_trajectory%set('snr',                 TRAJECTORY_SNR)
+    call cline_trajectory%set('nthr',                          NTHR)
+    call xtrajectory%execute(cline_trajectory)
+
+    call cline_denoise%set('prg',              'trajectory_denoise')
+    call cline_denoise%set('mkdir',                            'no')
+    call cline_denoise%set('stk',                    TRAJECTORY_STK)
+    call cline_denoise%set('outstk',                   DENOISED_STK)
+    call cline_denoise%set('smpd',                      params%smpd)
+    call cline_denoise%set('pca_mode',                       'kpca')
+    call cline_denoise%set('nthr',                             NTHR)
+    call xdenoise%execute(cline_denoise)
 
     projfile = projname%to_char()//'.simple'
     call cline_nproj%set('prg',                       'new_project')
     call cline_nproj%set('projname',             projname%to_char())
     call xnproj%execute(cline_nproj)
-    call cline_imptrj%set('prg',                'import_trajectory')
-    call cline_imptrj%set('projfile',            projfile%to_char())
-    call cline_imptrj%set('stk',       '../simulated_particles.mrc')
-    call cline_imptrj%set('smpd',                       params%smpd)
-    call ximptrj%execute(cline_imptrj)
+
+    call cline_imptcls%set('prg',                'import_particles')
+    call cline_imptcls%set('mkdir',                            'no')
+    call cline_imptcls%set('projfile',           projfile%to_char())
+    call cline_imptcls%set('stk',               '../'//DENOISED_STK)
+    call cline_imptcls%set('smpd',                      params%smpd)
+    call cline_imptcls%set('ctf',                              'no')
+    call ximptcls%execute(cline_imptcls)
+
+    call cline_an2Dnano%set('prg',                'analysis2D_nano')
+    call cline_an2Dnano%set('mkdir',                           'no')
+    call cline_an2Dnano%set('projfile',          projfile%to_char())
+    call cline_an2Dnano%set('element',               params%element)
+    call cline_an2Dnano%set('nthr',                            NTHR)
+    call xan2Dnano%execute(cline_an2Dnano)
+
     call cline_aref3Dnano%set('prg',            'autorefine3D_nano')
     call cline_aref3Dnano%set('projfile',        projfile%to_char())
-    call cline_aref3Dnano%set('vol1',               '../outvol.mrc')
+    call cline_aref3Dnano%set('vol1',                'startvol.mrc')
     call cline_aref3Dnano%set('smpd',                   params%smpd)
     call cline_aref3Dnano%set('element',             params%element)
     call cline_aref3Dnano%set('nthr',                          NTHR)
@@ -182,5 +214,33 @@ subroutine exec_test_single_workflow( self, cline )
     call xaref3Dnano%execute(cline_aref3Dnano)
     call simple_end('**** SIMPLE_TEST_SINGLE_WORKFLOW NORMAL STOP ****')
 end subroutine exec_test_single_workflow
+
+subroutine make_glc_trajectory_oris( oritab, nreprojs, nframes_per_group )
+    character(len=*), intent(in) :: oritab
+    integer,          intent(in) :: nreprojs, nframes_per_group
+    real, parameter              :: ANGULAR_SPAN = 2.0
+    type(oris)                   :: group_oris, trajectory_oris
+    real                         :: base_euls(3), euls(3), frame_frac
+    integer                      :: iframe, igroup, iproj, ngroups
+    if( nframes_per_group < 2 ) THROW_HARD('GLC orientation groups require at least two frames')
+    if( mod(nreprojs, nframes_per_group) /= 0 ) THROW_HARD('GLC reprojection count must divide into equal frame groups')
+    ngroups = nreprojs / nframes_per_group
+    call group_oris%new(ngroups, is_ptcl=.false.)
+    call group_oris%spiral()
+    call trajectory_oris%new(nreprojs, is_ptcl=.false.)
+    do igroup = 1, ngroups
+        base_euls = group_oris%get_euler(igroup)
+        do iframe = 1, nframes_per_group
+            iproj      = (igroup - 1) * nframes_per_group + iframe
+            frame_frac = real(iframe - 1) / real(nframes_per_group - 1)
+            euls       = base_euls + ANGULAR_SPAN * (frame_frac - 0.5) * [1.0, 0.5, 1.0]
+            call trajectory_oris%set_euler(iproj, euls)
+        enddo
+    enddo
+    call trajectory_oris%set_all2single('state', 1.0)
+    call trajectory_oris%write(string(oritab), [1, nreprojs])
+    call trajectory_oris%kill
+    call group_oris%kill
+end subroutine make_glc_trajectory_oris
 
 end module simple_commanders_test_single
