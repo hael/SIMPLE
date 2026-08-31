@@ -153,12 +153,13 @@ contains
         end do
     end subroutine write_cavg_quality_feature_inventory
 
-    subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, quality, quality_context )
+    subroutine extract_cavg_quality_features( imgs, cls_oris, mskdiam, quality, quality_context, threshold_pop )
         class(image),               intent(inout) :: imgs(:)
         type(cavg_quality_result),  intent(inout) :: quality
         type(oris),                 intent(in)    :: cls_oris
         real,                       intent(in)    :: mskdiam
         character(len=*), optional, intent(in)    :: quality_context
+        logical,          optional, intent(in)    :: threshold_pop
         type(image_bin),            allocatable   :: bin_img(:), cc_img(:), disc_img(:)
         integer,                    allocatable   :: pop(:), disc_area(:)
         real,                       allocatable   :: res(:), corr(:), corr_in(:)
@@ -190,6 +191,13 @@ contains
         if( size(res) /= ncls ) THROW_HARD('extract_cavg_quality_features: invalid res size')
         pop_hard_threshold      = ceiling(real(sum(pop)) * POP_FRACTION_HARD_REJECT)
         pool_pop_hard_threshold = ceiling(real(sum(pop)) * POOL_POP_FRACTION_HARD_REJECT)
+        if( present(threshold_pop) ) then
+            if( .not.threshold_pop )then
+                ! such that the population threshold criterion is deactivated
+                pop_hard_threshold      = 1.0
+                pool_pop_hard_threshold = 1.0
+            end if
+        end if
         allocate(corr(ncls), source=0.0)
         if( cls_oris%isthere('corr') )then
             corr_in = cls_oris%get_all('corr')

@@ -691,7 +691,7 @@ contains
             do imodel = 1, size(CAVG_QUALITY_BUILTIN_MODELS)
                 call state_model%init_preset(CAVG_QUALITY_BUILTIN_MODELS(imodel))
                 call evaluate_cavg_quality(cavg_imgs, spproj%os_cls2D, params%mskdiam, state_quality, &
-                    state_model, params, state_relation)
+                    state_model, params, state_relation, threshold_pop=.false. )
                 if( .not. allocated(state_quality%hard_reject) ) &
                     THROW_HARD('model_cavgs_rejection score_states=yes: model returned no hard-reject mask')
                 if( size(state_quality%hard_reject) /= ncls ) &
