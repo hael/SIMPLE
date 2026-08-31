@@ -1360,7 +1360,7 @@ contains
     end subroutine exec_refine3D_multi
 
     subroutine exec_refine3D_het( self, cline )
-        use simple_abinitio_utils, only: write_final_rec_outputs
+        use simple_abinitio_utils, only: write_final_rec_outputs, gen_ortho_reprojs4viz
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,  only: lpstages_setlims
         class(commander_refine3D_het), intent(inout) :: self
@@ -1494,7 +1494,7 @@ contains
 
         subroutine validate_refine3D_het_filtering()
             select case(trim(params%filt_mode))
-                case('nonuniform_lpset', 'none')
+                case('nonuniform_lpset', 'none', 'nonuniform')
                     ! supported
                 case default
                     THROW_HARD(WORKFLOW_LABEL//' supports filt_mode=nonuniform_lpset|none')
@@ -1671,6 +1671,7 @@ contains
         end subroutine initialize_state_volumes
 
         subroutine map_ptcls_to_input_volumes()
+            use simple_refine3D_fnames,  only: refine3D_startvol_fname
             type(cmdline) :: cline_mapping
             real    :: ufrac
             integer :: state, nsample
@@ -1686,7 +1687,7 @@ contains
             call cline_mapping%set('frac_best',      1.0)
             call cline_mapping%set('fillin',         'no')
             call cline_mapping%set('update_frac',    ufrac)
-            call cline_mapping%set('trail_rec',      'yes')
+            call cline_mapping%set('trail_rec',      'no')
             call cline_mapping%set('volrec',         'yes')
             call cline_mapping%set('maxits',         1)
             call cline_mapping%set('startit',        iter_glob)
@@ -1705,6 +1706,7 @@ contains
             call xrefine3D%execute(cline_mapping)
             do state = 1,params%nstates
                 params%vols(state) = refine3D_state_vol_fname(state)
+                call simple_copy_file(params%vols(state), refine3D_startvol_fname(state))
             enddo
             call cline_mapping%kill
             write(logfhandle,'(A)')&
@@ -1823,6 +1825,7 @@ contains
                 call cline%set('extr_iter',  startit)
                 call cline%set('trs',        lpinfos(stage)%trslim)
                 call cline%set('lp',         lpinfos(stage)%lp)
+                call cline%set('lpstop',     lpinfos(stage)%lp)
                 write(logfhandle,'(A,I0,A,F7.2)')'>>> '//WORKFLOW_LABEL//' ENTERING STAGE ',stage,' LP: ',lpinfos(stage)%lp
                 call xrefine3D%execute(cline)
                 lastit    = cline%get_iarg('endit')
@@ -1931,6 +1934,7 @@ contains
             params_final_rec%smpd = params_final_rec%smpd_crop
             call spproj%read_segment('out', params_final_rec%projfile)
             call write_final_rec_outputs(params_final_rec, spproj, params_final_rec%lpstop)
+            call gen_ortho_reprojs4viz(params_final_rec, spproj)
         end subroutine reconstruct_all_particles_volumes
 
     end subroutine exec_refine3D_het
