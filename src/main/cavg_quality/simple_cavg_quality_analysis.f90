@@ -27,30 +27,32 @@ public :: write_cavg_quality_feature_table
 
 contains
 
-    subroutine prepare_cavg_quality( imgs, cls_oris, mskdiam, quality, quality_context )
+    subroutine prepare_cavg_quality( imgs, cls_oris, mskdiam, quality, quality_context, threshold_pop )
         class(image),              intent(inout) :: imgs(:)
         type(oris),                intent(in)    :: cls_oris
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
         character(len=*), optional,intent(in)    :: quality_context
+        logical,          optional,intent(in)    :: threshold_pop
         character(len=32) :: context
         call quality%kill()
         context = 'chunk'
         if( present(quality_context) ) context = trim(quality_context)
-        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality, trim(context))
+        call extract_cavg_quality_features(imgs, cls_oris, mskdiam, quality, trim(context), threshold_pop)
         call normalize_cavg_quality_features(quality%raw, quality%hard_reject, quality%features)
     end subroutine prepare_cavg_quality
 
-    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, model, relation_params, relation_result )
+    subroutine evaluate_cavg_quality( imgs, cls_oris, mskdiam, quality, model, relation_params, relation_result, threshold_pop )
         class(image),              intent(inout) :: imgs(:)
         type(oris),                intent(in)    :: cls_oris
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
         type(cavg_quality_model),  intent(in)    :: model
-        type(parameters), optional,intent(in)    :: relation_params
+        type(parameters),                     optional, intent(in)    :: relation_params
         type(cavg_quality_relation_analysis), optional, intent(inout) :: relation_result
+        logical,                              optional, intent(in)    :: threshold_pop
         call evaluate_cavg_quality_in_context(imgs, cls_oris, mskdiam, quality, model, model%context, &
-            relation_params, relation_result)
+            relation_params, relation_result, threshold_pop)
     end subroutine evaluate_cavg_quality
 
     subroutine evaluate_cavg_quality_for_analysis( imgs, cls_oris, mskdiam, quality, model, quality_context, &
@@ -68,17 +70,18 @@ contains
     end subroutine evaluate_cavg_quality_for_analysis
 
     subroutine evaluate_cavg_quality_in_context( imgs, cls_oris, mskdiam, quality, model, quality_context, &
-                                                 relation_params, relation_result )
+                                                 relation_params, relation_result, threshold_pop )
         class(image),              intent(inout) :: imgs(:)
         type(oris),                intent(in)    :: cls_oris
         real,                      intent(in)    :: mskdiam
         type(cavg_quality_result), intent(inout) :: quality
         type(cavg_quality_model),  intent(in)    :: model
         character(len=*),          intent(in)    :: quality_context
-        type(parameters), optional,intent(in)    :: relation_params
+        type(parameters),                     optional, intent(in)    :: relation_params
         type(cavg_quality_relation_analysis), optional, intent(inout) :: relation_result
+        logical,                              optional, intent(in)    :: threshold_pop
         type(cavg_quality_relation_analysis) :: local_relation
-        call prepare_cavg_quality(imgs, cls_oris, mskdiam, quality, trim(quality_context))
+        call prepare_cavg_quality(imgs, cls_oris, mskdiam, quality, trim(quality_context), threshold_pop)
         if( model%supports_relational() )then
             if( .not. present(relation_params) ) &
                 THROW_HARD('evaluate_cavg_quality: relational model requires parameters')
