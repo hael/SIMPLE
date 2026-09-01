@@ -267,7 +267,7 @@
                     </div>
 
                     <div class="grid grid-cols-[auto_2fr] gap-x-4 items-center mb-4">
-                        <label class="text-xs font-medium text-streamtext whitespace-nowrap"
+                        <label class="text-xs font-bold text-streamtext whitespace-nowrap"
                                for="{% if batch_project_file_selector_enabled %}simple_batch_project_file{% else %}simple_batch_source{% endif %}">input project</label>
                         {% if batch_project_file_selector_enabled %}
                         <div class="relative flex items-center">
@@ -334,7 +334,7 @@
                                     <div class="grid grid-cols-[auto_2fr] gap-x-4 gap-y-2 items-center">
                                         {% for input in section.inputs %}
                                             {% if input.keytype == "hidden" %}
-                                                  <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
+                                                  <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
                                                       for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                   <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
                                                    <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
@@ -342,7 +342,7 @@
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
-                                                <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
+                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="batch_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                 <div class="relative flex items-center">
                                                     {% if input.keytype == "int" %}
                                                         <input id="batch_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"
@@ -502,7 +502,7 @@
                     </div>
 
                     <div class="grid grid-cols-[auto_2fr] gap-x-4 items-center mb-4">
-                        <label class="text-xs font-medium text-streamtext whitespace-nowrap"
+                        <label class="text-xs font-bold text-streamtext whitespace-nowrap"
                                for="{% if batch_project_file_selector_enabled %}single_batch_project_file{% else %}single_batch_source{% endif %}">input project</label>
                         {% if batch_project_file_selector_enabled %}
                         <div class="relative flex items-center">
@@ -569,7 +569,7 @@
                                     <div class="grid grid-cols-[auto_2fr] gap-x-4 gap-y-2 items-center">
                                         {% for input in section.inputs %}
                                             {% if input.keytype == "hidden" %}
-                                                  <label class="text-xs font-medium text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
+                                                  <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap hidden" data-toggle-hidden-label="true"
                                                       for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                   <div class="relative flex items-center hidden" data-toggle-hidden-container="true">
                                                    <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="hidden" data-toggle-hidden="true" data-hidden-original-type="hidden"
@@ -577,7 +577,7 @@
                                                        {% if "value" in input %}value="{{ input.value }}"{% elif input.has_default %}value="{{ input.default }}"{% endif %}>
                                                   </div>
                                             {% else %}
-                                                <label class="text-xs font-medium text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
+                                                <label class="text-xs {% if input.required %}font-bold{% else %}font-medium{% endif %} text-streamtext whitespace-nowrap" for="single_{{ program.prg }}_{{ input.key }}">{{ input.label }}{% if input.required %}<span class="text-streamerror" aria-hidden="true"> *</span>{% endif %}</label>
                                                 <div class="relative flex items-center">
                                                     {% if input.keytype == "int" %}
                                                         <input id="single_{{ program.prg }}_{{ input.key }}" name="{{ input.key }}" type="number" min="0" step="1"

@@ -21,7 +21,7 @@ show_help() {
         "  NICE_DEV_ADDR     Django listen address (default: 127.0.0.1:8000)" \
         "" \
         "Example:" \
-        "  NICE_DEV_ADDR=0.0.0.0:8001 nice/nice_dev.sh"
+        "  NICE_DEV_ADDR=127.0.0.1:8000 nice/nice_dev.sh"
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then

@@ -265,6 +265,56 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('placeholder="-1.5"', rendered)
         self.assertNotIn('option value=""', rendered)
 
+    def test_batch_required_argument_labels_are_bold(self):
+        context = {
+            "stream_user_inputs": [],
+            "simple_programs": [{"prg": "simple_demo", "disp": "Simple Demo", "desc": ""}],
+            "simple_program_inputs": [{
+                "prg": "simple_demo",
+                "disp": "Simple Demo",
+                "sections": [{
+                    "name": "inputs",
+                    "inputs": [
+                        {"key": "required_arg", "keytype": "str", "label": "required simple", "required": True},
+                        {"key": "optional_arg", "keytype": "str", "label": "optional simple", "required": False},
+                    ],
+                }],
+            }],
+            "single_programs": [{"prg": "single_demo", "disp": "Single Demo", "desc": ""}],
+            "single_program_inputs": [{
+                "prg": "single_demo",
+                "disp": "Single Demo",
+                "sections": [{
+                    "name": "inputs",
+                    "inputs": [
+                        {"key": "required_arg", "keytype": "str", "label": "required single", "required": True},
+                        {"key": "optional_arg", "keytype": "str", "label": "optional single", "required": False},
+                    ],
+                }],
+            }],
+            "batch_project_sources": [],
+            "default_batch_source": "workspace",
+        }
+
+        rendered = render_to_string("jobbuilder.html", context)
+
+        self.assertEqual(
+            rendered.count('class="text-xs font-bold text-streamtext whitespace-nowrap"'),
+            4,
+        )
+        self.assertIn('for="batch_simple_demo_required_arg">required simple', rendered)
+        self.assertIn('for="single_single_demo_required_arg">required single', rendered)
+        self.assertIn(
+            'class="text-xs font-medium text-streamtext whitespace-nowrap" '
+            'for="batch_simple_demo_optional_arg">optional simple',
+            rendered,
+        )
+        self.assertIn(
+            'class="text-xs font-medium text-streamtext whitespace-nowrap" '
+            'for="single_single_demo_optional_arg">optional single',
+            rendered,
+        )
+
     def test_batch_input_requirements_are_rendered_for_client_validation(self):
         context = {
             "stream_user_inputs": [],
