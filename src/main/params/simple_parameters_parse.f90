@@ -270,6 +270,7 @@ contains
         call reg%add_file('fname', self%fname)
         call reg%add_file('frcs', self%frcs,'B')
         call reg%add_file('fsc', self%fsc,'B')
+        call reg%add_file('pcg_mskfile', self%pcg_mskfile,'B')
         call reg%add_file('gainref', self%gainref)
         ! 'T' for the text index/assignment files flex_analysis reads, 'B' for the binary
         ! flex_pca embedding cache (flex_pca_embedding.bin)

@@ -66,6 +66,18 @@ real,    parameter :: NU_AUTOTARGET_STEP_ADD = 5.0  !< additive setpoint increas
 real,    parameter :: NU_AUTOTARGET_BACKOFF  = 0.6  !< multiplicative setpoint decrease on shipped-pair degradation
 real,    parameter :: NU_AUTOTARGET_SHIP_TOL = 0.02 !< relative deadband on the shipped-pair crossing (stall band)
 integer, parameter :: PCG_MASTER_NTHR_CAP    = 32   !< master-phase thread-boost ceiling; OpenMP scaling saturates beyond this at typical box sizes
+! Solve-support envelope (pcg_priors.md dev item 5): the conservative density
+! envelope (automask3D at envmsklp) replaces the spherical support in the PCG
+! solves, so the mask constrains the ESTIMATOR rather than post-processing.
+! automsk=yes enables it; the REGULARIZED pass always takes it, the UNFIL
+! pass only under envfsc=yes (envfsc=no keeps that pass spherical, so the
+! FSC pair stays unconstrained). That envelope is generous by construction --
+! protein plus micelle, dilated, soft-edged, and about half the spherical
+! support on the datasets measured so far -- so it removes the far solvent,
+! where deapodization amplifies hardest, while leaving the NU evidence a
+! populated support. The evidence readiness contract (null_fraction bounds)
+! is the guard if a specimen's envelope ever proves too tight for the null
+! calibration.
 logical, parameter :: DEBUG = .false.
 
 ! Rebuild-on-advance cadence for the NU replay evidence (streptavidin
@@ -488,6 +500,67 @@ contains
             fname = refine3D_resolution_txt_fbody(state)
         endif
     end function resolve_pcg_fsc_txt_fname
+
+    !> Install the solve support constraint, in precedence order: an explicit
+    !! pcg_mskfile envelope, the per-state density-envelope support when one
+    !! was built for this state (automsk=yes), else the spherical mskdiam
+    !! support. The projected system (P H P) u = P b is what set_mask already
+    !! implements; this only chooses P (pcg_priors.md dev item 5).
+    subroutine set_pcg_solve_support( pcgop, params, state_support, l_state_support )
+        class(reconstructor_pcg),  intent(inout) :: pcgop
+        class(parameters),         intent(in)    :: params
+        class(image),    optional, intent(in)    :: state_support
+        logical,         optional, intent(in)    :: l_state_support
+        type(image) :: mskvol
+        logical     :: l_state
+        if( params%pcg_mskfile%is_allocated() )then
+            if( len_trim(params%pcg_mskfile%to_char()) > 0 )then
+                call mskvol%read_and_crop(params%pcg_mskfile, params%smpd, params%box_crop, params%smpd_crop)
+                call pcgop%set_mask_volume(mskvol)
+                call mskvol%kill
+                return
+            endif
+        endif
+        l_state = .false.
+        if( present(l_state_support) ) l_state = l_state_support
+        if( l_state .and. present(state_support) )then
+            call pcgop%set_mask_volume(state_support)
+            return
+        endif
+        call pcgop%set_mask(params%msk_crop)
+    end subroutine set_pcg_solve_support
+
+    !> Build the per-state solve-support envelope from the reference volume
+    !! this iteration matched against (lag-one, the same lag the matching
+    !! references carry). Absent/startvol reference => no support, and the
+    !! caller falls back to the spherical one.
+    subroutine build_pcg_state_support( params, state_here, support, l_have )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: state_here
+        type(image_msk),   intent(inout) :: support
+        logical,           intent(out)   :: l_have
+        type(image)  :: vol_prev
+        real         :: lp_support
+        l_have = .false.
+        call support%kill_bimg
+        ! automsk gates using the density envelope in the solves at all;
+        ! which passes consume it is decided per solve (see the l_use_support
+        ! rule in reduce_solve_state_half): the regularized pass always, the
+        ! unfil pass only under envfsc=yes
+        if( trim(params%automsk) == 'no'          ) return
+        if( params%pcg_mskfile%is_allocated()     ) return ! explicit mask wins
+        if( state_here < 1 .or. state_here > size(params%vols) ) return
+        if( len_trim(params%vols(state_here)%to_char()) == 0    ) return
+        if( index(params%vols(state_here)%to_char(), 'startvol') > 0 ) return
+        if( .not. file_exists(params%vols(state_here)) ) return
+        lp_support = params%envmsklp
+        call vol_prev%read_and_crop(params%vols(state_here), params%smpd, params%box_crop, params%smpd_crop)
+        call support%automask3D(params, vol_prev, .false., lp_override=lp_support, l_report=.false.)
+        call vol_prev%kill
+        l_have = .true.
+        write(logfhandle,'(A,I0,A,F6.1,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
+            &', conservative density envelope at ', lp_support, ' A (replaces the spherical support)'
+    end subroutine build_pcg_state_support
 
     !> Hard activation contract for the direct NU replay (no silent fallback):
     !! a defined pcg_nu_lambda_rel must be finite and non-negative, and a
@@ -986,7 +1059,7 @@ contains
             crop_factor = real(params%box_crop) / real(params%box)
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             call pcgop%set_sym(build%pgrpsyms)
-            call pcgop%set_mask(params%msk_crop)
+            call set_pcg_solve_support(pcgop, params)
             lims2 = pcgop%get_lims2()
             R     = lims2(1,2)
             allocate(sig2(0:R,size(pinds)), source=1.0)
@@ -1101,7 +1174,7 @@ contains
 
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            call pcgop%set_mask(params%msk_crop)
+            call set_pcg_solve_support(pcgop, params)
             call pcgop%begin_reduction
             fname = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
             call pcgop%add_raw_accum(fname, state_here, eo_here, 1, 1, &
@@ -1846,6 +1919,8 @@ contains
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
         integer :: n_active_state, n_sampled_state
         integer :: nthr_master_here, nthr_solve
+        type(image_msk) :: state_support_msk
+        logical :: l_state_support
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_nu_replay
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_evidence
@@ -1930,6 +2005,12 @@ contains
                 l_bootstrap = .not. l_even_chain
             endif
             if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
+            ! one support envelope per state, used by BOTH the base and the
+            ! regularized solves: the mask constrains the estimator instead of
+            ! post-processing it, and a single support keeps the base pair
+            ! (FSC, NU evidence, B-factor reference) and the shipped ML pair
+            ! on the same footing
+            call build_pcg_state_support(params, state, state_support_msk, l_state_support)
             ! the two halves are independent by gold-standard construction
             ! (own accumulators, own pcgop, own outputs; image FFT planning
             ! is critical-section-guarded), so they solve concurrently as
@@ -2150,6 +2231,7 @@ contains
             enddo
         endif
         call raw_fname%kill
+        call state_support_msk%kill_bimg
         deallocate(res0143s, state_written, realized_fractions, update_weights, ship05s, ship0143s, &
             &nu_supps, nu_supp_cnts)
         !$ call omp_set_num_threads(params%nthr)
@@ -2272,7 +2354,11 @@ contains
             endif
 
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            call pcgop%set_mask(params%msk_crop)
+            ! the regularized pass always takes the density-envelope support;
+            ! the unfil pass takes it only under envfsc=yes, so with
+            ! envfsc=no the FSC pair is estimated on the spherical support
+            call set_pcg_solve_support(pcgop, params, state_support_msk, &
+                &l_state_support .and. (l_ml_solve .or. params%l_envfsc))
             call pcgop%begin_reduction
             nptcls = 0
             t_phase = tic()

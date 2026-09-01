@@ -2726,6 +2726,99 @@ the acceptable-looking outputs do not validate the prior.
      flip re-triggered DEGRADED/IMPROVED steps; the AIMD comparison
      now stalls on any change of fewer than two shells.
 
+5. **Direct PCG support constraint (EXPERIMENTAL, 2026-09-01,
+   user-directed).** Distinct from every prior and from the solvent
+   clamp: a real-space support constraint on the solve itself. The
+   machinery pre-existed -- `set_mask` already solves the projected
+   system (P H P) u = P b with the soft spherical support -- so the
+   mode is: install an ARBITRARY [0,1] envelope as P.
+   - `reconstructor_pcg%set_mask_volume(mskvol)`: caller-supplied
+     volume as the support (validated, clipped to [0,1]); both solve
+     entries now also project the INITIAL GUESS onto the support (a
+     warm start's out-of-support content was previously carried into
+     the output untouched -- latent even for the spherical case).
+   - CLI: `pcg_mskfile=<vol.mrc>` on reconstruct3D and refine3D
+     (pcg-gated, hard-errors without the pcg backend or a missing
+     file). All PCG solve sites route through
+     `set_pcg_solve_support`: pcg_mskfile when given, spherical
+     mskdiam support otherwise -- workflow policies are untouched, so
+     this is a pure play/experiment surface.
+   - Composition: NOT a replay prior (R10 untouched); composes with
+     P_tau/Q_NU (set_nu_prior already folds self%mask into the band
+     weights, so the support automatically shapes the prior too), and
+     with the trailing chain (constraint is solve-side only; the
+     accumulators stay constraint-free, so masks may change across
+     iterations and the mode switches off cleanly).
+   - Caveats recorded: the naive half-map FSC is optimistic inside
+     the support by construction -- judge with the phase-randomized
+     envfsc; the mask is shared between halves (the classic solvent-
+     flattening compromise); the Fourier-shell preconditioner does
+     not commute with a real-space P (still valid, mildly
+     suboptimal).
+   - Deferred (design in the 2026-09-01 discussion): the soft-penalty
+     variant (+ lambda_m diag((1-M)^2)) and the fixed-background
+     focused mode (x = x_fix + P*delta, RHS = P(b - A x_fix)) -- both
+     drop out of the same set_mask_volume machinery when wanted.
+     Mode semantics for the record: HARD is a change of variables
+     (x = P u), so out-of-support unknowns are REMOVED -- no strength
+     parameter exists, conditioning improves by the support fraction,
+     and a wrong mask deletes real density. SOFT is a Gaussian prior
+     with precision lambda_m(1-M)^2, so out-of-support density is
+     SHRUNK, not deleted, and survives where the data insists --
+     graceful under mask error but reintroduces a dataset-dependent
+     strength (the auto-lambda failure mode). The Q_NU solvent clamp
+     is the band-limited middle: soft, fine-frequencies-only.
+
+   **SOLVE SUPPORT POLICY (2026-09-01, user-directed; supersedes the
+   first per-solve draft).** Principle: with PCG a mask belongs in
+   the ESTIMATOR, not in post-processing -- post-hoc masking cannot
+   improve a map, a support constraint can. Three rules (user,
+   2026-09-01), over the two PCG passes (1) unfil and (2)
+   regularized:
+   - `automsk=yes` enables the conservative density envelope (Cyril's
+     automask3D at envmsklp) as solve support at all.
+   - `envfsc=yes` + automsk=yes: BOTH passes take the envelope.
+   - `envfsc=no`  + automsk=yes: pass (1) keeps the SPHERICAL support
+     (the FSC pair stays unconstrained), pass (2) takes the envelope.
+   - Consequence, and the reason envfsc is the right switch: when
+     pass (1) is envelope-constrained, the FSC pair is ALREADY
+     masked by the estimator, so the envfsc masking +
+     phase-randomization preprocessing in `evaluate_halfmap_pair`
+     must not run again -- it is now gated on rec_backend (skipped
+     for pcg, kept for gridding, where it remains the only way to get
+     the envelope into the estimate). The envelope is still derived
+     and returned there, because the automask artifact has other
+     consumers (postprocess envfsc, matcher fallback, final rec).
+   - ONE support envelope per state feeds both passes, so when both
+     take it the FSC pair and the shipped pair stay on the same
+     footing.
+   - Derived from the reference volume the iteration matched against
+     (lag-one, the same lag the matching references carry), which
+     also resolves the ordering problem: the support exists before
+     the base solves. Missing/startvol reference => spherical
+     fallback.
+   - The envelope is the CONSERVATIVE density automask at envmsklp
+     (Cyril's 20 A mask), used as-is. An earlier draft coarsened it
+     (max(30 A, 2*envmsklp)) out of concern for the NU evidence's
+     null calibration and whitening; that was over-engineering
+     (user, 2026-09-01): the 20 A envelope is already generous --
+     protein plus micelle, dilated, soft-edged, and about half the
+     spherical support on both datasets measured (PfCRT: 941k of
+     1.93M support voxels outside it; streptavidin: 102k of 217k) --
+     and NU refinement predates the shell whitening and works on
+     plain Euclidean unaries, so the whitening MAD is not a design
+     constraint. The evidence readiness contract (null_fraction
+     outside [0.01, 0.90] hard-errors) is the guard if a specimen's
+     envelope ever proves too tight for the null calibration; watch
+     pcg_nu_null_fraction in the evidence banner on first runs.
+   - Precedence in set_pcg_solve_support: explicit pcg_mskfile > the
+     per-state density envelope > spherical mskdiam.
+   - Backend split, for the record: gridding can only put the
+     envelope into the MEASUREMENT (post-hoc mask + phase
+     randomization); PCG puts it into the ESTIMATION (support
+     constraint). Same envelope, same intent, different mechanism --
+     and never both at once.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

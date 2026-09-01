@@ -173,6 +173,11 @@ subroutine new_automask( prgtab )
         &'Stop at this true L2 relative residual; use <=0 for exactly maxits_pcg iterations', 'tolerance{0}', &
         &.false., 0.0, visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call reconstruct3D%add_input(UI_FILT, 'pcg_mskfile', 'file', 'PCG support-constraint mask volume', &
+        &'Real-space [0,1] mask volume installed as the hard support constraint of the PCG solve (the projected '//&
+        &'system P H P; experimental focused/support mode); spherical mskdiam support when absent', &
+        &'e.g. focusmask.mrc', .false., '', group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call reconstruct3D%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
         &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the '//&
         &'regularized replay derives graded band-support evidence from the current base half pair and '//&
@@ -347,6 +352,11 @@ subroutine new_automask( prgtab )
         call refine3D%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
         &'Maximum kernel PCG iterations; independent of refine3D outer maxits', 'iterations{2}', &
         &.false., 2., group="filter", visibility=UI_VIS_ADVANCED, &
+        &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
+        call refine3D%add_input(UI_FILT, 'pcg_mskfile', 'file', 'PCG support-constraint mask volume', &
+        &'Real-space [0,1] mask volume installed as the hard support constraint of every PCG solve (the projected '//&
+        &'system P H P; experimental focused/support mode); spherical mskdiam support when absent', &
+        &'e.g. focusmask.mrc', .false., '', group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &
         &'Direct NU-evidence replay precision strength relative to the PCG data scale; when positive the '//&

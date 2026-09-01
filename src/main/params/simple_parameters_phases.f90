@@ -933,6 +933,12 @@ contains
         ! validated at the PCG execution point (validate_nu_replay_request),
         ! where the filtering policy is final -- the abinitio3D parent only
         ! forwards the key to its refine3D stages
+        if( cline%defined('pcg_mskfile') )then
+            if( trim(self%rec_backend) /= 'pcg' ) &
+                &THROW_HARD('pcg_mskfile (PCG support constraint) requires rec_backend=pcg')
+            if( .not. file_exists(self%pcg_mskfile) ) &
+                &THROW_HARD('pcg_mskfile does not exist: '//self%pcg_mskfile%to_char())
+        endif
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not. self%l_lpset
         self%l_bfac       = cline%defined('bfac')
         if( cline%defined('element') )then

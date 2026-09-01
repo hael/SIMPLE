@@ -55,11 +55,25 @@ contains
         type(fsc_area_score_result) :: cones_local
         real, allocatable :: fsc_t(:), fsc_n(:), res(:)
         integer :: nyq
+        logical :: l_envfsc_preproc
         nyq = even%get_filtsz()
-        if( params%l_envfsc )then
-            ! density-envelope masking with phase-randomized FSC correction
+        ! The envelope-masking + phase-randomization preprocessing is a
+        ! GRIDDING-path construction: it approximates, after the fact, an
+        ! estimate the solver could not constrain. On the PCG backend the
+        ! same envelope is installed as the SOLVE SUPPORT (pcg_priors.md dev
+        ! item 5), so the pair handed here is already envelope-constrained
+        ! and masking it again would double-count. The envelope itself is
+        ! still derived and returned, because the automask artifact has other
+        ! consumers (postprocess envfsc, matcher fallback, final rec).
+        l_envfsc_preproc = params%l_envfsc .and. trim(params%rec_backend) /= 'pcg'
+        if( params%l_envfsc .and. present(envmask) )then
             call envmask_work%automask3D(params, average, .false., lp_override=params%envmsklp)
-            if( present(envmask) ) call envmask%copy(envmask_work)
+            call envmask%copy(envmask_work)
+        endif
+        if( l_envfsc_preproc )then
+            ! density-envelope masking with phase-randomized FSC correction
+            if( .not. present(envmask) ) &
+                &call envmask_work%automask3D(params, average, .false., lp_override=params%envmsklp)
             call phase_rand_fsc(even, odd, envmask_work, state, nyq, diagnostics%fsc, fsc_t, fsc_n)
             call work_even%copy(even)
             call work_odd%copy(odd)
@@ -70,6 +84,7 @@ contains
             deallocate(fsc_t, fsc_n)
             call envmask_work%kill_bimg
         else
+            call envmask_work%kill_bimg
             call work_even%copy(even)
             call work_odd%copy(odd)
             call work_even%mask3D_soft(spherical_mask_radius, backgr=0.)
@@ -90,7 +105,7 @@ contains
             diagnostics%cfar = cones_local%cfar
             call cones_local%kill
         endif
-        if( .not. params%l_envfsc ) call work_even%fsc(work_odd, diagnostics%fsc)
+        if( .not. l_envfsc_preproc ) call work_even%fsc(work_odd, diagnostics%fsc)
         res = get_resarr(params%box_crop, params%smpd_crop)
         call get_resolution(diagnostics%fsc, res, diagnostics%res_fsc05, diagnostics%res_fsc0143)
         diagnostics%res_fsc05   = max(diagnostics%res_fsc05,   2. * params%smpd_crop)

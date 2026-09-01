@@ -213,6 +213,7 @@ type :: reconstructor_pcg
     procedure, private :: finalize_khat
     procedure :: set_deapod
     procedure :: set_mask
+    procedure :: set_mask_volume
     procedure :: set_lambda_relative
     procedure :: set_ml_prior
     procedure, private :: build_env
@@ -1019,6 +1020,25 @@ contains
         deallocate(ones)
         self%l_mask = .true.
     end subroutine set_mask
+
+    !>  \brief  Arbitrary-envelope variant of set_mask: install a caller-supplied
+    !!          real-space [0,1] volume as the support constraint P. Same solve
+    !!          contract as the spherical case ((P H P) u = P b, see set_mask
+    !!          docs); the mask is clipped into [0,1]. Experimental focused /
+    !!          support mode (pcg_priors.md dev item 5).
+    subroutine set_mask_volume( self, mskvol )
+        class(reconstructor_pcg), intent(inout) :: self
+        class(image),             intent(in)    :: mskvol
+        integer :: mdim(3)
+        mdim = mskvol%get_ldim()
+        if( any(mdim /= self%box) ) THROW_HARD('support mask volume dimensions differ from the solve box; set_mask_volume')
+        if( mskvol%is_ft() ) THROW_HARD('support mask volume must be in real space; set_mask_volume')
+        if( allocated(self%mask) ) deallocate(self%mask)
+        self%mask = mskvol%get_rmat()
+        self%mask = min(1.0, max(0.0, self%mask))
+        if( .not. any(self%mask > 0.0) ) THROW_HARD('support mask volume is empty; set_mask_volume')
+        self%l_mask = .true.
+    end subroutine set_mask_volume
 
     pure subroutine mask_mul( self, v )
         class(reconstructor_pcg), intent(in)    :: self
@@ -3377,6 +3397,8 @@ contains
         ! b' = P b, completing the (P H P) u = P b normal equations
         call self%mask_mul(self%b_rhs)
         self%l_rhs = .true.
+        ! project the initial guess onto the support (see solve_accum)
+        call self%mask_mul(x)
         call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome)
     end subroutine solve
 
@@ -3391,6 +3413,10 @@ contains
         integer,          optional,  intent(out)   :: niters
         type(pcg_solver_outcome), optional, intent(out) :: outcome
         if( .not. self%l_rhs ) THROW_HARD('end_accum has not been called; solve_accum')
+        ! project the initial guess onto the support: the constrained system
+        ! never touches content outside P, so an unprojected warm start would
+        ! carry it into the output unchanged
+        call self%mask_mul(x)
         call self%solve_core(x, maxits, rtol, rel_res_hist, niters, outcome)
     end subroutine solve_accum
 

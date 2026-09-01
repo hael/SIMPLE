@@ -216,6 +216,7 @@ type :: parameters
     type(string)              :: fname                !< file name
     type(string)              :: frcs                 !< binary file with per-class/proj Fourier Ring Correlations(.bin)
     type(string)              :: fsc                  !< binary file with FSC info{fsc_state01.bin}
+    type(string)              :: pcg_mskfile          !< real-space [0,1] mask volume constraining the PCG solve (hard support projection P H P; experimental focused/support mode, pcg_priors.md dev item 5); requires rec_backend=pcg; spherical mskdiam support when absent
     type(string)              :: gainref              !< gain reference for movie alignment
     type(string)              :: import_dir           !< dir to import .star files from for import_starproject
     type(string)              :: infile               !< file with inputs(.txt)
