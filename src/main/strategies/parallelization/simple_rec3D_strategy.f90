@@ -5,7 +5,7 @@ use simple_parameters,           only: parameters
 use simple_cmdline,              only: cmdline
 use simple_qsys_env,             only: qsys_env
 use simple_matcher_3Drec,        only: calc_3Drec, calc_projdir3Drec
-use simple_commanders_rec_distr, only: commander_volassemble
+use simple_commanders_rec_distr, only: commander_volassemble, filter_pcg_nonuniform_maps
 use simple_refine3D_fnames,      only: refine3D_fsc_fname, refine3D_state_vol_fname, &
     &refine3D_pcg_raw_accum_fname
 use simple_rec3D_pcg_strategy,   only: execute_rec3D_pcg_shared, execute_rec3D_pcg_distributed_master
@@ -313,6 +313,8 @@ contains
         type(commander_volassemble) :: xvolassemble
         type(cmdline)               :: cline_volassemble
         type(string)                :: volname, vol_in, raw_fname
+        logical, allocatable        :: l_trail_bootstrap(:)
+        real,    allocatable        :: nu_replay_lps(:)
         integer                     :: state, part, eo
         if( trim(params%rec_backend) == 'pcg' )then
             ! A stale final filename must never masquerade as a completed worker
@@ -331,7 +333,22 @@ contains
         endif
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         if( trim(params%rec_backend) == 'pcg' )then
-            call execute_rec3D_pcg_distributed_master(params, build, cline)
+            if( params%l_nonuniform )then
+                ! reconstruct3D must leave behind the SAME reference products
+                ! a refinement iteration does -- the NU-filtered matching
+                ! references and the evidence-derived matching low-pass
+                ! handoff -- otherwise a workflow that reconstructs before
+                ! refining has nothing to match against and the matcher
+                ! silently falls back to raw, unfiltered half maps
+                allocate(l_trail_bootstrap(params%nstates), source=.false.)
+                allocate(nu_replay_lps(params%nstates),     source=0.0)
+                call execute_rec3D_pcg_distributed_master(params, build, cline, &
+                    &trail_bootstrap_states=l_trail_bootstrap, nu_replay_finest_lps=nu_replay_lps)
+                call filter_pcg_nonuniform_maps(params, build, l_trail_bootstrap, nu_replay_lps)
+                deallocate(l_trail_bootstrap, nu_replay_lps)
+            else
+                call execute_rec3D_pcg_distributed_master(params, build, cline)
+            endif
             return
         endif
         ! Assemble volumes on master

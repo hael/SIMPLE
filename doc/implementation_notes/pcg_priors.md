@@ -2824,6 +2824,95 @@ the acceptable-looking outputs do not validate the prior.
      constraint). Same envelope, same intent, different mechanism --
      and never both at once.
 
+7. **refine3D_auto startup: reconstruct -> mask -> re-reconstruct ->
+   refine (IMPLEMENTED 2026-09-01, user-directed).** Root cause of the
+   PfCRT collapse, established by elimination (the envelope-masking and
+   solver-convergence hypotheses were both falsified by controls --
+   automsk=no reproduced the collapse exactly, and reconstruct3D at
+   maxits_pcg=2 from the same orientations gives 5.97/3.93 A with cFAR
+   0.78, better than refine3D_auto's first iteration): **the first
+   matching had no proper references to match against.**
+   - The matcher's nonuniform contract is that filtering is
+     assembly-owned (`if( l_ml_reg .or. l_nonuniform_mode ) then !
+     filtering done when volumes are assembled`). At iteration 1 the
+     `_nu_filt` references do not exist yet, so it fell back to the RAW
+     input half maps -- and then applied NO filter to them, matching
+     unfiltered noise out to the FSC=0.143 band (~3.9 A on PfCRT, where
+     that curve has already fallen to 0.16 and is about to cliff).
+     abinitio3D's final stage, by contrast, matched a MERGED,
+     NU-filtered reference at an explicit ~6 A lp.
+   - The gridding path was immune because
+     `prepare_nu_bootstrap_refs_from_raw_halves` generated NU-filtered
+     startup references; it returned immediately for pcg ("the Q_NU
+     replay regularizes in-solve"), which is true from iteration 2
+     onward and false for iteration 1.
+   - High-contrast specimens (bgal, streptavidin) survive matching
+     unfiltered half maps; a low-contrast detergent-solubilized
+     membrane protein does not. Hence "works on big things or things
+     with no detergent".
+   Implementation, three parts:
+   (a) `reconstruct3D` on the pcg backend now produces the SAME
+       reference products a refinement iteration does: `distr_execute`
+       calls `filter_pcg_nonuniform_maps` after the master when
+       filt_mode is nonuniform, generating the `_nu_filt` matching
+       references and writing the evidence-derived matching-lp handoff
+       into the project. Previously it called the master and returned,
+       so no workflow could reconstruct-then-refine correctly.
+   (b) refine3D_auto runs `bootstrap_rec3D` BEFORE any matching
+       (unregularized pass -> sigmas from the half maps -> regularized
+       pass with the refinement's own filt_mode/automsk/envfsc/
+       nu_refine). That single call is the user's sequence: reconstruct,
+       build masks, re-reconstruct with masks and the NU prior. It
+       leaves the automask, the NU evidence envelope, the `_nu_filt`
+       references and the lp handoff in place, and its output becomes
+       vol1. `prepare_nu_bootstrap_refs_from_raw_halves` is deleted as
+       superseded.
+   (c) The matcher can no longer match unfiltered references silently:
+       when the nonuniform references are missing it flags the
+       fallback, applies the FSC-optimal filter to the raw half maps
+       instead of nothing, and hard-errors if there is no FSC either.
+       This is the structural guard -- it protects every workflow, not
+       just this one, and would have made the original defect loud.
+
+6. **PfCRT matching-reference collapse -- SUPERSEDED HYPOTHESIS
+   (2026-09-01, retained as a record of what was falsified).**
+   Reproduced twice in refine3D_auto+pcg: iteration 1 matches with the
+   SPHERICAL reference mask (the envelope does not exist yet) and is
+   healthy (orientation overlap 0.875); iteration 2 is the first to
+   consume the NU-evidence-envelope-masked references and collapses
+   (overlap 0.236, in-plane distance 17 deg, shift increment 1.4 px
+   avg / 11.3 max, FSC 0.500 6.47 -> 7.39 A, B-factor -79 -> -142).
+   Mechanism: the NU evidence envelope OMITS DETERGENT BY DESIGN
+   (PfCRT occupancy 8.9% of the spherical support), so the matching
+   reference is protein-only while the particle images contain the
+   micelle. Under the Euclidean objective the unexplained micelle
+   dominates the cost, the assignment randomizes, and the
+   re-centering shows up directly as the shift-increment jump. This
+   is a MODEL-DATA MISMATCH, not overfitting and not a prior
+   miscalibration -- soluble specimens (streptavidin, bgal) are
+   immune because their envelope covers the whole particle.
+   FALSIFIED by the automsk=no control, which reproduced the collapse
+   identically (6.75/3.98 -> 7.76/4.93 with no envelope masking
+   anywhere, versus 6.47/3.98 -> 7.39/4.93 with it). The reference
+   mask was never the cause; see item 7 for the actual one. The
+   matcher mask change this motivated was reverted. Retained because
+   the reasoning about reference/image content consistency is still
+   the right frame -- it simply pointed at the wrong mask.
+   - (reverted) `prepare_matching_reference_mask` using the density
+     envelope for matching references.
+   - refine3D_auto gains a STARTUP BOOTSTRAP (user-directed):
+     bootstrap_rec3D runs before any matching (unregularized pass ->
+     sigmas from the half maps -> regularized pass with the
+     refinement's own filtering settings), so the masks, the NU
+     evidence products and the _nu_filt matching references all exist
+     at iteration 1. Iteration 1 then matches the SAME kind of
+     reference as iteration 10; previously the reference convention
+     changed underneath an already converged alignment, which is what
+     made the mismatch above fire as a cliff rather than a gradient.
+     abinitio3D never needed this because its stage ladder introduces
+     ml_reg / NU filtering / envfsc / automsk gradually, while the
+     alignment is still loose.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

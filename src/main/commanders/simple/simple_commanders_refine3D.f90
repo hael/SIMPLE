@@ -61,13 +61,10 @@ contains
         use simple_abinitio_utils, only: gen_ortho_reprojs4viz, write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,  only: lpstages_setlims
-        use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
-            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, NU_DEV_OUTPUT, &
-            &extend_nu_filter_highres_shells, write_nu_local_resolution_map
         use simple_commanders_rec, only: commander_bootstrap_rec3D
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(cmdline)               :: cline_rec3D
+        type(cmdline)               :: cline_rec3D, cline_boot
         type(parameters)            :: params, params_final_rec
         type(sp_project)            :: spproj
         type(string)                :: init_vol
@@ -232,13 +229,40 @@ contains
         ! them.
         call cline_rec3D%delete('pcg_nu_lambda_rel')
         call cline_rec3D%delete('pcg_nu_supp_target')
-        if( l_have_init_vol ) call prepare_nu_bootstrap_refs_from_raw_halves()
-        if( l_have_init_vol )then
-            call cline%set('vol1', init_vol)
-        else
-            call xrec3D%execute(cline_rec3D)
-            call cline%set('vol1', refine3D_state_vol_fname(1))
-        endif
+        ! STARTUP BOOTSTRAP: reconstruct -> build masks -> re-reconstruct with
+        ! the masks and the NU prior, before any matching. Without it the
+        ! first iteration matches raw, spherically masked references while
+        ! every later iteration matches envelope-masked, NU-filtered ones --
+        ! the reference convention changes underneath an already converged
+        ! alignment, which is where refine3D_auto has been losing particles.
+        ! bootstrap_rec3D is exactly this sequence (unregularized pass ->
+        ! sigmas from the half maps -> regularized pass), and its second pass
+        ! runs the refinement's own filtering settings, so it leaves behind
+        ! the automask, the NU evidence envelope and the _nu_filt matching
+        ! references that iteration 1 then consumes.
+        cline_boot = cline
+        call cline_boot%set('prg', 'bootstrap_rec3D')
+        call cline_boot%delete('trail_rec')
+        call cline_boot%delete('objfun')      ! bootstrap_rec3D owns objfun/ml_reg per pass
+        call cline_boot%delete('ml_reg')
+        call cline_boot%delete('objfun_den')
+        call cline_boot%delete('objfun_den_w')
+        call cline_boot%delete('sigma_est')
+        call cline_boot%delete('update_frac')
+        call cline_boot%delete('endit')
+        ! alignment-loop controls have no meaning for a reconstruction
+        call cline_boot%delete('refine')
+        call cline_boot%delete('maxits')
+        call cline_boot%delete('minits')
+        call cline_boot%delete('continue')
+        call cline_boot%set('postprocess', 'no')
+        call cline_boot%set('which_iter',      1)
+        call xbootstrap_rec3D%execute(cline_boot)
+        ! the bootstrap reconstruction is now the starting reference, and its
+        ! NU-filtered halves, masks and matching-lp handoff are on disk and in
+        ! the project, so iteration 1 matches exactly what iteration N will
+        call cline%set('vol1', refine3D_state_vol_fname(1))
+        call cline_boot%kill
         call seed_refine3D_auto_nonuniform_lpset()
         ! 3D refinement iterations
         call cline%set('prg',                   'refine3D')
@@ -333,130 +357,6 @@ contains
             l_compatible = init_box == params%box .and. init_smpd > TINY .and. &
                 &abs(init_smpd - params%smpd) <= 1.e-6
         end function project_init_vol_compatible
-
-        subroutine prepare_nu_bootstrap_refs_from_raw_halves()
-            type(string)         :: init_even, init_odd, raw_even, raw_odd, candidate
-            type(string)         :: out_even, out_odd, out_avg, out_locres
-            type(image)          :: vol_even_raw, vol_odd_raw, vol_even_nu, vol_odd_nu
-            integer              :: ldim_even(3), ldim_odd(3), ldim(3), nptcls_dummy, n_bootstrap_steps
-            logical              :: l_reconstruct_bootstrap
-            if( .not. params%l_nonuniform ) return
-            l_reconstruct_bootstrap = .false.
-            init_even      = add2fbody(init_vol, MRC_EXT, '_even')
-            init_odd       = add2fbody(init_vol, MRC_EXT, '_odd')
-            candidate      = add2fbody(init_even, MRC_EXT, '_unfil')
-            if( file_exists(candidate) )then
-                raw_even = candidate
-            else
-                raw_even = init_even
-            endif
-            call candidate%kill
-            candidate      = add2fbody(init_odd, MRC_EXT, '_unfil')
-            if( file_exists(candidate) )then
-                raw_odd = candidate
-            else
-                raw_odd = init_odd
-            endif
-            call candidate%kill
-            if( .not. file_exists(raw_even) .or. .not. file_exists(raw_odd) )then
-                write(logfhandle,'(A)') &
-                    &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: raw native E/O pair missing; '//&
-                    &'reconstructing startup references'
-                l_reconstruct_bootstrap = .true.
-            else
-                call find_ldim_nptcls(raw_even, ldim_even, nptcls_dummy)
-                call find_ldim_nptcls(raw_odd,  ldim_odd,  nptcls_dummy)
-                if( any(ldim_even /= [params%box,params%box,params%box]) .or. any(ldim_odd /= ldim_even) )then
-                    write(logfhandle,'(A)') &
-                        &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: raw E/O dimensions incompatible; '//&
-                        &'reconstructing startup references'
-                    l_reconstruct_bootstrap = .true.
-                else
-                    ldim = ldim_even
-                    call vol_even_raw%new(ldim, params%smpd)
-                    call vol_odd_raw%new(ldim, params%smpd)
-                    call vol_even_raw%read(raw_even)
-                    call vol_odd_raw%read(raw_odd)
-                    if( abs(vol_even_raw%get_smpd() - params%smpd) > 1.e-6 .or. &
-                        &abs(vol_odd_raw%get_smpd()  - params%smpd) > 1.e-6 )then
-                        write(logfhandle,'(A)') &
-                            &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: raw E/O sampling incompatible; '//&
-                            &'reconstructing startup references'
-                        l_reconstruct_bootstrap = .true.
-                    endif
-                endif
-            endif
-            if( l_reconstruct_bootstrap )then
-                l_have_init_vol = .false.
-                call cline_rec3D%delete('vol1')
-                call init_even%kill
-                call init_odd%kill
-                call raw_even%kill
-                call raw_odd%kill
-                call candidate%kill
-                call vol_even_raw%kill
-                call vol_odd_raw%kill
-                return
-            endif
-            ! PCG backend: the Q_NU replay regularizes in-solve, so the
-            ! competition NU prefilter of the validated init halves is
-            ! bypassed exactly like the post-hoc filter; no _nu_filt startup
-            ! references are produced and the first-iteration matching
-            ! references come from the raw init halves, as every later Q_NU
-            ! iteration feeds them. The raw-pair validation and its
-            ! reconstruct-startup fallback above stay backend-neutral.
-            if( trim(params%rec_backend) == 'pcg' )then
-                write(logfhandle,'(A)') &
-                    &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: PCG backend; raw native E/O startup references used without NU prefiltering'
-                call init_even%kill
-                call init_odd%kill
-                call raw_even%kill
-                call raw_odd%kill
-                call vol_even_raw%kill
-                call vol_odd_raw%kill
-                return
-            endif
-            ! The parsed startup lp is a generic default, not evidence about
-            ! the supplied half maps. Let NU inspect its full candidate bank.
-            call setup_nu_dmats(vol_even_raw, vol_odd_raw, params%mskdiam, [real ::])
-            call optimize_nu_cutoff_finds()
-            if( params%l_nu_refine )then
-                call extend_nu_filter_highres_shells(vol_even_raw, vol_odd_raw, nsteps=n_bootstrap_steps)
-                if( NU_DEV_OUTPUT ) &
-                    &write(logfhandle,'(A,I0)') '>>> NU bootstrap accepted high-resolution shell steps: ', n_bootstrap_steps
-            endif
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
-            call print_nu_filtmap_lowpass_stats()
-            if( NU_DEV_OUTPUT ) call analyze_filtmap_neighbor_continuity()
-            out_even = add2fbody(init_even, MRC_EXT, NUFILT_SUFFIX)
-            out_odd  = add2fbody(init_odd,  MRC_EXT, NUFILT_SUFFIX)
-            out_avg  = add2fbody(init_vol,  MRC_EXT, NUFILT_SUFFIX)
-            out_locres = add2fbody(init_vol, MRC_EXT, NULOCRES_SUFFIX)
-            call vol_even_nu%write(out_even, del_if_exists=.true.)
-            call vol_odd_nu%write(out_odd, del_if_exists=.true.)
-            call vol_even_nu%add(vol_odd_nu)
-            call vol_even_nu%mul(0.5)
-            call vol_even_nu%write(out_avg, del_if_exists=.true.)
-            call write_nu_local_resolution_map(out_locres)
-            call wait_for_closure(out_avg)
-            call wait_for_closure(out_locres)
-            write(logfhandle,'(A)') &
-                &'>>> '//WORKFLOW_LABEL//' BOOTSTRAP: generated NU-filtered startup references from raw native E/O maps'
-            call cleanup_nu_filter()
-            call init_even%kill
-            call init_odd%kill
-            call raw_even%kill
-            call raw_odd%kill
-            call out_even%kill
-            call out_odd%kill
-            call out_avg%kill
-            call out_locres%kill
-            call candidate%kill
-            call vol_even_raw%kill
-            call vol_odd_raw%kill
-            call vol_even_nu%kill
-            call vol_odd_nu%kill
-        end subroutine prepare_nu_bootstrap_refs_from_raw_halves
 
         subroutine set_refine3D_auto_sampling()
             type(sp_project) :: sampling_proj

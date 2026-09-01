@@ -238,6 +238,7 @@ contains
         integer :: filtsz
         logical :: have_even, have_odd, have_avg, l_nonuniform_mode, l_use_merged_nu_ref
         logical :: l_envmask_exists, l_envmask_compatible, l_use_envmask, l_nu_envmask_present
+        logical :: l_nu_refs_missing
         l_nonuniform_mode    = params%l_nonuniform
         l_use_merged_nu_ref  = params%l_nonuniform_lpset .and. params%l_lpset
         vol_avg = params%vols(s)
@@ -253,12 +254,20 @@ contains
         have_even = file_exists(vol_even)
         have_odd  = file_exists(vol_odd)
         ! fall back to regular refs if nonuniform versions don't exist yet (will be created later in volassemble)
+        l_nu_refs_missing = .false.
         if( .not. have_even .or. .not. have_odd )then
             if( l_nonuniform_mode )then
                 vol_even = params%vols_even(s)
                 vol_odd  = params%vols_odd(s)
                 have_even = file_exists(vol_even)
                 have_odd  = file_exists(vol_odd)
+                ! The nonuniform contract is that filtering is assembly-owned,
+                ! so the FILTER block below deliberately does nothing. That is
+                ! only true for references assembly actually produced: falling
+                ! back here yields RAW half maps, and leaving them unfiltered
+                ! matches against noise out to the full matching band. Flagged
+                ! so the filter block applies the FSC-optimal filter instead.
+                l_nu_refs_missing = .true.
             endif
         endif
         ! In nonuniform_lpset, an explicit/promoted LP means we deliberately
@@ -324,7 +333,7 @@ contains
             call build%vol%fft
             call build%vol_odd%fft
         endif
-        if( params%l_ml_reg .or. l_nonuniform_mode )then
+        if( (params%l_ml_reg .or. l_nonuniform_mode) .and. .not. l_nu_refs_missing )then
             ! filtering done when volumes are assembled
         else if( params%l_icm )then
             ! filtering done above
@@ -345,6 +354,13 @@ contains
                 call fsc2optlp_sub(filtsz,build%fsc(s,:),cur_fil)
                 call build%vol%apply_filter(cur_fil)
                 call build%vol_odd%apply_filter(cur_fil)
+                if( l_nu_refs_missing ) write(logfhandle,'(A,I0,A)') &
+                    &'>>> state ', s, ' nonuniform references not assembled yet; '//&
+                    &'matching against FSC-filtered raw half maps'
+            else if( l_nu_refs_missing )then
+                ! no FSC to filter with either: a raw, unfiltered, full-band
+                ! reference is never an acceptable matching model
+                THROW_HARD('no nonuniform references and no FSC to filter the raw half maps; supply lp')
             endif
         endif
         call envmask%kill

@@ -143,7 +143,17 @@ contains
         l_use    = .false.
         if( .not. params%l_nonuniform ) return
         l_fresh_start = params%which_iter <= params%startit .and. trim(params%continue).ne.'yes'
-        if( l_fresh_start ) return
+        if( l_fresh_start )then
+            ! A fresh start normally cannot trust an lp left in the project by
+            ! some earlier run. It can when the NU-filtered references that lp
+            ! was derived from are on disk: the same assembly wrote both, so
+            ! the handoff describes the references this iteration will match
+            ! (refine3D_auto's startup bootstrap). Without this the first
+            ! iteration falls back to the FSC band while every later one uses
+            ! the evidence-derived band -- the discontinuity the bootstrap
+            ! exists to remove.
+            if( .not. file_exists(add2fbody(params%vols_even(1), MRC_EXT, NUFILT_SUFFIX)) ) return
+        endif
         if( .not. build%spproj_field%isthere(params%fromp, 'lp') ) return
         align_lp = build%spproj_field%get(params%fromp, 'lp')
         l_use = align_lp > TINY

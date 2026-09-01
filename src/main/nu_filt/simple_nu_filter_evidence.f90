@@ -618,7 +618,13 @@ contains
         write(logfhandle,'(4X,A6,2X,A12,2X,I12,2X,F8.2,A)') '  null', '          --', counts(0), pct, '%'
         do icand = 1, n_signal
             pct = 100. * real(counts(icand)) / real(n_supp)
-            write(logfhandle,'(4X,I6,2X,F12.3,2X,I12,2X,F8.2,A)') icand, lps(icand), counts(icand), pct, '%'
+            if( lps(icand) > TINY )then
+                write(logfhandle,'(4X,I6,2X,F12.3,2X,I12,2X,F8.2,A)') icand, lps(icand), counts(icand), pct, '%'
+            else
+                ! no voxel selected this candidate, so its cutoff was never
+                ! observed here; report the count without a fabricated limit
+                write(logfhandle,'(4X,I6,2X,A12,2X,I12,2X,F8.2,A)') icand, '          --', counts(icand), pct, '%'
+            endif
         enddo
         deallocate(counts, lps)
     end subroutine print_nu_evidence_lowpass_histogram
