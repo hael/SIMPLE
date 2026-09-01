@@ -1918,7 +1918,6 @@ contains
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
         integer :: n_active_state, n_sampled_state
-        integer :: nthr_master_here, nthr_solve
         type(image_msk) :: state_support_msk
         logical :: l_state_support
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_nu_replay
@@ -2011,23 +2010,13 @@ contains
             ! (FSC, NU evidence, B-factor reference) and the shipped ML pair
             ! on the same footing
             call build_pcg_state_support(params, state, state_support_msk, l_state_support)
-            ! the two halves are independent by gold-standard construction
-            ! (own accumulators, own pcgop, own outputs; image FFT planning
-            ! is critical-section-guarded), so they solve concurrently as
-            ! two teams with half the threads each
-            nthr_master_here = 1
-            !$ nthr_master_here = omp_get_max_threads()
-            nthr_solve = max(1, nthr_master_here / 2)
-            !$ call omp_set_max_active_levels(2)
-            !$omp parallel sections num_threads(2) default(shared) if(nthr_master_here > 1)
-            !$omp section
-            !$ call omp_set_num_threads(nthr_solve)
+            ! NOTE: the halves were briefly solved as two concurrent OpenMP
+            ! sections; that regressed (both halves threw at the box-300
+            ! final reconstruction) and is reverted pending a diagnosis of
+            ! what in the solve path is not master-thread-safe or not
+            ! affordable at twice the peak workspace
             call reduce_solve_state_half(state, 0, 'even', half_even, n_even, 'base')
-            !$omp section
-            !$ call omp_set_num_threads(nthr_solve)
             call reduce_solve_state_half(state, 1, 'odd',  half_odd,  n_odd,  'base')
-            !$omp end parallel sections
-            !$ call omp_set_num_threads(nthr_master_here)
             if( params%l_trail_rec )then
                 call count_state_sampling(state, n_active_state, n_sampled_state)
                 if( n_even+n_odd /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
@@ -2114,20 +2103,9 @@ contains
                             &evidence_seconds=time_evidence)
                     endif
                 endif
-                ! concurrent ML solves, same contract as the base pair above
-                nthr_master_here = 1
-                !$ nthr_master_here = omp_get_max_threads()
-                nthr_solve = max(1, nthr_master_here / 2)
-                !$ call omp_set_max_active_levels(2)
-                !$omp parallel sections num_threads(2) default(shared) if(nthr_master_here > 1)
-                !$omp section
-                !$ call omp_set_num_threads(nthr_solve)
+                ! sequential; see the note on the base pair above
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
-                !$omp section
-                !$ call omp_set_num_threads(nthr_solve)
                 call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
-                !$omp end parallel sections
-                !$ call omp_set_num_threads(nthr_master_here)
                 if( allocated(nu_band_w)      ) deallocate(nu_band_w)
                 if( allocated(nu_band_limits) ) deallocate(nu_band_limits)
                 ! shipped-pair crossing: the over-regularization diagnostic

@@ -2691,15 +2691,20 @@ the acceptable-looking outputs do not validate the prior.
      because OpenMP scaling saturates at these box sizes). OMP
      regions benefit directly; FFTW plan threading may remain at the
      original nthr where plans are cached.
-   - Concurrent even/odd solves (2026-09-01, user-directed): the
-     distributed master's base and ML half solves run as two OpenMP
-     sections with half the master threads each -- the halves are
-     independent by gold-standard construction (own raw accumulators,
-     own reconstructor_pcg instance, own output files; image FFT plan
-     creation is critical-section-guarded in simple_image_core; the
-     per-state suppression accumulation is the one shared write, now
-     critical-guarded). The particle-reading shared-memory path is
-     NOT parallelized across halves (shared build%imgbatch buffer).
+   - Concurrent even/odd solves (2026-09-01): implemented as two
+     OpenMP sections in the distributed master, then REVERTED the
+     same day -- abinitio3D aborted in bootstrap_rec3D pass 1 of the
+     box-300 final reconstruction with two interleaved master-side
+     THROW_HARD backtraces (both halves throwing at once). The
+     preconditions checked out on paper (own accumulators, own
+     reconstructor_pcg, own output files, critical-guarded FFT plan
+     creation, critical-guarded suppression accumulation), so
+     something in the solve path is either not master-thread-safe
+     (ori/hash lookups in count_full_state_half are the leading
+     suspect) or not affordable at twice the padded workspace
+     (boxpd=600 at the final box). Re-attempt only with the actual
+     ERROR! line identified; the suppression critical section is
+     retained as harmless.
    - NU work deduplication (2026-09-01, user-directed): the Q_NU
      evidence phase and the matching-reference generation ran the
      full setup + solvent clamp + optimization + shell walk twice per
