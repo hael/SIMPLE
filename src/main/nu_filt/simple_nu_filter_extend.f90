@@ -326,6 +326,8 @@ contains
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'before post-extension ordered-label cleanup')
         call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
         call clamp_nu_filtmap_labels(n_base)
+        ! re-enforce the solvent clamp: the cleanup re-optimizes on unaries
+        call apply_nu_solvent_clamp()
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'after post-extension ordered-label cleanup')
         call compact_nu_highres_dmat_bank_for_capacity()

@@ -401,6 +401,10 @@ interface
         integer, intent(in) :: state
     end subroutine retain_nu_filter_setup
 
+    module subroutine apply_nu_solvent_clamp( n_clamped )
+        integer, optional, intent(out) :: n_clamped
+    end subroutine apply_nu_solvent_clamp
+
     module logical function nu_filter_setup_is_retained( state, box_expected )
         integer, intent(in) :: state, box_expected
     end function nu_filter_setup_is_retained

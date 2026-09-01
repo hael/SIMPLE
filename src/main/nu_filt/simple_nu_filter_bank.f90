@@ -216,24 +216,12 @@ contains
         end do
         !$omp end parallel do
         ! solvent-constraint clamp: outside the envelope the label is the
-        ! coarsest candidate, applied before Potts smoothing so the ordered
-        ! labels own the boundary
+        ! coarsest candidate. Applied before Potts smoothing as the intended
+        ! initialization AND re-applied after: the smoothing re-optimizes on
+        ! the unaries at every sweep, so a pre-smoothing override alone is
+        ! eroded wherever solvent unaries prefer fine labels
         if( nu_l_solvent_clamp )then
-            n_clamped = 0
-            !$omp parallel do schedule(static) default(shared) private(i,j,k,imask) &
-            !$omp reduction(+:n_clamped) proc_bind(close)
-            do imask = 1, n_nu_mask
-                i = nu_mask_vox(1,imask)
-                j = nu_mask_vox(2,imask)
-                k = nu_mask_vox(3,imask)
-                if( nu_solvent_lmask(i,j,k) )then
-                    if( filtmap(i,j,k) /= 1_NU_LABEL_KIND )then
-                        filtmap(i,j,k) = 1_NU_LABEL_KIND
-                        n_clamped = n_clamped + 1
-                    endif
-                endif
-            end do
-            !$omp end parallel do
+            call apply_nu_solvent_clamp(n_clamped)
             if( nu_l_report ) write(logfhandle,'(A,I0,A)') &
                 &'>>> NU SOLVENT CLAMP: ', n_clamped, ' support voxels outside the envelope set to the coarsest candidate'
         endif
@@ -241,6 +229,7 @@ contains
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'before ordered-label smoothing')
         call refine_nu_candidate_map_ordered_labels(filtmap, n_candidates)
+        if( nu_l_solvent_clamp ) call apply_nu_solvent_clamp()
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'after ordered-label smoothing')
         call clamp_nu_filtmap_labels(n_base)
@@ -249,6 +238,36 @@ contains
         ! accepted challenger unaries and can then run a final ordered-label
         ! cleanup over the expanded label field.
     end subroutine optimize_nu_cutoff_finds
+
+    !> Enforce the solvent-constraint clamp on the module label field:
+    !! support voxels outside the envelope take the coarsest candidate.
+    !! Called before AND after every ordered-label smoothing pass, because
+    !! the smoothing re-optimizes labels from the unaries.
+    module subroutine apply_nu_solvent_clamp( n_clamped )
+        integer, optional, intent(out) :: n_clamped
+        integer :: i, j, k, imask, n_here
+        if( .not. nu_l_solvent_clamp ) then
+            if( present(n_clamped) ) n_clamped = 0
+            return
+        endif
+        if( .not. allocated(filtmap) ) THROW_HARD('filtmap not allocated; apply_nu_solvent_clamp')
+        n_here = 0
+        !$omp parallel do schedule(static) default(shared) private(i,j,k,imask) &
+        !$omp reduction(+:n_here) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            if( nu_solvent_lmask(i,j,k) )then
+                if( filtmap(i,j,k) /= 1_NU_LABEL_KIND )then
+                    filtmap(i,j,k) = 1_NU_LABEL_KIND
+                    n_here = n_here + 1
+                endif
+            endif
+        end do
+        !$omp end parallel do
+        if( present(n_clamped) ) n_clamped = n_here
+    end subroutine apply_nu_solvent_clamp
 
     subroutine cache_nu_extension_frontier_dmats( candmap, n_base )
         integer(kind=NU_LABEL_KIND), intent(in) :: candmap(:,:,:)
