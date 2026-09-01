@@ -33,7 +33,7 @@ end type image_msk
 
 contains
 
-    subroutine automask3D( self, params, vol, l_tight, pix_thres, vol_masked, lp_override )
+    subroutine automask3D( self, params, vol, l_tight, pix_thres, vol_masked, lp_override, l_report )
         class(image_msk),       intent(inout) :: self
         class(parameters),      intent(in)    :: params
         class(image),           intent(in)    :: vol
@@ -41,12 +41,16 @@ contains
         real,         optional, intent(in)    :: pix_thres
         class(image), optional, intent(inout) :: vol_masked
         real,         optional, intent(in)    :: lp_override
+        logical,      optional, intent(in)    :: l_report
+        logical :: l_rep
         if( vol%is_2d() )THROW_HARD('automask3D is intended for volumes only')
+        l_rep = .true.
+        if( present(l_report) ) l_rep = l_report
         self%amsklp   = params%amsklp
         if( present(lp_override) ) self%amsklp = lp_override
         self%binwidth = params%binwidth
         self%edge     = params%edge
-        write(logfhandle,'(A,F7.2,A,I3,A,I3,A)') '>>> AUTOMASKING LOW-PASS/DILATION LAYERS/EDGE: ',&
+        if( l_rep ) write(logfhandle,'(A,F7.2,A,I3,A,I3,A)') '>>> AUTOMASKING LOW-PASS/DILATION LAYERS/EDGE: ',&
             &self%amsklp, ' A/',self%binwidth, ' voxels/', self%edge, ' voxels'
         ! low-pass smoothing
         call self%new_bimg(vol%get_ldim(), vol%get_smpd())
@@ -55,7 +59,7 @@ contains
         call self%ifft
         if( L_WRITE .and. params%part == 1 ) call self%write(string('automask_lowpass.mrc'))
         ! segmentation
-        call self%automask3D_binarize(params, l_tight, pix_thres)
+        call self%automask3D_binarize(params, l_tight, pix_thres, l_report=l_rep)
         ! Morphological growth and soft edge
         call self%grow_bins(self%binwidth)
         call self%cos_edge(self%edge)
@@ -168,14 +172,18 @@ contains
         deallocate(ccsizes, imat, keepmat)
     end subroutine envmask3D_from_lmask
 
-    subroutine automask3D_binarize( self, params, l_tight, pix_thres )
+    subroutine automask3D_binarize( self, params, l_tight, pix_thres, l_report )
         class(image_msk),  intent(inout) :: self
         class(parameters), intent(in)    :: params
         logical,           intent(in)    :: l_tight
         real, optional,    intent(in)    :: pix_thres
+        logical, optional, intent(in)    :: l_report
         integer, allocatable :: cc_sz(:)
         type(image_bin)      :: vol_ccs
         integer              :: i
+        logical              :: l_rep
+        l_rep = .true.
+        if( present(l_report) ) l_rep = l_report
         ! binarization
         if( present(pix_thres) )then
             call self%binarize(pix_thres)
@@ -187,7 +195,7 @@ contains
         ! identify connected components
         call self%find_ccs(vol_ccs, update_imat=.true.)
         cc_sz = vol_ccs%size_ccs()
-        write(logfhandle,'(A,I7,A)'  ) '>>> FOUND: ', size(cc_sz), ' CONNECTED COMPONENT(S)'
+        if( l_rep ) write(logfhandle,'(A,I7,A)'  ) '>>> FOUND: ', size(cc_sz), ' CONNECTED COMPONENT(S)'
         ! extract largest CC
         i = maxloc(cc_sz, dim=1)
         call vol_ccs%cc2bin(i)

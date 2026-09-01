@@ -575,12 +575,13 @@ contains
         write(logfhandle,'(A)') '>>> NU REPLAY EVIDENCE'
         write(logfhandle,'(A,A)')    '    pcg_nu_evidence_source=', trim(state%summary%source)
         write(logfhandle,'(A,A)')    '    pcg_nu_evidence_identity=', trim(state%summary%identity)
-        write(logfhandle,'(A,I0)')   '    pcg_nu_candidate_count=', state%summary%n_candidates
         write(logfhandle,'(A,F10.6)') '    pcg_nu_null_fraction=', state%summary%null_fraction
         do iband = 1, state%summary%n_bands
             write(logfhandle,'(A,I2.2,A,F10.6)') '    pcg_nu_supported_fraction_band', iband, '=', &
                 &state%summary%supported_fraction(iband)
         enddo
+        if( .not. (NU_DEV_OUTPUT .and. nu_l_report) ) return
+        write(logfhandle,'(A,I0)')   '    pcg_nu_candidate_count=', state%summary%n_candidates
         write(logfhandle,'(A,F10.6)') '    pcg_nu_uncertain_fraction=', state%summary%uncertain_fraction
         write(logfhandle,'(A,ES14.6)') '    pcg_nu_calibration_temperature=', &
             &state%summary%calibration_temperature

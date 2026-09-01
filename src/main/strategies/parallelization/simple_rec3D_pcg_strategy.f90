@@ -319,7 +319,7 @@ contains
             call vol_env_avg%copy(vol_even)
             call vol_env_avg%add(vol_odd)
             call vol_env_avg%mul(0.5)
-            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp)
+            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp, l_report=.false.)
             call set_nu_solvent_envelope(solvent_env)
             call solvent_env%kill_bimg
             call vol_env_avg%kill
@@ -515,20 +515,27 @@ contains
         real,                    intent(out)   :: supp_pct
         real,                    intent(out)   :: overhead_s
         real, allocatable :: xbase(:,:,:)
-        real :: nu_penalty, nu_penalty_base
+        real :: nu_penalty, nu_penalty_base, nu_penalty_evid, nu_penalty_base_evid
         integer(timer_int_kind) :: t_stats
         t_stats = tic()
-        call pcgop%get_nu_prior_stats(x, nu_penalty)
+        call pcgop%get_nu_prior_stats(x, nu_penalty, penalty_evidenced=nu_penalty_evid)
         xbase = base_volume%get_rmat()
-        call pcgop%get_nu_prior_stats(xbase, nu_penalty_base)
+        call pcgop%get_nu_prior_stats(xbase, nu_penalty_base, penalty_evidenced=nu_penalty_base_evid)
         deallocate(xbase)
+        ! the suppression readout the auto-lambda/auto-target controllers
+        ! consume is restricted to the evidenced (molecular) region: the
+        ! solvent clamp holds solvent at maximum weight, and total-energy
+        ! suppression would let the solvent term flood the readout and drive
+        ! lambda to the floor (weakening the prior where evidence grades it)
         supp_pct = 0.0
-        if( nu_penalty_base > 1.0e-12 ) supp_pct = 100.0 * (1.0 - sqrt(max(nu_penalty,0.0) / nu_penalty_base))
+        if( nu_penalty_base_evid > 1.0e-12 ) &
+            &supp_pct = 100.0 * (1.0 - sqrt(max(nu_penalty_evid,0.0) / nu_penalty_base_evid))
         overhead_s = real(real(toc(t_stats),dp))
         write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,F9.3)') '>>> PCG NU REPLAY ('//trim(context)//'/'//&
             &trim(half)//'): lambda_eff=', pcgop%get_effective_nu_lambda(), '  pcg_nu_prior_energy_final=', &
             &nu_penalty, '  pcg_nu_prior_energy_base=', nu_penalty_base, '  stats_overhead_s=', overhead_s
-        write(logfhandle,'(A,F8.2)') '    pcg_nu_suppression_pct=', supp_pct
+        write(logfhandle,'(A,F8.2,A,ES12.4,A,ES12.4)') '    pcg_nu_suppression_pct=', supp_pct, &
+            &' (evidenced region; energies ', nu_penalty_evid, ' /', nu_penalty_base_evid, ')'
     end subroutine report_nu_solve_stats
 
     !> Persist the per-state NU-replay firing readout for the convergence

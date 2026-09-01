@@ -185,6 +185,19 @@ contains
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
         nselected = count_active_nu_mask(mask)
+        if( .not. NU_DEV_OUTPUT )then
+            ! concise one-line summary; the full table is a dev diagnostic
+            do icut = size(cutoff_finds), 1, -1
+                if( counts(icut) > 0 )then
+                    write(logfhandle,'(A,F8.3,A,F6.2,A,I0,A)') '>>> NU FILTER: finest selected lp ', &
+                        &nu_label_lowpass_limit(icut), ' A (', percentages(icut), '% of mask; ', &
+                        &size(cutoff_finds), ' bank members)'
+                    exit
+                endif
+            end do
+            deallocate(counts, percentages)
+            return
+        endif
         write(logfhandle,'(A)') '>>> NU LOW-PASS ASSIGNMENTS (retained filter bank)'
         write(logfhandle,'(A,I12)') '    Analyzed voxels: ', nselected
         write(logfhandle,'(A)')     '    Source      Bank  Fourier k  LP limit (A)        Voxels    Pct mask'

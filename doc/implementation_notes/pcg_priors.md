@@ -2645,6 +2645,33 @@ the acceptable-looking outputs do not validate the prior.
      not compensate the clamp away by lowering lambda; if it does,
      restrict the suppression readout to the in-envelope region.
 
+   **FIRST-RUN FINDINGS AND FIXES (2026-09-01, streptavidin
+   refine3D_auto+pcg).** Shipped pair 3.05-3.12 A, controllers and
+   clamp active; two defects surfaced and were fixed:
+   - Matching low-pass pinned at the static bank finest (4.036 A)
+     while the evidence extended to 3.1 A: the plain-nonuniform
+     matching-reference pass built only the static ladder. Fixed:
+     `filter_pcg_nonuniform_maps` now runs the proven shell walk
+     (`extend_nu_filter_highres_shells`) after optimization when
+     nu_refine=yes, so the matching handoff advances with the
+     evidence (">>> NU MATCHING BANK EXTENDED..." line).
+   - The predicted controller interaction FIRED: total-energy
+     suppression read 40% at lambda 0.1 (solvent term), auto-lambda
+     drove lambda to the 0.01 floor, molecular regularization
+     collapsed to ~6%. Fixed as designed: the suppression readout is
+     now restricted to the evidenced region -- `reconstructor_pcg`
+     accumulates exact per-band energies y_b^T W_b y_b total and over
+     `l_nu_evidenced` (any input band weight < 1) during
+     `apply_nu_precision`; `get_nu_prior_stats` returns the evidenced
+     penalty and `report_nu_solve_stats` feeds the controllers the
+     evidenced-region suppression.
+   - Output tidied: routine NU diagnostics (Potts sweeps, whitening
+     profile, envelope ICM sweeps, envmask stats block, low-pass
+     assignment table, evidence calibration/provenance details,
+     solvent-automask banner lines) demoted behind NU_DEV_OUTPUT;
+     concise one-liners remain (finest selected lp, solvent clamp
+     count, evidence identity + null/band fractions, occupancy).
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

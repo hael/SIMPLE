@@ -809,7 +809,8 @@ contains
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &set_nu_filter_report, NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, &
-            &write_nu_local_resolution_map, write_nu_evidence_envmask, set_nu_solvent_envelope
+            &write_nu_local_resolution_map, write_nu_evidence_envmask, set_nu_solvent_envelope, &
+            &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
             &NU_ENVMASK_ACTION_REGENERATE
         use simple_image_msk,        only: image_msk
@@ -827,7 +828,7 @@ contains
         real, allocatable             :: fsc(:), res(:), nu_align_lps(:)
         integer, allocatable          :: state_pops(:)
         logical, allocatable          :: l_included(:)
-        integer                       :: state, i, ldim(3)
+        integer                       :: state, i, ldim(3), nsteps_ext
         real                          :: fsc05, fsc0143, aux_resolution, align_lp, selected_lp
 
         if( .not. params%l_nonuniform ) return
@@ -939,11 +940,20 @@ contains
             call vol_env_avg%copy(vol_base_even)
             call vol_env_avg%add(vol_base_odd)
             call vol_env_avg%mul(0.5)
-            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp)
+            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp, l_report=.false.)
             call set_nu_solvent_envelope(solvent_env)
             call solvent_env%kill_bimg
             call vol_env_avg%kill
             call optimize_nu_cutoff_finds()
+            ! nu_refine: extend the matching-reference bank by the proven
+            ! shell walk so the matching low-pass handoff can advance with
+            ! the evidence (the static ladder would otherwise pin it)
+            if( params%l_nu_refine )then
+                call extend_nu_filter_highres_shells(vol_base_even, vol_base_odd, nsteps=nsteps_ext)
+                if( nsteps_ext > 0 ) write(logfhandle,'(A,I0,A,F8.3,A)') &
+                    &'>>> NU MATCHING BANK EXTENDED BY ', nsteps_ext, ' ACCEPTED SHELL STEP(S) TO ', &
+                    &get_nu_filter_bank_finest_lp(), ' A'
+            endif
 
             call plan_state_postprocess(params, state, params%which_iter, pp_plan)
             if( pp_plan%l_nu_envmask_incompatible )then
@@ -1300,7 +1310,7 @@ contains
             call vol_env_avg%copy(vol_nu_base_even)
             call vol_env_avg%add(vol_nu_base_odd)
             call vol_env_avg%mul(0.5)
-            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp)
+            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp, l_report=.false.)
             call set_nu_solvent_envelope(solvent_env)
             call solvent_env%kill_bimg
             call vol_env_avg%kill

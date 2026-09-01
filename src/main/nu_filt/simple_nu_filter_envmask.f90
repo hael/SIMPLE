@@ -262,7 +262,7 @@ contains
                     !$omp end parallel do
                 end do
                 stats%nits = iter
-                if( nu_l_report ) write(logfhandle,'(A,I2,A,I10)') &
+                if( NU_DEV_OUTPUT .and. nu_l_report ) write(logfhandle,'(A,I2,A,I10)') &
                     &'>>> NU envelope ICM iteration ', iter, ' changed voxels: ', nchanged
                 if( nchanged == 0 ) exit
             end do
@@ -383,6 +383,14 @@ contains
 
     module subroutine print_nu_envmask_stats( stats )
         type(nu_envmask_stats), intent(in) :: stats
+        if( .not. (NU_DEV_OUTPUT .and. nu_l_report) )then
+            ! the occupancy warning must never be silenced
+            if( stats%pct_signal > 50. )then
+                write(logfhandle,'(A)') '    WARNING: signal occupies more than half the support, so the median/MAD null'
+                write(logfhandle,'(A)') '             estimate is not trustworthy. Widen mskdiam or raise nu_msk_sig.'
+            endif
+            return
+        endif
         write(logfhandle,'(A)')            '>>> NU EVIDENCE ENVELOPE MASK'
         write(logfhandle,'(A,I12)')        '    Support voxels             : ', stats%n_support
         write(logfhandle,'(A,ES12.4)')     '    Null median margin         : ', stats%null_med

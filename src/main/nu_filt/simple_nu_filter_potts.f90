@@ -68,7 +68,7 @@ contains
                 end do
                 !$omp end parallel do
             end do
-            if( nu_l_report )then
+            if( NU_DEV_OUTPUT .and. nu_l_report )then
                 site_energy = calc_nu_label_smooth_site_energy(candmap, beta)
                 write(logfhandle,'(A,I2,A,I8,A,F12.5)') '>>> NU ordered-label smoothing iteration ', iter, &
                     &' changed voxels: ', nchanged, ', mean site energy: ', site_energy

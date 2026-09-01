@@ -97,7 +97,8 @@ contains
         if( allocated(nu_noise_profile_cached) ) deallocate(nu_noise_profile_cached)
         nu_noise_profile_cached = noise_profile
         nu_noise_rmax_cached    = noise_rmax
-        write(logfhandle,'(A,I0,A,ES11.4,A,ES11.4,A,F6.3)') '>>> NU WHITENING PROFILE: ', &
+        if( NU_DEV_OUTPUT .and. nu_l_report ) &
+            &write(logfhandle,'(A,I0,A,ES11.4,A,ES11.4,A,F6.3)') '>>> NU WHITENING PROFILE: ', &
             &size(noise_profile), ' shells, sigma(r) min ', minval(noise_profile), ' max ', &
             &maxval(noise_profile), ' edge/centre ', noise_profile(size(noise_profile))/max(noise_profile(1),TINY)
         if( allocated(dmats_mask) ) deallocate(dmats_mask)

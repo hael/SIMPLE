@@ -147,6 +147,9 @@ type :: reconstructor_pcg
     real,    allocatable :: nu_band_w(:,:,:,:)        !< graded spatial weights, box^3 x nbands
     real,    allocatable :: nu_band_limits(:)         !< coarse-to-fine band low-pass limits (A)
     real,    allocatable :: nu_band_wmean(:)          !< support-mean weight per band (precond approx)
+    logical, allocatable :: l_nu_evidenced(:,:,:)     !< evidence-supported (molecular) region: any input band weight < 1; the suppression readout is restricted to it so the solvent clamp cannot flood the controller signal
+    real(dp)             :: nu_e_total_last = 0.d0    !< per-band-accumulated prior energy of the last Q_NU application
+    real(dp)             :: nu_e_evid_last  = 0.d0    !< same, restricted to the evidenced region
     integer(kind=1), allocatable :: nu_band_idx(:,:,:) !< padded-lattice band index, 0 = DC/unvisited
     real              :: nu_lambda_rel = 0.0          !< strength relative to the data scale
     real              :: lambda_nu = 0.0              !< effective absolute strength
@@ -678,6 +681,12 @@ contains
             self%nu_band_wmean(b)   = real(sum(real(self%nu_band_w(:,:,:,b),dp), &
                 &mask=self%mask > 0.0) / real(n_supp,dp))
         enddo
+        ! evidenced (molecular) region for the restricted suppression
+        ! readout: solvent-clamped and fully unsupported voxels carry weight
+        ! 1 in every band and are excluded
+        if( allocated(self%l_nu_evidenced) ) deallocate(self%l_nu_evidenced)
+        allocate(self%l_nu_evidenced(self%box,self%box,self%box))
+        self%l_nu_evidenced = (minval(band_w, dim=4) < 0.999) .and. (self%mask > 0.5)
         self%nu_lambda_rel = lambda_rel
         self%lambda_nu     = lambda_rel
         self%l_nu_prior    = .true.
@@ -824,6 +833,8 @@ contains
         endif
         nb = size(self%nu_band_w,4)
         self%nu_cacc = cmplx(0.0,0.0)
+        self%nu_e_total_last = 0.d0
+        self%nu_e_evid_last  = 0.d0
         do b = 1, nb
             !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static)
             do k = 1, cdim(3)
@@ -843,6 +854,13 @@ contains
             call self%wimg%get_rmat_ptr(rmat_ptr)
             self%nu_xb = self%nu_band_w(:,:,:,b) * &
                 &rmat_ptr(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box)
+            ! exact per-band energy y_b^T W_b y_b (nu_xb = W_b y_b here), total
+            ! and restricted to the evidenced region for the suppression readout
+            self%nu_e_total_last = self%nu_e_total_last + &
+                &sum(real(self%nu_xb,dp) * real(rmat_ptr(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box),dp))
+            self%nu_e_evid_last = self%nu_e_evid_last + &
+                &sum(real(self%nu_xb,dp) * real(rmat_ptr(o+1:o+self%box, o+1:o+self%box, o+1:o+self%box),dp), &
+                &mask=self%l_nu_evidenced)
             nullify(rmat_ptr)
             call self%wimg%zero_and_unflag_ft
             call self%wimg%get_rmat_ptr(rmat_ptr)
@@ -880,14 +898,19 @@ contains
 
     !>  \brief  NU replay diagnostics of a final map: the penalty
     !!          R_NU = (lambda_nu/2) x^T Q_NU x and its per-band energies.
-    subroutine get_nu_prior_stats( self, x, penalty )
+    subroutine get_nu_prior_stats( self, x, penalty, penalty_evidenced )
         class(reconstructor_pcg), intent(inout) :: self
         real,                       intent(in)  :: x(self%box,self%box,self%box)
         real,                       intent(out) :: penalty
+        real, optional,             intent(out) :: penalty_evidenced
         real, allocatable :: qx(:,:,:)
         if( .not. self%l_nu_prior ) THROW_HARD('set_nu_prior has not been called; get_nu_prior_stats')
         qx = self%apply_nu_precision(x)
         penalty = real(0.5_dp * real(self%lambda_nu,dp) * sum(real(x,dp) * real(qx,dp)))
+        ! evidenced-region energy from the per-band accumulation of the
+        ! application above (exact: W_b is diagonal in real space)
+        if( present(penalty_evidenced) ) &
+            &penalty_evidenced = real(0.5_dp * real(self%lambda_nu,dp) * self%nu_e_evid_last)
         deallocate(qx)
     end subroutine get_nu_prior_stats
 
@@ -1035,6 +1058,7 @@ contains
         if( allocated(self%nu_band_w)      ) deallocate(self%nu_band_w)
         if( allocated(self%nu_band_limits) ) deallocate(self%nu_band_limits)
         if( allocated(self%nu_band_wmean)  ) deallocate(self%nu_band_wmean)
+        if( allocated(self%l_nu_evidenced) ) deallocate(self%l_nu_evidenced)
         if( allocated(self%nu_band_idx)    ) deallocate(self%nu_band_idx)
         if( allocated(self%nu_cmat0)  ) deallocate(self%nu_cmat0)
         if( allocated(self%nu_cacc)   ) deallocate(self%nu_cacc)
