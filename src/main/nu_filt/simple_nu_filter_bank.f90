@@ -183,7 +183,7 @@ contains
     end function get_nu_filtmap_highres_shell_depth
 
     module subroutine optimize_nu_cutoff_finds()
-        integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates, imask
+        integer :: nx, ny, nz, i, j, k, icand, best_icand, n_base, n_candidates, imask, n_clamped
         real    :: best_dmat
         if( .not.allocated(dmats_mask) ) THROW_HARD('dmats_mask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats before nonuniform_filter_vol')
@@ -214,6 +214,28 @@ contains
             filtmap(i,j,k) = int(best_icand, kind=NU_LABEL_KIND)
         end do
         !$omp end parallel do
+        ! solvent-constraint clamp: outside the envelope the label is the
+        ! coarsest candidate, applied before Potts smoothing so the ordered
+        ! labels own the boundary
+        if( nu_l_solvent_clamp )then
+            n_clamped = 0
+            !$omp parallel do schedule(static) default(shared) private(i,j,k,imask) &
+            !$omp reduction(+:n_clamped) proc_bind(close)
+            do imask = 1, n_nu_mask
+                i = nu_mask_vox(1,imask)
+                j = nu_mask_vox(2,imask)
+                k = nu_mask_vox(3,imask)
+                if( nu_solvent_lmask(i,j,k) )then
+                    if( filtmap(i,j,k) /= 1_NU_LABEL_KIND )then
+                        filtmap(i,j,k) = 1_NU_LABEL_KIND
+                        n_clamped = n_clamped + 1
+                    endif
+                endif
+            end do
+            !$omp end parallel do
+            if( nu_l_report ) write(logfhandle,'(A,I0,A)') &
+                &'>>> NU SOLVENT CLAMP: ', n_clamped, ' support voxels outside the envelope set to the coarsest candidate'
+        endif
         if( NU_DEV_OUTPUT .and. nu_l_report ) call log_nu_aux_replacement_margin_stats()
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &call log_nu_candidate_selection_counts(filtmap, n_base, 'before ordered-label smoothing')

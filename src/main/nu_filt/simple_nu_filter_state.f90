@@ -204,7 +204,33 @@ contains
         nu_evidence_requested = .false.
         nu_evidence_source = ''
         nu_evidence_source_fingerprint = 0.d0
+        call clear_nu_solvent_envelope
     end subroutine cleanup_nu_filter
+
+    !> Arm the solvent-constraint clamp from a soft [0,1] envelope mask on the
+    !! setup grid: voxels below half height are solvent. Call after
+    !! setup_nu_dmats; the clamp overrides labels after optimization only, so
+    !! every spherical-support statistic is untouched.
+    module subroutine set_nu_solvent_envelope( envmask )
+        class(image), intent(in) :: envmask
+        real, allocatable :: env_rmat(:,:,:)
+        integer :: env_ldim(3)
+        if( box < 1 ) THROW_HARD('set_nu_solvent_envelope requires setup_nu_dmats first')
+        env_ldim = envmask%get_ldim()
+        if( any(env_ldim /= ldim) ) THROW_HARD('solvent envelope dimensions differ from NU setup')
+        if( envmask%is_ft() ) THROW_HARD('solvent envelope must be in real space')
+        call clear_nu_solvent_envelope
+        env_rmat = envmask%get_rmat()
+        allocate(nu_solvent_lmask(ldim(1),ldim(2),ldim(3)))
+        nu_solvent_lmask = env_rmat(:ldim(1),:ldim(2),:ldim(3)) < 0.5
+        deallocate(env_rmat)
+        nu_l_solvent_clamp = .true.
+    end subroutine set_nu_solvent_envelope
+
+    module subroutine clear_nu_solvent_envelope
+        if( allocated(nu_solvent_lmask) ) deallocate(nu_solvent_lmask)
+        nu_l_solvent_clamp = .false.
+    end subroutine clear_nu_solvent_envelope
 
     module subroutine cleanup_aux_bank
         integer :: i

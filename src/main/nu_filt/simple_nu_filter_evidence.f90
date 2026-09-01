@@ -204,6 +204,20 @@ contains
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
+            if( nu_l_solvent_clamp )then
+                ! solvent-constraint clamp: outside the envelope there is no
+                ! evidenced detail by construction -- null assignment, zero
+                ! band support (maximum lack-of-evidence in every band), zero
+                ! uncertainty. Applied after the spherical-support statistics
+                ! (calibration, whitening, spatial pass) are finalized.
+                if( nu_solvent_lmask(i,j,k) )then
+                    state%selected_label(imask)  = 0_NU_LABEL_KIND
+                    state%selected_cutoff(imask) = 0.
+                    state%uncertainty(imask)     = 0.
+                    state%band_support(imask,:)  = 0.
+                    cycle
+                endif
+            endif
             best_e = huge(best_e)
             do icand = 1, n_candidates
                 probs(icand) = evidence_site_energy(imask, icand, null_cost, dmats_mask(:,:n_signal), &
@@ -307,6 +321,11 @@ contains
         state%summary%provenance = trim(state%summary%provenance)//';temperature='//trim(adjustl(value_text))
         write(value_text,'(ES14.6)') beta
         state%summary%provenance = trim(state%summary%provenance)//';beta='//trim(adjustl(value_text))
+        ! the clamp is part of the evidence identity: a frozen state built
+        ! with the solvent constraint must never be mistaken for one without
+        if( nu_l_solvent_clamp )then
+            state%summary%provenance = trim(state%summary%provenance)//';solvent_clamp=density_envelope'
+        endif
         write(value_text,'(ES14.6)') null_bias_median
         state%summary%provenance = trim(state%summary%provenance)//';null_bias_median='//trim(adjustl(value_text))
         write(value_text,'(ES14.6)') null_bias_mad

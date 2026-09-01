@@ -102,7 +102,7 @@ contains
         call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
-        if( .not. cline%defined('envfsc')      ) call cline%set('envfsc',           'no') ! broad spherical FSC by default
+        call cline%set('envfsc',         'yes') ! density-envelope mask + phase-randomization corrected FSC steers matching lp, NU gating and convergence
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',            'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',            'no') ! 4 now, probably fine
         if( cline%defined('ref_pose_init') .and. cline%get_carg('ref_pose_init').eq.'cc' )then

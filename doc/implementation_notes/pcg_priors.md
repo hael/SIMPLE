@@ -2562,6 +2562,88 @@ the acceptable-looking outputs do not validate the prior.
    ceiling. The walk is gold-standard-gated so early noisy stages
    should accept nothing; verify on the bgal replay first, watching
    per-stage extension lines against the stage lp schedule.
+4. **Solvent constraint via the lowest-bin convention (IMPLEMENTED
+   2026-09-01, user-directed; design recorded before first run).**
+   Context: the
+   2026-08-05 fundamentals changes removed the envelope from the NU
+   filter (spherical-only `setup_nu_dmats`, a31c7e8ad) and flipped
+   refine3D_auto to spherical FSC (envfsc=no, c7dfd5055); the retired
+   solvent prior left the PCG solve with no solvent constraint at all.
+   envfsc=yes is restored as the refine3D_auto hard default
+   (2026-09-01): the density-envelope automask + phase-randomization
+   corrected FSC (`evaluate_halfmap_pair`) again steers matching lp,
+   NU gating, and convergence. This item drafts the remaining half:
+   reinstating the solvent constraint in the NU filter and the Q_NU
+   prior WITHOUT reopening the reason the envelope was removed.
+
+   Design principles:
+   - ONE mask, one convention, both consumers. The conservative
+     density automask (`image_msk%automask3D`: lp-smooth -> otsu
+     binarize -> connected components -> grow -> cos_edge) at the
+     conservative `envmsklp`, computed ON THE FLY from the current
+     base average at assembly time, never written to file for this
+     purpose. NOT the aggressive NU evidence envelope (amsklp-scale),
+     which keeps its narrower jobs (detergent-omitting
+     matching-reference masking, diagnostics) and is never used for
+     the FSC or the solvent constraint.
+   - POST-ASSIGNMENT CLAMP, not objective support. The spherical
+     support of `setup_nu_dmats` is an invariant (envelope-restricted
+     objectives broke the null statistics -- the reason for
+     a31c7e8ad). The objective, whitening, and null estimation stay
+     spherical and untouched. The envelope enters only AFTER
+     optimization:
+     (a) NU filter: voxels outside the envelope have their selected
+         label overridden to the COARSEST candidate (lowest-resolution
+         bin) before ordered-label Potts smoothing, which then owns
+         the boundary. New optional envelope argument on the
+         label-selection/`optimize_nu_cutoff_finds` handoff; absent
+         argument = current behavior, bit-identical.
+     (b) Q_NU prior: `expand_nu_evidence_band_weights` assigns voxels
+         outside the same envelope to the coarsest band at the
+         maximum lack-of-evidence weight, so the replay applies its
+         strongest fine-shell suppression in solvent -- the in-solve
+         solvent-flattening constraint the retired Q_s solvent prior
+         was reaching for, expressed through the existing band
+         machinery (no new prior term, R10 mode-exclusivity
+         untouched).
+   - Implementation (as built): module-level clamp state
+     (`nu_solvent_lmask`/`nu_l_solvent_clamp`) with public
+     `set_nu_solvent_envelope`/`clear_nu_solvent_envelope`; armed by the
+     caller after `setup_nu_dmats`, cleared by `cleanup_nu_filter`, so
+     absent = bit-identical current behavior for every other caller
+     (nu_filt3D, bootstrap refs, tests). Filter clamp in
+     `optimize_nu_cutoff_finds` (label -> coarsest candidate before
+     Potts, logged as ">>> NU SOLVENT CLAMP: N support voxels...").
+     Evidence clamp in `build_nu_evidence_state` (solvent -> null
+     assignment, zero band support, zero uncertainty; skipped voxels
+     bypass the softmax entirely, so the summary statistics --
+     null_fraction, supported_fraction, uncertain_fraction -- reflect
+     the constraint; provenance gains `solvent_clamp=density_envelope`,
+     which flows into the identity hash, so a frozen state built with
+     the clamp can never be mistaken for one without). Armed at three
+     sites: `filter_pcg_nonuniform_maps` (plain-nonuniform pcg),
+     gridding volassemble `setup_nonuniform_filter`, and
+     `build_nu_replay_evidence` (Q_NU evidence, frozen with the state)
+     -- each computing the density automask on the fly from the base or
+     evidence pair average at `envmsklp`. Mask cost: one automask3D per
+     state per assembly (same order as the envfsc path already pays).
+   - Freezing discipline: the Q_NU clamp mask is part of the frozen
+     evidence state (rebuilt with it), so operator and evidence cannot
+     disagree across the cache lifetime; the search-bandwidth binding
+     rule from the frozen-evidence deadlock fix is unaffected (the
+     clamp only ever COARSENS solvent voxels, never the molecular
+     region the handoff reads).
+   - Validation plan: (i) A/B against the envfsc-restored build alone
+     (A = envfsc=yes only, B = A + solvent clamp) on PfCRT
+     refine3D_auto, both backends -- the clamp's contribution must be
+     measured, not confounded with the FSC restoration; (ii) 1WCM
+     harness with the clamp active: truth-FSC must not degrade
+     (constraint is solvent-only by construction); (iii) suppression
+     readout shift: expect the measured %-suppression to RISE at
+     unchanged lambda (solvent now contributes), so watch the
+     auto-lambda/auto-target interplay -- the setpoint controller must
+     not compensate the clamp away by lowering lambda; if it does,
+     restrict the suppression readout to the in-envelope region.
 
 ## 11. The NU machinery as the prior infrastructure
 

@@ -15,7 +15,9 @@ use simple_estimate_ssnr,     only: fsc2shrink_filter, get_resolution
 use simple_image,             only: image
 use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfmap_pair, &
     &write_halfmap_diagnostics
+use simple_image_msk,         only: image_msk
 use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
+    &set_nu_solvent_envelope, &
     &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp, &
     &build_nu_evidence_state, nu_evidence_state, nu_evidence_summary, get_nu_evidence_summary, &
     &expand_nu_evidence_band_weights, &
@@ -287,6 +289,8 @@ contains
         type(nu_evidence_state)   :: evstate
         type(nu_evidence_summary) :: evsumm
         type(vol_pproc_plan)      :: pp_plan
+        type(image)               :: vol_env_avg
+        type(image_msk)           :: solvent_env
         character(len=32) :: source_here
         integer :: nsteps_ext, ldim_here(3), fsc_find
         real    :: handoff_lp
@@ -309,6 +313,16 @@ contains
             write(logfhandle,'(A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): BUILDING EVIDENCE FROM THE '//&
                 &'FSC HALF PAIR OF STATE ', state_here, ' (source='//trim(source_here)//')'
             call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source=trim(source_here))
+            ! solvent constraint: conservative density envelope from the
+            ! evidence pair average, computed on the fly and frozen into the
+            ! evidence state (pcg_priors.md dev item 4)
+            call vol_env_avg%copy(vol_even)
+            call vol_env_avg%add(vol_odd)
+            call vol_env_avg%mul(0.5)
+            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp)
+            call set_nu_solvent_envelope(solvent_env)
+            call solvent_env%kill_bimg
+            call vol_env_avg%kill
             call optimize_nu_cutoff_finds()
             ! Stage 6.6 (pcg_priors.md): with nu_refine=yes the evidence candidate
             ! bank is extended by the proven high-resolution shell walk -- one

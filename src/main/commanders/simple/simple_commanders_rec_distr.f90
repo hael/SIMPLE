@@ -809,15 +809,17 @@ contains
         use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &set_nu_filter_report, NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, &
-            &write_nu_local_resolution_map, write_nu_evidence_envmask
+            &write_nu_local_resolution_map, write_nu_evidence_envmask, set_nu_solvent_envelope
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
             &NU_ENVMASK_ACTION_REGENERATE
+        use simple_image_msk,        only: image_msk
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         logical,          intent(in)    :: l_trail_bootstrap(:)
         real, optional,   intent(in)    :: nu_replay_lps(:)
         type(image)                   :: vol_base_even, vol_base_odd, vol_aux_even, vol_aux_odd
-        type(image)                   :: vol_even_nu, vol_odd_nu
+        type(image)                   :: vol_even_nu, vol_odd_nu, vol_env_avg
+        type(image_msk)               :: solvent_env
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
         type(vol_pproc_plan)          :: pp_plan
         type(string)                  :: eonames(2), volname, eonames_nu(2), volname_nu, locres_name
@@ -932,6 +934,15 @@ contains
             call cleanup_aux_images()
             call vol_aux_even%kill
             call vol_aux_odd%kill
+            ! solvent constraint: conservative density envelope from the base
+            ! pair average, computed on the fly (pcg_priors.md dev item 4)
+            call vol_env_avg%copy(vol_base_even)
+            call vol_env_avg%add(vol_base_odd)
+            call vol_env_avg%mul(0.5)
+            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp)
+            call set_nu_solvent_envelope(solvent_env)
+            call solvent_env%kill_bimg
+            call vol_env_avg%kill
             call optimize_nu_cutoff_finds()
 
             call plan_state_postprocess(params, state, params%which_iter, pp_plan)
@@ -1026,9 +1037,10 @@ contains
             &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
             &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
             &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, &
-            &write_nu_evidence_envmask
+            &write_nu_evidence_envmask, set_nu_solvent_envelope
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
             &NU_ENVMASK_ACTION_REGENERATE
+        use simple_image_msk,        only: image_msk
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters), target      :: params
@@ -1037,6 +1049,8 @@ contains
         type(image)                   :: vol_prev_even, vol_prev_odd, vol_merged
         type(image)                   :: vol_even_nu, vol_odd_nu
         type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
+        type(image)                   :: vol_env_avg
+        type(image_msk)               :: solvent_env
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
         type(string)                  :: volname, eonames(2)
         type(restore_timings_t)       :: restore_timings
@@ -1281,6 +1295,15 @@ contains
                 call setup_nu_dmats(vol_nu_base_even, vol_nu_base_odd, params%mskdiam, [real ::], &
                     &n_highres_steps=n_highres_steps)
             endif
+            ! solvent constraint: conservative density envelope from the base
+            ! pair average, computed on the fly (pcg_priors.md dev item 4)
+            call vol_env_avg%copy(vol_nu_base_even)
+            call vol_env_avg%add(vol_nu_base_odd)
+            call vol_env_avg%mul(0.5)
+            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp)
+            call set_nu_solvent_envelope(solvent_env)
+            call solvent_env%kill_bimg
+            call vol_env_avg%kill
         end subroutine setup_nonuniform_filter
 
         logical function use_static_nu_aux_replacement() result(l_use_aux)

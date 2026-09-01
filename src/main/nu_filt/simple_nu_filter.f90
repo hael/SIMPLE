@@ -43,6 +43,7 @@ use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
 
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, &
+          set_nu_solvent_envelope, clear_nu_solvent_envelope, &
           cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
@@ -204,6 +205,15 @@ real,             allocatable :: nu_ev_best(:)
 logical,          allocatable :: nu_lmask(:,:,:)
 integer,          allocatable :: nu_mask_vox(:,:)
 real,             allocatable :: nu_smooth_norm(:,:,:)
+! Solvent-constraint clamp (pcg_priors.md dev item 4): the objective, null
+! estimation, and whitening keep the spherical support invariant; the
+! conservative density envelope enters only AFTER optimization as a label
+! override -- solvent voxels take the coarsest candidate in the filter and
+! zero band support (null) in the evidence, so the Q_NU replay applies its
+! strongest fine-shell suppression outside the envelope. Set by the caller
+! after setup_nu_dmats; cleared by cleanup_nu_filter; absent = no clamp.
+logical,          allocatable :: nu_solvent_lmask(:,:,:) !< .true. = outside the envelope (solvent)
+logical :: nu_l_solvent_clamp = .false.
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: n_nu_mask = 0
@@ -370,6 +380,13 @@ interface
 
     module subroutine cleanup_nu_filter
     end subroutine cleanup_nu_filter
+
+    module subroutine set_nu_solvent_envelope( envmask )
+        class(image), intent(in) :: envmask
+    end subroutine set_nu_solvent_envelope
+
+    module subroutine clear_nu_solvent_envelope
+    end subroutine clear_nu_solvent_envelope
 
     module subroutine cleanup_aux_bank
     end subroutine cleanup_aux_bank
