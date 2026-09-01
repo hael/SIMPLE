@@ -851,24 +851,35 @@ contains
                 &THROW_HARD('NU replay is active but no evidence-derived LP handoff was supplied')
             if( size(nu_replay_lps) /= params%nstates ) &
                 &THROW_HARD('NU replay LP handoff has invalid size')
-            allocate(state_pops(params%nstates), l_included(params%nstates))
-            do state = 1, params%nstates
-                state_pops(state) = build%spproj_field%get_pop(state, 'state')
-            enddo
-            l_included = (state_pops > 0) .and. (nu_replay_lps > TINY)
-            if( any(l_included) )then
-                align_lp = minval(nu_replay_lps, mask=l_included)
-                write(logfhandle,'(A,F8.3,A)') &
-                    &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); '//&
-                    &'evidence-derived matching low-pass ', align_lp, ' A'
-                call build%spproj_field%set_all2single('lp', align_lp)
-                call build%spproj%write_segment_inside(params%oritype, params%projfile)
-            else
-                write(logfhandle,'(A)') &
-                    &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); no evidenced cutoff to hand off'
+            if( params%l_nonuniform_lpset )then
+                ! merged-reference matching: the raw Q_NU maps serve
+                ! directly; only the evidence-derived LP handoff survives
+                allocate(state_pops(params%nstates), l_included(params%nstates))
+                do state = 1, params%nstates
+                    state_pops(state) = build%spproj_field%get_pop(state, 'state')
+                enddo
+                l_included = (state_pops > 0) .and. (nu_replay_lps > TINY)
+                if( any(l_included) )then
+                    align_lp = minval(nu_replay_lps, mask=l_included)
+                    write(logfhandle,'(A,F8.3,A)') &
+                        &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); '//&
+                        &'evidence-derived matching low-pass ', align_lp, ' A'
+                    call build%spproj_field%set_all2single('lp', align_lp)
+                    call build%spproj%write_segment_inside(params%oritype, params%projfile)
+                else
+                    write(logfhandle,'(A)') &
+                        &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); no evidenced cutoff to hand off'
+                endif
+                deallocate(state_pops, l_included)
+                return
             endif
-            deallocate(state_pops, l_included)
-            return
+            ! plain nonuniform matches independent even/odd references that
+            ! the matcher consumes unfiltered (filtering is assembly-owned),
+            ! so the derived _nu_filt matching references must still be
+            ! generated; the shipped primary outputs remain the raw Q_NU
+            ! maps (pcg_priors.md dev item 2)
+            write(logfhandle,'(A)') &
+                &'>>> PCG NU REPLAY: plain nonuniform topology; generating NU-filtered matching references'
         endif
         call set_nu_filter_report(params%part == 1)
         ldim = [params%box_crop, params%box_crop, params%box_crop]
@@ -886,22 +897,29 @@ contains
             call vol_base_even%new(ldim, params%smpd_crop)
             call vol_base_odd%new( ldim, params%smpd_crop)
             if( params%l_ml_reg .and. .not. l_trail_bootstrap(state) )then
+                ! under ml_reg the NU base is the _unfil pair; nu_refine=yes
+                ! excludes the aux replacement pair (extension is owned by
+                ! the shell-extension experiment, never the aux channel)
                 call vol_base_even%read(refine3D_state_halfvol_fname(state, 'even', unfil=.true.))
                 call vol_base_odd%read( refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.))
-                call vol_aux_even%new(ldim, params%smpd_crop)
-                call vol_aux_odd%new( ldim, params%smpd_crop)
-                call vol_aux_even%read(eonames(1))
-                call vol_aux_odd%read( eonames(2))
-                fsc_fname = refine3D_fsc_fname(state)
-                fsc       = file2rarr(fsc_fname)
-                call get_resolution(fsc, res, fsc05, fsc0143)
-                aux_resolution = fsc0143
-                if( params%l_lpset .and. params%lp > TINY ) aux_resolution = min(aux_resolution, params%lp)
-                allocate(nu_aux_even(1), nu_aux_odd(1))
-                call nu_aux_even(1)%copy(vol_aux_even)
-                call nu_aux_odd(1)%copy( vol_aux_odd)
-                call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [aux_resolution], &
-                    &nu_aux_even, nu_aux_odd)
+                if( params%l_nu_refine )then
+                    call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [real ::])
+                else
+                    call vol_aux_even%new(ldim, params%smpd_crop)
+                    call vol_aux_odd%new( ldim, params%smpd_crop)
+                    call vol_aux_even%read(eonames(1))
+                    call vol_aux_odd%read( eonames(2))
+                    fsc_fname = refine3D_fsc_fname(state)
+                    fsc       = file2rarr(fsc_fname)
+                    call get_resolution(fsc, res, fsc05, fsc0143)
+                    aux_resolution = fsc0143
+                    if( params%l_lpset .and. params%lp > TINY ) aux_resolution = min(aux_resolution, params%lp)
+                    allocate(nu_aux_even(1), nu_aux_odd(1))
+                    call nu_aux_even(1)%copy(vol_aux_even)
+                    call nu_aux_odd(1)%copy( vol_aux_odd)
+                    call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [aux_resolution], &
+                        &nu_aux_even, nu_aux_odd)
+                endif
             else
                 if( params%l_ml_reg .and. l_trail_bootstrap(state) )then
                     write(logfhandle,'(A,I0,A)') '>>> PCG NU: STATE ', state, &

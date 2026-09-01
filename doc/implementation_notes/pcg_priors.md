@@ -2508,6 +2508,52 @@ the acceptable-looking outputs do not validate the prior.
      no change (gate inert for compact particles, cache rides only
      while non-binding, so the speed win survives where it was ever
      legitimate).
+
+   **MATCHING-REFERENCE REGRESSION -- PLAIN NONUNIFORM TOPOLOGY
+   (2026-08-31).** First refine3D_auto+pcg PfCRT run (auto-lambda and
+   auto-target behaving: supp 13.3%, lambda 0.177, target held at the
+   15% cold start): shipped pair stuck at the gridding run's
+   ITERATION-1 state (FSC=0.500 at 7.96 A / 0.143 at 4.14 vs gridding
+   3.98/3.61 by iteration 2), postprocessed maps massively
+   over-sharpened. Root cause chain:
+   - The matcher's plain-nonuniform contract consumes INDEPENDENT
+     even/odd `_nu_filt` references with NO further filtering
+     ("filtering done when volumes are assembled",
+     `simple_matcher_refvol_utils`). The redundancy policy
+     (2026-08-28: Q_NU in-solve => no post-hoc NU filter, no _nu_filt
+     products) silently turned the matcher's first-iteration raw-refs
+     fallback into the PERMANENT state: every iteration matched
+     independent raw Q_NU half maps, unfiltered, at the evidenced
+     matching lp (~4 A) from iteration 1.
+   - abinitio3D never sees this because GOLD_STD_STAGE=TURNED_OFF
+     rewrites every nonuniform stage to nonuniform_lpset -- MERGED
+     single-reference matching, no independent per-half registration.
+     The redundancy policy was only ever validated in that topology.
+   - Independent per-half matching against each half's own
+     unsuppressed in-band noise (mild auto-targeted replay: 13%
+     suppression barely regularizes the refs; the old fixed-60%
+     setpoint was inadvertently cleaning them) overfits each half to
+     its own noise -> mid-resolution half-map divergence with a
+     matched-noise 0.143 tail. Textbook gold-standard overfitting.
+   - Over-sharpening: abinitio3D pins bfac=0; refine3D_auto lets
+     postprocess auto-estimate B by Guinier on the SHIPPED map. Q_NU
+     (and ML) amplitude suppression steepens the Guinier slope ->
+     auto-B strongly negative -> massive sharpening.
+   Fixes (2026-08-31, both implemented):
+   - `filter_pcg_nonuniform_maps`: the Q_NU skip-everything branch is
+     now LP-SET-ONLY (merged-reference topology keeps handoff-only
+     behavior). Plain nonuniform falls through and generates the
+     derived `_nu_filt` matching references (base = _unfil pair under
+     ml_reg; the ML/Q_NU pair enters as the finest-bank aux
+     replacement only when nu_refine=no, per the aux-channel
+     contract); the matching-lp handoff is then the filter-bank
+     finest selected lp, as in gridding. Shipped primary outputs
+     remain the raw Q_NU maps.
+   - `postprocess_volume_from_files`: automatic B-factor is now
+     always estimated from the `_even_unfil`/`_odd_unfil` pair
+     average when present (prior-free amplitudes; the estimate
+     targets the underlying signal decay), falling back to the
+     shipped map only when no unfil pair exists.
 3. **Test nu_refine=yes with rec_backend=pcg in abinitio3D.** The
    nu_refine=no rationale was gridding-specific (the ML-regularized aux
    competitor supplied beyond-bank resolution implicitly,

@@ -264,11 +264,8 @@ contains
         if( params%l_nonuniform )then
             if( trim(params%rec_backend) == 'pcg' )then
                 ! keep the NU machinery: the Q_NU prior regularizes the final
-                ! map in-solve (post-hoc NU filtering is bypassed); the
-                ! auto-lambda controller resumes from the stats file the last
-                ! refinement iteration persisted in this directory, so the
-                ! final rec runs at the converged strength -- explicit keys
-                ! pin as usual
+                ! map in-solve (auto-lambda resumes from the persisted stats
+                ! file; explicit keys pin)
                 call cline_rec3D%set('filt_mode', 'nonuniform')
                 if( cline%defined('pcg_nu_lambda_rel') )&
                     &call cline_rec3D%set('pcg_nu_lambda_rel', cline%get_rarg('pcg_nu_lambda_rel'))

@@ -965,15 +965,11 @@ contains
                     call child_cline%set('objfun', 'cc')
                     call child_cline%set('ml_reg', 'no')
                 endif
-                ! PCG backend continuity: the final reconstruction runs on the
-                ! same backend as the refinement, and with the euclid ML replay
-                ! active the Q_NU prior regularizes the final map in-solve
-                ! (filt_mode=nonuniform selects the NU machinery; the
-                ! auto-lambda controller then resumes from the stats file the
-                ! last refinement iteration persisted in this directory, so
-                ! the final rec runs at the converged strength -- explicit
-                ! keys pin as usual, and bootstrap_rec3D strips the Q_NU keys
-                ! off its unregularized sigma pass itself)
+                ! the final reconstruction runs on the refinement's backend;
+                ! with the euclid ML replay active the Q_NU prior regularizes
+                ! it in-solve (auto-lambda resumes from the persisted stats
+                ! file; explicit keys pin; bootstrap_rec3D strips the Q_NU
+                ! keys off its unregularized sigma pass itself)
                 if( trim(params%rec_backend) == 'pcg' )then
                     call child_cline%set('rec_backend', 'pcg')
                     if( cline_refine3D%defined('maxits_pcg') )&

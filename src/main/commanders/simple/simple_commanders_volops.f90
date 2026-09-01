@@ -301,7 +301,8 @@ contains
         integer,         intent(in)    :: state
         real, allocatable :: fsc(:), optlp(:), res(:)
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
-        type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk
+        type(string)     :: fname_even_unfil, fname_odd_unfil
+        type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk, vol_unfil, vol_unfil_odd
         real    :: fsc0143, fsc05, lplim
         integer :: ldim(3)
         logical :: has_fsc, do_envfsc, msk_exists, msk_compatible
@@ -342,13 +343,30 @@ contains
         else
             lplim = params%lp
         endif
-        ! B-factor
+        ! B-factor from the unfiltered pair when available: regularized maps
+        ! carry the prior's amplitude suppression, which steepens the Guinier
+        ! slope and drives the automatic estimate strongly negative
         if( cline%defined('bfac') )then
             ! already in params%bfac
         else
             if( lplim < 5. )then
-                params%bfac = vol_bfac%guinier_bfac(HPLIM_GUINIER, lplim)
-                write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
+                fname_even_unfil = add2fbody(fname_vol, params%ext, '_even_unfil')
+                fname_odd_unfil  = add2fbody(fname_vol, params%ext, '_odd_unfil')
+                if( file_exists(fname_even_unfil) .and. file_exists(fname_odd_unfil) )then
+                    call vol_unfil%new(ldim, smpd)
+                    call vol_unfil_odd%new(ldim, smpd)
+                    call vol_unfil%read(fname_even_unfil)
+                    call vol_unfil_odd%read(fname_odd_unfil)
+                    call vol_unfil%add(vol_unfil_odd)
+                    call vol_unfil%mul(0.5)
+                    params%bfac = vol_unfil%guinier_bfac(HPLIM_GUINIER, lplim)
+                    write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR (UNFIL PAIR) DETERMINED TO:', params%bfac
+                    call vol_unfil%kill
+                    call vol_unfil_odd%kill
+                else
+                    params%bfac = vol_bfac%guinier_bfac(HPLIM_GUINIER, lplim)
+                    write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
+                endif
             else
                 params%bfac = 0.
             endif
@@ -356,7 +374,7 @@ contains
         call vol_bfac%fft()
         call vol_no_bfac%copy(vol_bfac)
         call vol_bfac%apply_bfac(params%bfac)
-        ! low-pass filter    
+        ! low-pass filter
         if( has_fsc )then
             ! optimal low-pass filter of unfiltered volumes from FSC
             call vol_bfac%apply_filter(optlp)
@@ -403,6 +421,8 @@ contains
         call fname_pproc%kill
         call fname_lp%kill
         call fname_envmsk%kill
+        call fname_even_unfil%kill
+        call fname_odd_unfil%kill
     end subroutine postprocess_volume_from_files
 
     subroutine exec_postprocess( self, cline )

@@ -51,15 +51,13 @@ real,    parameter :: NU_AUTOLAMBDA_STEP_CLAMP   = 5.0  !< max multiplicative st
 real,    parameter :: NU_AUTOLAMBDA_LAMBDA_MIN   = 0.01 !< hard strength bounds
 real,    parameter :: NU_AUTOLAMBDA_LAMBDA_MAX   = 30.0
 real,    parameter :: NU_AUTOLAMBDA_SUPP_FLOOR   = 0.1  !< % floor so a near-zero readout cannot divide the model
-! Auto-target outer loop (pcg_priors.md dev item 2, PfCRT regression record
-! 2026-08-31): no fixed suppression setpoint transfers across datasets (PfCRT
-! best at ~9%, 1WCM ~35%, msp1 ~60%), so the setpoint itself is controlled.
+! Auto-target outer loop (pcg_priors.md dev item 2): no fixed suppression
+! setpoint transfers across datasets, so the setpoint itself is controlled.
 ! AIMD on the shipped-pair FSC=0.143 trajectory (the persisted
 ! over-regularization diagnostic): the target ratchets up additively only
 ! while the shipped-pair crossing improves, backs off multiplicatively when
 ! it degrades, and holds when it stalls (lp-limited stage plateaus therefore
-! hold). Cold start is gentle by construction; an explicit pcg_nu_supp_target
-! pins the setpoint and keeps recorded controls reproducible.
+! hold). An explicit pcg_nu_supp_target pins the setpoint.
 real,    parameter :: NU_AUTOTARGET_MIN      = 5.0  !< setpoint bounds; low bound = the banner's inert threshold
 real,    parameter :: NU_AUTOTARGET_MAX      = 75.0
 real,    parameter :: NU_AUTOTARGET_STEP_ADD = 5.0  !< additive setpoint increase per improving iteration (% points)
@@ -437,6 +435,33 @@ contains
         l_rebuild = .false.
     end function nu_evidence_needs_rebuild
 
+    !> Resolution-text naming, mirroring the gridding volassemble contract
+    !! (resolve_fsc_txt_fname in simple_commanders_rec_distr): an explicit
+    !! outfile names the document (the final-reconstruction RESOLUTION_FINAL
+    !! case), which_iter tags per-iteration documents so refinement
+    !! iterations do not overwrite one another, and the plain state name is
+    !! the fallback.
+    function resolve_pcg_fsc_txt_fname( params, cline, state ) result( fname )
+        class(parameters), intent(in) :: params
+        class(cmdline),    intent(in) :: cline
+        integer,           intent(in) :: state
+        type(string) :: fname, ext
+        if( cline%defined('outfile') )then
+            fname = params%outfile
+            ext   = fname2ext(fname)
+            select case(ext%to_char())
+                case('txt','simple')
+                    fname = get_fbody(fname, ext)
+            end select
+            fname = fname//'_STATE'//int2str_pad(state,2)
+            call ext%kill
+        else if( cline%defined('which_iter') )then
+            fname = refine3D_resolution_txt_fbody(state, params%which_iter)
+        else
+            fname = refine3D_resolution_txt_fbody(state)
+        endif
+    end function resolve_pcg_fsc_txt_fname
+
     !> Hard activation contract for the direct NU replay (no silent fallback):
     !! a defined pcg_nu_lambda_rel must be finite and non-negative, and a
     !! POSITIVE strength is only meaningful when the euclid ML replay actually
@@ -730,7 +755,7 @@ contains
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             call arr2file(fsc, fname_fsc)
-            fname_restxt = refine3D_resolution_txt_fbody(state)
+            fname_restxt = resolve_pcg_fsc_txt_fname(params, cline, state)
             call write_halfmap_diagnostics(hm_diag, params%box_crop, params%smpd_crop, fname_restxt)
             call fname_restxt%kill
             call hm_diag%kill
@@ -1908,7 +1933,7 @@ contains
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             call arr2file(fsc, fname_fsc)
-            fname_restxt = refine3D_resolution_txt_fbody(state)
+            fname_restxt = resolve_pcg_fsc_txt_fname(params, cline, state)
             call write_halfmap_diagnostics(hm_diag, params%box_crop, params%smpd_crop, fname_restxt)
             call fname_restxt%kill
             call hm_diag%kill

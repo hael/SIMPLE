@@ -916,9 +916,7 @@ contains
                     self%l_pcg_nu_autolambda = .true.
                     ! the suppression setpoint the controller tracks: pinned
                     ! by an explicit pcg_nu_supp_target, otherwise owned by
-                    ! the AIMD auto-target outer loop from a gentle cold start
-                    ! (no fixed setpoint transfers across datasets: PfCRT ~9%,
-                    ! 1WCM ~35%, msp1 ~60% -- pcg_priors.md dev item 2)
+                    ! the AIMD auto-target outer loop (pcg_priors.md dev item 2)
                     if( cline%defined('pcg_nu_supp_target') )then
                         if( self%pcg_nu_supp_target < 5.0 .or. self%pcg_nu_supp_target > 75.0 )&
                             &THROW_HARD('pcg_nu_supp_target must be in [5,75] %')
