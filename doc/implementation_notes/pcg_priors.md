@@ -2666,11 +2666,65 @@ the acceptable-looking outputs do not validate the prior.
      penalty and `report_nu_solve_stats` feeds the controllers the
      evidenced-region suppression.
    - Output tidied: routine NU diagnostics (Potts sweeps, whitening
-     profile, envelope ICM sweeps, envmask stats block, low-pass
-     assignment table, evidence calibration/provenance details,
-     solvent-automask banner lines) demoted behind NU_DEV_OUTPUT;
-     concise one-liners remain (finest selected lp, solvent clamp
-     count, evidence identity + null/band fractions, occupancy).
+     profile, envelope ICM sweeps, envmask stats block, evidence
+     calibration/provenance details, solvent-automask banner lines,
+     ML warm-start notices, prior-energy detail) demoted behind
+     NU_DEV_OUTPUT. Kept by default: the low-pass assignment table
+     (the per-iteration NU fingerprint, restored on review), the
+     solvent clamp count, a one-line evidence summary (id + null +
+     band supports), one line per half with lambda_eff + evidenced
+     suppression, and the controller lines.
+   - Distributed-exec ergonomics (2026-09-01, user-directed, applies
+     to ALL distributed SIMPLE applications): partition scripts no
+     longer tee their output into the master terminal -- parts append
+     to SIMPLE_SUBPROC_OUTPUT only, and the scheduler prints one
+     summary line per completed phase (">>> <PRG>: N PART(S)
+     COMPLETED IN X s", simple_qsys_ctrl). Part-level errors are
+     found in SIMPLE_SUBPROC_OUTPUT, as the existing hard-error
+     messages already direct.
+   - Master-phase utilization (2026-09-01, user-directed): during the
+     master-side PCG solve/NU/evidence phases the partition workers
+     are idle; on LOCAL execution the distributed master raises its
+     OpenMP thread count to min(ncores, nparts*nthr,
+     PCG_MASTER_NTHR_CAP=32) for the reconstruction phase and
+     restores nthr before matching (never on a cluster; capped
+     because OpenMP scaling saturates at these box sizes). OMP
+     regions benefit directly; FFTW plan threading may remain at the
+     original nthr where plans are cached.
+   - Concurrent even/odd solves (2026-09-01, user-directed): the
+     distributed master's base and ML half solves run as two OpenMP
+     sections with half the master threads each -- the halves are
+     independent by gold-standard construction (own raw accumulators,
+     own reconstructor_pcg instance, own output files; image FFT plan
+     creation is critical-section-guarded in simple_image_core; the
+     per-state suppression accumulation is the one shared write, now
+     critical-guarded). The particle-reading shared-memory path is
+     NOT parallelized across halves (shared build%imgbatch buffer).
+   - NU work deduplication (2026-09-01, user-directed): the Q_NU
+     evidence phase and the matching-reference generation ran the
+     full setup + solvent clamp + optimization + shell walk twice per
+     iteration on the same base pair. With nu_refine=yes (identical
+     setups: same _unfil pair, no aux channel), single state, and
+     source=base_unfil, the evidence phase now RETAINS its optimized
+     setup (retain_nu_filter_setup / nu_filter_setup_is_retained in
+     simple_nu_filter; cleanup_nu_filter always clears retention) and
+     filter_pcg_nonuniform_maps consumes it directly -- skipping
+     setup, clamp, extension and envmask regeneration -- then tears
+     it down. Retention is keyed on the finest-lp output being
+     requested (the signal that a matching volassemble follows), so
+     standalone reconstructions never leak a retained setup.
+     Multi-state and nu_refine=no keep the two-pass behavior (the
+     module holds one setup; the aux channel makes the setups differ).
+   - Second-run confirmation (streptavidin): matching bank extends
+     (10/9 accepted steps to 3.1-3.2 A), matching lp advances via the
+     support-gated promotion (3.43 A while the raw finest sits at 3.1
+     A with ~1% assignment -- the gate working as designed), evidenced
+     suppression keeps lambda off the floor spiral (settles ~0.01
+     with supp ~10-13% against targets 9-14%), B-factor sane (-62 to
+     -68). One controller wart fixed: the shipped-pair crossing is
+     Fourier-shell-quantized and the 3.05<->3.12 A adjacent-shell
+     flip re-triggered DEGRADED/IMPROVED steps; the AIMD comparison
+     now stalls on any change of fewer than two shells.
 
 ## 11. The NU machinery as the prior infrastructure
 

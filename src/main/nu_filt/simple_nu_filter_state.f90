@@ -205,6 +205,7 @@ contains
         nu_evidence_source = ''
         nu_evidence_source_fingerprint = 0.d0
         call clear_nu_solvent_envelope
+        nu_retained_setup_state = 0
     end subroutine cleanup_nu_filter
 
     !> Arm the solvent-constraint clamp from a soft [0,1] envelope mask on the
@@ -231,6 +232,22 @@ contains
         if( allocated(nu_solvent_lmask) ) deallocate(nu_solvent_lmask)
         nu_l_solvent_clamp = .false.
     end subroutine clear_nu_solvent_envelope
+
+    !> Mark the current setup as retained for the matching-reference pass of
+    !! the given state. Requires a live setup; the consumer verifies state
+    !! and geometry, and cleanup_nu_filter always clears the retention.
+    module subroutine retain_nu_filter_setup( state )
+        integer, intent(in) :: state
+        if( box < 1 .or. .not.allocated(filtmap) ) &
+            &THROW_HARD('no optimized NU setup to retain; retain_nu_filter_setup')
+        nu_retained_setup_state = state
+    end subroutine retain_nu_filter_setup
+
+    module logical function nu_filter_setup_is_retained( state, box_expected )
+        integer, intent(in) :: state, box_expected
+        nu_filter_setup_is_retained = state > 0 .and. nu_retained_setup_state == state .and. &
+            &box == box_expected .and. allocated(filtmap)
+    end function nu_filter_setup_is_retained
 
     module subroutine cleanup_aux_bank
         integer :: i

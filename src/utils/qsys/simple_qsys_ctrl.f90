@@ -35,6 +35,7 @@ type qsys_ctrl
     private
     ! --- job scripts and sentinel files ---
     type(string)                  :: exec_binary                   !< executable launched by every generated script
+    type(string)                  :: phase_label                   !< prg of the current distributed phase, for the one-line completion summary
     type(string),     allocatable :: script_names(:)               !< per-partition script file paths
     type(string),     allocatable :: coarray_job_args(:)           !< direct per-partition command arguments for coarray dispatch
     type(string),     allocatable :: jobs_done_fnames(:)           !< per-partition completion sentinel file paths
@@ -398,6 +399,7 @@ contains
         type(parameters), optional, intent(in)    :: extra_params      !< extra parameters passed to memory estimator
         type(string) :: outfile_body_local
         integer      :: ipart
+        if( job_descr%isthere('prg') ) self%phase_label = job_descr%get('prg')
         select type( pmyqsys => self%myqsys )
             class is(qsys_coarray)
                 call stage_coarray_jobs(self, job_descr, q_descr, outfile_body, part_params, extra_params)
@@ -530,8 +532,10 @@ contains
         ! compose the command line
         job_str = job_descr%chash2str()
         write(funit,'(a)',advance='no') self%exec_binary%to_char()//' '//job_str%to_char()
-        ! direct output
-        write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
+        ! direct output: parts append to the shared subprocess log only; the
+        ! master prints one summary line per completed phase instead of
+        ! echoing every part (see report_phase_completion)
+        write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT//' '//STDERR2STDOUT
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
@@ -582,8 +586,8 @@ contains
             ! unique output
             write(funit,'(a)') ' > '//outfile%to_char()//' '//STDERR2STDOUT
         else
-            ! subprocess, global output
-            write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
+            ! subprocess, global output: append-only, no terminal echo
+            write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT//' '//STDERR2STDOUT
         endif
         ! exit code
         if( present(exit_code_fname) )then
@@ -961,6 +965,8 @@ contains
     !> Block until all partition jobs have completed, polling at SHORTTIME intervals.
     subroutine schedule_jobs( self )
         class(qsys_ctrl), intent(inout) :: self
+        integer(timer_int_kind) :: t_phase
+        t_phase = tic()
         do
             if( all(self%jobs_done) ) exit
             call self%update_queue
@@ -968,11 +974,14 @@ contains
             call self%service_persistent_worker_warmup()
             call sleep(SHORTTIME)
         end do
+        call report_phase_completion(self, real(toc(t_phase)))
     end subroutine schedule_jobs
 
     !> Block until all subproject jobs have completed, polling at SHORTTIME intervals.
     subroutine schedule_subproject_jobs( self )
         class(qsys_ctrl), intent(inout) :: self
+        integer(timer_int_kind) :: t_phase
+        t_phase = tic()
         do
             if( all(self%jobs_done) ) exit
             call self%update_queue
@@ -980,18 +989,40 @@ contains
             call self%service_persistent_worker_warmup()
             call sleep(SHORTTIME)
         end do
+        call report_phase_completion(self, real(toc(t_phase)))
     end subroutine schedule_subproject_jobs
 
     !> Submit the single array-job script and block until all array elements complete.
     subroutine schedule_array_jobs( self )
         class(qsys_ctrl), intent(inout) :: self
+        integer(timer_int_kind) :: t_phase
+        t_phase = tic()
         call self%submit_script(string(ARRAY_SCRIPT))
         do
             if( all(self%jobs_done) ) exit
             call self%update_queue
             call sleep(SHORTTIME)
         end do
+        call report_phase_completion(self, real(toc(t_phase)))
     end subroutine schedule_array_jobs
+
+    !> One-line record of a completed distributed phase. The per-part output
+    !! is append-only into SIMPLE_SUBPROC_OUTPUT, so this line is the
+    !! terminal's record of the phase.
+    subroutine report_phase_completion( self, seconds )
+        class(qsys_ctrl), intent(in) :: self
+        real,             intent(in) :: seconds
+        type(string) :: label
+        integer      :: n
+        n = 0
+        if( allocated(self%jobs_done) ) n = size(self%jobs_done)
+        if( n < 1 ) return
+        label = 'distributed'
+        if( self%phase_label%is_allocated() ) label = self%phase_label
+        write(logfhandle,'(A,I0,A,F8.1,A)') '>>> '//upperCase(label%to_char())//': ', n, &
+            &' PART(S) COMPLETED IN ', seconds, ' s'
+        call label%kill
+    end subroutine report_phase_completion
 
     ! STREAMING
 

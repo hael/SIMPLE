@@ -44,6 +44,7 @@ implicit none
 
 public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vol, &
           set_nu_solvent_envelope, clear_nu_solvent_envelope, &
+          retain_nu_filter_setup, nu_filter_setup_is_retained, &
           cleanup_nu_filter, pack_filtmap_lowpass_limits,&
           calc_filtmap_lowpass_stats, print_nu_filtmap_lowpass_stats, calc_filtmap_lowpass_histogram,&
           print_filtmap_lowpass_histogram, extend_nu_filter_highres_shell_next, extend_nu_filter_highres_shells,&
@@ -214,6 +215,14 @@ real,             allocatable :: nu_smooth_norm(:,:,:)
 ! after setup_nu_dmats; cleared by cleanup_nu_filter; absent = no clamp.
 logical,          allocatable :: nu_solvent_lmask(:,:,:) !< .true. = outside the envelope (solvent)
 logical :: nu_l_solvent_clamp = .false.
+! Setup retention across the two per-iteration NU consumers (pcg_priors.md
+! dev item 4 dedup): the Q_NU evidence phase and the matching-reference
+! generation run on the same base pair with the same optimized, extended,
+! solvent-clamped setup when nu_refine=yes -- the evidence phase may retain
+! its setup for the matching pass instead of tearing it down, and the
+! matching pass consumes it and cleans up. State-indexed because the module
+! holds one setup; cleanup_nu_filter always clears the retention.
+integer :: nu_retained_setup_state = 0 !< 0 = nothing retained
 type(image),      allocatable :: aux_even_bank(:), aux_odd_bank(:)
 integer :: ldim(3), box
 integer :: n_nu_mask = 0
@@ -387,6 +396,14 @@ interface
 
     module subroutine clear_nu_solvent_envelope
     end subroutine clear_nu_solvent_envelope
+
+    module subroutine retain_nu_filter_setup( state )
+        integer, intent(in) :: state
+    end subroutine retain_nu_filter_setup
+
+    module logical function nu_filter_setup_is_retained( state, box_expected )
+        integer, intent(in) :: state, box_expected
+    end function nu_filter_setup_is_retained
 
     module subroutine cleanup_aux_bank
     end subroutine cleanup_aux_bank

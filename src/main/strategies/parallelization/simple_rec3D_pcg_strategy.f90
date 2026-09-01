@@ -17,7 +17,7 @@ use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfm
     &write_halfmap_diagnostics
 use simple_image_msk,         only: image_msk
 use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
-    &set_nu_solvent_envelope, &
+    &set_nu_solvent_envelope, retain_nu_filter_setup, NU_DEV_OUTPUT, &
     &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp, &
     &build_nu_evidence_state, nu_evidence_state, nu_evidence_summary, get_nu_evidence_summary, &
     &expand_nu_evidence_band_weights, &
@@ -65,6 +65,7 @@ real,    parameter :: NU_AUTOTARGET_MAX      = 75.0
 real,    parameter :: NU_AUTOTARGET_STEP_ADD = 5.0  !< additive setpoint increase per improving iteration (% points)
 real,    parameter :: NU_AUTOTARGET_BACKOFF  = 0.6  !< multiplicative setpoint decrease on shipped-pair degradation
 real,    parameter :: NU_AUTOTARGET_SHIP_TOL = 0.02 !< relative deadband on the shipped-pair crossing (stall band)
+integer, parameter :: PCG_MASTER_NTHR_CAP    = 32   !< master-phase thread-boost ceiling; OpenMP scaling saturates beyond this at typical box sizes
 logical, parameter :: DEBUG = .false.
 
 ! Rebuild-on-advance cadence for the NU replay evidence (streptavidin
@@ -145,6 +146,7 @@ contains
         x = prev%get_rmat()
         call prev%kill
         l_found = .true.
+        if( NU_DEV_OUTPUT ) &
         write(logfhandle,'(A)') '>>> PCG ML WARM START ('//trim(context)//'/'//trim(half)//&
             &'): previous-iteration ML half map '//prev_fname%to_char()
         call prev_fname%kill
@@ -275,7 +277,8 @@ contains
     !! a second NU analysis; cadence and artifact naming follow the same
     !! plan_state_postprocess contract as the post-hoc NU paths.
     subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, &
-            &res0143, band_w, band_limits, finest_lp, evidence_source, evidence_seconds )
+            &res0143, band_w, band_limits, finest_lp, evidence_source, evidence_seconds, &
+            &l_retain_setup )
         class(parameters),          intent(in)  :: params
         integer,                    intent(in)  :: state_here
         character(len=*),           intent(in)  :: context
@@ -286,6 +289,7 @@ contains
         real, optional,             intent(out) :: finest_lp
         character(len=*), optional, intent(in)  :: evidence_source
         real(dp), optional,         intent(out) :: evidence_seconds
+        logical, optional,          intent(in)  :: l_retain_setup !< leave the optimized setup armed for the matching-reference pass
         type(nu_evidence_state)   :: evstate
         type(nu_evidence_summary) :: evsumm
         type(vol_pproc_plan)      :: pp_plan
@@ -294,7 +298,7 @@ contains
         character(len=32) :: source_here
         integer :: nsteps_ext, ldim_here(3), fsc_find
         real    :: handoff_lp
-        logical :: l_rebuild, l_envmask_regen
+        logical :: l_rebuild, l_envmask_regen, l_retain
         integer(timer_int_kind) :: t_evidence
         real(dp) :: seconds_here
         t_evidence  = tic()
@@ -351,7 +355,16 @@ contains
                     &state_here, pp_plan%nu_envmask_file)
             endif
             call build_nu_evidence_state(vol_even, vol_odd, evstate)
-            call cleanup_nu_filter()
+            l_retain = .false.
+            if( present(l_retain_setup) ) l_retain = l_retain_setup
+            if( l_retain )then
+                ! single setup serves both per-iteration NU consumers: the
+                ! optimized, extended, solvent-clamped setup stays armed for
+                ! the matching-reference pass, which consumes and cleans up
+                call retain_nu_filter_setup(state_here)
+            else
+                call cleanup_nu_filter()
+            endif
             ! store the frozen state for the rebuild-on-advance cadence,
             ! together with the matching low-pass it hands off: when the
             ! FSC crossing later reaches this band, the alignment search is
@@ -531,11 +544,14 @@ contains
         if( nu_penalty_base_evid > 1.0e-12 ) &
             &supp_pct = 100.0 * (1.0 - sqrt(max(nu_penalty_evid,0.0) / nu_penalty_base_evid))
         overhead_s = real(real(toc(t_stats),dp))
-        write(logfhandle,'(A,ES12.4,A,ES12.4,A,ES12.4,A,F9.3)') '>>> PCG NU REPLAY ('//trim(context)//'/'//&
-            &trim(half)//'): lambda_eff=', pcgop%get_effective_nu_lambda(), '  pcg_nu_prior_energy_final=', &
-            &nu_penalty, '  pcg_nu_prior_energy_base=', nu_penalty_base, '  stats_overhead_s=', overhead_s
-        write(logfhandle,'(A,F8.2,A,ES12.4,A,ES12.4)') '    pcg_nu_suppression_pct=', supp_pct, &
-            &' (evidenced region; energies ', nu_penalty_evid, ' /', nu_penalty_base_evid, ')'
+        write(logfhandle,'(A,ES10.3,A,F6.1,A)') '>>> PCG NU REPLAY ('//trim(half)//'): lambda_eff=', &
+            &pcgop%get_effective_nu_lambda(), '  evidenced suppression ', supp_pct, ' %'
+        if( NU_DEV_OUTPUT )then
+            write(logfhandle,'(A,ES12.4,A,ES12.4,A,F9.3)') '    pcg_nu_prior_energy_final=', &
+                &nu_penalty, '  pcg_nu_prior_energy_base=', nu_penalty_base, '  stats_overhead_s=', overhead_s
+            write(logfhandle,'(A,ES12.4,A,ES12.4)') '    evidenced energies final/base=', &
+                &nu_penalty_evid, ' /', nu_penalty_base_evid
+        endif
     end subroutine report_nu_solve_stats
 
     !> Persist the per-state NU-replay firing readout for the convergence
@@ -612,7 +628,7 @@ contains
         real    :: lam_prev, lam_new, s_frac, s_t, supp_sum, ratio, target
         real    :: target_prev, target_new, ship_curr, ship_prev
         integer :: state, nsupp
-        logical :: l_ship_curr, l_ship_prev
+        logical :: l_ship_curr, l_ship_prev, l_ship_shells_apart
         if( .not. params%l_pcg_nu_autolambda   ) return
         if( params%pcg_nu_lambda_rel <= 0.0    ) return
         if( .not. file_exists(PCG_NU_STATS_FILE) ) return
@@ -648,10 +664,18 @@ contains
             ! AIMD outer loop on the setpoint, gated by the shipped-pair
             ! FSC=0.143 trajectory (crossings in Angstrom, finer = smaller):
             ! ratchet up only while the crossing improves, back off fast when
-            ! it degrades, hold when it stalls (lp-limited plateaus hold)
+            ! it degrades, hold when it stalls (lp-limited plateaus hold).
+            ! Crossings are Fourier-shell-quantized, so an adjacent-shell
+            ! flip is plateau noise, not a signal: any change of less than
+            ! two shells stalls regardless of the relative tolerance
             target_new = min(NU_AUTOTARGET_MAX, max(NU_AUTOTARGET_MIN, target_prev))
             if( l_ship_curr .and. l_ship_prev .and. ship_prev > 0.0 .and. ship_curr > 0.0 )then
-                if( ship_curr > ship_prev * (1.0 + NU_AUTOTARGET_SHIP_TOL) )then
+                l_ship_shells_apart = abs(calc_fourier_index(ship_curr, params%box_crop, params%smpd_crop) - &
+                    &calc_fourier_index(ship_prev, params%box_crop, params%smpd_crop)) >= 2
+                if( .not. l_ship_shells_apart )then
+                    write(logfhandle,'(A,F5.1)') &
+                        &'>>> PCG NU AUTO-TARGET: SHIPPED PAIR STALLED; HOLDING SUPP TARGET ', target_new
+                else if( ship_curr > ship_prev * (1.0 + NU_AUTOTARGET_SHIP_TOL) )then
                     target_new = max(NU_AUTOTARGET_MIN, target_prev * NU_AUTOTARGET_BACKOFF)
                     write(logfhandle,'(A,F6.2,A,F6.2,A,F5.1,A,F5.1)') &
                         &'>>> PCG NU AUTO-TARGET: SHIPPED PAIR DEGRADED (', ship_prev, ' ->', ship_curr, &
@@ -1821,6 +1845,7 @@ contains
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
         integer :: n_active_state, n_sampled_state
+        integer :: nthr_master_here, nthr_solve
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_nu_replay
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_evidence
@@ -1828,6 +1853,15 @@ contains
         call validate_pcg_common(params)
         call validate_nu_replay_request(params)
         call resolve_nu_autolambda(params)
+        ! the partition workers are idle during the master-side solve, NU
+        ! filtering and evidence phases: on local execution use the full
+        ! allocation, restored to nthr before returning to the matching
+        ! phase (never on a cluster, where the master's slot is fixed).
+        ! Capped: OpenMP scaling saturates well before large core counts
+        ! at these box sizes
+        !$ if( trim(params%qsys_name) == 'local' ) &
+        !$ &call omp_set_num_threads(min(omp_get_num_procs(), &
+        !$ &max(params%nthr, min(PCG_MASTER_NTHR_CAP, max(1, params%nparts) * params%nthr))))
         nu_evidence_bench_seconds = 0.0_dp
         ! replay precision mode: Q_NU replaces P_tau (mode-exclusive,
         ! pcg_priors.md R10); same rule as the shared path, validated above
@@ -1896,8 +1930,23 @@ contains
                 l_bootstrap = .not. l_even_chain
             endif
             if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
+            ! the two halves are independent by gold-standard construction
+            ! (own accumulators, own pcgop, own outputs; image FFT planning
+            ! is critical-section-guarded), so they solve concurrently as
+            ! two teams with half the threads each
+            nthr_master_here = 1
+            !$ nthr_master_here = omp_get_max_threads()
+            nthr_solve = max(1, nthr_master_here / 2)
+            !$ call omp_set_max_active_levels(2)
+            !$omp parallel sections num_threads(2) default(shared) if(nthr_master_here > 1)
+            !$omp section
+            !$ call omp_set_num_threads(nthr_solve)
             call reduce_solve_state_half(state, 0, 'even', half_even, n_even, 'base')
+            !$omp section
+            !$ call omp_set_num_threads(nthr_solve)
             call reduce_solve_state_half(state, 1, 'odd',  half_odd,  n_odd,  'base')
+            !$omp end parallel sections
+            !$ call omp_set_num_threads(nthr_master_here)
             if( params%l_trail_rec )then
                 call count_state_sampling(state, n_active_state, n_sampled_state)
                 if( n_even+n_odd /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
@@ -1965,11 +2014,18 @@ contains
                     ! the evidence pair is the FSC pair, selected once above;
                     ! its FSC=0.143 crossing steers the adaptive band ladder
                     if( present(nu_replay_finest_lps) )then
+                        ! the finest-lp output signals a matching-reference
+                        ! volassemble follows: retain the setup for it when
+                        ! it would be rebuilt identically (same base pair, no
+                        ! aux under nu_refine; single-state, as the module
+                        ! holds one setup)
                         call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
                             &fsc_pair_odd, res0143s(state), nu_band_w, nu_band_limits, &
                             &finest_lp=nu_replay_finest_lps(state), &
                             &evidence_source=trim(evidence_source_here), &
-                            &evidence_seconds=time_evidence)
+                            &evidence_seconds=time_evidence, &
+                            &l_retain_setup=(params%nstates == 1 .and. params%l_nu_refine .and. &
+                            &trim(evidence_source_here) == NU_EVIDENCE_SOURCE_BASE))
                     else
                         call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
                             &fsc_pair_odd, res0143s(state), nu_band_w, nu_band_limits, &
@@ -1977,8 +2033,20 @@ contains
                             &evidence_seconds=time_evidence)
                     endif
                 endif
+                ! concurrent ML solves, same contract as the base pair above
+                nthr_master_here = 1
+                !$ nthr_master_here = omp_get_max_threads()
+                nthr_solve = max(1, nthr_master_here / 2)
+                !$ call omp_set_max_active_levels(2)
+                !$omp parallel sections num_threads(2) default(shared) if(nthr_master_here > 1)
+                !$omp section
+                !$ call omp_set_num_threads(nthr_solve)
                 call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
+                !$omp section
+                !$ call omp_set_num_threads(nthr_solve)
                 call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
+                !$omp end parallel sections
+                !$ call omp_set_num_threads(nthr_master_here)
                 if( allocated(nu_band_w)      ) deallocate(nu_band_w)
                 if( allocated(nu_band_limits) ) deallocate(nu_band_limits)
                 ! shipped-pair crossing: the over-regularization diagnostic
@@ -2084,6 +2152,7 @@ contains
         call raw_fname%kill
         deallocate(res0143s, state_written, realized_fractions, update_weights, ship05s, ship0143s, &
             &nu_supps, nu_supp_cnts)
+        !$ call omp_set_num_threads(params%nthr)
 
     contains
 
@@ -2311,8 +2380,11 @@ contains
                 ! warm_start is this iteration's unregularized base half solve,
                 ! the reference the firing readout is measured against
                 call report_nu_solve_stats(pcgop, x, warm_start, 'distributed', half, supp_pct, nu_stats_overhead)
+                ! the two halves may execute as concurrent sections
+                !$omp critical(pcg_nu_supp_accum)
                 nu_supps(state_here)     = nu_supps(state_here) + supp_pct
                 nu_supp_cnts(state_here) = nu_supp_cnts(state_here) + 1
+                !$omp end critical(pcg_nu_supp_accum)
             endif
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)

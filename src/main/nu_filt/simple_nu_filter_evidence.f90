@@ -572,14 +572,10 @@ contains
         type(nu_evidence_state), intent(in) :: state
         integer :: iband
         if( .not.nu_evidence_state_is_valid(state) ) THROW_HARD('cannot print invalid NU evidence state')
-        write(logfhandle,'(A)') '>>> NU REPLAY EVIDENCE'
-        write(logfhandle,'(A,A)')    '    pcg_nu_evidence_source=', trim(state%summary%source)
-        write(logfhandle,'(A,A)')    '    pcg_nu_evidence_identity=', trim(state%summary%identity)
-        write(logfhandle,'(A,F10.6)') '    pcg_nu_null_fraction=', state%summary%null_fraction
-        do iband = 1, state%summary%n_bands
-            write(logfhandle,'(A,I2.2,A,F10.6)') '    pcg_nu_supported_fraction_band', iband, '=', &
-                &state%summary%supported_fraction(iband)
-        enddo
+        write(logfhandle,'(A,A,A,A,A,F6.3,A,8(F6.3,1X))') '>>> NU EVIDENCE (', &
+            &trim(state%summary%source), '): id ', trim(state%summary%identity), &
+            &', null fraction ', state%summary%null_fraction, ', band support ', &
+            &(state%summary%supported_fraction(iband), iband=1,state%summary%n_bands)
         if( .not. (NU_DEV_OUTPUT .and. nu_l_report) ) return
         write(logfhandle,'(A,I0)')   '    pcg_nu_candidate_count=', state%summary%n_candidates
         write(logfhandle,'(A,F10.6)') '    pcg_nu_uncertain_fraction=', state%summary%uncertain_fraction

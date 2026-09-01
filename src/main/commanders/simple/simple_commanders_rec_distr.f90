@@ -810,7 +810,8 @@ contains
             &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
             &set_nu_filter_report, NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, &
             &write_nu_local_resolution_map, write_nu_evidence_envmask, set_nu_solvent_envelope, &
-            &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp
+            &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp, &
+            &nu_filter_setup_is_retained
         use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
             &NU_ENVMASK_ACTION_REGENERATE
         use simple_image_msk,        only: image_msk
@@ -897,6 +898,15 @@ contains
             eonames(1) = refine3D_state_halfvol_fname(state, 'even')
             eonames(2) = refine3D_state_halfvol_fname(state, 'odd')
             volname    = refine3D_state_vol_fname(state)
+            if( nu_filter_setup_is_retained(state, params%box_crop) )then
+                ! the Q_NU evidence phase retained its optimized, extended,
+                ! solvent-clamped setup on the same base pair: reuse it and
+                ! skip setup, clamp, extension, and envmask regeneration
+                write(logfhandle,'(A)') &
+                    &'>>> PCG NU REPLAY: reusing the evidence-phase NU setup for the matching references'
+                call filter_and_write_matching_refs()
+                cycle
+            endif
             call vol_base_even%new(ldim, params%smpd_crop)
             call vol_base_odd%new( ldim, params%smpd_crop)
             if( params%l_ml_reg .and. .not. l_trail_bootstrap(state) )then
@@ -968,37 +978,7 @@ contains
 
             call vol_base_even%kill
             call vol_base_odd%kill
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
-            call print_nu_filtmap_lowpass_stats()
-            if( NU_DEV_OUTPUT .and. params%part == 1 ) call analyze_filtmap_neighbor_continuity()
-            eonames_nu(1) = add2fbody(eonames(1), MRC_EXT, NUFILT_SUFFIX)
-            eonames_nu(2) = add2fbody(eonames(2), MRC_EXT, NUFILT_SUFFIX)
-            volname_nu    = add2fbody(volname,    MRC_EXT, NUFILT_SUFFIX)
-            locres_name   = add2fbody(volname,    MRC_EXT, NULOCRES_SUFFIX)
-            call vol_even_nu%write(eonames_nu(1), del_if_exists=.true.)
-            call vol_odd_nu%write(eonames_nu(2), del_if_exists=.true.)
-            call vol_even_nu%add(vol_odd_nu)
-            call vol_even_nu%mul(0.5)
-            call vol_even_nu%write(volname_nu, del_if_exists=.true.)
-            call write_nu_local_resolution_map(locres_name)
-            call wait_for_closure(volname_nu)
-            call wait_for_closure(locres_name)
-            selected_lp = get_nu_filtmap_finest_selected_lp()
-            if( selected_lp > TINY ) nu_align_lps(state) = selected_lp
-
-            call vol_even_nu%kill
-            call vol_odd_nu%kill
-            call cleanup_nu_filter()
-            call pp_plan%nu_envmask_file%kill
-            call eonames(1)%kill
-            call eonames(2)%kill
-            call eonames_nu(1)%kill
-            call eonames_nu(2)%kill
-            call volname%kill
-            call volname_nu%kill
-            call locres_name%kill
-            call fsc_fname%kill
-            if( allocated(fsc) ) deallocate(fsc)
+            call filter_and_write_matching_refs()
         enddo
 
         l_included = (state_pops > 0) .and. (nu_align_lps > TINY)
@@ -1021,6 +1001,42 @@ contains
         deallocate(state_pops, nu_align_lps, l_included)
 
     contains
+
+        !> Synthesize and write the NU-filtered matching references from the
+        !! live NU setup (freshly built, or retained from the evidence
+        !! phase), record the matching-lp handoff, and tear the setup down.
+        subroutine filter_and_write_matching_refs()
+            call nu_filter_vols(vol_even_nu, vol_odd_nu)
+            call print_nu_filtmap_lowpass_stats()
+            if( NU_DEV_OUTPUT .and. params%part == 1 ) call analyze_filtmap_neighbor_continuity()
+            eonames_nu(1) = add2fbody(eonames(1), MRC_EXT, NUFILT_SUFFIX)
+            eonames_nu(2) = add2fbody(eonames(2), MRC_EXT, NUFILT_SUFFIX)
+            volname_nu    = add2fbody(volname,    MRC_EXT, NUFILT_SUFFIX)
+            locres_name   = add2fbody(volname,    MRC_EXT, NULOCRES_SUFFIX)
+            call vol_even_nu%write(eonames_nu(1), del_if_exists=.true.)
+            call vol_odd_nu%write(eonames_nu(2), del_if_exists=.true.)
+            call vol_even_nu%add(vol_odd_nu)
+            call vol_even_nu%mul(0.5)
+            call vol_even_nu%write(volname_nu, del_if_exists=.true.)
+            call write_nu_local_resolution_map(locres_name)
+            call wait_for_closure(volname_nu)
+            call wait_for_closure(locres_name)
+            selected_lp = get_nu_filtmap_finest_selected_lp()
+            if( selected_lp > TINY ) nu_align_lps(state) = selected_lp
+            call vol_even_nu%kill
+            call vol_odd_nu%kill
+            call cleanup_nu_filter()
+            call pp_plan%nu_envmask_file%kill
+            call eonames(1)%kill
+            call eonames(2)%kill
+            call eonames_nu(1)%kill
+            call eonames_nu(2)%kill
+            call volname%kill
+            call volname_nu%kill
+            call locres_name%kill
+            call fsc_fname%kill
+            if( allocated(fsc) ) deallocate(fsc)
+        end subroutine filter_and_write_matching_refs
 
         subroutine cleanup_aux_images()
             if( allocated(nu_aux_even) )then
