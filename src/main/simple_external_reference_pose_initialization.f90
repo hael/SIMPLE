@@ -1,7 +1,7 @@
 !@descr: fixed-reference CC pose initialization shared by 3D refinement workflows
 module simple_external_reference_pose_initialization
 use simple_commanders_api
-use simple_commanders_euclid, only: commander_calc_group_sigmas
+use simple_commanders_euclid, only: commander_calc_pspec, commander_calc_group_sigmas
 use simple_estimate_ssnr,     only: lpstages_setlims
 use simple_refine3D_fnames,   only: refine3D_startvol_fname, refine3D_state_vol_fname
 implicit none
@@ -24,8 +24,9 @@ contains
         integer, parameter :: NSAMPLE_POSE_INIT_CAP = 100000
         integer, parameter :: NSPACE_POSE_INIT       = 2500
         real,    parameter :: LP_POSE_INIT           = 15.0
+        type(commander_calc_pspec)        :: xcalc_pspec
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(cmdline) :: cline_pose_init, cline_sigmas, cline_checkpoint
+        type(cmdline) :: cline_sigma_bootstrap, cline_pose_init, cline_sigmas, cline_checkpoint
         type(lp_crop_inf) :: lpinfo_pose_init(1)
         type(string) :: startvol
         integer :: state, nsample_pose_init
@@ -81,6 +82,23 @@ contains
             call cline_pose_init%delete('smpd_crop')
         endif
         call prepare_pose_initialization_coverage(params%projfile)
+        cline_sigma_bootstrap = parent_cline
+        call cline_sigma_bootstrap%set('prg',                   'calc_pspec')
+        call cline_sigma_bootstrap%set('mkdir',                         'no')
+        call cline_sigma_bootstrap%set('objfun',                    'euclid')
+        call cline_sigma_bootstrap%set('sigma_est',                 'global')
+        call cline_sigma_bootstrap%set('cc_emit_sigma',                 'no')
+        call cline_sigma_bootstrap%set('sigma_transition_ready',        'no')
+        call cline_sigma_bootstrap%set('which_iter',          pose_init_iter)
+        call cline_sigma_bootstrap%delete('part')
+        call cline_sigma_bootstrap%delete('box_crop')
+        call cline_sigma_bootstrap%delete('smpd_crop')
+        call cline_sigma_bootstrap%delete('update_frac')
+        call cline_sigma_bootstrap%delete('nsample')
+        call cline_sigma_bootstrap%delete('endit')
+        write(logfhandle,'(A,I0)') '>>> EXTERNAL-REFERENCE IMAGE-POWER SIGMA2 BOOTSTRAP ITERATION: ', pose_init_iter
+        call xcalc_pspec%execute(cline_sigma_bootstrap)
+        call cline_sigma_bootstrap%kill
         call cline_pose_init%delete('endit')
         write(logfhandle,'(A,I0,A,I0,A,F8.4,A,F6.1)') &
             &'>>> FIXED-REFERENCE CC POSE INITIALIZATION STATES/NSAMPLE/FRACTION/LP: ', &
@@ -134,7 +152,7 @@ contains
         integer,      intent(in) :: nstates, nsample_expected
         type(sp_project) :: pose_proj
         integer, allocatable :: states(:), updatecnts(:)
-        integer :: state, nupdated, state_pop
+        integer :: state, nupdated, state_pop, nexpected
         call pose_proj%read_segment('ptcl3D', projfile)
         if( .not. pose_proj%os_ptcl3D%isthere('updatecnt') )then
             call pose_proj%kill
@@ -143,7 +161,8 @@ contains
         states     = pose_proj%os_ptcl3D%get_all_asint('state')
         updatecnts = pose_proj%os_ptcl3D%get_all_asint('updatecnt')
         nupdated   = count(states > 0 .and. updatecnts > 0)
-        if( nupdated < nsample_expected )then
+        nexpected  = floor(0.99*real(nsample_expected)) ! to account for rouding
+        if( nupdated < nexpected )then
             THROW_HARD('external-reference pose initialization updated fewer particles than the capped cohort')
         endif
         do state = 1,nstates

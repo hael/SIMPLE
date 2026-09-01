@@ -22,18 +22,21 @@ contains
         logical,           intent(in)    :: l_stream
         type(string)      :: fname
         logical           :: l_group_only_init
-        ! cc_emit_sigma allocates the residual table without reading sigma values,
-        ! so a euclid objective would score against unpopulated sigmas
+        ! cc_emit_sigma is a CC-only update path. CC does not consume sigma,
+        ! while Euclidean scoring requires populated grouped sigma values.
         if( trim(params%cc_emit_sigma) == 'yes' .and. params%cc_objfun == OBJFUN_EUCLID )then
             THROW_HARD('cc_emit_sigma=yes requires objfun=cc; euclid scoring would use unpopulated sigmas')
         endif
         if( params%cc_objfun == OBJFUN_EUCLID .or. trim(params%cc_emit_sigma) == 'yes' )then
             fname = SIGMA2_FBODY//int2str_pad(params%part,params%numlen)//'.dat'
+            if( trim(params%cc_emit_sigma) == 'yes' .and. .not. file_exists(fname) )then
+                THROW_HARD('CC residual sigma update requires image-bootstrap sigma2')
+            endif
             call build%esig%new(params, build%pftc, fname, params%box)
             if( trim(params%cc_emit_sigma) == 'yes' )then
-                ! CC never consumes sigma values. Allocate only the particle
-                ! residual table populated after each committed assignment.
-                call build%esig%allocate_ptcls
+                ! Preserve the image-power bootstrap outside the capped cohort;
+                ! committed CC assignments overwrite only active matching shells.
+                call build%esig%read_part(build%spproj_field)
             else
                 l_group_only_init = (.not. file_exists(fname)) .and. file_exists(sigma2_star_from_iter(params%which_iter))
                 if( l_stream .or. l_group_only_init )then

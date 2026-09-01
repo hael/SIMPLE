@@ -2,9 +2,10 @@
 
 ## Status
 
-Implemented in the working tree, 2026-08-31. The shared external-reference CC
-pose-initialization service and its three callers are present; compilation and
-runtime validation remain user-owned. This note is a focused companion to
+Implemented in the working tree, 2026-08-31, and updated 2026-09-01 to add the
+particle-image sigma2 bootstrap before CC residual emission. The shared
+external-reference CC pose-initialization service and its three callers are
+present; compilation and runtime validation remain user-owned. This note is a focused companion to
 `refine3d_state_and_reference_workflow_refactor.md`. That document owns the
 application boundaries and approved names; this document owns only the policy
 for introducing reference volumes that may not share the particles' alignment
@@ -17,17 +18,20 @@ not begin with noise-normalized Euclidean matching. It first runs a
 reference-conditioned pose-initialization stage with cross-correlation as one pass
 over the existing capped pose initialization cohort of at most 100,000 particles:
 
-1. normalize, validate, and low-pass filter every supplied reference to a
+1. run the normal native-grid `calc_pspec` bootstrap from particle images and
+   propagate its global even/odd curves to every active partition record;
+2. normalize, validate, and low-pass filter every supplied reference to a
    common 15 A limit;
-2. keep those references fixed;
-3. select the normal pose initialization cohort, capped at 100,000 particles, and
+3. keep those references fixed;
+4. select the normal pose initialization cohort, capped at 100,000 particles, and
    match that cohort competitively with `objfun=cc` in exactly one pass
    (`volrec=no`, `trail_rec=no`, no fractional-update scheme);
-4. accumulate Euclidean residual sigma contributions during that CC pass after
-   each hard pose/state assignment;
-5. reconstruct checkpoint state maps from the committed assignments and
+5. preserve bootstrap sigma2 outside the cohort and replace active matching
+   shells in cohort records with Euclidean residual contributions after each
+   hard pose/state assignment;
+6. reconstruct checkpoint state maps from the committed assignments and
    consolidate the accumulated sigma statistics;
-6. switch to `objfun=euclid` and start the ordinary frequency-marched
+7. switch to `objfun=euclid` and start the ordinary frequency-marched
    refinement.
 
 The pose initialization invariant is defined over the selected cohort, not the full
@@ -80,12 +84,15 @@ Euclidean residual contribution during the same particle read. CC does not
 consume those sigmas; it only supplies the committed assignment at which the
 bootstrap residual is evaluated.
 
-Reference normalization and the common 15 A low-pass limit reduce the initial
-scale mismatch. The resulting sigmas are pose initialization bootstrap statistics for
-the first Euclidean stage and are subsequently updated by ordinary Euclidean
-refinement. This is preferable to the generic particle power-spectrum
-bootstrap (`calc_pspec`), which sets sigma2 to total particle power, signal
-included, and ignores the initialized model entirely.
+The image-power bootstrap and the CC residual update serve different purposes.
+`calc_pspec` establishes finite native-grid sigma2 coverage for every active
+partition record before reference-conditioned assignments exist. Reference
+normalization and the common 15 A low-pass limit then reduce the initial scale
+mismatch while the CC matcher replaces active matching shells in committed
+cohort records with pose-conditioned residuals. Bootstrap values remain in
+shells outside the active band. The grouped cohort result seeds the first
+Euclidean stage; the image bootstrap remains fallback partition state for
+particles outside the capped cohort.
 
 ### Populated orientations are not evidence of pose initialization
 
@@ -198,7 +205,20 @@ Before matching:
 Every state must be evaluated at the same effective bandwidth. Per-state
 frequency adaptation would bias competitive assignment and is out of scope.
 
-### 2. Run one capped-cohort CC pass against the fixed references
+### 2. Bootstrap sigma2 from particle images
+
+Before CC matching, the wrapper runs the established `calc_pspec` service on
+the native particle grid with global even/odd estimation. Its capped random
+image sample produces two bootstrap curves that are propagated to every active
+record in `sigma2_noise_partN.dat`. This bootstrap is unconditional for a new
+external-reference transition, even when the caller's global stage number is
+greater than one.
+
+The image-power selection is independent of the capped pose-initialization
+cohort. Missing or incompatible partition files are fatal before CC residual
+emission.
+
+### 3. Run one capped-cohort CC pass against the fixed references
 
 The wrapper launches a single `refine3D` iteration with:
 
@@ -213,17 +233,23 @@ The wrapper launches a single `refine3D` iteration with:
 - Euclidean residual sigma contributions accumulated after each committed CC
   assignment, even though CC itself does not consume them.
 
+The CC matcher reads the existing image-bootstrap partition table, does not
+load grouped sigma for scoring, and overwrites only active matching shells in
+records with committed assignments. Particles outside the selected cohort, and
+inactive shells within cohort records, retain their image-bootstrap values.
+
 The ordinary matcher continues to own candidate scoring and pose/state
 updates. The wrapper owns the fixed-reference stage and the objective
 transition. Random Euler angles and random initial state labels may be used
 only as search seeds.
 
-For very large datasets, the cost of this stage is one pass over at most
-100,000 particles at 15 A, read through the downscaled particle cache. The cap
-is final for pose initialization: the workflow must not reinterpret it as the first
-fraction of a multi-pass coverage scheme.
+For very large datasets, the added work is the normal image-power bootstrap
+sample of at most 25,000 particles on the native grid, followed by one CC pass
+over at most 100,000 particles at 15 A. The 100,000-particle cap is final for
+pose initialization: the workflow must not reinterpret it as the first fraction
+of a multi-pass coverage scheme.
 
-### 3. Establish a data-derived checkpoint
+### 4. Establish a data-derived checkpoint
 
 After the capped pass:
 
@@ -238,7 +264,7 @@ This full reconstruction places the working references on SIMPLE's particle
 and reconstruction scale. It must not be a trailing blend with the independent
 input maps.
 
-### 4. Consolidate Euclidean statistics from the CC pass
+### 5. Consolidate Euclidean statistics from the CC pass
 
 The pose initialization matcher writes per-partition sigma contributions calculated
 at each particle's newly committed pose/state assignment. After matching:
@@ -248,16 +274,18 @@ at each particle's newly committed pose/state assignment. After matching:
 - use global residual statistics for this capped-cohort transition, because
   the cohort is not required to cover every acquisition group;
 - do not run a separate fixed-pose sigma pass;
-- do not run the generic `calc_pspec` power-spectrum bootstrap on this path.
+- include only particles with committed pose-initialization updates in the
+  grouped residual model handed to the first Euclidean iteration.
 
 The underlying residual computation (`gen_sigma_contrib` in
 `simple_polarft_corr.f90`) is objective-agnostic. The required implementation
 work is to permit the CC pose initialization matcher to emit these Euclidean residual
-contributions without making CC depend on sigma values, then preserve
+contributions without making CC depend on sigma values, preserve the
+image-bootstrap records for particles outside the cohort, then preserve
 iteration-number continuity so the first Euclidean iteration resolves the
-consolidated star.
+consolidated residual star.
 
-### 5. Switch to Euclidean refinement
+### 6. Switch to Euclidean refinement
 
 - reset iteration/update-epoch fields deliberately for the refinement phase
   while preserving the initialized pose and state checkpoint;
@@ -268,7 +296,7 @@ consolidated star.
 
 Because the CC pass has already emitted and consolidated sigma contributions,
 the first Euclidean stage takes the existing "reuse existing particle sigma
-files" initialization branch; no power-spectrum bootstrap is needed there.
+files" initialization branch; it does not repeat the power-spectrum bootstrap.
 The CC-to-Euclidean transition is a wrapper-controlled stage boundary, not a
 hidden objective change inside the matcher.
 
@@ -309,16 +337,19 @@ same shared pose-initialization service rather than owning another implementatio
 | Select the capped cohort, force the single pose initialization pass, and own the stage boundary | Independent-reference wrapper/refinement strategy |
 | Generate candidates and score with CC | Base search and matcher layers |
 | Keep pose initialization references immutable | Wrapper command construction and artifact policy (`volrec=no`, `trail_rec=no`) |
+| Bootstrap native-grid sigma2 for every active partition record | Existing `calc_pspec` service invoked by the wrapper |
 | Accumulate Euclidean residual sigma contributions after each CC assignment | Matcher residual path during the pose initialization read |
+| Preserve bootstrap sigma2 outside the capped CC cohort | Matcher sigma preparation and partition-file update path |
 | Reconstruct the pose initialization-cohort checkpoint | Existing reconstruction and assembly commands |
 | Consolidate group sigmas | Existing `calc_group_sigmas` service |
 | Run subsequent frequency-marched refinement | Base `refine3D` under the owning wrapper |
 
 No new matching formula, fractional scheme, or pose initialization coverage
-bookkeeping is proposed. The change is orchestration: choose the existing CC
-objective for one capped-cohort pass against fixed 15 A references, accumulate
-residual sigma contributions after assignment, reconstruct, consolidate, and
-switch to existing Euclidean refinement.
+bookkeeping is proposed. The change is orchestration and state preservation:
+bootstrap sigma2 from particle images, choose the existing CC objective for one
+capped-cohort pass against fixed 15 A references, replace only active cohort
+shells with residual contributions after assignment, reconstruct, consolidate,
+and switch to existing Euclidean refinement.
 
 ## Failure Policy
 
@@ -326,8 +357,10 @@ switch to existing Euclidean refinement.
   select at most the existing 100,000-particle cohort and process it once.
 - Do not replace or blend the fixed external references at any point during
   the pose initialization pass.
+- Do not enter CC residual emission without complete image-bootstrap partition
+  files, and do not erase bootstrap records outside the capped cohort.
 - Write sigma contributions during the CC pass only after a hard assignment;
-  do not make CC consume them, run a second sigma pass, or run `calc_pspec`.
+  do not make CC consume them or run a second fixed-pose sigma pass.
 - Do not continue into Euclidean refinement without the checkpoint
   reconstruction and consolidated sigma statistics in place.
 - Do not allow empty states at the transition without an explicit state
@@ -348,6 +381,8 @@ switch to existing Euclidean refinement.
   `trail_rec=no`; the selected cohort is capped at 100,000 and is not advanced
   through fractional passes.
 - Every external state is prepared at the same 15 A low-pass limit.
+- `calc_pspec` runs exactly once before CC and establishes finite native-grid
+  sigma2 coverage for every active partition record.
 - Sigma contributions are generated during pose initialization only after assignment,
   consolidated once, and read by the first Euclidean iteration through the
   existing reuse branch.
@@ -369,6 +404,8 @@ switch to existing Euclidean refinement.
 - The checkpoint reconstruction uses the complete initialized cohort and produces
   valid per-state even/odd maps and FSC metadata.
 - Sigma accumulation does not modify the initialized pose or state assignment.
+- Particles outside the capped CC cohort retain their image-bootstrap partition
+  records until a later reference-conditioned update.
 - Restart before the pose initialization pass and at the checkpoint preserves phase,
   fixed references, assignments, and consolidated sigmas without falsely
   advancing the objective.
@@ -386,9 +423,9 @@ Compare legacy Euclidean initialization with CC pose initialization using:
 
 Measure orientation recovery, state-assignment accuracy or consistency, state
 collapse, sensitivity to reference scaling, initialized map quality, and the
-stability of the first Euclidean stages. Additionally compare sigma
-initialization accumulated during CC against the legacy `calc_pspec` bootstrap
-on the first Euclidean stages.
+stability of the first Euclidean stages. Additionally compare the combined
+image-bootstrap plus CC-residual lifecycle against the former CC-residual-only
+transition on the first Euclidean stages.
 
 Compilation and runtime tests are intentionally deferred to user-side
 validation in accordance with repository policy. Linux and BOX results must
@@ -396,21 +433,25 @@ not be claimed unless their output is observed.
 
 ## Resolved Review Decisions
 
-Cyril approved and refined the pose initialization contract on 2026-08-31:
+Cyril approved and refined the pose initialization contract on 2026-08-31 and
+updated its sigma lifecycle on 2026-09-01:
 
 1. `classify3D_refs` always initializes poses with CC when references and
    particles have independent provenance.
 2. Pose initialization uses the existing cohort cap of 100,000 particles, processes
    that cohort once, and does not use a fractional scheme.
 3. Exactly one CC pass is performed before checkpoint reconstruction.
-4. Euclidean residual sigma contributions are accumulated during the CC pass
-   after each pose/state assignment; there is no separate fixed-pose pass and
-   no particle-power-spectrum bootstrap.
-5. `refine3D_auto` exposes `ref_pose_init=cc|none`. Untrusted external references are
+4. Before CC, `calc_pspec` bootstraps sigma2 from particle images and propagates
+   global even/odd curves to every active partition record.
+5. Euclidean residual sigma contributions are accumulated during the CC pass
+   after each pose/state assignment; active cohort shells replace their
+   bootstrap values, non-cohort records and inactive shells preserve them, and
+   there is no separate fixed-pose pass.
+6. `refine3D_auto` exposes `ref_pose_init=cc|none`. Untrusted external references are
    accepted, with a prominent warning in logs.
-6. `abinitio3D` continues to accept input volumes and dispatches the same
+7. `abinitio3D` continues to accept input volumes and dispatches the same
    shared pose initialization implementation.
-7. Every external state uses a common 15 A low-pass limit during pose initialization.
+8. Every external state uses a common 15 A low-pass limit during pose initialization.
 
 ## Completion Criteria
 
@@ -421,10 +462,13 @@ The design is complete when:
 - independent-reference matching uses one fixed-reference CC pass over the
   capped pose initialization cohort of at most 100,000 particles;
 - all external states use the same 15 A pose initialization limit;
+- native-grid image-power sigma2 covers every active partition record before
+  the CC pass;
 - the first data-derived reference is reconstructed from the complete assigned
   pose initialization cohort;
 - Euclidean residual sigma contributions are accumulated during the CC pass
-  and consolidated before the first Euclidean iteration;
+  while non-cohort bootstrap records are preserved, and the cohort residuals
+  are consolidated before the first Euclidean iteration;
 - `refine3D_auto` exposes `ref_pose_init=cc|none` with prominent untrusted-reference
   warnings, and `abinitio3D` input volumes reuse the same implementation;
 - the objective transition is restartable and visible in logs and metadata;

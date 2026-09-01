@@ -999,7 +999,8 @@ contains
                 call assert_multistate_populations(build, params)
                 call build%spproj%write_segment_inside(params%oritype)
             endif
-            ! objfun=cc never reads sigmas, so it must not pay for the bootstrap
+            ! Base objfun=cc never reads sigmas. Wrapper-owned external-reference
+            ! transitions bootstrap before entering this strategy.
             if( params%cc_objfun == OBJFUN_EUCLID )then
                 if( sigma2_stage_needs_bootstrap(params%startit) )then
                     call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)

@@ -79,6 +79,16 @@ If no compatible starting volume is available, `refine3D_auto` runs a
 `reconstruct3D` startup pass and uses `vol_state01.mrc` as the initial
 reference.
 
+For an explicit external `vol1`, `ref_pose_init=cc` selects the shared
+external-reference transition. Before its fixed-reference CC pass, the service
+runs the normal native-grid particle-image sigma2 bootstrap. In the initialized
+cohort, the CC pass then replaces active matching shells with
+reference-conditioned residuals and consolidates the resulting spectra for the
+first Euclidean iteration.
+Particles outside the capped cohort retain image-bootstrap records until they
+are updated by refinement. `ref_pose_init=none` trusts the supplied reference
+and does not invoke this wrapper-owned transition.
+
 When NU filtering is active and an existing initializer is used, the workflow
 requires a compatible same-stem raw native even/odd pair. It accepts
 `_unfil` half maps when present and otherwise uses the same-stem even/odd

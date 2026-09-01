@@ -50,15 +50,17 @@ workflow.
 The workflow always calls the shared external-reference pose-initialization
 service before Euclidean refinement:
 
-1. prepare every state reference at a common 15 Å low-pass;
-2. select one cohort capped at 100,000 active particles;
-3. run exactly one broad `objfun=cc` matching pass;
-4. keep all supplied references fixed with `volrec=no` and `trail_rec=no`;
-5. commit one hard pose and state assignment per selected particle;
-6. consolidate Euclidean residual sigma contributions produced at those
-   assignments;
-7. reconstruct data-derived checkpoint maps from the assigned cohort;
-8. use those checkpoint maps, rather than the external inputs, as the
+1. bootstrap native-grid sigma2 from particle-image power spectra and
+   propagate the global even/odd curves to every active particle record;
+2. prepare every state reference at a common 15 Å low-pass;
+3. select one cohort capped at 100,000 active particles;
+4. run exactly one broad `objfun=cc` matching pass;
+5. keep all supplied references fixed with `volrec=no` and `trail_rec=no`;
+6. commit one hard pose and state assignment per selected particle;
+7. overwrite the selected particles' active matching shells with Euclidean
+   residual contributions produced at those assignments and consolidate them;
+8. reconstruct data-derived checkpoint maps from the assigned cohort;
+9. use those checkpoint maps, rather than the external inputs, as the
    authoritative references for Euclidean refinement.
 
 The 100,000-particle cap is a one-pass initialization cohort, not the first
@@ -69,6 +71,14 @@ This transition uses global grouped residual statistics. That keeps the capped
 cohort sufficient even when it does not contain every acquisition group; a
 group-specific bootstrap would require coverage that this one-pass contract
 deliberately does not promise.
+
+The image-power bootstrap and CC cohort are separate samples with separate
+purposes. The bootstrap follows the normal `calc_pspec` policy and establishes
+finite sigma2 coverage for every active partition record. The CC pass preserves
+those values outside its capped cohort. For committed cohort records it
+replaces the active matching shells with reference-conditioned residuals while
+retaining bootstrap values in shells not yet activated. The first Euclidean
+block uses the grouped cohort result, not the initial image-power groups.
 
 The shared implementation is
 `initialize_poses_against_external_references` in
@@ -113,6 +123,7 @@ and final state products.
 The command fails before Euclidean refinement when:
 
 - the reference set is incomplete or incompatible;
+- image-power sigma2 bootstrap artifacts are missing or incompatible;
 - the CC pose-initialization cohort is empty;
 - a checkpoint state is empty or invalid;
 - sigma consolidation or checkpoint reconstruction is missing;
@@ -124,9 +135,12 @@ The command fails before Euclidean refinement when:
 User-side validation must verify:
 
 - one and only one fixed-reference CC pass;
+- one image-power bootstrap before that pass, with finite sigma2 coverage for
+  every active particle record;
 - a cohort of at most 100,000 particles and a common 15 Å bandwidth;
 - unchanged prepared external-reference hashes throughout that pass;
 - residual sigma availability before the first Euclidean block;
+- preservation of image-bootstrap records outside the CC cohort;
 - data-derived checkpoint state populations and maps;
 - global probabilistic matching and monotonic frequency marching;
 - final all-particle update coverage;

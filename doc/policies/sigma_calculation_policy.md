@@ -13,15 +13,22 @@ It applies to workflows that run with `objfun='euclid'`, especially:
 
 ## Public policy
 
-Sigma calculation is a Euclidean-objective feature.
+Sigma calculation is a Euclidean-objective feature, with one explicit
+wrapper-owned transition for external-reference CC pose initialization.
 
 - If `objfun='euclid'`, SIMPLE computes and persists sigma spectra.
-- If `objfun!='euclid'`, the Euclidean sigma path is inactive.
+- If `objfun='cc'`, sigma is normally inactive and is never consumed for
+  scoring.
+- If `objfun='cc'` with internal `cc_emit_sigma='yes'`, the external-reference
+  wrapper has already bootstrapped sigma2 from particle images; the matcher
+  preserves those records and overwrites active matching shells for committed
+  particles with Euclidean residual contributions.
 - Sigma application during restoration/reconstruction is gated separately by `ml_reg='yes'`.
 
 Two gates must never be conflated:
 
-- **Sigma calculation/update gate:** `cc_objfun == OBJFUN_EUCLID`
+- **Sigma calculation/update gate:** `cc_objfun == OBJFUN_EUCLID`, or the
+  internal external-reference transition `cc_emit_sigma='yes'`
 - **ML restoration/reconstruction consumption gate:** `params%l_ml_reg`
 
 Probabilistic refinement modes are not an exception. `prob_align`,
@@ -125,6 +132,16 @@ partitioning. A later staged run (`startit > 1`) reuses the existing
 `calc_group_sigmas` call then reads those files and creates the grouped model
 for the new iteration.
 
+The shared external-reference pose-initialization service is an explicit
+exception to the `startit <= 1` scheduling rule. It always runs `calc_pspec`
+before its CC pass, including when an external-volume `abinitio3D` route enters
+at a later global stage number. This creates native-grid image-power sigma2
+coverage for every active partition record. The CC matcher reads those
+partition files without loading grouped sigma for scoring, preserves records
+outside the capped cohort, and overwrites only the active matching shells of
+particles with committed CC assignments. Missing bootstrap partition files are
+fatal on this path.
+
 This reuse needs no public command-line mode, controller handoff metadata,
 binary-format extension, file conversion, or new interpolation path. The staged
 controller already advances `startit` and retains the native-grid partition
@@ -205,6 +222,13 @@ Call sites:
 
 At the end of the search pass, the updated per-particle spectra are written back to the partition binary file by `build%esig%write_sigma2`.
 
+External-reference CC pose initialization uses the same residual calculation
+after each hard pose/state assignment even though CC does not consume sigma.
+Its `cc_emit_sigma=yes` path begins from the image-bootstrap partition table,
+so unselected particles retain bootstrap values while active matching shells
+for selected particles receive reference-conditioned residuals. Bootstrap
+values remain in shells not yet activated by the frequency schedule.
+
 This update must run in probabilistic and non-probabilistic modes. In
 probabilistic modes, the sequence is:
 
@@ -255,6 +279,11 @@ That implementation:
   bucket
 - writes `sigma2_it_<which_iter>.star`
 
+For `cc_emit_sigma=yes`, consolidation includes only active particles with
+`updatecnt > 0`. Therefore the STAR handed to the first Euclidean iteration is
+the grouped reference-conditioned cohort residual, while the partition files
+still provide image-bootstrap fallback coverage outside that cohort.
+
 This is intentionally different from bootstrap `calc_pspec_assemble`, which
 derives spectra from average image-power subtraction and repairs negative
 values before writing its grouped result.
@@ -297,6 +326,12 @@ For every `abinitio3D` stage with a probabilistic refinement mode, the same
 critical invariant applies: `prob_align*` chooses/writes assignments, and the
 following `refine3D_exec` pass must recalculate residual sigma after those
 assignments have been applied.
+
+When `abinitio3D` starts from external volumes, the shared pose-initialization
+service runs `calc_pspec` first, then performs its single fixed-reference CC
+pass with residual emission. The first Euclidean stage consumes the grouped CC
+residuals; particles outside the CC cohort retain image-bootstrap partition
+records until subsequently updated.
 
 ## Consumption policy
 

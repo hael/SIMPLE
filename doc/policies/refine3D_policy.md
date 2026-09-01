@@ -493,6 +493,12 @@ iteration. It records the total stage initialization wall time and the nested
 may be reused across compatible stage changes; it must not be inferred from a
 per-iteration setup bucket.
 
+Base `objfun=cc` refinement still does not bootstrap or consume sigma2. The
+external-reference wrappers are the explicit exception: their shared service
+runs `calc_pspec` before the fixed-reference CC pass, preserves that native-grid
+partition state outside the initialized cohort, and replaces active cohort
+shells with residual sigma2 after committed assignments.
+
 Distributed matching writes partition alignment documents and merges them into
 the project after worker completion. Shared-memory matching writes the project
 directly after each iteration.

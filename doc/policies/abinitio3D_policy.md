@@ -150,10 +150,15 @@ workflow does not run symmetry-axis search on them.
 
 Input volumes are not assumed to share the particles' alignment provenance.
 Before the Euclidean stage ladder, this route calls the shared fixed-reference
-CC pose-initialization service: one pass over at most 100,000 active particles
-at a common 15 A limit, followed by residual-sigma consolidation and a
-data-derived checkpoint reconstruction. The external maps remain fixed during
-that pass and are not blended into the checkpoint.
+CC pose-initialization service. It first runs the normal native-grid
+particle-image sigma2 bootstrap, then performs one pass over at most 100,000
+active particles at a common 15 A limit. In selected particle records, the
+pass replaces active matching shells with reference-conditioned residual sigma2,
+consolidates those residuals for the first Euclidean stage, and reconstructs a
+data-derived checkpoint. Particles outside the capped cohort retain their
+image-bootstrap partition records until later refinement updates them. The
+external maps remain fixed during the CC pass and are not blended into the
+checkpoint.
 
 Normal particle-based starts treat `abinitio3D` as the producer of new
 `ptcl3D` orientation and multi-state information. The workflow resets `ptcl3D`
