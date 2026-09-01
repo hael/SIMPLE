@@ -21,7 +21,7 @@ use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cl
     &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp, &
     &build_nu_evidence_state, nu_evidence_state, nu_evidence_summary, get_nu_evidence_summary, &
     &expand_nu_evidence_band_weights, &
-    &print_nu_evidence_summary, assert_nu_evidence_replay_ready, &
+    &print_nu_evidence_summary, print_nu_evidence_lowpass_histogram, assert_nu_evidence_replay_ready, &
     &nu_evidence_finest_supported_lp, &
     &write_nu_evidence_envmask, &
     &NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
@@ -404,6 +404,11 @@ contains
         ! either replay, never attach silently
         call assert_nu_evidence_replay_ready(evstate)
         if( l_rebuild ) call print_nu_evidence_summary(evstate)
+        ! local resolution assignment table: the merged-reference topology
+        ! generates no filter bank, so this is the only place the per-voxel
+        ! low-pass distribution is reported there; printed every iteration
+        ! (cached states included) so the trajectory stays continuous
+        call print_nu_evidence_lowpass_histogram(evstate)
         write(logfhandle,'(A)') '    pcg_replay_prior_mode=nu_evidence'
         call expand_nu_evidence_band_weights(evstate, band_w)
         ! the active band ladder rides the frozen state; hand it to the caller

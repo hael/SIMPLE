@@ -587,6 +587,42 @@ contains
         write(logfhandle,'(A,A)') '    pcg_nu_evidence_provenance=', trim(state%summary%provenance)
     end subroutine print_nu_evidence_summary
 
+    !> Per-candidate local low-pass assignment table of a compact evidence
+    !! state -- the Q_NU-path counterpart of the retained-filter-bank
+    !! histogram (print_filtmap_lowpass_histogram). The merged-reference
+    !! (nonuniform_lpset) topology skips post-hoc NU filtering entirely, so
+    !! there is no filter bank to tabulate there; the evidence carries the
+    !! same per-voxel resolution assignment and is tabulated here instead.
+    module subroutine print_nu_evidence_lowpass_histogram( state )
+        type(nu_evidence_state), intent(in) :: state
+        integer, allocatable :: counts(:)
+        real,    allocatable :: lps(:)
+        integer :: imask, lab, n_signal, icand, n_supp
+        real    :: pct
+        if( .not.nu_evidence_state_is_valid(state) ) return
+        n_signal = state%summary%n_candidates - 1
+        n_supp   = state%summary%n_support
+        if( n_signal < 1 .or. n_supp < 1 ) return
+        allocate(counts(0:n_signal), source=0)
+        allocate(lps(n_signal),      source=0.)
+        do imask = 1, n_supp
+            lab = int(state%selected_label(imask))
+            if( lab < 0 .or. lab > n_signal ) cycle
+            counts(lab) = counts(lab) + 1
+            if( lab > 0 ) lps(lab) = state%selected_cutoff(imask)
+        enddo
+        write(logfhandle,'(A)')     '>>> NU EVIDENCE LOW-PASS ASSIGNMENTS'
+        write(logfhandle,'(A,I12)') '    Support voxels: ', n_supp
+        write(logfhandle,'(A)')     '    Bank  LP limit (A)        Voxels    Pct support'
+        pct = 100. * real(counts(0)) / real(n_supp)
+        write(logfhandle,'(4X,A6,2X,A12,2X,I12,2X,F8.2,A)') '  null', '          --', counts(0), pct, '%'
+        do icand = 1, n_signal
+            pct = 100. * real(counts(icand)) / real(n_supp)
+            write(logfhandle,'(4X,I6,2X,F12.3,2X,I12,2X,F8.2,A)') icand, lps(icand), counts(icand), pct, '%'
+        enddo
+        deallocate(counts, lps)
+    end subroutine print_nu_evidence_lowpass_histogram
+
     subroutine validate_compact_evidence_state( state )
         type(nu_evidence_state), intent(in) :: state
         integer :: iband

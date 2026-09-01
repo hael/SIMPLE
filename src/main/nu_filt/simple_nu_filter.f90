@@ -55,7 +55,7 @@ public :: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, nu_filter_vo
           write_nu_evidence_map, write_nu_evidence_envmask, print_nu_envmask_stats, NU_ENVMASK_BETA, NU_ENVMASK_DENS_WEIGHT,&
           NU_ENVMASK_RELATIVE, NU_ENVMASK_MINVOL_FRAC, NU_ENVMASK_GROW_A, NU_ENVMASK_EDGE_A,&
           nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, unpack_nu_evidence_state,&
-          nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT,&
+          nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT, print_nu_evidence_lowpass_histogram,&
           get_nu_evidence_summary, nu_evidence_state_is_valid, print_nu_evidence_summary,&
           expand_nu_evidence_band_weights, assert_nu_evidence_replay_ready,&
           nu_evidence_sharpen_vol,&
@@ -540,6 +540,10 @@ interface
     module subroutine print_nu_evidence_summary( state )
         type(nu_evidence_state), intent(in) :: state
     end subroutine print_nu_evidence_summary
+
+    module subroutine print_nu_evidence_lowpass_histogram( state )
+        type(nu_evidence_state), intent(in) :: state
+    end subroutine print_nu_evidence_lowpass_histogram
 
     module subroutine expand_nu_evidence_band_weights( state, band_w )
         type(nu_evidence_state), intent(in)  :: state
