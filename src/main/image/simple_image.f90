@@ -268,7 +268,8 @@ contains
     procedure          :: gradients_magnitude
     procedure          :: gradient
     procedure          :: calc_ice_score
-    procedure          :: calc_principal_axes_rotmat
+    procedure          :: calc_principal_axes
+    procedure          :: calc_3D_shape_descriptors
     ! Physical coords helpers
     procedure          :: loop_lims
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
@@ -1707,11 +1708,21 @@ interface
         real,         intent(out) :: score
     end subroutine calc_ice_score
 
-    module subroutine calc_principal_axes_rotmat( self, radius, R )
+    ! Eigenvalues are mass-normalized principal moments in voxel squared:
+    ! mean squared distances perpendicular to the corresponding eigenvectors.
+    ! Uniformly rescaling the positive voxel intensities does not change them.
+    module subroutine calc_principal_axes( self, radius, eigvals, eigvecs )
         class(image), intent(in)  :: self
         real,         intent(in)  :: radius
-        real,         intent(out) :: R(3,3)
-    end subroutine calc_principal_axes_rotmat
+        real,         intent(out) :: eigvals(3), eigvecs(3,3)
+    end subroutine calc_principal_axes
+
+    module subroutine calc_3D_shape_descriptors( self, radius, eccentricity, kappa2, b, c, rg_sq )
+        class(image), intent(in)  :: self
+        real,         intent(in)  :: radius
+        real,         intent(out) :: eccentricity, kappa2          ! dimensionless
+        real,         intent(out) :: b, c, rg_sq                    ! voxel squared
+    end subroutine calc_3D_shape_descriptors
 
     !--- Physical coords helpers ---!
 

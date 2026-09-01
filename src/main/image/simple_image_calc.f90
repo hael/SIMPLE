@@ -1064,27 +1064,34 @@ contains
         score   = ice_avg / (band_avg + TINY)
     end subroutine calc_ice_score
 
-    module subroutine calc_principal_axes_rotmat( self, radius, R )
+    module subroutine calc_principal_axes( self, radius, eigvals, eigvecs )
         class(image), intent(in)  :: self
         real,         intent(in)  :: radius
-        real,         intent(out) :: R(3,3)
-        real(dp) :: coord(3), ixx, iyy, izz, ixz, ixy, iyz, m
-        real(dp) :: inertia(3,3), eigvals(3), eigvecs(3,3)
+        real,         intent(out) :: eigvals(3), eigvecs(3,3)
+        real(dp) :: coord(3), ixx, iyy, izz, ixz, ixy, iyz, m, mass
+        real(dp) :: inertia(3,3), eigvals_dp(3), eigvecs_dp(3,3)
         real     :: radiussq
         integer  :: icenter(3),i,j,k
-        if( self%is_ft() )      THROW_HARD('Real space only; calc_principal_axes_rotmat')
-        if( .not.self%is_3d() ) THROW_HARD('Volumes only; calc_principal_axes_rotmat')
+        if( self%is_ft() )      THROW_HARD('Real space only; calc_principal_axes')
+        if( .not.self%is_3d() ) THROW_HARD('Volumes only; calc_principal_axes')
+        eigvals      = 0.
+        eigvecs      = 0.
+        eigvecs(1,1) = 1.
+        eigvecs(2,2) = 1.
+        eigvecs(3,3) = 1.
         icenter  = nint(real(self%ldim)/2.)+1
         radiussq = radius**2
         ! Inertia Tensor
         ixx = 0.d0; iyy = 0.d0; izz = 0.d0
         ixy = 0.d0; ixz = 0.d0; iyz = 0.d0
+        mass = 0.d0
         do k =1,self%ldim(3)
         do j =1,self%ldim(2)
         do i =1,self%ldim(1)
             if( (real(sum(([i,j,k]-icenter)**2)) < radiussq) .and. (self%rmat(i,j,k)>0.0) )then
                 coord = real([i,j,k]-icenter, dp)
                 m     = real(self%rmat(i,j,k), dp)
+                mass  = mass + m
                 ixx   = ixx + m * (coord(2)**2 + coord(3)**2)
                 iyy   = iyy + m * (coord(1)**2 + coord(3)**2)
                 izz   = izz + m * (coord(1)**2 + coord(2)**2)
@@ -1098,15 +1105,60 @@ contains
         inertia(1,:) = [ ixx, -ixy, -ixz]
         inertia(2,:) = [-ixy,  iyy, -iyz]
         inertia(3,:) = [-ixz, -iyz,  izz]
+        if( mass <= 0.d0 ) return
+        ! Normalize by the total included positive density. This makes the eigenvalues
+        ! per-unit-mass moments: mean squared distances perpendicular to each axis
+        inertia = inertia / mass
         ! Spectral analysis
-        call svdcmp(inertia, eigvals, eigvecs)
-        call eigsrt(eigvals, eigvecs, 3, 3)
-        ! double checking
+        call svdcmp(inertia, eigvals_dp, eigvecs_dp)
+        call eigsrt(eigvals_dp, eigvecs_dp, 3, 3)
+        eigvals = real(eigvals_dp)
+        eigvecs = real(eigvecs_dp)
         ! identity = matmul(eigvecs, transpose(eigvecs))
         ! inertia  = matmul(eigvecs, matmul(eye(3)*eigvals, transpose(eigvecs)))
         ! Reverse rotation matrix
-        R = real(transpose(eigvecs))
-    end subroutine calc_principal_axes_rotmat
+        ! R = real(transpose(eigvecs))
+    end subroutine calc_principal_axes
+
+    ! eccentricity — dimensionless
+    ! kappa2 — relative shape anisotropy, dimensionless and clamped to [0,1]
+    ! b — asphericity in voxel²
+    ! c — acylindricity in voxel²
+    ! rg_sq — radius of gyration squared in voxel²
+
+    module subroutine calc_3D_shape_descriptors( self, radius, eccentricity, kappa2, b, c, rg_sq )
+        class(image), intent(in)  :: self
+        real,         intent(in)  :: radius
+        real,         intent(out) :: eccentricity, kappa2          ! dimensionless
+        real,         intent(out) :: b, c, rg_sq                    ! voxel squared
+        real :: eigvals(3), eigvecs(3,3), gyr_eigvals(3)
+        eccentricity = 0.
+        kappa2       = 0.
+        b            = 0.
+        c            = 0.
+        rg_sq        = 0.
+        call self%calc_principal_axes(radius, eigvals, eigvecs)
+        if( maxval(eigvals) <= 0. ) return
+        ! Convert the descending, mass-normalized principal moments of inertia
+        ! to ascending principal squared extents of the gyration tensor.
+        gyr_eigvals(1) = max(0., eigvals(2) + eigvals(3) - eigvals(1)) / 2.
+        gyr_eigvals(2) = max(0., eigvals(1) + eigvals(3) - eigvals(2)) / 2.
+        gyr_eigvals(3) = max(0., eigvals(1) + eigvals(2) - eigvals(3)) / 2.
+        ! With lambda(1) <= lambda(2) <= lambda(3): Rg^2=sum(lambda),
+        ! b=lambda(3)-(lambda(2)+lambda(1))/2, c=lambda(2)-lambda(1),
+        ! kappa^2=1-3*sum_of_pair_products/Rg^4, e=sqrt(1-lambda(1)/lambda(3)).
+        rg_sq = sum(gyr_eigvals)
+        if( gyr_eigvals(3) > 0. )then
+            eccentricity = sqrt(max(0., 1. - gyr_eigvals(1) / gyr_eigvals(3)))
+        endif
+        if( rg_sq > 0. )then
+            kappa2 = 1. - 3. * (gyr_eigvals(1) * gyr_eigvals(2) + &
+                gyr_eigvals(2) * gyr_eigvals(3) + gyr_eigvals(3) * gyr_eigvals(1)) / rg_sq**2
+            kappa2 = min(1., max(0., kappa2))
+        endif
+        b = gyr_eigvals(3) - 0.5 * (gyr_eigvals(2) + gyr_eigvals(1))
+        c = gyr_eigvals(2) - gyr_eigvals(1)
+    end subroutine calc_3D_shape_descriptors
 
     !===========================
     ! Physical coords helpers
