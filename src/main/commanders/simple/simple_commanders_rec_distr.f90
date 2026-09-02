@@ -799,6 +799,44 @@ contains
 
     end subroutine restore_state_from_parts
 
+    !> FSC-optimal filtered copy of the raw NU base pair: the isotropic
+    !! fallback content for matching-reference voxels without positive NU
+    !! evidence (null/baseline label, solvent-clamped, outside support).
+    !! Flattening those voxels to the coarsest bank member erases density the
+    !! particle images contain (e.g. a detergent micelle), which under the
+    !! euclid objective destroys pose discrimination (PfCRT regression,
+    !! pcg_priors.md 2026-09-02). The prior and shipped maps keep
+    !! coarsest-bank semantics; only the matching product takes the fallback.
+    subroutine prepare_nu_matching_fallback( params, state, vol_even_in, vol_odd_in, fb_even, fb_odd )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: state
+        class(image),      intent(in)    :: vol_even_in, vol_odd_in
+        type(image),       intent(inout) :: fb_even, fb_odd
+        type(string)      :: fsc_fname
+        real, allocatable :: fsc(:), optfilt(:)
+        integer           :: filtsz, n
+        fsc_fname = refine3D_fsc_fname(state)
+        if( .not. file_exists(fsc_fname) ) &
+            &THROW_HARD('missing state FSC for the NU matching-reference fallback: '//fsc_fname%to_char())
+        fsc = file2rarr(fsc_fname)
+        call fb_even%copy(vol_even_in)
+        call fb_odd%copy( vol_odd_in)
+        filtsz = fb_even%get_filtsz()
+        allocate(optfilt(filtsz), source=0.)
+        n = min(filtsz, size(fsc))
+        call fsc2optlp_sub(n, fsc(:n), optfilt(:n))
+        call fb_even%fft
+        call fb_even%apply_filter(optfilt)
+        call fb_even%ifft
+        call fb_odd%fft
+        call fb_odd%apply_filter(optfilt)
+        call fb_odd%ifft
+        write(logfhandle,'(A,I0)') &
+            &'>>> NU MATCHING REFS: FSC-OPTIMAL FALLBACK FOR VOXELS WITHOUT POSITIVE NU EVIDENCE, STATE ', state
+        deallocate(fsc, optfilt)
+        call fsc_fname%kill
+    end subroutine prepare_nu_matching_fallback
+
     !> Apply the volume-assembly nonuniform-filtering contract to half-maps
     !! restored directly by the PCG backend. Raw (B,D) trailing, including its
     !! chain/bootstrap policy, remains wholly owned by the PCG master; this
@@ -1006,7 +1044,31 @@ contains
         !! live NU setup (freshly built, or retained from the evidence
         !! phase), record the matching-lp handoff, and tear the setup down.
         subroutine filter_and_write_matching_refs()
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
+            type(image)  :: raw_even, raw_odd, fb_even, fb_odd
+            type(string) :: raw_even_name, raw_odd_name
+            ! the fallback is the FSC-optimal filtered base pair -- the same
+            ! pair the bank caches were built from (the _unfil pair under
+            ! ml_reg); reading from disk also serves the retained-setup path,
+            ! where the base pair is not in memory
+            if( params%l_ml_reg .and. .not. l_trail_bootstrap(state) )then
+                raw_even_name = refine3D_state_halfvol_fname(state, 'even', unfil=.true.)
+                raw_odd_name  = refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.)
+            else
+                raw_even_name = eonames(1)
+                raw_odd_name  = eonames(2)
+            endif
+            call raw_even%new(ldim, params%smpd_crop)
+            call raw_odd%new( ldim, params%smpd_crop)
+            call raw_even%read(raw_even_name)
+            call raw_odd%read( raw_odd_name)
+            call prepare_nu_matching_fallback(params, state, raw_even, raw_odd, fb_even, fb_odd)
+            call raw_even%kill
+            call raw_odd%kill
+            call raw_even_name%kill
+            call raw_odd_name%kill
+            call nu_filter_vols(vol_even_nu, vol_odd_nu, fb_even, fb_odd)
+            call fb_even%kill
+            call fb_odd%kill
             call print_nu_filtmap_lowpass_stats()
             if( NU_DEV_OUTPUT .and. params%part == 1 ) call analyze_filtmap_neighbor_continuity()
             eonames_nu(1) = add2fbody(eonames(1), MRC_EXT, NUFILT_SUFFIX)
@@ -1282,14 +1344,21 @@ contains
         end subroutine postprocess_state
 
         subroutine run_state_nonuniform_filter()
+            type(image) :: fb_even, fb_odd
             if( L_BENCH_GLOB ) t_nonuniform_filter = tic()
             call setup_nonuniform_filter()
             call release_nonuniform_aux_inputs()
             call optimize_nu_cutoff_finds()
             call refine_nonuniform_filter_bank()
             call generate_state_nu_envmask()
+            ! FSC-optimal fallback for the matching product, built from the
+            ! same base pair the bank was optimized on, before it is released
+            call prepare_nu_matching_fallback(params, state, vol_nu_base_even, vol_nu_base_odd, &
+                &fb_even, fb_odd)
             call release_nonuniform_base_inputs()
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
+            call nu_filter_vols(vol_even_nu, vol_odd_nu, fb_even, fb_odd)
+            call fb_even%kill
+            call fb_odd%kill
             call log_nonuniform_filter_stats()
             call write_nonuniform_outputs()
             call record_nu_alignment_lowpass_limit()

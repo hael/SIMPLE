@@ -2913,6 +2913,66 @@ the acceptable-looking outputs do not validate the prior.
      ml_reg / NU filtering / envfsc / automsk gradually, while the
      alignment is still loose.
 
+8. **PfCRT refine3D_auto ROOT CAUSE -- COARSEST-BANK FLATTENING IN THE
+   MATCHING REFERENCES (2026-09-02, confirmed by elimination; fix
+   implemented).** With the startup bootstrap in place (1d0071e77) the
+   collapse moved from iteration 2 to iteration 1 and tracked the first
+   consumption of NU-filtered matching references in every topology.
+   Control chain that isolated it:
+   - automsk=no reproduced the collapse (mask exonerated -- and the
+     earlier automsk=no falsification of the envelope hypothesis was
+     confounded by the then-unfixed unfiltered-refs defect of item 7;
+     both hypotheses pointed at reference/image content mismatch, both
+     via the wrong mechanism);
+   - rec_backend=gridding reproduced it (Q_NU replay, auto-lambda,
+     evidence reuse, PCG solve support all exonerated);
+   - `filt_mode=none automsk=no autoscale=no` was HEALTHY at iteration 1
+     (overlap 0.981, angular moves 0.98 deg avg, shifts 0.17 px, FSC=0.143
+     holding at 3.98 A, cFAR 0.73, B-factor -70) -- exonerating the
+     euclid sigma cold start, the native box-300 geometry, nspace 20000,
+     and prob_neigh, since only the reference recipe differed.
+   Mechanism: on a detergent-solubilized specimen the NU bank puts
+   72-73% of the spherical support in the coarsest 19.4 A bank (solvent
+   clamp ~49% plus in-envelope null ~24%, i.e. ~45% of the density
+   envelope interior -- the micelle). The matching reference then omits
+   density every particle image contains; under the euclid objective the
+   unexplained micelle dominates the cost, pose discrimination is lost,
+   and the alignment scatters (3.93 -> 4.93 -> 5.86-5.97 A plateau read
+   as convergence). abinitio3D is immune (nonuniform_lpset merged refs
+   at box 160, where null ~= clamp only); compact soluble specimens are
+   immune (nearly nothing inside their envelope goes null). Score-spread
+   flatness (0.380 +/- 0.002) appears in healthy runs too and was never
+   evidence.
+   Fix (2026-09-02, user-directed: "the correct isotropic filter for the
+   mask-excluded density estimate"), matching product only, both
+   backends:
+   - `nu_filter_vols` gains an optional fallback even/odd pair that
+     seeds the output wherever no finer bank label was positively
+     selected (null/baseline label, solvent-clamped, outside support),
+     replacing the coarsest-candidate flattening there. Absent
+     arguments = bit-identical previous behavior (nufilt3D and every
+     other caller unchanged).
+   - `prepare_nu_matching_fallback` (rec_distr) builds the fallback as
+     the FSC-optimal (fsc2optlp) filtered copy of the same base pair
+     the bank caches were built from (the _unfil pair under ml_reg),
+     reading the state FSC from disk; wired at both matching-product
+     sites -- `filter_pcg_nonuniform_maps` (including the
+     retained-evidence-setup path, which re-reads the pair from disk)
+     and volassemble's `run_state_nonuniform_filter` (before the base
+     inputs are released). Logged as ">>> NU MATCHING REFS:
+     FSC-OPTIMAL FALLBACK...".
+   - The Q_NU prior, the shipped maps, the evidence state, the bank
+     tables, and the matching-lp handoff keep coarsest-bank semantics
+     unchanged: strong suppression stays correct for the solve; the
+     matching model is now never locally worse than the isotropic
+     FSC-filtered reference that the healthy filt_mode=none control
+     matched against.
+   - Validation plan: PfCRT refine3D_auto, defaults (NU + automsk back
+     on) -- expect iteration 1 to hold ~3.9 A with overlap ~0.98;
+     streptavidin rerun -- expect no change (their fallback region is
+     essentially solvent, which the spherical reference mask removes
+     anyway).
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

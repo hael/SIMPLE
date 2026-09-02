@@ -636,8 +636,9 @@ interface
     end subroutine apply_nu_highres_extension_selection
 
     ! In submodule: simple_nu_filter_apply.f90
-    module subroutine nu_filter_vols( vol_even, vol_odd )
-        class(image), intent(out) :: vol_even, vol_odd
+    module subroutine nu_filter_vols( vol_even, vol_odd, vol_fallback_even, vol_fallback_odd )
+        class(image),                   intent(out) :: vol_even, vol_odd
+        class(image), optional, target, intent(in)  :: vol_fallback_even, vol_fallback_odd
     end subroutine nu_filter_vols
 
     module subroutine nu_filter_vol( vol_in, vol_out )
