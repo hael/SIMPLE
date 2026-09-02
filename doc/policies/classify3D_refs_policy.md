@@ -52,7 +52,8 @@ service before Euclidean refinement:
 
 1. bootstrap native-grid sigma2 from particle-image power spectra and
    propagate the global even/odd curves to every active particle record;
-2. prepare every state reference at a common 15 Å low-pass;
+2. prepare every state reference at the common `lpstart` low-pass selected for
+   the workflow (10 Å by default);
 3. select one cohort capped at 100,000 active particles;
 4. run exactly one broad `objfun=cc` matching pass;
 5. keep all supplied references fixed with `volrec=no` and `trail_rec=no`;
@@ -66,6 +67,14 @@ service before Euclidean refinement:
 The 100,000-particle cap is a one-pass initialization cohort, not the first
 fraction of a coverage schedule. There is no repeated CC pass and no
 missing-particle sweep during pose initialization.
+
+`classify3D_refs` passes its parsed `lpstart` to the shared pose-initialization
+service. The value is common to every supplied state and controls the matching
+low-pass, crop, and translation setup for the CC pass. This is a
+workflow-specific override of the service's 15 Å default; callers that omit
+the override, including `abinitio3D` input-volume starts and
+`refine3D_auto ref_pose_init=cc`, retain that default. A caller-selected common
+bandwidth must never become per-state frequency adaptation.
 
 This transition uses global grouped residual statistics. That keeps the capped
 cohort sufficient even when it does not contain every acquisition group; a
@@ -100,10 +109,11 @@ Balanced class sampling is used only when appropriate metadata exists.
 
 ## 5. Frequency and Reconstruction
 
-`lpstart` and `lpstop` define one common frequency schedule for all states.
-The workflow consumes `simple_refine3D_stage_plan` in short blocks, applying
-the returned low-pass, crop, translation limit, and iteration range to each
-base-`refine3D` call.
+`lpstart` selects the common CC pose-initialization bandwidth and, together
+with `lpstop`, defines the subsequent common Euclidean frequency schedule for
+all states. The workflow consumes `simple_refine3D_stage_plan` in short blocks,
+applying the returned low-pass, crop, translation limit, and iteration range to
+each base-`refine3D` call.
 
 After the frequency march, a missing-update pass ensures every active particle
 has a committed reference-conditioned assignment. Final maps are reconstructed
@@ -137,7 +147,8 @@ User-side validation must verify:
 - one and only one fixed-reference CC pass;
 - one image-power bootstrap before that pass, with finite sigma2 coverage for
   every active particle record;
-- a cohort of at most 100,000 particles and a common 15 Å bandwidth;
+- a cohort of at most 100,000 particles and one common pose-initialization
+  bandwidth equal to the parsed `lpstart` value;
 - unchanged prepared external-reference hashes throughout that pass;
 - residual sigma availability before the first Euclidean block;
 - preservation of image-bootstrap records outside the CC cohort;

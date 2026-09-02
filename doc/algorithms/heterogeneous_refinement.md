@@ -28,12 +28,16 @@ references may not share the particle pose history, the workflow first runs
 one fixed-reference CC pose-initialization pass:
 
 ```text
-fixed 15 Å references + at most 100,000 particles
+fixed references at the common lpstart bandwidth + at most 100,000 particles
     -> one broad CC pose/state assignment pass
     -> residual sigma consolidation
     -> data-derived checkpoint maps
     -> Euclidean global probabilistic classification
 ```
+
+For `classify3D_refs`, `lpstart` therefore controls both the fixed-reference
+CC initialization pass and the start of the subsequent common Euclidean
+frequency schedule. Its default is 10 Å, and every state uses the same value.
 
 No reconstruction modifies the supplied references during the CC pass. The
 checkpoint maps, not the external inputs, become the authoritative working

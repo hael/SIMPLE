@@ -13,7 +13,7 @@ private
 contains
 
     subroutine initialize_poses_against_external_references( params, parent_cline, xrefine3D, xrec3D, &
-        &nactive, reference_vols, checkpoint_vols, pose_init_iter )
+        &nactive, reference_vols, checkpoint_vols, pose_init_iter, lp_init )
         class(parameters),     intent(in)    :: params
         class(cmdline),        intent(inout) :: parent_cline
         class(commander_base), intent(inout) :: xrefine3D, xrec3D
@@ -21,49 +21,52 @@ contains
         type(string),          intent(in)    :: reference_vols(:)
         type(string),          intent(out)   :: checkpoint_vols(:)
         integer,               intent(in)    :: pose_init_iter
+        real,        optional, intent(in)    :: lp_init
         integer, parameter :: NSAMPLE_POSE_INIT_CAP = 100000
         integer, parameter :: NSPACE_POSE_INIT       = 2500
         real,    parameter :: LP_POSE_INIT           = 15.0
         type(commander_calc_pspec)        :: xcalc_pspec
         type(commander_calc_group_sigmas) :: xcalc_group_sigmas
-        type(cmdline) :: cline_sigma_bootstrap, cline_pose_init, cline_sigmas, cline_checkpoint
+        type(cmdline)     :: cline_sigma_bootstrap, cline_pose_init, cline_sigmas, cline_checkpoint
         type(lp_crop_inf) :: lpinfo_pose_init(1)
-        type(string) :: startvol
+        type(string)      :: startvol
         integer :: state, nsample_pose_init
-        real    :: ufrac_pose_init
+        real    :: ufrac_pose_init, lp
         if( nactive < 1 ) THROW_HARD('external-reference pose initialization requires active particles')
         if( size(reference_vols) < 1 ) THROW_HARD('external-reference pose initialization requires references')
         if( size(checkpoint_vols) /= size(reference_vols) )then
             THROW_HARD('external-reference pose-initialization checkpoint/reference state count mismatch')
         endif
         if( pose_init_iter < 1 ) THROW_HARD('external-reference pose-initialization iteration must be positive')
+        lp = LP_POSE_INIT
+        if( present(lp_init) ) lp = lp_init
         nsample_pose_init = min(nactive, NSAMPLE_POSE_INIT_CAP)
         ufrac_pose_init   = real(nsample_pose_init) / real(nactive)
-        call lpstages_setlims(params%box, 1, params%smpd, LP_POSE_INIT, LP_POSE_INIT, &
+        call lpstages_setlims(params%box, 1, params%smpd, lp_init, lp_init, &
             &lpinfo_pose_init)
         cline_pose_init = parent_cline
-        call cline_pose_init%set('prg',            'refine3D')
-        call cline_pose_init%set('mkdir',                'no')
-        call cline_pose_init%set('objfun',               'cc')
-        call cline_pose_init%set('sigma_est',         'global')
-        call cline_pose_init%set('refine',           'greedy')
-        call cline_pose_init%set('greedy_sampling',     'yes')
-        call cline_pose_init%set('balance',              'no')
-        call cline_pose_init%set('trail_rec',            'no')
-        call cline_pose_init%set('volrec',               'no')
-        call cline_pose_init%set('cc_emit_sigma',        'yes')
-        call cline_pose_init%set('update_frac', ufrac_pose_init)
-        call cline_pose_init%set('nsample', nsample_pose_init)
-        call cline_pose_init%set('nstates', size(reference_vols))
-        call cline_pose_init%set('nspace', NSPACE_POSE_INIT)
-        call cline_pose_init%set('maxits',                  1)
-        call cline_pose_init%set('minits',                  1)
-        call cline_pose_init%set('startit',  pose_init_iter)
-        call cline_pose_init%set('which_iter', pose_init_iter)
-        call cline_pose_init%set('extr_iter', pose_init_iter)
-        call cline_pose_init%set('lp',          LP_POSE_INIT)
-        call cline_pose_init%set('lpstop',      LP_POSE_INIT)
-        call cline_pose_init%set('trs', lpinfo_pose_init(1)%trslim)
+        call cline_pose_init%set('prg',             'refine3D')
+        call cline_pose_init%set('mkdir',           'no')
+        call cline_pose_init%set('objfun',          'cc')
+        call cline_pose_init%set('sigma_est',       'global')
+        call cline_pose_init%set('refine',          'greedy')
+        call cline_pose_init%set('greedy_sampling', 'yes')
+        call cline_pose_init%set('balance',         'no')
+        call cline_pose_init%set('trail_rec',       'no')
+        call cline_pose_init%set('volrec',          'no')
+        call cline_pose_init%set('cc_emit_sigma',   'yes')
+        call cline_pose_init%set('update_frac',     ufrac_pose_init)
+        call cline_pose_init%set('nsample',         nsample_pose_init)
+        call cline_pose_init%set('nstates',         size(reference_vols))
+        call cline_pose_init%set('nspace',          NSPACE_POSE_INIT)
+        call cline_pose_init%set('maxits',          1)
+        call cline_pose_init%set('minits',          1)
+        call cline_pose_init%set('startit',         pose_init_iter)
+        call cline_pose_init%set('which_iter',      pose_init_iter)
+        call cline_pose_init%set('extr_iter',       pose_init_iter)
+        call cline_pose_init%set('lp',              lp)
+        call cline_pose_init%set('lpstop',          lp)
+        call cline_pose_init%set('trs',             lpinfo_pose_init(1)%trslim)
         do state = 1,size(reference_vols)
             if( .not. file_exists(reference_vols(state)) )then
                 THROW_HARD('external-reference pose-initialization input volume does not exist')
@@ -102,7 +105,7 @@ contains
         call cline_pose_init%delete('endit')
         write(logfhandle,'(A,I0,A,I0,A,F8.4,A,F6.1)') &
             &'>>> FIXED-REFERENCE CC POSE INITIALIZATION STATES/NSAMPLE/FRACTION/LP: ', &
-            &size(reference_vols), '/', nsample_pose_init, '/', ufrac_pose_init, '/', LP_POSE_INIT
+            &size(reference_vols), '/', nsample_pose_init, '/', ufrac_pose_init, '/', lp_init
         call xrefine3D%execute(cline_pose_init)
         call validate_pose_initialized_states(params%projfile, size(reference_vols), nsample_pose_init)
         cline_sigmas = cline_pose_init

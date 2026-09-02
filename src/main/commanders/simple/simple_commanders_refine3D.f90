@@ -1456,15 +1456,15 @@ contains
         class(commander_classify3D_refs), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         integer, parameter :: NSAMPLE_PER_STATE_CLASSIFY3D_REFS = 10000
-        integer, parameter :: NSAMPLE_CLASSIFY3D_REFS_CAP       = 100000
-        integer, parameter :: NSPACE                         = 5000
-        integer, parameter :: NSPACE_SUB                     = 500
-        integer, parameter :: MINITS_CLASSIFY3D_REFS            = 10
-        integer, parameter :: MAXITS_CLASSIFY3D_REFS            = 50
-        real,    parameter :: TARGET_UPDATES_PER_PARTICLE    = 4.0
-        real,    parameter :: LPSTART_CLASSIFY3D_REFS           = 10.0
-        real,    parameter :: LPSTOP_CLASSIFY3D_REFS            = 6.0
-        character(len=*), parameter :: WORKFLOW_LABEL = 'CLASSIFY3D_REFS'
+        integer, parameter :: NSAMPLE_CLASSIFY3D_REFS_CAP = 100000
+        integer, parameter :: NSPACE                      = 5000
+        integer, parameter :: NSPACE_SUB                  = 500
+        integer, parameter :: MINITS_CLASSIFY3D_REFS      = 10
+        integer, parameter :: MAXITS_CLASSIFY3D_REFS      = 50
+        real,    parameter :: TARGET_UPDATES_PER_PARTICLE = 4.0
+        real,    parameter :: LPSTART_CLASSIFY3D_REFS     = 10.0
+        real,    parameter :: LPSTOP_CLASSIFY3D_REFS      = 6.0
+        character(len=*), parameter :: WORKFLOW_LABEL     = 'CLASSIFY3D_REFS'
         type(commander_rec3D)     :: xrec3D
         type(commander_refine3D)  :: xrefine3D
         type(cmdline)             :: cline_rec3D
@@ -1721,10 +1721,11 @@ contains
             allocate(init_vols(params%nstates), checkpoint_vols(params%nstates))
             call validate_input_volumes()
             init_vols(1:params%nstates) = params%vols(1:params%nstates)
-            write(logfhandle,'(A)') &
-                &'>>> CLASSIFY3D_REFS EXTERNAL REFERENCES ARE UNTRUSTED UNTIL CC POSE INITIALIZATION COMPLETES'
+            write(logfhandle,'(A)')'>>> '//WORKFLOW_LABEL//&
+                &' EXTERNAL REFERENCES ARE UNTRUSTED UNTIL CC POSE INITIALIZATION COMPLETES'
+            write(logfhandle,'(A,F7.2)') '>>> '//WORKFLOW_LABEL//' INITIALIZING POSES WITH LP:', params%lpstart
             call initialize_poses_against_external_references(params, cline, xrefine3D, xrec3D, &
-                &nptcls_eff, init_vols, checkpoint_vols, 1)
+                &nptcls_eff, init_vols, checkpoint_vols, 1, lp_init=params%lpstart)
             params%vols(1:params%nstates) = checkpoint_vols
             iter_glob = 1
             ! update command line

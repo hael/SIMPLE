@@ -2,10 +2,11 @@
 
 ## Status
 
-Implemented in the working tree, 2026-08-31, and updated 2026-09-01 to add the
-particle-image sigma2 bootstrap before CC residual emission. The shared
-external-reference CC pose-initialization service and its three callers are
-present; compilation and runtime validation remain user-owned. This note is a focused companion to
+Implemented in the working tree, 2026-08-31, updated 2026-09-01 to add the
+particle-image sigma2 bootstrap before CC residual emission, and updated
+2026-09-02 to permit a caller-selected common pose-initialization bandwidth.
+The shared external-reference CC pose-initialization service and its three
+callers are present; compilation and runtime validation remain user-owned. This note is a focused companion to
 `refine3d_state_and_reference_workflow_refactor.md`. That document owns the
 application boundaries and approved names; this document owns only the policy
 for introducing reference volumes that may not share the particles' alignment
@@ -20,8 +21,9 @@ over the existing capped pose initialization cohort of at most 100,000 particles
 
 1. run the normal native-grid `calc_pspec` bootstrap from particle images and
    propagate its global even/odd curves to every active partition record;
-2. normalize, validate, and low-pass filter every supplied reference to a
-   common 15 A limit;
+2. normalize, validate, and low-pass filter every supplied reference to one
+   common caller-resolved limit; the shared default is 15 A, while
+   `classify3D_refs` supplies its parsed `lpstart` value;
 3. keep those references fixed;
 4. select the normal pose initialization cohort, capped at 100,000 particles, and
    match that cohort competitively with `objfun=cc` in exactly one pass
@@ -87,7 +89,7 @@ bootstrap residual is evaluated.
 The image-power bootstrap and the CC residual update serve different purposes.
 `calc_pspec` establishes finite native-grid sigma2 coverage for every active
 partition record before reference-conditioned assignments exist. Reference
-normalization and the common 15 A low-pass limit then reduce the initial scale
+normalization and the common resolved low-pass limit then reduce the initial scale
 mismatch while the CC matcher replaces active matching shells in committed
 cohort records with pose-conditioned residuals. Bootstrap values remain in
 shells outside the active band. The grouped cohort result seeds the first
@@ -123,10 +125,10 @@ The working-tree implementation centralizes the policy:
 | Path | Implemented policy |
 | --- | --- |
 | Base `refine3D` | Remains mechanism-only and does not infer reference provenance. |
-| `refine3D_auto` with `vol1` | Exposes `ref_pose_init=cc|none`; `none` warns prominently that the external map is trusted without CC initialization. |
+| `refine3D_auto` with `vol1` | Exposes `ref_pose_init=cc|none`; `none` warns prominently that the external map is trusted without CC initialization, while `cc` uses the shared 15 A default. |
 | `refine3D_states` | Starts directly with Euclidean matching because its contract requires a same-lineage pose scaffold and references. |
-| `classify3D_refs` | Requires a complete external reference set and always performs the shared CC pose-initialization stage. |
-| `abinitio3D` with input volumes | Dispatches the shared CC pose-initialization service before entering its Euclidean stage ladder. |
+| `classify3D_refs` | Requires a complete external reference set, always performs the shared CC pose-initialization stage, and supplies `lpstart` as its common initialization bandwidth. |
+| `abinitio3D` with input volumes | Dispatches the shared CC pose-initialization service at its 15 A default before entering its Euclidean stage ladder. |
 
 Some startup and final reconstruction commands set `objfun=cc`. Those are
 reconstruction-policy settings and do not constitute CC particle-to-reference
@@ -199,11 +201,15 @@ Before matching:
   can be checked, and state count;
 - normalize references without using particle assignments that do not yet
   exist;
-- apply one common 15 A low-pass limit;
+- resolve one common low-pass limit from the caller override when present and
+  otherwise use the shared 15 A default;
 - preserve immutable prepared copies for the complete pose initialization stage.
 
 Every state must be evaluated at the same effective bandwidth. Per-state
 frequency adaptation would bias competitive assignment and is out of scope.
+`classify3D_refs` supplies its parsed `lpstart` value (10 A by default), so its
+CC pass and first Euclidean frequency stage begin from the same configured
+bandwidth. `refine3D_auto` and `abinitio3D` omit the override and retain 15 A.
 
 ### 2. Bootstrap sigma2 from particle images
 
@@ -245,9 +251,9 @@ only as search seeds.
 
 For very large datasets, the added work is the normal image-power bootstrap
 sample of at most 25,000 particles on the native grid, followed by one CC pass
-over at most 100,000 particles at 15 A. The 100,000-particle cap is final for
-pose initialization: the workflow must not reinterpret it as the first fraction
-of a multi-pass coverage scheme.
+over at most 100,000 particles at the resolved common bandwidth. The
+100,000-particle cap is final for pose initialization: the workflow must not
+reinterpret it as the first fraction of a multi-pass coverage scheme.
 
 ### 4. Establish a data-derived checkpoint
 
@@ -347,9 +353,9 @@ same shared pose-initialization service rather than owning another implementatio
 No new matching formula, fractional scheme, or pose initialization coverage
 bookkeeping is proposed. The change is orchestration and state preservation:
 bootstrap sigma2 from particle images, choose the existing CC objective for one
-capped-cohort pass against fixed 15 A references, replace only active cohort
-shells with residual contributions after assignment, reconstruct, consolidate,
-and switch to existing Euclidean refinement.
+capped-cohort pass against fixed references at one resolved common bandwidth,
+replace only active cohort shells with residual contributions after assignment,
+reconstruct, consolidate, and switch to existing Euclidean refinement.
 
 ## Failure Policy
 
@@ -380,7 +386,11 @@ and switch to existing Euclidean refinement.
 - The pose initialization command line has `objfun=cc`, `volrec=no`, and
   `trail_rec=no`; the selected cohort is capped at 100,000 and is not advanced
   through fractional passes.
-- Every external state is prepared at the same 15 A low-pass limit.
+- Every external state in one transition is prepared at the same resolved
+  low-pass limit; the default is 15 A and a supplied override applies uniformly
+  to every state.
+- `classify3D_refs` supplies its parsed `lpstart` as that override, while
+  `refine3D_auto` and `abinitio3D` exercise the 15 A fallback.
 - `calc_pspec` runs exactly once before CC and establishes finite native-grid
   sigma2 coverage for every active partition record.
 - Sigma contributions are generated during pose initialization only after assignment,
@@ -433,8 +443,9 @@ not be claimed unless their output is observed.
 
 ## Resolved Review Decisions
 
-Cyril approved and refined the pose initialization contract on 2026-08-31 and
-updated its sigma lifecycle on 2026-09-01:
+Cyril approved and refined the pose initialization contract on 2026-08-31,
+updated its sigma lifecycle on 2026-09-01, and approved caller-selected common
+bandwidth for `classify3D_refs` on 2026-09-02:
 
 1. `classify3D_refs` always initializes poses with CC when references and
    particles have independent provenance.
@@ -451,7 +462,9 @@ updated its sigma lifecycle on 2026-09-01:
    accepted, with a prominent warning in logs.
 7. `abinitio3D` continues to accept input volumes and dispatches the same
    shared pose initialization implementation.
-8. Every external state uses a common 15 A low-pass limit during pose initialization.
+8. Every external state in one transition uses the same resolved low-pass;
+   `classify3D_refs` supplies `lpstart`, while callers without an override use
+   the shared 15 A default.
 
 ## Completion Criteria
 
@@ -461,7 +474,8 @@ The design is complete when:
   contracts;
 - independent-reference matching uses one fixed-reference CC pass over the
   capped pose initialization cohort of at most 100,000 particles;
-- all external states use the same 15 A pose initialization limit;
+- all external states in one transition use the same resolved pose-initialization
+  limit, with correct `lpstart` override and 15 A fallback behavior;
 - native-grid image-power sigma2 covers every active partition record before
   the CC pass;
 - the first data-derived reference is reconstructed from the complete assigned
