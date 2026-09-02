@@ -67,6 +67,103 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(loaded_job.prog, "pick")
         self.assertEqual(loaded_job.name, "Pick Particles")
 
+    def test_batch_detail_resolves_named_new_project_in_job_directory(self):
+        job_dir = os.path.join(self.workspace_dir, "1_new_project")
+        os.mkdir(job_dir)
+        project_path = os.path.join(job_dir, "test.simple")
+        with open(project_path, "w", encoding="utf-8"):
+            pass
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_new_project",
+            args={"projname": "test"},
+            status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "new_project"},
+        )
+
+        job = BatchJob(id=jobmodel.id)
+
+        self.assertEqual(job.get_safe_job_dir(), job_dir)
+        self.assertEqual(job.get_result_project_path(), project_path)
+
+    def test_batch_detail_rejects_ambiguous_or_external_result_projects(self):
+        job_dir = os.path.join(self.workspace_dir, "1_demo")
+        os.mkdir(job_dir)
+        for filename in ("first.simple", "second.simple"):
+            with open(os.path.join(job_dir, filename), "w", encoding="utf-8"):
+                pass
+        outside_project = os.path.join(self.tempdir.name, "outside.simple")
+        with open(outside_project, "w", encoding="utf-8"):
+            pass
+        os.symlink(outside_project, os.path.join(job_dir, "external.simple"))
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_demo",
+            status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "demo"},
+        )
+        job = BatchJob(id=jobmodel.id)
+
+        self.assertIsNone(job.get_result_project_path())
+
+        workspace_project = os.path.join(job_dir, "workspace.simple")
+        with open(workspace_project, "w", encoding="utf-8"):
+            pass
+        self.assertEqual(job.get_result_project_path(), workspace_project)
+
+    def test_batch_detail_returns_bounded_logs_and_artifact_previews(self):
+        job_dir = os.path.join(self.workspace_dir, "1_motion_correct")
+        os.mkdir(job_dir)
+        with open(os.path.join(job_dir, "stdout.log"), "w", encoding="utf-8") as stdout_file:
+            stdout_file.write("0123456789")
+        with open(os.path.join(job_dir, "movie_thumb.jpg"), "wb") as image_file:
+            image_file.write(b"image")
+        with open(os.path.join(job_dir, "movie_intg.mrc"), "wb") as mrc_file:
+            mrc_file.write(b"mrc")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_motion_correct",
+            status="running",
+            master_stats={"job_type": "batch", "package": "simple", "program": "motion_correct"},
+        )
+
+        job = BatchJob(id=jobmodel.id)
+        logs = job.get_log_tails(max_bytes=5)
+        artifacts = job.get_artifact_summary()
+
+        self.assertEqual(logs[0]["text"], "56789")
+        self.assertTrue(logs[0]["truncated"])
+        self.assertFalse(logs[1]["exists"])
+        self.assertEqual(
+            {entry["extension"]: entry["count"] for entry in artifacts["counts"]},
+            {"JPG": 1, "MRC": 1},
+        )
+        self.assertEqual(artifacts["images"][0]["name"], "movie_thumb.jpg")
+
+    def test_batch_detail_rejects_job_directory_outside_workspace(self):
+        outside_dir = os.path.join(self.tempdir.name, "outside_job")
+        os.mkdir(outside_dir)
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="../outside_job",
+            status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "demo"},
+        )
+        job = BatchJob(id=jobmodel.id)
+
+        self.assertIsNone(job.get_safe_job_dir())
+        self.assertIsNone(job.get_result_project_path())
+        self.assertEqual(job.get_log_tails(), [])
+        self.assertEqual(job.get_artifact_summary(), {"counts": [], "images": []})
+
     def test_new_marks_persisted_job_failed_when_dispatch_fails(self):
         launcher = batchjob_module.SIMPLEBatch
         with patch.object(launcher, "loadUIJSON", return_value=True), patch.object(launcher, "start", return_value=False):

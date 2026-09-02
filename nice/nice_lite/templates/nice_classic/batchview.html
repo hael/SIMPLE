@@ -1,0 +1,256 @@
+{% comment %}Owned SIMPLE/SINGLE batch job detail page.{% endcomment %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+</head>
+<body class="bg-streambg h-screen flex flex-col font-sans">
+    <div class="bg-streambar border-b border-streamline px-4 h-10 flex items-center gap-3 flex-shrink-0">
+        <a class="text-streamlabel hover:text-streamtext cursor-pointer transition-colors"
+           href="{% url 'nice_lite:workspace' %}" title="back">
+            <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3">
+                <polyline points="7,2 3,6 7,10"/>
+            </svg>
+        </a>
+        <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">{{ package|default:"simple" }} batch</span>
+        <span class="text-streamlabel text-[10px]">/</span>
+        <span class="text-[12px] font-medium text-streamtext truncate">{{ disp }} · {{ name }}{% if desc %} · {{ desc }}{% endif %}</span>
+        <span class="ml-auto inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full
+            {% if status == 'running' %}bg-streamaction/10 text-streamaction
+            {% elif status == 'finished' %}bg-streamring/10 text-streamaccent
+            {% elif status == 'failed' or status == 'stopped' %}bg-streamerrorsurface text-streamerror
+            {% elif status == 'queued' %}bg-streamline/40 text-streamlabel
+            {% else %}bg-streamrejected/10 text-streamrejected{% endif %}">
+            {{ status }}
+        </span>
+
+        {% if batch_job_controls_enabled %}
+            {% if status == "running" %}
+                <form method="POST" action="{% url 'nice_lite:stop_batch' %}" class="flex">
+                    {% csrf_token %}
+                    <input type="hidden" name="selected_job_id" value="{{ jobid }}">
+                    <button type="submit" title="stop batch job"
+                            onclick="return confirm('Please confirm that you wish to stop batch job {{ jobid }}');"
+                            class="text-streamicon hover:text-streamerror transition-colors">
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="8" cy="8" r="6"/>
+                            <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" stroke="none"/>
+                        </svg>
+                    </button>
+                </form>
+            {% elif status == "queued" or status == "finished" or status == "failed" or status == "stopped" %}
+                <form method="POST" action="{% url 'nice_lite:delete_batch' %}" class="flex">
+                    {% csrf_token %}
+                    <input type="hidden" name="selected_job_id" value="{{ jobid }}">
+                    <button type="submit" title="delete batch job"
+                            onclick="return confirm('Please confirm that you wish to permanently delete batch job {{ jobid }}. This cannot be undone.');"
+                            class="text-streamicon hover:text-streamerror transition-colors">
+                        <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                            <polyline points="2,4 14,4"/>
+                            <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
+                        </svg>
+                    </button>
+                </form>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <main class="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+        <div class="grid grid-cols-2 gap-3 content-start">
+            <section class="bg-streambar rounded-xl border border-streamline p-4">
+                <h2 class="text-[10px] font-medium uppercase tracking-widest text-streamlabel mb-3">job overview</h2>
+                <dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-[11px]">
+                    <dt class="text-streamlabel">program</dt>
+                    <dd class="text-streamtext font-mono">{{ program }}</dd>
+                    <dt class="text-streamlabel">created</dt>
+                    <dd class="text-streamtext">{{ created }}</dd>
+                    <dt class="text-streamlabel">project</dt>
+                    <dd class="text-streamtext">{{ project }}</dd>
+                    <dt class="text-streamlabel">workspace</dt>
+                    <dd class="text-streamtext">{{ workspace }}</dd>
+                    <dt class="text-streamlabel">input project</dt>
+                    <dd class="text-streamtext">{{ source_label }}</dd>
+                    <dt class="text-streamlabel">job directory</dt>
+                    <dd class="text-streamsubtle font-mono" style="overflow-wrap:anywhere">{{ job_dir }}</dd>
+                </dl>
+            </section>
+
+            <section class="bg-streambar rounded-xl border border-streamline p-4">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                    <h2 id="argument_view_heading" class="text-[10px] font-medium uppercase tracking-widest text-streamlabel">submitted arguments</h2>
+                    {% if arguments %}
+                        <div class="flex items-center rounded-md border border-streamdivider p-0.5" role="group" aria-label="argument view">
+                            <button id="submitted_arguments_button" type="button" aria-pressed="true" aria-controls="argument_list"
+                                    onclick="setBatchArgumentView('submitted')"
+                                    class="rounded px-2 py-0.5 text-[9px] bg-streamring/10 text-streamaccent">submitted</button>
+                            <button id="all_arguments_button" type="button" aria-pressed="false" aria-controls="argument_list"
+                                    onclick="setBatchArgumentView('all')"
+                                    class="rounded px-2 py-0.5 text-[9px] text-streamlabel">all</button>
+                        </div>
+                    {% endif %}
+                </div>
+                {% if arguments %}
+                    <dl id="argument_list" class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-[11px]">
+                        {% for arg in arguments %}
+                            <dt data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
+                                class="text-streamlabel{% if not arg.submitted %} hidden{% endif %}">{{ arg.label }}</dt>
+                            <dd data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
+                                class="text-streamtext font-mono{% if not arg.submitted %} hidden{% endif %}"
+                                style="overflow-wrap:anywhere">
+                                {% if arg.origin == "unset" %}
+                                    <span class="text-streamlabel">—</span>
+                                {% elif arg.value == "" %}
+                                    <span class="text-streamlabel">empty</span>
+                                {% else %}
+                                    <span>{{ arg.value }}</span>
+                                {% endif %}
+                                <span data-argument-origin class="hidden ml-2 rounded bg-streamline/40 px-1.5 py-0.5 text-[9px] font-sans text-streamlabel">
+                                    {% if arg.origin == "unset" %}not set{% else %}{{ arg.origin }}{% endif %}
+                                </span>
+                            </dd>
+                        {% endfor %}
+                    </dl>
+                {% endif %}
+                <p id="no_submitted_arguments" class="text-[11px] text-streamsubtle{% if submitted_argument_count %} hidden{% endif %}">no user arguments were submitted</p>
+            </section>
+
+            <section class="col-span-full bg-streambar rounded-xl border {% if status == 'failed' or status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} p-4">
+                <h2 class="text-[10px] font-medium uppercase tracking-widest text-streamlabel mb-3">logs</h2>
+                <div class="grid grid-cols-3 gap-3">
+                    {% for log in logs %}
+                        <article class="min-w-0 rounded-lg border border-streamdivider bg-streambg overflow-hidden">
+                            <div class="px-3 py-2 border-b border-streamdivider flex items-center justify-between gap-2">
+                                <div>
+                                    <p class="text-[10px] font-medium text-streamtext">{{ log.label }}</p>
+                                    <p class="text-[9px] text-streamlabel font-mono">{{ log.name }}</p>
+                                </div>
+                                {% if log.exists %}
+                                    <span class="text-[9px] text-streamlabel">{{ log.size|filesizeformat }}{% if log.truncated %} · tail{% endif %}</span>
+                                {% endif %}
+                            </div>
+                            <pre class="h-[260px] overflow-auto p-3 text-[10px] text-streamsubtle" style="white-space:pre-wrap;overflow-wrap:anywhere">{% if log.exists and log.text %}{{ log.text }}{% elif log.exists %}no output yet{% else %}log file not available{% endif %}</pre>
+                        </article>
+                    {% empty %}
+                        <p class="text-[11px] text-streamsubtle">job directory is unavailable</p>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <section class="bg-streambar rounded-xl border border-streamline p-4">
+                <h2 class="text-[10px] font-medium uppercase tracking-widest text-streamlabel mb-3">result project</h2>
+                {% if result_project %}
+                    <p class="text-[10px] text-streamsubtle font-mono mb-3" style="overflow-wrap:anywhere">{{ result_project }}</p>
+                    {% if status == "finished" and project_sections %}
+                        <div class="grid grid-cols-3 gap-2">
+                            {% for section in project_sections %}
+                                <div class="rounded-lg border border-streamdivider bg-streambg px-3 py-2" title="{{ section.info }}">
+                                    <p class="text-[18px] font-medium text-streamtext">{{ section.count }}</p>
+                                    <p class="text-[9px] uppercase tracking-wide text-streamlabel">{{ section.label }}</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% elif status == "finished" and not project_summary_available %}
+                        <p class="text-[11px] text-streamsubtle">project summary is empty or currently unavailable</p>
+                    {% else %}
+                        <p class="text-[11px] text-streamsubtle">project data is summarized after the job finishes</p>
+                    {% endif %}
+                {% else %}
+                    <p class="text-[11px] text-streamsubtle">no unambiguous result project was found in the job directory</p>
+                {% endif %}
+            </section>
+
+            <section class="bg-streambar rounded-xl border border-streamline p-4">
+                <h2 class="text-[10px] font-medium uppercase tracking-widest text-streamlabel mb-3">recognized artifacts</h2>
+                {% if artifact_counts %}
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        {% for artifact in artifact_counts %}
+                            <span class="inline-flex items-center gap-1 rounded-full bg-streamline/40 px-2 py-1 text-[10px] text-streamlabel">
+                                <span class="font-medium text-streamtext">{{ artifact.count }}</span> {{ artifact.extension }}
+                            </span>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-[11px] text-streamsubtle mb-3">no recognized result files yet</p>
+                {% endif %}
+
+                {% if artifact_images %}
+                    <div class="grid grid-cols-4 gap-2">
+                        {% for image in artifact_images %}
+                            <a href="{% url 'nice_lite:image' image.path %}" target="_blank" rel="noopener"
+                               class="rounded-md overflow-hidden bg-black border border-streamdivider" title="{{ image.name }}">
+                                <img src="{% url 'nice_lite:image' image.path %}" loading="lazy" alt="{{ image.name }}"
+                                     class="w-full aspect-square object-cover hover:opacity-90 transition-opacity">
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </section>
+        </div>
+    </main>
+
+    {% include 'messages.html' %}
+
+    <script>
+        const batchArgumentViewStorageKey = "nice_batch_argument_view_{{ jobid }}";
+        const setBatchArgumentView = (view) => {
+            const showAll = view === "all";
+            document.querySelectorAll("[data-argument-row]").forEach((row) => {
+                row.classList.toggle("hidden", !showAll && row.dataset.submitted !== "true");
+            });
+            document.querySelectorAll("[data-argument-origin]").forEach((origin) => {
+                origin.classList.toggle("hidden", !showAll);
+            });
+
+            const noSubmitted = document.querySelector("#no_submitted_arguments");
+            if (noSubmitted) {
+                noSubmitted.classList.toggle("hidden", showAll || {{ submitted_argument_count|default:0 }} > 0);
+            }
+
+            const heading = document.querySelector("#argument_view_heading");
+            if (heading) heading.textContent = showAll ? "all arguments" : "submitted arguments";
+
+            const submittedButton = document.querySelector("#submitted_arguments_button");
+            const allButton = document.querySelector("#all_arguments_button");
+            [[submittedButton, !showAll], [allButton, showAll]].forEach(([button, active]) => {
+                if (!button) return;
+                button.setAttribute("aria-pressed", active ? "true" : "false");
+                button.classList.toggle("bg-streamring/10", active);
+                button.classList.toggle("text-streamaccent", active);
+                button.classList.toggle("text-streamlabel", !active);
+            });
+
+            try {
+                sessionStorage.setItem(batchArgumentViewStorageKey, showAll ? "all" : "submitted");
+            } catch (error) {
+                // Storage can be unavailable without affecting the toggle itself.
+            }
+        };
+
+        try {
+            if (sessionStorage.getItem(batchArgumentViewStorageKey) === "all") {
+                setBatchArgumentView("all");
+            }
+        } catch (error) {
+            // Keep the default submitted view when storage is unavailable.
+        }
+    </script>
+
+    {% if auto_refresh %}
+        <script>
+            let lastinteraction = Date.now();
+            for (const eventName of ["click", "keydown", "scroll"]) {
+                document.addEventListener(eventName, () => { lastinteraction = Date.now(); }, { passive: true });
+            }
+            setInterval(() => {
+                if (document.visibilityState !== "hidden" && (Date.now() - lastinteraction) > 10000) {
+                    location.reload();
+                }
+            }, 1000);
+        </script>
+    {% endif %}
+</body>
+</html>

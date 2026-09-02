@@ -434,3 +434,91 @@ class TemplateIntegrationTests(SimpleTestCase):
             finished.index('title="delete batch job"'),
             finished.index('job directory'),
         )
+
+    def test_batch_card_always_links_to_detail_view(self):
+        job = {
+            "id": 7,
+            "disp": 1,
+            "name": "Import Movie Data",
+            "dirc": "1_import_movies",
+            "args": {},
+            "master_stats": {"package": "simple"},
+            "status": "finished",
+        }
+
+        rendered = render_to_string("nice_classic/_batch_card.html", {
+            "job": job,
+            "batch_job_controls_enabled": False,
+        })
+
+        self.assertIn('href="/viewbatch/7"', rendered)
+        self.assertIn('target="_parent"', rendered)
+        self.assertIn('aria-label="view batch job 1 Import Movie Data"', rendered)
+        self.assertNotIn('<circle cx="8" cy="8" r="3"', rendered)
+
+    def test_batch_detail_template_has_common_result_and_log_panels(self):
+        batch_view = self._read_template("nice_classic/batchview.html")
+
+        rendered = render_to_string("nice_classic/batchview.html", {
+            "jobid": 7,
+            "disp": 1,
+            "name": "Import Movie Data",
+            "desc": "",
+            "status": "finished",
+            "created": "today",
+            "package": "simple",
+            "program": "import_movies",
+            "project": "project",
+            "workspace": "workspace",
+            "job_dir": "/project/workspace/1_import_movies",
+            "source_label": "workspace project",
+            "arguments": [
+                {
+                    "key": "nthr",
+                    "label": "Number of threads",
+                    "value": "4",
+                    "origin": "submitted",
+                    "submitted": True,
+                },
+                {
+                    "key": "scale",
+                    "label": "Scale",
+                    "value": 1.5,
+                    "origin": "default",
+                    "submitted": False,
+                },
+                {
+                    "key": "mskdiam",
+                    "label": "Mask diameter",
+                    "value": None,
+                    "origin": "unset",
+                    "submitted": False,
+                },
+            ],
+            "submitted_argument_count": 1,
+            "result_project": None,
+            "project_sections": [],
+            "project_summary_available": False,
+            "logs": [],
+            "artifact_counts": [],
+            "artifact_images": [],
+            "batch_job_controls_enabled": False,
+            "auto_refresh": False,
+        })
+
+        self.assertIn("job overview", batch_view)
+        self.assertIn("submitted arguments", batch_view)
+        self.assertIn("result project", batch_view)
+        self.assertIn("recognized artifacts", batch_view)
+        self.assertIn("{% for log in logs %}", batch_view)
+        self.assertIn("{% if auto_refresh %}", batch_view)
+        self.assertIn("Import Movie Data", rendered)
+        self.assertIn("Number of threads", rendered)
+        self.assertNotIn(">nthr</dt>", rendered)
+        self.assertIn('onclick="setBatchArgumentView(\'submitted\')"', rendered)
+        self.assertIn('onclick="setBatchArgumentView(\'all\')"', rendered)
+        self.assertIn('sessionStorage.getItem(batchArgumentViewStorageKey)', rendered)
+        self.assertIn('data-submitted="false"', rendered)
+        self.assertIn("Scale", rendered)
+        self.assertIn("Mask diameter", rendered)
+        self.assertIn("not set", rendered)

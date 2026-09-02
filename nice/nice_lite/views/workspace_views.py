@@ -25,7 +25,10 @@ from ..models                    import JobModel
 from ..data_structures.batchjob  import BatchJob
 from ..data_structures.streamjob import StreamJob
 from ..data_structures.workspace import Workspace
-from ..features                  import batch_job_controls_enabled, workspace_job_refresh_enabled
+from ..features                  import (
+    batch_job_controls_enabled,
+    workspace_job_refresh_enabled,
+)
 from ..helpers                   import (
     HttpResponseNoContent,
     clear_checksum_cookies,

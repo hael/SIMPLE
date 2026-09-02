@@ -568,6 +568,7 @@ class SIMPLEProjFile:
 
     cmd_header = ["simple_exec", "prg=print_project_info",  "json=yes"]
     cmd_field  = ["simple_exec", "prg=print_project_field", "json=yes"]
+    command_timeout = 30
 
     def __init__(self, projfile):
         self.projfile = projfile  # absolute path to the .simple project file
@@ -580,11 +581,15 @@ class SIMPLEProjFile:
                 cmd,
                 capture_output=True,
                 check=True,
-                text=True
+                text=True,
+                timeout=self.command_timeout,
             )
             return json.loads(result.stdout)
         except subprocess.CalledProcessError as cpe:
             print_error(cpe.stderr)
+            return {}
+        except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+            print_error(str(error))
             return {}
 
     def _check_projfile(self):

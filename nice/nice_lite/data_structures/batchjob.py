@@ -3,6 +3,7 @@ import os
 import shutil
 import signal
 import time
+from collections import Counter
 
 # django imports
 from django.db import transaction
@@ -21,6 +22,15 @@ class BatchJob(Job):
 
     TERMINAL_STATUSES = frozenset(("finished", "failed", "stopped"))
     DELETABLE_STATUSES = TERMINAL_STATUSES | frozenset(("queued",))
+    LOG_FILES = (
+        ("stdout.log", "standard output"),
+        ("stderr.log", "standard error"),
+        ("nice_status.log", "NICE status callbacks"),
+    )
+    ARTIFACT_EXTENSIONS = frozenset((
+        ".simple", ".mrc", ".star", ".jpg", ".jpeg", ".png", ".pdf", ".txt",
+    ))
+    IMAGE_EXTENSIONS = frozenset((".jpg", ".jpeg", ".png"))
 
     def __init__(self, pckg=None, id=None, request=None):
         super().__init__(id=None)
@@ -90,6 +100,168 @@ class BatchJob(Job):
 
     def get_jobmodel(self):
         return self.jobmodel
+
+    def get_safe_job_dir(self):
+        """Return a validated, non-symlink job directory inside its workspace."""
+        if self.jobmodel is None:
+            return None
+
+        project_root = os.path.realpath(self.jobmodel.dset.proj.dirc)
+        workspace_raw = os.path.abspath(os.path.join(project_root, self.jobmodel.dset.dirc))
+        workspace_root = os.path.realpath(workspace_raw)
+        try:
+            workspace_is_safe = os.path.commonpath((project_root, workspace_root)) == project_root
+        except ValueError:
+            workspace_is_safe = False
+        if not workspace_is_safe or not os.path.isdir(workspace_root):
+            return None
+
+        job_dirc = self.jobmodel.dirc
+        if (
+            not isinstance(job_dirc, str)
+            or job_dirc in ("", ".", "..")
+            or job_dirc != os.path.basename(job_dirc)
+        ):
+            return None
+
+        job_raw = os.path.abspath(os.path.join(workspace_root, job_dirc))
+        job_root = os.path.realpath(job_raw)
+        try:
+            job_is_safe = (
+                job_root != workspace_root
+                and os.path.commonpath((workspace_root, job_root)) == workspace_root
+            )
+        except ValueError:
+            job_is_safe = False
+        if not job_is_safe or os.path.islink(job_raw) or not os.path.isdir(job_root):
+            return None
+        return job_root
+
+    def _safe_job_file(self, filename, containment_root=None):
+        """Return one fixed root-level job file after containment validation."""
+        job_dir = self.get_safe_job_dir()
+        if job_dir is None or not isinstance(filename, str) or filename != os.path.basename(filename):
+            return None
+
+        raw_path = os.path.abspath(os.path.join(job_dir, filename))
+        resolved_path = os.path.realpath(raw_path)
+        containment_root = os.path.realpath(containment_root or job_dir)
+        try:
+            path_is_safe = os.path.commonpath((containment_root, resolved_path)) == containment_root
+        except ValueError:
+            path_is_safe = False
+        if not path_is_safe or not os.path.isfile(raw_path):
+            return None
+        return resolved_path
+
+    def get_result_project_path(self):
+        """Resolve this job's output project without trusting a request path."""
+        job_dir = self.get_safe_job_dir()
+        if job_dir is None or self.jobmodel is None:
+            return None
+
+        workspace_root = os.path.realpath(os.path.dirname(job_dir))
+        workspace_project = self._safe_job_file("workspace.simple", workspace_root)
+        if workspace_project is not None:
+            return workspace_project
+
+        if self.prog == "new_project":
+            projname = str(self.args.get("projname", "")).strip()
+            if projname and projname == os.path.basename(projname):
+                project_filename = projname if projname.endswith(".simple") else f"{projname}.simple"
+                named_project = self._safe_job_file(project_filename, workspace_root)
+                if named_project is not None:
+                    return named_project
+
+        try:
+            with os.scandir(job_dir) as directory_entries:
+                filenames = sorted(
+                    entry.name
+                    for entry in directory_entries
+                    if entry.name.endswith(".simple") and entry.is_file(follow_symlinks=True)
+                )
+        except OSError:
+            return None
+
+        candidates = []
+        for filename in filenames:
+            project_path = self._safe_job_file(filename, workspace_root)
+            if project_path is not None and project_path not in candidates:
+                candidates.append(project_path)
+        return candidates[0] if len(candidates) == 1 else None
+
+    def get_log_tails(self, max_bytes=131072):
+        """Return bounded tails for the fixed batch log filenames."""
+        job_dir = self.get_safe_job_dir()
+        if job_dir is None:
+            return []
+        if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes <= 0:
+            max_bytes = 131072
+        max_bytes = min(max_bytes, 1048576)
+
+        logs = []
+        for filename, label in self.LOG_FILES:
+            path = self._safe_job_file(filename, job_dir)
+            entry = {
+                "name": filename,
+                "label": label,
+                "exists": path is not None,
+                "size": 0,
+                "truncated": False,
+                "text": "",
+            }
+            if path is not None:
+                try:
+                    size = os.path.getsize(path)
+                    with open(path, "rb") as log_file:
+                        start = max(0, size - max_bytes)
+                        log_file.seek(start)
+                        log_text = log_file.read(max_bytes).decode("utf-8", errors="replace")
+                    entry.update({
+                        "size": size,
+                        "truncated": start > 0,
+                        "text": log_text,
+                    })
+                except OSError:
+                    entry["exists"] = False
+            logs.append(entry)
+        return logs
+
+    def get_artifact_summary(self, max_previews=12):
+        """Summarize recognized root-level result files and safe image previews."""
+        job_dir = self.get_safe_job_dir()
+        if job_dir is None:
+            return {"counts": [], "images": []}
+        if not isinstance(max_previews, int) or isinstance(max_previews, bool) or max_previews <= 0:
+            max_previews = 12
+        max_previews = min(max_previews, 24)
+
+        try:
+            with os.scandir(job_dir) as directory_entries:
+                entries = sorted(directory_entries, key=lambda entry: entry.name)
+        except OSError:
+            return {"counts": [], "images": []}
+
+        counts = Counter()
+        images = []
+        for entry in entries:
+            extension = os.path.splitext(entry.name)[1].lower()
+            if extension not in self.ARTIFACT_EXTENSIONS:
+                continue
+            path = self._safe_job_file(entry.name, job_dir)
+            if path is None:
+                continue
+            counts[extension] += 1
+            if extension in self.IMAGE_EXTENSIONS and len(images) < max_previews:
+                images.append({"name": entry.name, "path": path})
+
+        return {
+            "counts": [
+                {"extension": extension.removeprefix(".").upper(), "count": count}
+                for extension, count in sorted(counts.items())
+            ],
+            "images": images,
+        }
 
     # ------------------------------------------------------------------
     # Internal helpers

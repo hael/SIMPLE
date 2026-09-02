@@ -59,6 +59,7 @@ urlpatterns = [
     # Job lifecycle
     path("newstream",                          views.view_job_builder,                             name="new_stream"),
     path("createbatch",                        views.view_create_batch,                            name="create_batch"),
+    path("viewbatch/<int:jobid>",              batch_views.view_batch,                            name="view_batch"),
     path("stopbatch",                          batch_views.view_batch_stop,                        name="stop_batch"),
     path("deletebatch",                        batch_views.view_batch_delete,                      name="delete_batch"),
     path("createstream",                       stream_views.view_stream_create_stream,             name="create_stream"),
