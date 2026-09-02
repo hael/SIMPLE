@@ -66,9 +66,19 @@ contains
         if( matcher_completed ) group_iter = group_iter + 1
     end function sigma2_group_iter
 
-    pure logical function sigma2_stage_needs_bootstrap( startit ) result( needs_bootstrap )
+    !> A fresh start normally has to bootstrap the particle sigmas. It does
+    !! not when usable sigmas for the starting iteration are already on disk:
+    !! a workflow that reconstructs before refining (refine3D_auto's startup)
+    !! estimates them once up front, and re-deriving them here would leave
+    !! the startup reconstruction and the refinement on two different sigma
+    !! bases -- the reconstruction regularized against sigmas the refinement
+    !! then discards.
+    logical function sigma2_stage_needs_bootstrap( startit ) result( needs_bootstrap )
         integer, intent(in) :: startit
         needs_bootstrap = startit <= 1
+        if( needs_bootstrap )then
+            if( file_exists(sigma2_star_from_iter(startit)) ) needs_bootstrap = .false.
+        endif
     end function sigma2_stage_needs_bootstrap
 
     subroutine new( self, params, pftc, binfname, box )

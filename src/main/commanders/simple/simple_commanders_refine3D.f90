@@ -60,8 +60,10 @@ contains
     subroutine exec_refine3D_auto( self, cline )
         use simple_abinitio_utils, only: gen_ortho_reprojs4viz, write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
-        use simple_estimate_ssnr,  only: lpstages_setlims
-        use simple_commanders_rec, only: commander_bootstrap_rec3D
+        use simple_estimate_ssnr,     only: lpstages_setlims
+        use simple_commanders_rec,    only: commander_bootstrap_rec3D
+        use simple_commanders_euclid, only: commander_calc_pspec
+        use simple_refine3D_strategy, only: strip_refine3D_search_only_args
         class(commander_refine3D_auto), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(cmdline)               :: cline_rec3D, cline_boot
@@ -84,6 +86,7 @@ contains
         ! commanders
         type(commander_rec3D)           :: xrec3D
         type(commander_bootstrap_rec3D) :: xbootstrap_rec3D
+        type(commander_calc_pspec)      :: xcalc_pspec
         type(commander_refine3D)        :: xrefine3D
         maxits_user      = 0
         l_external_input = cline%defined('vol1')
@@ -235,19 +238,30 @@ contains
         ! every later iteration matches envelope-masked, NU-filtered ones --
         ! the reference convention changes underneath an already converged
         ! alignment, which is where refine3D_auto has been losing particles.
-        ! bootstrap_rec3D is exactly this sequence (unregularized pass ->
-        ! sigmas from the half maps -> regularized pass), and its second pass
-        ! runs the refinement's own filtering settings, so it leaves behind
-        ! the automask, the NU evidence envelope and the _nu_filt matching
-        ! references that iteration 1 then consumes.
+        ! Sigmas come FIRST, from the particle power spectra, so the startup
+        ! reconstruction and every refinement iteration share one sigma
+        ! basis. Deriving them instead from the startup half maps (what
+        ! bootstrap_rec3D does, for the case where no box-compatible sigmas
+        ! can exist) leaves the startup regularized against sigmas the
+        ! refinement then discards, and its heavy rescaling conditions the
+        ! euclid system markedly worse (bgal: base residual 0.23 vs 0.08).
+        ! refine3D reuses these rather than re-deriving them, see
+        ! sigma2_stage_needs_bootstrap.
         cline_boot = cline
-        call cline_boot%set('prg', 'bootstrap_rec3D')
+        call strip_refine3D_search_only_args(cline_boot)
+        call cline_boot%set('prg', 'calc_pspec')
+        call cline_boot%set('which_iter', 1)
+        call xcalc_pspec%execute(cline_boot)
+        ! With the sigmas in hand the startup is a SINGLE regularized
+        ! reconstruction carrying the refinement's own filtering settings; it
+        ! leaves behind the automask, the NU evidence envelope, the _nu_filt
+        ! matching references and the matching-lp handoff that iteration 1
+        ! then consumes.
+        cline_boot = cline
+        call cline_boot%set('prg', 'reconstruct3D')
         call cline_boot%delete('trail_rec')
-        call cline_boot%delete('objfun')      ! bootstrap_rec3D owns objfun/ml_reg per pass
-        call cline_boot%delete('ml_reg')
         call cline_boot%delete('objfun_den')
         call cline_boot%delete('objfun_den_w')
-        call cline_boot%delete('sigma_est')
         call cline_boot%delete('update_frac')
         call cline_boot%delete('endit')
         ! alignment-loop controls have no meaning for a reconstruction
@@ -257,11 +271,17 @@ contains
         call cline_boot%delete('continue')
         call cline_boot%set('postprocess', 'no')
         call cline_boot%set('which_iter',      1)
-        call xbootstrap_rec3D%execute(cline_boot)
+        call xrec3D%execute(cline_boot)
         ! the bootstrap reconstruction is now the starting reference, and its
         ! NU-filtered halves, masks and matching-lp handoff are on disk and in
         ! the project, so iteration 1 matches exactly what iteration N will
         call cline%set('vol1', refine3D_state_vol_fname(1))
+        ! the NU replay controllers compare consecutive REFINEMENT iterations.
+        ! The bootstrap is a reconstruction from the incoming orientations, so
+        ! leaving its readout behind makes the first auto-target comparison
+        ! bootstrap-vs-iteration-1, which is not like for like and produced a
+        ! spurious setpoint step. Start the controllers clean.
+        if( file_exists(PCG_NU_STATS_FILE) ) call del_file(PCG_NU_STATS_FILE)
         call cline_boot%kill
         call seed_refine3D_auto_nonuniform_lpset()
         ! 3D refinement iterations

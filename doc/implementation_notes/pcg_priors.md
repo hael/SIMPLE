@@ -2858,15 +2858,35 @@ the acceptable-looking outputs do not validate the prior.
        references and writing the evidence-derived matching-lp handoff
        into the project. Previously it called the master and returned,
        so no workflow could reconstruct-then-refine correctly.
-   (b) refine3D_auto runs `bootstrap_rec3D` BEFORE any matching
-       (unregularized pass -> sigmas from the half maps -> regularized
-       pass with the refinement's own filt_mode/automsk/envfsc/
-       nu_refine). That single call is the user's sequence: reconstruct,
-       build masks, re-reconstruct with masks and the NU prior. It
-       leaves the automask, the NU evidence envelope, the `_nu_filt`
-       references and the lp handoff in place, and its output becomes
-       vol1. `prepare_nu_bootstrap_refs_from_raw_halves` is deleted as
+   (b) refine3D_auto runs a STARTUP sequence before any matching:
+       `calc_pspec` (particle-spectrum sigmas) then ONE regularized
+       `reconstruct3D` carrying the refinement's own filt_mode/automsk/
+       envfsc/nu_refine. It leaves the automask, the NU evidence
+       envelope, the `_nu_filt` references and the lp handoff in place,
+       and its output becomes vol1.
+       `prepare_nu_bootstrap_refs_from_raw_halves` is deleted as
        superseded.
+       SIGMA BASIS (2026-09-01, second iteration of this design): the
+       first version used `bootstrap_rec3D`, which derives sigmas from
+       the startup half maps. That exists for the case where no
+       box-compatible sigmas CAN exist (the final rec, crop box ->
+       native box); at the refinement box calc_pspec can estimate them
+       directly from the particles, and its estimate conditions the
+       euclid system far better (bgal startup base residual 0.23 with
+       the half-map sigmas, 0.08 with calc_pspec's). Worse, refine3D
+       then re-derived its own regardless, because
+       `sigma2_stage_needs_bootstrap` was positional
+       (`startit <= 1`) and never checked whether usable sigmas
+       existed -- so the startup was regularized against sigmas the
+       refinement discarded. That predicate now also requires the
+       absence of a sigma star for the starting iteration, so one basis
+       serves the whole workflow. Fresh runs are unaffected (no star
+       exists, so the bootstrap still runs).
+       The startup's `PCG_NU_STATS_FILE` is deleted afterwards: the NU
+       replay controllers compare consecutive REFINEMENT iterations,
+       and leaving the startup readout behind made the first
+       auto-target comparison startup-vs-iteration-1 -- not like for
+       like, and it took a real setpoint step off it (bgal: 15 -> 9).
    (c) The matcher can no longer match unfiltered references silently:
        when the nonuniform references are missing it flags the
        fallback, applies the FSC-optimal filter to the raw half maps
