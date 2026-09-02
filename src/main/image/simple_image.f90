@@ -445,11 +445,12 @@ interface
 
     ! ===== Constructors/lifecycle =====
 
-    module subroutine new( self, ldim, smpd, wthreads )
+    module subroutine new( self, ldim, smpd, wthreads, fft_nthreads )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
         real,              intent(in)    :: smpd
         logical, optional, intent(in)    :: wthreads
+        integer, optional, intent(in)    :: fft_nthreads
     end subroutine new
 
     module subroutine set_wthreads( self, wthreads )

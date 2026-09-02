@@ -5,12 +5,14 @@ implicit none
 
 contains
 
-    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats, accept_pct )
+    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats, accept_pct, &
+            &l_tie_tolerant )
         class(image), intent(in) :: vol_even, vol_odd
         real,         intent(in) :: threshold_pct   ! e.g. 10.0
         real,         intent(in) :: new_limit        ! Angstrom limit for the proposed shell
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         real, optional, intent(in) :: accept_pct
+        logical, optional, intent(in) :: l_tie_tolerant
         type(image)       :: vol_even_filt_new, vol_odd_filt_new
         type(string)      :: even_cache_fname, odd_cache_fname
         real, allocatable :: dmat_new(:,:,:), dmat_tmp(:,:,:), dmat_finest_mask(:), evidence_candidate(:)
@@ -21,11 +23,13 @@ contains
         integer(kind=NU_LABEL_KIND), allocatable :: extend_choice(:)
         type(nu_highres_extension_stats) :: local_stats
         integer           :: i, j, k, imask
-        logical           :: l_permissive_accept
+        logical           :: l_permissive_accept, l_tie_tolerant_eff
         local_stats%new_limit = new_limit
         accept_pct_eff = NU_HIGHRES_EXTENSION_ACCEPT_PCT
         if( present(accept_pct) ) accept_pct_eff = max(0., accept_pct)
         l_permissive_accept = present(accept_pct) .and. accept_pct_eff <= TINY
+        l_tie_tolerant_eff = .false.
+        if( present(l_tie_tolerant) ) l_tie_tolerant_eff = l_tie_tolerant
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds first')
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated')
         if( .not.allocated(nu_lmask)     ) THROW_HARD('nu_lmask not allocated; run setup_nu_dmats first')
@@ -145,7 +149,7 @@ contains
         n_extended = 0
         allocate(extend_choice(n_finest), source=0_NU_LABEL_KIND)
         call init_nu_highres_extension_selection(frontier_vox, dmat_finest_mask, dmat_new, &
-            &extend_choice, n_extended)
+            &extend_choice, n_extended, l_tie_tolerant=l_tie_tolerant_eff)
         ! The extension experiment is already constrained to the current
         ! finest frontier and one Fourier-shell step, so we deliberately do not
         ! apply the full-bank Potts prior here. This lets any local unary
@@ -236,16 +240,24 @@ contains
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres
 
-    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct )
+    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct, max_find, &
+            &l_tie_tolerant )
         class(image), intent(in) :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         real, optional, intent(in) :: accept_pct
+        integer, optional, intent(in) :: max_find
+        logical, optional, intent(in) :: l_tie_tolerant
         type(nu_highres_extension_stats) :: local_stats
-        integer :: new_find, sz_old, frontier_label, n_frontier, ilabel
+        integer :: new_find, max_find_eff, sz_old, frontier_label, n_frontier, ilabel
         real    :: new_limit
+        logical :: l_tie_tolerant_eff
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; extend_nu_filter_highres_shell_next')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; extend_nu_filter_highres_shell_next')
         if( .not.allocated(nu_lmask)     ) THROW_HARD('nu_lmask not allocated; extend_nu_filter_highres_shell_next')
+        max_find_eff = box / 2
+        if( present(max_find) ) max_find_eff = min(box / 2, max(0, max_find))
+        l_tie_tolerant_eff = .false.
+        if( present(l_tie_tolerant) ) l_tie_tolerant_eff = l_tie_tolerant
         sz_old   = size(cutoff_finds)
         local_stats%old_find  = cutoff_finds(sz_old)
         local_stats%old_limit = cutoff_find_to_lowpass_limit(sz_old)
@@ -275,29 +287,46 @@ contains
             if( present(stats) ) stats = local_stats
             return
         endif
+        ! A caller may cap adaptive discovery at a measured resolution
+        ! frontier. The default remains the full Fourier grid, preserving the
+        ! established gridding/postprocess behavior.
+        if( new_find > max_find_eff )then
+            if( present(stats) ) stats = local_stats
+            return
+        endif
         new_limit = calc_lowpass_lim(new_find, box, smpd)
         if( present(accept_pct) )then
             call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
-                &new_limit, stats=local_stats, accept_pct=accept_pct)
+                &new_limit, stats=local_stats, accept_pct=accept_pct, l_tie_tolerant=l_tie_tolerant_eff)
         else
             call extend_nu_filter_highres(vol_even, vol_odd, NU_HIGHRES_EXTENSION_THRESHOLD_PCT, &
-                &new_limit, stats=local_stats)
+                &new_limit, stats=local_stats, l_tie_tolerant=l_tie_tolerant_eff)
         endif
         if( present(stats) ) stats = local_stats
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct, max_find, &
+            &l_tie_tolerant )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
         real, optional, intent(in) :: accept_pct
+        integer, optional, intent(in) :: max_find
+        logical, optional, intent(in) :: l_tie_tolerant
         type(nu_highres_extension_stats) :: step_stats
-        integer :: nsteps_local
+        integer :: max_find_eff, nsteps_local
+        logical :: l_tie_tolerant_eff
         nsteps_local = 0
+        max_find_eff = box / 2
+        if( present(max_find) ) max_find_eff = min(box / 2, max(0, max_find))
+        l_tie_tolerant_eff = .false.
+        if( present(l_tie_tolerant) ) l_tie_tolerant_eff = l_tie_tolerant
         do
             if( present(accept_pct) )then
-                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats, accept_pct=accept_pct)
+                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats, &
+                    &accept_pct=accept_pct, max_find=max_find_eff, l_tie_tolerant=l_tie_tolerant_eff)
             else
-                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats)
+                call extend_nu_filter_highres_shell_next(vol_even, vol_odd, stats=step_stats, &
+                    &max_find=max_find_eff, l_tie_tolerant=l_tie_tolerant_eff)
             endif
             if( .not. step_stats%attempted ) exit
             if( .not. step_stats%applied   ) exit
@@ -666,23 +695,30 @@ contains
     end subroutine fill_nu_frontier_dmat_from_bank
 
     module subroutine init_nu_highres_extension_selection( frontier_vox, dmat_old, dmat_new, &
-            &extend_choice, n_extended )
+            &extend_choice, n_extended, l_tie_tolerant )
         integer, intent(in)    :: frontier_vox(:)
         real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
         integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:)
         integer, intent(out)   :: n_extended
+        logical, optional, intent(in) :: l_tie_tolerant
         integer :: i, j, k, imask, ifront
+        logical :: l_tie_tolerant_eff, l_better
         if( size(extend_choice) /= size(frontier_vox) ) &
             &THROW_HARD('extension choice/frontier size mismatch; init_nu_highres_extension_selection')
         extend_choice = 0_NU_LABEL_KIND
         n_extended = 0
-        !$omp parallel do schedule(static) default(shared) private(ifront,i,j,k,imask) reduction(+:n_extended) proc_bind(close)
+        l_tie_tolerant_eff = .false.
+        if( present(l_tie_tolerant) ) l_tie_tolerant_eff = l_tie_tolerant
+        !$omp parallel do schedule(static) default(shared) private(ifront,i,j,k,imask,l_better) &
+        !$omp reduction(+:n_extended) proc_bind(close)
         do ifront = 1, size(frontier_vox)
             imask = frontier_vox(ifront)
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
-            if( dmat_new(i,j,k) < dmat_old(imask) )then
+            l_better = dmat_new(i,j,k) < dmat_old(imask)
+            if( l_tie_tolerant_eff ) l_better = nu_label_smooth_is_better(dmat_new(i,j,k), dmat_old(imask))
+            if( l_better )then
                 extend_choice(ifront) = 1_NU_LABEL_KIND
                 n_extended = n_extended + 1
             endif

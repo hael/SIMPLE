@@ -1,5 +1,6 @@
 !@descr: calculating stuff from images
 submodule (simple_image) simple_image_calc
+use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
 #include "simple_local_flags.inc"
 
@@ -1785,7 +1786,7 @@ contains
         real,    allocatable :: vals(:), smoothed(:), packed(:)
         integer, allocatable :: shell_of(:), off(:), fill(:), nxt(:)
         real    :: cx, cy, cz, rr, med, global_sigma
-        integer :: nx, ny, nz, i, j, k, nsh, is, nmask, imask, jn, dist, best
+        integer :: nx, ny, nz, i, j, k, nsh, is, nmask, nobserved, imask, jn, dist, best
         nx = even_raw%ldim(1)
         ny = even_raw%ldim(2)
         nz = even_raw%ldim(3)
@@ -1794,26 +1795,44 @@ contains
         cz = real(nz/2 + 1)
         nmask = count(l_mask)
         if( nmask < 1 ) THROW_HARD('empty mask in nu_objective_noise_profile')
-        rmax = 0.
+        rmax      = 0.
+        nobserved = 0
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
                     if( .not.l_mask(i,j,k) ) cycle
+                    if( .not.ieee_is_finite(even_raw%rmat(i,j,k)) .or. &
+                        &.not.ieee_is_finite(odd_raw%rmat(i,j,k)) ) &
+                        &THROW_HARD('non-finite half map in nu_objective_noise_profile')
                     rr = sqrt((real(i)-cx)**2 + (real(j)-cy)**2 + (real(k)-cz)**2)
                     if( rr > rmax ) rmax = rr
+                    ! A PCG solve support creates exact zero/zero samples
+                    ! outside its envelope. They are unobserved boundary
+                    ! conditions, not zero-noise measurements, and including
+                    ! them can collapse a shell MAD before the null unary is
+                    ! evaluated on the broader NU sphere.
+                    if( even_raw%rmat(i,j,k) /= 0. .or. odd_raw%rmat(i,j,k) /= 0. ) &
+                        &nobserved = nobserved + 1
                 end do
             end do
         end do
         rmax = max(rmax, 1.0)
         nsh  = max(4, min(64, ceiling(rmax / SHELL_WIDTH_PX)))
         allocate(sigma_r(nsh), source=0.)
+        if( nobserved < 1 )then
+            ! A completely zero pair has no estimable noise. Unit scale keeps
+            ! every zero residual neutral and avoids manufacturing evidence.
+            sigma_r = 1.
+            return
+        endif
         allocate(off(nsh+1),   source=0)
-        allocate(shell_of(nmask), vals(nmask))
+        allocate(shell_of(nobserved), vals(nobserved))
         imask = 0
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
                     if( .not.l_mask(i,j,k) ) cycle
+                    if( even_raw%rmat(i,j,k) == 0. .and. odd_raw%rmat(i,j,k) == 0. ) cycle
                     imask = imask + 1
                     rr = sqrt((real(i)-cx)**2 + (real(j)-cy)**2 + (real(k)-cz)**2)
                     is = min(nsh, max(1, floor(rr / rmax * real(nsh)) + 1))
@@ -1823,14 +1842,15 @@ contains
                 end do
             end do
         end do
+        if( imask /= nobserved ) THROW_HARD('observed voxel count mismatch in nu_objective_noise_profile')
         ! pack values shell-contiguously so each shell's MAD works on a slice
         off(1) = 0
         do is = 2, nsh + 1
             off(is) = off(is) + off(is-1)
         end do
-        allocate(packed(nmask))
+        allocate(packed(nobserved))
         allocate(nxt(nsh), source=0)
-        do imask = 1, nmask
+        do imask = 1, nobserved
             is = shell_of(imask)
             nxt(is) = nxt(is) + 1
             packed(off(is) + nxt(is)) = vals(imask)
@@ -1845,14 +1865,15 @@ contains
         ! fill sparse/degenerate shells from the nearest valid one
         allocate(fill(nsh), source=0)
         do is = 1, nsh
-            if( sigma_r(is) > TINY ) fill(is) = is
+            if( ieee_is_finite(sigma_r(is)) .and. sigma_r(is) > TINY ) fill(is) = is
         end do
         if( .not. any(fill > 0) )then
             ! no shell individually estimable: fall back to the global scale
             med = median_nocopy(vals)
             global_sigma = mad_gau(vals, med)
-            if( global_sigma <= TINY ) global_sigma = sqrt(sum(vals*vals)/real(nmask))
-            if( global_sigma <= TINY ) global_sigma = 1.
+            if( .not.ieee_is_finite(global_sigma) .or. global_sigma <= TINY ) &
+                &global_sigma = real(sqrt(sum(real(vals,dp)**2) / real(nobserved,dp)))
+            if( .not.ieee_is_finite(global_sigma) .or. global_sigma <= TINY ) global_sigma = 1.
             sigma_r = global_sigma
         else
             do is = 1, nsh
@@ -1882,6 +1903,8 @@ contains
             sigma_r = max(smoothed, TINY)
             deallocate(smoothed)
         endif
+        if( any(.not.ieee_is_finite(sigma_r)) .or. any(sigma_r <= 0.) ) &
+            &THROW_HARD('invalid scale in nu_objective_noise_profile')
         deallocate(vals, shell_of, off, fill)
     end subroutine nu_objective_noise_profile
 
@@ -1907,8 +1930,16 @@ contains
         ! local outliers, imperfect masks, disorder, or interpolation/filter
         ! artifacts from dominating the voxelwise filter choice and pushing the
         ! selection toward overly conservative low-pass candidates.
-        real, parameter :: HUBER_DELTA = 1.345
-        real :: sigma, r1, r2, cx, cy, cz, rr, xs, w
+        real, parameter :: HUBER_DELTA  = 1.345
+        ! A zero-predictor residual can be many orders of magnitude larger
+        ! than an ordinary cross-half residual after PCG support projection.
+        ! Evaluate it in double precision and saturate before conversion to
+        ! the single-precision unary volume. Costs above 1/epsilon cannot carry
+        ! meaningful relative information in that volume; retaining a larger
+        ! dynamic range destabilizes the sliding-sum objective smoother when a
+        ! hard PCG support puts zero-cost and saturated regions side by side.
+        real, parameter :: HUBER_LOSS_CAP = 1. / epsilon(1.)
+        real :: sigma, cx, cy, cz, rr, xs, w
         integer :: nx, ny, nz, i, j, k, nsh, is
         nx  = even_raw%ldim(1)
         ny  = even_raw%ldim(2)
@@ -1916,10 +1947,12 @@ contains
         nsh = size(noise_profile)
         if( nsh < 1 ) THROW_HARD('empty noise profile; nu_objective')
         if( nsh > 1 .and. profile_rmax <= 0. ) THROW_HARD('invalid profile_rmax; nu_objective')
+        if( any(.not.ieee_is_finite(noise_profile)) .or. any(noise_profile <= 0.) ) &
+            &THROW_HARD('invalid noise profile; nu_objective')
         cx = real(nx/2 + 1)
         cy = real(ny/2 + 1)
         cz = real(nz/2 + 1)
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,r1,r2,sigma,rr,xs,is,w) proc_bind(close)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,sigma,rr,xs,is,w) proc_bind(close)
         do k = 1, nz
             do j = 1, ny
                 do i = 1, nx
@@ -1940,9 +1973,9 @@ contains
                             endif
                             sigma = max(sigma, TINY)
                         endif
-                        r1 = (even_raw%rmat(i,j,k)  - odd_filt%rmat(i,j,k)) / sigma
-                        r2 = (even_filt%rmat(i,j,k) - odd_raw%rmat(i,j,k))  / sigma
-                        diff(i,j,k) = huber_loss(r1) + huber_loss(r2)
+                        diff(i,j,k) = min(HUBER_LOSS_CAP, &
+                            &huber_loss_scaled(even_raw%rmat(i,j,k) - odd_filt%rmat(i,j,k), sigma) + &
+                            &huber_loss_scaled(even_filt%rmat(i,j,k) - odd_raw%rmat(i,j,k), sigma))
                     else
                         ! Neutral fill for mask-normalized tent smoothing only;
                         ! outside-mask voxels are assigned the coarsest label later.
@@ -1953,16 +1986,24 @@ contains
         end do
         !$omp end parallel do
     contains
-        elemental real function huber_loss( r ) result( loss )
-            real, intent(in) :: r
-            real :: ar
-            ar = abs(r)
-            if( ar <= HUBER_DELTA )then
-                loss = 0.5 * r * r
-            else
-                loss = HUBER_DELTA * (ar - 0.5 * HUBER_DELTA)
+        elemental real function huber_loss_scaled( residual, scale ) result( loss )
+            real, intent(in) :: residual, scale
+            real(dp) :: r, ar, loss_dp
+            if( .not.ieee_is_finite(residual) .or. .not.ieee_is_finite(scale) .or. scale <= 0. )then
+                ! A malformed predictor is maximally unfavorable, but remains
+                ! a finite unary so one bad candidate cannot poison the bank.
+                loss = HUBER_LOSS_CAP
+                return
             endif
-        end function huber_loss
+            r  = real(residual,dp) / real(scale,dp)
+            ar = abs(r)
+            if( ar <= real(HUBER_DELTA,dp) )then
+                loss_dp = 0.5_dp * r * r
+            else
+                loss_dp = real(HUBER_DELTA,dp) * (ar - 0.5_dp * real(HUBER_DELTA,dp))
+            endif
+            loss = real(min(loss_dp, real(HUBER_LOSS_CAP,dp)))
+        end function huber_loss_scaled
     end subroutine nu_objective
 
     module function euclid_norm( self1, self2 ) result( r )

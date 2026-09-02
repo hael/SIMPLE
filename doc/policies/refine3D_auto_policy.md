@@ -28,10 +28,13 @@ the refinement iterations are delegated to `commander_refine3D`.
 - `lplim_crit=0.143`
 - `incrreslim=no`
 
-NU volume filtering is independent of `incrreslim`: the FSC does not cap the
-NU candidate bank or shell extension. Bootstrap NU filtering likewise never
-uses the generic parsed startup `lp` as a volume-filter ceiling because it is
-not evidence about the resolution of supplied half maps.
+NU volume filtering is independent of `incrreslim`. On gridding the FSC does
+not cap the NU candidate bank or shell extension. On PCG, where the field is
+an empirical precision rather than a post-hoc filter, adaptive evidence-bank
+discovery is bounded to two Fourier shells beyond the evidence pair's measured
+FSC=0.143 crossing. Bootstrap NU filtering never uses the generic parsed
+startup `lp` as a volume-filter ceiling because it is not evidence about the
+resolution of supplied half maps.
 
 It also supplies overridable defaults when the user has not provided them:
 
@@ -43,25 +46,27 @@ It also supplies overridable defaults when the user has not provided them:
 - `nsample=25000`
 - `autoscale=yes`
 - `filt_mode=nonuniform`
-- `nu_refine=yes` (gridding backend; `rec_backend=pcg` defaults `nu_refine=no`
-  because the in-solve Q_NU replay makes NU shell extension obsolete, 2026-08-29;
-  an explicit `nu_refine=yes` with the PCG backend remains a hard error)
+- `nu_refine=yes` (gridding extends the filter bank; PCG extends the evidence
+  bank used to construct `Q_NU`; the PCG extension is FSC-frontier bounded and
+  spacing-aware)
 - `automsk=yes`
-- `envfsc=no`
+- `envfsc=yes`
 - `keepvol=no`
 
-The default `envfsc=no` uses the broad spherical FSC mask. With `envfsc=yes`,
-volume assembly generates a density/Otsu envelope from the current merged half
-maps, low-pass filtered at `envmsklp`, and uses it for phase-randomized FSC
-correction and cFAR. `envmsklp` defaults to `ENVMSKLP_DEFAULT` (20 A), while
-`amsklp` remains the separate NU-evidence smoothing scale. The NU-evidence
-envelope never enters FSC correction. `envfsc` and `envmsklp` remain advanced
-filter controls and are independent of the default `automsk=yes` NU-reference
-policy.
+The default `envfsc=yes` is guarded, so an explicit user value remains
+authoritative. It generates a density/Otsu envelope from the current merged
+half maps, low-pass filtered at `envmsklp`, and uses it for phase-randomized
+FSC correction and cFAR. On PCG it is also the conservative support for both
+the base and regularized solves. `envmsklp` defaults to
+`ENVMSKLP_DEFAULT` (20 A), while `amsklp` remains the separate NU-evidence
+smoothing scale. The NU-evidence envelope never enters FSC correction or PCG
+solve support.
 
 With `automsk=yes`, the NU filter-field background is the complement of the
-NU evidence envelope (`nu_envmask3D_stateNN.mrc`), derived in the same
-evidence pass that builds the filter bank. Background voxels take the
+NU evidence envelope (`nu_envmask3D_stateNN.mrc`), derived from the static
+candidate bank at the start of the same evidence pass. It is fixed before
+adaptive candidates are challenged, so accepted probes refine precision inside
+a causal boundary rather than redefining their own support. Background voxels take the
 coarsest bank candidate, so matching references carry the envelope-excluded
 density (detergent micelle, disordered belt) heavily low-pass filtered
 rather than removed, and the same field derives the Q_NU precisions.
@@ -105,11 +110,11 @@ When the raw pair is compatible, `refine3D_auto` generates fresh same-stem
 `nu_refine=yes`, that bootstrap may run the sequential shell challenger from
 the finest populated base-bank label.
 
-Under `rec_backend=pcg` (2026-08-29) the NU prefilter of the bootstrap is
-bypassed exactly like the post-hoc NU filter: the raw-pair validation and its
-reconstruct-startup fallback still run, but no `_nu_filt` startup references
-are produced and the first matcher pass uses the raw native E/O references,
-consistent with how every later Q_NU-regularized iteration feeds the matcher.
+Under `rec_backend=pcg`, no `_nu_filt` bootstrap reference is produced. The
+startup reconstruction supplies the first `Q_NU`-regularized primary pair;
+when an existing initializer is used, the first matching pass necessarily
+precedes PCG evidence construction and uses that initializer with only the
+spherical matcher support.
 
 ## 4. Autoscaling and Sampling
 

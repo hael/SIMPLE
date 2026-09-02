@@ -395,12 +395,13 @@ the strategy dispatches `volassemble`.
   onset. `envmsklp` defaults to `ENVMSKLP_DEFAULT` (20 A) and is separate from
   the `amsklp` NU-evidence smoothing scale
 - writes `automask3D_stateNN.mrc` when `envfsc=yes`; the same density envelope
-  is available to compatible final postprocessing and as a lower-priority
-  matching-reference fallback
+  is available to compatible non-PCG final postprocessing, but is never
+  multiplied into a matching reference
 - restores merged state volumes
 - derives the NU-evidence envelope from the completed accepted NU bank before
   unary storage is released
-- writes derived reference products
+- writes derived NU reference products on gridding; PCG instead constructs the
+  replay precision and writes only its primary maps
 - records resolution and NU matching metadata in the project
 
 Volume assembly does not refresh matcher PFTC references. It only produces
@@ -431,10 +432,11 @@ records only the refine3D-side integration contract:
 - **The backend seam is dense even/odd half maps.** `volassemble` dispatches
   to a backend-specific state restorer: gridding reduces `(cmat,rho)` and
   sampling-density-corrects; PCG reduces raw `(B,D)`, finalizes the kernel
-  and solves. After the seam, FSC/cFAR, merged maps, automask, nonuniform
-  filtering, filenames, project updates, and next-iteration handoffs are
-  common. PCG maps never receive gridding correction or a second
-  sampling-density correction.
+  and solves. FSC/cFAR diagnostics, filenames, and project updates share
+  policy helpers, but NU regularization and masking remain backend-specific:
+  gridding synthesizes `_nu_filt` references, whereas PCG installs `Q_NU`
+  during the replay and performs no post-hoc filtering or masking. PCG maps
+  never receive gridding correction or a second sampling-density correction.
 - **Raw statistics boundary.** Workers accumulate and atomically publish raw,
   unregularized `(B,D)` per `(state,half,part)`; only the master folds,
   finalizes, regularizes, and solves, reducing parts in ascending order.
@@ -447,12 +449,18 @@ records only the refine3D-side integration contract:
   normal operator and preconditioner only; it never weights `B`, and nothing
   prior-related is persisted in raw statistics.
 - **FSC ownership.** The FSC comes from the unregularized `_unfil` base pair
-  and remains the resolution authority; the ML replay consumes it and
-  produces the standard maps. Both output pairs feed the unchanged NU
-  orchestration exactly as in the gridding path.
-- **Current exclusions** (hard-errored, not approximated): fractional/
-  trailing reconstruction, `projrec=yes`, `conical_fsc=yes`, matrix-free
-  workflow execution.
+  and remains the resolution authority. Ordinary PCG replays with the global
+  FSC/SSNR precision; PCG+NU instead freezes the Potts local-resolution field
+  from that pair and replays with `Q_NU`.
+- **Solve support.** Only the conservative density envelope may constrain a
+  PCG solve. With `envfsc=yes` it constrains base and replay; with `envfsc=no`
+  the base is spherical and the replay is density-constrained. The
+  NU-evidence envelope never becomes solve support. Before any reconstruction
+  exists, the base necessarily bootstraps on the sphere and its current pair
+  provides the replay density support.
+- **Current exclusions** (hard-errored, not approximated): `projrec=yes`,
+  `conical_fsc=yes`, and matrix-free workflow execution. Fractional/trailing
+  reconstruction is implemented in the distributed master path.
 - New regularization is research, tracked in
   `doc/implementation_notes/pcg_priors.md`; it cannot be used to close
   integration gates.

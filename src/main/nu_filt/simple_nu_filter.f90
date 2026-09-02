@@ -95,6 +95,11 @@ integer,          parameter   :: NU_DMAT_CANDIDATE_HEADROOM            = 2
 real,             parameter   :: NU_OBJECTIVE_SMOOTH_AWF          = 3.0
 real,             parameter   :: NU_OBJECTIVE_SMOOTH_RADIUS_FRAC  = 0.5
 real,             parameter   :: NU_OBJECTIVE_SMOOTH_MAX_RADIUS_A = 30.0
+! Largest representable NU unary with useful relative precision. The image
+! objective uses the same bound before its single-precision smoothing volume
+! is formed. This is still overwhelmingly unfavorable relative to ordinary
+! noise-normalized Huber costs, without behaving like a numeric sentinel.
+real,             parameter   :: NU_OBJECTIVE_UNARY_CAP           = 1. / epsilon(1.)
 ! Report continuity health using the same hinge as the ordered-label prior:
 ! one-step retained-bank transitions are tolerated, larger jumps are penalized.
 integer,          parameter   :: DISCONT_STEP_THRESH         = 1
@@ -153,15 +158,13 @@ real,             parameter   :: NU_EVIDENCE_BAND_RATIO      = 0.64 !< geometric
 !! self-neutralizes to the static ladder (measured over-suppression on 1WCM,
 !! pcg_priors.md S6.6 record).
 real,             parameter   :: NU_EVIDENCE_MIN_BAND_SUPPORT = 0.01
-!> Matching low-pass handoff support gate (the PCG mirror of the gridding
-!! design intent: promote the finest bank member to which a minimum fraction
-!! of observations was assigned). The promoted matching low-pass is the
-!! finest evidenced cutoff such that at least this percentage of the assigned
-!! (non-null) support voxels selected that cutoff or a finer one. A raw
-!! per-voxel minimum lets a single selection pin the global matching
-!! bandwidth and saturates at the finest candidates, which alias onto the
-!! crop Nyquist at intermediate stage boxes. Strength mirrors the shell
-!! walk's NU_HIGHRES_EXTENSION_ACCEPT_PCT.
+!> Adaptive matching low-pass support gate. The promoted cutoff is the finest
+!! value for which this percentage of assigned non-null support selected that
+!! cutoff or a finer one. PCG combines it with explicit FSC shell headroom so
+!! sparse evidence cannot deadlock matching, while one extreme voxel cannot
+!! set the global bandwidth. The nu_refine=no PCG compatibility path retains
+!! its historical raw-finest handoff. Strength mirrors the shell walk's
+!! NU_HIGHRES_EXTENSION_ACCEPT_PCT.
 real,             parameter   :: NU_ALIGN_LP_MIN_ASSIGNED_PCT = 5.0
 real,             parameter   :: NU_EVIDENCE_UNCERTAIN_ENTROPY = 0.5
 ! NU-evidence nonuniform postprocessing v2 (nu_evidence_local_sharpening.md,
@@ -206,13 +209,13 @@ real,             allocatable :: nu_ev_best(:)
 logical,          allocatable :: nu_lmask(:,:,:)
 integer,          allocatable :: nu_mask_vox(:,:)
 real,             allocatable :: nu_smooth_norm(:,:,:)
-! Solvent-constraint clamp (pcg_priors.md dev item 4): the objective, null
-! estimation, and whitening keep the spherical support invariant; the
-! conservative density envelope enters only AFTER optimization as a label
-! override -- solvent voxels take the coarsest candidate in the filter and
-! zero band support (null) in the evidence, so the Q_NU replay applies its
-! strongest fine-shell suppression outside the envelope. Set by the caller
-! after setup_nu_dmats; cleared by cleanup_nu_filter; absent = no clamp.
+! Solvent-constraint clamp (pcg_priors.md dev item 4): the objective and null
+! competition retain the broad spherical domain. The whitening fit omits exact
+! zero/zero samples introduced by a narrower PCG solve support because those
+! are boundary conditions, not noise observations. Solvent voxels are fixed to
+! the coarsest signal candidate in both the filter and evidence Potts fields,
+! preserving coarse support while suppressing unsupported finer bands. Set by
+! the caller after setup_nu_dmats; cleared by cleanup_nu_filter; absent = no clamp.
 logical,          allocatable :: nu_solvent_lmask(:,:,:) !< .true. = outside the envelope (solvent)
 logical :: nu_l_solvent_clamp = .false.
 ! Which envelope defines the filter-field background: the conservative
@@ -604,35 +607,44 @@ interface
     end function calc_nu_label_smooth_site_energy
 
     ! In submodule: simple_nu_filter_extend.f90
-    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats, accept_pct )
+    module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats, accept_pct, &
+            &l_tie_tolerant )
         class(image), intent(in) :: vol_even, vol_odd
         real,         intent(in) :: threshold_pct   ! e.g. 10.0
         real,         intent(in) :: new_limit        ! Angstrom limit for the proposed shell
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         real, optional, intent(in) :: accept_pct
+        logical, optional, intent(in) :: l_tie_tolerant
     end subroutine extend_nu_filter_highres
 
-    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct )
+    module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct, max_find, &
+            &l_tie_tolerant )
         class(image),                               intent(in)  :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         real, optional, intent(in) :: accept_pct
+        integer, optional, intent(in) :: max_find
+        logical, optional, intent(in) :: l_tie_tolerant
     end subroutine extend_nu_filter_highres_shell_next
 
-    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct )
+    module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct, max_find, &
+            &l_tie_tolerant )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
         real, optional, intent(in) :: accept_pct
+        integer, optional, intent(in) :: max_find
+        logical, optional, intent(in) :: l_tie_tolerant
     end subroutine extend_nu_filter_highres_shells
 
     module subroutine refine_nu_extension_filtmap_ordered_labels
     end subroutine refine_nu_extension_filtmap_ordered_labels
 
     module subroutine init_nu_highres_extension_selection( frontier_vox, dmat_old, dmat_new, &
-            &extend_choice, n_extended )
+            &extend_choice, n_extended, l_tie_tolerant )
         integer, intent(in)    :: frontier_vox(:)
         real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
         integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:)
         integer, intent(out)   :: n_extended
+        logical, optional, intent(in) :: l_tie_tolerant
     end subroutine init_nu_highres_extension_selection
 
     module subroutine apply_nu_highres_extension_selection( frontier_vox, extend_choice, old_label, new_label )

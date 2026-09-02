@@ -9,13 +9,14 @@ contains
     ! Constructors / lifecycle
     !========================================
 
-    module subroutine new( self, ldim, smpd, wthreads )
+    module subroutine new( self, ldim, smpd, wthreads, fft_nthreads )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
         real,              intent(in)    :: smpd
         logical, optional, intent(in)    :: wthreads
+        integer, optional, intent(in)    :: fft_nthreads
         integer(kind=c_int) :: rc
-        integer             :: i
+        integer             :: i, plan_nthreads
         logical             :: do_allocate
         ! we need to be clever about allocation (because it is costly)
         if( self%existence )then
@@ -32,9 +33,11 @@ contains
         else
             do_allocate = .true.
         endif
+        plan_nthreads = nthr_glob
+        if( present(fft_nthreads) ) plan_nthreads = max(1, fft_nthreads)
         self%wthreads = .true.
         if( present(wthreads) ) self%wthreads = wthreads
-        self%wthreads = self%wthreads .and. nthr_glob > 1
+        self%wthreads = self%wthreads .and. plan_nthreads > 1
         self%ldim = ldim
         self%smpd = smpd
         ! Make Fourier iterator
@@ -62,7 +65,7 @@ contains
         ! make fftw plans
         if( self%wthreads .and. (any(ldim >= 200) .or. ldim(3) >= 100) )then
             rc = fftwf_init_threads()
-            call fftwf_plan_with_nthreads(nthr_glob)
+            call fftwf_plan_with_nthreads(plan_nthreads)
         endif
         if(self%ldim(3) > 1)then
             self%plan_fwd = fftwf_plan_dft_r2c_3d(self%ldim(3), self%ldim(2), self%ldim(1), self%rmat, self%cmat, FFTW_ESTIMATE)

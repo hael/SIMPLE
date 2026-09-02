@@ -60,8 +60,9 @@ noise-weighted fixed-pose least-squares problem with PCG. Orientations, in-plane
 shifts, state assignments, half assignments, CTF parameters, phase shifts and
 `ctfflag` are read from the project and are never optimized by reconstruction.
 The Euclidean objective uses per-particle `sigma2`; correlation is unweighted.
-`mskdiam` supplies the soft solve support and `pgrp` is applied by coordinate
-replication.
+`mskdiam` supplies the spherical fallback support and `pgrp` is applied by
+coordinate replication. The conservative density support may replace that
+sphere according to the solve matrix below; the NU-evidence mask never does.
 
 Shared execution accumulates and solves both halfsets in-process. Distributed
 workers publish raw accumulators and the master reduces, finalizes and solves
@@ -126,9 +127,10 @@ the absolute coefficient `1e-3` (`PCG_LAMBDA`). The relative-lambda CLI
 (`pcg_lambda_rel`) was removed as unused; the internal `set_lambda_relative`
 mechanism and the deterministic linear fixed-band data scale `s_data(D)`
 remain for tests, diagnostics, and future prior anchoring
-(`pcg_priors.md`). No current-volume-dependent mask, FSC, filter or
-nonlinear clipping appears inside the operator — that linearity is what PCG
-relies on.
+(`pcg_priors.md`). A solve may receive a frozen real-space support and, for an
+NU replay, a frozen real-space `Q_NU` precision. Both are fixed before CG
+starts; no state changes or nonlinear clipping occur during an iteration, so
+the operator remains linear.
 
 **The normal operator carries only the real weight `|T_i|^2 = |C_i|^2/sigma2_i`.**
 The shift phase is unit-modulus and cancels between the forward and adjoint
@@ -154,16 +156,38 @@ gridding-to-PCG handoff crash was exactly such a jump).
 
 Refinement solves are two phases from one particle accumulation. The *base*
 solve (`H_data + lambda I`, cold start) produces the `_unfil` half pair;
-FSC/cFAR and resolution metadata come from that pair. The *ML replay*
-(`H_data + P_tau + lambda I`, where `P_tau` is the FSC/SSNR shell-diagonal
-precision applied in both the operator and the preconditioner) deterministically
-replays kernel finalization from the persisted raw `(B,D)` and produces the
-standard maps. The ML replay warm-starts from the previous refinement
+FSC/cFAR and resolution metadata come from that pair. The regularized replay
+deterministically replays kernel finalization from the persisted raw `(B,D)`
+and produces the standard maps. Ordinary mode installs the FSC/SSNR
+shell-diagonal `P_tau`; NU modes install the Potts-derived real-space `Q_NU`
+instead, never both. The replay warm-starts from the previous refinement
 iteration's ML half map when one exists on disk — strictly the same half
 (gold-standard independence), constant-FOV `read_and_crop` across crop
 changes, support re-masked after resampling, the first-iteration noise
 `startvol` excluded by name — and otherwise from the base solution. Neither
-`P_tau` nor lambda is ever accumulated into raw `B` or `D`.
+precision nor lambda is ever accumulated into raw `B` or `D`.
+
+With `nu_refine=no`, PCG uses the established eight signal candidates, four
+fixed evidence bands, integer Potts coordinates, unit candidate masses, and
+raw-finest matching handoff. This is the staged-abinitio3D compatibility path.
+With `nu_refine=yes`, accepted high-resolution candidates continue from the
+static bank in Fourier-shell coordinates and use a normalized Voronoi measure
+when their soft evidence is accumulated. Discovery stops two shells beyond
+the evidence-pair FSC=0.143 crossing. The matching handoff requires 5% assigned
+support and retains the same two-shell FSC headroom.
+
+Solve support is phase-specific and independent of `automsk`:
+
+| `envfsc` | Base solve | Regularized replay |
+| --- | --- | --- |
+| `yes` | conservative density support | conservative density support |
+| `no` | spherical support | conservative density support |
+
+Before any reconstruction-derived density source exists, the base necessarily
+bootstraps on the sphere for either `envfsc` value and its completed pair
+supplies the conservative replay support. Once a prior reconstruction exists,
+the table applies without exception. No PCG map is multiplied by either mask
+after reconstruction.
 
 ### Beyond-band diagnostic
 
@@ -412,11 +436,12 @@ particle I/O loop, and replicated symmetry through the matrix-free operator
 Not implemented, and hard-errored or absent rather than silently approximated:
 
 - no orientation search or pose optimization inside reconstruction;
-- no online partial reconstruction or fractional/trailing updates;
-- no adaptive regulariser, automask, nonuniform filtering or FSC feedback inside
-  PCG;
-- no box cropping, projection-direction compression, conical-FSC regularization,
-  or GPU/offload path;
+- no online pose update inside reconstruction; distributed fractional/trailing
+  reconstruction is supported through persisted raw accumulator chains;
+- no post-hoc NU filtering or post-hoc masking; PCG+NU uses only the frozen
+  `Q_NU` replay precision;
+- no projection-direction compression, conical-FSC regularization, or
+  GPU/offload path;
 - no reuse of SPIDER BP-CG real-space code — the design is Fourier
   central-section and the architectures do not transfer. There is no licensing
   barrier: SIMPLE is GPL-3.0 and SPIDER GPL-2.0-or-later.

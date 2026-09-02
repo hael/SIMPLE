@@ -210,8 +210,9 @@ contains
 
     !> Arm the solvent-constraint clamp from a soft [0,1] envelope mask on the
     !! setup grid: voxels below half height are solvent. Call after
-    !! setup_nu_dmats; the clamp overrides labels after optimization only, so
-    !! every spherical-support statistic is untouched.
+    !! setup_nu_dmats. Evidence compaction first captures unconstrained
+    !! spherical-support calibration statistics, then treats this background
+    !! as a fixed coarsest-label boundary condition in its Potts field.
     module subroutine set_nu_solvent_envelope( envmask, source )
         class(image),               intent(in) :: envmask
         character(len=*), optional, intent(in) :: source
@@ -339,32 +340,63 @@ contains
         real, intent(inout) :: dmat(:,:,:)
         real, intent(inout) :: tmp(:,:,:)
         real, intent(in)    :: lp_angstrom
-        integer :: i, j, k, radius_px
-        real :: x
+        integer :: i, j, k, radius_px, n_nonfinite, n_negative
+        real :: smoothed, x
         if( .not.allocated(nu_lmask) ) THROW_HARD('nu_lmask not allocated; smooth_nu_objective')
         if( any(shape(dmat) /= ldim) ) THROW_HARD('dmat shape mismatch; smooth_nu_objective')
         if( any(shape(tmp)  /= ldim) ) THROW_HARD('tmp shape mismatch; smooth_nu_objective')
         radius_px = nu_objective_smooth_radius_pixels(lp_angstrom)
         call prepare_nu_smooth_norm(radius_px, tmp)
+        n_nonfinite = 0
+        n_negative  = 0
         ! Outside support is a neutral fill for normalized convolution, not a
         ! candidate preference. optimize_nu_cutoff_finds assigns those voxels
         ! to the coarsest filter-bank label after the in-mask competition.
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+        ! Inside support, impose the unary's finite/nonnegative mathematical
+        ! contract before the sliding-sum filter. A non-finite predictor is a
+        ! maximally unfavorable candidate, never missing evidence.
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) &
+        !$omp reduction(+:n_nonfinite,n_negative) proc_bind(close)
         do k = 1, ldim(3)
             do j = 1, ldim(2)
                 do i = 1, ldim(1)
-                    if( .not.nu_lmask(i,j,k) ) dmat(i,j,k) = 0.
+                    if( .not.nu_lmask(i,j,k) )then
+                        dmat(i,j,k) = 0.
+                    else if( .not.ieee_is_finite(dmat(i,j,k)) )then
+                        dmat(i,j,k) = NU_OBJECTIVE_UNARY_CAP
+                        n_nonfinite = n_nonfinite + 1
+                    else if( dmat(i,j,k) < 0. )then
+                        dmat(i,j,k) = 0.
+                        n_negative = n_negative + 1
+                    else
+                        dmat(i,j,k) = min(dmat(i,j,k), NU_OBJECTIVE_UNARY_CAP)
+                    endif
                 end do
             end do
         end do
         !$omp end parallel do
         call tent_smooth_3d(dmat, tmp, ldim(1), ldim(2), ldim(3), radius_px)
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k) proc_bind(close)
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,k,smoothed) &
+        !$omp reduction(+:n_nonfinite,n_negative) proc_bind(close)
         do k = 1, ldim(3)
             do j = 1, ldim(2)
                 do i = 1, ldim(1)
                     if( nu_lmask(i,j,k) .and. nu_smooth_norm(i,j,k) > TINY )then
-                        dmat(i,j,k) = dmat(i,j,k) / nu_smooth_norm(i,j,k)
+                        smoothed = dmat(i,j,k) / nu_smooth_norm(i,j,k)
+                        if( .not.ieee_is_finite(smoothed) )then
+                            dmat(i,j,k) = NU_OBJECTIVE_UNARY_CAP
+                            n_nonfinite = n_nonfinite + 1
+                        else if( smoothed < 0. )then
+                            ! A normalized average of nonnegative inputs cannot
+                            ! be negative. Clamp sliding-sum cancellation at
+                            ! the boundary where that invariant is owned.
+                            dmat(i,j,k) = 0.
+                            n_negative = n_negative + 1
+                        else
+                            dmat(i,j,k) = min(smoothed, NU_OBJECTIVE_UNARY_CAP)
+                        endif
+                    else if( nu_lmask(i,j,k) )then
+                        dmat(i,j,k) = NU_OBJECTIVE_UNARY_CAP
                     else
                         dmat(i,j,k) = huge(x)
                     endif
@@ -372,6 +404,11 @@ contains
             end do
         end do
         !$omp end parallel do
+        if( NU_DEV_OUTPUT .and. nu_l_report .and. (n_nonfinite > 0 .or. n_negative > 0) )then
+            write(logfhandle,'(A,I0,A,I0,A,F8.3,A)') &
+                &'>>> NU OBJECTIVE NUMERIC REPAIR: ', n_nonfinite, ' non-finite and ', n_negative, &
+                &' negative entries at ', lp_angstrom, ' A'
+        endif
     end subroutine smooth_nu_objective
 
     subroutine prepare_nu_smooth_norm( radius_px, tmp )

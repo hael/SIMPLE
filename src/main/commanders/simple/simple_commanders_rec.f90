@@ -71,10 +71,12 @@ contains
         class(commander_bootstrap_rec3D), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(commander_rec3D) :: xrec3D
-        type(cmdline)         :: cline_unreg, cline_reg
+        type(cmdline)         :: cline_unreg, cline_reg, cline_nu_calib
         type(parameters)      :: params
         type(string)          :: sigma_star
+        real                  :: inherited_nu_supp_target
         integer               :: state, which_iter
+        logical               :: l_calibrate_pcg_nu, l_inherited_nu_supp_target
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',       'yes')
         call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('nstates')     ) call cline%set('nstates',          1)
@@ -88,6 +90,13 @@ contains
         call cline%delete('ml_reg')
         call params%new(cline)
         which_iter = max(1, params%which_iter)
+        ! Q_NU gain changes with reconstruction sampling. When lambda is under
+        ! automatic control, the first regularized solve on this grid must be
+        ! treated as a calibration measurement rather than as the final map.
+        ! A user-pinned lambda remains an explicit opt-out.
+        l_calibrate_pcg_nu = trim(params%rec_backend).eq.'pcg' .and. params%l_nonuniform .and. &
+            &.not. cline%defined('pcg_nu_lambda_rel')
+        call read_inherited_nu_supp_target(inherited_nu_supp_target, l_inherited_nu_supp_target)
         call cline%set('which_iter', which_iter)
         call cline%set('mkdir', 'no') ! child reconstruct3D calls must not create nested run directories
         cline_unreg = cline
@@ -98,7 +107,18 @@ contains
         write(logfhandle,'(A,1X,A)') '>>> BOOTSTRAP_REC3D WROTE SIGMA STAR:', sigma_star%to_char()
         cline_reg = cline
         call prepare_bootstrap_rec_cline(cline_reg, l_regularized=.true.)
-        write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 2: EUCLID ML-REGULARIZED RECONSTRUCTION'
+        if( l_inherited_nu_supp_target .and. .not. cline_reg%defined('pcg_nu_supp_target') ) &
+            &call cline_reg%set('pcg_nu_supp_target', inherited_nu_supp_target)
+        if( l_calibrate_pcg_nu )then
+            cline_nu_calib = cline_reg
+            call cline_nu_calib%set('postprocess', 'no')
+            write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 2: CURRENT-GRID Q_NU CALIBRATION'
+            call xrec3D%execute(cline_nu_calib)
+            call cline_nu_calib%kill
+            write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 3: CALIBRATED EUCLID ML-REGULARIZED RECONSTRUCTION'
+        else
+            write(logfhandle,'(A)') '>>> BOOTSTRAP_REC3D PASS 2: EUCLID ML-REGULARIZED RECONSTRUCTION'
+        endif
         call xrec3D%execute(cline_reg)
         call register_bootstrap_rec_outputs()
         do state = 1, params%nstates
@@ -157,6 +177,27 @@ contains
                 call cline_rec%delete('pcg_nu_supp_target')
             endif
         end subroutine prepare_bootstrap_rec_cline
+
+        subroutine read_inherited_nu_supp_target( supp_target, available )
+            real,    intent(out) :: supp_target
+            logical, intent(out) :: available
+            type(oris) :: os
+            supp_target = 0.0
+            available   = .false.
+            if( .not. l_calibrate_pcg_nu ) return
+            if( cline%defined('pcg_nu_supp_target') ) return
+            if( .not. file_exists(PCG_NU_STATS_FILE) ) return
+            call os%new(1, is_ptcl=.false.)
+            call os%read(string(PCG_NU_STATS_FILE))
+            if( os%isthere('PCG_NU_SUPP_TARGET') )then
+                supp_target = os%get(1, 'PCG_NU_SUPP_TARGET')
+                available   = supp_target >= 5.0 .and. supp_target <= 75.0
+            endif
+            call os%kill
+            if( available ) write(logfhandle,'(A,F5.1,A)') &
+                &'>>> BOOTSTRAP_REC3D: RETAINING LEARNED Q_NU SUPPRESSION TARGET ', supp_target, &
+                &' % FOR CURRENT-GRID CALIBRATION'
+        end subroutine read_inherited_nu_supp_target
 
         subroutine register_bootstrap_rec_outputs()
             type(sp_project) :: spproj

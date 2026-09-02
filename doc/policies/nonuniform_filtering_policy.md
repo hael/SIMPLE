@@ -6,10 +6,12 @@ today.
 
 ## 1. Scope
 
-Nonuniform filtering is a volume-domain reference-generation feature. It
-selects a local low-pass limit inside spherical `mskdiam` support and writes
-NU-filtered derived volumes. Its candidate bank is not truncated by the FSC.
-The finest cutoff actually selected by the NU filter separately governs the
+Nonuniform filtering is a volume-domain regularization feature. On the
+gridding backend it selects a local low-pass limit inside spherical `mskdiam`
+support and writes NU-filtered derived references. On the PCG backend the same
+Potts-regularized local-resolution field supplies the in-solve `Q_NU`
+precision and no derived NU-filtered volume is produced. Its candidate bank is
+not truncated by the FSC. The finest evidenced cutoff separately governs the
 matching bandwidth handed to later iterations.
 
 It is not a separate final-map postprocessing workflow. `postprocess` and the
@@ -47,7 +49,9 @@ modes.
 
 `nu_refine=yes` enables iterative high-resolution NU shell extension. This is
 on by default in `refine3D_auto`, off by default elsewhere, and explicitly set
-to `no` by staged `abinitio3D`.
+to `no` by staged `abinitio3D`. The static `nu_refine=no` PCG evidence and
+four-band operator are a compatibility boundary: adaptive safeguards must not
+alter their candidate geometry, posterior masses, or matching handoff.
 
 `mskdiam` controls the spherical NU support mask. `automsk` separately controls
 NU-evidence envelope generation, but is valid only while NU filtering is active.
@@ -60,7 +64,9 @@ Refinement automasking is available only in NU modes:
 `automsk=tight` is rejected because the NU-evidence envelope has no Otsu tight
 variant. All other filtering modes require `automsk=no`.
 
-`envfsc=no` is the default and the broad-sphere FSC remains the reported curve.
+`envfsc=no` is the general default and the broad-sphere FSC remains the
+reported curve. `refine3D_auto` overrides that default to `yes` unless the user
+sets it explicitly.
 With `envfsc=yes`, volume assembly generates a density envelope on the fly from
 the merged current half maps, smoothing it at `envmsklp`, and performs
 phase-randomized solvent correction. `envmsklp` defaults to 20 A through
@@ -212,12 +218,17 @@ outvoted by a high-contrast core.
 Mask ownership is strict:
 
 - spherical `mskdiam` support defines the NU objective domain
-- `nu_envmask3D_stateNN.mrc` is generated from the completed NU evidence bank
-  and serves matching-reference preprocessing whenever `automsk=yes`
+- `nu_envmask3D_stateNN.mrc` is generated from NU evidence when `automsk=yes`;
+  it constrains the filter field's background and is never multiplied into a
+  matching reference or installed as PCG solve support
 - density-derived `automask3D_stateNN.mrc` is generated during volume assembly
   when `envfsc=yes`; the same generated mask feeds phase-randomized FSC and
-  cFAR, is reused by final postprocessing, and may serve as a
-  matching-reference transition fallback
+  cFAR and may be reused by non-PCG final postprocessing
+- PCG builds a conservative density support independently of `automsk`:
+  `envfsc=yes` installs it in the base and replay solves, while `envfsc=no`
+  leaves the base solve spherical and installs it in the replay only. Before
+  any reconstruction exists, the base necessarily bootstraps on the sphere
+  and supplies the replay's density support for either `envfsc` value
 - the correlation-derived NU-evidence envelope never feeds FSC correction or
   NU support
 
@@ -292,17 +303,18 @@ ML replay; in that mode the post-hoc NU filter and its
 `_nu_filt`/`_nu_locres` products are NOT generated -- the in-solve precision
 already performs the local regularization, and the LP-set matching handoff
 derives from the frozen replay evidence (finest evidenced local cutoff).
-With `automsk` enabled the NU-evidence envelope IS still produced
-(2026-08-29): it is regenerated at replay-evidence construction time, while
-the raw per-voxel evidence margins are live, so the matching-reference
-envelope derives from the same frozen evidence as the `Q_NU` precision --
-one analysis, two consumers. Cadence and artifact naming follow the same
-`plan_state_postprocess` contract as the post-hoc paths, and all three
-regeneration sites (gridding volassemble, PCG post-hoc, PCG replay) share
-the single producer `write_nu_evidence_envmask` in `simple_nu_filter`. The
-full post-hoc NU filtering path described in this document remains the
-production behavior for the gridding backend and for PCG with an explicit
-`pcg_nu_lambda_rel=0`.
+With `automsk` enabled the NU-evidence envelope is still produced. It is
+regenerated from the static candidate bank while the raw per-voxel evidence
+margins are live, then fixed as a coarsest-bank boundary condition during
+ordered-label Potts regularization and adaptive shell challenges. Accepted
+adaptive candidates refine the precision inside that preliminary boundary;
+they do not redefine their own support in the same pass.
+That clamped field supplies `Q_NU`; the artifact is not a second filtering or
+reference-masking mechanism. `write_nu_evidence_envmask` remains the single
+producer shared by gridding volume assembly and PCG evidence construction.
+The full post-hoc NU filtering path described in this document is production
+behavior only for the gridding backend. PCG+NU rejects a disabled `Q_NU`
+rather than falling back to post-hoc filtering.
 
 Auxiliary replacement is conservative. If supplied, the auxiliary pair replaces
 the finest discrete label only when its effective resolution is finer than that
@@ -355,6 +367,10 @@ The extension:
 - stops at the first unattempted, unsupported, or rejected challenger
 - never proposes a shell beyond the Fourier grid
 
+For PCG only, adaptive discovery also stops two Fourier shells beyond the
+current evidence-pair FSC=0.143 crossing. This bounds repeated use of the same
+half pair while leaving the established gridding shell walk unchanged.
+
 The challenge test itself is unary-only. After one or more challengers are
 accepted, the final expanded label field is cleaned with the same ordered-label
 Potts prior used by the static bank.
@@ -365,18 +381,35 @@ plus the current terminal shell. The active mask-packed objective bank is
 capped; if compaction cannot free room, extension stops rather than growing
 without bound.
 
-Each accepted challenger also updates the raw best-candidate cost used by the
-NU-evidence envelope before candidate-scale objective smoothing. Consequently
-the envelope null and margin describe the same accepted bank that generated the
-refinement reference.
+Each accepted challenger also updates the raw best-candidate cost before
+candidate-scale objective smoothing. A diagnostic envelope generated after the
+walk can therefore describe the accepted bank. With `automsk=yes`, however,
+the filtering/precision boundary is deliberately generated from the static
+bank before the walk, because the boundary must constrain rather than be
+selected by the adaptive candidates.
 
-The accepted high-resolution depth for each state is persisted in
+On the gridding path the accepted high-resolution depth for each state is persisted in
 `nu_highres_depth_stateNN.txt` so the next iteration can seed the same
 extension depth.
 
+For PCG, accepted candidates are converted to an evidence posterior using
+Fourier-shell coordinates anchored to the finest static-bank interval. The
+static coordinates remain exactly 1 through 8; only extension candidates use
+the shell-distance continuation. Voronoi cell widths supply the candidate
+integration measure, normalized to the static bank's total signal mass.
+Adding, removing, or thinning densely spaced shell probes therefore does not
+create fine-band support merely by changing the label count. The static
+eight-candidate bank retains integer coordinates and unit masses exactly.
+
+The PCG adaptive matching handoff requires the established 5% assignment
+support and then guarantees two Fourier shells beyond the FSC crossing. This
+keeps the matching/evidence loop able to advance without letting a single
+high-resolution voxel set the global bandwidth. `nu_refine=no` retains the
+historical raw-finest handoff.
+
 ## 11. Matching References
 
-When NU mode is active, matcher reference loading first looks for NU products.
+On the gridding backend, matcher reference loading first looks for NU products.
 
 Plain `nonuniform` prefers independent `_nu_filt` even/odd references. If they
 do not exist yet, it falls back to regular even/odd references, then to the
@@ -388,16 +421,20 @@ reference and prefers the merged `_nu_filt` product when it exists.
 State count alone must not force merged-reference matching. The selected NU LP
 does not choose reference topology; LP-set mode does.
 
-The ordinary low-pass filter is not applied on top of the NU reference path.
+On the PCG backend, both NU modes use the primary `Q_NU`-regularized maps:
+independent halves for `nonuniform`, and the merged map for
+`nonuniform_lpset`. PCG never looks for `_nu_filt` products and applies no
+additional NU filtering.
+
+The ordinary low-pass filter is not applied on top of either NU reference
+path.
 Reference preparation treats NU filtering, like ML regularization, as filtering
 already done during assembly.
 
-Whenever `automsk=yes`, the selected independent or merged reference is
-background-zeroed from the NU-envelope transition and multiplied by
-`nu_envmask3D_stateNN.mrc` before projection. Reference preparation falls back
-to a compatible density FSC mask and then to the ordinary spherical mask.
-This lag-by-one bootstrap leaves the first iteration spherical when no prior
-artifact exists.
+Reference preparation never multiplies either the NU-evidence or density
+envelope into a reference. The matcher applies only the ordinary spherical
+soft support before projection. Envelope information reaches a PCG matching
+reference solely through the Potts-regularized `Q_NU` solve.
 
 ## 12. FSC Correction and Matching-Bandwidth Handoff
 
@@ -452,10 +489,10 @@ matching.
 - `nu_refine=yes`
 - `automsk=yes`
 - `ml_reg=yes`
-- `envfsc=no`
+- `envfsc=yes`
 
-With `automsk=yes`, matching references are solvent-flattened with the lagged
-NU-evidence envelope; there is no separate reference-mask control.
+With `automsk=yes`, the NU-evidence envelope fixes background voxels of the
+local filter field to the coarsest bank member. It is not a reference mask.
 
 The `envfsc` default is overridable. When enabled, it uses the independent
 density-envelope path described above; it does not enable `automsk` or change NU

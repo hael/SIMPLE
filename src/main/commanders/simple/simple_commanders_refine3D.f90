@@ -102,7 +102,11 @@ contains
         call cline%set('lplim_crit',     0.143) ! we use the 0.143 criterion for low-pass limitation
         call cline%set('incrreslim',      'no') ! if anything 'yes' makes it slightly worse, but no real difference right now
         ! overridable defaults
-        if( .not. cline%defined('envfsc')      ) call cline%set('envfsc', 'yes') ! density-envelope mask + phase-randomization corrected FSC steers matching lp, NU gating and convergence
+        if( .not. cline%defined('envfsc') )then
+            ! Density-envelope/phase-randomization-corrected FSC steers the
+            ! matching LP, NU gating, and convergence.
+            call cline%set('envfsc', 'yes')
+        endif
         if( .not. cline%defined('mkdir')       ) call cline%set('mkdir',            'yes')
         if( .not. cline%defined('center')      ) call cline%set('center',            'no') ! 4 now, probably fine
         if( cline%defined('ref_pose_init') .and. cline%get_carg('ref_pose_init').eq.'cc' )then
@@ -121,7 +125,9 @@ contains
         ! proven win-fraction acceptance. abinitio3D keeps the discrete
         ! static ladder via its stage policy.
         if( .not. cline%defined('nu_refine')   ) call cline%set('nu_refine',        'yes') ! allow conservative NU resolution-bank expansion
-        if( .not. cline%defined('automsk')     ) call cline%set('automsk',          'yes') ! envelope masking for background flattening
+        if( .not. cline%defined('automsk') )then
+            call cline%set('automsk', 'yes') ! evidence-constrained background filtering
+        endif
         l_maxits_defined = cline%defined('maxits')
         if( l_maxits_defined )then
             maxits_user = cline%get_iarg('maxits')

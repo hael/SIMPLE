@@ -967,9 +967,10 @@ contains
                 endif
                 ! the final reconstruction runs on the refinement's backend;
                 ! with the euclid ML replay active the Q_NU prior regularizes
-                ! it in-solve (auto-lambda resumes from the persisted stats
-                ! file; explicit keys pin; bootstrap_rec3D strips the Q_NU
-                ! keys off its unregularized sigma pass itself)
+                ! it in-solve. When bootstrap_rec3D changes the reconstruction
+                ! grid, it retains the learned suppression target but measures
+                ! and corrects the Q_NU strength on that grid before shipping
+                ! the final map. Explicit controls remain pinned.
                 if( trim(params%rec_backend) == 'pcg' )then
                     call child_cline%set('rec_backend', 'pcg')
                     if( cline_refine3D%defined('maxits_pcg') )&

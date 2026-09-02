@@ -334,12 +334,9 @@ contains
         call self%qenv%gen_scripts_and_schedule_jobs(self%job_descr, array=L_USE_SLURM_ARR, extra_params=params)
         if( trim(params%rec_backend) == 'pcg' )then
             if( params%l_nonuniform )then
-                ! reconstruct3D must leave behind the SAME reference products
-                ! a refinement iteration does -- the NU-filtered matching
-                ! references and the evidence-derived matching low-pass
-                ! handoff -- otherwise a workflow that reconstructs before
-                ! refining has nothing to match against and the matcher
-                ! silently falls back to raw, unfiltered half maps
+                ! reconstruct3D must leave behind the same Q_NU-regularized
+                ! primary references and evidence-derived matching low-pass
+                ! handoff as a refinement iteration.
                 allocate(l_trail_bootstrap(params%nstates), source=.false.)
                 allocate(nu_replay_lps(params%nstates),     source=0.0)
                 call execute_rec3D_pcg_distributed_master(params, build, cline, &

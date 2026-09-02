@@ -92,6 +92,7 @@ type :: reconstructor_pcg
     logical              :: l_mask = .false.
     type(image)          :: wimg                     !< persistent box^3 work image (keeps its FFTW plans)
     logical              :: wimg_exists = .false.
+    integer              :: fft_nthreads = 1         !< threads owned by each persistent FFTW plan
     ! ---- streaming accumulation over particle batches ----
     ! These two Fourier accumulators are the ONLY particle-dependent state the
     ! solve needs; precond, Khat and the RHS are all derived from them. Keeping
@@ -282,15 +283,30 @@ end type reconstructor_pcg
 
 contains
 
+    !> PCG-local wall-clock helpers. Unlike the legacy shared timer, these keep
+    !! no module-global last timestamp and are therefore safe when independent
+    !! even/odd operators execute concurrently.
+    integer(timer_int_kind) function pcg_tic() result(tstart)
+        call system_clock(count=tstart)
+    end function pcg_tic
+
+    real(dp) function pcg_toc( tstart ) result(seconds)
+        integer(timer_int_kind), intent(in) :: tstart
+        integer(timer_int_kind) :: tend, rate
+        call system_clock(count=tend, count_rate=rate)
+        seconds = real(tend-tstart,dp) / real(rate,dp)
+    end function pcg_toc
+
     !>  \brief  Applies a right tangent-space increment R <- R exp([omega]x).
 
     ! CONSTRUCTOR
 
-    subroutine new( self, box, smpd, lambda )
+    subroutine new( self, box, smpd, lambda, fft_nthreads )
         class(reconstructor_pcg), intent(inout) :: self
         integer,                   intent(in)    :: box
         real,                      intent(in)    :: smpd
         real, optional,            intent(in)    :: lambda
+        integer, optional,         intent(in)    :: fft_nthreads
         type(image) :: tmp
         integer     :: R, lo, hi, i
         real        :: rlim
@@ -299,6 +315,8 @@ contains
         self%smpd   = smpd
         self%lambda = 0.0
         if( present(lambda) ) self%lambda = lambda
+        self%fft_nthreads = nthr_glob
+        if( present(fft_nthreads) ) self%fft_nthreads = max(1, fft_nthreads)
         self%kbwin  = kbinterpol(KBWINSZ, KBALPHA)
         self%iwinsz = ceiling(self%kbwin%get_winsz() - 0.5)
         ! Deliberately computed as 2*iwinsz+1 (odd, symmetric around nint(loc)),
@@ -329,7 +347,8 @@ contains
         ! fwd_ft divides by product(ldim), so the padded spectrum is 1/padf**3
         ! of the native one at coincident frequencies; this restores the scale.
         self%padsc   = real(self%padf)**3
-        call tmp%new([self%boxpd,self%boxpd,self%boxpd], smpd)
+        call tmp%new([self%boxpd,self%boxpd,self%boxpd], smpd, &
+            &wthreads=self%fft_nthreads > 1, fft_nthreads=self%fft_nthreads)
         call tmp%fft()
         self%lims3 = tmp%loop_lims(3)
         ! wlims is the TRUE period-box canonical wrap range (period = box).
@@ -1050,7 +1069,8 @@ contains
     subroutine ensure_wimg( self )
         class(reconstructor_pcg), intent(inout) :: self
         if( self%wimg_exists ) return
-        call self%wimg%new([self%boxpd,self%boxpd,self%boxpd], self%smpd)
+        call self%wimg%new([self%boxpd,self%boxpd,self%boxpd], self%smpd, &
+            &wthreads=self%fft_nthreads > 1, fft_nthreads=self%fft_nthreads)
         self%wimg_exists = .true.
     end subroutine ensure_wimg
 
@@ -1484,22 +1504,22 @@ contains
         ! adjoint, so the operator is the true D.S rather than D.S.E
         allocate(pd(self%box,self%box,self%box), source=p)
         call self%deapod_mul(pd)
-        if( self%l_profile ) tp = tic()
+        if( self%l_profile ) tp = pcg_tic()
         call self%set_volume(pd)
-        if( self%l_profile ) self%t_setvol = self%t_setvol + real(toc(tp),dp)
+        if( self%l_profile ) self%t_setvol = self%t_setvol + pcg_toc(tp)
         ! NOTE: get_cmat returns a COPY. On the padded lattice that is
         ! (boxpd/2+1)*boxpd^2 complex -- 539 MB at box 256 -- allocated and
         ! streamed on every call. t_cmatcp is what separates that traffic from
         ! the transforms themselves; image offers get_rmat_ptr but no cmat
         ! equivalent, so removing it would mean adding one.
-        if( self%l_profile ) tp = tic()
+        if( self%l_profile ) tp = pcg_tic()
         cmat = self%wimg%get_cmat()
-        if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + real(toc(tp),dp)
+        if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + pcg_toc(tp)
         allocate(vol_accum(self%lims3(1,1):self%lims3(1,2),&
                           &self%lims3(2,1):self%lims3(2,2),&
                           &self%lims3(3,1):self%lims3(3,2)), source=cmplx(0.,0.))
         allocate(absT2(self%lims2(1,1):self%lims2(1,2), self%lims2(2,1):self%lims2(2,2)))
-        if( self%l_profile ) tp = tic()
+        if( self%l_profile ) tp = pcg_tic()
         !$omp parallel default(shared) private(i,g,h,k,l,loc,i0,w,comp,rot) proc_bind(close)
         do i = 1, self%nptcls
             ! per-particle real weight |T_i|^2, shared across threads. The
@@ -1549,7 +1569,7 @@ contains
             end do
         end do
         !$omp end parallel
-        if( self%l_profile ) self%t_ploop = self%t_ploop + real(toc(tp),dp)
+        if( self%l_profile ) self%t_ploop = self%t_ploop + pcg_toc(tp)
         hp = self%fold_and_ifft(vol_accum)
         call self%deapod_mul(hp)
         if( self%l_ml_prior ) hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
@@ -1578,20 +1598,20 @@ contains
         ! more is needed. With it OFF the matrix-free operator is E T E, so the
         ! envelope has to be reinstated on both sides for the two to agree.
         if( .not. self%l_deapod ) work = work * self%env
-        if( self%l_profile ) tp = tic()
+        if( self%l_profile ) tp = pcg_tic()
         call self%wimg%set_rmat(center_embed_real3d(work,self%boxpd), .false.)
         call self%wimg%fft()
-        if( self%l_profile ) self%t_setvol = self%t_setvol + real(toc(tp),dp)
-        if( self%l_profile ) tp = tic()
+        if( self%l_profile ) self%t_setvol = self%t_setvol + pcg_toc(tp)
+        if( self%l_profile ) tp = pcg_tic()
         cmat = self%wimg%get_cmat()
-        if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + real(toc(tp),dp)
+        if( self%l_profile ) self%t_cmatcp = self%t_cmatcp + pcg_toc(tp)
         ! with deapodization on, this spectrum is FFT(pad(p)) of the iterate
         ! itself -- stash it so the Q_NU application below skips its own
         ! forward transform (shared-forward optimization; the prior completes
         ! the mean-centering in Fourier space via nu_winhat)
         if( self%l_nu_prior .and. self%l_deapod ) call self%stash_nu_forward(cmat)
         cdim = self%wimg%get_array_shape()
-        if( self%l_profile ) tp = tic()
+        if( self%l_profile ) tp = pcg_tic()
         !$omp parallel do collapse(3) default(shared) private(i,j,k,kv) &
         !$omp schedule(static) proc_bind(close)
         do k = 1, cdim(3)
@@ -1604,12 +1624,12 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( self%l_profile ) self%t_khat = self%t_khat + real(toc(tp),dp)
-        if( self%l_profile ) tp = tic()
+        if( self%l_profile ) self%t_khat = self%t_khat + pcg_toc(tp)
+        if( self%l_profile ) tp = pcg_tic()
         call self%wimg%set_cmat(cmat)
         call self%wimg%ifft()
         hp = center_crop_real3d(self%wimg%get_rmat(),self%box)
-        if( self%l_profile ) self%t_fold = self%t_fold + real(toc(tp),dp)
+        if( self%l_profile ) self%t_fold = self%t_fold + pcg_toc(tp)
         if( .not. self%l_deapod ) hp = hp * self%env
         if( self%l_ml_prior .and. .not. self%l_deapod )then
             hp = hp + self%apply_fourier_diagonal(p, self%ml_prior)
@@ -2220,14 +2240,14 @@ contains
         ! RHS first, and free its accumulator before the kernel work starts:
         ! finalize_khat is the allocation-heavy half and should not overlap it.
         ! move_alloc for the same aliasing reason as accumulate_batch.
-        tp = tic()
+        tp = pcg_tic()
         call move_alloc(self%b_work, bwork)
         self%b_rhs = self%fold_and_ifft(bwork)
         deallocate(bwork)
         call self%deapod_mul(self%b_rhs)
         call self%mask_mul(self%b_rhs)
         self%l_rhs = .true.
-        self%t_fin_rhs = real(toc(tp),dp)
+        self%t_fin_rhs = pcg_toc(tp)
         call move_alloc(self%acc_work, dwork)
         call self%finalize_density_accum(dwork, .true., l_kernel)
         deallocate(dwork)
@@ -2560,7 +2580,7 @@ contains
         ! the zeros would drag the floor down exactly where sampling is sparse,
         ! which is the regime the floor exists to protect.
         if( l_precond )then
-            tp = tic()
+            tp = pcg_tic()
             nthr = 1
             !$ nthr = omp_get_max_threads()
             allocate(shsum(0:rho_lim), source=0.0_dp)
@@ -2600,11 +2620,11 @@ contains
                 endif
             end do
             deallocate(shsum, shcnt)
-            self%t_fin_rho = real(toc(tp),dp)
+            self%t_fin_rho = pcg_toc(tp)
         endif
         ! PASS 2: guarded reciprocal and packed Khat. An empty shell leaves the
         ! reciprocal at zero, i.e. treats those modes as unconstrained.
-        tp = tic()
+        tp = pcg_tic()
         !$omp parallel do collapse(2) default(shared) private(h,k,m,hh,phys,sh,denom) schedule(static)
         do m = self%lims3(3,1), self%lims3(3,2)
             do k = self%lims3(2,1), self%lims3(2,2)
@@ -2634,7 +2654,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        self%t_fin_fold = real(toc(tp),dp)
+        self%t_fin_fold = pcg_toc(tp)
         if( l_precond )then
             self%l_precond = .true.
             deallocate(shfloor)
@@ -2733,10 +2753,10 @@ contains
         ! obtained from the exact discrete transform of the same normalized
         ! origin stencil used for deposition. Its separability eliminates a
         ! full complex accumulator and padded inverse FFT.
-        tp = tic()
+        tp = pcg_tic()
         call kb_stencil_envelope_1d(self%kbwin,self%boxpd,dep1d)
-        self%t_fin_dep = real(toc(tp),dp)
-        tp = tic()
+        self%t_fin_dep = pcg_toc(tp)
+        tp = pcg_tic()
         ctmp = cmplx(self%Khat, 0.)
         call self%wimg%set_cmat(ctmp)
         call self%wimg%ifft()
@@ -2762,7 +2782,7 @@ contains
         deallocate(ctmp, tker, dep1d)
         self%l_kernel = .true.
         call self%calibrate_kernel
-        self%t_fin_kernel = real(toc(tp),dp)
+        self%t_fin_kernel = pcg_toc(tp)
     end subroutine finalize_khat
 
     !>  \brief  One-off least-squares calibration of the kernel's overall scale
@@ -3028,7 +3048,7 @@ contains
         integer :: h, hh, k, m, phys(3)
         integer(timer_int_kind) :: tp
         call self%ensure_wimg
-        if( self%l_profile ) tp = tic()
+        if( self%l_profile ) tp = pcg_tic()
         call self%wimg%zero_and_flag_ft()
         !$omp parallel do collapse(2) default(shared) private(h,hh,k,m,phys) &
         !$omp schedule(static) proc_bind(close)
@@ -3045,7 +3065,7 @@ contains
         call self%wimg%ifft()
         ! back to the native lattice: the unknown never leaves box^3
         z = center_crop_real3d(self%wimg%get_rmat(),self%box)
-        if( self%l_profile ) self%t_fold = self%t_fold + real(toc(tp),dp)
+        if( self%l_profile ) self%t_fold = self%t_fold + pcg_toc(tp)
     end function fold_and_ifft
 
     !>  \brief  z = M^-1 r via FFT, guarded elementwise divide, inverse FFT.
@@ -3075,7 +3095,7 @@ contains
             return
         endif
         call self%ensure_wimg
-        if( self%l_profile ) tp = tic()
+        if( self%l_profile ) tp = pcg_tic()
         allocate(rw(self%box,self%box,self%box), source=r)
         if( self%l_deapod ) rw = rw * self%env
         call self%wimg%set_rmat(center_embed_real3d(rw,self%boxpd), .false.)
@@ -3100,7 +3120,7 @@ contains
         ! is a Fourier diagonal and would otherwise leak the search directions
         ! back out into the solvent that P H P has just been set up to ignore
         call self%mask_mul(z)
-        if( self%l_profile ) self%t_prec = self%t_prec + real(toc(tp),dp)
+        if( self%l_profile ) self%t_prec = self%t_prec + pcg_toc(tp)
     end function apply_precond
 
     !>  \brief  Does this window straddle the periodic wrap boundary?
@@ -3505,7 +3525,7 @@ contains
         n_done = 0
         dxx = 0.0_dp
         do iter = 1, mmaxits
-            t_it = tic()
+            t_it = pcg_tic()
             hp  = self%apply_normal(p)
             pHp = self%dot_real_volume(p,hp)
             if( pHp <= 0.0_dp ) THROW_HARD('non-positive dot(p,Hp); PCG lost positive-definiteness; solve')
@@ -3530,7 +3550,7 @@ contains
             stop_rtol  = rrtol > 0.0 .and. rnorm / bnorm <= real(rrtol,dp)
             stop_xtol  = rrtol > 0.0 .and. dxx <= real(PCG_XTOL,dp)
             if( stop_rtol .or. stop_xtol .or. iter == mmaxits )then
-                iteration_times(iter) = real(toc(t_it))
+                iteration_times(iter) = real(pcg_toc(t_it))
                 if( stop_rtol )then
                     result%stop_reason = 'rtol'
                     result%converged   = .true.
@@ -3547,7 +3567,7 @@ contains
             rho_new = self%dot_real_volume(r,z)
             mnorm   = sqrt(abs(rho_new)/rho0)
             mnorm_hist(iter) = real(mnorm)
-            iteration_times(iter) = real(toc(t_it))
+            iteration_times(iter) = real(pcg_toc(t_it))
             beta = rho_new / rho
             p    = z + real(beta) * p
             rho  = rho_new

@@ -364,14 +364,25 @@ after the nested workflow returns.
 The final reconstruction inherits only the scientific reconstruction policy it
 needs. It preserves the parent `envfsc` request so the original-sampling half
 maps use the same radial FSC/cFAR masking policy, but it does not inherit staged
-search, matching-reference automasking, or NU controls such as `refine`, `lp`,
-`automsk`, `gauref`, or NU `filt_mode`.
+search, matching-reference automasking, or reference-filter controls such as
+`refine`, `lp`, `automsk`, or `gauref`. The PCG exception is the explicit
+`filt_mode=nonuniform` selection needed to activate the in-solve Q_NU replay;
+it does not run post-hoc NU filtering.
 
 If the final stage used `objfun=euclid` and `ml_reg=yes`, final reconstruction
 uses compatible grouped sigma estimates when they are local to the workflow.
 If needed, it bootstraps sigmas locally before producing the regularized map.
 For the final ML-regularized stage, final reconstruction preserves the
 `conical_fsc` policy selected by the parent workflow.
+
+On the PCG backend, a final ML-regularized stage uses the in-solve Q_NU prior.
+When the sigma bootstrap crosses from a downscaled stage grid to the native
+grid and Q_NU strength is automatic, the bootstrap retains the learned
+suppression target but not the old-grid strength. Its first native-grid Q_NU
+solve is a calibration measurement with postprocessing disabled; the
+controller adapts from that response and a second regularized solve produces
+the final map. An explicit `pcg_nu_lambda_rel` remains pinned and skips this
+extra calibration solve.
 
 The final reconstruction does not apply fractional-update sampling or trailing
 average blending. Final-map postprocessing is classical, even when staged

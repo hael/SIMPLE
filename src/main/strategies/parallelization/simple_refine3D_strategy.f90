@@ -205,8 +205,7 @@ contains
         if( trim(params%rec_backend) /= 'pcg' ) return
         ! nu_refine=yes on the pcg path means Q_NU evidence-bank shell
         ! extension (Stage 6.6, the mirror of the gridding challenger) and
-        ! requires the Q_NU replay; the post-hoc P_tau+NU pcg path still has
-        ! no extension support.
+        ! requires the Q_NU replay; there is no post-hoc PCG+NU path.
         if( params%l_nonuniform .and. params%l_nu_refine .and. &
             &.not. (params%l_ml_reg .and. params%pcg_nu_lambda_rel > 0.0) ) &
             &THROW_HARD('nu_refine=yes on the PCG backend requires the Q_NU replay (euclid ml_reg, pcg_nu_lambda_rel > 0)')

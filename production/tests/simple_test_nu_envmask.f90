@@ -12,7 +12,8 @@ use simple_nu_filter, only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu
     &nu_envmask_params, nu_envmask_stats, nu_evidence_envelope, calc_nu_evidence_margin, &
     &print_nu_envmask_stats, nu_evidence_state, nu_evidence_summary, build_nu_evidence_state, &
     &unpack_nu_evidence_state, get_nu_evidence_summary, nu_evidence_state_is_valid, &
-    &print_nu_evidence_summary, assert_nu_evidence_replay_ready, NU_EVIDENCE_NBANDS
+    &print_nu_evidence_summary, assert_nu_evidence_replay_ready, set_nu_solvent_envelope, &
+    &NU_EVIDENCE_NBANDS
 use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
 implicit none
 #include "simple_local_flags.inc"
@@ -20,6 +21,7 @@ integer, parameter :: BOX          = 48
 real,    parameter :: SMPD         = 2.0
 real,    parameter :: MOL_RAD_PX   = 15.0   ! ground-truth molecule radius
 real,    parameter :: SUPP_RAD_PX  = 22.0   ! NU support, deliberately generous
+real,    parameter :: HARD_RAD_PX  = 18.0   ! emulates a conservative PCG solve support
 real,    parameter :: NOISE_SDEV   = 1.0
 real,    parameter :: LP_SMOOTH    = 4.0    ! envelope scale; kept small so the
                                             ! assertions test the statistic, not the blur
@@ -31,11 +33,12 @@ type(nu_evidence_state) :: evstate
 type(nu_evidence_summary) :: evsummary
 real,    allocatable    :: margin(:), ev_cutoff(:), ev_uncertainty(:), ev_band_support(:,:)
 integer, allocatable    :: ev_label(:)
-logical, allocatable    :: l_supp(:,:,:), l_env(:,:,:), l_env_rel(:,:,:), l_true(:,:,:)
+logical, allocatable    :: l_supp(:,:,:), l_env(:,:,:), l_env_rel(:,:,:), l_true(:,:,:), l_hard(:,:,:)
 real    :: rmat_even(BOX,BOX,BOX), rmat_odd(BOX,BOX,BOX), sig
 real    :: cen, dsq, mean_in, mean_out, recall, fpr, recall_rel, fpr_rel, mskval
 real    :: support_in, support_out, null_in, null_out
-integer :: i, j, k, imask, n_true, n_sol, n_hit, n_false, n_ccs, n_ccs_kept
+real    :: unconstrained_null_fraction
+integer :: i, j, k, imask, n_true, n_sol, n_hit, n_false, n_ccs, n_ccs_kept, n_clamped
 integer :: n_in, n_out
 integer(kind=8) :: s1, s2
 
@@ -81,8 +84,15 @@ if( .not.nu_evidence_state_is_valid(evstate) ) THROW_HARD('compact NU evidence s
 ! failure and must hard-error long before any reconstruction harness runs
 call assert_nu_evidence_replay_ready(evstate)
 call get_nu_evidence_summary(evstate, evsummary)
+unconstrained_null_fraction = evsummary%null_fraction
 call unpack_nu_evidence_state(evstate, ev_label, ev_cutoff, ev_uncertainty, ev_band_support)
 call print_nu_evidence_summary(evstate)
+! The abinitio3D PCG route pins nu_refine=no. Its static evidence state is a
+! compatibility boundary: eight signal candidates plus the explicit null,
+! four fixed bands, and no adaptive candidate geometry.
+if( evsummary%n_bands /= NU_EVIDENCE_NBANDS ) THROW_HARD('static NU evidence band count changed')
+if( index(evsummary%provenance, 'adaptive_geometry=') > 0 ) &
+    &THROW_HARD('static NU evidence unexpectedly enabled adaptive candidate geometry')
 if( evsummary%n_support /= count(l_supp) ) THROW_HARD('compact evidence support size mismatch')
 if( evsummary%n_candidates /= 9 ) THROW_HARD('compact evidence must contain null plus the eight-label static bank')
 if( abs(evsummary%mskdiam - 2. * SUPP_RAD_PX * SMPD) > TINY ) &
@@ -241,14 +251,75 @@ enddo
 if( envelope%get([nint(cen),nint(cen),nint(cen)]) < 0.5 ) THROW_HARD('molecule centre is not inside the soft envelope')
 if( envelope%get([1,1,1]) > 1.e-5 ) THROW_HARD('box corner is inside the soft envelope')
 
+! ---- PCG evidence background constraint ---------------------------------
+! The readiness null fraction remains that of the unconstrained spherical
+! Potts field, while the replay state fixes envelope-background voxels to the
+! coarsest bank member: coarse support 1, every finer support 0.
+call set_nu_solvent_envelope(envelope, source='test_density_envelope')
+call build_nu_evidence_state(even, odd, evstate)
+call assert_nu_evidence_replay_ready(evstate)
+call get_nu_evidence_summary(evstate, evsummary)
+if( abs(evsummary%null_fraction - unconstrained_null_fraction) > 1.e-6 ) &
+    &THROW_HARD('envelope constraint changed the broad-support NU null readiness statistic')
+deallocate(ev_label, ev_cutoff, ev_uncertainty, ev_band_support)
+call unpack_nu_evidence_state(evstate, ev_label, ev_cutoff, ev_uncertainty, ev_band_support)
+n_clamped = 0
+imask = 0
+do k = 1,BOX
+    do j = 1,BOX
+        do i = 1,BOX
+            if( .not.l_supp(i,j,k) ) cycle
+            imask = imask + 1
+            if( envelope%get([i,j,k]) >= 0.5 ) cycle
+            n_clamped = n_clamped + 1
+            if( ev_label(imask) /= 1 ) THROW_HARD('NU background was not assigned the coarsest signal label')
+            if( ev_cutoff(imask) <= TINY ) THROW_HARD('NU background coarsest assignment has no low-pass cutoff')
+            if( abs(ev_band_support(imask,1) - 1.) > 1.e-6 ) &
+                &THROW_HARD('NU background does not preserve the coarsest evidence band')
+            if( maxval(abs(ev_band_support(imask,2:NU_EVIDENCE_NBANDS))) > 1.e-6 ) &
+                &THROW_HARD('NU background incorrectly supports detail finer than the coarsest band')
+        enddo
+    enddo
+enddo
+if( n_clamped < 1 ) THROW_HARD('synthetic NU envelope produced no constrained background voxels')
+
 call cleanup_nu_filter()
 if( .not.nu_evidence_state_is_valid(evstate) ) &
     &THROW_HARD('compact NU evidence changed when mutable unary state was released')
+
+! A density-supported PCG pair is identically zero outside the conservative
+! solve envelope while the NU evidence domain remains the broader sphere. The
+! exact-zero boundary must not collapse the radial noise estimate or overflow
+! the explicit zero-predictor unary during evidence compaction.
+allocate(l_hard(BOX,BOX,BOX), source=.false.)
+do k = 1,BOX
+    do j = 1,BOX
+        do i = 1,BOX
+            dsq = (real(i)-cen)**2 + (real(j)-cen)**2 + (real(k)-cen)**2
+            l_hard(i,j,k) = dsq <= HARD_RAD_PX**2
+            if( .not.l_hard(i,j,k) )then
+                rmat_even(i,j,k) = 0.
+                rmat_odd (i,j,k) = 0.
+            endif
+        enddo
+    enddo
+enddo
+if( count(l_supp .and. .not.l_hard) < 1 ) THROW_HARD('hard-support regression has no exact-zero boundary')
+call even%set_rmat(rmat_even, .false.)
+call odd %set_rmat(rmat_odd,  .false.)
+call setup_nu_dmats(even, odd, 2. * SUPP_RAD_PX * SMPD, [real ::], evidence_source='base_unfil')
+call optimize_nu_cutoff_finds()
+call build_nu_evidence_state(even, odd, evstate)
+if( .not.nu_evidence_state_is_valid(evstate) ) &
+    &THROW_HARD('hard-supported pair produced invalid NU evidence')
+call assert_nu_evidence_replay_ready(evstate)
+call cleanup_nu_filter()
+
 call even%kill
 call odd%kill
 call vol_supp%kill
 call envelope%kill_bimg
-deallocate(margin, ev_label, ev_cutoff, ev_uncertainty, ev_band_support, l_supp, l_env, l_true)
+deallocate(margin, ev_label, ev_cutoff, ev_uncertainty, ev_band_support, l_supp, l_env, l_true, l_hard)
 if( allocated(l_env_rel) ) deallocate(l_env_rel)
 write(logfhandle,'(A)') 'NU evidence envelope masking test passed'
 

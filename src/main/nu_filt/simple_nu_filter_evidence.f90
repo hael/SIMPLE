@@ -20,12 +20,13 @@ contains
         type(string) :: identity_seed_string, identity_hash
         integer(kind=NU_LABEL_KIND), allocatable :: evidence_map(:,:,:)
         real, allocatable :: null_full(:,:,:), smooth_tmp(:,:,:), null_cost(:), coords(:), signal_lps(:)
-        real, allocatable :: gaps(:), probs(:), band_support_tmp(:,:)
+        real, allocatable :: gaps(:), probs(:), candidate_measure(:), band_support_tmp(:,:)
         real, allocatable :: band_limits_active(:)
         real    :: nextb
         real(kind=8) :: fingerprint(6), cutoff_checksum, uncertainty_checksum, support_checksum
         real(kind=8) :: whitening_checksum
         real :: beta, temperature, best_e, second_e, e, prob_sum, entropy, null_lp
+        real :: unconstrained_null_fraction
         real :: null_bias_median, null_bias_mad, null_bias_threshold
         integer :: n_signal, n_candidates, imask, icand, iband, i, j, k, label, n_uncertain, k25
         integer :: nb_active
@@ -67,9 +68,18 @@ contains
         enddo
 
         n_candidates = n_signal + 1
-        if( any(.not.ieee_is_finite(dmats_mask(:,:n_signal))) .or. any(dmats_mask(:,:n_signal) < 0.) .or. &
-            &any(dmats_mask(:,:n_signal) >= NU_EVIDENCE_INVALID) ) &
-            &THROW_HARD('NU evidence signal unaries must be finite and nonnegative')
+        do icand = 1, n_signal
+            if( any(.not.ieee_is_finite(dmats_mask(:,icand))) .or. any(dmats_mask(:,icand) < 0.) .or. &
+                &any(dmats_mask(:,icand) >= NU_EVIDENCE_INVALID) )then
+                write(logfhandle,'(A,I0,A,F8.3,A,I0,A,I0,A,I0)') &
+                    &'>>> INVALID NU SIGNAL UNARY: candidate ', icand, ' at ', &
+                    &nu_label_lowpass_limit(icand), ' A; non-finite=', &
+                    &count(.not.ieee_is_finite(dmats_mask(:,icand))), ', negative=', &
+                    &count(dmats_mask(:,icand) < 0.), ', sentinel=', &
+                    &count(dmats_mask(:,icand) >= NU_EVIDENCE_INVALID)
+                THROW_HARD('NU evidence signal unaries must be finite and nonnegative')
+            endif
+        enddo
 
         ! Candidate zero: no reproducible signal.  Smooth it at the same scale
         ! as the adjacent 20-A label so the null/coarsest comparison is not
@@ -133,15 +143,20 @@ contains
         if( any(.not.ieee_is_finite(null_cost)) .or. any(abs(null_cost) >= NU_EVIDENCE_INVALID) ) &
             &THROW_HARD('calibrated NU evidence null score is invalid')
 
-        allocate(coords(n_candidates), source=0.)
-        coords(2:) = candidate_coords
         allocate(signal_lps(n_signal), source=0.)
         do icand = 1, n_signal
             signal_lps(icand) = nu_label_lowpass_limit(icand)
         enddo
+        call setup_evidence_candidate_geometry(signal_lps, coords, candidate_measure)
 
         beta = estimate_evidence_beta(null_cost, dmats_mask(:,:n_signal))
         call regularize_evidence_labels(null_cost, dmats_mask(:,:n_signal), coords, beta, evidence_map)
+        ! Readiness diagnoses the calibrated evidence model on the complete
+        ! spherical support.  It must not be changed by the downstream
+        ! envelope constraint, which deliberately reassigns solvent voxels to
+        ! the coarsest signal label for the replay precision.
+        unconstrained_null_fraction = real(count((evidence_map == 1_NU_LABEL_KIND) .and. nu_lmask)) / &
+            &real(n_nu_mask)
 
         ! Calibrate confidence against the final spatial-model energy gap, not
         ! against raw Huber values.  This is a deterministic temperature for
@@ -177,6 +192,17 @@ contains
             &THROW_HARD('NU evidence calibration temperature is invalid')
         deallocate(gaps)
 
+        ! The envelope background is a fixed coarsest-label boundary condition
+        ! on the Potts field.  Re-run the spatial optimization with that
+        ! condition after all unconstrained calibration statistics have been
+        ! captured, so the constraint influences neighboring assignments but
+        ! cannot corrupt the broad-support null readiness diagnostic.
+        if( nu_l_solvent_clamp )then
+            deallocate(evidence_map)
+            call regularize_evidence_labels(null_cost, dmats_mask(:,:n_signal), coords, beta, evidence_map, &
+                &l_constrain_background=.true.)
+        endif
+
         ! Stage 6.6 band ladder from the ACTUAL bank: the static four bands,
         ! extended geometrically only while an accepted candidate is at least
         ! as fine as the next boundary. With the static bank (abinitio3D's
@@ -205,28 +231,18 @@ contains
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
             if( nu_l_solvent_clamp )then
-                ! background constraint = the COARSEST bank candidate, not a
-                ! null label (code review 2026-09-02 P1): the coarse band
-                ! keeps its support (1 wherever the coarsest candidate
-                ! reaches the band boundary), and only finer bands carry the
-                ! full lack-of-evidence penalty -- supports [1,0,0,...] ->
-                ! weights [0,1,1,...]. The previous null encoding zeroed
-                ! every band's support and thereby suppressed ALL non-DC
-                ! background detail in the replay, which is not "heavy
-                ! background low-pass" but background erasure. Applied after
-                ! the spherical-support statistics (calibration, whitening,
-                ! spatial pass) are finalized.
+                ! The Potts field above already treats the background as a
+                ! fixed coarsest-label boundary condition. Encode that exact
+                ! hard assignment rather than a softmax over incompatible
+                ! unaries: supports [1,0,0,...] -> weights [0,1,1,...].
                 if( nu_solvent_lmask(i,j,k) )then
                     state%selected_label(imask)  = 1_NU_LABEL_KIND
                     state%selected_cutoff(imask) = signal_lps(1)
                     state%uncertainty(imask)     = 0.
-                    do iband = 1, nb_active
-                        if( signal_lps(1) <= band_limits_active(iband) + TINY )then
-                            state%band_support(imask,iband) = 1.
-                        else
-                            state%band_support(imask,iband) = 0.
-                        endif
-                    enddo
+                    ! This is a categorical coarsest-bank assignment. Do not
+                    ! compare its grid-quantized cutoff (for example 20.4 A)
+                    ! with the nominal 20 A evidence boundary.
+                    state%band_support(imask,1) = 1.
                     cycle
                 endif
             endif
@@ -241,7 +257,13 @@ contains
                 if( e >= 80. )then
                     probs(icand) = 0.
                 else
-                    probs(icand) = exp(-e)
+                    ! Adaptive candidates are samples of a continuous
+                    ! resolution coordinate. Integrate their posterior with
+                    ! the represented frequency-cell measure so adding or
+                    ! thinning shell probes cannot manufacture support merely
+                    ! by changing the number of labels. The static bank uses
+                    ! unit measure exactly, preserving nu_refine=no bitwise.
+                    probs(icand) = candidate_measure(icand) * exp(-e)
                 endif
             enddo
             prob_sum = sum(probs)
@@ -297,7 +319,7 @@ contains
         allocate(state%summary%band_limits(nb_active), source=band_limits_active(1:nb_active))
         allocate(state%summary%supported_fraction(nb_active), source=0.)
         state%summary%source = nu_evidence_source
-        state%summary%null_fraction = real(count(state%selected_label == 0_NU_LABEL_KIND)) / real(n_nu_mask)
+        state%summary%null_fraction = unconstrained_null_fraction
         state%summary%uncertain_fraction = real(n_uncertain) / real(n_nu_mask)
         state%summary%calibration_temperature = temperature
         state%summary%spatial_beta = beta
@@ -329,6 +351,8 @@ contains
             if( icand > 1 ) state%summary%provenance = trim(state%summary%provenance)//','
             state%summary%provenance = trim(state%summary%provenance)//trim(adjustl(value_text))
         enddo
+        if( n_signal > size(lowpass_limits) ) state%summary%provenance = trim(state%summary%provenance)//&
+            &';adaptive_geometry=static_anchored_fourier_voronoi_measure'
         write(value_text,'(ES14.6)') temperature
         state%summary%provenance = trim(state%summary%provenance)//';temperature='//trim(adjustl(value_text))
         write(value_text,'(ES14.6)') beta
@@ -377,8 +401,62 @@ contains
         state%summary%identity = identity_hash%to_char()
 
         call validate_compact_evidence_state(state)
-        deallocate(null_cost, coords, signal_lps)
+        deallocate(null_cost, coords, signal_lps, candidate_measure)
     end subroutine build_nu_evidence_state
+
+    !> Geometry and integration measure for the evidence candidate posterior.
+    !! The eight-member static bank deliberately retains its historical
+    !! integer coordinates and unit masses so the heavily used
+    !! nu_refine=no PCG route is numerically unchanged. Once accepted shell
+    !! candidates are present, their coordinates follow Fourier-shell distance
+    !! normalized by the finest static interval while the original coordinates
+    !! remain exactly 1:n_static. Each signal hypothesis receives its Voronoi
+    !! cell width, normalized to the static bank's total signal mass. This
+    !! removes adaptive label-count bias without discontinuously changing the
+    !! established static Potts geometry.
+    subroutine setup_evidence_candidate_geometry( signal_lps, coords, measure )
+        real, intent(in) :: signal_lps(:)
+        real, allocatable, intent(out) :: coords(:), measure(:)
+        real, allocatable :: widths(:)
+        real :: shell_scale, left_edge, right_edge, coord_eps
+        integer :: n_signal, n_static, static_find_gap, i
+        n_signal = size(signal_lps)
+        if( n_signal < 1 ) THROW_HARD('empty NU evidence signal geometry')
+        allocate(coords(n_signal + 1), source=0.)
+        allocate(measure(n_signal + 1), source=1.)
+        do i = 1, n_signal
+            coords(i+1) = real(i)
+        enddo
+        n_static = min(size(lowpass_limits), n_signal)
+        if( n_signal <= size(lowpass_limits) ) return
+        if( any(signal_lps <= TINY) ) THROW_HARD('invalid NU evidence candidate low-pass geometry')
+        if( size(cutoff_finds) < n_signal ) THROW_HARD('NU evidence cutoff geometry is incomplete')
+        static_find_gap = max(1, cutoff_finds(n_static) - cutoff_finds(max(1, n_static - 1)))
+        shell_scale = 1. / real(static_find_gap)
+        coord_eps = sqrt(epsilon(1.))
+        do i = n_static + 1, n_signal
+            coords(i+1) = real(n_static) + real(cutoff_finds(i) - cutoff_finds(n_static)) * shell_scale
+            coords(i+1) = max(coords(i+1), coords(i) + coord_eps)
+        enddo
+        allocate(widths(n_signal), source=0.)
+        do i = 1, n_signal
+            if( i == 1 )then
+                left_edge = coords(2) - 0.5 * (coords(3) - coords(2))
+            else
+                left_edge = 0.5 * (coords(i+1) + coords(i))
+            endif
+            if( i == n_signal )then
+                right_edge = coords(n_signal+1) + 0.5 * (coords(n_signal+1) - coords(n_signal))
+            else
+                right_edge = 0.5 * (coords(i+1) + coords(i+2))
+            endif
+            widths(i) = max(coord_eps, right_edge - left_edge)
+        enddo
+        measure(2:) = widths * real(size(lowpass_limits)) / sum(widths)
+        if( any(.not.ieee_is_finite(coords)) .or. any(.not.ieee_is_finite(measure)) .or. &
+            &any(measure <= 0.) ) THROW_HARD('invalid NU evidence adaptive candidate geometry')
+        deallocate(widths)
+    end subroutine setup_evidence_candidate_geometry
 
     module subroutine calculate_nu_source_fingerprint( vol_even, vol_odd, fingerprint )
         class(image), intent(in) :: vol_even, vol_odd
@@ -690,11 +768,18 @@ contains
         beta = NU_LABEL_SMOOTH_BETA_FRAC * beta / real(size(signal_costs,1))
     end function estimate_evidence_beta
 
-    subroutine regularize_evidence_labels( null_cost, signal_costs, coords, beta, candmap )
+    subroutine regularize_evidence_labels( null_cost, signal_costs, coords, beta, candmap, &
+            &l_constrain_background )
         real, intent(in) :: null_cost(:), signal_costs(:,:), coords(:), beta
         integer(kind=NU_LABEL_KIND), allocatable, intent(out) :: candmap(:,:,:)
+        logical, optional, intent(in) :: l_constrain_background
         integer :: imask, icand, i, j, k, iter, color, current, best, nchanged
         real :: e, best_e
+        logical :: l_constrain
+        l_constrain = .false.
+        if( present(l_constrain_background) ) l_constrain = l_constrain_background
+        if( l_constrain .and. (.not.nu_l_solvent_clamp .or. .not.allocated(nu_solvent_lmask)) ) &
+            &THROW_HARD('constrained NU evidence Potts field requires an armed solvent envelope')
         allocate(candmap(ldim(1),ldim(2),ldim(3)), source=1_NU_LABEL_KIND)
         !$omp parallel do schedule(static) default(shared) private(imask,icand,i,j,k,best,best_e) proc_bind(close)
         do imask = 1, n_nu_mask
@@ -712,6 +797,7 @@ contains
             candmap(i,j,k) = int(best,kind=NU_LABEL_KIND)
         enddo
         !$omp end parallel do
+        if( l_constrain ) call clamp_evidence_background(candmap)
         if( beta <= TINY ) return
         do iter = 1, NU_LABEL_SMOOTH_MAXITS
             nchanged = 0
@@ -723,6 +809,7 @@ contains
                     j = nu_mask_vox(2,imask)
                     k = nu_mask_vox(3,imask)
                     if( nu_label_smooth_color(i,j,k) /= color ) cycle
+                    if( l_constrain .and. nu_solvent_lmask(i,j,k) ) cycle
                     current = int(candmap(i,j,k))
                     best = current
                     best_e = evidence_site_energy(imask, current, null_cost, signal_costs, coords, candmap, beta)
@@ -743,6 +830,24 @@ contains
             enddo
             if( nchanged == 0 ) exit
         enddo
+        if( l_constrain ) call clamp_evidence_background(candmap)
+
+    contains
+
+        subroutine clamp_evidence_background( labels )
+            integer(kind=NU_LABEL_KIND), intent(inout) :: labels(:,:,:)
+            integer :: imask_here, i_here, j_here, k_here
+            ! candmap label 1 is the explicit null; label 2 is signal-bank
+            ! candidate 1, the coarsest low-pass member.
+            do imask_here = 1, n_nu_mask
+                i_here = nu_mask_vox(1,imask_here)
+                j_here = nu_mask_vox(2,imask_here)
+                k_here = nu_mask_vox(3,imask_here)
+                if( nu_solvent_lmask(i_here,j_here,k_here) ) &
+                    &labels(i_here,j_here,k_here) = 2_NU_LABEL_KIND
+            enddo
+        end subroutine clamp_evidence_background
+
     end subroutine regularize_evidence_labels
 
     real function evidence_site_energy( imask, icand, null_cost, signal_costs, coords, candmap, beta ) result( energy )

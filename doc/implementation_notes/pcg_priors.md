@@ -638,7 +638,8 @@ they do not block the active Stage 6 NU design.
 - 1.2 **DONE (2026-08-25).** Production never calls `set_deapod` (default on)
   and always sets `PCG_OP_KERNEL`. `assert_prior_attachment_mode` (hard error
   unless kernel + deapodized) is called at both ML-replay attach sites —
-  shared `regularize_state_half` and distributed `reduce_solve_state_half`.
+  shared `regularize_state_half` and distributed
+  `prepare_distributed_half_job`.
 - 1.3 **DONE, refine3D diagnostics check pending (2026-08-25).** Inert
   `report_solvent_envelope_status` in the strategy runs the former mask contract
   (presence, cubic lattice, physical-extent identity, constant-FOV
@@ -1183,7 +1184,7 @@ and otherwise cold-starts from the base solution (the closed-form shrinkage
 init encodes the P_tau/Q_s optimum and is skipped). Per-half
 `PCG NU REPLAY` lines report `lambda_eff` and `pcg_nu_prior_energy_final`;
 the shipped-pair inflation crossings are measured in NU mode too. Distributed
-parity: the same attach path runs in `reduce_solve_state_half`; trailing
+parity: the same attach path runs in `prepare_distributed_half_job`; trailing
 reconstruction and the trailing bootstrap are hard-errored with the NU replay
 (the evidence contract requires the plain current-cohort base pair). The
 solvent prior, its envelope bootstrap, and its default remain untouched
@@ -2455,13 +2456,17 @@ the acceptable-looking outputs do not validate the prior.
      unregularized cc), with bootstrap sigmas written at endit+2 so no
      crop-box sigma star is overwritten, and the same pcg/Q_NU
      forwarding.
-   - Strength continuity: with auto-lambda active the final rec's
-     `resolve_nu_autolambda` reads the `PCG_NU_STATS_FILE` the last
-     refinement iteration persisted in the run directory, so the
-     final map is regularized at the CONVERGED lambda (lambda_rel is
-     data-scale-relative and transfers across the crop->native box
-     change); a missing stats file falls back to the 0.1 cold start.
-     Explicit keys pin as usual.
+   - Grid-transition calibration (corrected 2026-09-02): `lambda_rel`
+     does not transfer unchanged across the staged-crop -> native-grid
+     transition. The change in downscaling changes the effective Q_NU
+     plant gain even though the suppression target remains meaningful.
+     With auto-lambda active, `bootstrap_rec3D` therefore retains the
+     learned suppression target, lets the unregularized sigma pass clear
+     the old-grid response, runs one current-grid Q_NU calibration solve
+     without postprocessing, and then reruns the regularized reconstruction
+     after `resolve_nu_autolambda` has adapted from that measurement. Only
+     the calibrated replay is shipped. A missing target starts at 15%.
+     Explicit lambda controls skip calibration and remain pinned as usual.
 
    **PfCRT REGRESSION ROOT CAUSE -- HANDOFF GATE + FROZEN-EVIDENCE
    DEADLOCK (2026-08-31).** The post-auto-target PfCRT abinitio3D run
@@ -2688,23 +2693,28 @@ the acceptable-looking outputs do not validate the prior.
      OpenMP thread count to min(ncores, nparts*nthr,
      PCG_MASTER_NTHR_CAP=32) for the reconstruction phase and
      restores nthr before matching (never on a cluster; capped
-     because OpenMP scaling saturates at these box sizes). OMP
-     regions benefit directly; FFTW plan threading may remain at the
-     original nthr where plans are cached.
-   - Concurrent even/odd solves (2026-09-01): implemented as two
-     OpenMP sections in the distributed master, then REVERTED the
-     same day -- abinitio3D aborted in bootstrap_rec3D pass 1 of the
-     box-300 final reconstruction with two interleaved master-side
-     THROW_HARD backtraces (both halves throwing at once). The
-     preconditions checked out on paper (own accumulators, own
-     reconstructor_pcg, own output files, critical-guarded FFT plan
-     creation, critical-guarded suppression accumulation), so
-     something in the solve path is either not master-thread-safe
-     (ori/hash lookups in count_full_state_half are the leading
-     suspect) or not affordable at twice the padded workspace
-     (boxpd=600 at the final box). Re-attempt only with the actual
-     ERROR! line identified; the suppression critical section is
-     retained as harmless.
+     because OpenMP scaling saturates at these box sizes). Ordinary
+     master work uses that team; concurrent half solves split it and
+     bake the half-team size into their private FFTW plans.
+   - **Concurrent distributed even/odd solves -- implementation pending
+     runtime validation** (2026-09-02): the reverted whole-lifecycle
+     OpenMP sections are replaced by explicit prepare/solve/finalize
+     half jobs. Preparation remains serial and owns support-mask
+     memoization, FFTW planning, raw-accumulator I/O, trailing-chain
+     writes, prior attachment, and warm-start construction. Only two
+     fully prepared, half-owned `solve_accum` calls enter concurrent
+     sections; validation, NU firing statistics, diagnostics/logging,
+     image construction, and teardown are serial again. Each operator
+     now owns an explicit half-team FFTW plan size, and nested OpenMP
+     levels are enabled only around the solve pair then restored. PCG
+     profiling uses stateless local timestamps rather than the shared
+     legacy timer. This removes the deterministic code path behind the
+     prior box-300 failure: spherical `set_mask -> mask3D_soft` no longer
+     runs in an OpenMP region. The shared/direct route remains serial because its
+     builder image batch is not half-owned. Remaining gate: measure
+     peak resident memory and wall time at boxpd=600, and retain the
+     implementation only if the two prepared workspaces fit with useful
+     speedup in the final abinitio3D reconstruction.
    - NU work deduplication (2026-09-01, user-directed): the Q_NU
      evidence phase and the matching-reference generation ran the
      full setup + solvent clamp + optimization + shell walk twice per
@@ -3018,7 +3028,7 @@ the acceptable-looking outputs do not validate the prior.
      essentially solvent).
 
 9. **PCG+NU code-review response (2026-09-02,
-   `pcg_nonuniform_code_review.md`, all P1/P2 findings addressed).**
+   `pcg_nonuniform_code_review.md`, corrected implementation).**
    - P1 post-hoc filter: `filter_pcg_nonuniform_maps` no longer runs
      `nu_filter_vols` for ANY mode -- it is the evidence-derived scalar
      matching-lp handoff for both `nonuniform` and `nonuniform_lpset`,
@@ -3041,16 +3051,21 @@ the acceptable-looking outputs do not validate the prior.
      `build_nu_evidence_state` now encodes the COARSEST bank candidate
      (supports [1,0,0,...] -> band weights [0,1,1,...]) instead of the
      post-Potts null label whose zero supports suppressed all non-DC
-     background detail. Clamped voxels count as label 1, so the
-     summary null_fraction now reflects genuine in-envelope nulls
-     only. Residual simplification: the deterministic assignment is
-     still applied post-MRF; the evidence Potts field itself is not
-     clamp-aware (matching the pre-existing structure).
+     background detail. The constraint is installed before the Potts
+     sweeps, fixed voxels participate as boundary conditions, and the
+     readiness `null_fraction` is retained from the unconstrained broad
+     spherical evidence field, counted only over that packed support, so
+     neither the full-box exterior nor envelope size can invalidate its
+     calibration diagnostic. The coarsest band's support is categorical and
+     is not inferred by comparing a grid-quantized cutoff with its nominal
+     Angstrom boundary.
    - P1 solve support: `build_pcg_state_support` is independent of
      `automsk`; the shared route now builds and installs the per-state
      density support exactly like the distributed route (base solves
-     under envfsc=yes, regularized replay always); missing/startvol
-     reference falls back to the sphere LOUDLY.
+     under envfsc=yes, regularized replay always). A valid start volume
+     is a density source. If no reconstruction exists yet, the base solve
+     necessarily bootstraps on the sphere for either `envfsc` value; its
+     current merged pair then seeds the density-supported replay.
    - P1 FSC preproc: `evaluate_halfmap_pair` takes
      `l_pair_support_constrained` and skips the envelope+
      phase-randomization preprocessing only when the pair was actually
@@ -3065,12 +3080,34 @@ the acceptable-looking outputs do not validate the prior.
      (development escape hatch isolated to filt_mode=none).
    - P2 refine3D_auto envfsc: now a guarded (genuinely overridable)
      default.
-   - P2 _pproc: the density-envelope multiplication of `_pproc`/`_mirr`
-     is documented as a display/deposition exemption in
-     `postprocess_volume_from_files`; the unmasked primary maps remain
-     authoritative.
+   - P2 _pproc: PCG skips all post-hoc mask multiplication in
+     `postprocess_volume_from_files`, including derived `_pproc`/`_mirr`
+     products. Non-PCG behavior is unchanged.
    - P3: `nu_evidence_envelope_masking.md` carries a SUPERSEDED banner;
      automasking/nonuniform policies updated 2026-09-02.
+   - Runtime follow-up: a density-supported iteration-1 base pair exposed a
+     numerical mismatch between the narrower solve support and broader NU
+     evidence sphere. Exact zero/zero boundary voxels had entered the radial
+     MAD whitening fit as zero-noise samples, and the explicit zero predictor
+     could then overflow even though ordinary cross-half candidate unaries
+     remained finite. `nu_objective_noise_profile` now excludes only those
+     unobserved exact-zero pairs from scale estimation while retaining the
+     spherical evidence domain; `nu_objective` computes standardized Huber
+     losses in double precision with a high finite cap. The focused envelope
+     test includes this hard-supported-pair geometry. Rebuild and runtime
+     rerun are pending.
+   - `nu_refine` follow-up: `refine3D_auto` keeps its default `yes`, while
+     staged abinitio3D's heavily used `nu_refine=no` PCG state is preserved
+     exactly (eight signal candidates, integer coordinates, unit candidate
+     masses, four bands, raw-finest matching handoff). Adaptive PCG discovery
+     alone is capped at FSC=0.143 plus two Fourier shells and uses the final
+     ordered-label tie tolerance. Once extension candidates exist, their
+     coordinates continue from the unchanged static ladder in Fourier-shell
+     distance normalized by the finest static interval; normalized Voronoi
+     widths remove candidate-count bias from soft band support. Adaptive
+     matching uses the 5% supported cutoff plus the same two-shell FSC
+     headroom. The `automsk=yes` evidence envelope is explicitly the
+     preliminary static-bank boundary, fixed before adaptive challenges.
 
 ## 11. The NU machinery as the prior infrastructure
 

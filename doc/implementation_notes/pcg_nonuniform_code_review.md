@@ -1,6 +1,6 @@
 # Code review: PCG reconstruction with nonuniform regularization
 
-**Review status:** Request changes  
+**Review status:** Corrections implemented in the working tree; latest runtime fix pending rebuild/validation
 **Reviewed revision:** `5e9933ffe6dee71e3e464589c74fa991980799ce`
 (`more automsk CSI`, 2026-09-02)  
 **Scope:** `rec_backend=pcg` with
@@ -10,6 +10,15 @@ postprocessing.
 
 This is a static source review. No compilation, linking, or runtime tests were
 performed, in accordance with repository policy.
+
+The findings below preserve the reviewed-revision snapshot. The corrective
+implementation removes post-hoc PCG NU filtering and masking, makes the
+conservative solve support independent of `automsk`, enforces the requested
+`envfsc` solve matrix once a reconstruction-derived mask exists, bootstraps a
+missing-reference base solve on the sphere before deriving replay support,
+makes the envelope background a fixed coarsest-label Potts boundary condition
+without changing the unconstrained null-readiness statistic, and carries the
+evidence-derived LP handoff through both PCG execution routes.
 
 ## Required contract
 
@@ -272,5 +281,85 @@ focused route-level tests or deterministic diagnostics:
    and no envelope multiplication of primary or matching-reference maps;
 9. rejection or explicit development isolation of `pcg_nu_lambda_rel=0`,
    missing ML replay, and `pcg_mskfile` overrides.
+10. a density-supported half pair that is exactly zero outside the conservative
+    solve envelope but whose NU evidence is evaluated on the broader spherical
+    support; its radial whitening profile and explicit null unary must remain
+    finite.
 
-Compilation and runtime validation remain outstanding for the user.
+## Runtime follow-up: hard-supported pair null-unary overflow
+
+A user-side run reached the intended PCG topology: spherical bootstrap when no
+reference existed, in-solve `Q_NU`, no post-hoc NU filtering, then a
+lag-one-density-supported base pair on iteration 1. Evidence construction for
+that second pair failed at the explicit zero-predictor unary with
+`IEEE_INVALID_FLAG`/`IEEE_DIVIDE_BY_ZERO`.
+
+The radial noise estimator had treated the exact zero/zero voxels created by
+the narrower PCG solve support as zero-noise observations, even though the NU
+objective is evaluated on the broader spherical domain. This can collapse a
+shell scale. The null predictor is uniquely exposed because it measures the
+full map amplitude; ordinary filtered candidates compare two similar maps and
+can remain finite.
+
+The correction keeps the evidence domain broad but omits exact zero/zero
+boundary samples from the whitening fit, nearest-fills unsupported radial
+shells as before, validates the resulting profile, and evaluates standardized
+Huber residuals in double precision with a numerically safe finite saturation
+well above meaningful unary differences. The focused NU-envelope test now
+includes a hard-supported-pair regression over a broader NU sphere.
+
+The latest correction has only static validation in this workspace. Rebuild
+and focused/runtime reruns remain outstanding for the user.
+
+## Follow-up: default-on `nu_refine` hardening
+
+`refine3D_auto` intentionally retains `nu_refine=yes`; staged abinitio3D
+continues to pin `nu_refine=no`. The latter is heavily used, so its PCG
+evidence state is now an explicit compatibility boundary: the eight static
+signal candidates keep their integer Potts coordinates and unit softmax
+measure, the four-band ladder is unchanged, and the raw-finest matching
+handoff is unchanged.
+
+Only an evidence bank containing accepted extension candidates takes the new
+spacing-aware representation. The static Potts coordinates remain exactly
+1 through 8, while extension coordinates continue in Fourier-shell distance
+normalized by the finest static interval. Signal-candidate posterior terms are
+integrated with Voronoi cell widths normalized to the static bank's total
+signal mass. Candidate thinning or inserting densely spaced probes therefore
+cannot create support solely through label multiplicity.
+
+PCG adaptive shell discovery is additionally capped at two Fourier shells
+beyond the current evidence-pair FSC=0.143 crossing. The adaptive matching
+handoff uses the established 5% assigned-support statistic and explicitly
+retains the same two-shell FSC headroom, rather than allowing one extreme voxel
+to set the global matching bandwidth. The cache identity includes the
+`nu_refine` mode so a mode transition cannot ride incompatible evidence.
+
+With `automsk=yes`, the NU envelope is deliberately the preliminary
+static-bank boundary. It is fixed before shell challenges so adaptive evidence
+cannot select its own spatial support. Accepted candidates refine `Q_NU`
+inside that boundary. Documentation that previously claimed the envelope
+always described the final accepted bank has been corrected.
+
+The focused NU-envelope test now asserts the static candidate count, band
+count, and absence of adaptive geometry, in addition to its existing evidence
+and hard-support checks. Compilation and runtime validation remain with the
+user.
+
+## Follow-up: native-grid Q_NU calibration
+
+The first concurrent abinitio3D run completed normally and verified the
+compute-only even/odd parallel solve boundary. Its final reconstruction also
+showed a 48--50% suppression jump when the box changed from the staged crop to
+native sampling. That change is explained by the different downscaling/grid:
+the Q_NU plant gain changes, so the reduced-grid `lambda_rel` is not a valid
+native-grid operating point.
+
+The final bootstrap now treats its first automatic-Q_NU solve as a current-grid
+calibration rather than shipping it. It preserves the dataset-level suppression
+target, clears the obsolete reduced-grid response during the unregularized
+sigma pass, measures suppression at the normal cold-start strength on the
+current grid, and performs a second regularized solve after the existing
+auto-lambda controller adapts from that measurement. Postprocessing and output
+registration occur only for the calibrated solve. User-pinned lambda values
+remain single-pass and unchanged.

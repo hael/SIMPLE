@@ -22,7 +22,7 @@ use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cl
     &build_nu_evidence_state, nu_evidence_state, nu_evidence_summary, get_nu_evidence_summary, &
     &expand_nu_evidence_band_weights, &
     &print_nu_evidence_summary, print_nu_evidence_lowpass_histogram, assert_nu_evidence_replay_ready, &
-    &nu_evidence_finest_supported_lp, &
+    &nu_evidence_finest_supported_lp, NU_ALIGN_LP_MIN_ASSIGNED_PCT, &
     &write_nu_evidence_envmask, &
     &NU_EVIDENCE_SOURCE_BASE, NU_EVIDENCE_SOURCE_PREV
 use simple_vol_pproc_policy,  only: vol_pproc_plan, plan_state_postprocess, &
@@ -30,6 +30,8 @@ use simple_vol_pproc_policy,  only: vol_pproc_plan, plan_state_postprocess, &
 use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state_vol_fname, &
     &refine3D_fsc_fname, refine3D_resolution_txt_fbody, refine3D_pcg_raw_accum_fname, &
     &refine3D_pcg_trail_accum_fname
+!$ use omp_lib, only: omp_get_max_threads, omp_get_num_procs, omp_get_max_active_levels, &
+!$     &omp_set_max_active_levels, omp_set_num_threads
 implicit none
 
 public :: execute_rec3D_pcg_shared, execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
@@ -65,13 +67,14 @@ real,    parameter :: NU_AUTOTARGET_MAX      = 75.0
 real,    parameter :: NU_AUTOTARGET_STEP_ADD = 5.0  !< additive setpoint increase per improving iteration (% points)
 real,    parameter :: NU_AUTOTARGET_BACKOFF  = 0.6  !< multiplicative setpoint decrease on shipped-pair degradation
 real,    parameter :: NU_AUTOTARGET_SHIP_TOL = 0.02 !< relative deadband on the shipped-pair crossing (stall band)
-integer, parameter :: PCG_MASTER_NTHR_CAP    = 32   !< master-phase thread-boost ceiling; OpenMP scaling saturates beyond this at typical box sizes
+integer, parameter :: PCG_MASTER_NTHR_CAP    = 32   !< master-phase thread-boost ceiling
 ! Solve-support envelope (pcg_priors.md dev item 5): the conservative density
 ! envelope (automask3D at envmsklp) replaces the spherical support in the PCG
 ! solves, so the mask constrains the ESTIMATOR rather than post-processing.
-! automsk=yes enables it; the REGULARIZED pass always takes it, the UNFIL
-! pass only under envfsc=yes (envfsc=no keeps that pass spherical, so the
-! FSC pair stays unconstrained). That envelope is generous by construction --
+! The REGULARIZED pass always takes it; the UNFIL pass takes it under
+! envfsc=yes once a prior reconstruction exists. A first reconstruction has
+! no density source and necessarily bootstraps on the sphere. This policy is
+! independent of automsk. The envelope is generous by construction --
 ! protein plus micelle, dilated, soft-edged, and about half the spherical
 ! support on the datasets measured so far -- so it removes the far solvent,
 ! where deapodization amplifies hardest, while leaving the NU evidence a
@@ -97,6 +100,7 @@ logical, parameter :: DEBUG = .false.
 integer, parameter :: NU_EVIDENCE_REBUILD_MAX_LAG = 5 !< iterations a frozen evidence state may ride before a forced rebuild
 type :: nu_evidence_cache_entry
     logical :: valid = .false.
+    logical :: l_nu_refine = .false.
     integer :: box = 0
     integer :: fsc_find = 0
     integer :: handoff_find = 0 !< Fourier index of the matching low-pass this evidence handed off
@@ -287,10 +291,10 @@ contains
     !! read, and no silent fallback exists: evidence-construction failure is
     !! a hard error. With automsk enabled the NU evidence envelope artifact
     !! is regenerated here (policy 2026-08-29): the raw per-voxel evidence
-    !! margins are live at this point, so the matching-reference envelope
-    !! derives from the same frozen evidence as the Q_NU precision, without
-    !! a second NU analysis; cadence and artifact naming follow the same
-    !! plan_state_postprocess contract as the post-hoc NU paths.
+    !! margins are live at this point, so that envelope constrains the same
+    !! Potts field that supplies the Q_NU precision, without a second NU
+    !! analysis. It is diagnostic state, never a matching-reference mask;
+    !! cadence and artifact naming follow plan_state_postprocess.
     subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, &
             &res0143, band_w, band_limits, finest_lp, evidence_source, evidence_seconds )
         class(parameters),          intent(in)  :: params
@@ -332,9 +336,12 @@ contains
             call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source=trim(source_here))
             if( trim(params%automsk).ne.'no' )then
                 ! automsk=yes: the filter-field background is the complement of
-                ! the NU evidence envelope, derived from the unaries of the
-                ! setup that just ran (same pass, no second compute) and frozen
-                ! into the evidence state; the artifact is written here too.
+                ! a deliberately PRELIMINARY static-bank NU evidence envelope.
+                ! It is armed before optimization so it can be a causal, fixed
+                ! boundary for both the initial Potts field and any adaptive
+                ! shell challenges. Accepted high-resolution probes refine the
+                ! local precision inside this boundary; they do not redefine
+                ! their own support in the same evidence pass.
                 ! The PCG SOLVE support keeps the conservative density
                 ! envelope elsewhere (set_pcg_solve_support) -- never this mask.
                 call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, vol_even%get_smpd(), &
@@ -353,7 +360,7 @@ contains
             endif
             call optimize_nu_cutoff_finds()
             ! Stage 6.6 (pcg_priors.md): with nu_refine=yes the evidence candidate
-            ! bank is extended by the proven high-resolution shell walk -- one
+            ! bank is extended by the high-resolution shell walk -- one
             ! Fourier shell at a time from the populated frontier, accepted only
             ! on strict unary win-fraction, exactly as on the gridding path
             ! (refine3D_auto mirrors its gridding bootstrap; abinitio3D keeps the
@@ -362,7 +369,12 @@ contains
             ! The band ladder then grows over ACCEPTED candidates only, inside
             ! build_nu_evidence_state, and rides the frozen state.
             if( params%l_nu_refine )then
-                call extend_nu_filter_highres_shells(vol_even, vol_odd, nsteps=nsteps_ext)
+                ! Q_NU adaptation follows measured information growth. Permit
+                ! two Fourier shells of search headroom beyond the current
+                ! FSC=0.143 crossing, but do not let repeated weak unary wins
+                ! ratchet the empirical prior toward Nyquist in one rebuild.
+                call extend_nu_filter_highres_shells(vol_even, vol_odd, nsteps=nsteps_ext, &
+                    &max_find=min(ldim_here(1) / 2, fsc_find + 2), l_tie_tolerant=.true.)
                 if( nsteps_ext > 0 )then
                     write(logfhandle,'(A,I0,A,F8.3,A)') '>>> PCG NU REPLAY ('//trim(context)//&
                         &'): EVIDENCE BANK EXTENDED BY ', nsteps_ext, ' ACCEPTED SHELL STEP(S) TO ', &
@@ -389,8 +401,10 @@ contains
             ! FSC crossing later reaches this band, the alignment search is
             ! band-limited by the ridden evidence and the cache must not be
             ! allowed to seal the stall (PfCRT regression record 2026-08-31)
-            handoff_lp = nu_evidence_finest_supported_lp(evstate, 0.)
+            handoff_lp = pcg_nu_matching_lowpass(evstate, params%l_nu_refine, fsc_find, &
+                &ldim_here(1), vol_even%get_smpd())
             nu_evidence_cache(state_here)%valid        = .true.
+            nu_evidence_cache(state_here)%l_nu_refine  = params%l_nu_refine
             nu_evidence_cache(state_here)%box          = ldim_here(1)
             nu_evidence_cache(state_here)%fsc_find     = fsc_find
             nu_evidence_cache(state_here)%handoff_find = 0
@@ -401,6 +415,8 @@ contains
             nu_evidence_cache(state_here)%evstate      = evstate
         else
             evstate = nu_evidence_cache(state_here)%evstate
+            handoff_lp = pcg_nu_matching_lowpass(evstate, params%l_nu_refine, fsc_find, &
+                &ldim_here(1), vol_even%get_smpd())
             write(logfhandle,'(A,I0,A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): STATE ', state_here, &
                 &' RIDING FROZEN EVIDENCE (age ', params%which_iter - nu_evidence_cache(state_here)%iter_built, &
                 &' iterations; no resolution advance)'
@@ -422,18 +438,13 @@ contains
         ! for set_nu_prior so operator and evidence can never disagree
         call get_nu_evidence_summary(evstate, evsumm)
         band_limits = evsumm%band_limits
-        ! finest evidenced local cutoff, for the LP-set matching handoff --
+        ! Evidence-supported local cutoff for the LP-set matching handoff --
         ! the compact state replaces the retired second NU analysis of the
-        ! postprocess (pcg_priors.md S6.3 evidence-state sharing). RAW finest
-        ! selected cutoff (min_pct=0), NOT the assignment-support percentile:
-        ! on small membrane proteins only a small core carries fine-resolution
-        ! evidence, and the support gate collapsed the matching bandwidth to
-        ! the FSC crossing, sealing the alignment/evidence stall (PfCRT
-        ! regression record 2026-08-31). Sparse-but-real fine evidence must be
-        ! allowed to pull the search band forward; over-extension merely
-        ! widens the search, over-restriction deadlocks it.
+        ! postprocess (pcg_priors.md S6.3 evidence-state sharing). The adaptive
+        ! path uses supported evidence plus explicit FSC headroom;
+        ! nu_refine=no retains its historical raw handoff exactly.
         if( present(finest_lp) )then
-            finest_lp = nu_evidence_finest_supported_lp(evstate, 0.)
+            finest_lp = handoff_lp
         endif
         seconds_here = real(toc(t_evidence),dp)
         nu_evidence_bench_seconds = nu_evidence_bench_seconds + seconds_here
@@ -471,6 +482,7 @@ contains
         endif
         if( state_here < 1 .or. state_here > params%nstates ) THROW_HARD('invalid state for NU evidence cache')
         if( .not. nu_evidence_cache(state_here)%valid                          ) return
+        if( nu_evidence_cache(state_here)%l_nu_refine .neqv. params%l_nu_refine ) return
         if( nu_evidence_cache(state_here)%box /= box_here                      ) return
         if( trim(nu_evidence_cache(state_here)%source) /= trim(source_here)    ) return
         if( l_envmask_regen                                                    ) return
@@ -485,6 +497,28 @@ contains
         if( params%which_iter - nu_evidence_cache(state_here)%iter_built >= NU_EVIDENCE_REBUILD_MAX_LAG ) return
         l_rebuild = .false.
     end function nu_evidence_needs_rebuild
+
+    !> Matching-band handoff for the PCG NU replay. The static
+    !! nu_refine=no route deliberately retains the established raw finest
+    !! selection so abinitio3D is numerically unchanged. Adaptive refinement
+    !! requires the same 5% assignment support as the shell challenger, then
+    !! guarantees two Fourier shells beyond the measured FSC crossing so the
+    !! evidence cache cannot make its own matching bandwidth a fixed point.
+    real function pcg_nu_matching_lowpass( state, l_nu_refine, fsc_find, box_here, smpd_here ) result( lp )
+        type(nu_evidence_state), intent(in) :: state
+        logical,                 intent(in) :: l_nu_refine
+        integer,                 intent(in) :: fsc_find, box_here
+        real,                    intent(in) :: smpd_here
+        integer :: evidence_find, handoff_find
+        real    :: min_pct
+        min_pct = 0.
+        if( l_nu_refine ) min_pct = NU_ALIGN_LP_MIN_ASSIGNED_PCT
+        lp = nu_evidence_finest_supported_lp(state, min_pct)
+        if( .not.l_nu_refine .or. lp <= TINY ) return
+        evidence_find = calc_fourier_index(lp, box_here, smpd_here)
+        handoff_find  = max(evidence_find, min(box_here / 2, max(1, fsc_find + 2)))
+        lp = calc_lowpass_lim(handoff_find, box_here, smpd_here)
+    end function pcg_nu_matching_lowpass
 
     !> Resolution-text naming, mirroring the gridding volassemble contract
     !! (resolve_fsc_txt_fname in simple_commanders_rec_distr): an explicit
@@ -515,7 +549,7 @@ contains
 
     !> Install the solve support constraint, in precedence order: an explicit
     !! pcg_mskfile envelope, the per-state density-envelope support when one
-    !! was built for this state (automsk=yes), else the spherical mskdiam
+    !! was built for this state, else the spherical mskdiam
     !! support. The projected system (P H P) u = P b is what set_mask already
     !! implements; this only chooses P (pcg_priors.md dev item 5).
     subroutine set_pcg_solve_support( pcgop, params, state_support, l_state_support )
@@ -544,65 +578,73 @@ contains
 
     !> Build the per-state solve-support envelope from the reference volume
     !! this iteration matched against (lag-one, the same lag the matching
-    !! references carry). Absent/startvol reference => no support, and the
-    !! caller falls back to the spherical one.
+    !! references carry). A start volume is a valid density source. With no
+    !! usable reconstruction yet, the base solve necessarily bootstraps on the
+    !! sphere; its current pair then supplies density support for the replay.
     subroutine build_pcg_state_support( params, state_here, support, l_have )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: state_here
         type(image_msk),   intent(inout) :: support
         logical,           intent(out)   :: l_have
         type(image)  :: vol_prev
-        real         :: lp_support
         l_have = .false.
         call support%kill_bimg
         ! The density solve support is INDEPENDENT of automsk (code review
         ! 2026-09-02 P1): automsk selects the filter-field background envelope
         ! only. Which solves consume the support is decided per solve from
         ! envfsc and solve phase alone (the regularized replay always, the
-        ! unfil/base pass only under envfsc=yes). Missing/startvol reference =>
-        ! spherical fallback, reported loudly so an envfsc=yes run cannot
-        ! silently claim density-envelope semantics (the FSC preproc decision
-        ! follows the support actually installed, not the backend name).
-        if( params%pcg_mskfile%is_allocated()     ) return ! explicit mask wins (dev escape hatch)
+        ! unfil/base pass only under envfsc=yes). Without a lagged reference,
+        ! envfsc=no can still construct the replay support from the completed
+        ! current base pair. The same bootstrap exception applies to
+        ! envfsc=yes because no reconstruction-derived density mask exists yet.
+        if( params%pcg_mskfile%is_allocated() )then
+            ! A non-empty explicit mask wins on development/non-NU routes.
+            ! An allocated empty string is not an override and must not
+            ! suppress construction of the production density support.
+            if( len_trim(params%pcg_mskfile%to_char()) > 0 ) return
+        endif
         if( state_here < 1 .or. state_here > size(params%vols) ) then
-            call report_spherical_fallback('no reference volume slot')
+            call handle_missing_reference('no reference volume slot')
             return
         endif
         if( len_trim(params%vols(state_here)%to_char()) == 0 )then
-            call report_spherical_fallback('no reference volume recorded')
-            return
-        endif
-        if( index(params%vols(state_here)%to_char(), 'startvol') > 0 )then
-            call report_spherical_fallback('startvol reference')
+            call handle_missing_reference('no reference volume recorded')
             return
         endif
         if( .not. file_exists(params%vols(state_here)) )then
-            call report_spherical_fallback('missing reference volume')
+            call handle_missing_reference('missing reference volume')
             return
         endif
-        lp_support = params%envmsklp
         call vol_prev%read_and_crop(params%vols(state_here), params%smpd, params%box_crop, params%smpd_crop)
-        call support%automask3D(params, vol_prev, .false., lp_override=lp_support, l_report=.false.)
+        call build_pcg_density_support(params, state_here, vol_prev, support, 'lag-one reference')
         call vol_prev%kill
         l_have = .true.
-        write(logfhandle,'(A,I0,A,F6.1,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
-            &', conservative density envelope at ', lp_support, ' A (replaces the spherical support)'
 
     contains
 
-        subroutine report_spherical_fallback( why )
+        subroutine handle_missing_reference( why )
             character(len=*), intent(in) :: why
-            if( params%l_envfsc )then
-                write(logfhandle,'(A,I0,A)') '>>> WARNING: PCG SOLVE SUPPORT: STATE ', state_here, &
-                    &' has '//trim(why)//'; SPHERICAL support this iteration '//&
-                    &'(envfsc=yes: the FSC preproc will envelope-correct the pair post hoc instead)'
-            else
-                write(logfhandle,'(A,I0,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
-                    &' has '//trim(why)//'; spherical support this iteration'
-            endif
-        end subroutine report_spherical_fallback
+            write(logfhandle,'(A,I0,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
+                &' has '//trim(why)//'; bootstrap base uses the sphere and replay support derives from that base pair'
+        end subroutine handle_missing_reference
 
     end subroutine build_pcg_state_support
+
+    !> Construct the conservative density support from an explicit volume.
+    !! Used for the normal lag-one path and, when envfsc=no has no prior
+    !! reference, for the regularized replay after the spherical base pair is
+    !! available. The NU-evidence envelope never enters this routine.
+    subroutine build_pcg_density_support( params, state_here, volume, support, source )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: state_here
+        class(image),      intent(in)    :: volume
+        type(image_msk),   intent(inout) :: support
+        character(len=*),  intent(in)    :: source
+        call support%automask3D(params, volume, .false., lp_override=params%envmsklp, l_report=.false.)
+        write(logfhandle,'(A,I0,A,F6.1,A,A,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
+            &', conservative density envelope at ', params%envmsklp, ' A from ', trim(source), &
+            &' (replaces the spherical support)'
+    end subroutine build_pcg_density_support
 
     !> Hard activation contract for the direct NU replay (no silent fallback):
     !! a defined pcg_nu_lambda_rel must be finite and non-negative, and a
@@ -861,16 +903,17 @@ contains
         type(string) :: fname_restxt
         type(halfmap_diagnostics_result) :: hm_diag
         integer, allocatable :: selected_pinds(:), half_pinds(:)
-        real, allocatable :: fsc(:), res0143s(:)
+        real, allocatable :: fsc(:), res0143s(:), nu_replay_lps(:)
         real, allocatable :: ship05s(:), ship0143s(:), nu_band_w(:,:,:,:), nu_band_limits(:), nu_supps(:)
         integer, allocatable :: nu_supp_cnts(:)
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         logical :: l_nu_replay
         type(image_msk) :: state_support_msk
-        logical :: l_state_support
+        logical :: l_state_support, l_base_support_constrained
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_evidence
+        real :: align_lp
         logical :: l_sigma_loaded
 
         call validate_supported_mode()
@@ -892,6 +935,7 @@ contains
         endif
 
         allocate(res0143s(params%nstates), source=0.0)
+        allocate(nu_replay_lps(params%nstates), source=0.0)
         allocate(state_written(params%nstates), source=.false.)
         allocate(ship05s(params%nstates), ship0143s(params%nstates), source=0.0)
         allocate(nu_supps(params%nstates), source=0.0)
@@ -909,11 +953,12 @@ contains
             if( n_even + n_odd /= n_state ) THROW_HARD('PCG reconstruct3D found invalid halfset labels')
             if( n_even < 1 .or. n_odd < 1 ) THROW_HARD('PCG reconstruct3D requires particles in both halfsets')
 
-            ! one density-envelope support per state, same policy as the
-            ! distributed owner: the base solves consume it under envfsc=yes,
-            ! the regularized replay always (code review 2026-09-02 P1 --
-            ! the shared route previously never installed a density support)
+            ! One density-envelope support per state, shared with the
+            ! distributed owner. The regularized replay always consumes it;
+            ! envfsc=yes also applies it to the base when a prior
+            ! reconstruction exists.
             call build_pcg_state_support(params, state, state_support_msk, l_state_support)
+            l_base_support_constrained = l_state_support .and. params%l_envfsc
             call collect_state_half(state, 0, n_even, half_pinds)
             call solve_state_half(state, 0, 'even', half_pinds, half_even)
             deallocate(half_pinds)
@@ -928,6 +973,10 @@ contains
             call merged%copy(half_even)
             call merged%add(half_odd)
             call merged%mul(0.5)
+            if( params%l_ml_reg .and. .not. l_state_support )then
+                call build_pcg_density_support(params, state, merged, state_support_msk, 'current base pair')
+                l_state_support = .true.
+            endif
             time_map_output = 0.0_dp
             time_evidence   = 0.0_dp
             if( params%l_ml_reg )then
@@ -941,7 +990,7 @@ contains
 
             t_state_phase = tic()
             call calculate_pcg_state_diagnostics(params, state, 'RECONSTRUCT3D', half_even, half_odd, &
-                &merged, hm_diag, l_state_support .and. params%l_envfsc)
+                &merged, hm_diag, l_base_support_constrained)
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             call arr2file(fsc, fname_fsc)
@@ -959,7 +1008,7 @@ contains
                 ! the same frozen evidence (no envelope artifact is ever read)
                 if( l_nu_replay ) call build_nu_replay_evidence(params, state, 'shared', &
                     &half_even, half_odd, res0143s(state), nu_band_w, nu_band_limits, &
-                    &evidence_seconds=time_evidence)
+                    &finest_lp=nu_replay_lps(state), evidence_seconds=time_evidence)
                 call regularize_state_half(state, 0, 'even', fsc, half_even, ml_even)
                 call regularize_state_half(state, 1, 'odd',  fsc, half_odd,  ml_odd)
                 if( allocated(nu_band_w)      ) deallocate(nu_band_w)
@@ -1028,10 +1077,20 @@ contains
                 endif
             enddo
         endif
+        if( l_nu_replay )then
+            if( any(state_written .and. nu_replay_lps > TINY) )then
+                align_lp = minval(nu_replay_lps, mask=state_written .and. nu_replay_lps > TINY)
+                call build%spproj_field%set_all2single('lp', align_lp)
+                write(logfhandle,'(A,F8.3,A)') &
+                    &'>>> PCG NU REPLAY: evidence-derived matching low-pass ', align_lp, ' A'
+            else
+                THROW_HARD('PCG NU replay produced no evidence-derived matching low-pass')
+            endif
+        endif
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
         call register_project_outputs()
 
-        deallocate(selected_pinds, res0143s, state_written, ship05s, ship0143s, nu_supps, nu_supp_cnts)
+        deallocate(selected_pinds, res0143s, nu_replay_lps, state_written, ship05s, ship0143s, nu_supps, nu_supp_cnts)
 
     contains
 
@@ -1970,10 +2029,23 @@ contains
     end subroutine execute_rec3D_pcg_worker
 
     !> Distributed master: reduce raw worker B,D artifacts in ascending part
-    !! order, then perform all folding, finalization and PCG locally. Independent
-    !! state/half reductions are completed and released one at a time.
+    !! order, then perform all folding, finalization and PCG locally. For each
+    !! even/odd pair, construction and teardown stay serial while the two fully
+    !! prepared PCG solves execute concurrently with disjoint thread budgets.
     subroutine execute_rec3D_pcg_distributed_master( params, build, cline, trail_bootstrap_states, &
             &nu_replay_finest_lps )
+        type :: distributed_half_job
+            type(reconstructor_pcg) :: pcgop
+            type(pcg_solver_outcome) :: result
+            real, allocatable :: x(:,:,:), rel_res_hist(:)
+            integer :: state = 0, eo = 0, nptcls = 0, niters = 0
+            integer :: prior_npositive = 0
+            character(len=8) :: half = '', solve_kind = ''
+            real(dp) :: time_reduce = 0.0_dp, time_finalize = 0.0_dp, time_solve = 0.0_dp
+            real :: prior_positive_min = 0.0, prior_positive_max = 0.0
+            real :: prior_to_khat_l1 = 0.0, prior_to_khat_rms = 0.0
+            logical :: l_ml_solve = .false., ready = .false.
+        end type distributed_half_job
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
         class(cmdline),   intent(inout) :: cline
@@ -1994,9 +2066,12 @@ contains
         character(len=256) :: provenance, chain_provenance
         integer :: state, part, eo, n_even, n_odd, iptcl, istate
         integer :: n_active_state, n_sampled_state
+        integer :: pcg_master_nthreads, pcg_half_nthreads
+        type(distributed_half_job) :: even_job, odd_job
         type(image_msk) :: state_support_msk
-        logical :: l_state_support
+        logical :: l_state_support, l_base_support_constrained
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_nu_replay
+        logical :: l_fsc_pair_support_constrained
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_evidence
 
@@ -2012,6 +2087,13 @@ contains
         !$ if( trim(params%qsys_name) == 'local' ) &
         !$ &call omp_set_num_threads(min(omp_get_num_procs(), &
         !$ &max(params%nthr, min(PCG_MASTER_NTHR_CAP, max(1, params%nparts) * params%nthr))))
+        pcg_master_nthreads = 1
+        !$ pcg_master_nthreads = omp_get_max_threads()
+        pcg_half_nthreads = max(1, pcg_master_nthreads / 2)
+        if( pcg_master_nthreads >= 2 )then
+            write(logfhandle,'(A,I0,A,I0,A)') '>>> PCG DISTRIBUTED: EVEN/ODD SOLVES RUN CONCURRENTLY (', &
+                &pcg_half_nthreads, ' THREADS PER HALF; ', pcg_master_nthreads, ' MASTER THREADS AVAILABLE)'
+        endif
         nu_evidence_bench_seconds = 0.0_dp
         ! replay precision mode: Q_NU replaces P_tau (mode-exclusive,
         ! pcg_priors.md R10); same rule as the shared path, validated above
@@ -2080,19 +2162,12 @@ contains
                 l_bootstrap = .not. l_even_chain
             endif
             if( present(trail_bootstrap_states) ) trail_bootstrap_states(state) = l_bootstrap
-            ! one support envelope per state, used by BOTH the base and the
-            ! regularized solves: the mask constrains the estimator instead of
-            ! post-processing it, and a single support keeps the base pair
-            ! (FSC, NU evidence, B-factor reference) and the shipped ML pair
-            ! on the same footing
+            ! Build one conservative support per state. envfsc=yes installs it
+            ! in both solves once a prior reconstruction exists; otherwise the
+            ! base bootstraps on the sphere. The replay always uses density.
             call build_pcg_state_support(params, state, state_support_msk, l_state_support)
-            ! NOTE: the halves were briefly solved as two concurrent OpenMP
-            ! sections; that regressed (both halves threw at the box-300
-            ! final reconstruction) and is reverted pending a diagnosis of
-            ! what in the solve path is not master-thread-safe or not
-            ! affordable at twice the peak workspace
-            call reduce_solve_state_half(state, 0, 'even', half_even, n_even, 'base')
-            call reduce_solve_state_half(state, 1, 'odd',  half_odd,  n_odd,  'base')
+            l_base_support_constrained = l_state_support .and. params%l_envfsc
+            call reduce_solve_state_pair(state, half_even, half_odd, n_even, n_odd, 'base')
             if( params%l_trail_rec )then
                 call count_state_sampling(state, n_active_state, n_sampled_state)
                 if( n_even+n_odd /= n_sampled_state ) THROW_HARD('PCG raw particles do not match the latest sampled cohort')
@@ -2115,6 +2190,10 @@ contains
             call merged%copy(half_even)
             call merged%add(half_odd)
             call merged%mul(0.5)
+            if( params%l_ml_reg .and. .not. l_state_support )then
+                call build_pcg_density_support(params, state, merged, state_support_msk, 'current base pair')
+                l_state_support = .true.
+            endif
             time_map_output = 0.0_dp
             time_evidence   = 0.0_dp
             if( params%l_ml_reg )then
@@ -2138,14 +2217,20 @@ contains
                 fsc_pair_odd         => previous_odd
                 fsc_pair_merged      => previous_merged
                 evidence_source_here =  NU_EVIDENCE_SOURCE_PREV
+                ! Current support availability says nothing about how an
+                ! imported/lagged previous pair was reconstructed. Without
+                ! persisted solve provenance, treat it as unconstrained so an
+                ! envfsc request receives the phase-randomized correction.
+                l_fsc_pair_support_constrained = .false.
             else
                 fsc_pair_even        => half_even
                 fsc_pair_odd         => half_odd
                 fsc_pair_merged      => merged
                 evidence_source_here =  NU_EVIDENCE_SOURCE_BASE
+                l_fsc_pair_support_constrained = l_base_support_constrained
             endif
             call calculate_pcg_state_diagnostics(params, state, 'DISTRIBUTED', fsc_pair_even, &
-                &fsc_pair_odd, fsc_pair_merged, hm_diag, l_state_support .and. params%l_envfsc)
+                &fsc_pair_odd, fsc_pair_merged, hm_diag, l_fsc_pair_support_constrained)
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             call arr2file(fsc, fname_fsc)
@@ -2175,9 +2260,8 @@ contains
                             &evidence_seconds=time_evidence)
                     endif
                 endif
-                ! sequential; see the note on the base pair above
-                call reduce_solve_state_half(state, 0, 'even', ml_even, n_even, 'ml', fsc, half_even)
-                call reduce_solve_state_half(state, 1, 'odd',  ml_odd,  n_odd,  'ml', fsc, half_odd)
+                call reduce_solve_state_pair(state, ml_even, ml_odd, n_even, n_odd, 'ml', fsc, &
+                    &half_even, half_odd)
                 if( allocated(nu_band_w)      ) deallocate(nu_band_w)
                 if( allocated(nu_band_limits) ) deallocate(nu_band_limits)
                 ! shipped-pair crossing: the over-regularization diagnostic
@@ -2378,168 +2462,248 @@ contains
             enddo
         end function count_full_state_half
 
-        subroutine reduce_solve_state_half( state_here, eo_here, half, volume, nptcls, solve_kind, &
+        subroutine reduce_solve_state_pair( state_here, even, odd, n_even_here, n_odd_here, solve_kind, &
+                &fsc_prior, warm_even, warm_odd )
+            integer,          intent(in)    :: state_here
+            character(len=*), intent(in)    :: solve_kind
+            type(image),      intent(inout) :: even, odd
+            integer,          intent(out)   :: n_even_here, n_odd_here
+            real, optional,   intent(in)    :: fsc_prior(:)
+            type(image), optional, intent(in) :: warm_even, warm_odd
+
+            if( present(fsc_prior) )then
+                if( .not. present(warm_even) .or. .not. present(warm_odd) ) &
+                    &THROW_HARD('distributed PCG ML replay requires both half-map warm starts')
+                call prepare_distributed_half_job(state_here, 0, 'even', solve_kind, even_job, &
+                    &fsc_prior, warm_even)
+                call prepare_distributed_half_job(state_here, 1, 'odd', solve_kind, odd_job, &
+                    &fsc_prior, warm_odd)
+            else
+                if( present(warm_even) .or. present(warm_odd) ) &
+                    &THROW_HARD('distributed PCG base solve cannot take replay warm starts')
+                call prepare_distributed_half_job(state_here, 0, 'even', solve_kind, even_job)
+                call prepare_distributed_half_job(state_here, 1, 'odd', solve_kind, odd_job)
+            endif
+            n_even_here = even_job%nptcls
+            n_odd_here  = odd_job%nptcls
+
+            call solve_distributed_half_pair(even_job, odd_job)
+
+            if( present(fsc_prior) )then
+                call finish_distributed_half_job(even_job, even, warm_even)
+                call finish_distributed_half_job(odd_job, odd, warm_odd)
+            else
+                call finish_distributed_half_job(even_job, even)
+                call finish_distributed_half_job(odd_job, odd)
+            endif
+        end subroutine reduce_solve_state_pair
+
+        ! Preparation is deliberately serial. It owns mask memoization, FFTW
+        ! planning, raw-accumulator I/O, trail writes, prior attachment and
+        ! initial-guess construction. Only fully prepared, half-owned operators
+        ! cross the OpenMP sections boundary below.
+        subroutine prepare_distributed_half_job( state_here, eo_here, half, solve_kind, job, &
                 &fsc_prior, warm_start )
             integer,          intent(in)    :: state_here, eo_here
             character(len=*), intent(in)    :: half, solve_kind
-            type(image),      intent(inout) :: volume
-            integer,          intent(out)   :: nptcls
+            type(distributed_half_job), intent(inout) :: job
             real, optional,   intent(in)    :: fsc_prior(:)
             type(image), optional, intent(in) :: warm_start
-            type(reconstructor_pcg) :: pcgop
-            type(pcg_solver_outcome) :: result
             type(string) :: fname
-            real, allocatable :: x(:,:,:), rel_res_hist(:)
-            integer :: part_here, n_part, niters, prior_npositive, n_full_half
+            integer :: part_here, n_part, n_full_half
             integer(timer_int_kind) :: t_phase
-            real(dp) :: time_reduce, time_finalize, time_solve
-            real :: prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms
             real :: realized_fraction, update_weight, current_scale
-            real :: supp_pct, nu_stats_overhead
-            logical :: l_ml_solve, l_chain_exists, l_seed_chain, l_warm
+            logical :: l_chain_exists, l_seed_chain, l_warm
 
-            l_ml_solve = present(fsc_prior)
-            if( l_ml_solve .neqv. present(warm_start) )then
-                THROW_HARD('distributed PCG ML replay requires both FSC and warm start')
-            endif
+            job%state = state_here
+            job%eo = eo_here
+            job%half = half
+            job%solve_kind = solve_kind
+            job%nptcls = 0
+            job%niters = 0
+            job%ready = .false.
+            job%l_ml_solve = present(fsc_prior)
+            if( job%l_ml_solve .neqv. present(warm_start) ) &
+                &THROW_HARD('distributed PCG ML replay requires both FSC and warm start')
+            if( allocated(job%x) ) deallocate(job%x)
+            if( allocated(job%rel_res_hist) ) deallocate(job%rel_res_hist)
 
-            call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            ! the regularized pass always takes the density-envelope support;
-            ! the unfil pass takes it only under envfsc=yes, so with
-            ! envfsc=no the FSC pair is estimated on the spherical support
-            call set_pcg_solve_support(pcgop, params, state_support_msk, &
-                &l_state_support .and. (l_ml_solve .or. params%l_envfsc))
-            call pcgop%begin_reduction
-            nptcls = 0
+            call job%pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA, &
+                &fft_nthreads=pcg_half_nthreads)
+            ! The regularized pass always takes the density envelope; the base
+            ! pass takes it only under envfsc=yes. This call stays outside the
+            ! parallel region because spherical-mask construction memoizes
+            ! coordinates at module scope.
+            call set_pcg_solve_support(job%pcgop, params, state_support_msk, &
+                &l_state_support .and. (job%l_ml_solve .or. params%l_envfsc))
+            call job%pcgop%begin_reduction
             t_phase = tic()
-            if( l_ml_solve .and. params%l_trail_rec )then
+            if( job%l_ml_solve .and. params%l_trail_rec )then
                 fname = refine3D_pcg_trail_accum_fname(state_here, half)
-                call pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
-                    &chain_provenance, 1.0, nptcls)
+                call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
+                    &chain_provenance, 1.0, job%nptcls)
                 call fname%kill
                 if( l_bootstrap .or. 1.0-update_weights(state_here) <= 0.01 )then
-                    call pcgop%scale_raw_accum(realized_fractions(state_here))
+                    call job%pcgop%scale_raw_accum(realized_fractions(state_here))
                 endif
             else
-                ! Without trailing, replay the current worker statistics
-                ! directly for ML regularization. The persistent trail file is
-                ! reserved for full-mass continuation data and must not double
-                ! as an ML scratch artifact carrying fractional mass.
                 do part_here = 1, params%nparts
                     fname = refine3D_pcg_raw_accum_fname(state_here, part_here, params%numlen, half)
-                    call pcgop%add_raw_accum(fname, state_here, eo_here, part_here, params%nparts, &
+                    call job%pcgop%add_raw_accum(fname, state_here, eo_here, part_here, params%nparts, &
                         &provenance, n_part)
-                    nptcls = nptcls + n_part
+                    job%nptcls = job%nptcls + n_part
                     call fname%kill
                 enddo
             endif
-            time_reduce = real(toc(t_phase),dp)
-            if( nptcls == 0 )then
-                call pcgop%kill
+            job%time_reduce = real(toc(t_phase),dp)
+            if( job%nptcls == 0 )then
+                call job%pcgop%kill
                 return
             endif
-            if( .not. l_ml_solve )then
+            if( .not. job%l_ml_solve )then
                 n_full_half = count_full_state_half(state_here, eo_here)
-                if( n_full_half < nptcls ) THROW_HARD('PCG current half population exceeds its full population')
+                if( n_full_half < job%nptcls ) &
+                    &THROW_HARD('PCG current half population exceeds its full population')
                 realized_fraction = realized_fractions(state_here)
                 update_weight = update_weights(state_here)
                 l_seed_chain = pcg_trail_seed_requested(cline)
                 fname = refine3D_pcg_trail_accum_fname(state_here, half)
                 l_chain_exists = file_exists(fname)
                 if( params%l_trail_rec )then
-                    if( realized_fraction <= 0.0 ) THROW_HARD('PCG trailing update has zero realized state fraction')
+                    if( realized_fraction <= 0.0 ) &
+                        &THROW_HARD('PCG trailing update has zero realized state fraction')
                     if( l_chain_exists .and. 1.0-update_weight > 0.01 )then
                         current_scale = update_weight / realized_fraction
-                        call pcgop%scale_raw_accum(current_scale)
-                        call pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
+                        call job%pcgop%scale_raw_accum(current_scale)
+                        call job%pcgop%add_raw_accum_weighted(fname, state_here, eo_here, 1, 1, &
                             &chain_provenance, 1.0-update_weight, n_part)
                     else
                         current_scale = 1.0 / realized_fraction
-                        call pcgop%scale_raw_accum(current_scale)
+                        call job%pcgop%scale_raw_accum(current_scale)
                     endif
-                    call pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n_full_half, chain_provenance)
-                    if( .not. l_chain_exists .or. 1.0-update_weight <= 0.01 )then
-                        call pcgop%scale_raw_accum(realized_fraction)
-                    endif
+                    call job%pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n_full_half, &
+                        &chain_provenance)
+                    if( .not. l_chain_exists .or. 1.0-update_weight <= 0.01 ) &
+                        &call job%pcgop%scale_raw_accum(realized_fraction)
                     write(logfhandle,'(A,I0,A,A,A,F8.4,A,F8.4)') '>>> PCG TRAIL | STATE=', state_here, &
                         &' | HALF=', trim(half), ' | F=', realized_fraction, ' | U=', update_weight
                 else if( l_seed_chain )then
-                    call pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n_full_half, chain_provenance)
+                    call job%pcgop%write_raw_accum(fname, state_here, eo_here, 1, 1, n_full_half, &
+                        &chain_provenance)
                 endif
                 call fname%kill
             endif
+
             t_phase = tic()
-            if( l_ml_solve )then
-                ! mode-exclusive replay precision (R10): Q_NU replaces P_tau;
-                ! the reconstructor hard-errors if both are requested. The
-                ! effective strengths derive from the data scale in end_accum.
+            if( job%l_ml_solve )then
                 if( l_nu_replay )then
                     if( .not. allocated(nu_band_w) ) &
                         &THROW_HARD('NU replay evidence was not constructed before the replay')
                     if( .not. allocated(nu_band_limits) ) &
                         &THROW_HARD('NU replay band ladder was not constructed before the replay')
-                    call pcgop%set_nu_prior(nu_band_w, nu_band_limits, params%pcg_nu_lambda_rel)
+                    call job%pcgop%set_nu_prior(nu_band_w, nu_band_limits, params%pcg_nu_lambda_rel)
                 else
-                    call pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
+                    call job%pcgop%set_ml_prior(fsc_prior, params%tau, params%hp)
                 endif
             endif
-            call pcgop%end_accum(.true.)
-            call pcgop%set_op_mode(PCG_OP_KERNEL)
-            if( l_ml_solve ) call pcgop%assert_prior_attachment_mode
-            time_finalize = real(toc(t_phase),dp)
-            prior_npositive    = 0
-            prior_positive_min = 0.0
-            prior_positive_max = 0.0
-            prior_to_khat_l1   = 0.0
-            prior_to_khat_rms  = 0.0
-            if( l_ml_solve .and. .not. l_nu_replay )then
-                call pcgop%get_ml_prior_stats(prior_npositive, prior_positive_min, prior_positive_max, &
-                    &prior_to_khat_l1, prior_to_khat_rms)
+            call job%pcgop%end_accum(.true.)
+            call job%pcgop%set_op_mode(PCG_OP_KERNEL)
+            if( job%l_ml_solve ) call job%pcgop%assert_prior_attachment_mode
+            job%time_finalize = real(toc(t_phase),dp)
+            job%prior_npositive = 0
+            job%prior_positive_min = 0.0
+            job%prior_positive_max = 0.0
+            job%prior_to_khat_l1 = 0.0
+            job%prior_to_khat_rms = 0.0
+            if( job%l_ml_solve .and. .not. l_nu_replay )then
+                call job%pcgop%get_ml_prior_stats(job%prior_npositive, job%prior_positive_min, &
+                    &job%prior_positive_max, job%prior_to_khat_l1, job%prior_to_khat_rms)
             endif
-            if( l_ml_solve )then
-                x = warm_start%get_rmat()
-                call override_ml_warm_start_from_previous(params, state_here, half, x, 'distributed', l_warm)
-                ! the closed-form shrinkage initial guess encodes the P_tau
-                ! optimum; the NU replay cold-starts from the base solution
-                if( .not. l_warm .and. .not. l_nu_replay )then
-                    call regularized_ml_initial_guess(params, fsc_prior, x, 'distributed', half)
-                endif
+            if( job%l_ml_solve )then
+                job%x = warm_start%get_rmat()
+                call override_ml_warm_start_from_previous(params, state_here, half, job%x, &
+                    &'distributed', l_warm)
+                if( .not. l_warm .and. .not. l_nu_replay ) &
+                    &call regularized_ml_initial_guess(params, fsc_prior, job%x, 'distributed', half)
             else
-                allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
+                allocate(job%x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             endif
-            t_phase = tic()
-            call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
-                &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
-            time_solve = real(toc(t_phase),dp)
-            call validate_solved_map(x, 'distributed', state_here, half, solve_kind)
-            if( l_ml_solve .and. l_nu_replay )then
-                ! warm_start is this iteration's unregularized base half solve,
-                ! the reference the firing readout is measured against
-                call report_nu_solve_stats(pcgop, x, warm_start, 'distributed', half, supp_pct, nu_stats_overhead)
-                ! the two halves may execute as concurrent sections
-                !$omp critical(pcg_nu_supp_accum)
-                nu_supps(state_here)     = nu_supps(state_here) + supp_pct
-                nu_supp_cnts(state_here) = nu_supp_cnts(state_here) + 1
-                !$omp end critical(pcg_nu_supp_accum)
+            job%ready = .true.
+        end subroutine prepare_distributed_half_job
+
+        subroutine solve_distributed_half_pair( even, odd )
+            type(distributed_half_job), intent(inout) :: even, odd
+            integer :: previous_max_active_levels
+
+            if( even%ready .and. odd%ready .and. pcg_master_nthreads >= 2 )then
+                previous_max_active_levels = 1
+                !$ previous_max_active_levels = omp_get_max_active_levels()
+                !$ call omp_set_max_active_levels(max(2, previous_max_active_levels))
+                !$omp parallel sections num_threads(2) default(shared)
+                !$omp section
+                !$ call omp_set_num_threads(pcg_half_nthreads)
+                call solve_prepared_half_job(even)
+                !$omp section
+                !$ call omp_set_num_threads(pcg_half_nthreads)
+                call solve_prepared_half_job(odd)
+                !$omp end parallel sections
+                !$ call omp_set_max_active_levels(previous_max_active_levels)
+                !$ call omp_set_num_threads(pcg_master_nthreads)
+            else
+                call solve_prepared_half_job(even)
+                call solve_prepared_half_job(odd)
+            endif
+        end subroutine solve_distributed_half_pair
+
+        subroutine solve_prepared_half_job( job )
+            type(distributed_half_job), intent(inout) :: job
+            integer(timer_int_kind) :: t_phase, t_end, t_rate
+            if( .not. job%ready ) return
+            call system_clock(count=t_phase)
+            call job%pcgop%solve_accum(job%x, maxits=params%maxits_pcg, rtol=params%rtol, &
+                &rel_res_hist=job%rel_res_hist, niters=job%niters, outcome=job%result)
+            call system_clock(count=t_end, count_rate=t_rate)
+            job%time_solve = real(t_end-t_phase,dp) / real(t_rate,dp)
+        end subroutine solve_prepared_half_job
+
+        ! Finalization is serial for deterministic logging, diagnostics and
+        ! image/FFTW lifecycle management.
+        subroutine finish_distributed_half_job( job, volume, warm_start )
+            type(distributed_half_job), intent(inout) :: job
+            type(image), intent(inout) :: volume
+            type(image), optional, intent(in) :: warm_start
+            real :: supp_pct, nu_stats_overhead
+            if( .not. job%ready ) return
+            call validate_solved_map(job%x, 'distributed', job%state, job%half, job%solve_kind)
+            if( job%l_ml_solve .and. l_nu_replay )then
+                if( .not. present(warm_start) ) &
+                    &THROW_HARD('distributed PCG NU replay finalization requires its warm start')
+                call report_nu_solve_stats(job%pcgop, job%x, warm_start, 'distributed', job%half, &
+                    &supp_pct, nu_stats_overhead)
+                nu_supps(job%state) = nu_supps(job%state) + supp_pct
+                nu_supp_cnts(job%state) = nu_supp_cnts(job%state) + 1
             endif
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
-            call volume%set_rmat(x, .false.)
-            call report_beyond_band_excess(volume, params, state_here, half, solve_kind)
-            if( l_ml_solve )then
-                call write_distributed_diagnostics(state_here, half, solve_kind, nptcls, result, rel_res_hist, &
-                    &time_reduce, time_finalize, time_solve, pcgop%get_data_scale(), &
-                    &pcgop%get_effective_lambda(), prior_npositive, prior_positive_min, prior_positive_max, &
-                    &prior_to_khat_l1, prior_to_khat_rms, pcgop)
+            call volume%set_rmat(job%x, .false.)
+            call report_beyond_band_excess(volume, params, job%state, job%half, job%solve_kind)
+            if( job%l_ml_solve )then
+                call write_distributed_diagnostics(job%state, job%half, job%solve_kind, job%nptcls, &
+                    &job%result, job%rel_res_hist, job%time_reduce, job%time_finalize, job%time_solve, &
+                    &job%pcgop%get_data_scale(), job%pcgop%get_effective_lambda(), &
+                    &job%prior_npositive, job%prior_positive_min, job%prior_positive_max, &
+                    &job%prior_to_khat_l1, job%prior_to_khat_rms, job%pcgop)
             else
-                call write_distributed_diagnostics(state_here, half, solve_kind, nptcls, result, rel_res_hist, &
-                    &time_reduce, time_finalize, time_solve, pcgop%get_data_scale(), &
-                    &pcgop%get_effective_lambda(), pcgop=pcgop)
+                call write_distributed_diagnostics(job%state, job%half, job%solve_kind, job%nptcls, &
+                    &job%result, job%rel_res_hist, job%time_reduce, job%time_finalize, job%time_solve, &
+                    &job%pcgop%get_data_scale(), job%pcgop%get_effective_lambda(), pcgop=job%pcgop)
             endif
-            call report_solve_summary('DISTRIBUTED', state_here, half, solve_kind, nptcls, niters, &
-                &result%final_rel_residual, time_solve, result%stop_reason)
-            call pcgop%kill
-            deallocate(x, rel_res_hist)
-        end subroutine reduce_solve_state_half
+            call report_solve_summary('DISTRIBUTED', job%state, job%half, job%solve_kind, job%nptcls, &
+                &job%niters, job%result%final_rel_residual, job%time_solve, job%result%stop_reason)
+            call job%pcgop%kill
+            if( allocated(job%x) ) deallocate(job%x)
+            if( allocated(job%rel_res_hist) ) deallocate(job%rel_res_hist)
+            job%ready = .false.
+        end subroutine finish_distributed_half_job
 
         subroutine write_distributed_diagnostics( state_here, half, solve_kind, nptcls, result, history, &
                 &reduce_time, finalize_time, solve_time, data_scale, lambda_eff, prior_npositive, &
@@ -2561,6 +2725,8 @@ contains
             call fopen(funit, file=fname, status='replace', action='write')
             write(funit,'(A,A)')      'execution_mode=',        'distributed'
             write(funit,'(A,A)')      'solve_kind=',             trim(solve_kind)
+            write(funit,'(A,L1)')     'half_pair_parallel=',     pcg_master_nthreads >= 2
+            write(funit,'(A,I0)')     'threads_per_half=',       pcg_half_nthreads
             write(funit,'(A,I0)')     'nparts=',                params%nparts
             write(funit,'(A,I0)')     'nptcls=',                nptcls
             write(funit,'(A,I0)')     'requested_maxits=',      result%requested_maxits
