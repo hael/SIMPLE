@@ -159,8 +159,13 @@ solve (`H_data + lambda I`) produces the `_unfil` half pair; FSC/cFAR and
 resolution metadata come from that pair. It warm-starts from the previous
 iteration's same-half base solution: the explicit `_unfil` artifact after a
 regularized iteration, or the primary half only when its sidecar identifies it
-as a base solution. A first solve, imported legacy base-only map, or mixed
-bootstrap output without an eligible base artifact starts from zero. The
+as a base solution. A first solve, a volume without a solve-kind sidecar
+(no legacy `_unfil` fallback), or mixed bootstrap output without an eligible
+base artifact starts from zero. Any warm-started solve (base or replay) that
+loses positive-definiteness returns `stop_reason=indefinite` from the solver
+and is restarted once from zero (`solve_with_cold_restart`) before the
+failure is fatal; a cold solve that loses positive-definiteness fails
+immediately. The
 regularized replay deterministically replays kernel finalization from the
 persisted raw `(B,D)` and produces the standard maps. Ordinary mode installs
 the FSC/SSNR shell-diagonal `P_tau`; NU modes install the Potts-derived

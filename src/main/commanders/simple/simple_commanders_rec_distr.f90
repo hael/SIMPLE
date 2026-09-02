@@ -1267,7 +1267,10 @@ contains
         subroutine record_nu_alignment_lowpass_limit()
             real :: selected_lp
             if( .not. params%l_nonuniform ) return
-            selected_lp = get_nu_filtmap_finest_selected_lp()
+            ! raw finest selected label (min_assigned_pct=0): the 5% support
+            ! gate introduced 2026-08-30 capped the PfCRT matching band at
+            ! 5-6 A against a 4.1 A map and refine3D_auto degraded from there
+            selected_lp = get_nu_filtmap_finest_selected_lp(min_assigned_pct=0.)
             if( selected_lp <= TINY ) return
             nu_align_lps(state) = selected_lp
             if( NU_DEV_OUTPUT .and. params%part == 1 )then

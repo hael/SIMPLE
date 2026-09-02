@@ -3138,7 +3138,40 @@ the acceptable-looking outputs do not validate the prior.
      A bootstrap blend is constrained only if both contributions were. Base
      solves also use the kind field to reuse only a compatible own-half base
      solution: `_unfil` for a regularized predecessor, primary for a base-only
-     predecessor, and no primary warm start for a mixed predecessor.
+     predecessor, and no primary warm start for a mixed predecessor. There is
+     no legacy `_unfil` fallback for volumes without a sidecar (review
+     2026-09-02 pm: a stale `_unfil` beside an imported map would survive two
+     CG steps; such jobs are rerun from scratch).
+   - PfCRT refine3D_auto log audit (2026-09-02 pm, Jul02 vs Sep02 runs):
+     the July refine3D_auto took the abinitio3D map from 4.14 to 3.53 A in
+     four iterations. At HEAD, abinitio3D orientations bootstrap to 3.88 A
+     (pcg, sphere) / 4.14 A (gridding), i.e. at least as good as July, and
+     refine3D_auto then DEGRADES them on both backends. Gridding: the 5%
+     support gate added to `get_nu_filtmap_finest_selected_lp` on
+     2026-08-30 capped the matching band at 5.0 then 5.97 A against a
+     4.1 A map (July: raw finest label, 3.98 A); overlap plateaued at 0.85,
+     cFAR 0.75 -> 0.34, helices unresolved. Fix: the volassemble handoff
+     passes `min_assigned_pct=0`. PCG: `pcg_nu_matching_lowpass` put the
+     band at FSC+2 shells (3.79 A vs 3.88 A) every iteration against
+     unfiltered Q_NU references; orientations "converged" (overlap 0.998,
+     dist 0.14 deg) while the FSC=0.5 crossing went 4.09 -> 7.06 A and cFAR
+     0.75 -> 0.54: per-half self-consistency, not signal. The headroom is
+     now `NU_ALIGN_LP_FSC_HEADROOM_SHELLS = 0` (experiment; the binding-band
+     rebuild test prevents the frozen-evidence deadlock at 0). Also
+     observed: SCORE 0.38 +/- 0.002 across all particles on both backends
+     (relative whitened residual d ~ 0.97), consistent with the likelihood
+     softmax over the top-K being effectively uniform; not the primary
+     cause here since abinitio3D at HEAD uses the same sampler and is fine.
+   - Cold restart (review 2026-09-02 pm): `solve_core` no longer hard-errors
+     on non-positive `dot(p,Hp)`; it returns the pre-step iterate with
+     `stop_reason=PCG_STOP_INDEFINITE`. `solve_with_cold_restart` wraps every
+     production solve: a warm-started solve (previous base/ML half, or the
+     replay's base-solution seed) is retried once from zero, a cold solve
+     fails immediately, and a second indefinite outcome is fatal. Rationale:
+     a warm start converging toward the approximate kernel's fixed point
+     concentrates the residual in the operator-error modes, the same regime
+     as over-iteration; a mid-refinement crash there would discard a long
+     run for a recoverable condition.
    - Shell-walk flag renamed `l_require_margin` (was `l_tie_tolerant`):
      it demands a `nu_label_smooth_is_better` margin win, i.e. it is
      STRICTER than the raw `<` test, which the old name inverted.

@@ -692,8 +692,9 @@ interface
         logical, optional, intent(in) :: mask(:,:,:)
     end subroutine calc_filtmap_lowpass_histogram
 
-    module real function get_nu_filtmap_finest_selected_lp( mask )
+    module real function get_nu_filtmap_finest_selected_lp( mask, min_assigned_pct )
         logical, optional, intent(in) :: mask(:,:,:)
+        real,    optional, intent(in) :: min_assigned_pct
     end function get_nu_filtmap_finest_selected_lp
 
     module subroutine print_filtmap_lowpass_histogram( mask )

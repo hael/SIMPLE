@@ -32,6 +32,13 @@ integer, parameter :: PCG_RAW_ACCUM_VERSION = 1
 integer, parameter :: PCG_RAW_PROV_LEN = 256
 character(len=16), parameter :: PCG_RAW_ACCUM_MAGIC = 'SIMPLE_PCG_RAW01'
 
+!> stop_reason value when CG met a non-positive or non-finite curvature
+!! dot(p,Hp): the iterate is returned as it stood BEFORE that step (the
+!! step is not applied), converged=.false., and the caller decides whether to
+!! restart (a warm start can steer the Krylov space into the operator-error
+!! modes of the approximate kernel) or to fail.
+character(len=*), parameter, public :: PCG_STOP_INDEFINITE = 'indefinite'
+
 type :: pcg_solver_outcome
     character(len=24) :: stop_reason         = 'not_started'
     integer           :: iteration_count     = 0
@@ -3528,8 +3535,15 @@ contains
             t_it = pcg_tic()
             hp  = self%apply_normal(p)
             pHp = self%dot_real_volume(p,hp)
-            if( pHp <= 0.0_dp ) THROW_HARD('non-positive dot(p,Hp); PCG lost positive-definiteness; solve')
-            if( pHp /= pHp )    THROW_HARD('non-finite dot(p,Hp); solve')
+            if( pHp /= pHp .or. pHp <= 0.0_dp )then
+                ! lost positive-definiteness: hand the decision to the caller
+                ! with the iterate as it stood before this step
+                write(logfhandle,'(A,ES12.4,A,I0)') '>>> PCG: non-positive/non-finite dot(p,Hp)=', pHp, &
+                    &' at CG iteration ', iter
+                result%stop_reason = PCG_STOP_INDEFINITE
+                result%converged   = .false.
+                exit
+            endif
             alpha = rho / pHp
             x  = x + real(alpha) * p
             r  = r - real(alpha) * hp

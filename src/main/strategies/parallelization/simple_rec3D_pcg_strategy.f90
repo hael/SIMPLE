@@ -5,7 +5,7 @@ use simple_core_module_api
 use simple_builder,           only: builder
 use simple_cmdline,           only: cmdline
 use simple_parameters,        only: parameters
-use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, &
+use simple_reconstructor_pcg, only: reconstructor_pcg, pcg_solver_outcome, PCG_OP_KERNEL, PCG_STOP_INDEFINITE, &
     &pcg_raw_accum_compatible
 use simple_matcher_ptcl_io,   only: prepimgbatch, discrete_read_imgbatch, &
     &discrete_read_imgbatch_source, killimgbatch
@@ -99,6 +99,15 @@ logical, parameter :: DEBUG = .false.
 ! for staleness in the Q_NU band weights; it must never govern the search
 ! bandwidth from a frozen statistic.
 integer, parameter :: NU_EVIDENCE_REBUILD_MAX_LAG = 5 !< iterations a frozen evidence state may ride before a forced rebuild
+!> Fourier shells of matching-band headroom beyond the evidence-pair FSC=0.143
+!! crossing with nu_refine=yes (shell-walk cap and handoff floor). Was 2: on
+!! PfCRT (refine3D_auto pcg, 2026-09-02) that put the matching band at 3.79 A
+!! against a 3.88 A FSC every iteration, i.e. beyond the resolution against
+!! unfiltered Q_NU references, and the run degraded (FSC=0.5 crossing 4.1 ->
+!! 7.1 A over 10 iterations while orientations "converged"). 0 = match at the
+!! FSC crossing; the frozen-evidence binding-band test then rebuilds the
+!! evidence whenever the crossing sits at the handoff, so no deadlock.
+integer, parameter :: NU_ALIGN_LP_FSC_HEADROOM_SHELLS = 0
 type :: nu_evidence_cache_entry
     logical :: valid = .false.
     logical :: l_nu_refine = .false.
@@ -174,11 +183,12 @@ contains
     !! shipped pair was regularized. A shipped primary half is eligible only
     !! when its provenance says that it is itself a base solution; this keeps
     !! NU/ML regularization out of the base oracle and also avoids accidentally
-    !! selecting a stale `_unfil` artifact after a base-only iteration. Legacy
-    !! runs without solve-kind provenance may still supply an `_unfil` half,
-    !! whose filename is an explicit compatibility contract. Otherwise the
-    !! caller's zero initialization is retained. solve_accum applies the exact
-    !! current solve support to this initial guess before entering CG.
+    !! selecting a stale `_unfil` artifact after a base-only iteration. A
+    !! volume without solve-kind provenance never seeds the base solve (no
+    !! legacy fallback: a stale `_unfil` next to an imported map would survive
+    !! two CG steps); the caller's zero initialization is retained. solve_accum
+    !! applies the exact current solve support to this initial guess before
+    !! entering CG.
     subroutine override_base_warm_start_from_previous( params, state_here, half, x, context, l_found )
         class(parameters), intent(in)    :: params
         integer,           intent(in)    :: state_here
@@ -205,10 +215,6 @@ contains
             if( file_exists(prev_fname) ) seed_fname = prev_fname
         else if( l_kind_found .and. trim(solve_kind) == 'regularized' )then
             if( file_exists(unfil_fname) ) seed_fname = unfil_fname
-        else if( .not. l_kind_found )then
-            ! Backward compatibility: `_unfil` alone proves that the artifact
-            ! is the base member of the previous iteration's two-map contract.
-            if( file_exists(unfil_fname) ) seed_fname = unfil_fname
         endif
         if( len_trim(seed_fname%to_char()) == 0 )then
             call prev_fname%kill
@@ -227,6 +233,42 @@ contains
         call unfil_fname%kill
         call seed_fname%kill
     end subroutine override_base_warm_start_from_previous
+
+    !> Solve with one cold restart. A warm-started CG (previous-iteration base
+    !! or ML half, or the base solution seeding the replay) can steer the
+    !! Krylov space into the operator-error modes of the approximate kernel
+    !! and lose positive-definiteness; the solver then returns
+    !! PCG_STOP_INDEFINITE instead of failing. The pre-warm-start contract
+    !! (start from zero) is retried once before the failure is fatal. Safe
+    !! inside the concurrent half sections: only the job's own operator and
+    !! iterate are touched.
+    subroutine solve_with_cold_restart( pcgop, x, l_warm, context, half, solve_kind, maxits, rtol, &
+            &rel_res_hist, niters, outcome )
+        type(reconstructor_pcg),  intent(inout) :: pcgop
+        real,                     intent(inout) :: x(:,:,:)
+        logical,                  intent(in)    :: l_warm
+        character(len=*),         intent(in)    :: context, half, solve_kind
+        integer,                  intent(in)    :: maxits
+        real,                     intent(in)    :: rtol
+        real, allocatable,        intent(out)   :: rel_res_hist(:)
+        integer,                  intent(out)   :: niters
+        type(pcg_solver_outcome), intent(out)   :: outcome
+        call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
+            &outcome=outcome)
+        if( trim(outcome%stop_reason) /= PCG_STOP_INDEFINITE ) return
+        if( .not. l_warm ) THROW_HARD('PCG lost positive-definiteness from a cold start; '//&
+            &trim(context)//'/'//trim(half)//'/'//trim(solve_kind))
+        write(logfhandle,'(A,I0,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//trim(solve_kind)//&
+            &'): warm-started CG lost positive-definiteness after ', outcome%iteration_count, &
+            &' iteration(s); restarting from zero'
+        x = 0.0
+        if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
+        call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
+            &outcome=outcome)
+        if( trim(outcome%stop_reason) == PCG_STOP_INDEFINITE ) &
+            &THROW_HARD('PCG lost positive-definiteness from the cold restart as well; '//&
+            &trim(context)//'/'//trim(half)//'/'//trim(solve_kind))
+    end subroutine solve_with_cold_restart
 
     !> Regularized initial guess for a COLD ML replay (no previous ML half
     !! map to warm-start from: the standalone harness, the first refinement
@@ -429,12 +471,13 @@ contains
             ! The band ladder then grows over ACCEPTED candidates only, inside
             ! build_nu_evidence_state, and rides the frozen state.
             if( params%l_nu_refine )then
-                ! Q_NU adaptation follows measured information growth. Permit
-                ! two Fourier shells of search headroom beyond the current
-                ! FSC=0.143 crossing, but do not let repeated weak unary wins
-                ! ratchet the empirical prior toward Nyquist in one rebuild.
+                ! Q_NU adaptation follows measured information growth. Cap the
+                ! shell walk at the current FSC=0.143 crossing plus
+                ! NU_ALIGN_LP_FSC_HEADROOM_SHELLS, and do not let repeated weak
+                ! unary wins ratchet the empirical prior toward Nyquist.
                 call extend_nu_filter_highres_shells(vol_even, vol_odd, nsteps=nsteps_ext, &
-                    &max_find=min(ldim_here(1) / 2, fsc_find + 2), l_require_margin=.true.)
+                    &max_find=min(ldim_here(1) / 2, fsc_find + NU_ALIGN_LP_FSC_HEADROOM_SHELLS), &
+                    &l_require_margin=.true.)
                 if( nsteps_ext > 0 )then
                     write(logfhandle,'(A,I0,A,F8.3,A)') '>>> PCG NU REPLAY ('//trim(context)//&
                         &'): EVIDENCE BANK EXTENDED BY ', nsteps_ext, ' ACCEPTED SHELL STEP(S) TO ', &
@@ -562,8 +605,9 @@ contains
     !! nu_refine=no route deliberately retains the established raw finest
     !! selection so abinitio3D is numerically unchanged. Adaptive refinement
     !! requires the same 5% assignment support as the shell challenger, then
-    !! guarantees two Fourier shells beyond the measured FSC crossing so the
-    !! evidence cache cannot make its own matching bandwidth a fixed point.
+    !! floors the band at the measured FSC crossing plus
+    !! NU_ALIGN_LP_FSC_HEADROOM_SHELLS; the binding-band rebuild test keeps
+    !! the evidence cache from making its own bandwidth a fixed point.
     real function pcg_nu_matching_lowpass( state, l_nu_refine, fsc_find, box_here, smpd_here ) result( lp )
         type(nu_evidence_state), intent(in) :: state
         logical,                 intent(in) :: l_nu_refine
@@ -576,7 +620,7 @@ contains
         lp = nu_evidence_finest_supported_lp(state, min_pct)
         if( .not.l_nu_refine .or. lp <= TINY ) return
         evidence_find = calc_fourier_index(lp, box_here, smpd_here)
-        handoff_find  = max(evidence_find, min(box_here / 2, max(1, fsc_find + 2)))
+        handoff_find  = max(evidence_find, min(box_here / 2, max(1, fsc_find + NU_ALIGN_LP_FSC_HEADROOM_SHELLS)))
         lp = calc_lowpass_lim(handoff_find, box_here, smpd_here)
     end function pcg_nu_matching_lowpass
 
@@ -1394,8 +1438,8 @@ contains
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             call override_base_warm_start_from_previous(params, state_here, half, x, 'shared', l_warm)
             t_phase = tic()
-            call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
-                &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
+            call solve_with_cold_restart(pcgop, x, l_warm, 'shared', half, 'base', params%maxits_pcg, &
+                &params%rtol, rel_res_hist, niters, result)
             time_solve = real(toc(t_phase),dp)
             call validate_solved_map(x, 'shared', state_here, half, 'base')
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
@@ -1480,8 +1524,10 @@ contains
                 call regularized_ml_initial_guess(params, fsc_here, x, 'shared', half)
             endif
             t_phase = tic()
-            call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
-                &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
+            ! the replay iterate is never zero (previous ML half, or the base
+            ! solution with the shrinkage initial guess): always restart-eligible
+            call solve_with_cold_restart(pcgop, x, .true., 'shared', half, 'ml', params%maxits_pcg, &
+                &params%rtol, rel_res_hist, niters, result)
             time_solve = real(toc(t_phase),dp)
             call validate_solved_map(x, 'shared', state_here, half, 'ml')
             time_nu_stats = 0.0_dp
@@ -1969,10 +2015,14 @@ contains
             type(reconstructor_pcg), intent(inout) :: op
             real, allocatable,       intent(out)   :: x(:,:,:), history(:)
             integer,                 intent(out)   :: niters
+            type(pcg_solver_outcome) :: outcome
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             call op%end_accum(.true.)
             call op%set_op_mode(PCG_OP_KERNEL)
-            call op%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, rel_res_hist=history, niters=niters)
+            call op%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, rel_res_hist=history, &
+                &niters=niters, outcome=outcome)
+            if( trim(outcome%stop_reason) == PCG_STOP_INDEFINITE ) &
+                &THROW_HARD('PCG lost positive-definiteness in the harness solve')
         end subroutine finalize_and_solve
 
         subroutine require_raw( label, b_err, d_err, tolerance )
@@ -2175,6 +2225,7 @@ contains
             real :: prior_positive_min = 0.0, prior_positive_max = 0.0
             real :: prior_to_khat_l1 = 0.0, prior_to_khat_rms = 0.0
             logical :: l_ml_solve = .false., ready = .false., l_concurrent = .false.
+            logical :: l_warm = .false. !< nonzero initial guess: eligible for the cold restart
         end type distributed_half_job
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -2774,10 +2825,14 @@ contains
                     &'distributed', l_warm)
                 if( .not. l_warm .and. .not. l_nu_replay ) &
                     &call regularized_ml_initial_guess(params, fsc_prior, job%x, 'distributed', half)
+                ! the replay iterate is never zero (previous ML half, or the
+                ! base solution with the shrinkage initial guess)
+                job%l_warm = .true.
             else
                 allocate(job%x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
                 call override_base_warm_start_from_previous(params, state_here, half, job%x, &
                     &'distributed', l_warm)
+                job%l_warm = l_warm
             endif
             job%ready = .true.
         end subroutine prepare_distributed_half_job
@@ -2815,8 +2870,8 @@ contains
             integer(timer_int_kind) :: t_phase, t_end, t_rate
             if( .not. job%ready ) return
             call system_clock(count=t_phase)
-            call job%pcgop%solve_accum(job%x, maxits=params%maxits_pcg, rtol=params%rtol, &
-                &rel_res_hist=job%rel_res_hist, niters=job%niters, outcome=job%result)
+            call solve_with_cold_restart(job%pcgop, job%x, job%l_warm, 'distributed', job%half, &
+                &job%solve_kind, params%maxits_pcg, params%rtol, job%rel_res_hist, job%niters, job%result)
             call system_clock(count=t_end, count_rate=t_rate)
             job%time_solve = real(t_end-t_phase,dp) / real(t_rate,dp)
         end subroutine solve_prepared_half_job

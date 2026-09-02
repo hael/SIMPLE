@@ -126,8 +126,16 @@ contains
     !! onto the crop Nyquist. Labels are ranked by their low-pass limits, not
     !! their indices, so an auxiliary-replacement member at an FSC-derived
     !! resolution orders correctly among the bank members.
-    module real function get_nu_filtmap_finest_selected_lp( mask )
+    !> Finest selected low-pass of the retained filter bank. With
+    !! min_assigned_pct absent the NU_ALIGN_LP_MIN_ASSIGNED_PCT support gate
+    !! applies; the gridding volassemble handoff passes 0 (raw finest selected
+    !! label, the pre-2026-08-30 behaviour): on PfCRT the 5% gate capped the
+    !! matching band at 5-6 A against a 4.1 A map (refine3D_auto gridding,
+    !! 2026-09-02) and the refinement degraded.
+    module real function get_nu_filtmap_finest_selected_lp( mask, min_assigned_pct )
         logical, optional, intent(in) :: mask(:,:,:)
+        real,    optional, intent(in) :: min_assigned_pct
+        real :: min_pct
         integer, allocatable :: counts(:)
         real,    allocatable :: percentages(:), label_lps(:)
         logical, allocatable :: visited(:)
@@ -143,8 +151,10 @@ contains
         allocate(counts(size(cutoff_finds)), percentages(size(cutoff_finds)))
         call calc_filtmap_lowpass_histogram(counts, percentages, mask)
         n_assigned = sum(counts)
+        min_pct = NU_ALIGN_LP_MIN_ASSIGNED_PCT
+        if( present(min_assigned_pct) ) min_pct = max(0., min_assigned_pct)
         if( n_assigned > 0 )then
-            needed = min(n_assigned, max(1, ceiling(real(n_assigned) * NU_ALIGN_LP_MIN_ASSIGNED_PCT / 100.)))
+            needed = min(n_assigned, max(1, ceiling(real(n_assigned) * min_pct / 100.)))
             allocate(label_lps(size(cutoff_finds)), visited(size(cutoff_finds)))
             do ilabel = 1, size(cutoff_finds)
                 label_lps(ilabel) = nu_label_lowpass_limit(ilabel)
