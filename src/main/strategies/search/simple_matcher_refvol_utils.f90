@@ -235,12 +235,19 @@ contains
         real    :: cur_fil(params%box_crop)
         integer :: filtsz
         logical :: have_even, have_odd, have_avg, l_nonuniform_mode, l_use_merged_nu_ref
-        logical :: l_nu_refs_missing
+        logical :: l_nu_refs_missing, l_pcg_qnu
         l_nonuniform_mode    = params%l_nonuniform
         l_use_merged_nu_ref  = params%l_nonuniform_lpset .and. params%l_lpset
+        ! On the PCG backend every NU mode runs the Q_NU replay (validated at
+        ! every PCG entry), so the PRIMARY half maps are the authoritative,
+        ! in-solve-regularized matching references: no _nu_filt products
+        ! exist, primary maps are not an error fallback, and no additional
+        ! NU, FSC-optimal, or envelope filter may be applied to them
+        ! (code review 2026-09-02 P2).
+        l_pcg_qnu = l_nonuniform_mode .and. trim(params%rec_backend) == 'pcg'
         vol_avg = params%vols(s)
         ! READ: try nonuniform refs first if requested, then regular refs, then average
-        if( l_nonuniform_mode )then
+        if( l_nonuniform_mode .and. .not. l_pcg_qnu )then
             vol_even = add2fbody(params%vols_even(s), MRC_EXT, NUFILT_SUFFIX)
             vol_odd  = add2fbody(params%vols_odd(s),  MRC_EXT, NUFILT_SUFFIX)
             if( l_use_merged_nu_ref ) vol_avg = add2fbody(params%vols(s), MRC_EXT, NUFILT_SUFFIX)
@@ -253,7 +260,7 @@ contains
         ! fall back to regular refs if nonuniform versions don't exist yet (will be created later in volassemble)
         l_nu_refs_missing = .false.
         if( .not. have_even .or. .not. have_odd )then
-            if( l_nonuniform_mode )then
+            if( l_nonuniform_mode .and. .not. l_pcg_qnu )then
                 vol_even = params%vols_even(s)
                 vol_odd  = params%vols_odd(s)
                 have_even = file_exists(vol_even)
@@ -329,7 +336,10 @@ contains
             call build%vol%fft
             call build%vol_odd%fft
         endif
-        if( (params%l_ml_reg .or. l_nonuniform_mode) .and. .not. l_nu_refs_missing )then
+        if( l_pcg_qnu )then
+            ! Q_NU-regularized in-solve: the primary maps are the finished
+            ! matching model; any further filter here would double-regularize
+        else if( (params%l_ml_reg .or. l_nonuniform_mode) .and. .not. l_nu_refs_missing )then
             ! filtering done when volumes are assembled
         else if( params%l_icm )then
             ! filtering done above

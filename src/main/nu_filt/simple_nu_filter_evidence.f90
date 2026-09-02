@@ -205,16 +205,28 @@ contains
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
             if( nu_l_solvent_clamp )then
-                ! solvent-constraint clamp: outside the envelope there is no
-                ! evidenced detail by construction -- null assignment, zero
-                ! band support (maximum lack-of-evidence in every band), zero
-                ! uncertainty. Applied after the spherical-support statistics
-                ! (calibration, whitening, spatial pass) are finalized.
+                ! background constraint = the COARSEST bank candidate, not a
+                ! null label (code review 2026-09-02 P1): the coarse band
+                ! keeps its support (1 wherever the coarsest candidate
+                ! reaches the band boundary), and only finer bands carry the
+                ! full lack-of-evidence penalty -- supports [1,0,0,...] ->
+                ! weights [0,1,1,...]. The previous null encoding zeroed
+                ! every band's support and thereby suppressed ALL non-DC
+                ! background detail in the replay, which is not "heavy
+                ! background low-pass" but background erasure. Applied after
+                ! the spherical-support statistics (calibration, whitening,
+                ! spatial pass) are finalized.
                 if( nu_solvent_lmask(i,j,k) )then
-                    state%selected_label(imask)  = 0_NU_LABEL_KIND
-                    state%selected_cutoff(imask) = 0.
+                    state%selected_label(imask)  = 1_NU_LABEL_KIND
+                    state%selected_cutoff(imask) = signal_lps(1)
                     state%uncertainty(imask)     = 0.
-                    state%band_support(imask,:)  = 0.
+                    do iband = 1, nb_active
+                        if( signal_lps(1) <= band_limits_active(iband) + TINY )then
+                            state%band_support(imask,iband) = 1.
+                        else
+                            state%band_support(imask,iband) = 0.
+                        endif
+                    enddo
                     cycle
                 endif
             endif

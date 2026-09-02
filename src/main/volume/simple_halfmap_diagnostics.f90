@@ -42,7 +42,7 @@ contains
     !! optional cones argument returns the conical FSC result needed for
     !! directional regularization.
     subroutine evaluate_halfmap_pair( params, state, even, odd, average, spherical_mask_radius, &
-        &diagnostics, envmask, cones )
+        &diagnostics, envmask, cones, l_pair_support_constrained )
         class(parameters),                      intent(in)    :: params
         integer,                                intent(in)    :: state
         class(image),                           intent(in)    :: even, odd, average
@@ -50,6 +50,7 @@ contains
         type(halfmap_diagnostics_result),       intent(out)   :: diagnostics
         class(image),                 optional, intent(inout) :: envmask
         class(fsc_area_score_result), optional, intent(inout) :: cones
+        logical,                      optional, intent(in)    :: l_pair_support_constrained
         type(image)                 :: work_even, work_odd
         type(image_msk)             :: envmask_work
         type(fsc_area_score_result) :: cones_local
@@ -57,15 +58,22 @@ contains
         integer :: nyq
         logical :: l_envfsc_preproc
         nyq = even%get_filtsz()
-        ! The envelope-masking + phase-randomization preprocessing is a
-        ! GRIDDING-path construction: it approximates, after the fact, an
-        ! estimate the solver could not constrain. On the PCG backend the
-        ! same envelope is installed as the SOLVE SUPPORT (pcg_priors.md dev
-        ! item 5), so the pair handed here is already envelope-constrained
-        ! and masking it again would double-count. The envelope itself is
-        ! still derived and returned, because the automask artifact has other
-        ! consumers (postprocess envfsc, matcher fallback, final rec).
-        l_envfsc_preproc = params%l_envfsc .and. trim(params%rec_backend) /= 'pcg'
+        ! The envelope-masking + phase-randomization preprocessing
+        ! approximates, after the fact, an estimate the solver could not
+        ! constrain. When the caller states that the pair was ALREADY
+        ! density-envelope-constrained in the estimator (the PCG solve
+        ! support), masking it again would double-count and the preproc is
+        ! skipped. The decision follows the support actually installed for
+        ! this pair, never the backend name (code review 2026-09-02 P1):
+        ! a PCG run whose base solves fell back to the spherical support
+        ! (missing/startvol reference, bootstrap) passes .false. and gets
+        ! the ordinary envelope-corrected FSC. The envelope itself is still
+        ! derived and returned, because the automask artifact has other
+        ! consumers (postprocess envfsc, final rec).
+        l_envfsc_preproc = params%l_envfsc
+        if( present(l_pair_support_constrained) )then
+            if( l_pair_support_constrained ) l_envfsc_preproc = .false.
+        endif
         if( params%l_envfsc .and. present(envmask) )then
             call envmask_work%automask3D(params, average, .false., lp_override=params%envmsklp)
             call envmask%copy(envmask_work)

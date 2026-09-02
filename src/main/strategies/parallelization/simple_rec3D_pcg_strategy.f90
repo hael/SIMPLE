@@ -17,7 +17,7 @@ use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfm
     &write_halfmap_diagnostics
 use simple_image_msk,         only: image_msk
 use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
-    &set_nu_solvent_envelope, retain_nu_filter_setup, NU_DEV_OUTPUT, &
+    &set_nu_solvent_envelope, NU_DEV_OUTPUT, &
     &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp, &
     &build_nu_evidence_state, nu_evidence_state, nu_evidence_summary, get_nu_evidence_summary, &
     &expand_nu_evidence_band_weights, &
@@ -249,20 +249,23 @@ contains
     !! envfsc path, and the execution-context resolution log lines. The shared
     !! and distributed paths pass identical scientific policy and differ only
     !! in the context label.
-    subroutine calculate_pcg_state_diagnostics( params, state_here, context, even, odd, avg, diagnostics )
+    subroutine calculate_pcg_state_diagnostics( params, state_here, context, even, odd, avg, diagnostics, &
+        &l_pair_support_constrained )
         class(parameters),                intent(in)  :: params
         integer,                          intent(in)  :: state_here
         character(len=*),                 intent(in)  :: context
         class(image),                     intent(in)  :: even, odd, avg
         type(halfmap_diagnostics_result), intent(out) :: diagnostics
+        logical,                          intent(in)  :: l_pair_support_constrained
         type(image) :: envmask
         if( params%l_envfsc )then
             call evaluate_halfmap_pair(params, state_here, even, odd, avg, params%msk_crop, &
-                &diagnostics, envmask=envmask)
+                &diagnostics, envmask=envmask, l_pair_support_constrained=l_pair_support_constrained)
             call envmask%write(string(AUTOMASK_FBODY//int2str_pad(state_here,2)//MRC_EXT))
             call envmask%kill
         else
-            call evaluate_halfmap_pair(params, state_here, even, odd, avg, params%msk_crop, diagnostics)
+            call evaluate_halfmap_pair(params, state_here, even, odd, avg, params%msk_crop, diagnostics, &
+                &l_pair_support_constrained=l_pair_support_constrained)
         endif
         write(logfhandle,'(A,I0,A,F8.3)') '>>> PCG '//trim(context)//': STATE ', state_here, &
             &' FSC=0.500 RESOLUTION = ', diagnostics%res_fsc05
@@ -289,8 +292,7 @@ contains
     !! a second NU analysis; cadence and artifact naming follow the same
     !! plan_state_postprocess contract as the post-hoc NU paths.
     subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, &
-            &res0143, band_w, band_limits, finest_lp, evidence_source, evidence_seconds, &
-            &l_retain_setup )
+            &res0143, band_w, band_limits, finest_lp, evidence_source, evidence_seconds )
         class(parameters),          intent(in)  :: params
         integer,                    intent(in)  :: state_here
         character(len=*),           intent(in)  :: context
@@ -301,7 +303,6 @@ contains
         real, optional,             intent(out) :: finest_lp
         character(len=*), optional, intent(in)  :: evidence_source
         real(dp), optional,         intent(out) :: evidence_seconds
-        logical, optional,          intent(in)  :: l_retain_setup !< leave the optimized setup armed for the matching-reference pass
         type(nu_evidence_state)   :: evstate
         type(nu_evidence_summary) :: evsumm
         type(vol_pproc_plan)      :: pp_plan
@@ -310,7 +311,7 @@ contains
         character(len=32) :: source_here
         integer :: nsteps_ext, ldim_here(3), fsc_find
         real    :: handoff_lp
-        logical :: l_rebuild, l_envmask_regen, l_retain
+        logical :: l_rebuild, l_envmask_regen
         integer(timer_int_kind) :: t_evidence
         real(dp) :: seconds_here
         t_evidence  = tic()
@@ -380,16 +381,9 @@ contains
                     &state_here, pp_plan%nu_envmask_file)
             endif
             call build_nu_evidence_state(vol_even, vol_odd, evstate)
-            l_retain = .false.
-            if( present(l_retain_setup) ) l_retain = l_retain_setup
-            if( l_retain )then
-                ! single setup serves both per-iteration NU consumers: the
-                ! optimized, extended, solvent-clamped setup stays armed for
-                ! the matching-reference pass, which consumes and cleans up
-                call retain_nu_filter_setup(state_here)
-            else
-                call cleanup_nu_filter()
-            endif
+            ! no post-hoc NU filter follows on the pcg backend, so the
+            ! evidence phase owns and tears down its setup
+            call cleanup_nu_filter()
             ! store the frozen state for the rebuild-on-advance cadence,
             ! together with the matching low-pass it hands off: when the
             ! FSC crossing later reaches this band, the alignment search is
@@ -561,16 +555,31 @@ contains
         real         :: lp_support
         l_have = .false.
         call support%kill_bimg
-        ! automsk gates using the density envelope in the solves at all;
-        ! which passes consume it is decided per solve (see the l_use_support
-        ! rule in reduce_solve_state_half): the regularized pass always, the
-        ! unfil pass only under envfsc=yes
-        if( trim(params%automsk) == 'no'          ) return
-        if( params%pcg_mskfile%is_allocated()     ) return ! explicit mask wins
-        if( state_here < 1 .or. state_here > size(params%vols) ) return
-        if( len_trim(params%vols(state_here)%to_char()) == 0    ) return
-        if( index(params%vols(state_here)%to_char(), 'startvol') > 0 ) return
-        if( .not. file_exists(params%vols(state_here)) ) return
+        ! The density solve support is INDEPENDENT of automsk (code review
+        ! 2026-09-02 P1): automsk selects the filter-field background envelope
+        ! only. Which solves consume the support is decided per solve from
+        ! envfsc and solve phase alone (the regularized replay always, the
+        ! unfil/base pass only under envfsc=yes). Missing/startvol reference =>
+        ! spherical fallback, reported loudly so an envfsc=yes run cannot
+        ! silently claim density-envelope semantics (the FSC preproc decision
+        ! follows the support actually installed, not the backend name).
+        if( params%pcg_mskfile%is_allocated()     ) return ! explicit mask wins (dev escape hatch)
+        if( state_here < 1 .or. state_here > size(params%vols) ) then
+            call report_spherical_fallback('no reference volume slot')
+            return
+        endif
+        if( len_trim(params%vols(state_here)%to_char()) == 0 )then
+            call report_spherical_fallback('no reference volume recorded')
+            return
+        endif
+        if( index(params%vols(state_here)%to_char(), 'startvol') > 0 )then
+            call report_spherical_fallback('startvol reference')
+            return
+        endif
+        if( .not. file_exists(params%vols(state_here)) )then
+            call report_spherical_fallback('missing reference volume')
+            return
+        endif
         lp_support = params%envmsklp
         call vol_prev%read_and_crop(params%vols(state_here), params%smpd, params%box_crop, params%smpd_crop)
         call support%automask3D(params, vol_prev, .false., lp_override=lp_support, l_report=.false.)
@@ -578,6 +587,21 @@ contains
         l_have = .true.
         write(logfhandle,'(A,I0,A,F6.1,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
             &', conservative density envelope at ', lp_support, ' A (replaces the spherical support)'
+
+    contains
+
+        subroutine report_spherical_fallback( why )
+            character(len=*), intent(in) :: why
+            if( params%l_envfsc )then
+                write(logfhandle,'(A,I0,A)') '>>> WARNING: PCG SOLVE SUPPORT: STATE ', state_here, &
+                    &' has '//trim(why)//'; SPHERICAL support this iteration '//&
+                    &'(envfsc=yes: the FSC preproc will envelope-correct the pair post hoc instead)'
+            else
+                write(logfhandle,'(A,I0,A)') '>>> PCG SOLVE SUPPORT: STATE ', state_here, &
+                    &' has '//trim(why)//'; spherical support this iteration'
+            endif
+        end subroutine report_spherical_fallback
+
     end subroutine build_pcg_state_support
 
     !> Hard activation contract for the direct NU replay (no silent fallback):
@@ -592,6 +616,29 @@ contains
         endif
         if( params%pcg_nu_lambda_rel > 0.0 .and. .not. params%l_ml_reg )then
             THROW_HARD('pcg_nu_lambda_rel > 0 requires the regularized replay: objfun=euclid ml_reg=yes')
+        endif
+        ! production contract (code review 2026-09-02 P2): Q_NU is the SOLE
+        ! NU regularization mechanism on the PCG backend -- an NU filter mode
+        ! without an active Q_NU replay would silently fall back to post-hoc
+        ! filtering or no NU regularization at all. The strength-zero and
+        ! P_tau development controls remain available only without an NU
+        ! filter mode.
+        if( params%l_nonuniform )then
+            ! Q_NU is the sole NU mechanism on pcg: NU filter modes require the
+            ! active euclid ML replay with positive strength; strength-zero /
+            ! P_tau remain development controls valid only with filt_mode=none
+            if( .not. params%l_ml_reg ) &
+                &THROW_HARD('pcg+NU requires the euclid ML replay (objfun=euclid ml_reg=yes); use filt_mode=none otherwise')
+            if( .not. (params%pcg_nu_lambda_rel > 0.0) ) &
+                &THROW_HARD('pcg+NU requires an active Q_NU replay (pcg_nu_lambda_rel > 0); lambda 0 is filt_mode=none only')
+            ! only the conservative density envelope may constrain a
+            ! production NU solve; the explicit-mask override is a
+            ! development escape hatch isolated to filt_mode=none routes
+            ! (code review 2026-09-02 P2)
+            if( params%pcg_mskfile%is_allocated() )then
+                if( len_trim(params%pcg_mskfile%to_char()) > 0 ) &
+                    &THROW_HARD('pcg_mskfile is a development-only support override; not permitted with NU filter modes')
+            endif
         endif
         ! setpoint contract: an explicit pcg_nu_supp_target is only meaningful
         ! when the auto-lambda controller tracks it -- an explicit lambda pins
@@ -820,6 +867,8 @@ contains
         logical, allocatable :: state_written(:)
         integer :: nselected, state, n_state, n_even, n_odd, iptcl, istate
         logical :: l_nu_replay
+        type(image_msk) :: state_support_msk
+        logical :: l_state_support
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_evidence
         logical :: l_sigma_loaded
@@ -860,6 +909,11 @@ contains
             if( n_even + n_odd /= n_state ) THROW_HARD('PCG reconstruct3D found invalid halfset labels')
             if( n_even < 1 .or. n_odd < 1 ) THROW_HARD('PCG reconstruct3D requires particles in both halfsets')
 
+            ! one density-envelope support per state, same policy as the
+            ! distributed owner: the base solves consume it under envfsc=yes,
+            ! the regularized replay always (code review 2026-09-02 P1 --
+            ! the shared route previously never installed a density support)
+            call build_pcg_state_support(params, state, state_support_msk, l_state_support)
             call collect_state_half(state, 0, n_even, half_pinds)
             call solve_state_half(state, 0, 'even', half_pinds, half_even)
             deallocate(half_pinds)
@@ -887,7 +941,7 @@ contains
 
             t_state_phase = tic()
             call calculate_pcg_state_diagnostics(params, state, 'RECONSTRUCT3D', half_even, half_odd, &
-                &merged, hm_diag)
+                &merged, hm_diag, l_state_support .and. params%l_envfsc)
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             call arr2file(fsc, fname_fsc)
@@ -958,6 +1012,7 @@ contains
             if( allocated(fsc) ) deallocate(fsc)
         enddo
 
+        call state_support_msk%kill_bimg
         call killimgbatch(build)
         ! rewritten (or deleted) every volassemble so the convergence reporter
         ! never reads a stale NU firing readout
@@ -1077,7 +1132,9 @@ contains
             crop_factor = real(params%box_crop) / real(params%box)
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
             call pcgop%set_sym(build%pgrpsyms)
-            call set_pcg_solve_support(pcgop, params)
+            ! base/unregularized solve: density support only under envfsc=yes
+            call set_pcg_solve_support(pcgop, params, state_support_msk, &
+                &l_state_support .and. params%l_envfsc)
             lims2 = pcgop%get_lims2()
             R     = lims2(1,2)
             allocate(sig2(0:R,size(pinds)), source=1.0)
@@ -1192,7 +1249,8 @@ contains
 
             t_phase = tic()
             call pcgop%new(params%box_crop, params%smpd_crop, PCG_LAMBDA)
-            call set_pcg_solve_support(pcgop, params)
+            ! regularized replay: always takes the density support when built
+            call set_pcg_solve_support(pcgop, params, state_support_msk, l_state_support)
             call pcgop%begin_reduction
             fname = refine3D_pcg_raw_accum_fname(state_here, 1, params%numlen, half)
             call pcgop%add_raw_accum(fname, state_here, eo_here, 1, 1, &
@@ -2087,7 +2145,7 @@ contains
                 evidence_source_here =  NU_EVIDENCE_SOURCE_BASE
             endif
             call calculate_pcg_state_diagnostics(params, state, 'DISTRIBUTED', fsc_pair_even, &
-                &fsc_pair_odd, fsc_pair_merged, hm_diag)
+                &fsc_pair_odd, fsc_pair_merged, hm_diag, l_state_support .and. params%l_envfsc)
             fsc             = hm_diag%fsc
             res0143s(state) = hm_diag%res_fsc0143
             call arr2file(fsc, fname_fsc)
@@ -2102,18 +2160,14 @@ contains
                     ! the evidence pair is the FSC pair, selected once above;
                     ! its FSC=0.143 crossing steers the adaptive band ladder
                     if( present(nu_replay_finest_lps) )then
-                        ! the finest-lp output signals a matching-reference
-                        ! volassemble follows: retain the setup for it when
-                        ! it would be rebuilt identically (same base pair, no
-                        ! aux under nu_refine; single-state, as the module
-                        ! holds one setup)
+                        ! no post-hoc NU filter follows on the pcg backend
+                        ! (code review 2026-09-02 P1): the evidence phase owns
+                        ! and cleans up its setup; nothing is retained
                         call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
                             &fsc_pair_odd, res0143s(state), nu_band_w, nu_band_limits, &
                             &finest_lp=nu_replay_finest_lps(state), &
                             &evidence_source=trim(evidence_source_here), &
-                            &evidence_seconds=time_evidence, &
-                            &l_retain_setup=(params%nstates == 1 .and. params%l_nu_refine .and. &
-                            &trim(evidence_source_here) == NU_EVIDENCE_SOURCE_BASE))
+                            &evidence_seconds=time_evidence)
                     else
                         call build_nu_replay_evidence(params, state, 'distributed', fsc_pair_even, &
                             &fsc_pair_odd, res0143s(state), nu_band_w, nu_band_limits, &

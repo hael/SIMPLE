@@ -3017,6 +3017,61 @@ the acceptable-looking outputs do not validate the prior.
      density envelopes nearly coincide, and its background is
      essentially solvent).
 
+9. **PCG+NU code-review response (2026-09-02,
+   `pcg_nonuniform_code_review.md`, all P1/P2 findings addressed).**
+   - P1 post-hoc filter: `filter_pcg_nonuniform_maps` no longer runs
+     `nu_filter_vols` for ANY mode -- it is the evidence-derived scalar
+     matching-lp handoff for both `nonuniform` and `nonuniform_lpset`,
+     nothing else. No `_nu_filt`/`_nu_locres` products exist on the pcg
+     backend; plain nonuniform matches the PRIMARY per-half Q_NU maps
+     (matcher `l_pcg_qnu` path: primary maps authoritative, no fallback
+     flag, no FSC-optimal or other extra filter). The evidence-phase
+     setup-retention machinery in the strategy was removed as its
+     consumer no longer exists (the nu_filter module API remains).
+     NOTE the standing tension with the 2026-08-31 "matching-reference
+     regression -- plain nonuniform topology" record, which retired
+     exactly this raw-Q_NU-refs matching for gold-standard noise
+     overfitting: circumstances have changed (evidence-envelope
+     background suppression in-solve, auto-lambda/auto-target live),
+     but the overfitting risk of independent per-half matching against
+     each half's own in-band noise is not structurally removed --
+     watch mid-resolution half-map divergence with a matched-noise
+     0.143 tail on validation runs.
+   - P1 evidence background: the solvent/background clamp in
+     `build_nu_evidence_state` now encodes the COARSEST bank candidate
+     (supports [1,0,0,...] -> band weights [0,1,1,...]) instead of the
+     post-Potts null label whose zero supports suppressed all non-DC
+     background detail. Clamped voxels count as label 1, so the
+     summary null_fraction now reflects genuine in-envelope nulls
+     only. Residual simplification: the deterministic assignment is
+     still applied post-MRF; the evidence Potts field itself is not
+     clamp-aware (matching the pre-existing structure).
+   - P1 solve support: `build_pcg_state_support` is independent of
+     `automsk`; the shared route now builds and installs the per-state
+     density support exactly like the distributed route (base solves
+     under envfsc=yes, regularized replay always); missing/startvol
+     reference falls back to the sphere LOUDLY.
+   - P1 FSC preproc: `evaluate_halfmap_pair` takes
+     `l_pair_support_constrained` and skips the envelope+
+     phase-randomization preprocessing only when the pair was actually
+     density-constrained in the estimator -- never inferred from the
+     backend name. PCG spherical-fallback pairs under envfsc=yes now
+     get the ordinary envelope-corrected FSC.
+   - P2 Q_NU mandatory: `validate_nu_replay_request` hard-errors any
+     pcg+NU configuration without the active euclid ML replay and
+     pcg_nu_lambda_rel > 0; strength-zero/P_tau remain valid only with
+     filt_mode=none (bootstrap_rec3D pass 1 forces filt_mode=none and
+     is unaffected). `pcg_mskfile` is likewise rejected on NU routes
+     (development escape hatch isolated to filt_mode=none).
+   - P2 refine3D_auto envfsc: now a guarded (genuinely overridable)
+     default.
+   - P2 _pproc: the density-envelope multiplication of `_pproc`/`_mirr`
+     is documented as a display/deposition exemption in
+     `postprocess_volume_from_files`; the unmasked primary maps remain
+     authoritative.
+   - P3: `nu_evidence_envelope_masking.md` carries a SUPERSEDED banner;
+     automasking/nonuniform policies updated 2026-09-02.
+
 ## 11. The NU machinery as the prior infrastructure
 
 The nonuniform-regularization machinery

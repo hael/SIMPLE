@@ -1,5 +1,19 @@
 # NU-Evidence Envelope Masking
 
+> **SUPERSEDED (2026-09-02).** The reference-masking decision below is
+> retired: matching references are NEVER multiplied with an envelope
+> (evidence or density) before reprojection — hard-removing density present
+> in the particle images destroys pose discrimination (PfCRT collapse,
+> `pcg_priors.md` item 8). Under `automsk=yes` the evidence envelope now
+> defines the NU filter-field BACKGROUND (heavy background low-pass,
+> cisTEM-style), and on the PCG backend that field enters reconstruction
+> only through the `Q_NU` precision prior. The `envfsc=yes` density-mask FSC
+> path described as unfinished here is live. See
+> `doc/policies/automasking_policy.md`,
+> `doc/policies/nonuniform_filtering_policy.md`, and
+> `doc/implementation_notes/pcg_nonuniform_code_review.md` for the current
+> contract; the remainder of this note is retained as a historical record.
+
 > Implementation note. The standalone routine is reachable through
 > `simple_exec prg=nu_filt3D nu_envmsk=yes`. The workflow integration described
 > in section 4 is implemented in `volassemble` and matching-reference

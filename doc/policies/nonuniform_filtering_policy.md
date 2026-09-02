@@ -37,6 +37,14 @@ bandwidth while the matcher retains independent half-map topology.
 selected NU bandwidth into an LP-set matching run. LP-set matching uses merged
 registration-reference topology.
 
+On `rec_backend=pcg` (2026-09-02) both NU modes require the active `Q_NU`
+replay, which is the SOLE NU regularization mechanism on that backend: no
+post-hoc NU filter runs, no `_nu_filt`/`_nu_locres` products are written, and
+the matcher consumes the primary Q_NU-regularized maps directly (per-half for
+`nonuniform`, merged for `nonuniform_lpset`) with no additional filtering.
+Only the evidence-derived scalar matching-lp handoff survives, for both
+modes.
+
 `nu_refine=yes` enables iterative high-resolution NU shell extension. This is
 on by default in `refine3D_auto`, off by default elsewhere, and explicitly set
 to `no` by staged `abinitio3D`.

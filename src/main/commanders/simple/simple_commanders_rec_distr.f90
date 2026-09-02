@@ -799,271 +799,50 @@ contains
 
     end subroutine restore_state_from_parts
 
-    !> Apply the volume-assembly nonuniform-filtering contract to half-maps
-    !! restored directly by the PCG backend. Raw (B,D) trailing, including its
-    !! chain/bootstrap policy, remains wholly owned by the PCG master; this
-    !! consumer must never blend solved maps. PCG maps are already corrected in
-    !! the solved image domain, so this path deliberately omits the gridding
-    !! instrument-function correction performed by commander_volassemble.
+    !> PCG-backend NU matching contract: with Q_NU mandatory for every NU
+    !! filter mode on this backend (validated at every PCG entry), the shipped
+    !! maps are regularized in-solve and NO post-hoc NU filter runs here for
+    !! either mode (code review 2026-09-02 P1 -- a second bank filter made the
+    !! two NU topologies scientifically different for reasons unrelated to
+    !! their matching topology). The primary per-half Q_NU maps ARE the
+    !! matching references for plain nonuniform; the merged primary map serves
+    !! nonuniform_lpset. Only the evidence-derived scalar matching-lp handoff
+    !! survives, for both modes. With automsk enabled the NU evidence envelope
+    !! is regenerated at replay-evidence construction time inside the PCG
+    !! strategy (build_nu_replay_evidence), never here.
     subroutine filter_pcg_nonuniform_maps( params, build, l_trail_bootstrap, nu_replay_lps )
-        use simple_nu_filter,        only: setup_nu_dmats, optimize_nu_cutoff_finds, nu_filter_vols, &
-            &cleanup_nu_filter, print_nu_filtmap_lowpass_stats, analyze_filtmap_neighbor_continuity, &
-            &set_nu_filter_report, NU_DEV_OUTPUT, get_nu_filtmap_finest_selected_lp, &
-            &write_nu_local_resolution_map, write_nu_evidence_envmask, set_nu_solvent_envelope, &
-            &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp, &
-            &nu_filter_setup_is_retained
-        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
-            &NU_ENVMASK_ACTION_REGENERATE
-        use simple_image_msk,        only: image_msk
         type(parameters), intent(in)    :: params
         type(builder),    intent(inout) :: build
         logical,          intent(in)    :: l_trail_bootstrap(:)
         real, optional,   intent(in)    :: nu_replay_lps(:)
-        type(image)                   :: vol_base_even, vol_base_odd, vol_aux_even, vol_aux_odd
-        type(image)                   :: vol_even_nu, vol_odd_nu, vol_env_avg
-        type(image_msk)               :: solvent_env
-        type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
-        type(vol_pproc_plan)          :: pp_plan
-        type(string)                  :: eonames(2), volname, eonames_nu(2), volname_nu, locres_name
-        type(string)                  :: fsc_fname
-        real, allocatable             :: fsc(:), res(:), nu_align_lps(:)
-        integer, allocatable          :: state_pops(:)
-        logical, allocatable          :: l_included(:)
-        integer                       :: state, i, ldim(3), nsteps_ext
-        real                          :: fsc05, fsc0143, aux_resolution, align_lp, selected_lp
-
+        integer, allocatable :: state_pops(:)
+        logical, allocatable :: l_included(:)
+        integer :: state
+        real    :: align_lp
         if( .not. params%l_nonuniform ) return
-        ! nu_refine=yes on pcg belongs to the Q_NU replay (evidence-bank shell
-        ! extension inside build_nu_replay_evidence, Stage 6.6); on the
-        ! post-hoc P_tau+NU pcg path it remains unsupported
-        if( params%l_nu_refine .and. .not. (params%l_ml_reg .and. params%pcg_nu_lambda_rel > 0.0) ) &
-            &THROW_HARD('nu_refine=yes on the PCG backend requires the Q_NU replay (euclid ml_reg, pcg_nu_lambda_rel > 0)')
         if( size(l_trail_bootstrap) /= params%nstates ) &
             &THROW_HARD('PCG nonuniform trailing-bootstrap state input has invalid size')
-        ! Policy (2026-08-28, pcg_priors.md): with the Q_NU replay active the
-        ! shipped maps are already locally regularized in-solve, so the
-        ! post-hoc NU filter is redundant -- no second NU analysis and no
-        ! _nu_filt/_nu_locres products. Only the LP-set matching handoff
-        ! survives, derived from the frozen replay evidence (the finest
-        ! evidenced local cutoff per state) instead of a second filter-bank
-        ! optimization. With automsk enabled the NU evidence envelope is
-        ! regenerated at replay-evidence construction time inside the PCG
-        ! strategy (build_nu_replay_evidence, policy 2026-08-29), from the
-        ! same frozen evidence -- never here.
-        if( params%l_ml_reg .and. params%pcg_nu_lambda_rel > 0.0 )then
-            if( .not. present(nu_replay_lps) ) &
-                &THROW_HARD('NU replay is active but no evidence-derived LP handoff was supplied')
-            if( size(nu_replay_lps) /= params%nstates ) &
-                &THROW_HARD('NU replay LP handoff has invalid size')
-            if( params%l_nonuniform_lpset )then
-                ! merged-reference matching: the raw Q_NU maps serve
-                ! directly; only the evidence-derived LP handoff survives
-                allocate(state_pops(params%nstates), l_included(params%nstates))
-                do state = 1, params%nstates
-                    state_pops(state) = build%spproj_field%get_pop(state, 'state')
-                enddo
-                l_included = (state_pops > 0) .and. (nu_replay_lps > TINY)
-                if( any(l_included) )then
-                    align_lp = minval(nu_replay_lps, mask=l_included)
-                    write(logfhandle,'(A,F8.3,A)') &
-                        &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); '//&
-                        &'evidence-derived matching low-pass ', align_lp, ' A'
-                    call build%spproj_field%set_all2single('lp', align_lp)
-                    call build%spproj%write_segment_inside(params%oritype, params%projfile)
-                else
-                    write(logfhandle,'(A)') &
-                        &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); no evidenced cutoff to hand off'
-                endif
-                deallocate(state_pops, l_included)
-                return
-            endif
-            ! plain nonuniform matches independent even/odd references that
-            ! the matcher consumes unfiltered (filtering is assembly-owned),
-            ! so the derived _nu_filt matching references must still be
-            ! generated; the shipped primary outputs remain the raw Q_NU
-            ! maps (pcg_priors.md dev item 2)
-            write(logfhandle,'(A)') &
-                &'>>> PCG NU REPLAY: plain nonuniform topology; generating NU-filtered matching references'
-        endif
-        call set_nu_filter_report(params%part == 1)
-        ldim = [params%box_crop, params%box_crop, params%box_crop]
-        res  = get_resarr(params%box_crop, params%smpd_crop)
-        allocate(state_pops(params%nstates), nu_align_lps(params%nstates), l_included(params%nstates))
-        state_pops  = 0
-        nu_align_lps = 0.
+        if( .not. present(nu_replay_lps) ) &
+            &THROW_HARD('NU on the PCG backend requires the evidence-derived LP handoff from the Q_NU replay')
+        if( size(nu_replay_lps) /= params%nstates ) &
+            &THROW_HARD('NU replay LP handoff has invalid size')
+        allocate(state_pops(params%nstates), l_included(params%nstates))
         do state = 1, params%nstates
             state_pops(state) = build%spproj_field%get_pop(state, 'state')
-            if( state_pops(state) < 1 ) cycle
-
-            eonames(1) = refine3D_state_halfvol_fname(state, 'even')
-            eonames(2) = refine3D_state_halfvol_fname(state, 'odd')
-            volname    = refine3D_state_vol_fname(state)
-            if( nu_filter_setup_is_retained(state, params%box_crop) )then
-                ! the Q_NU evidence phase retained its optimized, extended,
-                ! solvent-clamped setup on the same base pair: reuse it and
-                ! skip setup, clamp, extension, and envmask regeneration
-                write(logfhandle,'(A)') &
-                    &'>>> PCG NU REPLAY: reusing the evidence-phase NU setup for the matching references'
-                call filter_and_write_matching_refs()
-                cycle
-            endif
-            call vol_base_even%new(ldim, params%smpd_crop)
-            call vol_base_odd%new( ldim, params%smpd_crop)
-            if( params%l_ml_reg .and. .not. l_trail_bootstrap(state) )then
-                ! under ml_reg the NU base is the _unfil pair; nu_refine=yes
-                ! excludes the aux replacement pair (extension is owned by
-                ! the shell-extension experiment, never the aux channel)
-                call vol_base_even%read(refine3D_state_halfvol_fname(state, 'even', unfil=.true.))
-                call vol_base_odd%read( refine3D_state_halfvol_fname(state, 'odd',  unfil=.true.))
-                if( params%l_nu_refine )then
-                    call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [real ::])
-                else
-                    call vol_aux_even%new(ldim, params%smpd_crop)
-                    call vol_aux_odd%new( ldim, params%smpd_crop)
-                    call vol_aux_even%read(eonames(1))
-                    call vol_aux_odd%read( eonames(2))
-                    fsc_fname = refine3D_fsc_fname(state)
-                    fsc       = file2rarr(fsc_fname)
-                    call get_resolution(fsc, res, fsc05, fsc0143)
-                    aux_resolution = fsc0143
-                    if( params%l_lpset .and. params%lp > TINY ) aux_resolution = min(aux_resolution, params%lp)
-                    allocate(nu_aux_even(1), nu_aux_odd(1))
-                    call nu_aux_even(1)%copy(vol_aux_even)
-                    call nu_aux_odd(1)%copy( vol_aux_odd)
-                    call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [aux_resolution], &
-                        &nu_aux_even, nu_aux_odd)
-                endif
-            else
-                if( params%l_ml_reg .and. l_trail_bootstrap(state) )then
-                    write(logfhandle,'(A,I0,A)') '>>> PCG NU: STATE ', state, &
-                        &' IS A CHAINLESS TRAILING BOOTSTRAP; FILTERING THE COHERENT STANDARD PAIR WITHOUT AN ML AUXILIARY'
-                endif
-                call vol_base_even%read(eonames(1))
-                call vol_base_odd%read( eonames(2))
-                call setup_nu_dmats(vol_base_even, vol_base_odd, params%mskdiam, [real ::])
-            endif
-            call cleanup_aux_images()
-            call vol_aux_even%kill
-            call vol_aux_odd%kill
-            call plan_state_postprocess(params, state, params%which_iter, pp_plan)
-            if( pp_plan%l_nu_envmask_incompatible )then
-                write(logfhandle,'(A,1X,A)') &
-                    &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
-                    &pp_plan%nu_envmask_file%to_char()
-            endif
-            if( trim(params%automsk).ne.'no' )then
-                ! automsk=yes: the filter-field background is the complement of
-                ! the NU evidence envelope, derived from the unaries of the
-                ! setup that just ran (same pass, no second compute); the
-                ! artifact is written by the same call
-                call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, params%smpd_crop, &
-                    &state, pp_plan%nu_envmask_file, l_arm_background=.true.)
-            else
-                ! automsk=no: solvent constraint from the conservative density
-                ! envelope, computed on the fly from the base pair average
-                ! (pcg_priors.md dev item 4)
-                call vol_env_avg%copy(vol_base_even)
-                call vol_env_avg%add(vol_base_odd)
-                call vol_env_avg%mul(0.5)
-                call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp, l_report=.false.)
-                call set_nu_solvent_envelope(solvent_env)
-                call solvent_env%kill_bimg
-                call vol_env_avg%kill
-            endif
-            call optimize_nu_cutoff_finds()
-            ! nu_refine: extend the matching-reference bank by the proven
-            ! shell walk so the matching low-pass handoff can advance with
-            ! the evidence (the static ladder would otherwise pin it)
-            if( params%l_nu_refine )then
-                call extend_nu_filter_highres_shells(vol_base_even, vol_base_odd, nsteps=nsteps_ext)
-                if( nsteps_ext > 0 ) write(logfhandle,'(A,I0,A,F8.3,A)') &
-                    &'>>> NU MATCHING BANK EXTENDED BY ', nsteps_ext, ' ACCEPTED SHELL STEP(S) TO ', &
-                    &get_nu_filter_bank_finest_lp(), ' A'
-            endif
-            if( pp_plan%nu_envmask_action == NU_ENVMASK_ACTION_REGENERATE .and. trim(params%automsk).eq.'no' )then
-                ! with automsk=yes the artifact was already written by the
-                ! background-arming call above
-                call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, params%smpd_crop, &
-                    &state, pp_plan%nu_envmask_file)
-            endif
-
-            call vol_base_even%kill
-            call vol_base_odd%kill
-            call filter_and_write_matching_refs()
         enddo
-
-        l_included = (state_pops > 0) .and. (nu_align_lps > TINY)
+        l_included = (state_pops > 0) .and. (nu_replay_lps > TINY)
         if( any(l_included) )then
-            align_lp = minval(nu_align_lps, mask=l_included)
+            align_lp = minval(nu_replay_lps, mask=l_included)
+            write(logfhandle,'(A,F8.3,A)') &
+                &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); '//&
+                &'evidence-derived matching low-pass ', align_lp, ' A'
             call build%spproj_field%set_all2single('lp', align_lp)
             call build%spproj%write_segment_inside(params%oritype, params%projfile)
+        else
+            write(logfhandle,'(A)') &
+                &'>>> PCG NU REPLAY: post-hoc NU filtering skipped (Q_NU in-solve); no evidenced cutoff to hand off'
         endif
-        call cleanup_aux_images()
-        call vol_base_even%kill
-        call vol_base_odd%kill
-        call vol_aux_even%kill
-        call vol_aux_odd%kill
-        call vol_even_nu%kill
-        call vol_odd_nu%kill
-        call cleanup_nu_filter()
-        call pp_plan%nu_envmask_file%kill
-        if( allocated(fsc) ) deallocate(fsc)
-        if( allocated(res) ) deallocate(res)
-        deallocate(state_pops, nu_align_lps, l_included)
-
-    contains
-
-        !> Synthesize and write the NU-filtered matching references from the
-        !! live NU setup (freshly built, or retained from the evidence
-        !! phase), record the matching-lp handoff, and tear the setup down.
-        subroutine filter_and_write_matching_refs()
-            call nu_filter_vols(vol_even_nu, vol_odd_nu)
-            call print_nu_filtmap_lowpass_stats()
-            if( NU_DEV_OUTPUT .and. params%part == 1 ) call analyze_filtmap_neighbor_continuity()
-            eonames_nu(1) = add2fbody(eonames(1), MRC_EXT, NUFILT_SUFFIX)
-            eonames_nu(2) = add2fbody(eonames(2), MRC_EXT, NUFILT_SUFFIX)
-            volname_nu    = add2fbody(volname,    MRC_EXT, NUFILT_SUFFIX)
-            locres_name   = add2fbody(volname,    MRC_EXT, NULOCRES_SUFFIX)
-            call vol_even_nu%write(eonames_nu(1), del_if_exists=.true.)
-            call vol_odd_nu%write(eonames_nu(2), del_if_exists=.true.)
-            call vol_even_nu%add(vol_odd_nu)
-            call vol_even_nu%mul(0.5)
-            call vol_even_nu%write(volname_nu, del_if_exists=.true.)
-            call write_nu_local_resolution_map(locres_name)
-            call wait_for_closure(volname_nu)
-            call wait_for_closure(locres_name)
-            selected_lp = get_nu_filtmap_finest_selected_lp()
-            if( selected_lp > TINY ) nu_align_lps(state) = selected_lp
-            call vol_even_nu%kill
-            call vol_odd_nu%kill
-            call cleanup_nu_filter()
-            call pp_plan%nu_envmask_file%kill
-            call eonames(1)%kill
-            call eonames(2)%kill
-            call eonames_nu(1)%kill
-            call eonames_nu(2)%kill
-            call volname%kill
-            call volname_nu%kill
-            call locres_name%kill
-            call fsc_fname%kill
-            if( allocated(fsc) ) deallocate(fsc)
-        end subroutine filter_and_write_matching_refs
-
-        subroutine cleanup_aux_images()
-            if( allocated(nu_aux_even) )then
-                do i = 1, size(nu_aux_even)
-                    call nu_aux_even(i)%kill
-                enddo
-                deallocate(nu_aux_even)
-            endif
-            if( allocated(nu_aux_odd) )then
-                do i = 1, size(nu_aux_odd)
-                    call nu_aux_odd(i)%kill
-                enddo
-                deallocate(nu_aux_odd)
-            endif
-        end subroutine cleanup_aux_images
-
+        deallocate(state_pops, l_included)
     end subroutine filter_pcg_nonuniform_maps
 
     subroutine exec_volassemble( self, cline )

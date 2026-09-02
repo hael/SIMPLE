@@ -386,7 +386,14 @@ contains
         ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_no_bfac%ifft
         call vol_no_bfac%write(fname_lp)
-        ! masking
+        ! masking -- DISPLAY/DEPOSITION EXEMPTION (code review 2026-09-02 P2):
+        ! multiplying the density envelope into a map is prohibited for
+        ! primary maps and iterative matching references, but the derived
+        ! _pproc/_mirr products are presentation artifacts and are
+        ! intentionally exempt. The unmasked primary map (and, on the PCG
+        ! backend, the Q_NU-regularized half maps) remains the authoritative
+        ! iterative and scientific output; nothing downstream may feed a
+        ! _pproc product back into refinement.
         call vol_bfac%ifft()
         if( do_envfsc )then
             ! enveloppe mask from FSC
