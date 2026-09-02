@@ -212,8 +212,9 @@ contains
     !! setup grid: voxels below half height are solvent. Call after
     !! setup_nu_dmats; the clamp overrides labels after optimization only, so
     !! every spherical-support statistic is untouched.
-    module subroutine set_nu_solvent_envelope( envmask )
-        class(image), intent(in) :: envmask
+    module subroutine set_nu_solvent_envelope( envmask, source )
+        class(image),               intent(in) :: envmask
+        character(len=*), optional, intent(in) :: source
         real, allocatable :: env_rmat(:,:,:)
         integer :: env_ldim(3)
         if( box < 1 ) THROW_HARD('set_nu_solvent_envelope requires setup_nu_dmats first')
@@ -226,11 +227,14 @@ contains
         nu_solvent_lmask = env_rmat(:ldim(1),:ldim(2),:ldim(3)) < 0.5
         deallocate(env_rmat)
         nu_l_solvent_clamp = .true.
+        nu_solvent_clamp_source = 'density_envelope'
+        if( present(source) ) nu_solvent_clamp_source = trim(source)
     end subroutine set_nu_solvent_envelope
 
     module subroutine clear_nu_solvent_envelope
         if( allocated(nu_solvent_lmask) ) deallocate(nu_solvent_lmask)
         nu_l_solvent_clamp = .false.
+        nu_solvent_clamp_source = 'density_envelope'
     end subroutine clear_nu_solvent_envelope
 
     !> Mark the current setup as retained for the matching-reference pass of

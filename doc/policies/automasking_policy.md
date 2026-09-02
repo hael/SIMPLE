@@ -9,8 +9,11 @@ mask for FSC correction independently of refinement-reference automasking.
 
 The current architecture has two independent controls and artifacts:
 
-- `automsk` requests a NU-evidence-derived per-state envelope for lagged
-  matching-reference solvent flattening
+- `automsk` requests a NU-evidence-derived per-state envelope that defines
+  the filter-field background: outside it the NU filter takes the coarsest
+  bank candidate, so matching references carry the excluded density heavily
+  low-pass filtered (never removed), and the same field derives the Q_NU
+  precisions on the pcg backend
 - `envfsc` requests an on-the-fly density-derived per-state envelope for
   phase-randomized FSC correction, cFAR, and final-map masking
 
@@ -43,12 +46,16 @@ cFAR, and compatible final-map postprocessing. This path is independent of
 `automsk` and NU filtering; `amsklp` remains the NU-evidence/standalone
 automasking scale and does not control this density FSC envelope.
 
-Matching references are solvent-flattened with the current, lagged NU-evidence
-envelope whenever `automsk=yes`; there is no separate `envref` control. A
-compatible density FSC envelope is the second-choice fallback; otherwise the
-first iteration uses the sphere. This changes only the references used to
-generate projections. Particle images, FSC estimation, NU filtering, and
-matching-bandwidth selection are unchanged by `automsk`.
+Matching references are never multiplied with an envelope before reprojection
+(2026-09-02): hard-removing density that is present in the particle images
+(e.g. a detergent micelle) destroys pose discrimination under the euclid
+objective. With `automsk=yes` the down-weighting happens through the NU
+filter field instead -- the background, defined as the complement of the NU
+evidence envelope derived in the same evidence pass, takes the coarsest bank
+candidate (cisTEM-style heavy background low-pass). The matcher applies the
+spherical soft reference mask only; there is no separate `envref` control.
+Particle images, FSC estimation, and matching-bandwidth selection are
+unchanged by `automsk`.
 
 NU filtering always uses the spherical support derived from `mskdiam`.
 Envelope masks do not define or restrict the NU objective domain. In

@@ -324,7 +324,8 @@ contains
         ! the clamp is part of the evidence identity: a frozen state built
         ! with the solvent constraint must never be mistaken for one without
         if( nu_l_solvent_clamp )then
-            state%summary%provenance = trim(state%summary%provenance)//';solvent_clamp=density_envelope'
+            state%summary%provenance = trim(state%summary%provenance)//';solvent_clamp='//&
+                &trim(nu_solvent_clamp_source)
         endif
         write(value_text,'(ES14.6)') null_bias_median
         state%summary%provenance = trim(state%summary%provenance)//';null_bias_median='//trim(adjustl(value_text))

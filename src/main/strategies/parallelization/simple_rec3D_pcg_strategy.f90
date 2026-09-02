@@ -329,16 +329,27 @@ contains
             write(logfhandle,'(A,I0,A)') '>>> PCG NU REPLAY ('//trim(context)//'): BUILDING EVIDENCE FROM THE '//&
                 &'FSC HALF PAIR OF STATE ', state_here, ' (source='//trim(source_here)//')'
             call setup_nu_dmats(vol_even, vol_odd, params%mskdiam, [real ::], evidence_source=trim(source_here))
-            ! solvent constraint: conservative density envelope from the
-            ! evidence pair average, computed on the fly and frozen into the
-            ! evidence state (pcg_priors.md dev item 4)
-            call vol_env_avg%copy(vol_even)
-            call vol_env_avg%add(vol_odd)
-            call vol_env_avg%mul(0.5)
-            call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp, l_report=.false.)
-            call set_nu_solvent_envelope(solvent_env)
-            call solvent_env%kill_bimg
-            call vol_env_avg%kill
+            if( trim(params%automsk).ne.'no' )then
+                ! automsk=yes: the filter-field background is the complement of
+                ! the NU evidence envelope, derived from the unaries of the
+                ! setup that just ran (same pass, no second compute) and frozen
+                ! into the evidence state; the artifact is written here too.
+                ! The PCG SOLVE support keeps the conservative density
+                ! envelope elsewhere (set_pcg_solve_support) -- never this mask.
+                call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, vol_even%get_smpd(), &
+                    &state_here, pp_plan%nu_envmask_file, l_arm_background=.true.)
+            else
+                ! automsk=no: solvent constraint from the conservative density
+                ! envelope, computed on the fly from the evidence pair average
+                ! (pcg_priors.md dev item 4)
+                call vol_env_avg%copy(vol_even)
+                call vol_env_avg%add(vol_odd)
+                call vol_env_avg%mul(0.5)
+                call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp, l_report=.false.)
+                call set_nu_solvent_envelope(solvent_env)
+                call solvent_env%kill_bimg
+                call vol_env_avg%kill
+            endif
             call optimize_nu_cutoff_finds()
             ! Stage 6.6 (pcg_priors.md): with nu_refine=yes the evidence candidate
             ! bank is extended by the proven high-resolution shell walk -- one
@@ -362,7 +373,9 @@ contains
                     &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
                     &pp_plan%nu_envmask_file%to_char()
             endif
-            if( l_envmask_regen )then
+            if( l_envmask_regen .and. trim(params%automsk).eq.'no' )then
+                ! with automsk=yes the artifact was already written by the
+                ! background-arming call above, from the same evidence pass
                 call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, vol_even%get_smpd(), &
                     &state_here, pp_plan%nu_envmask_file)
             endif

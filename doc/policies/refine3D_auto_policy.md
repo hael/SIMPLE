@@ -59,12 +59,17 @@ envelope never enters FSC correction. `envfsc` and `envmsklp` remain advanced
 filter controls and are independent of the default `automsk=yes` NU-reference
 policy.
 
-With `automsk=yes`, matching references consume the lagged
-`nu_envmask3D_stateNN.mrc`. The first iteration uses the spherical
-matching-reference mask; once volume assembly has written a compatible NU
-envelope, later references are solvent-flattened before projection without
-changing the NU filter, FSC policy, particles, or matching low-pass. There is no
-separate `envref` control.
+With `automsk=yes`, the NU filter-field background is the complement of the
+NU evidence envelope (`nu_envmask3D_stateNN.mrc`), derived in the same
+evidence pass that builds the filter bank. Background voxels take the
+coarsest bank candidate, so matching references carry the envelope-excluded
+density (detergent micelle, disordered belt) heavily low-pass filtered
+rather than removed, and the same field derives the Q_NU precisions.
+Matching references always take the spherical soft mask only -- they are
+never multiplied with an envelope before projection, because a reference
+must not hard-remove density that is present in the particle images. The
+PCG solve support remains the conservative density envelope, never the
+evidence envelope. There is no separate `envref` control.
 
 If `filt_mode` is overridden to a non-NU mode, `automsk` must also be set to
 `no`; other combinations are rejected.

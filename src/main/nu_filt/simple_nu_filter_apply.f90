@@ -5,34 +5,17 @@ implicit none
 
 contains
 
-    module subroutine nu_filter_vols( vol_even, vol_odd, vol_fallback_even, vol_fallback_odd )
-        class(image),                   intent(out) :: vol_even, vol_odd
-        class(image), optional, target, intent(in)  :: vol_fallback_even, vol_fallback_odd
+    module subroutine nu_filter_vols( vol_even, vol_odd )
+        class(image), intent(out) :: vol_even, vol_odd
         type(image) :: vol_filt
         type(string) :: cache_fname
         real(kind=c_float), pointer :: rmat_filt(:,:,:)
         real(kind=c_float), pointer :: rmat_even_out(:,:,:),  rmat_odd_out(:,:,:)
         real(kind=c_float), pointer :: rmat_aux_even(:,:,:), rmat_aux_odd(:,:,:)
         integer :: i, j, k, icut, imask
-        logical :: l_fallback
         if( .not.allocated(cutoff_finds) ) THROW_HARD('cutoff_finds not allocated; run setup_nu_dmats before nu_filter_vols')
         if( .not.allocated(filtmap)      ) THROW_HARD('filtmap not allocated; run optimize_nu_cutoff_finds before nu_filter_vols')
         if( .not.allocated(nu_mask_vox)  ) THROW_HARD('nu_mask_vox not allocated; run setup_nu_dmats before nu_filter_vols')
-        ! Optional fallback pair: seeds the output where no finer bank label was
-        ! positively selected -- the null/baseline label, the solvent-clamped
-        ! region, and outside-support voxels -- replacing the coarsest-candidate
-        ! flattening there. Intended for matching-reference generation, where the
-        ! caller supplies the FSC-optimal filtered base pair so the matching
-        ! model is never locally worse than the isotropic FSC-filtered reference.
-        l_fallback = present(vol_fallback_even) .or. present(vol_fallback_odd)
-        if( l_fallback )then
-            if( .not.(present(vol_fallback_even) .and. present(vol_fallback_odd)) ) &
-                &THROW_HARD('fallback volumes must be supplied as an even/odd pair; nu_filter_vols')
-            if( any(vol_fallback_even%get_ldim() /= ldim) .or. any(vol_fallback_odd%get_ldim() /= ldim) ) &
-                &THROW_HARD('fallback volume dimensions differ; nu_filter_vols')
-            if( vol_fallback_even%is_ft() .or. vol_fallback_odd%is_ft() ) &
-                &THROW_HARD('fallback volumes must be in real space; nu_filter_vols')
-        endif
         call release_nu_filter_unary_storage
         call vol_filt%new(ldim, smpd)
         call vol_filt%set_wthreads(.false.)
@@ -40,14 +23,10 @@ contains
         call vol_odd%new(ldim, smpd, wthreads=.false.)
         call vol_even%get_rmat_ptr(rmat_even_out)
         call vol_odd%get_rmat_ptr(rmat_odd_out)
-        if( l_fallback )then
-            call vol_fallback_even%get_rmat_ptr(rmat_filt)
-        else
-            cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(1))
-            if( .not.file_exists(cache_fname) ) THROW_HARD('Missing filtered volume cache: '//cache_fname%to_char()//' ; run setup_nu_dmats first')
-            call vol_filt%read(cache_fname)
-            call vol_filt%get_rmat_ptr(rmat_filt)
-        endif
+        cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_EVEN), cutoff_finds(1))
+        if( .not.file_exists(cache_fname) ) THROW_HARD('Missing filtered volume cache: '//cache_fname%to_char()//' ; run setup_nu_dmats first')
+        call vol_filt%read(cache_fname)
+        call vol_filt%get_rmat_ptr(rmat_filt)
         rmat_even_out(:ldim(1),:ldim(2),:ldim(3)) = rmat_filt(:ldim(1),:ldim(2),:ldim(3))
         do icut = 2, size(cutoff_finds)
             if( nu_label_is_aux_replacement(icut) ) cycle
@@ -64,14 +43,10 @@ contains
             end do
             !$omp end parallel do
         end do
-        if( l_fallback )then
-            call vol_fallback_odd%get_rmat_ptr(rmat_filt)
-        else
-            cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_ODD), cutoff_finds(1))
-            if( .not.file_exists(cache_fname) ) THROW_HARD('Missing filtered volume cache: '//cache_fname%to_char()//' ; run setup_nu_dmats first')
-            call vol_filt%read(cache_fname)
-            call vol_filt%get_rmat_ptr(rmat_filt)
-        endif
+        cache_fname = filtered_vol_fname(string(NU_FILTER_CACHE_ODD), cutoff_finds(1))
+        if( .not.file_exists(cache_fname) ) THROW_HARD('Missing filtered volume cache: '//cache_fname%to_char()//' ; run setup_nu_dmats first')
+        call vol_filt%read(cache_fname)
+        call vol_filt%get_rmat_ptr(rmat_filt)
         rmat_odd_out(:ldim(1),:ldim(2),:ldim(3)) = rmat_filt(:ldim(1),:ldim(2),:ldim(3))
         do icut = 2, size(cutoff_finds)
             if( nu_label_is_aux_replacement(icut) ) cycle

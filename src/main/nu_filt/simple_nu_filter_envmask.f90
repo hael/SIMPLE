@@ -304,16 +304,22 @@ contains
     !! plan_state_postprocess at the call site, and the filename is passed in.
     !! An empty evidence field warns and writes nothing; every envelope
     !! consumer handles absence.
-    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname )
+    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, l_arm_background, l_armed )
         use simple_image_msk, only: image_msk
-        real,          intent(in) :: nsigma, lp_smooth, smpd
-        integer,       intent(in) :: state
-        class(string), intent(in) :: fname
+        real,              intent(in)  :: nsigma, lp_smooth, smpd
+        integer,           intent(in)  :: state
+        class(string),     intent(in)  :: fname
+        logical, optional, intent(in)  :: l_arm_background
+        logical, optional, intent(out) :: l_armed
         type(nu_envmask_params) :: envp
         type(nu_envmask_stats)  :: envstats
         type(image_msk)         :: envmask
         logical, allocatable    :: l_env(:,:,:)
         integer :: grow_px, edge_px, n_ccs, n_ccs_kept
+        logical :: l_arm
+        l_arm = .false.
+        if( present(l_arm_background) ) l_arm = l_arm_background
+        if( present(l_armed) ) l_armed = .false.
         envp%nsigma      = nsigma
         envp%beta        = NU_ENVMASK_BETA
         envp%dens_weight = NU_ENVMASK_DENS_WEIGHT
@@ -335,6 +341,20 @@ contains
             call wait_for_closure(fname)
             write(logfhandle,'(A,I0,A,1X,A)') &
                 &'>>> NU EVIDENCE ENVELOPE: STATE ', state, ', MASK', fname%to_char()
+            ! automsk=yes background policy: the filter-field background is the
+            ! complement of this envelope, derived from the SAME evidence pass
+            ! (no second compute). Voxels outside it take the coarsest bank
+            ! candidate -- a heavy background low-pass (cisTEM-style) that
+            ! down-weights the excluded density's contribution to alignment
+            ! without removing it from the reference. The same field feeds the
+            ! Q_NU precisions. The PCG SOLVE support stays on the conservative
+            ! density envelope, never on this evidence mask.
+            if( l_arm )then
+                call set_nu_solvent_envelope(envmask, source='nu_evidence_envelope')
+                if( present(l_armed) ) l_armed = .true.
+                write(logfhandle,'(A,I0)') &
+                    &'>>> NU BACKGROUND: FILTER-FIELD BACKGROUND ARMED FROM THE EVIDENCE ENVELOPE, STATE ', state
+            endif
         endif
         ! One greppable line per state per cycle. The envelope is allowed to
         ! shrink as resolution improves, but reference masking suppresses

@@ -215,6 +215,11 @@ real,             allocatable :: nu_smooth_norm(:,:,:)
 ! after setup_nu_dmats; cleared by cleanup_nu_filter; absent = no clamp.
 logical,          allocatable :: nu_solvent_lmask(:,:,:) !< .true. = outside the envelope (solvent)
 logical :: nu_l_solvent_clamp = .false.
+! Which envelope defines the filter-field background: the conservative
+! density automask (automsk=no solvent constraint) or the NU evidence
+! envelope (automsk=yes background policy, derived in the same evidence
+! pass). Part of the frozen-evidence identity via the provenance string.
+character(len=32) :: nu_solvent_clamp_source = 'density_envelope'
 ! Setup retention across the two per-iteration NU consumers (pcg_priors.md
 ! dev item 4 dedup): the Q_NU evidence phase and the matching-reference
 ! generation run on the same base pair with the same optimized, extended,
@@ -390,8 +395,9 @@ interface
     module subroutine cleanup_nu_filter
     end subroutine cleanup_nu_filter
 
-    module subroutine set_nu_solvent_envelope( envmask )
-        class(image), intent(in) :: envmask
+    module subroutine set_nu_solvent_envelope( envmask, source )
+        class(image),               intent(in) :: envmask
+        character(len=*), optional, intent(in) :: source
     end subroutine set_nu_solvent_envelope
 
     module subroutine clear_nu_solvent_envelope
@@ -636,9 +642,8 @@ interface
     end subroutine apply_nu_highres_extension_selection
 
     ! In submodule: simple_nu_filter_apply.f90
-    module subroutine nu_filter_vols( vol_even, vol_odd, vol_fallback_even, vol_fallback_odd )
-        class(image),                   intent(out) :: vol_even, vol_odd
-        class(image), optional, target, intent(in)  :: vol_fallback_even, vol_fallback_odd
+    module subroutine nu_filter_vols( vol_even, vol_odd )
+        class(image), intent(out) :: vol_even, vol_odd
     end subroutine nu_filter_vols
 
     module subroutine nu_filter_vol( vol_in, vol_out )
@@ -734,10 +739,12 @@ interface
         logical, optional, intent(in) :: l_relative
     end subroutine write_nu_evidence_map
 
-    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname )
-        real,          intent(in) :: nsigma, lp_smooth, smpd
-        integer,       intent(in) :: state
-        class(string), intent(in) :: fname
+    module subroutine write_nu_evidence_envmask( nsigma, lp_smooth, smpd, state, fname, l_arm_background, l_armed )
+        real,              intent(in)  :: nsigma, lp_smooth, smpd
+        integer,           intent(in)  :: state
+        class(string),     intent(in)  :: fname
+        logical, optional, intent(in)  :: l_arm_background
+        logical, optional, intent(out) :: l_armed
     end subroutine write_nu_evidence_envmask
 
     module subroutine print_nu_envmask_stats( stats )

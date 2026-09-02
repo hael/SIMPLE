@@ -62,11 +62,17 @@ correction changes reported resolution metadata; it does not truncate the NU
 filter bank or directly set the NU matching bandwidth. `envfsc` is independent
 of `automsk` and can operate without NU filtering.
 
-Matching-reference solvent flattening is no longer a separate control. Whenever
-`automsk=yes`, the selected NU-derived reference is solvent-flattened with the
-current compatible state envelope immediately before reprojection. It does not
-alter the NU map, the FSC, particle images, or the selected matching low-pass
-limit. The former `envref` parameter has been removed.
+Matching references are never multiplied with an envelope before reprojection
+(2026-09-02): a reference must not hard-remove density that is present in the
+particle images. Whenever `automsk=yes`, the filter-field background -- the
+complement of the NU evidence envelope, derived in the same evidence pass that
+builds the filter bank -- takes the coarsest bank candidate, so the
+envelope-excluded density (detergent micelle, disordered belt) enters the
+matching references heavily low-pass filtered rather than removed, and the
+same field derives the Q_NU precisions on the pcg backend. With `automsk=no`
+the background clamp uses the conservative density envelope instead. The
+matcher applies the spherical soft mask only. The former `envref` parameter
+has been removed.
 
 ## 3. Ownership
 

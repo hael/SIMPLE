@@ -2963,35 +2963,59 @@ the acceptable-looking outputs do not validate the prior.
    immune (nearly nothing inside their envelope goes null). Score-spread
    flatness (0.380 +/- 0.002) appears in healthy runs too and was never
    evidence.
-   Fix (2026-09-02, user-directed: "the correct isotropic filter for the
-   mask-excluded density estimate"), matching product only, both
-   backends:
-   - `nu_filter_vols` gains an optional fallback even/odd pair that
-     seeds the output wherever no finer bank label was positively
-     selected (null/baseline label, solvent-clamped, outside support),
-     replacing the coarsest-candidate flattening there. Absent
-     arguments = bit-identical previous behavior (nufilt3D and every
-     other caller unchanged).
-   - `prepare_nu_matching_fallback` (rec_distr) builds the fallback as
-     the FSC-optimal (fsc2optlp) filtered copy of the same base pair
-     the bank caches were built from (the _unfil pair under ml_reg),
-     reading the state FSC from disk; wired at both matching-product
-     sites -- `filter_pcg_nonuniform_maps` (including the
-     retained-evidence-setup path, which re-reads the pair from disk)
-     and volassemble's `run_state_nonuniform_filter` (before the base
-     inputs are released). Logged as ">>> NU MATCHING REFS:
-     FSC-OPTIMAL FALLBACK...".
-   - The Q_NU prior, the shipped maps, the evidence state, the bank
-     tables, and the matching-lp handoff keep coarsest-bank semantics
-     unchanged: strong suppression stays correct for the solve; the
-     matching model is now never locally worse than the isotropic
-     FSC-filtered reference that the healthy filt_mode=none control
-     matched against.
-   - Validation plan: PfCRT refine3D_auto, defaults (NU + automsk back
-     on) -- expect iteration 1 to hold ~3.9 A with overlap ~0.98;
-     streptavidin rerun -- expect no change (their fallback region is
-     essentially solvent, which the spherical reference mask removes
-     anyway).
+   **First fix attempt -- FSC-OPTIMAL FALLBACK IN THE MATCHING PRODUCT
+   (6e5135689) -- TESTED AND RETIRED (2026-09-02).** Seeding the
+   `_nu_filt` matching references with the FSC-optimal filtered base
+   pair wherever no finer bank label was positively selected did NOT
+   rescue the alignment. The test ran at automsk=yes defaults, where
+   the matcher still multiplied the references with the NU evidence
+   envelope before reprojection -- the restored fallback content
+   outside the ~10-19% envelope was erased again by the
+   multiplication, which stood in every collapsing configuration.
+   The multiplication, not the filter flattening, is the standing
+   suspect; the fallback machinery was reverted.
+   **Superseding policy (2026-09-02, user-directed).** Principle: a
+   reference must never HARD-REMOVE density that is present in the
+   particle images; density excluded by an envelope is DOWN-WEIGHTED
+   through heavy low-pass filtering of the background (cisTEM
+   precedent: envelope + heavy background low-pass does not break
+   alignment). Three parts, both backends:
+   - Reference-envelope multiplication REMOVED. The matcher's
+     `mask_matching_reference` applies the spherical soft mask ONLY;
+     `prepare_matching_reference_mask` and the evidence/density
+     envelope multiplication (`zero_env_background` + `mul`) are
+     deleted. No reference is ever multiplied with an envelope before
+     reprojection.
+   - automsk=yes now means: the filter-field BACKGROUND is the
+     complement of the NU evidence envelope, derived from the SAME
+     evidence pass (the setup unaries; no automask3D double-compute).
+     `write_nu_evidence_envmask` gains `l_arm_background`: one call
+     derives the envelope, writes the artifact, and arms the
+     background clamp (`set_nu_solvent_envelope` with
+     source='nu_evidence_envelope'; provenance -- and thus the frozen
+     evidence identity -- records the clamp source). Background voxels
+     take the coarsest bank candidate in the filter field, which both
+     generates the matching references (heavy background low-pass,
+     detergent down-weighted but present) and derives the Q_NU
+     precisions (maximum lack-of-evidence outside the envelope) -- one
+     field, both consumers. Armed before `optimize_nu_cutoff_finds` at
+     all three sites (`build_nu_replay_evidence`,
+     `filter_pcg_nonuniform_maps`, volassemble's
+     `setup_nonuniform_filter`), so the existing pre/post-Potts clamp
+     mechanics apply unchanged; the later plan-gated envmask writes are
+     skipped in this mode (already written in-pass).
+   - automsk=no keeps the conservative density-envelope solvent
+     constraint of dev item 4 (on-the-fly automask3D), bit-identical.
+   - The PCG SOLVE support is deliberately NOT the evidence mask: it
+     stays the conservative density envelope from the lag-one
+     reference (`build_pcg_state_support`), per the solve-support
+     policy -- the evidence mask is too tight to constrain the solve.
+   - Validation plan: PfCRT refine3D_auto at full defaults -- expect
+     iteration 1 to hold ~3.9 A with high overlap now that the
+     references explain the micelle at 19.4 A instead of omitting it;
+     streptavidin rerun -- expect no regression (its evidence and
+     density envelopes nearly coincide, and its background is
+     essentially solvent).
 
 ## 11. The NU machinery as the prior infrastructure
 
