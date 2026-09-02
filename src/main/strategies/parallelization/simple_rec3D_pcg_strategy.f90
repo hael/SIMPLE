@@ -169,6 +169,65 @@ contains
         call prev_fname%kill
     end subroutine override_ml_warm_start_from_previous
 
+    !> Cross-iteration warm start for the unregularized/base solve. Prefer the
+    !! previous iteration's explicitly saved `_unfil` half whenever the
+    !! shipped pair was regularized. A shipped primary half is eligible only
+    !! when its provenance says that it is itself a base solution; this keeps
+    !! NU/ML regularization out of the base oracle and also avoids accidentally
+    !! selecting a stale `_unfil` artifact after a base-only iteration. Legacy
+    !! runs without solve-kind provenance may still supply an `_unfil` half,
+    !! whose filename is an explicit compatibility contract. Otherwise the
+    !! caller's zero initialization is retained. solve_accum applies the exact
+    !! current solve support to this initial guess before entering CG.
+    subroutine override_base_warm_start_from_previous( params, state_here, half, x, context, l_found )
+        class(parameters), intent(in)    :: params
+        integer,           intent(in)    :: state_here
+        character(len=*),  intent(in)    :: half, context
+        real,              intent(inout) :: x(:,:,:)
+        logical,           intent(out)   :: l_found
+        type(string) :: prev_fname, unfil_fname, seed_fname
+        type(image)  :: prev
+        character(len=16) :: solve_kind
+        logical :: l_support_constrained, l_support_found, l_kind_found
+        l_found = .false.
+        if( state_here < 1 .or. state_here > size(params%vols) ) return
+        if( len_trim(params%vols(state_here)%to_char()) == 0 ) return
+        prev_fname = add2fbody(params%vols(state_here), MRC_EXT, '_'//trim(half))
+        if( index(prev_fname%to_char(), 'startvol') > 0 )then
+            call prev_fname%kill
+            return
+        endif
+        unfil_fname = add2fbody(prev_fname, MRC_EXT, '_unfil')
+        call read_pcg_support_provenance(params%vols(state_here), l_support_constrained, &
+            &l_support_found, solve_kind, l_kind_found)
+        if( .not. l_support_found ) l_kind_found = .false.
+        if( l_kind_found .and. trim(solve_kind) == 'base' )then
+            if( file_exists(prev_fname) ) seed_fname = prev_fname
+        else if( l_kind_found .and. trim(solve_kind) == 'regularized' )then
+            if( file_exists(unfil_fname) ) seed_fname = unfil_fname
+        else if( .not. l_kind_found )then
+            ! Backward compatibility: `_unfil` alone proves that the artifact
+            ! is the base member of the previous iteration's two-map contract.
+            if( file_exists(unfil_fname) ) seed_fname = unfil_fname
+        endif
+        if( len_trim(seed_fname%to_char()) == 0 )then
+            call prev_fname%kill
+            call unfil_fname%kill
+            call seed_fname%kill
+            return
+        endif
+        call prev%read_and_crop(seed_fname, params%smpd, params%box_crop, params%smpd_crop)
+        call prev%mask3D_soft(params%msk_crop, backgr=0.)
+        x = prev%get_rmat()
+        call prev%kill
+        l_found = .true.
+        write(logfhandle,'(A)') '>>> PCG BASE WARM START ('//trim(context)//'/'//trim(half)//&
+            &'): previous-iteration base half map '//seed_fname%to_char()
+        call prev_fname%kill
+        call unfil_fname%kill
+        call seed_fname%kill
+    end subroutine override_base_warm_start_from_previous
+
     !> Regularized initial guess for a COLD ML replay (no previous ML half
     !! map to warm-start from: the standalone harness, the first refinement
     !! iteration, abinitio3D stage handoffs). The documented cold-start gap
@@ -521,51 +580,68 @@ contains
         lp = calc_lowpass_lim(handoff_find, box_here, smpd_here)
     end function pcg_nu_matching_lowpass
 
-    !> Solve-support provenance sidecar of a shipped state volume: records
-    !! whether the shipped half pair was estimated inside the conservative
-    !! density envelope (P H P with the density support) or on the sphere.
-    !! The trailing bootstrap reads it back for the lag-one pair so the FSC
-    !! preprocessing decision follows the support actually installed, never
-    !! the current iteration's support availability.
+    !> Solve provenance sidecar of a shipped state volume: records whether
+    !! the shipped half pair was estimated inside the conservative density
+    !! envelope (P H P with the density support) or on the sphere, and whether
+    !! the primary pair is base, regularized, or a bootstrap mixture. The
+    !! trailing bootstrap reads the support field for its lag-one FSC pair;
+    !! the base warm-start selector reads the solve-kind field.
     function pcg_support_provenance_fname( volname ) result( fname )
         type(string), intent(in) :: volname
         type(string) :: fname
         fname = swap_suffix(add2fbody(volname, MRC_EXT, '_pcg_support'), TXT_EXT, MRC_EXT)
     end function pcg_support_provenance_fname
 
-    subroutine write_pcg_support_provenance( volname, l_constrained )
+    subroutine write_pcg_support_provenance( volname, l_constrained, solve_kind )
         type(string), intent(in) :: volname
         logical,      intent(in) :: l_constrained
+        character(len=*), intent(in) :: solve_kind
         type(string) :: fname
         integer :: funit
+        select case( trim(solve_kind) )
+            case( 'base', 'regularized', 'mixed' )
+            case default
+                THROW_HARD('invalid PCG solve kind for provenance sidecar')
+        end select
         fname = pcg_support_provenance_fname(volname)
         call fopen(funit, file=fname, status='replace', action='write')
         write(funit,'(A)') 'solve_support='//merge('density', 'sphere ', l_constrained)
+        write(funit,'(A)') 'solve_kind='//trim(solve_kind)
         call fclose(funit)
         call fname%kill
     end subroutine write_pcg_support_provenance
 
-    subroutine read_pcg_support_provenance( volname, l_constrained, l_found )
+    subroutine read_pcg_support_provenance( volname, l_constrained, l_found, solve_kind, l_kind_found )
         type(string), intent(in)  :: volname
         logical,      intent(out) :: l_constrained, l_found
+        character(len=*), optional, intent(out) :: solve_kind
+        logical, optional,          intent(out) :: l_kind_found
         type(string) :: fname
         character(len=64) :: line
         integer :: funit, io_stat
         l_constrained = .false.
         l_found       = .false.
+        if( present(solve_kind) )   solve_kind   = ''
+        if( present(l_kind_found) ) l_kind_found = .false.
         fname = pcg_support_provenance_fname(volname)
         if( .not. file_exists(fname) )then
             call fname%kill
             return
         endif
         call fopen(funit, file=fname, status='old', action='read')
-        read(funit,'(A)',iostat=io_stat) line
+        do
+            read(funit,'(A)',iostat=io_stat) line
+            if( io_stat /= 0 ) exit
+            if( index(line, 'solve_support=') == 1 )then
+                l_found       = .true.
+                l_constrained = index(line, 'density') > 0
+            else if( index(line, 'solve_kind=') == 1 )then
+                if( present(solve_kind) ) solve_kind = adjustl(line(len('solve_kind=')+1:))
+                if( present(l_kind_found) ) l_kind_found = .true.
+            endif
+        enddo
         call fclose(funit)
         call fname%kill
-        if( io_stat /= 0 ) return
-        if( index(line, 'solve_support=') /= 1 ) return
-        l_found       = .true.
-        l_constrained = index(line, 'density') > 0
     end subroutine read_pcg_support_provenance
 
     !> Resolution-text naming, mirroring the gridding volassemble contract
@@ -1075,11 +1151,11 @@ contains
             if( params%l_ml_reg )then
                 call ml_even%write(fname_even, del_if_exists=.true.)
                 call ml_odd%write(fname_odd, del_if_exists=.true.)
-                call write_pcg_support_provenance(fname_vol, l_state_support)
+                call write_pcg_support_provenance(fname_vol, l_state_support, 'regularized')
             else
                 call half_even%write(fname_even, del_if_exists=.true.)
                 call half_odd%write(fname_odd, del_if_exists=.true.)
-                call write_pcg_support_provenance(fname_vol, l_base_support_constrained)
+                call write_pcg_support_provenance(fname_vol, l_base_support_constrained, 'base')
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
@@ -1228,6 +1304,7 @@ contains
             integer :: lims2(2,2), R, kfromto(2), batchlims(2), batchsz
             integer :: i, ii, iptcl, ibatch, niters
             real    :: shift(2), crop_factor, sdev_noise, edge_mean
+            logical :: l_warm
             integer(timer_int_kind) :: t_half, t_phase
             real(dp) :: time_metadata, time_particles, time_accum_init, time_accum
             real(dp) :: time_finalize, time_solve, time_total
@@ -1315,6 +1392,7 @@ contains
             call pcgop%set_op_mode(PCG_OP_KERNEL)
             time_finalize = real(toc(t_phase),dp)
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
+            call override_base_warm_start_from_previous(params, state_here, half, x, 'shared', l_warm)
             t_phase = tic()
             call pcgop%solve_accum(x, maxits=params%maxits_pcg, rtol=params%rtol, &
                 &rel_res_hist=rel_res_hist, niters=niters, outcome=result)
@@ -2366,7 +2444,13 @@ contains
                 call half_even%write(fname_even, del_if_exists=.true.)
                 call half_odd%write(fname_odd, del_if_exists=.true.)
             endif
-            call write_pcg_support_provenance(fname_vol, l_shipped_support_constrained)
+            if( params%l_ml_reg )then
+                call write_pcg_support_provenance(fname_vol, l_shipped_support_constrained, 'regularized')
+            else if( l_bootstrap .and. update_weights(state) < 0.99 )then
+                call write_pcg_support_provenance(fname_vol, l_shipped_support_constrained, 'mixed')
+            else
+                call write_pcg_support_provenance(fname_vol, l_shipped_support_constrained, 'base')
+            endif
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
             call write_output_diagnostics(state, 'distributed', time_map_output, time_fsc_output, time_evidence)
@@ -2692,6 +2776,8 @@ contains
                     &call regularized_ml_initial_guess(params, fsc_prior, job%x, 'distributed', half)
             else
                 allocate(job%x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
+                call override_base_warm_start_from_previous(params, state_here, half, job%x, &
+                    &'distributed', l_warm)
             endif
             job%ready = .true.
         end subroutine prepare_distributed_half_job

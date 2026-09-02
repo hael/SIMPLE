@@ -155,27 +155,34 @@ gridding-to-PCG handoff crash was exactly such a jump).
 ### ML two-map contract and warm starts
 
 Refinement solves are two phases from one particle accumulation. The *base*
-solve (`H_data + lambda I`, cold start) produces the `_unfil` half pair;
-FSC/cFAR and resolution metadata come from that pair. The regularized replay
-deterministically replays kernel finalization from the persisted raw `(B,D)`
-and produces the standard maps. Ordinary mode installs the FSC/SSNR
-shell-diagonal `P_tau`; NU modes install the Potts-derived real-space `Q_NU`
-instead, never both. The replay warm-starts from the previous refinement
-iteration's ML half map when one exists on disk — strictly the same half
-(gold-standard independence), constant-FOV `read_and_crop` across crop
+solve (`H_data + lambda I`) produces the `_unfil` half pair; FSC/cFAR and
+resolution metadata come from that pair. It warm-starts from the previous
+iteration's same-half base solution: the explicit `_unfil` artifact after a
+regularized iteration, or the primary half only when its sidecar identifies it
+as a base solution. A first solve, imported legacy base-only map, or mixed
+bootstrap output without an eligible base artifact starts from zero. The
+regularized replay deterministically replays kernel finalization from the
+persisted raw `(B,D)` and produces the standard maps. Ordinary mode installs
+the FSC/SSNR shell-diagonal `P_tau`; NU modes install the Potts-derived
+real-space `Q_NU` instead, never both. The replay warm-starts from the previous
+refinement iteration's ML half map when one exists on disk — strictly the same
+half (gold-standard independence), constant-FOV `read_and_crop` across crop
 changes, support re-masked after resampling, the first-iteration noise
 `startvol` excluded by name — and otherwise from the base solution. Neither
 precision nor lambda is ever accumulated into raw `B` or `D`.
 
 Every shipped state volume carries a solve-support provenance sidecar
-(`<vol>_pcg_support.txt`, `solve_support=density|sphere`). The trailing
-bootstrap reads it for the lag-one FSC/evidence pair so the envelope and
-phase-randomization FSC preprocessing is skipped exactly when that pair was
-density-constrained in the estimator; a pair without a sidecar is treated as
-unconstrained, and a bootstrap blend is constrained only if both contributions
-were. The NU evidence built from a density-constrained pair confines all its
-calibration statistics to the observed (non-zero) voxels of the spherical
-support (`doc/policies/nonuniform_filtering_policy.md`).
+(`<vol>_pcg_support.txt`, `solve_support=density|sphere` and
+`solve_kind=base|regularized|mixed`). The trailing bootstrap reads the support
+field for the lag-one FSC/evidence pair so the envelope and phase-randomization
+FSC preprocessing is skipped exactly when that pair was density-constrained in
+the estimator; a pair without a sidecar is treated as unconstrained, and a
+bootstrap blend is constrained only if both contributions were. The base
+warm-start selector uses the kind field to prevent a regularized or mixed
+primary map from entering the base solve. The NU evidence built from a
+density-constrained pair confines all its calibration statistics to the
+observed (non-zero) voxels of the spherical support
+(`doc/policies/nonuniform_filtering_policy.md`).
 
 With `nu_refine=no`, PCG uses the established eight signal candidates, four
 fixed evidence bands, integer Potts coordinates, unit candidate masses, and

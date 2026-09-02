@@ -34,8 +34,11 @@ this document predates this outcome and is retained as plan history.
 The production PCG path performs, per state and half, one *base* solve and one
 *ML replay* solve from the same raw `(B,D)` statistics:
 
-- **base solve**: `(H_data + lambda_0 I) x = b`, cold-started; its half pair
-  (`*_unfil`) produces the FSC.
+- **base solve**: `(H_data + lambda_0 I) x = b`; its half pair (`*_unfil`)
+  produces the FSC. Each half warm-starts from the previous iteration's own
+  base half when that artifact is explicit (`*_unfil`) or the primary pair is
+  proven base-only by its sidecar. First solves and ineligible/mixed inputs
+  retain the zero start.
 - **ML replay**: `(H_data + P_tau + lambda_0 I) x = b`, where `P_tau` is the
   FSC/SSNR shell-diagonal Fourier precision (`ml_prior`, present in both the
   operator and the preconditioner). Its output is the shipped map. It
@@ -71,7 +74,7 @@ Kept so no experiment is re-run. Measurements in
 | `pcg_lambda_rel` — relative base-lambda CLI (the "P0 lambda contract") | CLI removed as unused; the internal `set_lambda_relative` mechanism and the deterministic `s_data(D)` data-scale functional remain (test commanders, diagnostics). | Relative anchoring machinery is retained where priors need it; it is not user-facing. |
 | Kernel-derived preconditioner | Removed. Did not improve runtime at one iteration and degraded reconstruction metrics. | The sampling-density diagonal with a shell-relative floor is the preconditioner. |
 | Whole-volume-L2 ML-vs-base rescale guard | Removed. Whole-volume norms are solvent-dominated and never fired on the failing solves. | Compare shell profiles, not whole-map statistics. |
-| `x0 = P b` base-solve warm start (proposed, never built) | Superseded. | The cross-iteration ML warm start addresses the same under-convergence where it matters (the shipped ML map). |
+| `x0 = P b` right-hand-side base warm start (proposed, never built) | Superseded by the previous-iteration base solution. | Reusing the prior compatible same-half solution exploits actual iteration-to-iteration continuity without constructing a differently scaled surrogate from `b`. |
 | `ref_taper` — legacy KB matching-reference taper | Removed after a master reliability control (1/10 failures on master vs 2/10 on the branch) showed no regression to fix. | Measure the baseline before attributing a failure rate to a change. |
 
 Two historical defects, both fixed, whose lessons are contracts now:
@@ -3125,13 +3128,17 @@ the acceptable-looking outputs do not validate the prior.
      uncertainty. The summary carries `observed_fraction` and the
      provenance string records `statistics_domain=observed_support`. The
      spherical NU support itself is unchanged (skill invariant).
-   - Solve-support provenance: every shipped state volume now has a
-     `<vol>_pcg_support.txt` sidecar (`solve_support=density|sphere`).
+   - Solve/support provenance: every shipped state volume now has a
+     `<vol>_pcg_support.txt` sidecar (`solve_support=density|sphere`,
+     `solve_kind=base|regularized|mixed`).
      The trailing bootstrap reads it for the lag-one FSC/evidence pair, so
      `evaluate_halfmap_pair` skips the envelope+phase-randomization
      preprocessing exactly when that pair was density-constrained in the
      estimator; a pair without a sidecar (imported) stays unconstrained.
-     A bootstrap blend is constrained only if both contributions were.
+     A bootstrap blend is constrained only if both contributions were. Base
+     solves also use the kind field to reuse only a compatible own-half base
+     solution: `_unfil` for a regularized predecessor, primary for a base-only
+     predecessor, and no primary warm start for a mixed predecessor.
    - Shell-walk flag renamed `l_require_margin` (was `l_tie_tolerant`):
      it demands a `nu_label_smooth_is_better` margin win, i.e. it is
      STRICTER than the raw `<` test, which the old name inverted.
