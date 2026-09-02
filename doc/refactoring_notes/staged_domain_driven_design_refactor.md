@@ -1116,10 +1116,15 @@ distributed, streaming, restart, and numerical contracts throughout migration.
 | Self-verifying serial/parallel/persisted benchmark | Adopt: correctness and determinism gates precede timing acceptance |
 | Versioned, fail-closed packed artifact | Defer as a separate infrastructure decision; preserve `.simple` initially and require explicit compatibility approval for new formats |
 | Shallow domain-specific inheritance | Do not generalize into a Movie/Micrograph/Particle hierarchy; prefer composition, services, result types, and lineage |
-| Small-package command specification and one-type-per-module organization | Do not transplant mechanically; retain SIMPLE's established generated UI and functional source organization |
+| Small-package command specification and one-type-per-module organization | Command specification: see `x_execution_layer_adoption.md`, an independent program that predates this refactor. One-type-per-module: do not transplant |
 
 The X review also exposed a caution that this plan makes explicit: an abstract
 semantic contract can become decorative if optimized consumers require methods
 available only on a concrete packed type. SIMPLE contracts must therefore be
 designed around the actual bulk access needed by production algorithms while
 keeping storage layout and persistence ownership outside the domain API.
+
+The X command-object, CLI-specification, and distributed-execution
+mechanisms are adopted through a separate, independent program:
+`doc/refactoring_notes/x_execution_layer_adoption.md`. It does not depend on
+any milestone here and should land first.

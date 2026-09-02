@@ -20,7 +20,7 @@ contains
         type(string) :: identity_seed_string, identity_hash
         integer(kind=NU_LABEL_KIND), allocatable :: evidence_map(:,:,:)
         real, allocatable :: null_full(:,:,:), smooth_tmp(:,:,:), null_cost(:), coords(:), signal_lps(:)
-        real, allocatable :: gaps(:), probs(:), candidate_measure(:), band_support_tmp(:,:)
+        real, allocatable :: gaps(:), gaps_obs(:), probs(:), candidate_measure(:), band_support_tmp(:,:)
         real, allocatable :: band_limits_active(:)
         real    :: nextb
         real(kind=8) :: fingerprint(6), cutoff_checksum, uncertainty_checksum, support_checksum
@@ -29,7 +29,7 @@ contains
         real :: unconstrained_null_fraction
         real :: null_bias_median, null_bias_mad, null_bias_threshold
         integer :: n_signal, n_candidates, imask, icand, iband, i, j, k, label, n_uncertain, k25
-        integer :: nb_active
+        integer :: nb_active, n_observed, n_null_observed
         character(len=32) :: value_text
         character(len=XLONGSTRLEN) :: identity_seed
 
@@ -50,6 +50,21 @@ contains
         if( .not.allocated(nu_noise_profile_cached) ) &
             &THROW_HARD('NU whitening profile is unavailable for evidence compaction')
         if( n_nu_mask < 1 ) THROW_HARD('NU evidence support is empty')
+        ! Observation domain (2026-09-02 correction): a density-constrained
+        ! PCG solve leaves exact zero/zero voxels inside the broader spherical
+        ! evidence support. They are boundary conditions, not measurements.
+        ! Every calibration statistic below (null-bias center, spatial beta,
+        ! confidence temperature, readiness null fraction, band support
+        ! fractions) is evaluated over OBSERVED voxels only; unobserved
+        ! voxels are frozen at the explicit null with zero band support.
+        if( .not.allocated(nu_observed_mask) ) &
+            &THROW_HARD('NU observation mask was not set up before evidence compaction')
+        if( size(nu_observed_mask) /= n_nu_mask ) THROW_HARD('NU observation mask size mismatch')
+        n_observed = count(nu_observed_mask)
+        if( n_observed < 1 ) THROW_HARD('NU evidence pair has no observed support voxels')
+        if( nu_l_report .and. n_observed < n_nu_mask ) write(logfhandle,'(A,F6.3,A)') &
+            &'>>> NU EVIDENCE: observed fraction of the spherical support ', &
+            &real(n_observed) / real(n_nu_mask), ' (exact-zero pairs excluded from calibration)'
 
         call calculate_nu_source_fingerprint(vol_even, vol_odd, fingerprint)
         if( any(abs(fingerprint - nu_evidence_source_fingerprint) > &
@@ -129,13 +144,17 @@ contains
             gaps(imask) = null_cost(imask) - minval(dmats_mask(imask,:n_signal))
         enddo
         !$omp end parallel do
-        null_bias_median = median_nocopy(gaps)
-        null_bias_mad = mad_gau(gaps, null_bias_median)
+        ! observed voxels only: an unobserved zero/zero region is a degenerate
+        ! cluster at gap ~0 that would otherwise pin the lower quartile
+        gaps_obs = pack(gaps, nu_observed_mask)
+        deallocate(gaps)
+        null_bias_median = median_nocopy(gaps_obs)
+        null_bias_mad = mad_gau(gaps_obs, null_bias_median)
         ! lower-quartile center of the gap mixture; selec reorders but
         ! preserves the values, so it composes with the diagnostics above
-        k25 = max(1, nint(0.25 * real(n_nu_mask)))
-        null_bias_threshold = selec(k25, n_nu_mask, gaps)
-        deallocate(gaps)
+        k25 = max(1, nint(0.25 * real(n_observed)))
+        null_bias_threshold = selec(k25, n_observed, gaps_obs)
+        deallocate(gaps_obs)
         if( .not.ieee_is_finite(null_bias_median) .or. .not.ieee_is_finite(null_bias_mad) .or. &
             &.not.ieee_is_finite(null_bias_threshold) .or. null_bias_mad < 0. ) &
             &THROW_HARD('NU evidence null-bias calibration is invalid')
@@ -155,8 +174,18 @@ contains
         ! spherical support.  It must not be changed by the downstream
         ! envelope constraint, which deliberately reassigns solvent voxels to
         ! the coarsest signal label for the replay precision.
-        unconstrained_null_fraction = real(count((evidence_map == 1_NU_LABEL_KIND) .and. nu_lmask)) / &
-            &real(n_nu_mask)
+        n_null_observed = 0
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) &
+        !$omp reduction(+:n_null_observed) proc_bind(close)
+        do imask = 1, n_nu_mask
+            if( .not.nu_observed_mask(imask) ) cycle
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            if( evidence_map(i,j,k) == 1_NU_LABEL_KIND ) n_null_observed = n_null_observed + 1
+        enddo
+        !$omp end parallel do
+        unconstrained_null_fraction = real(n_null_observed) / real(n_observed)
 
         ! Calibrate confidence against the final spatial-model energy gap, not
         ! against raw Huber values.  This is a deterministic temperature for
@@ -182,15 +211,17 @@ contains
             gaps(imask) = max(0., second_e - best_e)
         enddo
         !$omp end parallel do
-        temperature = median_nocopy(gaps)
+        gaps_obs = pack(gaps, nu_observed_mask)
+        deallocate(gaps)
+        temperature = median_nocopy(gaps_obs)
         if( temperature <= TINY )then
-            temperature = sum(gaps, mask=gaps > TINY) / real(max(1, count(gaps > TINY)))
+            temperature = sum(gaps_obs, mask=gaps_obs > TINY) / real(max(1, count(gaps_obs > TINY)))
         endif
         if( temperature <= TINY ) temperature = sqrt(epsilon(1.)) * &
             &max(1., (sum(null_cost) + sum(dmats_mask(:,:n_signal))) / real(n_nu_mask * n_candidates))
         if( .not.ieee_is_finite(temperature) .or. temperature <= TINY ) &
             &THROW_HARD('NU evidence calibration temperature is invalid')
-        deallocate(gaps)
+        deallocate(gaps_obs)
 
         ! The envelope background is a fixed coarsest-label boundary condition
         ! on the Potts field.  Re-run the spatial optimization with that
@@ -245,6 +276,15 @@ contains
                     state%band_support(imask,1) = 1.
                     cycle
                 endif
+            endif
+            if( .not.nu_observed_mask(imask) )then
+                ! no measurement at this voxel: explicit null, maximal
+                ! uncertainty, no band support (fully suppressed in the
+                ! replay; the solve support zeroes it anyway)
+                state%selected_label(imask)  = 0_NU_LABEL_KIND
+                state%selected_cutoff(imask) = 0.
+                state%uncertainty(imask)     = 1.
+                cycle
             endif
             best_e = huge(best_e)
             do icand = 1, n_candidates
@@ -305,7 +345,7 @@ contains
         ! truncates finest-first; the static bands are never pruned, so
         ! pre-6.6 behavior is the guaranteed floor.
         do while( nb_active > NU_EVIDENCE_NBANDS )
-            if( sum(state%band_support(:,nb_active)) / real(n_nu_mask) >= NU_EVIDENCE_MIN_BAND_SUPPORT ) exit
+            if( sum(state%band_support(:,nb_active)) / real(n_observed) >= NU_EVIDENCE_MIN_BAND_SUPPORT ) exit
             nb_active = nb_active - 1
         enddo
         if( nb_active < size(state%band_support,2) )then
@@ -320,22 +360,23 @@ contains
         allocate(state%summary%supported_fraction(nb_active), source=0.)
         state%summary%source = nu_evidence_source
         state%summary%null_fraction = unconstrained_null_fraction
-        state%summary%uncertain_fraction = real(n_uncertain) / real(n_nu_mask)
+        state%summary%uncertain_fraction = real(n_uncertain) / real(n_observed)
+        state%summary%observed_fraction = real(n_observed) / real(n_nu_mask)
         state%summary%calibration_temperature = temperature
         state%summary%spatial_beta = beta
-        state%summary%null_cost_mean = sum(null_cost) / real(n_nu_mask)
+        state%summary%null_cost_mean = sum(null_cost, mask=nu_observed_mask) / real(n_observed)
         state%summary%null_bias_median = null_bias_median
         state%summary%null_bias_mad = null_bias_mad
         state%summary%null_bias_threshold = null_bias_threshold
         do iband = 1, nb_active
             state%summary%supported_fraction(iband) = min(1., max(0., &
-                &sum(state%band_support(:,iband)) / real(n_nu_mask)))
+                &sum(state%band_support(:,iband)) / real(n_observed)))
         enddo
 
         write(value_text,'(F10.4)') null_lp
         state%summary%provenance = 'algorithm='//NU_EVIDENCE_ALGORITHM//';source='//trim(nu_evidence_source)//&
             &';null=calibrated_zero_cross_half_prediction;null_reference=best_exact_signal_bank;'//&
-            &'null_offset=lower_quartile_center;'//&
+            &'null_offset=lower_quartile_center;statistics_domain=observed_support;'//&
             &'null_smooth_A='//trim(adjustl(value_text))//&
             &';confidence=spatial_softmax_gap_temperature;'//&
             &'uncertainty=normalized_entropy;candidate_order=coarse_to_fine_validated;'//&
@@ -512,6 +553,8 @@ contains
             &state%summary%null_fraction < 0. .or. state%summary%null_fraction > 1. ) return
         if( .not.ieee_is_finite(state%summary%uncertain_fraction) .or. &
             &state%summary%uncertain_fraction < 0. .or. state%summary%uncertain_fraction > 1. ) return
+        if( .not.ieee_is_finite(state%summary%observed_fraction) .or. &
+            &state%summary%observed_fraction <= 0. .or. state%summary%observed_fraction > 1. ) return
         if( any(.not.ieee_is_finite(state%summary%supported_fraction)) .or. &
             &any(state%summary%supported_fraction < 0.) .or. any(state%summary%supported_fraction > 1.) ) return
         if( .not.ieee_is_finite(state%summary%null_bias_median) .or. &
@@ -669,6 +712,7 @@ contains
             &(state%summary%supported_fraction(iband), iband=1,state%summary%n_bands)
         if( .not. (NU_DEV_OUTPUT .and. nu_l_report) ) return
         write(logfhandle,'(A,I0)')   '    pcg_nu_candidate_count=', state%summary%n_candidates
+        write(logfhandle,'(A,F10.6)') '    pcg_nu_observed_fraction=', state%summary%observed_fraction
         write(logfhandle,'(A,F10.6)') '    pcg_nu_uncertain_fraction=', state%summary%uncertain_fraction
         write(logfhandle,'(A,ES14.6)') '    pcg_nu_calibration_temperature=', &
             &state%summary%calibration_temperature
@@ -749,9 +793,12 @@ contains
     real function estimate_evidence_beta( null_cost, signal_costs ) result( beta )
         real, intent(in) :: null_cost(:), signal_costs(:,:)
         real :: best_e, second_e, e
-        integer :: imask, icand
-        beta = 0.
+        integer :: imask, icand, n_used
+        beta  = 0.
+        n_used = 0
         do imask = 1, size(signal_costs,1)
+            if( .not.nu_observed_mask(imask) ) cycle
+            n_used = n_used + 1
             best_e = huge(best_e)
             second_e = huge(second_e)
             do icand = 1, size(signal_costs,2) + 1
@@ -765,7 +812,8 @@ contains
             enddo
             beta = beta + max(0., second_e - best_e)
         enddo
-        beta = NU_LABEL_SMOOTH_BETA_FRAC * beta / real(size(signal_costs,1))
+        if( n_used < 1 ) THROW_HARD('no observed voxels for NU evidence beta estimation')
+        beta = NU_LABEL_SMOOTH_BETA_FRAC * beta / real(n_used)
     end function estimate_evidence_beta
 
     subroutine regularize_evidence_labels( null_cost, signal_costs, coords, beta, candmap, &
@@ -786,6 +834,11 @@ contains
             i = nu_mask_vox(1,imask)
             j = nu_mask_vox(2,imask)
             k = nu_mask_vox(3,imask)
+            ! unobserved voxels are frozen at the explicit null (label 1)
+            if( .not.nu_observed_mask(imask) )then
+                candmap(i,j,k) = 1_NU_LABEL_KIND
+                cycle
+            endif
             best = 1
             best_e = null_cost(imask)
             do icand = 2, size(signal_costs,2) + 1
@@ -809,6 +862,7 @@ contains
                     j = nu_mask_vox(2,imask)
                     k = nu_mask_vox(3,imask)
                     if( nu_label_smooth_color(i,j,k) /= color ) cycle
+                    if( .not.nu_observed_mask(imask) ) cycle
                     if( l_constrain .and. nu_solvent_lmask(i,j,k) ) cycle
                     current = int(candmap(i,j,k))
                     best = current

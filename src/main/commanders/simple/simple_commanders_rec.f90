@@ -68,6 +68,7 @@ contains
     end subroutine exec_rec3D
 
     subroutine exec_bootstrap_rec3D( self, cline )
+        use simple_rec3D_pcg_strategy, only: NU_AUTOTARGET_MIN, NU_AUTOTARGET_MAX
         class(commander_bootstrap_rec3D), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(commander_rec3D) :: xrec3D
@@ -191,7 +192,7 @@ contains
             call os%read(string(PCG_NU_STATS_FILE))
             if( os%isthere('PCG_NU_SUPP_TARGET') )then
                 supp_target = os%get(1, 'PCG_NU_SUPP_TARGET')
-                available   = supp_target >= 5.0 .and. supp_target <= 75.0
+                available   = supp_target >= NU_AUTOTARGET_MIN .and. supp_target <= NU_AUTOTARGET_MAX
             endif
             call os%kill
             if( available ) write(logfhandle,'(A,F5.1,A)') &

@@ -97,6 +97,7 @@ contains
         if( allocated(nu_noise_profile_cached) ) deallocate(nu_noise_profile_cached)
         nu_noise_profile_cached = noise_profile
         nu_noise_rmax_cached    = noise_rmax
+        call setup_nu_observed_mask(vol_even, vol_odd)
         if( NU_DEV_OUTPUT .and. nu_l_report ) &
             &write(logfhandle,'(A,I0,A,ES11.4,A,ES11.4,A,F6.3)') '>>> NU WHITENING PROFILE: ', &
             &size(noise_profile), ' shells, sigma(r) min ', minval(noise_profile), ' max ', &

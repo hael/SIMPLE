@@ -38,7 +38,7 @@ real    :: rmat_even(BOX,BOX,BOX), rmat_odd(BOX,BOX,BOX), sig
 real    :: cen, dsq, mean_in, mean_out, recall, fpr, recall_rel, fpr_rel, mskval
 real    :: support_in, support_out, null_in, null_out
 real    :: unconstrained_null_fraction
-integer :: i, j, k, imask, n_true, n_sol, n_hit, n_false, n_ccs, n_ccs_kept, n_clamped
+integer :: i, j, k, imask, n_true, n_sol, n_hit, n_false, n_ccs, n_ccs_kept, n_clamped, n_unobserved
 integer :: n_in, n_out
 integer(kind=8) :: s1, s2
 
@@ -313,6 +313,30 @@ call build_nu_evidence_state(even, odd, evstate)
 if( .not.nu_evidence_state_is_valid(evstate) ) &
     &THROW_HARD('hard-supported pair produced invalid NU evidence')
 call assert_nu_evidence_replay_ready(evstate)
+call get_nu_evidence_summary(evstate, evsummary)
+! Calibration statistics are confined to the observed voxels; the exact-zero
+! region is reported through observed_fraction and frozen at the null label
+! with no band support and maximal uncertainty.
+if( abs(evsummary%observed_fraction - real(count(l_supp .and. l_hard)) / real(count(l_supp))) > 1.e-6 ) &
+    &THROW_HARD('NU evidence observed fraction does not match the hard support geometry')
+deallocate(ev_label, ev_cutoff, ev_uncertainty, ev_band_support)
+call unpack_nu_evidence_state(evstate, ev_label, ev_cutoff, ev_uncertainty, ev_band_support)
+n_unobserved = 0
+imask = 0
+do k = 1,BOX
+    do j = 1,BOX
+        do i = 1,BOX
+            if( .not.l_supp(i,j,k) ) cycle
+            imask = imask + 1
+            if( l_hard(i,j,k) ) cycle
+            n_unobserved = n_unobserved + 1
+            if( ev_label(imask) /= 0 ) THROW_HARD('unobserved NU voxel was not frozen at the null label')
+            if( abs(ev_uncertainty(imask) - 1.) > 1.e-6 ) THROW_HARD('unobserved NU voxel is not maximally uncertain')
+            if( maxval(abs(ev_band_support(imask,:))) > 1.e-6 ) THROW_HARD('unobserved NU voxel carries band support')
+        enddo
+    enddo
+enddo
+if( n_unobserved /= count(l_supp .and. .not.l_hard) ) THROW_HARD('unobserved NU voxel count mismatch')
 call cleanup_nu_filter()
 
 call even%kill

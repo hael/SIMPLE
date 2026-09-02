@@ -35,6 +35,7 @@ use simple_refine3D_fnames,   only: refine3D_state_halfvol_fname, refine3D_state
 implicit none
 
 public :: execute_rec3D_pcg_shared, execute_rec3D_pcg_worker, execute_rec3D_pcg_distributed_master
+public :: NU_AUTOTARGET_MIN, NU_AUTOTARGET_MAX
 public :: validate_rec3D_pcg_fractional_updates, get_pcg_nu_evidence_bench_seconds
 private
 #include "simple_local_flags.inc"
@@ -374,7 +375,7 @@ contains
                 ! FSC=0.143 crossing, but do not let repeated weak unary wins
                 ! ratchet the empirical prior toward Nyquist in one rebuild.
                 call extend_nu_filter_highres_shells(vol_even, vol_odd, nsteps=nsteps_ext, &
-                    &max_find=min(ldim_here(1) / 2, fsc_find + 2), l_tie_tolerant=.true.)
+                    &max_find=min(ldim_here(1) / 2, fsc_find + 2), l_require_margin=.true.)
                 if( nsteps_ext > 0 )then
                     write(logfhandle,'(A,I0,A,F8.3,A)') '>>> PCG NU REPLAY ('//trim(context)//&
                         &'): EVIDENCE BANK EXTENDED BY ', nsteps_ext, ' ACCEPTED SHELL STEP(S) TO ', &
@@ -519,6 +520,53 @@ contains
         handoff_find  = max(evidence_find, min(box_here / 2, max(1, fsc_find + 2)))
         lp = calc_lowpass_lim(handoff_find, box_here, smpd_here)
     end function pcg_nu_matching_lowpass
+
+    !> Solve-support provenance sidecar of a shipped state volume: records
+    !! whether the shipped half pair was estimated inside the conservative
+    !! density envelope (P H P with the density support) or on the sphere.
+    !! The trailing bootstrap reads it back for the lag-one pair so the FSC
+    !! preprocessing decision follows the support actually installed, never
+    !! the current iteration's support availability.
+    function pcg_support_provenance_fname( volname ) result( fname )
+        type(string), intent(in) :: volname
+        type(string) :: fname
+        fname = swap_suffix(add2fbody(volname, MRC_EXT, '_pcg_support'), TXT_EXT, MRC_EXT)
+    end function pcg_support_provenance_fname
+
+    subroutine write_pcg_support_provenance( volname, l_constrained )
+        type(string), intent(in) :: volname
+        logical,      intent(in) :: l_constrained
+        type(string) :: fname
+        integer :: funit
+        fname = pcg_support_provenance_fname(volname)
+        call fopen(funit, file=fname, status='replace', action='write')
+        write(funit,'(A)') 'solve_support='//merge('density', 'sphere ', l_constrained)
+        call fclose(funit)
+        call fname%kill
+    end subroutine write_pcg_support_provenance
+
+    subroutine read_pcg_support_provenance( volname, l_constrained, l_found )
+        type(string), intent(in)  :: volname
+        logical,      intent(out) :: l_constrained, l_found
+        type(string) :: fname
+        character(len=64) :: line
+        integer :: funit, io_stat
+        l_constrained = .false.
+        l_found       = .false.
+        fname = pcg_support_provenance_fname(volname)
+        if( .not. file_exists(fname) )then
+            call fname%kill
+            return
+        endif
+        call fopen(funit, file=fname, status='old', action='read')
+        read(funit,'(A)',iostat=io_stat) line
+        call fclose(funit)
+        call fname%kill
+        if( io_stat /= 0 ) return
+        if( index(line, 'solve_support=') /= 1 ) return
+        l_found       = .true.
+        l_constrained = index(line, 'density') > 0
+    end subroutine read_pcg_support_provenance
 
     !> Resolution-text naming, mirroring the gridding volassemble contract
     !! (resolve_fsc_txt_fname in simple_commanders_rec_distr): an explicit
@@ -1027,9 +1075,11 @@ contains
             if( params%l_ml_reg )then
                 call ml_even%write(fname_even, del_if_exists=.true.)
                 call ml_odd%write(fname_odd, del_if_exists=.true.)
+                call write_pcg_support_provenance(fname_vol, l_state_support)
             else
                 call half_even%write(fname_even, del_if_exists=.true.)
                 call half_odd%write(fname_odd, del_if_exists=.true.)
+                call write_pcg_support_provenance(fname_vol, l_base_support_constrained)
             endif
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
@@ -1084,7 +1134,9 @@ contains
                 write(logfhandle,'(A,F8.3,A)') &
                     &'>>> PCG NU REPLAY: evidence-derived matching low-pass ', align_lp, ' A'
             else
-                THROW_HARD('PCG NU replay produced no evidence-derived matching low-pass')
+                ! same leniency as the distributed route (filter_pcg_nonuniform_maps):
+                ! the previous matching low-pass rides until evidence hands one off
+                write(logfhandle,'(A)') '>>> PCG NU REPLAY: no evidenced cutoff to hand off; matching low-pass unchanged'
             endif
         endif
         call build%spproj%write_segment_inside(params%oritype, params%projfile)
@@ -2044,7 +2096,7 @@ contains
             real(dp) :: time_reduce = 0.0_dp, time_finalize = 0.0_dp, time_solve = 0.0_dp
             real :: prior_positive_min = 0.0, prior_positive_max = 0.0
             real :: prior_to_khat_l1 = 0.0, prior_to_khat_rms = 0.0
-            logical :: l_ml_solve = .false., ready = .false.
+            logical :: l_ml_solve = .false., ready = .false., l_concurrent = .false.
         end type distributed_half_job
         type(parameters), intent(inout) :: params
         type(builder),    intent(inout) :: build
@@ -2071,7 +2123,8 @@ contains
         type(image_msk) :: state_support_msk
         logical :: l_state_support, l_base_support_constrained
         logical :: l_has_updates, l_bootstrap, l_even_chain, l_odd_chain, l_nu_replay
-        logical :: l_fsc_pair_support_constrained
+        logical :: l_fsc_pair_support_constrained, l_prev_support_constrained, l_prev_provenance_found
+        logical :: l_shipped_support_constrained
         integer(timer_int_kind) :: t_state_phase
         real(dp) :: time_map_output, time_fsc_output, time_evidence
 
@@ -2217,11 +2270,17 @@ contains
                 fsc_pair_odd         => previous_odd
                 fsc_pair_merged      => previous_merged
                 evidence_source_here =  NU_EVIDENCE_SOURCE_PREV
-                ! Current support availability says nothing about how an
-                ! imported/lagged previous pair was reconstructed. Without
-                ! persisted solve provenance, treat it as unconstrained so an
-                ! envfsc request receives the phase-randomized correction.
-                l_fsc_pair_support_constrained = .false.
+                ! Current support availability says nothing about how the
+                ! lagged previous pair was reconstructed: read the solve-support
+                ! provenance persisted beside it. An imported pair without a
+                ! sidecar is treated as unconstrained so an envfsc request
+                ! receives the phase-randomized correction.
+                call read_pcg_support_provenance(params%vols(state), l_prev_support_constrained, &
+                    &l_prev_provenance_found)
+                l_fsc_pair_support_constrained = l_prev_provenance_found .and. l_prev_support_constrained
+                if( .not. l_prev_provenance_found ) write(logfhandle,'(A,I0,A)') &
+                    &'>>> PCG DISTRIBUTED: STATE ', state, &
+                    &' previous pair has no solve-support provenance; treated as unconstrained'
             else
                 fsc_pair_even        => half_even
                 fsc_pair_odd         => half_odd
@@ -2295,6 +2354,11 @@ contains
                 endif
             endif
             t_state_phase = tic()
+            l_shipped_support_constrained = merge(l_state_support, l_base_support_constrained, params%l_ml_reg)
+            ! a bootstrap blend carries the previous pair's support into the
+            ! shipped pair: constrained only if both contributions were
+            if( l_bootstrap .and. update_weights(state) < 0.99 ) &
+                &l_shipped_support_constrained = l_shipped_support_constrained .and. l_fsc_pair_support_constrained
             if( params%l_ml_reg )then
                 call ml_even%write(fname_even, del_if_exists=.true.)
                 call ml_odd%write(fname_odd, del_if_exists=.true.)
@@ -2302,6 +2366,7 @@ contains
                 call half_even%write(fname_even, del_if_exists=.true.)
                 call half_odd%write(fname_odd, del_if_exists=.true.)
             endif
+            call write_pcg_support_provenance(fname_vol, l_shipped_support_constrained)
             call merged%write(fname_vol, del_if_exists=.true.)
             time_map_output = time_map_output + real(toc(t_state_phase),dp)
             call write_output_diagnostics(state, 'distributed', time_map_output, time_fsc_output, time_evidence)
@@ -2635,7 +2700,11 @@ contains
             type(distributed_half_job), intent(inout) :: even, odd
             integer :: previous_max_active_levels
 
+            even%l_concurrent = .false.
+            odd%l_concurrent  = .false.
             if( even%ready .and. odd%ready .and. pcg_master_nthreads >= 2 )then
+                even%l_concurrent = .true.
+                odd%l_concurrent  = .true.
                 previous_max_active_levels = 1
                 !$ previous_max_active_levels = omp_get_max_active_levels()
                 !$ call omp_set_max_active_levels(max(2, previous_max_active_levels))
@@ -2687,15 +2756,16 @@ contains
             call volume%set_rmat(job%x, .false.)
             call report_beyond_band_excess(volume, params, job%state, job%half, job%solve_kind)
             if( job%l_ml_solve )then
-                call write_distributed_diagnostics(job%state, job%half, job%solve_kind, job%nptcls, &
-                    &job%result, job%rel_res_hist, job%time_reduce, job%time_finalize, job%time_solve, &
-                    &job%pcgop%get_data_scale(), job%pcgop%get_effective_lambda(), &
+                call write_distributed_diagnostics(job%state, job%half, job%solve_kind, job%l_concurrent, &
+                    &job%nptcls, job%result, job%rel_res_hist, job%time_reduce, job%time_finalize, &
+                    &job%time_solve, job%pcgop%get_data_scale(), job%pcgop%get_effective_lambda(), &
                     &job%prior_npositive, job%prior_positive_min, job%prior_positive_max, &
                     &job%prior_to_khat_l1, job%prior_to_khat_rms, job%pcgop)
             else
-                call write_distributed_diagnostics(job%state, job%half, job%solve_kind, job%nptcls, &
-                    &job%result, job%rel_res_hist, job%time_reduce, job%time_finalize, job%time_solve, &
-                    &job%pcgop%get_data_scale(), job%pcgop%get_effective_lambda(), pcgop=job%pcgop)
+                call write_distributed_diagnostics(job%state, job%half, job%solve_kind, job%l_concurrent, &
+                    &job%nptcls, job%result, job%rel_res_hist, job%time_reduce, job%time_finalize, &
+                    &job%time_solve, job%pcgop%get_data_scale(), job%pcgop%get_effective_lambda(), &
+                    &pcgop=job%pcgop)
             endif
             call report_solve_summary('DISTRIBUTED', job%state, job%half, job%solve_kind, job%nptcls, &
                 &job%niters, job%result%final_rel_residual, job%time_solve, job%result%stop_reason)
@@ -2705,11 +2775,12 @@ contains
             job%ready = .false.
         end subroutine finish_distributed_half_job
 
-        subroutine write_distributed_diagnostics( state_here, half, solve_kind, nptcls, result, history, &
-                &reduce_time, finalize_time, solve_time, data_scale, lambda_eff, prior_npositive, &
+        subroutine write_distributed_diagnostics( state_here, half, solve_kind, l_concurrent, nptcls, result, &
+                &history, reduce_time, finalize_time, solve_time, data_scale, lambda_eff, prior_npositive, &
                 &prior_positive_min, prior_positive_max, prior_to_khat_l1, prior_to_khat_rms, pcgop )
             integer,                  intent(in) :: state_here, nptcls
             character(len=*),         intent(in) :: half, solve_kind
+            logical,                  intent(in) :: l_concurrent
             type(pcg_solver_outcome), intent(in) :: result
             real,                     intent(in) :: history(:)
             real(dp),                 intent(in) :: reduce_time, finalize_time, solve_time
@@ -2725,8 +2796,8 @@ contains
             call fopen(funit, file=fname, status='replace', action='write')
             write(funit,'(A,A)')      'execution_mode=',        'distributed'
             write(funit,'(A,A)')      'solve_kind=',             trim(solve_kind)
-            write(funit,'(A,L1)')     'half_pair_parallel=',     pcg_master_nthreads >= 2
-            write(funit,'(A,I0)')     'threads_per_half=',       pcg_half_nthreads
+            write(funit,'(A,L1)')     'half_pair_parallel=',     l_concurrent
+            write(funit,'(A,I0)')     'threads_per_half=',       merge(pcg_half_nthreads, pcg_master_nthreads, l_concurrent)
             write(funit,'(A,I0)')     'nparts=',                params%nparts
             write(funit,'(A,I0)')     'nptcls=',                nptcls
             write(funit,'(A,I0)')     'requested_maxits=',      result%requested_maxits

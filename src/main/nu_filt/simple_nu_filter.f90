@@ -208,6 +208,13 @@ real,             allocatable :: nu_ev_base(:)
 real,             allocatable :: nu_ev_best(:)
 logical,          allocatable :: nu_lmask(:,:,:)
 integer,          allocatable :: nu_mask_vox(:,:)
+! Packed (nu_mask_vox order) observation mask of the evidence pair: .false.
+! where both half maps are exactly zero. A density-constrained PCG solve
+! leaves such voxels inside the broader spherical NU domain; they are
+! boundary conditions, not measurements, so the evidence compaction keeps
+! them out of every calibration statistic and freezes them at the null label.
+logical,          allocatable :: nu_observed_mask(:)
+integer :: n_nu_observed = 0
 real,             allocatable :: nu_smooth_norm(:,:,:)
 ! Solvent-constraint clamp (pcg_priors.md dev item 4): the objective and null
 ! competition retain the broad spherical domain. The whitening fit omits exact
@@ -319,6 +326,7 @@ type :: nu_evidence_summary
     real    :: mskdiam = 0.
     real    :: null_fraction = 0.
     real    :: uncertain_fraction = 0.
+    real    :: observed_fraction = 1. !< fraction of the packed support carrying a non-zero half-map pair
     real    :: calibration_temperature = 0.
     real    :: spatial_beta = 0.
     real    :: null_cost_mean = 0.
@@ -428,6 +436,10 @@ interface
     module subroutine stash_aux_volumes( aux_even, aux_odd )
         type(image), intent(in) :: aux_even(:), aux_odd(:)
     end subroutine stash_aux_volumes
+
+    module subroutine setup_nu_observed_mask( vol_even, vol_odd )
+        class(image), intent(in) :: vol_even, vol_odd
+    end subroutine setup_nu_observed_mask
 
     module subroutine setup_nu_mask_voxels
     end subroutine setup_nu_mask_voxels
@@ -608,43 +620,43 @@ interface
 
     ! In submodule: simple_nu_filter_extend.f90
     module subroutine extend_nu_filter_highres( vol_even, vol_odd, threshold_pct, new_limit, stats, accept_pct, &
-            &l_tie_tolerant )
+            &l_require_margin )
         class(image), intent(in) :: vol_even, vol_odd
         real,         intent(in) :: threshold_pct   ! e.g. 10.0
         real,         intent(in) :: new_limit        ! Angstrom limit for the proposed shell
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         real, optional, intent(in) :: accept_pct
-        logical, optional, intent(in) :: l_tie_tolerant
+        logical, optional, intent(in) :: l_require_margin
     end subroutine extend_nu_filter_highres
 
     module subroutine extend_nu_filter_highres_shell_next( vol_even, vol_odd, stats, accept_pct, max_find, &
-            &l_tie_tolerant )
+            &l_require_margin )
         class(image),                               intent(in)  :: vol_even, vol_odd
         type(nu_highres_extension_stats), optional, intent(out) :: stats
         real, optional, intent(in) :: accept_pct
         integer, optional, intent(in) :: max_find
-        logical, optional, intent(in) :: l_tie_tolerant
+        logical, optional, intent(in) :: l_require_margin
     end subroutine extend_nu_filter_highres_shell_next
 
     module subroutine extend_nu_filter_highres_shells( vol_even, vol_odd, nsteps, accept_pct, max_find, &
-            &l_tie_tolerant )
+            &l_require_margin )
         class(image), intent(in) :: vol_even, vol_odd
         integer, optional, intent(out) :: nsteps
         real, optional, intent(in) :: accept_pct
         integer, optional, intent(in) :: max_find
-        logical, optional, intent(in) :: l_tie_tolerant
+        logical, optional, intent(in) :: l_require_margin
     end subroutine extend_nu_filter_highres_shells
 
     module subroutine refine_nu_extension_filtmap_ordered_labels
     end subroutine refine_nu_extension_filtmap_ordered_labels
 
     module subroutine init_nu_highres_extension_selection( frontier_vox, dmat_old, dmat_new, &
-            &extend_choice, n_extended, l_tie_tolerant )
+            &extend_choice, n_extended, l_require_margin )
         integer, intent(in)    :: frontier_vox(:)
         real,    intent(in)    :: dmat_old(:), dmat_new(:,:,:)
         integer(kind=NU_LABEL_KIND), intent(inout) :: extend_choice(:)
         integer, intent(out)   :: n_extended
-        logical, optional, intent(in) :: l_tie_tolerant
+        logical, optional, intent(in) :: l_require_margin
     end subroutine init_nu_highres_extension_selection
 
     module subroutine apply_nu_highres_extension_selection( frontier_vox, extend_choice, old_label, new_label )

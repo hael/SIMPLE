@@ -193,6 +193,8 @@ contains
         if( allocated(cutoff_finds)       ) deallocate(cutoff_finds)
         if( allocated(nu_lmask)           ) deallocate(nu_lmask)
         if( allocated(nu_mask_vox)        ) deallocate(nu_mask_vox)
+        if( allocated(nu_observed_mask)   ) deallocate(nu_observed_mask)
+        n_nu_observed = 0
         call cleanup_aux_bank
         ldim = 0
         box  = 0
@@ -296,6 +298,33 @@ contains
             call aux_odd_bank(i)%copy(aux_odd(i))
         end do
     end subroutine stash_aux_volumes
+
+    !> Packed observation mask of the setup pair, in nu_mask_vox order. Uses
+    !! the same exact zero/zero criterion as nu_objective_noise_profile so
+    !! the whitening fit and the evidence statistics see one definition of
+    !! "unobserved". A pair without any exact zeros is fully observed.
+    module subroutine setup_nu_observed_mask( vol_even, vol_odd )
+        class(image), intent(in) :: vol_even, vol_odd
+        real(kind=c_float), pointer :: rmat_even(:,:,:), rmat_odd(:,:,:)
+        integer :: imask, i, j, k
+        if( .not.allocated(nu_mask_vox) ) THROW_HARD('nu_mask_vox not allocated; setup_nu_observed_mask')
+        if( allocated(nu_observed_mask) ) deallocate(nu_observed_mask)
+        allocate(nu_observed_mask(n_nu_mask), source=.true.)
+        call vol_even%get_rmat_ptr(rmat_even)
+        call vol_odd%get_rmat_ptr(rmat_odd)
+        !$omp parallel do schedule(static) default(shared) private(imask,i,j,k) proc_bind(close)
+        do imask = 1, n_nu_mask
+            i = nu_mask_vox(1,imask)
+            j = nu_mask_vox(2,imask)
+            k = nu_mask_vox(3,imask)
+            nu_observed_mask(imask) = rmat_even(i,j,k) /= 0. .or. rmat_odd(i,j,k) /= 0.
+        enddo
+        !$omp end parallel do
+        n_nu_observed = count(nu_observed_mask)
+        if( NU_DEV_OUTPUT .and. nu_l_report .and. n_nu_observed < n_nu_mask ) &
+            &write(logfhandle,'(A,I0,A,I0,A)') '>>> NU OBSERVED SUPPORT: ', n_nu_observed, ' of ', n_nu_mask, &
+            &' support voxels carry a non-zero half-map pair'
+    end subroutine setup_nu_observed_mask
 
     module subroutine setup_nu_mask_voxels
         integer :: i, j, k, imask

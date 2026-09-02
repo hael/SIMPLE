@@ -167,6 +167,16 @@ changes, support re-masked after resampling, the first-iteration noise
 `startvol` excluded by name — and otherwise from the base solution. Neither
 precision nor lambda is ever accumulated into raw `B` or `D`.
 
+Every shipped state volume carries a solve-support provenance sidecar
+(`<vol>_pcg_support.txt`, `solve_support=density|sphere`). The trailing
+bootstrap reads it for the lag-one FSC/evidence pair so the envelope and
+phase-randomization FSC preprocessing is skipped exactly when that pair was
+density-constrained in the estimator; a pair without a sidecar is treated as
+unconstrained, and a bootstrap blend is constrained only if both contributions
+were. The NU evidence built from a density-constrained pair confines all its
+calibration statistics to the observed (non-zero) voxels of the spherical
+support (`doc/policies/nonuniform_filtering_policy.md`).
+
 With `nu_refine=no`, PCG uses the established eight signal candidates, four
 fixed evidence bands, integer Potts coordinates, unit candidate masses, and
 raw-finest matching handoff. This is the staged-abinitio3D compatibility path.

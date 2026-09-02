@@ -293,9 +293,16 @@ frozen geometry alone so it works after `cleanup_nu_filter`. Before any
 replay use, `assert_nu_evidence_replay_ready` enforces the readiness
 contract: a state whose explicit null wins less than
 `NU_EVIDENCE_MIN_NULL_FRAC` or more than `NU_EVIDENCE_MAX_NULL_FRAC` of the
-generous spherical support marks a failed null calibration (starved and
-saturated null respectively) and hard-errors -- validity alone does not
-qualify evidence to parameterize a precision. The PCG replay consumes the expanded weights as
+OBSERVED part of the generous spherical support marks a failed null
+calibration (starved and saturated null respectively) and hard-errors --
+validity alone does not qualify evidence to parameterize a precision. The
+observed part excludes exact zero/zero voxels that a density-constrained PCG
+solve leaves inside the sphere (`nu_observed_mask`, set by `setup_nu_dmats`
+with the same test as the whitening profile); every calibration statistic
+(null-bias center, spatial beta, temperature, null/uncertain/band-support
+fractions) is confined to it, unobserved voxels are frozen at the explicit
+null with zero band support, and the summary reports `observed_fraction`.
+The spherical NU support itself is unchanged. The PCG replay consumes the expanded weights as
 the `Q_NU` precision when `pcg_nu_lambda_rel > 0`
 (`doc/implementation_notes/pcg_priors.md` Stage 6). Since 2026-08-28 this is
 the DEFAULT whenever `rec_backend=pcg` runs with NU filtering and the euclid

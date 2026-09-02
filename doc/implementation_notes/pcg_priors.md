@@ -3108,6 +3108,39 @@ the acceptable-looking outputs do not validate the prior.
      matching uses the 5% supported cutoff plus the same two-shell FSC
      headroom. The `automsk=yes` evidence envelope is explicitly the
      preliminary static-bank boundary, fixed before adaptive challenges.
+   - Observed-domain calibration (review follow-up, 2026-09-02 pm): the
+     whitening fix above left every OTHER evidence statistic on the full
+     sphere. With the base pair density-constrained (refine3D defaults,
+     iteration 2 onward) about half of the spherical support is an exact
+     zero/zero cluster at gap ~0, which pinned the lower-quartile null
+     center, diluted the spatial beta, could collapse the temperature
+     median into its fallback, and inflated the readiness `null_fraction`
+     by support geometry (a small particle in a generous sphere could
+     cross the 0.90 ceiling and hard-error). `setup_nu_dmats` now records
+     a packed observation mask (`nu_observed_mask`, same exact-zero test
+     as the profile); `build_nu_evidence_state` evaluates the null-bias
+     center, beta, temperature, null/uncertain/band-support fractions on
+     observed voxels only, freezes unobserved voxels at the explicit null
+     in both Potts sweeps, and ships them with zero band support and unit
+     uncertainty. The summary carries `observed_fraction` and the
+     provenance string records `statistics_domain=observed_support`. The
+     spherical NU support itself is unchanged (skill invariant).
+   - Solve-support provenance: every shipped state volume now has a
+     `<vol>_pcg_support.txt` sidecar (`solve_support=density|sphere`).
+     The trailing bootstrap reads it for the lag-one FSC/evidence pair, so
+     `evaluate_halfmap_pair` skips the envelope+phase-randomization
+     preprocessing exactly when that pair was density-constrained in the
+     estimator; a pair without a sidecar (imported) stays unconstrained.
+     A bootstrap blend is constrained only if both contributions were.
+   - Shell-walk flag renamed `l_require_margin` (was `l_tie_tolerant`):
+     it demands a `nu_label_smooth_is_better` margin win, i.e. it is
+     STRICTER than the raw `<` test, which the old name inverted.
+   - Diagnostics `half_pair_parallel=` now reports whether the pair
+     actually ran as concurrent sections (one empty half runs serially).
+   - Shared route: a missing evidenced matching low-pass is logged and the
+     previous `lp` rides, matching the distributed route.
+   - `bootstrap_rec3D` imports `NU_AUTOTARGET_MIN/MAX` instead of
+     duplicating the bounds.
 
 ## 11. The NU machinery as the prior infrastructure
 
