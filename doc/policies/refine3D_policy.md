@@ -503,6 +503,15 @@ Distributed matching writes partition alignment documents and merges them into
 the project after worker completion. Shared-memory matching writes the project
 directly after each iteration.
 
+After the current iteration's committed orientations are available, both
+strategies attempt to write `orientations_distribution_stateNN.jpg` for each
+nonempty state. This projection-direction distribution is a secondary,
+latest-view visualization, generated and overwritten at every iteration. It is not
+authoritative scientific state, is not registered in `os_out`, and is not a
+restart or workflow-handoff artifact. An empty state may produce no
+new image. Failure to write this JPEG warns but does not invalidate the
+refinement iteration.
+
 On finalization:
 
 - `endit` is written to the command line

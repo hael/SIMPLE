@@ -205,6 +205,7 @@ type :: oris
     procedure, private :: write_1, write_2
     generic            :: write => write_1, write_2
     procedure          :: write2bild
+    procedure          :: write_projdir_heatmap
     !======================================================================
     ! RESHAPE / PARTITION / REMAP (simple_oris_reshape.f90)
     !======================================================================
@@ -1427,6 +1428,13 @@ interface
         class(oris),   intent(inout) :: self
         class(string), intent(in)    :: file
     end subroutine write2bild
+
+    module subroutine write_projdir_heatmap( self, state, nspace, fname, legend )
+        class(oris),            intent(in) :: self
+        integer,                intent(in) :: state, nspace
+        class(string),          intent(in) :: fname
+        type(string), optional, intent(in) :: legend
+    end subroutine write_projdir_heatmap
 
     !======================================================================
     ! RESHAPE / PARTITION / REMAP (simple_oris_reshape.f90)

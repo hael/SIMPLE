@@ -280,7 +280,7 @@ contains
             do i=0,w-1
                 if  (self%colorspace == 3) then
                     c=3
-                    pixel = NINT( (2**24) * (in_buffer(i+1,j+1)-lo)/(hi-lo),kind=4)
+                    pixel = NINT( real(boz_ffff) * (in_buffer(i+1,j+1)-lo)/(hi-lo),kind=4)
                     idx = i*c + (j*w*c) + 1
                     img_buffer(idx)     = INT( ISHFT( pixel , -16) ,kind=c_char)
                     img_buffer(idx + 1) = INT( IAND( ISHFT( pixel , -8_c_int) , boz_00ff) ,kind=c_char)
@@ -329,7 +329,7 @@ contains
             do i=0,w-1
                 if  (self%colorspace == 3) then
                     c=3
-                    pixel = NINT( REAL(2**24) * REAL(in_buffer(i+1,j+1)-lo)/REAL(hi-lo),kind=4)
+                    pixel = NINT( REAL(boz_ffff) * REAL(in_buffer(i+1,j+1)-lo)/REAL(hi-lo),kind=4)
                     idx = i*c + (j*w*c) + 1
                     img_buffer(idx)     = INT( ISHFT( pixel , -16) ,kind=c_char)
                     img_buffer(idx + 1) = INT( IAND( ISHFT( pixel , -8) , boz_00ff) ,kind=c_char)

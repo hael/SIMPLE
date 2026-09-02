@@ -747,6 +747,9 @@ contains
             self%bench%rt_sched   = toc(self%bench%t_sched)
             self%bench%t_assemble = tic()
         endif
+        do state = 1, params%nstates
+            call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
+        enddo
         if( l_write_partial_recs )then
             if( trim(params%rec_backend) == 'pcg' )then
                 call assemble_refine3D_pcg(cline, params, build)
@@ -1181,6 +1184,9 @@ contains
         call self%qenv%gen_scripts_and_schedule_jobs( self%job_descr, algnfbody=string(ALGN_FBODY), array=L_USE_SLURM_ARR, extra_params=params)
         ! merge alignment docs
         call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
+        do state = 1, params%nstates
+            call build%spproj_field%write_projdir_heatmap(state, params%nspace, refine3D_oris_heatmap_fname(state))
+        enddo
         ! assemble volumes, postprocess, automask
         if( L_BENCH_GLOB )then
             self%bench%rt_sched   = toc(self%bench%t_sched)
