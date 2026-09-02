@@ -489,7 +489,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     real,             parameter :: KV             = 300.0
     real,             parameter :: FRACA          = 0.1
     integer,          parameter :: NPROJS         = 100
-    integer,          parameter :: NPER_MOVIE     = 12
+    integer,          parameter :: NPER_MOVIE     = 10
     integer,          parameter :: MOVIE_DIM      = 1536
     integer,          parameter :: NFRAMES        = 16
     integer,          parameter :: NMOVIES        = 10
@@ -517,7 +517,7 @@ subroutine exec_test_simulated_workflow( self, cline )
     type(string)                        :: movie_fname, subset_fname, optimal_fname, params_fname
     type(string)                        :: movie_files(NMOVIES)
     character(len=XLONGSTRLEN)          :: workflow_root_path
-    integer                             :: i, j, iproj, proj_inds(NPER_MOVIE), ldim(3), nprojs_stk
+    integer                             :: i, j, proj_inds(NPER_MOVIE), projection_order(NPROJS), ldim(3), nprojs_stk
     integer                             :: reproj_box, npickrefs, nptcls, ncls, status
     real                                :: pickref_smpd, pickref_width
     integer                             :: rnd_defocus
@@ -599,18 +599,14 @@ subroutine exec_test_simulated_workflow( self, cline )
 
     write(logfhandle,'(a,i0,a,i0,a,i0,a)') '>>> Step 3: generate ', NMOVIES, &
         &' simulated movies with ', NFRAMES, ' frames and ', NPER_MOVIE, ' random projections each'
+    if( NPROJS /= NMOVIES * NPER_MOVIE ) THROW_HARD('Projection count must divide equally among simulated movies')
+    do i = 1, NPROJS
+        projection_order(i) = i
+    enddo
+    call seed_rnd
+    call shuffle(projection_order)
     do i = 1,NMOVIES
-        proj_inds = 0
-        do j = 1,NPER_MOVIE
-            do
-                iproj = irnd_uni(NPROJS)
-                if( j > 1 )then
-                    if( any(proj_inds(:j-1) == iproj) ) cycle
-                endif
-                exit
-            enddo
-            proj_inds(j) = iproj
-        enddo
+        proj_inds = projection_order((i - 1) * NPER_MOVIE + 1:i * NPER_MOVIE)
         if( file_exists(SUBSET_FILE) ) call del_file(SUBSET_FILE)
         do j = 1,NPER_MOVIE
             call projection%read(reproj_path, proj_inds(j))
