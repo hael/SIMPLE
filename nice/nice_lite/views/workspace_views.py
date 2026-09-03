@@ -25,10 +25,6 @@ from ..models                    import JobModel
 from ..data_structures.batchjob  import BatchJob
 from ..data_structures.streamjob import StreamJob
 from ..data_structures.workspace import Workspace
-from ..features                  import (
-    batch_job_controls_enabled,
-    workspace_job_refresh_enabled,
-)
 from ..helpers                   import (
     HttpResponseNoContent,
     clear_checksum_cookies,
@@ -165,7 +161,7 @@ def view_workspace(request):
 
     # Include stream statuses in checksum seed so parent iframe updates on state changes.
     jobs = list(JobModel.objects.filter(dset=workspace_obj.id).order_by("id"))
-    if batch_job_controls_enabled() and _reconcile_local_batch_completions(jobs):
+    if _reconcile_local_batch_completions(jobs):
         jobs = list(JobModel.objects.filter(dset=workspace_obj.id).order_by("id"))
     jobstats = "|".join(
         job.status if _is_batch_job(job) else StreamJob(id=job.id).get_status()
@@ -185,7 +181,6 @@ def view_workspace(request):
         "folder": workspace_obj.get_linkpath(),
         "description": workspacemodel.desc,
         "jobstats": jobstats,
-        "workspace_job_refresh_enabled": workspace_job_refresh_enabled(),
     }
 
     # Render only when payload changed to avoid unnecessary parent iframe redraws.
@@ -215,23 +210,16 @@ def view_workspace_jobs(request):
         return render(request, "jobs.html", {"jobs": []})
 
     jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
-    controls_enabled = batch_job_controls_enabled()
-    if controls_enabled and _reconcile_local_batch_completions(jobs):
+    if _reconcile_local_batch_completions(jobs):
         jobs = JobModel.objects.filter(dset=workspace_obj.id).order_by("id")
 
     # Checksum-gate iframe redraws using current DB state for all jobs in workspace.
-    checksum_payload = {
-        "jobs": list(jobs.values()),
-        "batch_job_controls_enabled": controls_enabled,
-    }
+    checksum_payload = {"jobs": list(jobs.values())}
     checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
     old_checksum = request.COOKIES.get("workspace_jobs_checksum", "none")
     if old_checksum == "none" or old_checksum != checksum:
         _normalize_latest_cls2d(jobs)
-        response = render(request, "jobs.html", {
-            "jobs": jobs,
-            "batch_job_controls_enabled": controls_enabled,
-        })
+        response = render(request, "jobs.html", {"jobs": jobs})
         response.set_cookie(key="workspace_jobs_checksum", value=checksum)
 
     return response
@@ -242,10 +230,6 @@ def view_workspace_jobs(request):
 def view_refresh_workspace_jobs(request):
     """Reconcile externally deleted job directories and the workspace job counter."""
     response = redirect("nice_lite:workspace")
-    if not workspace_job_refresh_enabled():
-        messages.add_message(request, messages.ERROR, "workspace job refresh is disabled")
-        return response
-
     workspace_id = get_workspace_id(request)
     project_id = get_project_id(request)
     workspace_obj = Workspace(workspace_id)

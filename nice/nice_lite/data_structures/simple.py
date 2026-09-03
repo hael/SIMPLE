@@ -10,7 +10,6 @@ import subprocess
 
 # local imports
 from ..helpers import *
-from ..features import batch_status_callbacks_enabled
 from ..models import DispatchModel
 
 
@@ -453,13 +452,10 @@ class SIMPLEBatch:
 
         creates_project = self.executable == "simple_exec" and self.jobtype == "new_project"
         status_endpoint = dispatchmodel.url + "/api_classic"
-        status_prefix = ""
-        status_suffix = ""
-        if batch_status_callbacks_enabled():
-            status_prefix, status_suffix = _classic_status_callback_wrapper(
-                self.jobid,
-                status_endpoint,
-            )
+        status_prefix, status_suffix = _classic_status_callback_wrapper(
+            self.jobid,
+            status_endpoint,
+        )
 
         command_string = status_prefix
         setup_failure_guard = " || return $?" if status_suffix else ""
@@ -574,6 +570,15 @@ class SIMPLEProjFile:
         self.projfile = projfile  # absolute path to the .simple project file
         self.ui       = {}        # most recently returned stats dict
 
+    @staticmethod
+    def _keep_first_json_value(pairs):
+        """Preserve character values emitted before duplicate numeric keys."""
+        values = {}
+        for key, value in pairs:
+            if key not in values:
+                values[key] = value
+        return values
+
     def _run(self, cmd):
         """Run a simple_exec command and return the parsed JSON, or {} on failure."""
         try:
@@ -584,7 +589,10 @@ class SIMPLEProjFile:
                 text=True,
                 timeout=self.command_timeout,
             )
-            return json.loads(result.stdout)
+            return json.loads(
+                result.stdout,
+                object_pairs_hook=self._keep_first_json_value,
+            )
         except subprocess.CalledProcessError as cpe:
             print_error(cpe.stderr)
             return {}

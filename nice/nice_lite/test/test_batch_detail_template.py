@@ -229,6 +229,109 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("movie_thumb.jpg", rendered)
         self.assertIn("picked micrograph 9", rendered)
 
+    def test_extract_output_uses_lazy_paginated_particle_thumbnails(self):
+        batch_view = self._read_template("nice_classic/batchview.html")
+        context = {
+            "jobid": 7,
+            "particle_stack_page": {
+                "stacks": [{"name": "particles.mrcs", "count": 481}],
+                "particles": [
+                    {
+                        "number": 42,
+                        "stack_name": "particles.mrcs",
+                        "stack_index": 42,
+                    },
+                ],
+                "total": 481,
+                "page": 2,
+                "pages": 12,
+                "page_numbers": [1, 2, 3, 4, "…", 12],
+                "ellipsis": "…",
+                "has_previous": True,
+                "previous_page": 1,
+                "has_next": True,
+                "next_page": 3,
+                "first_particle": 41,
+                "last_particle": 80,
+            },
+            "arguments": [],
+            "logs": [],
+            "artifact_counts": [{"extension": "MRCS", "count": 1}],
+            "artifact_images": [],
+            "auto_refresh": False,
+        }
+
+        rendered = render_to_string("nice_classic/batchview.html", context)
+
+        self.assertIn("extracted particles", rendered)
+        self.assertIn("41–80 of 481", rendered)
+        self.assertIn("thumbnails are generated on demand", rendered)
+        self.assertIn("/batchparticle/7/particles.mrcs/42", rendered)
+        self.assertIn('loading="lazy" decoding="async"', rendered)
+        self.assertIn('data-artifact-preview-kind="particle"', rendered)
+        self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
+        self.assertIn("hover:opacity-90 transition-opacity", rendered)
+        self.assertNotIn("<figcaption", rendered)
+        self.assertNotIn(">#42<", rendered)
+        self.assertIn('aria-label="extracted particle pages"', rendered)
+        self.assertIn("?particle_page=1#batch_particle_gallery", rendered)
+        self.assertIn("?particle_page=3#batch_particle_gallery", rendered)
+        self.assertIn("?particle_page=12#batch_particle_gallery", rendered)
+        self.assertIn('aria-label="last particle page"', rendered)
+        self.assertIn("particle_stack_page.ellipsis", batch_view)
+        self.assertIn("…", rendered)
+        self.assertIn('aria-current="page"', rendered)
+        self.assertNotIn("mrc2jpeg", batch_view)
+
+    def test_import_movie_output_uses_lazy_paginated_thumbnail_tiles(self):
+        batch_view = self._read_template("nice_classic/batchview.html")
+        context = {
+            "jobid": 7,
+            "import_movie_page": {
+                "movies": [{
+                    "number": 41,
+                    "name": "movie_041.mrcs",
+                    "frames": 40,
+                    "preview_available": True,
+                    "token": "signed-token",
+                }],
+                "total": 481,
+                "page": 2,
+                "pages": 13,
+                "page_numbers": [1, 2, 3, 4, "…", 13],
+                "ellipsis": "…",
+                "has_previous": True,
+                "previous_page": 1,
+                "has_next": True,
+                "next_page": 3,
+                "first_movie": 41,
+                "last_movie": 80,
+            },
+            "arguments": [],
+            "logs": [],
+            "artifact_counts": [],
+            "artifact_images": [],
+            "auto_refresh": False,
+        }
+
+        rendered = render_to_string("nice_classic/batchview.html", context)
+
+        self.assertIn("imported movies", rendered)
+        self.assertIn("41–80 of 481", rendered)
+        self.assertIn("thumbnails are cached as WebP on demand", rendered)
+        self.assertIn("/batchmovie/7/signed-token", rendered)
+        self.assertIn('loading="lazy" decoding="async"', rendered)
+        self.assertIn('data-artifact-preview-kind="movie"', rendered)
+        self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
+        self.assertNotIn("<figcaption", rendered)
+        self.assertIn('aria-label="imported movie pages"', rendered)
+        self.assertIn("?movie_page=1#batch_movie_gallery", rendered)
+        self.assertIn("?movie_page=3#batch_movie_gallery", rendered)
+        self.assertIn("?movie_page=13#batch_movie_gallery", rendered)
+        self.assertIn('aria-label="last movie page"', rendered)
+        self.assertIn("import_movie_page.ellipsis", batch_view)
+        self.assertIn("…", rendered)
+
     def test_batch_detail_panels_collapse_and_logs_are_last(self):
         batch_view = self._read_template("nice_classic/batchview.html")
 

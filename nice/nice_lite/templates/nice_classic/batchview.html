@@ -31,34 +31,32 @@
             {{ status }}
         </span>
 
-        {% if batch_job_controls_enabled %}
-            {% if status == "running" %}
-                <form method="POST" action="{% url 'nice_lite:stop_batch' %}" class="flex">
-                    {% csrf_token %}
-                    <input type="hidden" name="selected_job_id" value="{{ jobid }}">
-                    <button type="submit" title="stop batch job" aria-label="stop batch job"
-                            onclick="return confirm('Please confirm that you wish to stop batch job {{ jobid }}');"
-                            class="size-11 -mr-2 flex items-center justify-center rounded-md text-streamicon hover:text-streamerror transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
-                        <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <circle cx="8" cy="8" r="6"/>
-                            <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" stroke="none"/>
-                        </svg>
-                    </button>
-                </form>
-            {% elif status == "queued" or status == "finished" or status == "failed" or status == "stopped" %}
-                <form method="POST" action="{% url 'nice_lite:delete_batch' %}" class="flex">
-                    {% csrf_token %}
-                    <input type="hidden" name="selected_job_id" value="{{ jobid }}">
-                    <button type="submit" title="delete batch job" aria-label="delete batch job"
-                            onclick="return confirm('Please confirm that you wish to permanently delete batch job {{ jobid }}. This cannot be undone.');"
-                            class="size-11 -mr-2 flex items-center justify-center rounded-md text-streamicon hover:text-streamerror transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
-                        <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                            <polyline points="2,4 14,4"/>
-                            <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
-                        </svg>
-                    </button>
-                </form>
-            {% endif %}
+        {% if status == "running" %}
+            <form method="POST" action="{% url 'nice_lite:stop_batch' %}" class="flex">
+                {% csrf_token %}
+                <input type="hidden" name="selected_job_id" value="{{ jobid }}">
+                <button type="submit" title="stop batch job" aria-label="stop batch job"
+                        onclick="return confirm('Please confirm that you wish to stop batch job {{ jobid }}');"
+                        class="size-11 -mr-2 flex items-center justify-center rounded-md text-streamicon hover:text-streamerror transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="8" cy="8" r="6"/>
+                        <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" stroke="none"/>
+                    </svg>
+                </button>
+            </form>
+        {% elif status == "queued" or status == "finished" or status == "failed" or status == "stopped" %}
+            <form method="POST" action="{% url 'nice_lite:delete_batch' %}" class="flex">
+                {% csrf_token %}
+                <input type="hidden" name="selected_job_id" value="{{ jobid }}">
+                <button type="submit" title="delete batch job" aria-label="delete batch job"
+                        onclick="return confirm('Please confirm that you wish to permanently delete batch job {{ jobid }}. This cannot be undone.');"
+                        class="size-11 -mr-2 flex items-center justify-center rounded-md text-streamicon hover:text-streamerror transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                        <polyline points="2,4 14,4"/>
+                        <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
+                    </svg>
+                </button>
+            </form>
         {% endif %}
     </header>
 
@@ -239,6 +237,138 @@
                         </div>
                     {% elif not pick_micrographs %}
                         <p class="text-[11px] text-streamsubtle mb-3">no recognized result files yet</p>
+                    {% endif %}
+
+                    {% if import_movie_page.movies %}
+                        <div id="batch_movie_gallery" class="mb-4">
+                            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                <span>
+                                    <span class="block text-[10px] text-streamlabel">imported movies</span>
+                                    <span class="block text-[9px] text-streamsubtle">
+                                        {{ import_movie_page.first_movie }}–{{ import_movie_page.last_movie }} of {{ import_movie_page.total }}
+                                    </span>
+                                </span>
+                                <span class="text-[9px] text-streamsubtle">thumbnails are cached as WebP on demand</span>
+                            </div>
+                            <div id="batch_movie_thumbnails" class="flex flex-wrap items-start gap-2"
+                                 style="--artifact-tile-height:clamp(72px,18vw,260px)">
+                                {% for movie in import_movie_page.movies %}
+                                    {% if movie.preview_available %}
+                                        <a data-artifact-preview-kind="movie"
+                                           href="{% url 'nice_lite:batch_movie_thumbnail' jobid movie.token %}"
+                                           target="_blank" rel="noopener"
+                                           class="relative flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
+                                           style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
+                                           title="{{ movie.name }}{% if movie.frames %}, {{ movie.frames }} frames{% endif %}">
+                                            <img src="{% url 'nice_lite:batch_movie_thumbnail' jobid movie.token %}"
+                                                 loading="lazy" decoding="async"
+                                                 class="rounded absolute inset-0 w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                                 alt="imported movie {{ movie.number }}">
+                                        </a>
+                                    {% else %}
+                                        <div data-artifact-preview-kind="movie"
+                                             class="relative flex flex-shrink-0 items-center justify-center rounded-md overflow-hidden bg-streambg border border-streamdivider text-streamsubtle"
+                                             style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
+                                             title="{{ movie.name }} — thumbnail unavailable for this format">
+                                            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" class="h-8 w-8">
+                                                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                                                <path d="m8 15 2.5-3 2 2 2.5-3 3 4"/>
+                                            </svg>
+                                            <span class="sr-only">thumbnail unavailable for imported movie {{ movie.number }}</span>
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+
+                            {% if import_movie_page.pages > 1 %}
+                                <nav class="mt-3 flex flex-wrap items-center justify-center gap-1"
+                                     aria-label="imported movie pages">
+                                    {% if import_movie_page.has_previous %}
+                                        <a href="?movie_page={{ import_movie_page.previous_page }}#batch_movie_gallery"
+                                           class="min-h-9 rounded-md border border-streamdivider px-3 py-2 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
+                                           aria-label="previous movie page">previous</a>
+                                    {% endif %}
+                                    {% for page_number in import_movie_page.page_numbers %}
+                                        {% if page_number == import_movie_page.ellipsis %}
+                                            <span aria-hidden="true"
+                                                  class="min-h-9 px-2 py-2 text-center text-[10px] text-streamlabel">{{ page_number }}</span>
+                                        {% elif page_number == import_movie_page.page %}
+                                            <span aria-current="page"
+                                                  class="min-h-9 rounded-md border border-streamdivider bg-streamring/10 px-3 py-2 text-center text-[10px] text-streamaccent">{{ page_number }}</span>
+                                        {% else %}
+                                            <a href="?movie_page={{ page_number }}#batch_movie_gallery"
+                                               class="min-h-9 rounded-md border border-streamdivider px-3 py-2 text-center text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
+                                               {% if page_number == import_movie_page.pages %}aria-label="last movie page"{% endif %}>{{ page_number }}</a>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% if import_movie_page.has_next %}
+                                        <a href="?movie_page={{ import_movie_page.next_page }}#batch_movie_gallery"
+                                           class="min-h-9 rounded-md border border-streamdivider px-3 py-2 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
+                                           aria-label="next movie page">next</a>
+                                    {% endif %}
+                                </nav>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+
+                    {% if particle_stack_page.particles %}
+                        <div id="batch_particle_gallery" class="mb-4">
+                            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                <span>
+                                    <span class="block text-[10px] text-streamlabel">extracted particles</span>
+                                    <span class="block text-[9px] text-streamsubtle">
+                                        {{ particle_stack_page.first_particle }}–{{ particle_stack_page.last_particle }} of {{ particle_stack_page.total }}
+                                        from {{ particle_stack_page.stacks|length }} stack{{ particle_stack_page.stacks|length|pluralize }}
+                                    </span>
+                                </span>
+                                <span class="text-[9px] text-streamsubtle">thumbnails are generated on demand</span>
+                            </div>
+                            <div id="batch_particle_thumbnails" class="flex flex-wrap items-start gap-2"
+                                 style="--artifact-tile-height:clamp(72px,18vw,260px)">
+                                {% for particle in particle_stack_page.particles %}
+                                    <a data-artifact-preview-kind="particle"
+                                       href="{% url 'nice_lite:batch_particle_thumbnail' jobid particle.stack_name particle.stack_index %}"
+                                       target="_blank" rel="noopener"
+                                       class="relative flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
+                                       style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
+                                       title="{{ particle.stack_name }}, particle {{ particle.stack_index }}">
+                                        <img src="{% url 'nice_lite:batch_particle_thumbnail' jobid particle.stack_name particle.stack_index %}"
+                                             loading="lazy" decoding="async"
+                                             class="rounded absolute inset-0 w-full h-full object-cover hover:opacity-90 transition-opacity"
+                                             alt="extracted particle {{ particle.number }}">
+                                    </a>
+                                {% endfor %}
+                            </div>
+
+                            {% if particle_stack_page.pages > 1 %}
+                                <nav class="mt-3 flex flex-wrap items-center justify-center gap-1"
+                                     aria-label="extracted particle pages">
+                                    {% if particle_stack_page.has_previous %}
+                                        <a href="?particle_page={{ particle_stack_page.previous_page }}#batch_particle_gallery"
+                                           class="min-h-9 rounded-md border border-streamdivider px-3 py-2 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
+                                           aria-label="previous particle page">previous</a>
+                                    {% endif %}
+                                    {% for page_number in particle_stack_page.page_numbers %}
+                                        {% if page_number == particle_stack_page.ellipsis %}
+                                            <span aria-hidden="true"
+                                                  class="min-h-9 px-2 py-2 text-center text-[10px] text-streamlabel">{{ page_number }}</span>
+                                        {% elif page_number == particle_stack_page.page %}
+                                            <span aria-current="page"
+                                                  class="min-h-9 rounded-md border border-streamdivider bg-streamring/10 px-3 py-2 text-center text-[10px] text-streamaccent">{{ page_number }}</span>
+                                        {% else %}
+                                            <a href="?particle_page={{ page_number }}#batch_particle_gallery"
+                                               class="min-h-9 rounded-md border border-streamdivider px-3 py-2 text-center text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
+                                               {% if page_number == particle_stack_page.pages %}aria-label="last particle page"{% endif %}>{{ page_number }}</a>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% if particle_stack_page.has_next %}
+                                        <a href="?particle_page={{ particle_stack_page.next_page }}#batch_particle_gallery"
+                                           class="min-h-9 rounded-md border border-streamdivider px-3 py-2 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
+                                           aria-label="next particle page">next</a>
+                                    {% endif %}
+                                </nav>
+                            {% endif %}
+                        </div>
                     {% endif %}
 
                     {% if pick_micrographs or artifact_images %}

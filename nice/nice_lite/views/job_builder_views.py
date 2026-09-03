@@ -8,10 +8,11 @@ This module renders ``jobbuilder.html`` and prepares:
 
 # global imports
 import copy
-import math
+import logging
 import os
 
 # django imports
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
@@ -22,17 +23,12 @@ from ..data_structures.batchjob import BatchJob
 from ..data_structures.simple import SIMPLEBatch, SIMPLEStream
 from ..data_structures.streamjob import StreamJob
 from ..data_structures.workspace import Workspace
-from ..features import (
-    batch_project_file_selector_enabled,
-    batch_project_inheritance_enabled,
-)
 from ..models import JobModel
 from ..helpers import (
     clear_checksum_cookies,
     get_job_id,
     get_project_id,
     get_workspace_id,
-    print_error,
 )
 
 
@@ -42,9 +38,70 @@ _BATCH_JOB_SOURCE_PREFIX = "job"
 _BATCH_SNAPSHOT_SOURCE_PREFIX = "snapshot"
 
 
+logger = logging.getLogger(__name__)
+
+
 # ------------------------------------------------------------------
 # Internal Helpers
 # ------------------------------------------------------------------
+
+
+class _BatchProgramArgumentsForm(forms.Form):
+    """Build typed batch fields from the authoritative SIMPLE UI metadata."""
+
+    def __init__(self, data, program_cfg):
+        super().__init__(data=data)
+        self.input_metadata = []
+        for section_name, section_inputs in program_cfg.items():
+            if section_name == "program" or not isinstance(section_inputs, list):
+                continue
+            for user_input in section_inputs:
+                if not isinstance(user_input, dict):
+                    continue
+                key = user_input.get("key")
+                if (
+                    not isinstance(key, str)
+                    or key == ""
+                    or key in _BATCH_LAUNCHER_KEYS
+                ):
+                    continue
+                self.fields[key] = self._field_for_input(key, user_input)
+                self.input_metadata.append(user_input)
+
+    @staticmethod
+    def _field_for_input(key, user_input):
+        required = bool(user_input.get("required"))
+        required_error = f"missing required input: {key}"
+        keytype = user_input.get("keytype")
+        if keytype == "int":
+            invalid_error = f"invalid integer value for input: {key}"
+            return forms.IntegerField(
+                required=required,
+                min_value=0,
+                error_messages={
+                    "required": required_error,
+                    "invalid": invalid_error,
+                    "min_value": invalid_error,
+                },
+            )
+        if keytype in ("float", "num"):
+            invalid_error = f"invalid numeric value for input: {key}"
+            field_options = {
+                "required": required,
+                "error_messages": {
+                    "required": required_error,
+                    "invalid": invalid_error,
+                    "min_value": invalid_error,
+                },
+            }
+            if keytype == "float":
+                field_options["min_value"] = 0
+            return forms.FloatField(**field_options)
+        return forms.CharField(
+            required=required,
+            strip=True,
+            error_messages={"required": required_error},
+        )
 
 
 def _is_job_accessible(jobmodel, username=None):
@@ -130,24 +187,28 @@ def _get_batch_program(batchui, package, program):
 
 def _collect_batch_args(post, program_cfg):
     """Allow-list and normalize values against authoritative UI JSON metadata."""
-    inputs = []
-    for section_name, section_inputs in program_cfg.items():
-        if section_name != "program" and isinstance(section_inputs, list):
-            inputs.extend(entry for entry in section_inputs if isinstance(entry, dict))
+    form = _BatchProgramArgumentsForm(post, program_cfg)
+    if not form.is_valid():
+        for user_input in form.input_metadata:
+            key = user_input.get("key")
+            if key in form.errors:
+                return None, str(form.errors[key][0])
+        return None, "invalid batch input"
 
     args = {}
-    for user_input in inputs:
+    for user_input in form.input_metadata:
         key = user_input.get("key")
-        if not isinstance(key, str) or key == "" or key in _BATCH_LAUNCHER_KEYS:
-            continue
-        value = post.get(key, "").strip()
+        raw_value = post.get(key, "")
+        value = raw_value.strip() if isinstance(raw_value, str) else str(raw_value).strip()
+        cleaned_value = form.cleaned_data.get(key)
         if value == "":
-            if user_input.get("required"):
-                return None, f"missing required input: {key}"
             if key == "nthr" and user_input.get("has_default") and user_input.get("default") is not None:
                 # The scheduler needs the effective thread count even when the
                 # user accepts the UI default.
-                value = str(user_input["default"])
+                try:
+                    cleaned_value = form.fields[key].clean(user_input["default"])
+                except forms.ValidationError as error:
+                    return None, str(error.messages[0])
             else:
                 # Leave other untouched optional inputs out of the command.
                 # SIMPLE will apply its own defaults, and mutually exclusive
@@ -157,20 +218,7 @@ def _collect_batch_args(post, program_cfg):
 
         keytype = user_input.get("keytype")
         if keytype == "int":
-            try:
-                numeric_value = float(value)
-                if not math.isfinite(numeric_value) or not numeric_value.is_integer() or numeric_value < 0:
-                    raise ValueError
-                value = str(int(numeric_value))
-            except (TypeError, ValueError, OverflowError):
-                return None, f"invalid integer value for input: {key}"
-        elif keytype in ("float", "num"):
-            try:
-                numeric_value = float(value)
-                if not math.isfinite(numeric_value) or (keytype == "float" and numeric_value < 0):
-                    raise ValueError
-            except (TypeError, ValueError, OverflowError):
-                return None, f"invalid numeric value for input: {key}"
+            value = str(cleaned_value)
 
         options = user_input.get("options")
         if isinstance(options, list) and options and value not in [str(option) for option in options]:
@@ -363,7 +411,7 @@ def _resolve_batch_project_source(workspace_obj, source_key):
 
     parts = source_key.split(":")
     if len(parts) == 2 and parts[0] == _BATCH_JOB_SOURCE_PREFIX:
-        if not batch_project_inheritance_enabled() or not parts[1].isdecimal():
+        if not parts[1].isdecimal():
             return None, None, "invalid batch project source"
         jobmodel = JobModel.objects.filter(
             id=int(parts[1]),
@@ -404,8 +452,6 @@ def _resolve_batch_project_source(workspace_obj, source_key):
 
 def _default_batch_source_key(workspace_obj):
     """Return the newest eligible batch project key or the workspace seed."""
-    if not batch_project_inheritance_enabled():
-        return _BATCH_WORKSPACE_SOURCE
     sources = _collect_batch_job_sources(workspace_obj)
     if sources:
         return sources[0]["key"]
@@ -418,12 +464,11 @@ def _default_batch_project_file(workspace_obj):
     if not isinstance(workspace_dir, str):
         return ""
 
-    if batch_project_inheritance_enabled():
-        jobs = JobModel.objects.filter(dset=workspace_obj.get_id()).order_by("-id")
-        for jobmodel in jobs:
-            source = _batch_job_source(jobmodel, workspace_dir)
-            if source is not None:
-                return source["path"]
+    jobs = JobModel.objects.filter(dset=workspace_obj.get_id()).order_by("-id")
+    for jobmodel in jobs:
+        source = _batch_job_source(jobmodel, workspace_dir)
+        if source is not None:
+            return source["path"]
 
     workspace_project = os.path.realpath(os.path.join(workspace_dir, "workspace.simple"))
     if os.path.isfile(workspace_project):
@@ -536,11 +581,7 @@ def view_job_builder(request):
     else:
         messages.add_message(request, messages.ERROR, "failed to read batch ui JSON")
 
-    project_file_selector_enabled = batch_project_file_selector_enabled()
     context = {
-        "batch_project_sources": [],
-        "default_batch_source": _BATCH_WORKSPACE_SOURCE,
-        "batch_project_file_selector_enabled": project_file_selector_enabled,
         "default_batch_project_file": "",
     }
     if isinstance(streamui, dict):
@@ -567,17 +608,7 @@ def view_job_builder(request):
     if workspace_id is not None and project_id is not None:
         workspace_obj = Workspace(workspace_id)
         if _is_workspace_accessible(workspace_obj, project_id, request.user.username):
-            if project_file_selector_enabled:
-                context["default_batch_project_file"] = _default_batch_project_file(workspace_obj)
-            else:
-                batch_job_sources = []
-                if batch_project_inheritance_enabled():
-                    batch_job_sources = _collect_batch_job_sources(workspace_obj)
-                context["batch_project_sources"] = (
-                    batch_job_sources + _collect_batch_snapshot_sources(workspace_obj)
-                )
-                if batch_job_sources:
-                    context["default_batch_source"] = batch_job_sources[0]["key"]
+            context["default_batch_project_file"] = _default_batch_project_file(workspace_obj)
 
     response = render(request, template, context)
     if clear_selected_job_cookie:
@@ -596,7 +627,7 @@ def view_create_batch(request):
     project_id = get_project_id(request)
     workspace_obj = Workspace(workspace_id)
     if not _is_workspace_accessible(workspace_obj, project_id, request.user.username):
-        print_error(f"create_batch: invalid workspace access for workspace {workspace_id}")
+        logger.error("create_batch: invalid workspace access for workspace %s", workspace_id)
         messages.add_message(request, messages.ERROR, "invalid workspace selection")
         return redirect("nice_lite:workspace")
 
@@ -605,46 +636,37 @@ def view_create_batch(request):
     simplebatch = SIMPLEBatch(pckg=package)
     program_cfg = _get_batch_program(simplebatch.get_ui(), package, program)
     if program_cfg is None:
-        print_error(f"create_batch: unknown {package} program {program}")
+        logger.error("create_batch: unknown %s program %s", package, program)
         messages.add_message(request, messages.ERROR, "invalid batch program selection")
         return redirect("nice_lite:workspace")
 
     args, error = _collect_batch_args(request.POST, program_cfg)
     if error is not None:
-        print_error(f"create_batch: {error}")
+        logger.error("create_batch: %s", error)
         messages.add_message(request, messages.ERROR, error)
         return redirect("nice_lite:workspace")
 
     error = _validate_batch_requirements(program_cfg, args)
     if error is not None:
-        print_error(f"create_batch: {error}")
+        logger.error("create_batch: %s", error)
         messages.add_message(request, messages.ERROR, error)
         return redirect("nice_lite:workspace")
 
     error = _validate_batch_program_args(program, args)
     if error is not None:
-        print_error(f"create_batch: {error}")
+        logger.error("create_batch: %s", error)
         messages.add_message(request, messages.ERROR, error)
         return redirect("nice_lite:workspace")
 
-    if batch_project_file_selector_enabled():
-        project_file = request.POST.get("batch_project_file")
-        if project_file in (None, ""):
-            project_file = _default_batch_project_file(workspace_obj)
-        parent_proj, source_metadata, error = _resolve_batch_project_file(
-            workspace_obj,
-            project_file,
-        )
-    else:
-        source_key = request.POST.get("batch_source")
-        if source_key in (None, ""):
-            source_key = _default_batch_source_key(workspace_obj)
-        parent_proj, source_metadata, error = _resolve_batch_project_source(
-            workspace_obj,
-            source_key,
-        )
+    project_file = request.POST.get("batch_project_file")
+    if project_file in (None, ""):
+        project_file = _default_batch_project_file(workspace_obj)
+    parent_proj, source_metadata, error = _resolve_batch_project_file(
+        workspace_obj,
+        project_file,
+    )
     if error is not None:
-        print_error(f"create_batch: {error}")
+        logger.error("create_batch: %s", error)
         messages.add_message(request, messages.ERROR, error)
         return redirect("nice_lite:workspace")
 
@@ -657,7 +679,7 @@ def view_create_batch(request):
     if parent_proj is not None:
         launch_options.update({"parent_proj": parent_proj, "source": source_metadata})
     if not batchjob.new(workspace_obj, package, program, args, **launch_options):
-        print_error("failed to create new batch job")
+        logger.error("failed to create new batch job")
         messages.add_message(request, messages.ERROR, "failed to create batch job")
     else:
         messages.add_message(request, messages.SUCCESS, "batch job queued")

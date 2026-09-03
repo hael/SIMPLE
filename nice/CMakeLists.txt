@@ -71,6 +71,10 @@ add_custom_target(nice_src ALL
 # ------------------------------------------------------------------------------
 set(NICE_PY_PACKAGES
   django==5.2.5
+  mrcfile==1.5.4
+  numpy==2.2.6
+  Pillow==12.3.0
+  psutil==7.2.2
   pytailwindcss==0.2.0
   dirsync==2.2.6
 )

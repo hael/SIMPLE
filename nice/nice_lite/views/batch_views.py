@@ -1,16 +1,26 @@
 """Lifecycle actions for classic SIMPLE and SINGLE batch jobs."""
 
+import logging
+import os
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core import signing
+from django.core.paginator import Paginator
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.cache import cache_control
 from django.views.decorators.http import require_GET, require_POST
 
 from ..data_structures.batchjob import BatchJob
+from ..data_structures.movie import movie_preview_supported
 from ..data_structures.project import Project
 from ..data_structures.simple import SIMPLEBatch, SIMPLEProjFile
 from ..data_structures.workspace import Workspace
-from ..features import batch_job_controls_enabled
-from ..helpers import clear_checksum_cookies, get_job_id, print_error
+from ..helpers import clear_checksum_cookies, get_job_id
+
+
+logger = logging.getLogger(__name__)
 
 
 _PROJECT_SECTION_LABELS = {
@@ -24,6 +34,9 @@ _PROJECT_SECTION_LABELS = {
 _BATCH_LAUNCHER_KEYS = {"prg", "projfile", "mkdir", "niceprocid", "niceserver"}
 _BATCH_PICK_PREVIEW_LIMIT = 20
 _BATCH_PICK_COORDINATE_LIMIT = 1500
+_BATCH_PARTICLE_PAGE_SIZE = 40
+_BATCH_MOVIE_PAGE_SIZE = 40
+_BATCH_MOVIE_THUMBNAIL_SALT = "nice-lite.batch-movie-thumbnail"
 
 
 def _get_accessible_batch_job(request, log_context, job_id=None):
@@ -34,7 +47,7 @@ def _get_accessible_batch_job(request, log_context, job_id=None):
         or isinstance(resolved_job_id, bool)
         or resolved_job_id <= 0
     ):
-        print_error(f"{log_context}: missing job id")
+        logger.error("%s: missing job id", log_context)
         return None, None
 
     batch_job = BatchJob(id=resolved_job_id)
@@ -42,7 +55,7 @@ def _get_accessible_batch_job(request, log_context, job_id=None):
     workspace = getattr(jobmodel, "dset", None)
     owner = (getattr(workspace, "user", "") or "").strip()
     if jobmodel is None or owner != request.user.username:
-        print_error(f"{log_context}: access denied for job {resolved_job_id}")
+        logger.error("%s: access denied for job %s", log_context, resolved_job_id)
         return None, None
     return batch_job, jobmodel
 
@@ -259,11 +272,96 @@ def _argument_rows(jobmodel, metadata):
     return arguments
 
 
-def _batch_detail_context(batch_job, jobmodel):
+def _empty_movie_page():
+    """Return the stable empty shape used by the import movie gallery."""
+    return {
+        "movies": [],
+        "total": 0,
+        "page": 1,
+        "pages": 0,
+        "page_numbers": [],
+        "ellipsis": Paginator.ELLIPSIS,
+        "has_previous": False,
+        "has_next": False,
+        "first_movie": 0,
+        "last_movie": 0,
+    }
+
+
+def _movie_thumbnail_token(job_id, movie_path):
+    """Sign an imported movie path so it cannot be replaced in the URL."""
+    return signing.Signer(salt=_BATCH_MOVIE_THUMBNAIL_SALT).sign_object(
+        {
+            "job_id": job_id,
+            "path": movie_path,
+            "version": BatchJob.MOVIE_THUMBNAIL_CACHE_VERSION,
+        },
+        compress=True,
+    )
+
+
+def _import_movie_page(job_id, batch_job, page=1, page_size=40):
+    """Return one metadata-only page from an import job's submitted source."""
+    empty_page = _empty_movie_page()
+    movie_paths = batch_job.get_import_movie_paths()
+    if not isinstance(movie_paths, list):
+        return empty_page
+    total = len(movie_paths)
+    if (
+        total < 1
+        or not isinstance(page_size, int)
+        or isinstance(page_size, bool)
+        or page_size < 1
+    ):
+        return empty_page
+
+    page_size = min(page_size, 100)
+    paginator = Paginator(movie_paths, page_size)
+    page_obj = paginator.get_page(page)
+    first_movie = page_obj.start_index()
+    last_movie = page_obj.end_index()
+
+    movies = []
+    for offset, movie_path in enumerate(page_obj.object_list):
+        preview_available = movie_preview_supported(movie_path)
+        movies.append({
+            "number": first_movie + offset,
+            "name": os.path.basename(movie_path) or movie_path,
+            "preview_available": preview_available,
+            "token": (
+                _movie_thumbnail_token(job_id, movie_path)
+                if preview_available else ""
+            ),
+        })
+
+    return {
+        "movies": movies,
+        "total": total,
+        "page": page_obj.number,
+        "pages": paginator.num_pages,
+        "page_numbers": list(paginator.get_elided_page_range(
+            page_obj.number,
+            on_each_side=2,
+            on_ends=1,
+        )),
+        "ellipsis": Paginator.ELLIPSIS,
+        "has_previous": page_obj.has_previous(),
+        "previous_page": (
+            page_obj.previous_page_number() if page_obj.has_previous() else None
+        ),
+        "has_next": page_obj.has_next(),
+        "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
+        "first_movie": first_movie,
+        "last_movie": last_movie,
+    }
+
+
+def _batch_detail_context(batch_job, jobmodel, particle_page=1, movie_page=1):
     """Assemble validated batch metadata, logs, artifacts, and project summary."""
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
     result_project = batch_job.get_result_project_path()
     project_stats = {}
+    project_reader = None
     pick_micrographs = []
     if jobmodel.status == "finished" and result_project is not None:
         project_reader = SIMPLEProjFile(result_project)
@@ -277,7 +375,30 @@ def _batch_detail_context(batch_job, jobmodel):
             pick_micrographs = _pick_micrograph_previews(project_reader, project_stats)
 
     artifact_summary = batch_job.get_artifact_summary()
+    artifact_counts = list(artifact_summary.get("counts", []))
     artifact_images = artifact_summary.get("images", [])
+    particle_stack_page = {}
+    if metadata.get("program") in BatchJob.PARTICLE_STACK_PROGRAMS:
+        particle_stack_page = batch_job.get_particle_stack_page(
+            page=particle_page,
+            page_size=_BATCH_PARTICLE_PAGE_SIZE,
+        )
+        if particle_stack_page.get("stacks"):
+            artifact_counts.append({
+                "extension": "MRCS",
+                "count": len(particle_stack_page["stacks"]),
+            })
+    import_movie_page = {}
+    if (
+        metadata.get("program") == "import_movies"
+        and jobmodel.status == "finished"
+    ):
+        import_movie_page = _import_movie_page(
+            jobmodel.id,
+            batch_job,
+            page=movie_page,
+            page_size=_BATCH_MOVIE_PAGE_SIZE,
+        )
     arguments = _argument_rows(jobmodel, metadata)
     return {
         "jobid": jobmodel.id,
@@ -311,8 +432,10 @@ def _batch_detail_context(batch_job, jobmodel):
             if isinstance(box, dict)
         ),
         "logs": batch_job.get_log_tails(),
-        "artifact_counts": artifact_summary.get("counts", []),
+        "artifact_counts": artifact_counts,
         "artifact_images": artifact_images,
+        "particle_stack_page": particle_stack_page,
+        "import_movie_page": import_movie_page,
         "motion_artifact_toggle_available": (
             metadata.get("program") == "motion_correct"
             and any(
@@ -329,17 +452,17 @@ def _batch_detail_context(batch_job, jobmodel):
                 for preview in image.get("previews", [])
             )
         ),
-        "batch_job_controls_enabled": batch_job_controls_enabled(),
         "auto_refresh": jobmodel.status in ("queued", "running"),
     }
 
 
-def _controls_available(request):
-    """Reject lifecycle writes while the opt-in feature is disabled."""
-    if batch_job_controls_enabled():
-        return True
-    messages.add_message(request, messages.ERROR, "batch job controls are disabled")
-    return False
+def _positive_page_number(request, query_name):
+    """Return a positive page query value, defaulting safely to one."""
+    try:
+        page = int(request.GET.get(query_name, "1"))
+    except (TypeError, ValueError):
+        return 1
+    return max(1, page)
 
 
 @login_required(login_url="/login")
@@ -358,7 +481,12 @@ def view_batch(request, jobid):
     response = render(
         request,
         "nice_classic/batchview.html",
-        _batch_detail_context(batch_job, jobmodel),
+        _batch_detail_context(
+            batch_job,
+            jobmodel,
+            particle_page=_positive_page_number(request, "particle_page"),
+            movie_page=_positive_page_number(request, "movie_page"),
+        ),
     )
     response.set_cookie(key="selected_project_id", value=jobmodel.dset.proj_id)
     response.set_cookie(key="selected_workspace_id", value=jobmodel.dset_id)
@@ -368,12 +496,61 @@ def view_batch(request, jobid):
 
 
 @login_required(login_url="/login")
+@require_GET
+@cache_control(private=True, max_age=300, no_transform=True)
+def view_batch_particle_thumbnail(request, jobid, stack_name, particle_index):
+    """Render one owned extract particle on demand without writing a thumbnail."""
+    batch_job, _ = _get_accessible_batch_job(
+        request,
+        "view_batch_particle_thumbnail",
+        job_id=jobid,
+    )
+    if batch_job is None:
+        return HttpResponse(status=404)
+
+    thumbnail = batch_job.get_particle_thumbnail(stack_name, particle_index)
+    if thumbnail is None:
+        return HttpResponse(status=404)
+    return HttpResponse(thumbnail, content_type="image/png")
+
+
+@login_required(login_url="/login")
+@require_GET
+@cache_control(private=True, max_age=300, no_transform=True)
+def view_batch_movie_thumbnail(request, jobid, token):
+    """Return one signed import movie from the on-demand WebP cache."""
+    batch_job, _ = _get_accessible_batch_job(
+        request,
+        "view_batch_movie_thumbnail",
+        job_id=jobid,
+    )
+    if batch_job is None:
+        return HttpResponse(status=404)
+
+    try:
+        payload = signing.Signer(
+            salt=_BATCH_MOVIE_THUMBNAIL_SALT,
+        ).unsign_object(token)
+    except signing.BadSignature:
+        return HttpResponse(status=404)
+    if (
+        not isinstance(payload, dict)
+        or payload.get("job_id") != jobid
+        or not isinstance(payload.get("path"), str)
+        or payload.get("version") != BatchJob.MOVIE_THUMBNAIL_CACHE_VERSION
+    ):
+        return HttpResponse(status=404)
+
+    thumbnail = batch_job.get_import_movie_thumbnail(payload["path"])
+    if thumbnail is None:
+        return HttpResponse(status=404)
+    return HttpResponse(thumbnail, content_type="image/webp")
+
+
+@login_required(login_url="/login")
 @require_POST
 def view_batch_stop(request):
     """Stop an owned running batch job and return to its workspace."""
-    if not _controls_available(request):
-        return redirect("nice_lite:workspace")
-
     batch_job, jobmodel = _get_accessible_batch_job(request, "stop_batch")
     if batch_job is None:
         messages.add_message(request, messages.ERROR, "invalid batch job selection")
@@ -390,9 +567,6 @@ def view_batch_stop(request):
 @require_POST
 def view_batch_delete(request):
     """Permanently delete an owned deletable batch job and return to its workspace."""
-    if not _controls_available(request):
-        return redirect("nice_lite:workspace")
-
     batch_job, jobmodel = _get_accessible_batch_job(request, "delete_batch")
     if batch_job is None:
         messages.add_message(request, messages.ERROR, "invalid batch job selection")

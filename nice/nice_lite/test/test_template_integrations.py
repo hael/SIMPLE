@@ -24,7 +24,6 @@ class TemplateIntegrationTests(SimpleTestCase):
     def test_workspace_refresh_button_posts_missing_directory_cleanup(self):
         content = self._read_template("workspace.html")
 
-        self.assertIn("workspace_job_refresh_enabled", content)
         self.assertIn('<form method="POST" action="{% url \'nice_lite:refresh_workspace_jobs\' %}">', content)
         self.assertIn('title="refresh job cards"', content)
         self.assertIn("{% csrf_token %}", content)
@@ -158,44 +157,6 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertEqual(jobbuilder.count('data-batch-package='), 2)
         self.assertIn('document.querySelectorAll("form[data-batch-package]")', jobbuilder)
 
-    def test_batch_project_source_defaults_to_workspace_and_lists_snapshots(self):
-        rendered = render_to_string("jobbuilder.html", {
-            "stream_user_inputs": [],
-            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
-            "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
-            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
-            "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
-            "batch_project_sources": [{
-                "key": "snapshot:12:3",
-                "label": "stream 2 - particle set 3",
-            }],
-            "default_batch_source": "workspace",
-        })
-
-        self.assertEqual(rendered.count('value="workspace" selected>workspace project'), 2)
-        self.assertEqual(rendered.count('value="snapshot:12:3"'), 2)
-        self.assertEqual(rendered.count('name="batch_source" value="workspace"'), 2)
-        self.assertIn('id="simple_batch_source"', rendered)
-        self.assertIn('id="single_batch_source"', rendered)
-
-    def test_batch_project_source_defaults_to_latest_completed_job(self):
-        rendered = render_to_string("jobbuilder.html", {
-            "stream_user_inputs": [],
-            "simple_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
-            "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
-            "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
-            "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
-            "batch_project_sources": [{
-                "key": "job:8",
-                "label": "job 1 - Import Movie Data",
-            }],
-            "default_batch_source": "job:8",
-        })
-
-        self.assertEqual(rendered.count('value="job:8" selected'), 2)
-        self.assertEqual(rendered.count('name="batch_source" value="job:8"'), 2)
-        self.assertEqual(rendered.count('value="workspace" >workspace project'), 2)
-
     def test_batch_project_file_selector_uses_inherited_simple_project(self):
         project_path = "/workspace/1_import_movies/workspace.simple"
         rendered = render_to_string("jobbuilder.html", {
@@ -204,7 +165,6 @@ class TemplateIntegrationTests(SimpleTestCase):
             "simple_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
             "single_programs": [{"prg": "demo", "disp": "Demo", "desc": ""}],
             "single_program_inputs": [{"prg": "demo", "disp": "Demo", "sections": []}],
-            "batch_project_file_selector_enabled": True,
             "default_batch_project_file": project_path,
         })
 
@@ -370,7 +330,6 @@ class TemplateIntegrationTests(SimpleTestCase):
         batch_card = self._read_template("nice_classic/_batch_card.html")
         jobs = self._read_template("jobs.html")
 
-        self.assertIn("batch_job_controls_enabled", batch_card)
         self.assertIn("{% url 'nice_lite:stop_batch' %}", batch_card)
         self.assertIn('onclick="stopBatchJob(this)"', batch_card)
         self.assertIn('<circle cx="8" cy="8" r="6"/>', batch_card)
@@ -384,7 +343,7 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("permanently delete batch job", jobs)
         self.assertIn("This cannot be undone.", jobs)
 
-    def test_batch_card_controls_follow_opt_in_and_job_status(self):
+    def test_batch_card_controls_follow_job_status(self):
         job = {
             "id": 7,
             "disp": 1,
@@ -395,27 +354,12 @@ class TemplateIntegrationTests(SimpleTestCase):
             "status": "running",
         }
 
-        disabled = render_to_string("nice_classic/_batch_card.html", {
-            "job": job,
-            "batch_job_controls_enabled": False,
-        })
-        running = render_to_string("nice_classic/_batch_card.html", {
-            "job": job,
-            "batch_job_controls_enabled": True,
-        })
+        running = render_to_string("nice_classic/_batch_card.html", {"job": job})
         job["status"] = "queued"
-        queued = render_to_string("nice_classic/_batch_card.html", {
-            "job": job,
-            "batch_job_controls_enabled": True,
-        })
+        queued = render_to_string("nice_classic/_batch_card.html", {"job": job})
         job["status"] = "finished"
-        finished = render_to_string("nice_classic/_batch_card.html", {
-            "job": job,
-            "batch_job_controls_enabled": True,
-        })
+        finished = render_to_string("nice_classic/_batch_card.html", {"job": job})
 
-        self.assertNotIn('title="stop batch job"', disabled)
-        self.assertNotIn('title="delete batch job"', disabled)
         self.assertIn('title="stop batch job"', running)
         self.assertNotIn('title="delete batch job"', running)
         self.assertIn("rounded-full bg-streamaction/10 text-streamaction", running)
@@ -446,10 +390,7 @@ class TemplateIntegrationTests(SimpleTestCase):
             "status": "finished",
         }
 
-        rendered = render_to_string("nice_classic/_batch_card.html", {
-            "job": job,
-            "batch_job_controls_enabled": False,
-        })
+        rendered = render_to_string("nice_classic/_batch_card.html", {"job": job})
 
         self.assertIn('href="/viewbatch/7"', rendered)
         self.assertIn('target="_parent"', rendered)
@@ -527,7 +468,6 @@ class TemplateIntegrationTests(SimpleTestCase):
             ],
             "artifact_counts": [],
             "artifact_images": [],
-            "batch_job_controls_enabled": False,
             "auto_refresh": False,
         })
 

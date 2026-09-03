@@ -268,8 +268,7 @@
 
                     <div class="grid grid-cols-[auto_2fr] gap-x-4 items-center mb-4">
                         <label class="text-xs font-bold text-streamtext whitespace-nowrap"
-                               for="{% if batch_project_file_selector_enabled %}simple_batch_project_file{% else %}simple_batch_source{% endif %}">input project</label>
-                        {% if batch_project_file_selector_enabled %}
+                               for="simple_batch_project_file">input project</label>
                         <div class="relative flex items-center">
                             <input id="simple_batch_project_file" type="text"
                                    value="{{ default_batch_project_file }}"
@@ -284,15 +283,6 @@
                                 </svg>
                             </button>
                         </div>
-                        {% else %}
-                        <select id="simple_batch_source"
-                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
-                            <option value="workspace" {% if default_batch_source == "workspace" %}selected{% endif %}>workspace project</option>
-                            {% for source in batch_project_sources %}
-                                <option value="{{ source.key }}" {% if source.key == default_batch_source %}selected{% endif %}>{{ source.label }}</option>
-                            {% endfor %}
-                        </select>
-                        {% endif %}
                     </div>
                     <p id="simple_batch_feedback" role="alert" aria-live="polite"
                        class="hidden mb-3 text-xs text-streamerror"></p>
@@ -306,11 +296,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="package" value="simple">
                             <input type="hidden" name="program" value="{{ program.prg }}">
-                            {% if batch_project_file_selector_enabled %}
                             <input type="hidden" name="batch_project_file" value="{{ default_batch_project_file }}">
-                            {% else %}
-                            <input type="hidden" name="batch_source" value="{{ default_batch_source|default:'workspace' }}">
-                            {% endif %}
                             {% if program.requirements %}
                             <div class="mb-4 space-y-1">
                                 {% for requirement in program.requirements %}
@@ -503,8 +489,7 @@
 
                     <div class="grid grid-cols-[auto_2fr] gap-x-4 items-center mb-4">
                         <label class="text-xs font-bold text-streamtext whitespace-nowrap"
-                               for="{% if batch_project_file_selector_enabled %}single_batch_project_file{% else %}single_batch_source{% endif %}">input project</label>
-                        {% if batch_project_file_selector_enabled %}
+                               for="single_batch_project_file">input project</label>
                         <div class="relative flex items-center">
                             <input id="single_batch_project_file" type="text"
                                    value="{{ default_batch_project_file }}"
@@ -519,15 +504,6 @@
                                 </svg>
                             </button>
                         </div>
-                        {% else %}
-                        <select id="single_batch_source"
-                                class="w-full text-xs px-2 py-1 border border-streamline rounded-lg bg-streamsurface text-streaminput cursor-pointer focus:outline-none focus:ring-1 focus:ring-streamring">
-                            <option value="workspace" {% if default_batch_source == "workspace" %}selected{% endif %}>workspace project</option>
-                            {% for source in batch_project_sources %}
-                                <option value="{{ source.key }}" {% if source.key == default_batch_source %}selected{% endif %}>{{ source.label }}</option>
-                            {% endfor %}
-                        </select>
-                        {% endif %}
                     </div>
                     <p id="single_batch_feedback" role="alert" aria-live="polite"
                        class="hidden mb-3 text-xs text-streamerror"></p>
@@ -541,11 +517,7 @@
                             {% csrf_token %}
                             <input type="hidden" name="package" value="single">
                             <input type="hidden" name="program" value="{{ program.prg }}">
-                            {% if batch_project_file_selector_enabled %}
                             <input type="hidden" name="batch_project_file" value="{{ default_batch_project_file }}">
-                            {% else %}
-                            <input type="hidden" name="batch_source" value="{{ default_batch_source|default:'workspace' }}">
-                            {% endif %}
                             {% if program.requirements %}
                             <div class="mb-4 space-y-1">
                                 {% for requirement in program.requirements %}
@@ -987,10 +959,6 @@
                     return;
                 }
                 projectFileInput.value = projectFile;
-            } else {
-                const sourceSelector = document.getElementById(packageName + "_batch_source");
-                const sourceInput = form.querySelector("input[name='batch_source']");
-                if (sourceSelector && sourceInput) sourceInput.value = sourceSelector.value;
             }
             form.requestSubmit();
         }

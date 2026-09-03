@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from django.http import HttpResponse
 from django.test import RequestFactory
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase
 
 from ..views import workspace_views
 
@@ -40,7 +40,6 @@ class _FakeQueryset:
         return iter(self._jobs)
 
 
-@override_settings(NICE_LITE_BATCH_JOB_CONTROLS=False)
 class WorkspaceJobsViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -72,10 +71,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
 
     def test_workspace_jobs_returns_204_when_checksum_matches(self):
         payload = [{"id": 1, "status": "running"}]
-        checksum_payload = {
-            "jobs": payload,
-            "batch_job_controls_enabled": False,
-        }
+        checksum_payload = {"jobs": payload}
         checksum = hashlib.md5(json.dumps(checksum_payload, sort_keys=True, default=str).encode()).hexdigest()
 
         request = self.factory.get("/workspacejobs")
@@ -92,8 +88,7 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         mock_render.assert_not_called()
         mock_normalize.assert_not_called()
 
-    @override_settings(NICE_LITE_BATCH_JOB_CONTROLS=True)
-    def test_workspace_jobs_reconciles_local_completions_when_controls_enabled(self):
+    def test_workspace_jobs_reconciles_local_completions(self):
         request = self.factory.get("/workspacejobs")
         request.user = _AuthUser()
 
@@ -106,7 +101,6 @@ class WorkspaceJobsViewTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         reconcile.assert_called_once_with(fake_queryset)
 
-    @override_settings(NICE_LITE_BATCH_JOB_CONTROLS=True)
     def test_workspace_reconciles_local_completion_before_checksum(self):
         request = self.factory.get("/workspace")
         request.user = _AuthUser()
@@ -191,18 +185,6 @@ class WorkspaceJobRefreshTests(SimpleTestCase):
         delete_queryset.delete.assert_called_once_with()
         reconcile_job_counter.assert_called_once_with()
 
-    @override_settings(NICE_LITE_WORKSPACE_JOB_REFRESH=False)
-    def test_refresh_is_blocked_when_feature_is_disabled(self):
-        request = self.factory.post("/refreshworkspacejobs")
-        request.user = _AuthUser()
-
-        with patch.object(workspace_views, "Workspace") as workspace_cls, patch.object(workspace_views.messages, "add_message"):
-            response = workspace_views.view_refresh_workspace_jobs(request)
-
-        self.assertEqual(response.status_code, 302)
-        workspace_cls.assert_not_called()
-
-    @override_settings(NICE_LITE_WORKSPACE_JOB_REFRESH=True)
     def test_refresh_removes_missing_records_for_owned_workspace(self):
         request = self.factory.post("/refreshworkspacejobs")
         request.user = _AuthUser()
@@ -215,7 +197,6 @@ class WorkspaceJobRefreshTests(SimpleTestCase):
         remove_missing.assert_called_once_with(workspace)
         clear_checksums.assert_called_once_with(request, response)
 
-    @override_settings(NICE_LITE_WORKSPACE_JOB_REFRESH=True)
     def test_refresh_rejects_inaccessible_workspace(self):
         request = self.factory.post("/refreshworkspacejobs")
         request.user = _AuthUser()
@@ -226,7 +207,6 @@ class WorkspaceJobRefreshTests(SimpleTestCase):
         self.assertEqual(response.status_code, 302)
         remove_missing.assert_not_called()
 
-    @override_settings(NICE_LITE_WORKSPACE_JOB_REFRESH=True)
     def test_refresh_requires_post(self):
         request = self.factory.get("/refreshworkspacejobs")
         request.user = _AuthUser()

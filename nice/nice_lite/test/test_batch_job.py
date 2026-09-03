@@ -1,11 +1,11 @@
 import os
 import signal
-import struct
 import subprocess
 import tempfile
-from unittest.mock import ANY, patch
+from types import SimpleNamespace
+from unittest.mock import ANY, Mock, patch
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 
 from ..data_structures import batchjob as batchjob_module
@@ -161,6 +161,148 @@ class BatchJobLifecycleTests(TestCase):
         self.assertNotIn("hidden_by_default", previews[0])
         self.assertTrue(previews[1]["hidden_by_default"])
 
+    def test_extract_particle_stack_pages_read_headers_without_rendering_thumbnails(self):
+        job_dir = os.path.join(self.workspace_dir, "1_extract")
+        os.mkdir(job_dir)
+        for filename in ("particles_a.mrcs", "particles_b.mrcs"):
+            with open(os.path.join(job_dir, filename), "wb") as stack_file:
+                stack_file.write(b"stack")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_extract",
+            status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "extract"},
+        )
+        stack_counts = {"particles_a.mrcs": 3, "particles_b.mrcs": 4}
+
+        def stack_info(path):
+            return SimpleNamespace(
+                width=128,
+                height=128,
+                count=stack_counts[os.path.basename(path)],
+            )
+
+        job = BatchJob(id=jobmodel.id)
+        before = set(os.listdir(job_dir))
+        with (
+            patch.object(batchjob_module, "read_mrc_stack_info", side_effect=stack_info),
+            patch.object(batchjob_module, "render_mrc_particle_png") as render_thumbnail,
+        ):
+            particle_page = job.get_particle_stack_page(page=2, page_size=4)
+
+        self.assertEqual(particle_page["total"], 7)
+        self.assertEqual(particle_page["page"], 2)
+        self.assertEqual(particle_page["pages"], 2)
+        self.assertEqual(particle_page["page_numbers"], [1, 2])
+        self.assertEqual(
+            [
+                (particle["number"], particle["stack_name"], particle["stack_index"])
+                for particle in particle_page["particles"]
+            ],
+            [
+                (5, "particles_b.mrcs", 2),
+                (6, "particles_b.mrcs", 3),
+                (7, "particles_b.mrcs", 4),
+            ],
+        )
+        render_thumbnail.assert_not_called()
+        self.assertEqual(set(os.listdir(job_dir)), before)
+
+    def test_extract_particle_stack_page_uses_elided_django_page_range(self):
+        job_dir = os.path.join(self.workspace_dir, "1_extract")
+        os.mkdir(job_dir)
+        stack_path = os.path.join(job_dir, "particles.mrcs")
+        with open(stack_path, "wb") as stack_file:
+            stack_file.write(b"stack")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_extract",
+            status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "extract"},
+        )
+        stack_info = SimpleNamespace(width=128, height=128, count=481)
+
+        with patch.object(batchjob_module, "read_mrc_stack_info", return_value=stack_info):
+            particle_page = BatchJob(id=jobmodel.id).get_particle_stack_page(
+                page=2,
+                page_size=40,
+            )
+
+        self.assertEqual(particle_page["pages"], 13)
+        self.assertEqual(
+            particle_page["page_numbers"],
+            [1, 2, 3, 4, particle_page["ellipsis"], 13],
+        )
+
+    def test_extract_particle_thumbnail_is_rendered_only_when_requested(self):
+        job_dir = os.path.join(self.workspace_dir, "1_extract")
+        os.mkdir(job_dir)
+        stack_path = os.path.join(job_dir, "particles.mrcs")
+        with open(stack_path, "wb") as stack_file:
+            stack_file.write(b"stack")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_extract",
+            status="finished",
+            master_stats={"job_type": "batch", "package": "simple", "program": "extract"},
+        )
+
+        with patch.object(
+            batchjob_module,
+            "render_mrc_particle_png",
+            return_value=b"png",
+        ) as render_thumbnail:
+            thumbnail = BatchJob(id=jobmodel.id).get_particle_thumbnail("particles.mrcs", 3)
+
+        self.assertEqual(thumbnail, b"png")
+        render_thumbnail.assert_called_once_with(stack_path, 3, max_size=160)
+
+    def test_import_movie_thumbnail_is_rendered_only_when_requested(self):
+        job_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(job_dir)
+        movie_path = os.path.join(self.tempdir.name, "movie.mrcs")
+        with open(movie_path, "wb") as movie_file:
+            movie_file.write(b"movie")
+        jobmodel = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            args={"dir_movies": self.tempdir.name},
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "import_movies",
+            },
+        )
+
+        with patch.object(
+            batchjob_module,
+            "render_movie_webp",
+            return_value=b"webp",
+        ) as render_thumbnail:
+            job = BatchJob(id=jobmodel.id)
+            thumbnail = job.get_import_movie_thumbnail(
+                movie_path,
+            )
+            cached_thumbnail = job.get_import_movie_thumbnail(movie_path)
+
+        self.assertEqual(job.get_import_movie_paths(), [movie_path])
+        self.assertEqual(thumbnail, b"webp")
+        self.assertEqual(cached_thumbnail, b"webp")
+        render_thumbnail.assert_called_once_with(movie_path, max_size=160)
+        cache_dir = os.path.join(job_dir, job.MOVIE_THUMBNAIL_CACHE_DIR)
+        cache_files = os.listdir(cache_dir)
+        self.assertEqual(len(cache_files), 1)
+        self.assertTrue(cache_files[0].endswith(".webp"))
+
     def test_ctf_artifacts_pair_diagnostics_with_source_motion_thumbnails(self):
         motion_dir = os.path.join(self.workspace_dir, "1_motion_correct")
         os.mkdir(motion_dir)
@@ -266,7 +408,7 @@ class BatchJobLifecycleTests(TestCase):
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(b"image")
         with open(os.path.join(motion_dir, "movie_intg.mrc"), "wb") as mrc_file:
-            mrc_file.write(struct.pack("<3i", 4096, 3072, 1))
+            mrc_file.write(b"mrc")
         motion_job = JobModel.objects.create(
             dset=self.workspace_model,
             cdat=timezone.now(),
@@ -314,7 +456,15 @@ class BatchJobLifecycleTests(TestCase):
             },
         )
 
-        previews = BatchJob(id=pick_job.id).get_pick_micrograph_previews()
+        mrc_info = SimpleNamespace(width=4096, height=3072)
+        with patch.object(
+            batchjob_module,
+            "read_mrc_stack_info",
+            return_value=mrc_info,
+        ) as read_mrc_info:
+            previews = BatchJob(id=pick_job.id).get_pick_micrograph_previews()
+
+        read_mrc_info.assert_called_once_with(os.path.join(motion_dir, "movie_intg.mrc"))
 
         self.assertEqual(previews, [{
             "path": thumbnail_path,
@@ -413,7 +563,11 @@ class BatchJobLifecycleTests(TestCase):
             master_stats={"job_type": "batch", "package": "simple", "program": "import_movies"},
         )
 
-        with patch.object(batchjob_module.os, "readlink", return_value=self.workspace_dir), patch.object(batchjob_module.os, "getpgid", return_value=4321), patch.object(batchjob_module.os, "killpg") as killpg:
+        process = Mock()
+        process.is_running.return_value = True
+        process.status.return_value = batchjob_module.psutil.STATUS_RUNNING
+        process.cwd.return_value = self.workspace_dir
+        with patch.object(batchjob_module.psutil, "Process", return_value=process), patch.object(batchjob_module.os, "getpgid", return_value=4321), patch.object(batchjob_module.os, "killpg") as killpg:
             stopped = BatchJob(id=jobmodel.id).stop()
 
         self.assertFalse(stopped)
@@ -740,7 +894,6 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(jobmodel.master_stats["source"], source)
         self.assertEqual(BatchJob(id=job.id).source, source)
 
-    @override_settings(NICE_LITE_BATCH_PROJECT_INHERITANCE=True)
     def test_batch_project_sources_list_latest_completed_job_first(self):
         expected = []
         for disp, name in ((1, "Import Movie Data"), (2, "Correct Movie Motion")):
@@ -787,7 +940,6 @@ class BatchJobLifecycleTests(TestCase):
             os.path.join(self.workspace_dir, "2_job", "workspace.simple"),
         )
 
-    @override_settings(NICE_LITE_BATCH_PROJECT_INHERITANCE=True)
     def test_batch_job_project_source_resolves_owned_completed_project(self):
         job_dir = os.path.join(self.workspace_dir, "1_import_movies")
         os.mkdir(job_dir)
@@ -971,7 +1123,6 @@ class SimpleBatchDispatchTests(TestCase):
 
         self.assertFalse(started)
 
-    @override_settings(NICE_LITE_BATCH_STATUS_CALLBACKS=False)
     def test_start_dispatches_corresponding_executable_and_quotes_values(self):
         with tempfile.TemporaryDirectory() as parent_dir:
             parent_proj = os.path.join(parent_dir, "parent project.simple")
@@ -1006,10 +1157,9 @@ class SimpleBatchDispatchTests(TestCase):
                     self.assertIn(f"{executable} prg=demo_commander input='path with spaces' nthr=8", content)
                     self.assertIn(f"cp -v '{parent_proj}' workspace.simple", content)
                     self.assertIn("# CPU 8", content)
-                    self.assertNotIn("nice_status_callback", content)
+                    self.assertIn("nice_status_callback()", content)
                     submit.assert_called_once()
 
-    @override_settings(NICE_LITE_BATCH_STATUS_CALLBACKS=True)
     def test_status_callbacks_wrap_every_batch_package(self):
         with tempfile.TemporaryDirectory() as parent_dir:
             parent_proj = os.path.join(parent_dir, "workspace.simple")
@@ -1061,7 +1211,6 @@ class SimpleBatchDispatchTests(TestCase):
                     self.assertLess(content.index("nice_job_exit=$?"), content.index(failed))
                     submit.assert_called_once()
 
-    @override_settings(NICE_LITE_BATCH_STATUS_CALLBACKS=True)
     def test_new_project_dispatch_creates_project_in_job_directory(self):
         with tempfile.TemporaryDirectory() as parent_dir:
             parent_proj = os.path.join(parent_dir, "workspace.simple")

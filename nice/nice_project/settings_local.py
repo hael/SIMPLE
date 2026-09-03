@@ -142,18 +142,3 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Modified for nice
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 #increased to 10MB for large json uploads from simple
 X_FRAME_OPTIONS = "SAMEORIGIN"
-
-# Opt-in NICE Lite controls for stopping and deleting batch jobs.
-NICE_LITE_BATCH_JOB_CONTROLS = True
-
-# Opt-in inheritance of the latest completed batch project in the job builder.
-NICE_LITE_BATCH_PROJECT_INHERITANCE = True
-
-# Opt-in .simple file selector for batch input projects.
-NICE_LITE_BATCH_PROJECT_FILE_SELECTOR = True
-
-# Opt-in script-level status callbacks for every SIMPLE and SINGLE batch job.
-NICE_LITE_BATCH_STATUS_CALLBACKS = True
-
-# Opt-in cleanup of job cards whose workspace directories were removed externally.
-NICE_LITE_WORKSPACE_JOB_REFRESH = True

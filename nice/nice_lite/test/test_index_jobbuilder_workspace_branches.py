@@ -6,7 +6,6 @@ from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.test import RequestFactory
 from django.test import SimpleTestCase
-from django.test import override_settings
 
 from ..views import index_views
 from ..views import job_builder_views
@@ -97,10 +96,6 @@ class IndexViewBranchTests(SimpleTestCase):
         self.assertEqual(response._ctx["iframeurl"], "rev:nice_lite:workspace?selected_workspace_id=42")
 
 
-@override_settings(
-    NICE_LITE_BATCH_PROJECT_FILE_SELECTOR=False,
-    NICE_LITE_BATCH_PROJECT_INHERITANCE=False,
-)
 class JobBuilderBranchTests(SimpleTestCase):
     def setUp(self):
         self.factory = RequestFactory()
@@ -170,10 +165,6 @@ class JobBuilderBranchTests(SimpleTestCase):
         stream_inputs = response._ctx["stream_user_inputs"]
         self.assertEqual(stream_inputs[0]["value"], "2.5")
 
-    @override_settings(
-        NICE_LITE_BATCH_PROJECT_FILE_SELECTOR=True,
-        NICE_LITE_BATCH_PROJECT_INHERITANCE=True,
-    )
     def test_job_builder_defaults_file_selector_to_latest_completed_batch_project(self):
         request = self.factory.get("/jobbuilder")
         request.user = _AuthUser()
@@ -207,7 +198,6 @@ class JobBuilderBranchTests(SimpleTestCase):
             response = job_builder_views.view_job_builder(request)
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(response._ctx["batch_project_file_selector_enabled"])
         self.assertEqual(response._ctx["default_batch_project_file"], project_path)
         default_project.assert_called_once_with(workspace)
         batch_sources.assert_not_called()
@@ -268,6 +258,56 @@ class JobBuilderBranchTests(SimpleTestCase):
 
         self.assertIsNone(error)
         self.assertEqual(args, {"dir_movies": "/data/movies"})
+
+    def test_collect_batch_args_uses_typed_form_fields_and_preserves_values(self):
+        program_cfg = {
+            "program": {"executable": "simple_exec"},
+            "compute": [
+                {"key": "nthr", "keytype": "int", "options": [4, 8]},
+                {"key": "scale", "keytype": "float"},
+                {"key": "shift", "keytype": "num"},
+            ],
+        }
+
+        args, error = job_builder_views._collect_batch_args(
+            {"nthr": "4.0", "scale": "1.50", "shift": "-2.25"},
+            program_cfg,
+        )
+
+        self.assertIsNone(error)
+        self.assertEqual(args, {"nthr": "4", "scale": "1.50", "shift": "-2.25"})
+
+    def test_collect_batch_args_returns_existing_messages_for_form_errors(self):
+        program_cfg = {
+            "program": {"executable": "simple_exec"},
+            "inputs": [
+                {"key": "name", "required": True},
+                {"key": "nthr", "keytype": "int"},
+                {"key": "scale", "keytype": "float"},
+            ],
+        }
+
+        self.assertEqual(
+            job_builder_views._collect_batch_args(
+                {"name": "", "nthr": "4", "scale": "1"},
+                program_cfg,
+            ),
+            (None, "missing required input: name"),
+        )
+        self.assertEqual(
+            job_builder_views._collect_batch_args(
+                {"name": "job", "nthr": "-1", "scale": "1"},
+                program_cfg,
+            ),
+            (None, "invalid integer value for input: nthr"),
+        )
+        self.assertEqual(
+            job_builder_views._collect_batch_args(
+                {"name": "job", "nthr": "4", "scale": "nan"},
+                program_cfg,
+            ),
+            (None, "invalid numeric value for input: scale"),
+        )
 
     def test_create_batch_rejects_program_for_wrong_executable(self):
         request = self.factory.post("/createbatch", {"package": "single", "program": "pick"})
@@ -483,7 +523,7 @@ class JobBuilderBranchTests(SimpleTestCase):
         request = self.factory.post("/createbatch", {
             "package": "simple",
             "program": "cluster2D",
-            "batch_source": "snapshot:12:3",
+            "batch_project_file": "/workspace/snapshot_3.simple",
         })
         request.user = _AuthUser()
         workspace = Mock()
@@ -511,7 +551,7 @@ class JobBuilderBranchTests(SimpleTestCase):
             patch.object(job_builder_views, "SIMPLEBatch", return_value=launcher),
             patch.object(
                 job_builder_views,
-                "_resolve_batch_project_source",
+                "_resolve_batch_project_file",
                 return_value=("/workspace/snapshot_3.simple", source, None),
             ),
             patch.object(job_builder_views, "BatchJob", return_value=batchjob),
@@ -529,10 +569,6 @@ class JobBuilderBranchTests(SimpleTestCase):
             source=source,
         )
 
-    @override_settings(
-        NICE_LITE_BATCH_PROJECT_FILE_SELECTOR=True,
-        NICE_LITE_BATCH_PROJECT_INHERITANCE=True,
-    )
     def test_create_batch_inherits_latest_job_when_source_is_omitted(self):
         request = self.factory.post("/createbatch", {
             "package": "simple",

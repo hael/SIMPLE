@@ -1,22 +1,32 @@
 # global imports
+import hashlib
+import logging
 import math
 import os
 import shutil
 import signal
-import struct
+import tempfile
 import time
 from collections import Counter
 
+import psutil
+
 # django imports
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.utils import timezone
 
 # local imports
-from ..helpers import directory_exists, ensure_directory, print_error
+from ..helpers import directory_exists, ensure_directory
 from ..models import JobModel, WorkspaceModel
 from .simple import SIMPLEBatch, SIMPLEProjFile, SIMPLEProject
 from .job import Job
+from .mrc import read_mrc_stack_info, render_mrc_particle_png
+from .movie import render_movie_webp
 from .workspace import Workspace
+
+
+logger = logging.getLogger(__name__)
 
 
 class BatchJob(Job):
@@ -36,6 +46,12 @@ class BatchJob(Job):
     CTF_DIAGNOSTIC_SUFFIX = "_ctf_estimate_diag"
     MOTION_THUMBNAIL_SUFFIX = "_thumb.jpg"
     PICK_INTEGRATED_SUFFIX = "_intg"
+    PARTICLE_STACK_PROGRAMS = frozenset(("extract", "reextract"))
+    IMPORT_MOVIE_EXTENSIONS = frozenset((
+        ".mrc", ".mrcs", ".tif", ".tiff", ".eer",
+    ))
+    MOVIE_THUMBNAIL_CACHE_DIR = ".nice_movie_thumbnails"
+    MOVIE_THUMBNAIL_CACHE_VERSION = 2
 
     def __init__(self, pckg=None, id=None, request=None):
         super().__init__(id=None)
@@ -304,20 +320,11 @@ class BatchJob(Job):
 
     @staticmethod
     def _read_mrc_dimensions(path):
-        """Read validated x/y dimensions from a little- or big-endian MRC header."""
-        try:
-            with open(path, "rb") as mrc_file:
-                header = mrc_file.read(12)
-        except OSError:
+        """Read validated x/y dimensions through the shared MRC helper."""
+        stack_info = read_mrc_stack_info(path)
+        if stack_info is None:
             return None
-        if len(header) != 12:
-            return None
-
-        for byte_order in ("<", ">"):
-            xdim, ydim, zdim = struct.unpack(f"{byte_order}3i", header)
-            if all(0 < dimension <= 1000000 for dimension in (xdim, ydim, zdim)):
-                return xdim, ydim
-        return None
+        return stack_info.width, stack_info.height
 
     @staticmethod
     def _read_box_centers(path, max_coordinates):
@@ -525,21 +532,268 @@ class BatchJob(Job):
             "images": images,
         }
 
+    def get_particle_stack_page(self, page=1, page_size=40):
+        """Return one page of addressable images from owned extract stacks.
+
+        Only MRC headers are read here. Pixel data is read later by the image
+        endpoint for the thumbnails that the browser actually requests.
+        """
+        empty_page = {
+            "stacks": [],
+            "particles": [],
+            "total": 0,
+            "page": 1,
+            "pages": 0,
+            "page_numbers": [],
+            "ellipsis": Paginator.ELLIPSIS,
+            "has_previous": False,
+            "has_next": False,
+            "first_particle": 0,
+            "last_particle": 0,
+        }
+        if self.prog not in self.PARTICLE_STACK_PROGRAMS:
+            return empty_page
+        if not isinstance(page, int) or isinstance(page, bool) or page < 1:
+            page = 1
+        if not isinstance(page_size, int) or isinstance(page_size, bool) or page_size < 1:
+            page_size = 40
+        page_size = min(page_size, 100)
+
+        job_dir = self.get_safe_job_dir()
+        if job_dir is None:
+            return empty_page
+        try:
+            with os.scandir(job_dir) as directory_entries:
+                stack_names = sorted(
+                    entry.name
+                    for entry in directory_entries
+                    if entry.name.lower().endswith(".mrcs")
+                    and entry.is_file(follow_symlinks=True)
+                )
+        except OSError:
+            return empty_page
+
+        stacks = []
+        total = 0
+        for stack_name in stack_names:
+            stack_path = self._safe_job_file(stack_name, job_dir)
+            stack_info = read_mrc_stack_info(stack_path) if stack_path is not None else None
+            if stack_info is None:
+                continue
+            stacks.append({
+                "name": stack_name,
+                "count": stack_info.count,
+                "width": stack_info.width,
+                "height": stack_info.height,
+                "first_particle": total + 1,
+            })
+            total += stack_info.count
+
+        if total == 0:
+            return empty_page
+
+        paginator = Paginator(range(total), page_size)
+        page_obj = paginator.get_page(page)
+        first_offset = page_obj.start_index() - 1
+        last_offset = page_obj.end_index()
+        particles = []
+        stack_offset = 0
+        for stack in stacks:
+            stack_last_offset = stack_offset + stack["count"]
+            selected_start = max(first_offset, stack_offset)
+            selected_end = min(last_offset, stack_last_offset)
+            for global_offset in range(selected_start, selected_end):
+                particles.append({
+                    "number": global_offset + 1,
+                    "stack_name": stack["name"],
+                    "stack_index": global_offset - stack_offset + 1,
+                })
+            stack_offset = stack_last_offset
+            if stack_offset >= last_offset:
+                break
+
+        return {
+            "stacks": stacks,
+            "particles": particles,
+            "total": total,
+            "page": page_obj.number,
+            "pages": paginator.num_pages,
+            "page_numbers": list(paginator.get_elided_page_range(
+                page_obj.number,
+                on_each_side=2,
+                on_ends=1,
+            )),
+            "ellipsis": Paginator.ELLIPSIS,
+            "has_previous": page_obj.has_previous(),
+            "previous_page": (
+                page_obj.previous_page_number() if page_obj.has_previous() else None
+            ),
+            "has_next": page_obj.has_next(),
+            "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
+            "first_particle": page_obj.start_index(),
+            "last_particle": page_obj.end_index(),
+        }
+
+    def get_particle_thumbnail(self, stack_name, particle_index, max_size=160):
+        """Return one owned extract particle as in-memory PNG bytes."""
+        if (
+            self.prog not in self.PARTICLE_STACK_PROGRAMS
+            or not isinstance(stack_name, str)
+            or stack_name != os.path.basename(stack_name)
+            or not stack_name.lower().endswith(".mrcs")
+        ):
+            return None
+        job_dir = self.get_safe_job_dir()
+        stack_path = self._safe_job_file(stack_name, job_dir) if job_dir is not None else None
+        if stack_path is None:
+            return None
+        return render_mrc_particle_png(stack_path, particle_index, max_size=max_size)
+
+    def get_import_movie_thumbnail(self, movie_path, max_size=160):
+        """Return one imported movie thumbnail from an on-demand WebP cache."""
+        if (
+            self.prog != "import_movies"
+            or not isinstance(movie_path, str)
+            or not os.path.isabs(movie_path)
+            or not os.path.isfile(movie_path)
+        ):
+            return None
+
+        cache_path = self._import_movie_thumbnail_cache_path(movie_path, max_size)
+        if cache_path is None:
+            return None
+        try:
+            with open(cache_path, "rb") as cache_file:
+                return cache_file.read()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            return None
+
+        thumbnail = render_movie_webp(movie_path, max_size=max_size)
+        if thumbnail is None:
+            return None
+
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=os.path.dirname(cache_path),
+                prefix=".movie-thumbnail-",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary_file:
+                temporary_path = temporary_file.name
+                temporary_file.write(thumbnail)
+            os.replace(temporary_path, cache_path)
+            temporary_path = None
+        except OSError:
+            return thumbnail
+        finally:
+            if temporary_path is not None:
+                try:
+                    os.unlink(temporary_path)
+                except OSError:
+                    pass
+        return thumbnail
+
+    def get_import_movie_paths(self):
+        """Return import candidates from this job's submitted movie source."""
+        if self.prog != "import_movies" or not isinstance(self.args, dict):
+            return []
+
+        directory = str(self.args.get("dir_movies", "") or "").strip()
+        file_table = str(self.args.get("filetab", "") or "").strip()
+        if bool(directory) == bool(file_table):
+            return []
+
+        job_dir = self.get_safe_job_dir()
+        if job_dir is None:
+            return []
+        if directory:
+            if not os.path.isabs(directory):
+                directory = os.path.abspath(os.path.join(job_dir, directory))
+            try:
+                with os.scandir(directory) as entries:
+                    return sorted(
+                        os.path.abspath(entry.path)
+                        for entry in entries
+                        if entry.is_file(follow_symlinks=True)
+                        and os.path.splitext(entry.name)[1].lower()
+                        in self.IMPORT_MOVIE_EXTENSIONS
+                    )
+            except OSError:
+                return []
+
+        if not os.path.isabs(file_table):
+            file_table = os.path.abspath(os.path.join(job_dir, file_table))
+        try:
+            with open(file_table, encoding="utf-8") as source_file:
+                source_lines = source_file.readlines()
+        except OSError:
+            return []
+
+        movie_paths = []
+        for source_line in source_lines:
+            movie_path = source_line.strip()
+            if not movie_path or movie_path.startswith("#"):
+                continue
+            if not os.path.isabs(movie_path):
+                movie_path = os.path.abspath(os.path.join(job_dir, movie_path))
+            if (
+                os.path.splitext(movie_path)[1].lower()
+                in self.IMPORT_MOVIE_EXTENSIONS
+                and os.path.isfile(movie_path)
+            ):
+                movie_paths.append(movie_path)
+        return movie_paths
+
+    def _import_movie_thumbnail_cache_path(self, movie_path, max_size):
+        """Return a safe cache path keyed by source identity and dimensions."""
+        if (
+            not isinstance(max_size, int)
+            or isinstance(max_size, bool)
+            or max_size < 1
+        ):
+            return None
+        job_dir = self.get_safe_job_dir()
+        if job_dir is None:
+            return None
+        cache_dir = os.path.join(job_dir, self.MOVIE_THUMBNAIL_CACHE_DIR)
+        if os.path.islink(cache_dir) or not ensure_directory(cache_dir):
+            return None
+        try:
+            if os.path.commonpath((job_dir, os.path.realpath(cache_dir))) != job_dir:
+                return None
+            source_stat = os.stat(movie_path)
+        except (OSError, ValueError):
+            return None
+
+        cache_identity = "\0".join((
+            str(self.MOVIE_THUMBNAIL_CACHE_VERSION),
+            os.path.realpath(movie_path),
+            str(source_stat.st_size),
+            str(source_stat.st_mtime_ns),
+            str(max_size),
+        ))
+        cache_name = hashlib.sha256(cache_identity.encode("utf-8")).hexdigest()
+        return os.path.join(cache_dir, cache_name + ".webp")
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _create_dir(self, parent_dir):
         if self.dirc == "":
-            print_error("_create_dir: empty dir name")
+            logger.error("_create_dir: empty dir name")
             return False
         if not directory_exists(parent_dir):
-            print_error("_create_dir: parent directory missing")
+            logger.error("_create_dir: parent directory missing")
             return False
 
         new_dir_path = os.path.join(parent_dir, self.dirc)
         if directory_exists(new_dir_path):
-            print_error("_create_dir: destination already exists")
+            logger.error("_create_dir: destination already exists")
             return False
 
         return ensure_directory(new_dir_path)
@@ -550,15 +804,15 @@ class BatchJob(Job):
 
     def createLink(self, source, destination):
         if not os.path.exists(source):
-            print_error("createLink: source missing")
+            logger.error("createLink: source missing")
             return False
         if not os.path.isfile(source):
-            print_error("createLink: source is not a file")
+            logger.error("createLink: source is not a file")
             return False
         try:
             os.symlink(source, destination)
         except OSError:
-            print_error("createLink: symlink creation failed")
+            logger.error("createLink: symlink creation failed")
             return False
         return True
 
@@ -581,16 +835,16 @@ class BatchJob(Job):
     def new(self, workspace, pckg, prog, args, parent_proj=None, source=None, display_name=None):
         """Create and launch a SIMPLE or SINGLE batch job."""
         if workspace is None or pckg not in ("simple", "single") or not prog:
-            print_error("new: invalid batch job configuration")
+            logger.error("new: invalid batch job configuration")
             return False
         if not isinstance(args, dict):
-            print_error("new: args is not a dictionary")
+            logger.error("new: args is not a dictionary")
             return False
 
         workspacemodel = workspace.get_workspacemodel()
         workspace_dir = workspace.get_absdir()
         if workspacemodel is None or not directory_exists(workspace_dir):
-            print_error("new: workspace is unavailable")
+            logger.error("new: workspace is unavailable")
             return False
 
         explicit_parent_proj = parent_proj is not None
@@ -602,13 +856,13 @@ class BatchJob(Job):
             except (TypeError, ValueError):
                 source_in_workspace = False
             if not source_in_workspace or not os.path.isfile(parent_proj):
-                print_error("new: batch project source is unavailable")
+                logger.error("new: batch project source is unavailable")
                 return False
         else:
             parent_proj = os.path.join(workspace_dir, "workspace.simple")
             if not os.path.isfile(parent_proj):
                 if not SIMPLEProject(workspace_dir).create():
-                    print_error("new: failed to initialize workspace.simple")
+                    logger.error("new: failed to initialize workspace.simple")
                     return False
 
         self.pckg = pckg
@@ -670,7 +924,7 @@ class BatchJob(Job):
 
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
         if workspacemodel is None:
-            print_error("linkParticleSet: workspace not found")
+            logger.error("linkParticleSet: workspace not found")
             return False
 
         self.disp = workspacemodel.jcnt + 1
@@ -712,7 +966,7 @@ class BatchJob(Job):
 
         workspacemodel = WorkspaceModel.objects.filter(id=workspace.id).first()
         if workspacemodel is None:
-            print_error("linkParticleSetFinal: workspace not found")
+            logger.error("linkParticleSetFinal: workspace not found")
             return False
 
         self.disp = workspacemodel.jcnt + 1
@@ -765,14 +1019,13 @@ class BatchJob(Job):
     def _local_process_is_running(self, pid):
         """Return True while the generated local job process still exists."""
         try:
-            process_dir = os.path.realpath(os.readlink(f"/proc/{pid}/cwd"))
-        except OSError:
-            try:
-                os.kill(pid, 0)
-            except ProcessLookupError:
+            process = psutil.Process(pid)
+            if not process.is_running() or process.status() == psutil.STATUS_ZOMBIE:
                 return False
-            except PermissionError:
-                return True
+            process_dir = os.path.realpath(process.cwd())
+        except (psutil.NoSuchProcess, psutil.ZombieProcess):
+            return False
+        except psutil.AccessDenied:
             return True
         return process_dir == os.path.realpath(self.get_absdir() or "")
 
@@ -855,22 +1108,25 @@ class BatchJob(Job):
         """Return an isolated process group owned by this job, or ``None``."""
         job_dir = self.get_absdir()
         if job_dir is None:
-            print_error("stop: job directory is unavailable")
+            logger.error("stop: job directory is unavailable")
             return None
 
         try:
-            process_dir = os.path.realpath(os.readlink(f"/proc/{pid}/cwd"))
+            process = psutil.Process(pid)
+            if not process.is_running() or process.status() == psutil.STATUS_ZOMBIE:
+                raise psutil.NoSuchProcess(pid)
+            process_dir = os.path.realpath(process.cwd())
             job_dir = os.path.realpath(job_dir)
             process_group = os.getpgid(pid)
-        except OSError:
-            print_error("stop: job process is not available on this host")
+        except (OSError, psutil.Error):
+            logger.error("stop: job process is not available on this host")
             return None
 
         if process_dir != job_dir:
-            print_error("stop: pid does not belong to the job directory")
+            logger.error("stop: pid does not belong to the job directory")
             return None
         if process_group != pid:
-            print_error("stop: job process group is not isolated")
+            logger.error("stop: job process group is not isolated")
             return None
         return process_group
 
@@ -879,7 +1135,7 @@ class BatchJob(Job):
         with transaction.atomic():
             jobmodel = JobModel.objects.select_for_update().filter(id=self.id).first()
             if jobmodel is None or jobmodel.status != "running":
-                print_error("stop: batch job is not running")
+                logger.error("stop: batch job is not running")
                 return False
 
             pid_path = os.path.join(self.get_absdir() or "", "nice.pid")
@@ -887,10 +1143,10 @@ class BatchJob(Job):
                 with open(pid_path, encoding="utf-8") as pid_file:
                     pid = int(pid_file.read(32).strip())
             except (OSError, ValueError):
-                print_error("stop: nice.pid is missing or invalid")
+                logger.error("stop: nice.pid is missing or invalid")
                 return False
             if pid <= 1:
-                print_error("stop: nice.pid contains an unsafe process id")
+                logger.error("stop: nice.pid contains an unsafe process id")
                 return False
 
             process_group = self._get_local_process_group(pid)
@@ -899,7 +1155,7 @@ class BatchJob(Job):
             try:
                 os.killpg(process_group, signal.SIGTERM)
             except OSError:
-                print_error("stop: failed to terminate the job process group")
+                logger.error("stop: failed to terminate the job process group")
                 return False
 
             self.status = "stopped"
@@ -986,10 +1242,10 @@ class BatchJob(Job):
         if jobmodel is None:
             return False
         if jobmodel.status not in self.DELETABLE_STATUSES:
-            print_error("delete: batch job status is not deletable")
+            logger.error("delete: batch job status is not deletable")
             return False
         if jobmodel.status == "queued" and not self.queued_job_can_delete():
-            print_error("delete: queued batch job is still active or unverifiable")
+            logger.error("delete: queued batch job is still active or unverifiable")
             return False
 
         workspace_dir = os.path.realpath(
@@ -1016,7 +1272,7 @@ class BatchJob(Job):
         except ValueError:
             path_is_safe = False
         if not path_is_safe or os.path.islink(raw_job_path):
-            print_error("delete: unsafe batch job directory")
+            logger.error("delete: unsafe batch job directory")
             return False
         if not directory_exists(job_path):
             return False
@@ -1024,7 +1280,7 @@ class BatchJob(Job):
         try:
             shutil.rmtree(job_path)
         except OSError:
-            print_error("delete: failed to permanently remove batch job directory")
+            logger.error("delete: failed to permanently remove batch job directory")
             return False
 
         workspace_id = jobmodel.dset_id
