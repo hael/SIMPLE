@@ -46,6 +46,11 @@ type :: pcg_solver_outcome
     real              :: initial_rel_residual = 0.0
     real              :: final_rel_residual   = 0.0
     real              :: final_rel_update     = 0.0
+    real(dp)          :: failure_curvature    = 0.0_dp !< curvature of this attempt's indefinite stop
+    integer           :: failure_iteration    = 0      !< iteration of this attempt's indefinite stop
+    real(dp)          :: restart_trigger_curvature = 0.0_dp !< warm-attempt curvature that caused a cold restart
+    integer           :: restart_trigger_iteration = 0      !< warm-attempt iteration that caused a cold restart
+    logical           :: cold_restart_used    = .false.     !< outcome is from the one permitted cold retry
     logical           :: converged            = .false.
     real, allocatable  :: rel_residual_history(:)
     real, allocatable  :: rel_update_history(:)
@@ -3535,13 +3540,16 @@ contains
             t_it = pcg_tic()
             hp  = self%apply_normal(p)
             pHp = self%dot_real_volume(p,hp)
-            if( pHp /= pHp .or. pHp <= 0.0_dp )then
+            if( .not. ieee_is_finite(pHp) .or. pHp <= 0.0_dp )then
                 ! lost positive-definiteness: hand the decision to the caller
                 ! with the iterate as it stood before this step
-                write(logfhandle,'(A,ES12.4,A,I0)') '>>> PCG: non-positive/non-finite dot(p,Hp)=', pHp, &
-                    &' at CG iteration ', iter
-                result%stop_reason = PCG_STOP_INDEFINITE
-                result%converged   = .false.
+                if( .not. present(outcome) )then
+                    THROW_HARD('non-positive/non-finite dot(p,Hp); PCG lost positive-definiteness; solve')
+                endif
+                result%stop_reason       = PCG_STOP_INDEFINITE
+                result%failure_curvature = real(pHp)
+                result%failure_iteration = iter
+                result%converged         = .false.
                 exit
             endif
             alpha = rho / pHp

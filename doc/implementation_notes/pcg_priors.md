@@ -3171,7 +3171,11 @@ the acceptable-looking outputs do not validate the prior.
      a warm start converging toward the approximate kernel's fixed point
      concentrates the residual in the operator-error modes, the same regime
      as over-iteration; a mid-refinement crash there would discard a long
-     run for a recoverable condition.
+     run for a recoverable condition. Follow-up review keeps the retry itself
+     compute-only: each concurrent distributed half returns its final outcome
+     with any restart trigger recorded, while logging and fatal handling occur
+     in serial finalization. Public solver calls without an outcome retain
+     their previous immediate failure.
    - Shell-walk flag renamed `l_require_margin` (was `l_tie_tolerant`):
      it demands a `nu_label_smooth_is_better` margin win, i.e. it is
      STRICTER than the raw `<` test, which the old name inverted.

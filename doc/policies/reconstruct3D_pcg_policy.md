@@ -165,7 +165,10 @@ base artifact starts from zero. Any warm-started solve (base or replay) that
 loses positive-definiteness returns `stop_reason=indefinite` from the solver
 and is restarted once from zero (`solve_with_cold_restart`) before the
 failure is fatal; a cold solve that loses positive-definiteness fails
-immediately. The
+immediately. Distributed recovery is compute-only inside the even/odd
+sections; restart reporting and fatal handling occur afterward at the serial
+finalization boundary. Solver callers that do not request an outcome retain
+the historical immediate hard failure. The
 regularized replay deterministically replays kernel finalization from the
 persisted raw `(B,D)` and produces the standard maps. Ordinary mode installs
 the FSC/SSNR shell-diagonal `P_tau`; NU modes install the Potts-derived

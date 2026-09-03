@@ -117,21 +117,14 @@ contains
         end do
     end subroutine calc_filtmap_lowpass_histogram
 
-    !> Matching low-pass handoff with assignment support: the same gate as
-    !! the PCG evidence handoff (NU_ALIGN_LP_MIN_ASSIGNED_PCT). Returns the
-    !! finest bank low-pass limit such that at least that percentage of the
-    !! assigned voxels selected that member or a finer one -- the fine-end
-    !! percentile of the assigned label limits. A raw finest-label promotion
-    !! lets a single voxel pin the matching bandwidth at a candidate aliased
-    !! onto the crop Nyquist. Labels are ranked by their low-pass limits, not
-    !! their indices, so an auxiliary-replacement member at an FSC-derived
-    !! resolution orders correctly among the bank members.
     !> Finest selected low-pass of the retained filter bank. With
     !! min_assigned_pct absent the NU_ALIGN_LP_MIN_ASSIGNED_PCT support gate
     !! applies; the gridding volassemble handoff passes 0 (raw finest selected
     !! label, the pre-2026-08-30 behaviour): on PfCRT the 5% gate capped the
     !! matching band at 5-6 A against a 4.1 A map (refine3D_auto gridding,
-    !! 2026-09-02) and the refinement degraded.
+    !! 2026-09-02) and the refinement degraded. Labels are ranked by their
+    !! low-pass limits, not indices, so an FSC-derived auxiliary replacement
+    !! orders correctly among the bank members.
     module real function get_nu_filtmap_finest_selected_lp( mask, min_assigned_pct )
         logical, optional, intent(in) :: mask(:,:,:)
         real,    optional, intent(in) :: min_assigned_pct

@@ -234,41 +234,62 @@ contains
         call seed_fname%kill
     end subroutine override_base_warm_start_from_previous
 
-    !> Solve with one cold restart. A warm-started CG (previous-iteration base
-    !! or ML half, or the base solution seeding the replay) can steer the
-    !! Krylov space into the operator-error modes of the approximate kernel
-    !! and lose positive-definiteness; the solver then returns
-    !! PCG_STOP_INDEFINITE instead of failing. The pre-warm-start contract
-    !! (start from zero) is retried once before the failure is fatal. Safe
-    !! inside the concurrent half sections: only the job's own operator and
-    !! iterate are touched.
-    subroutine solve_with_cold_restart( pcgop, x, l_warm, context, half, solve_kind, maxits, rtol, &
-            &rel_res_hist, niters, outcome )
+    !> Solve with one cold restart. This procedure is compute-only so it is
+    !! safe inside the concurrent half sections: it touches only the job's own
+    !! operator, iterate, and outcomes. Reporting and fatal handling are
+    !! deferred to handle_cold_restart_outcome on the serial side.
+    subroutine solve_with_cold_restart( pcgop, x, l_warm, maxits, rtol, rel_res_hist, niters, outcome )
         type(reconstructor_pcg),  intent(inout) :: pcgop
         real,                     intent(inout) :: x(:,:,:)
         logical,                  intent(in)    :: l_warm
-        character(len=*),         intent(in)    :: context, half, solve_kind
         integer,                  intent(in)    :: maxits
         real,                     intent(in)    :: rtol
         real, allocatable,        intent(out)   :: rel_res_hist(:)
         integer,                  intent(out)   :: niters
         type(pcg_solver_outcome), intent(out)   :: outcome
+        type(pcg_solver_outcome) :: first_failure
         call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
             &outcome=outcome)
         if( trim(outcome%stop_reason) /= PCG_STOP_INDEFINITE ) return
-        if( .not. l_warm ) THROW_HARD('PCG lost positive-definiteness from a cold start; '//&
-            &trim(context)//'/'//trim(half)//'/'//trim(solve_kind))
-        write(logfhandle,'(A,I0,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//trim(solve_kind)//&
-            &'): warm-started CG lost positive-definiteness after ', outcome%iteration_count, &
-            &' iteration(s); restarting from zero'
+        if( .not. l_warm ) return
+        first_failure = outcome
         x = 0.0
         if( allocated(rel_res_hist) ) deallocate(rel_res_hist)
         call pcgop%solve_accum(x, maxits=maxits, rtol=rtol, rel_res_hist=rel_res_hist, niters=niters, &
             &outcome=outcome)
-        if( trim(outcome%stop_reason) == PCG_STOP_INDEFINITE ) &
-            &THROW_HARD('PCG lost positive-definiteness from the cold restart as well; '//&
-            &trim(context)//'/'//trim(half)//'/'//trim(solve_kind))
+        outcome%cold_restart_used = .true.
+        outcome%restart_trigger_curvature = first_failure%failure_curvature
+        outcome%restart_trigger_iteration = first_failure%failure_iteration
     end subroutine solve_with_cold_restart
+
+    !> Serial reporting/failure boundary for solve_with_cold_restart. Keeping
+    !! log I/O and THROW_HARD outside the distributed OpenMP sections preserves
+    !! the prepared-job concurrency contract.
+    subroutine handle_cold_restart_outcome( outcome, context, half, solve_kind )
+        type(pcg_solver_outcome), intent(in) :: outcome
+        character(len=*), intent(in) :: context, half, solve_kind
+        character(len=256) :: error_message
+        logical :: l_restarted
+        l_restarted = outcome%cold_restart_used
+        if( l_restarted )then
+            write(logfhandle,'(A,I0,A,ES12.4,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//&
+                &trim(solve_kind)//'): warm-started CG lost positive-definiteness at iteration ', &
+                &outcome%restart_trigger_iteration, ' (dot(p,Hp)=', outcome%restart_trigger_curvature, &
+                &'); restarted from zero'
+        endif
+        if( trim(outcome%stop_reason) /= PCG_STOP_INDEFINITE ) return
+        if( l_restarted )then
+            error_message = 'PCG lost positive-definiteness from the cold restart as well; '//&
+                &trim(context)//'/'//trim(half)//'/'//trim(solve_kind)
+        else
+            write(logfhandle,'(A,I0,A,ES12.4,A)') '>>> PCG '//trim(context)//' ('//trim(half)//'/'//&
+                &trim(solve_kind)//'): cold CG lost positive-definiteness at iteration ', &
+                &outcome%failure_iteration, ' (dot(p,Hp)=', outcome%failure_curvature, ')'
+            error_message = 'PCG lost positive-definiteness from a cold start; '//trim(context)//'/'//&
+                &trim(half)//'/'//trim(solve_kind)
+        endif
+        THROW_HARD(error_message)
+    end subroutine handle_cold_restart_outcome
 
     !> Regularized initial guess for a COLD ML replay (no previous ML half
     !! map to warm-start from: the standalone harness, the first refinement
@@ -1438,9 +1459,10 @@ contains
             allocate(x(params%box_crop,params%box_crop,params%box_crop), source=0.0)
             call override_base_warm_start_from_previous(params, state_here, half, x, 'shared', l_warm)
             t_phase = tic()
-            call solve_with_cold_restart(pcgop, x, l_warm, 'shared', half, 'base', params%maxits_pcg, &
-                &params%rtol, rel_res_hist, niters, result)
+            call solve_with_cold_restart(pcgop, x, l_warm, params%maxits_pcg, params%rtol, &
+                &rel_res_hist, niters, result)
             time_solve = real(toc(t_phase),dp)
+            call handle_cold_restart_outcome(result, 'shared', half, 'base')
             call validate_solved_map(x, 'shared', state_here, half, 'base')
             call volume%new([params%box_crop,params%box_crop,params%box_crop], params%smpd_crop)
             call volume%set_rmat(x, .false.)
@@ -1526,9 +1548,10 @@ contains
             t_phase = tic()
             ! the replay iterate is never zero (previous ML half, or the base
             ! solution with the shrinkage initial guess): always restart-eligible
-            call solve_with_cold_restart(pcgop, x, .true., 'shared', half, 'ml', params%maxits_pcg, &
-                &params%rtol, rel_res_hist, niters, result)
+            call solve_with_cold_restart(pcgop, x, .true., params%maxits_pcg, params%rtol, &
+                &rel_res_hist, niters, result)
             time_solve = real(toc(t_phase),dp)
+            call handle_cold_restart_outcome(result, 'shared', half, 'ml')
             call validate_solved_map(x, 'shared', state_here, half, 'ml')
             time_nu_stats = 0.0_dp
             if( l_nu_replay )then
@@ -1584,6 +1607,11 @@ contains
             write(funit,'(A,I0)')     'iteration_count=',      result%iteration_count
             write(funit,'(A,A)')      'stop_reason=',          trim(result%stop_reason)
             write(funit,'(A,L1)')     'converged=',            result%converged
+            write(funit,'(A,L1)')     'cold_restart_used=',    result%cold_restart_used
+            if( result%cold_restart_used )then
+                write(funit,'(A,I0)')     'restart_trigger_iteration=', result%restart_trigger_iteration
+                write(funit,'(A,ES14.6)') 'restart_trigger_curvature=', result%restart_trigger_curvature
+            endif
             write(funit,'(A,ES14.6)') 'initial_rel_resid_l2=', result%initial_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',   result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_update=',     result%final_rel_update
@@ -2870,8 +2898,8 @@ contains
             integer(timer_int_kind) :: t_phase, t_end, t_rate
             if( .not. job%ready ) return
             call system_clock(count=t_phase)
-            call solve_with_cold_restart(job%pcgop, job%x, job%l_warm, 'distributed', job%half, &
-                &job%solve_kind, params%maxits_pcg, params%rtol, job%rel_res_hist, job%niters, job%result)
+            call solve_with_cold_restart(job%pcgop, job%x, job%l_warm, params%maxits_pcg, params%rtol, &
+                &job%rel_res_hist, job%niters, job%result)
             call system_clock(count=t_end, count_rate=t_rate)
             job%time_solve = real(t_end-t_phase,dp) / real(t_rate,dp)
         end subroutine solve_prepared_half_job
@@ -2884,6 +2912,7 @@ contains
             type(image), optional, intent(in) :: warm_start
             real :: supp_pct, nu_stats_overhead
             if( .not. job%ready ) return
+            call handle_cold_restart_outcome(job%result, 'distributed', job%half, job%solve_kind)
             call validate_solved_map(job%x, 'distributed', job%state, job%half, job%solve_kind)
             if( job%l_ml_solve .and. l_nu_replay )then
                 if( .not. present(warm_start) ) &
@@ -2946,6 +2975,11 @@ contains
             write(funit,'(A,I0)')     'iteration_count=',       result%iteration_count
             write(funit,'(A,A)')      'stop_reason=',           trim(result%stop_reason)
             write(funit,'(A,L1)')     'converged=',             result%converged
+            write(funit,'(A,L1)')     'cold_restart_used=',     result%cold_restart_used
+            if( result%cold_restart_used )then
+                write(funit,'(A,I0)')     'restart_trigger_iteration=', result%restart_trigger_iteration
+                write(funit,'(A,ES14.6)') 'restart_trigger_curvature=', result%restart_trigger_curvature
+            endif
             write(funit,'(A,ES14.6)') 'initial_rel_resid_l2=',  result%initial_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_resid_l2=',    result%final_rel_residual
             write(funit,'(A,ES14.6)') 'final_rel_update=',      result%final_rel_update
