@@ -1,0 +1,14 @@
+{% comment %}
+  Pick overlay tile using the same square sizing and crop as the batch motion
+  correction and CTF artifact gallery.
+{% endcomment %}
+<a data-pick-micrograph-preview data-pick-micrograph-grid-preview
+   data-artifact-preview-kind="micrograph"
+   href="{% url 'nice_lite:image' micrograph.path %}" target="_blank" rel="noopener"
+   class="relative flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
+   style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
+   title="picked micrograph{% if micrograph.number %} {{ micrograph.number }}{% endif %}">
+    <canvas data-pick-micrograph-overlay
+            class="absolute inset-0 pointer-events-none hover:animate-pulse z-10"></canvas>
+    {% include 'nice_stream/includes/_pick_micrograph_slide.html' with micrograph=micrograph grid_tile=True %}
+</a>

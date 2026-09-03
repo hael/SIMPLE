@@ -163,6 +163,99 @@ class BatchViewTests(SimpleTestCase):
             "submitted": True,
         }])
 
+    def test_batch_detail_exposes_default_hidden_ctf_micrograph_toggle(self):
+        jobmodel = SimpleNamespace(
+            id=7,
+            disp=2,
+            name="Estimate CTF",
+            desc="",
+            status="running",
+            cdat="created",
+            args={},
+            master_stats={
+                "job_type": "batch",
+                "package": "unknown",
+                "program": "ctf_estimate",
+            },
+            dset=SimpleNamespace(
+                name="workspace",
+                proj=SimpleNamespace(name="project"),
+            ),
+        )
+        batch_job = Mock()
+        batch_job.get_result_project_path.return_value = None
+        artifact_summary = {
+            "counts": [],
+            "images": [{
+                "path": "ctf.jpg",
+                "previews": [
+                    {"kind": "image"},
+                    {"kind": "micrograph", "hidden_by_default": True},
+                ],
+            }],
+        }
+        batch_job.get_artifact_summary.return_value = artifact_summary
+        batch_job.get_safe_job_dir.return_value = "/workspace/2_ctf_estimate"
+        batch_job.get_log_tails.return_value = []
+
+        context = batch_views._batch_detail_context(batch_job, jobmodel)
+
+        batch_job.get_artifact_summary.assert_called_once_with()
+        self.assertEqual(context["artifact_images"], artifact_summary["images"])
+        self.assertTrue(context["ctf_artifact_micrograph_toggle_available"])
+
+    def test_batch_detail_prefers_pick_previews_from_motion_artifacts(self):
+        jobmodel = SimpleNamespace(
+            id=7,
+            disp=3,
+            name="Pick Particles from Micrographs",
+            desc="",
+            status="finished",
+            cdat="created",
+            args={},
+            master_stats={
+                "job_type": "batch",
+                "package": "unknown",
+                "program": "pick",
+            },
+            dset=SimpleNamespace(
+                name="workspace",
+                proj=SimpleNamespace(name="project"),
+            ),
+        )
+        batch_job = Mock()
+        batch_job.get_result_project_path.return_value = "/workspace/3_pick/workspace.simple"
+        batch_job.get_artifact_summary.return_value = {"counts": [], "images": []}
+        batch_job.get_safe_job_dir.return_value = "/workspace/3_pick"
+        batch_job.get_log_tails.return_value = []
+        batch_job.get_pick_micrograph_previews.return_value = [{
+            "path": "/workspace/1_motion/movie_thumb.jpg",
+            "number": 11,
+            "xdim": 4096,
+            "ydim": 3072,
+            "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
+        }]
+
+        with patch.object(batch_views, "SIMPLEProjFile") as projfile:
+            project_reader = projfile.return_value
+            project_reader.getGlobalStats.return_value = {"mic": {"n": 30}}
+
+            context = batch_views._batch_detail_context(batch_job, jobmodel)
+
+        batch_job.get_pick_micrograph_previews.assert_called_once_with(
+            max_previews=20,
+            max_coordinates=1500,
+        )
+        project_reader.getFieldStats.assert_not_called()
+        self.assertEqual(context["pick_micrographs"], [{
+            "path": "/workspace/1_motion/movie_thumb.jpg",
+            "number": 11,
+            "xdim": 4096,
+            "ydim": 3072,
+            "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
+        }])
+        self.assertTrue(context["pick_box_overlay_available"])
+
     def test_batch_detail_rejects_inaccessible_job(self):
         with (
             patch.object(batch_views, "_get_accessible_batch_job", return_value=(None, None)),

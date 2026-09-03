@@ -1,0 +1,31 @@
+{% comment %}
+  Shared picked-micrograph slider used by stream picking and batch pick output.
+
+  Parameters:
+    micrographs  — list of {path, xdim, ydim, boxes}; number is optional.
+    left_action  — onclick expression for the shared left scroll button.
+    right_action — onclick expression for the shared right scroll button.
+    context_action — optional oncontextmenu expression for contrast/brightness controls.
+    preview_size — optional fixed square size in pixels; stream panels fill available width.
+{% endcomment %}
+<div data-pick-micrograph-carousel class="flex items-center gap-1">
+    {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action=left_action %}
+
+    <div data-pick-micrograph-preview class="relative flex-1 min-w-0"{% if preview_size %} style="width:{{ preview_size }}px;flex:none"{% endif %}>
+        <canvas id="boxes_overlay" data-pick-micrograph-overlay
+                class="absolute inset-0 pointer-events-none hover:animate-pulse z-10"
+                height="{{ preview_size|default:210 }}" width="{{ preview_size|default:210 }}"></canvas>
+        <div id="micrographs_slider" data-pick-micrograph-slider
+             {% if status == "running" and jobstats.user_input is True and "picking_diameters" in jobstats %}
+                 data-best_diam="{{ jobstats.best_diam }}"
+                 data-picking_diameters="{{ jobstats.picking_diameters }}"
+             {% endif %}
+            class="flex flex-row w-full overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
+            {% for micrograph in micrographs %}
+                {% include 'nice_stream/includes/_pick_micrograph_slide.html' with micrograph=micrograph context_action=context_action %}
+            {% endfor %}
+        </div>
+    </div>
+
+    {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action=right_action %}
+</div>

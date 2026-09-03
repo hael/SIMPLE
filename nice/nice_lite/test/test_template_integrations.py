@@ -499,7 +499,32 @@ class TemplateIntegrationTests(SimpleTestCase):
             "result_project": None,
             "project_sections": [],
             "project_summary_available": False,
-            "logs": [],
+            "logs": [
+                {
+                    "name": "stdout.log",
+                    "label": "standard output",
+                    "exists": True,
+                    "size": 12,
+                    "truncated": False,
+                    "text": "output",
+                },
+                {
+                    "name": "stderr.log",
+                    "label": "standard error",
+                    "exists": False,
+                    "size": 0,
+                    "truncated": False,
+                    "text": "",
+                },
+                {
+                    "name": "nice_status.log",
+                    "label": "NICE status callbacks",
+                    "exists": True,
+                    "size": 8,
+                    "truncated": False,
+                    "text": "running",
+                },
+            ],
             "artifact_counts": [],
             "artifact_images": [],
             "batch_job_controls_enabled": False,
@@ -508,8 +533,8 @@ class TemplateIntegrationTests(SimpleTestCase):
 
         self.assertIn("job overview", batch_view)
         self.assertIn("submitted arguments", batch_view)
-        self.assertIn("result project", batch_view)
-        self.assertIn("recognized artifacts", batch_view)
+        self.assertIn("project results", batch_view)
+        self.assertIn("<span>output</span>", batch_view)
         self.assertIn("{% for log in logs %}", batch_view)
         self.assertIn("{% if auto_refresh %}", batch_view)
         self.assertIn("Import Movie Data", rendered)
@@ -522,3 +547,6 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("Scale", rendered)
         self.assertIn("Mask diameter", rendered)
         self.assertIn("not set", rendered)
+        self.assertIn("standard output", rendered)
+        self.assertIn("standard error", rendered)
+        self.assertIn("NICE status callbacks", rendered)

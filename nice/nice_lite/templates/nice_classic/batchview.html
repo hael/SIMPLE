@@ -6,19 +6,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    {% if pick_micrographs %}
+        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}"></script>
+    {% endif %}
 </head>
-<body class="bg-streambg h-screen flex flex-col font-sans">
-    <div class="bg-streambar border-b border-streamline px-4 h-10 flex items-center gap-3 flex-shrink-0">
-        <a class="text-streamlabel hover:text-streamtext cursor-pointer transition-colors"
-           href="{% url 'nice_lite:workspace' %}" title="back">
+<body class="bg-streambg h-screen flex flex-col font-sans" style="height:100vh;height:100dvh">
+    <header class="bg-streambar border-b border-streamline min-h-14 sm:min-h-10 px-3 py-1.5 sm:px-4 sm:py-0 flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 sm:gap-x-3 flex-shrink-0">
+        <a class="size-11 -ml-2 flex flex-shrink-0 items-center justify-center rounded-md text-streamlabel hover:text-streamtext cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring"
+           href="{% url 'nice_lite:workspace' %}" title="back" aria-label="back to workspace">
             <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"
                  stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3">
                 <polyline points="7,2 3,6 7,10"/>
             </svg>
         </a>
-        <span class="text-[10px] font-medium tracking-widest uppercase text-streamsubtle">{{ package|default:"simple" }} batch</span>
-        <span class="text-streamlabel text-[10px]">/</span>
-        <span class="text-[12px] font-medium text-streamtext truncate">{{ disp }} · {{ name }}{% if desc %} · {{ desc }}{% endif %}</span>
+        <span class="flex-shrink-0 text-[10px] font-medium tracking-widest uppercase text-streamsubtle">{{ package|default:"simple" }} batch</span>
+        <span class="hidden sm:inline text-streamlabel text-[10px]">/</span>
+        <span class="order-last basis-full min-w-0 pb-1 text-[12px] leading-4 font-medium text-streamtext break-words sm:order-none sm:basis-auto sm:flex-1 sm:pb-0 sm:truncate">{{ disp }} · {{ name }}{% if desc %} · {{ desc }}{% endif %}</span>
         <span class="ml-auto inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full
             {% if status == 'running' %}bg-streamaction/10 text-streamaction
             {% elif status == 'finished' %}bg-streamring/10 text-streamaccent
@@ -33,9 +36,9 @@
                 <form method="POST" action="{% url 'nice_lite:stop_batch' %}" class="flex">
                     {% csrf_token %}
                     <input type="hidden" name="selected_job_id" value="{{ jobid }}">
-                    <button type="submit" title="stop batch job"
+                    <button type="submit" title="stop batch job" aria-label="stop batch job"
                             onclick="return confirm('Please confirm that you wish to stop batch job {{ jobid }}');"
-                            class="text-streamicon hover:text-streamerror transition-colors">
+                            class="size-11 -mr-2 flex items-center justify-center rounded-md text-streamicon hover:text-streamerror transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
                         <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                             <circle cx="8" cy="8" r="6"/>
                             <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" stroke="none"/>
@@ -46,9 +49,9 @@
                 <form method="POST" action="{% url 'nice_lite:delete_batch' %}" class="flex">
                     {% csrf_token %}
                     <input type="hidden" name="selected_job_id" value="{{ jobid }}">
-                    <button type="submit" title="delete batch job"
+                    <button type="submit" title="delete batch job" aria-label="delete batch job"
                             onclick="return confirm('Please confirm that you wish to permanently delete batch job {{ jobid }}. This cannot be undone.');"
-                            class="text-streamicon hover:text-streamerror transition-colors">
+                            class="size-11 -mr-2 flex items-center justify-center rounded-md text-streamicon hover:text-streamerror transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
                         <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
                             <polyline points="2,4 14,4"/>
                             <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
@@ -57,137 +60,271 @@
                 </form>
             {% endif %}
         {% endif %}
-    </div>
+    </header>
 
-    <main class="flex-1 min-h-0 overflow-y-auto px-5 py-4">
-        <div class="grid grid-cols-2 gap-3 content-start">
-            <section class="bg-streambar rounded-xl border border-streamline p-4">
-                <h2 class="text-[10px] font-medium uppercase tracking-widest text-streamlabel mb-3">job overview</h2>
-                <dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-[11px]">
-                    <dt class="text-streamlabel">program</dt>
-                    <dd class="text-streamtext font-mono">{{ program }}</dd>
-                    <dt class="text-streamlabel">created</dt>
-                    <dd class="text-streamtext">{{ created }}</dd>
-                    <dt class="text-streamlabel">project</dt>
-                    <dd class="text-streamtext">{{ project }}</dd>
-                    <dt class="text-streamlabel">workspace</dt>
-                    <dd class="text-streamtext">{{ workspace }}</dd>
-                    <dt class="text-streamlabel">input project</dt>
-                    <dd class="text-streamtext">{{ source_label }}</dd>
-                    <dt class="text-streamlabel">job directory</dt>
-                    <dd class="text-streamsubtle font-mono" style="overflow-wrap:anywhere">{{ job_dir }}</dd>
-                </dl>
+    <main class="flex-1 min-h-0 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 content-start">
+            <section data-collapsible-panel data-collapse-key="overview" class="min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
+                <h2>
+                    <button type="button" data-collapse-toggle aria-expanded="true" aria-controls="batch_overview_panel"
+                            class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
+                        <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
+                            <polyline points="4,2 8,6 4,10"/>
+                        </svg>
+                        <span>job overview</span>
+                    </button>
+                </h2>
+                <div id="batch_overview_panel" data-collapse-body class="mt-3">
+                    <dl class="grid grid-cols-[minmax(5.5rem,40%)_minmax(0,1fr)] gap-x-3 sm:gap-x-4 gap-y-2 text-[11px]">
+                        <dt class="text-streamlabel">program</dt>
+                        <dd class="min-w-0 break-words text-streamtext font-mono">{{ program }}</dd>
+                        <dt class="text-streamlabel">created</dt>
+                        <dd class="min-w-0 break-words text-streamtext">{{ created }}</dd>
+                        <dt class="text-streamlabel">project</dt>
+                        <dd class="min-w-0 break-words text-streamtext">{{ project }}</dd>
+                        <dt class="text-streamlabel">workspace</dt>
+                        <dd class="min-w-0 break-words text-streamtext">{{ workspace }}</dd>
+                        <dt class="text-streamlabel">input project</dt>
+                        <dd class="min-w-0 break-words text-streamtext">{{ source_label }}</dd>
+                        <dt class="text-streamlabel">job directory</dt>
+                        <dd class="min-w-0 text-streamsubtle font-mono" style="overflow-wrap:anywhere">{{ job_dir }}</dd>
+                    </dl>
+                </div>
             </section>
 
-            <section class="bg-streambar rounded-xl border border-streamline p-4">
-                <div class="flex items-center justify-between gap-3 mb-3">
-                    <h2 id="argument_view_heading" class="text-[10px] font-medium uppercase tracking-widest text-streamlabel">submitted arguments</h2>
+            <section data-collapsible-panel data-collapse-key="arguments" class="min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="min-w-0 flex-1">
+                        <button type="button" data-collapse-toggle data-collapse-companion-id="argument_view_controls"
+                                aria-expanded="true" aria-controls="batch_arguments_panel"
+                                class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
+                            <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
+                                <polyline points="4,2 8,6 4,10"/>
+                            </svg>
+                            <span id="argument_view_heading">submitted arguments</span>
+                        </button>
+                    </h2>
                     {% if arguments %}
-                        <div class="flex items-center rounded-md border border-streamdivider p-0.5" role="group" aria-label="argument view">
+                        <div id="argument_view_controls" class="flex items-center rounded-md border border-streamdivider p-0.5" role="group" aria-label="argument view">
                             <button id="submitted_arguments_button" type="button" aria-pressed="true" aria-controls="argument_list"
                                     onclick="setBatchArgumentView('submitted')"
-                                    class="rounded px-2 py-0.5 text-[9px] bg-streamring/10 text-streamaccent">submitted</button>
+                                    class="min-h-9 rounded px-3 py-1.5 text-[10px] bg-streamring/10 text-streamaccent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">submitted</button>
                             <button id="all_arguments_button" type="button" aria-pressed="false" aria-controls="argument_list"
                                     onclick="setBatchArgumentView('all')"
-                                    class="rounded px-2 py-0.5 text-[9px] text-streamlabel">all</button>
+                                    class="min-h-9 rounded px-3 py-1.5 text-[10px] text-streamlabel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">all</button>
                         </div>
                     {% endif %}
                 </div>
-                {% if arguments %}
-                    <dl id="argument_list" class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-[11px]">
-                        {% for arg in arguments %}
-                            <dt data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
-                                class="text-streamlabel{% if not arg.submitted %} hidden{% endif %}">{{ arg.label }}</dt>
-                            <dd data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
-                                class="text-streamtext font-mono{% if not arg.submitted %} hidden{% endif %}"
-                                style="overflow-wrap:anywhere">
-                                {% if arg.origin == "unset" %}
-                                    <span class="text-streamlabel">—</span>
-                                {% elif arg.value == "" %}
-                                    <span class="text-streamlabel">empty</span>
-                                {% else %}
-                                    <span>{{ arg.value }}</span>
-                                {% endif %}
-                                <span data-argument-origin class="hidden ml-2 rounded bg-streamline/40 px-1.5 py-0.5 text-[9px] font-sans text-streamlabel">
-                                    {% if arg.origin == "unset" %}not set{% else %}{{ arg.origin }}{% endif %}
-                                </span>
-                            </dd>
-                        {% endfor %}
-                    </dl>
-                {% endif %}
-                <p id="no_submitted_arguments" class="text-[11px] text-streamsubtle{% if submitted_argument_count %} hidden{% endif %}">no user arguments were submitted</p>
-            </section>
-
-            <section class="col-span-full bg-streambar rounded-xl border {% if status == 'failed' or status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} p-4">
-                <h2 class="text-[10px] font-medium uppercase tracking-widest text-streamlabel mb-3">logs</h2>
-                <div class="grid grid-cols-3 gap-3">
-                    {% for log in logs %}
-                        <article class="min-w-0 rounded-lg border border-streamdivider bg-streambg overflow-hidden">
-                            <div class="px-3 py-2 border-b border-streamdivider flex items-center justify-between gap-2">
-                                <div>
-                                    <p class="text-[10px] font-medium text-streamtext">{{ log.label }}</p>
-                                    <p class="text-[9px] text-streamlabel font-mono">{{ log.name }}</p>
-                                </div>
-                                {% if log.exists %}
-                                    <span class="text-[9px] text-streamlabel">{{ log.size|filesizeformat }}{% if log.truncated %} · tail{% endif %}</span>
-                                {% endif %}
-                            </div>
-                            <pre class="h-[260px] overflow-auto p-3 text-[10px] text-streamsubtle" style="white-space:pre-wrap;overflow-wrap:anywhere">{% if log.exists and log.text %}{{ log.text }}{% elif log.exists %}no output yet{% else %}log file not available{% endif %}</pre>
-                        </article>
-                    {% empty %}
-                        <p class="text-[11px] text-streamsubtle">job directory is unavailable</p>
-                    {% endfor %}
+                <div id="batch_arguments_panel" data-collapse-body class="mt-3">
+                    {% if arguments %}
+                        <dl id="argument_list" class="grid grid-cols-[minmax(5.5rem,40%)_minmax(0,1fr)] gap-x-3 sm:gap-x-4 gap-y-2 text-[11px]">
+                            {% for arg in arguments %}
+                                <dt data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
+                                    class="min-w-0 break-words text-streamlabel{% if not arg.submitted %} hidden{% endif %}">{{ arg.label }}</dt>
+                                <dd data-argument-row data-submitted="{{ arg.submitted|yesno:'true,false' }}"
+                                    class="min-w-0 text-streamtext font-mono{% if not arg.submitted %} hidden{% endif %}"
+                                    style="overflow-wrap:anywhere">
+                                    {% if arg.origin == "unset" %}
+                                        <span class="text-streamlabel">—</span>
+                                    {% elif arg.value == "" %}
+                                        <span class="text-streamlabel">empty</span>
+                                    {% else %}
+                                        <span>{{ arg.value }}</span>
+                                    {% endif %}
+                                    <span data-argument-origin class="hidden ml-1 sm:ml-2 rounded bg-streamline/40 px-1.5 py-0.5 text-[9px] font-sans text-streamlabel">
+                                        {% if arg.origin == "unset" %}not set{% else %}{{ arg.origin }}{% endif %}
+                                    </span>
+                                </dd>
+                            {% endfor %}
+                        </dl>
+                    {% endif %}
+                    <p id="no_submitted_arguments" class="text-[11px] text-streamsubtle{% if submitted_argument_count %} hidden{% endif %}">no user arguments were submitted</p>
                 </div>
             </section>
 
-            <section class="bg-streambar rounded-xl border border-streamline p-4">
-                <h2 class="text-[10px] font-medium uppercase tracking-widest text-streamlabel mb-3">result project</h2>
-                {% if result_project %}
-                    <p class="text-[10px] text-streamsubtle font-mono mb-3" style="overflow-wrap:anywhere">{{ result_project }}</p>
-                    {% if status == "finished" and project_sections %}
-                        <div class="grid grid-cols-3 gap-2">
-                            {% for section in project_sections %}
-                                <div class="rounded-lg border border-streamdivider bg-streambg px-3 py-2" title="{{ section.info }}">
-                                    <p class="text-[18px] font-medium text-streamtext">{{ section.count }}</p>
-                                    <p class="text-[9px] uppercase tracking-wide text-streamlabel">{{ section.label }}</p>
+            <section data-collapsible-panel data-collapse-key="result" class="min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
+                <h2>
+                    <button type="button" data-collapse-toggle aria-expanded="true" aria-controls="batch_result_panel"
+                            class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
+                        <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
+                            <polyline points="4,2 8,6 4,10"/>
+                        </svg>
+                        <span>project results</span>
+                    </button>
+                </h2>
+                <div id="batch_result_panel" data-collapse-body class="mt-3">
+                    {% if result_project %}
+                        <p class="text-[10px] text-streamsubtle font-mono mb-3" style="overflow-wrap:anywhere">{{ result_project }}</p>
+                        {% if status == "finished" and project_sections %}
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {% for section in project_sections %}
+                                    <div class="rounded-lg border border-streamdivider bg-streambg px-3 py-2" title="{{ section.info }}">
+                                        <p class="text-[18px] font-medium text-streamtext">{{ section.count }}</p>
+                                        <p class="text-[9px] uppercase tracking-wide text-streamlabel">{{ section.label }}</p>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% elif status == "finished" and not project_summary_available %}
+                            <p class="text-[11px] text-streamsubtle">project summary is empty or currently unavailable</p>
+                        {% else %}
+                            <p class="text-[11px] text-streamsubtle">project data is summarized after the job finishes</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-[11px] text-streamsubtle">no unambiguous result project was found in the job directory</p>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section data-collapsible-panel data-collapse-key="artifacts" class="lg:col-span-full min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
+                <div class="flex items-center gap-3">
+                    <h2 class="min-w-0 flex-1">
+                        <button type="button" data-collapse-toggle data-collapse-companion-id="{% if pick_box_overlay_available %}batch_pick_overlay_toggle{% elif motion_artifact_toggle_available %}batch_motion_artifact_toggle{% else %}batch_ctf_micrograph_toggle{% endif %}"
+                                aria-expanded="true" aria-controls="batch_artifacts_panel"
+                                class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
+                            <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
+                                <polyline points="4,2 8,6 4,10"/>
+                            </svg>
+                            <span>output</span>
+                        </button>
+                    </h2>
+                    {% if pick_box_overlay_available %}
+                        <button id="batch_pick_overlay_toggle" type="button" data-pick-overlay-toggle
+                                aria-pressed="false" aria-controls="batch_artifact_images"
+                                aria-label="show boxes" title="show boxes"
+                                class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
+                                <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/>
+                                <rect x="2.5" y="2.5" width="11" height="11" rx="1"/>
+                            </svg>
+                            <span data-pick-overlay-toggle-label>show boxes</span>
+                        </button>
+                    {% endif %}
+                    {% if motion_artifact_toggle_available %}
+                        <button id="batch_motion_artifact_toggle" type="button"
+                                aria-controls="batch_artifact_images"
+                                aria-label="show micrographs" title="show micrographs"
+                                class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
+                                <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
+                                <path d="M8 2.5v11"/>
+                                <circle cx="11" cy="8" r="1.25"/>
+                            </svg>
+                            <span data-motion-artifact-toggle-label>show micrographs</span>
+                        </button>
+                    {% endif %}
+                    {% if ctf_artifact_micrograph_toggle_available %}
+                        <button id="batch_ctf_micrograph_toggle" type="button" aria-pressed="false"
+                                aria-controls="batch_artifact_images"
+                                aria-label="show micrographs" title="show micrographs"
+                                class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
+                                <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
+                                <circle cx="5" cy="6" r="1.25"/>
+                                <path d="m2.5 12 3.25-3 2.25 2 2.25-2.25L13.5 12"/>
+                            </svg>
+                            <span data-ctf-micrograph-toggle-label>show micrographs</span>
+                        </button>
+                    {% endif %}
+                </div>
+                <div id="batch_artifacts_panel" data-collapse-body class="mt-3">
+                    {% if pick_micrographs %}
+                        <p class="text-[10px] text-streamlabel mb-2">pick locations</p>
+                    {% endif %}
+
+                    {% if artifact_counts %}
+                        <div class="flex flex-wrap gap-2 mb-3">
+                            {% for artifact in artifact_counts %}
+                                {% include 'nice_stream/includes/_pill.html' with count=artifact.count label=artifact.extension variant="neutral" %}
+                            {% endfor %}
+                        </div>
+                    {% elif not pick_micrographs %}
+                        <p class="text-[11px] text-streamsubtle mb-3">no recognized result files yet</p>
+                    {% endif %}
+
+                    {% if pick_micrographs or artifact_images %}
+                        <div id="batch_artifact_images" class="flex flex-wrap items-start gap-2" data-pick-overlay-mode="points"
+                            style="--artifact-tile-height:clamp(72px,18vw,260px)">
+                            {% for micrograph in pick_micrographs %}
+                                {% include 'nice_classic/includes/_batch_pick_micrograph_preview.html' with micrograph=micrograph %}
+                            {% endfor %}
+                            {% for image in artifact_images %}
+                                <div data-artifact-preview-group class="flex flex-shrink-0 items-start gap-2">
+                                    {% for preview in image.previews %}
+                                        {% include 'nice_classic/includes/_batch_artifact_preview.html' with preview=preview %}
+                                    {% endfor %}
                                 </div>
                             {% endfor %}
                         </div>
-                    {% elif status == "finished" and not project_summary_available %}
-                        <p class="text-[11px] text-streamsubtle">project summary is empty or currently unavailable</p>
-                    {% else %}
-                        <p class="text-[11px] text-streamsubtle">project data is summarized after the job finishes</p>
                     {% endif %}
-                {% else %}
-                    <p class="text-[11px] text-streamsubtle">no unambiguous result project was found in the job directory</p>
-                {% endif %}
+                </div>
             </section>
 
-            <section class="bg-streambar rounded-xl border border-streamline p-4">
-                <h2 class="text-[10px] font-medium uppercase tracking-widest text-streamlabel mb-3">recognized artifacts</h2>
-                {% if artifact_counts %}
-                    <div class="flex flex-wrap gap-2 mb-3">
-                        {% for artifact in artifact_counts %}
-                            <span class="inline-flex items-center gap-1 rounded-full bg-streamline/40 px-2 py-1 text-[10px] text-streamlabel">
-                                <span class="font-medium text-streamtext">{{ artifact.count }}</span> {{ artifact.extension }}
-                            </span>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <p class="text-[11px] text-streamsubtle mb-3">no recognized result files yet</p>
-                {% endif %}
-
-                {% if artifact_images %}
-                    <div class="grid grid-cols-4 gap-2">
-                        {% for image in artifact_images %}
-                            <a href="{% url 'nice_lite:image' image.path %}" target="_blank" rel="noopener"
-                               class="rounded-md overflow-hidden bg-black border border-streamdivider" title="{{ image.name }}">
-                                <img src="{% url 'nice_lite:image' image.path %}" loading="lazy" alt="{{ image.name }}"
-                                     class="w-full aspect-square object-cover hover:opacity-90 transition-opacity">
-                            </a>
-                        {% endfor %}
-                    </div>
-                {% endif %}
+            <section data-collapsible-panel data-collapse-key="logs" class="col-span-full min-w-0 bg-streambar rounded-xl border {% if status == 'failed' or status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} p-3 sm:p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <h2 class="min-w-0 flex-1">
+                        <button type="button" data-collapse-toggle data-collapse-companion-id="batch_log_layout_toggle"
+                                aria-expanded="true" aria-controls="batch_logs_panel"
+                                class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
+                            <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
+                                <polyline points="4,2 8,6 4,10"/>
+                            </svg>
+                            <span>logs</span>
+                        </button>
+                    </h2>
+                    {% if logs %}
+                        <button id="batch_log_layout_toggle" type="button" aria-pressed="false"
+                                aria-label="show split log view" title="show split log view"
+                                class="min-h-9 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                            <svg data-log-layout-split-icon aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
+                                <rect x="1.5" y="2.5" width="5" height="11" rx="0.75"/>
+                                <rect x="9.5" y="2.5" width="5" height="11" rx="0.75"/>
+                            </svg>
+                            <svg data-log-layout-tabs-icon aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="hidden w-3.5 h-3.5">
+                                <path d="M1.5 4.5h13v9h-13zM1.5 7h13M3.5 4.5v-2h4v2M9 4.5v-2h3.5v2"/>
+                            </svg>
+                            <span data-log-layout-label>split view</span>
+                        </button>
+                    {% endif %}
+                </div>
+                <div id="batch_logs_panel" data-collapse-body class="mt-3">
+                    {% if logs %}
+                        <div class="min-w-0">
+                            <div data-log-tablist role="tablist" aria-label="batch logs" class="flex overflow-x-auto rounded-t-lg bg-streamsurface border border-streamdivider border-b-0">
+                                {% for log in logs %}
+                                    <button type="button" role="tab" id="batch_log_tab_{{ forloop.counter }}"
+                                            data-log-tab data-log-key="{{ log.name }}"
+                                            aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+                                            aria-controls="batch_log_panel_{{ forloop.counter }}"
+                                            tabindex="{% if forloop.first %}0{% else %}-1{% endif %}"
+                                            class="min-w-max min-h-10 px-3 py-2 flex items-center border-t-2 border-r border-streamdivider text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-streamring {% if forloop.first %}bg-streambg text-streamtext border-t-streamaccent{% else %}text-streamlabel border-t-transparent hover:bg-streambg hover:text-streamtext{% endif %}">
+                                        <span class="text-[10px] font-medium whitespace-nowrap">{{ log.label }}</span>
+                                    </button>
+                                {% endfor %}
+                            </div>
+                            <div data-log-panels class="block">
+                                {% for log in logs %}
+                                    <div role="tabpanel" id="batch_log_panel_{{ forloop.counter }}"
+                                         data-log-panel data-log-key="{{ log.name }}"
+                                         aria-labelledby="batch_log_tab_{{ forloop.counter }}"
+                                         class="overflow-hidden rounded-b-lg border border-streamdivider border-t-0 bg-streambg{% if not forloop.first %} hidden{% endif %}">
+                                        <div class="min-h-9 px-3 py-2 flex flex-wrap items-center justify-between gap-2 border-b border-streamdivider">
+                                            <span class="min-w-0">
+                                                <span class="block text-[10px] font-medium text-streamtext">{{ log.label }}</span>
+                                                <span class="block text-[9px] text-streamlabel font-mono break-all">{{ log.name }}</span>
+                                            </span>
+                                            {% if log.exists %}
+                                                <span class="flex-shrink-0 text-[9px] text-streamlabel">{{ log.size|filesizeformat }}{% if log.truncated %} · tail{% endif %}</span>
+                                            {% endif %}
+                                        </div>
+                                        <pre class="h-[220px] sm:h-[260px] overflow-auto p-3 text-[10px] text-streamsubtle" style="white-space:pre-wrap;overflow-wrap:anywhere">{% if log.exists and log.text %}{{ log.text }}{% elif log.exists %}no output yet{% else %}log file not available{% endif %}</pre>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <p class="text-[11px] text-streamsubtle">job directory is unavailable</p>
+                    {% endif %}
+                </div>
             </section>
         </div>
     </main>
@@ -237,13 +374,260 @@
         } catch (error) {
             // Keep the default submitted view when storage is unavailable.
         }
+
+        const batchMotionArtifactToggle = document.querySelector("#batch_motion_artifact_toggle");
+        const batchMotionArtifactPreviews = [
+            ...document.querySelectorAll("[data-motion-artifact-preview]"),
+        ];
+        const setBatchMotionArtifactView = (view) => {
+            const showMicrographs = view === "micrograph";
+            const showSideBySide = view === "side_by_side";
+            batchMotionArtifactPreviews.forEach((preview) => {
+                preview.classList.toggle(
+                    "hidden",
+                    !showSideBySide && preview.dataset.motionArtifactPreview !== view,
+                );
+            });
+            if (!batchMotionArtifactToggle) return;
+
+            batchMotionArtifactToggle.dataset.motionArtifactView = view;
+            let actionDescription = "show micrographs";
+            if (showMicrographs) actionDescription = "show side by side";
+            if (showSideBySide) actionDescription = "show power spectra";
+            batchMotionArtifactToggle.setAttribute("aria-label", actionDescription);
+            batchMotionArtifactToggle.title = actionDescription;
+            const label = batchMotionArtifactToggle.querySelector(
+                "[data-motion-artifact-toggle-label]",
+            );
+            if (label) label.textContent = actionDescription;
+        };
+
+        if (batchMotionArtifactToggle) {
+            batchMotionArtifactToggle.addEventListener("click", () => {
+                const currentView = batchMotionArtifactToggle.dataset.motionArtifactView;
+                let nextView = "micrograph";
+                if (currentView === "micrograph") nextView = "side_by_side";
+                if (currentView === "side_by_side") nextView = "power_spectrum";
+                setBatchMotionArtifactView(nextView);
+            });
+            setBatchMotionArtifactView("power_spectrum");
+        }
+
+        const batchCtfMicrographToggle = document.querySelector("#batch_ctf_micrograph_toggle");
+        const batchCtfMicrographPreviews = [
+            ...document.querySelectorAll("[data-ctf-micrograph-preview]"),
+        ];
+        const setBatchCtfMicrographsVisible = (visible) => {
+            batchCtfMicrographPreviews.forEach((micrograph) => {
+                micrograph.classList.toggle("hidden", !visible);
+            });
+            if (!batchCtfMicrographToggle) return;
+
+            batchCtfMicrographToggle.setAttribute("aria-pressed", visible ? "true" : "false");
+            const actionDescription = visible ? "hide micrographs" : "show micrographs";
+            batchCtfMicrographToggle.setAttribute("aria-label", actionDescription);
+            batchCtfMicrographToggle.title = actionDescription;
+            const label = batchCtfMicrographToggle.querySelector(
+                "[data-ctf-micrograph-toggle-label]",
+            );
+            if (label) label.textContent = actionDescription;
+        };
+
+        if (batchCtfMicrographToggle) {
+            batchCtfMicrographToggle.addEventListener("click", () => {
+                const visible = batchCtfMicrographToggle.getAttribute("aria-pressed") !== "true";
+                setBatchCtfMicrographsVisible(visible);
+            });
+            setBatchCtfMicrographsVisible(false);
+        }
+
+        const batchCollapsedPanelsStorageKey = "nice_batch_collapsed_panels_{{ jobid }}";
+        let collapsedBatchPanels = new Set();
+        try {
+            const storedPanels = JSON.parse(sessionStorage.getItem(batchCollapsedPanelsStorageKey) || "[]");
+            if (Array.isArray(storedPanels)) collapsedBatchPanels = new Set(storedPanels);
+        } catch (error) {
+            // Keep every panel expanded when stored state is unavailable or invalid.
+        }
+
+        const persistCollapsedBatchPanels = () => {
+            try {
+                sessionStorage.setItem(batchCollapsedPanelsStorageKey, JSON.stringify([...collapsedBatchPanels]));
+            } catch (error) {
+                // Collapsing still works when storage is unavailable.
+            }
+        };
+
+        const setBatchPanelExpanded = (button, expanded) => {
+            const panelBody = document.getElementById(button.getAttribute("aria-controls"));
+            if (!panelBody) return;
+
+            button.setAttribute("aria-expanded", expanded ? "true" : "false");
+            button.title = expanded ? "collapse section" : "expand section";
+            panelBody.classList.toggle("hidden", !expanded);
+
+            const collapseIcon = button.querySelector("[data-collapse-icon]");
+            if (collapseIcon) collapseIcon.classList.toggle("rotate-90", expanded);
+
+            const companionId = button.dataset.collapseCompanionId;
+            const companion = companionId ? document.getElementById(companionId) : null;
+            if (companion) companion.classList.toggle("hidden", !expanded);
+        };
+
+        document.querySelectorAll("[data-collapse-toggle]").forEach((button) => {
+            const panel = button.closest("[data-collapsible-panel]");
+            const panelKey = panel?.dataset.collapseKey;
+            if (!panelKey) return;
+
+            setBatchPanelExpanded(button, !collapsedBatchPanels.has(panelKey));
+            button.addEventListener("click", () => {
+                const expanded = button.getAttribute("aria-expanded") !== "true";
+                setBatchPanelExpanded(button, expanded);
+                if (expanded) {
+                    collapsedBatchPanels.delete(panelKey);
+                } else {
+                    collapsedBatchPanels.add(panelKey);
+                }
+                persistCollapsedBatchPanels();
+            });
+        });
+
+        const batchLogTabStorageKey = "nice_batch_log_tab_{{ jobid }}";
+        const batchLogLayoutStorageKey = "nice_batch_log_layout_{{ jobid }}";
+        const batchLogTabs = [...document.querySelectorAll("[data-log-tab]")];
+        const batchLogPanels = [...document.querySelectorAll("[data-log-panel]")];
+        const batchLogTablist = document.querySelector("[data-log-tablist]");
+        const batchLogPanelsContainer = document.querySelector("[data-log-panels]");
+        const batchLogLayoutToggle = document.querySelector("#batch_log_layout_toggle");
+        const batchLogWideScreenQuery = window.matchMedia("(min-width: 64rem)");
+        let activeBatchLogKey = batchLogTabs[0]?.dataset.logKey || "";
+        let batchLogLayout = batchLogWideScreenQuery.matches ? "split" : "tabs";
+        let batchLogLayoutUserSelected = false;
+
+        try {
+            activeBatchLogKey = sessionStorage.getItem(batchLogTabStorageKey) || activeBatchLogKey;
+            const storedLayout = sessionStorage.getItem(batchLogLayoutStorageKey);
+            if (storedLayout === "split" || storedLayout === "tabs") {
+                batchLogLayout = storedLayout;
+                batchLogLayoutUserSelected = true;
+            }
+        } catch (error) {
+            // Keep the first log and viewport-appropriate layout when storage is unavailable.
+        }
+
+        const syncBatchLogView = () => {
+            const splitView = batchLogLayout === "split";
+            batchLogTabs.forEach((tab) => {
+                const active = tab.dataset.logKey === activeBatchLogKey;
+                tab.setAttribute("aria-selected", active ? "true" : "false");
+                tab.tabIndex = active ? 0 : -1;
+                tab.classList.toggle("bg-streambg", active);
+                tab.classList.toggle("text-streamtext", active);
+                tab.classList.toggle("border-t-streamaccent", active);
+                tab.classList.toggle("text-streamlabel", !active);
+                tab.classList.toggle("border-t-transparent", !active);
+            });
+
+            batchLogPanels.forEach((panel) => {
+                const active = panel.dataset.logKey === activeBatchLogKey;
+                panel.classList.toggle("hidden", !splitView && !active);
+                panel.classList.toggle("rounded-b-lg", !splitView);
+                panel.classList.toggle("border-t-0", !splitView);
+                panel.classList.toggle("rounded-lg", splitView);
+            });
+
+            if (batchLogTablist) batchLogTablist.classList.toggle("hidden", splitView);
+            if (batchLogPanelsContainer) {
+                batchLogPanelsContainer.classList.toggle("block", !splitView);
+                for (const className of ["grid", "grid-cols-1", "lg:grid-cols-3", "items-start", "gap-3"]) {
+                    batchLogPanelsContainer.classList.toggle(className, splitView);
+                }
+            }
+
+            if (batchLogLayoutToggle) {
+                batchLogLayoutToggle.setAttribute("aria-pressed", splitView ? "true" : "false");
+                const actionLabel = splitView ? "tab view" : "split view";
+                const actionDescription = splitView ? "show tabbed log view" : "show split log view";
+                batchLogLayoutToggle.setAttribute("aria-label", actionDescription);
+                batchLogLayoutToggle.title = actionDescription;
+                const label = batchLogLayoutToggle.querySelector("[data-log-layout-label]");
+                if (label) label.textContent = actionLabel;
+                const splitIcon = batchLogLayoutToggle.querySelector("[data-log-layout-split-icon]");
+                const tabsIcon = batchLogLayoutToggle.querySelector("[data-log-layout-tabs-icon]");
+                if (splitIcon) splitIcon.classList.toggle("hidden", splitView);
+                if (tabsIcon) tabsIcon.classList.toggle("hidden", !splitView);
+            }
+        };
+
+        const setBatchLogTab = (logKey, persist = true) => {
+            const selectedTab = batchLogTabs.find((tab) => tab.dataset.logKey === logKey) || batchLogTabs[0];
+            if (!selectedTab) return;
+            activeBatchLogKey = selectedTab.dataset.logKey;
+            syncBatchLogView();
+            if (persist) {
+                try {
+                    sessionStorage.setItem(batchLogTabStorageKey, activeBatchLogKey);
+                } catch (error) {
+                    // Tab selection still works when storage is unavailable.
+                }
+            }
+        };
+
+        const setBatchLogLayout = (layout, persist = true) => {
+            batchLogLayout = layout === "split" ? "split" : "tabs";
+            syncBatchLogView();
+            if (persist) {
+                batchLogLayoutUserSelected = true;
+                try {
+                    sessionStorage.setItem(batchLogLayoutStorageKey, batchLogLayout);
+                } catch (error) {
+                    // Layout switching still works when storage is unavailable.
+                }
+            }
+        };
+
+        batchLogTabs.forEach((tab, index) => {
+            tab.addEventListener("click", () => setBatchLogTab(tab.dataset.logKey));
+            tab.addEventListener("keydown", (event) => {
+                let targetIndex = null;
+                if (event.key === "ArrowRight") targetIndex = (index + 1) % batchLogTabs.length;
+                if (event.key === "ArrowLeft") targetIndex = (index - 1 + batchLogTabs.length) % batchLogTabs.length;
+                if (event.key === "Home") targetIndex = 0;
+                if (event.key === "End") targetIndex = batchLogTabs.length - 1;
+                if (targetIndex === null) return;
+                event.preventDefault();
+                const targetTab = batchLogTabs[targetIndex];
+                setBatchLogTab(targetTab.dataset.logKey);
+                targetTab.focus();
+            });
+        });
+
+        if (batchLogLayoutToggle) {
+            batchLogLayoutToggle.addEventListener("click", () => {
+                setBatchLogLayout(batchLogLayout === "split" ? "tabs" : "split");
+            });
+        }
+        const updateDefaultBatchLogLayout = (event) => {
+            if (!batchLogLayoutUserSelected) setBatchLogLayout(event.matches ? "split" : "tabs", false);
+        };
+        if (typeof batchLogWideScreenQuery.addEventListener === "function") {
+            batchLogWideScreenQuery.addEventListener("change", updateDefaultBatchLogLayout);
+        } else {
+            batchLogWideScreenQuery.addListener(updateDefaultBatchLogLayout);
+        }
+        setBatchLogTab(activeBatchLogKey, false);
+        setBatchLogLayout(batchLogLayout, false);
     </script>
 
     {% if auto_refresh %}
         <script>
             let lastinteraction = Date.now();
-            for (const eventName of ["click", "keydown", "scroll"]) {
-                document.addEventListener(eventName, () => { lastinteraction = Date.now(); }, { passive: true });
+            const markBatchDetailInteraction = () => { lastinteraction = Date.now(); };
+            for (const eventName of ["click", "keydown", "pointerdown"]) {
+                document.addEventListener(eventName, markBatchDetailInteraction);
+            }
+            for (const eventName of ["scroll", "touchmove", "wheel"]) {
+                document.addEventListener(eventName, markBatchDetailInteraction, { capture: true, passive: true });
             }
             setInterval(() => {
                 if (document.visibilityState !== "hidden" && (Date.now() - lastinteraction) > 10000) {

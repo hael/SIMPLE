@@ -1,7 +1,9 @@
 # global imports
+import math
 import os
 import shutil
 import signal
+import struct
 import time
 from collections import Counter
 
@@ -31,6 +33,9 @@ class BatchJob(Job):
         ".simple", ".mrc", ".star", ".jpg", ".jpeg", ".png", ".pdf", ".txt",
     ))
     IMAGE_EXTENSIONS = frozenset((".jpg", ".jpeg", ".png"))
+    CTF_DIAGNOSTIC_SUFFIX = "_ctf_estimate_diag"
+    MOTION_THUMBNAIL_SUFFIX = "_thumb.jpg"
+    PICK_INTEGRATED_SUFFIX = "_intg"
 
     def __init__(self, pckg=None, id=None, request=None):
         super().__init__(id=None)
@@ -227,6 +232,224 @@ class BatchJob(Job):
             logs.append(entry)
         return logs
 
+    def _get_source_batch_job(self):
+        """Return this job's earlier, same-workspace batch source."""
+        if self.jobmodel is None:
+            return None
+
+        metadata = self.jobmodel.master_stats
+        source = metadata.get("source") if isinstance(metadata, dict) else None
+        if not isinstance(source, dict):
+            return None
+        source_job_id = source.get("batch_job_id")
+        if (
+            source.get("type") != "batch_job"
+            or not isinstance(source_job_id, int)
+            or isinstance(source_job_id, bool)
+            or source_job_id <= 0
+        ):
+            return None
+
+        source_model = JobModel.objects.filter(
+            id=source_job_id,
+            dset_id=self.jobmodel.dset_id,
+        ).first()
+        source_metadata = source_model.master_stats if source_model is not None else None
+        if (
+            source_model is None
+            or source_model.disp >= self.jobmodel.disp
+            or not isinstance(source_metadata, dict)
+            or source_metadata.get("job_type") != "batch"
+        ):
+            return None
+        return BatchJob(id=source_job_id)
+
+    def _get_source_motion_job(self):
+        """Return an earlier motion job from this job's persisted source chain."""
+        if self.jobmodel is None or self.prog not in ("ctf_estimate", "pick"):
+            return None
+
+        source_job = self
+        visited_job_ids = {self.id}
+        while source_job is not None:
+            source_job = source_job._get_source_batch_job()
+            if source_job is None or source_job.id in visited_job_ids:
+                return None
+            visited_job_ids.add(source_job.id)
+            if source_job.prog == "motion_correct":
+                return source_job
+        return None
+
+    def _get_motion_thumbnail(self, source_motion_job, diagnostic_name):
+        """Resolve the source thumbnail matching one CTF diagnostic filename."""
+        if source_motion_job is None:
+            return None
+        diagnostic_stem, extension = os.path.splitext(diagnostic_name)
+        if (
+            extension.lower() not in self.IMAGE_EXTENSIONS
+            or not diagnostic_stem.endswith(self.CTF_DIAGNOSTIC_SUFFIX)
+        ):
+            return None
+
+        micrograph_stem = diagnostic_stem[:-len(self.CTF_DIAGNOSTIC_SUFFIX)]
+        if not micrograph_stem:
+            return None
+        source_dir = source_motion_job.get_safe_job_dir()
+        if source_dir is None:
+            return None
+        return source_motion_job._safe_job_file(
+            f"{micrograph_stem}{self.MOTION_THUMBNAIL_SUFFIX}",
+            source_dir,
+        )
+
+    @staticmethod
+    def _read_mrc_dimensions(path):
+        """Read validated x/y dimensions from a little- or big-endian MRC header."""
+        try:
+            with open(path, "rb") as mrc_file:
+                header = mrc_file.read(12)
+        except OSError:
+            return None
+        if len(header) != 12:
+            return None
+
+        for byte_order in ("<", ">"):
+            xdim, ydim, zdim = struct.unpack(f"{byte_order}3i", header)
+            if all(0 < dimension <= 1000000 for dimension in (xdim, ydim, zdim)):
+                return xdim, ydim
+        return None
+
+    @staticmethod
+    def _read_box_centers(path, max_coordinates):
+        """Read bounded EMAN box records and convert top-left corners to centers."""
+        centers = []
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as box_file:
+                for line_number, line in enumerate(box_file):
+                    if line_number >= max_coordinates:
+                        break
+                    fields = line.split()
+                    if len(fields) < 4:
+                        continue
+                    try:
+                        xcoord, ycoord, width, height = map(float, fields[:4])
+                    except ValueError:
+                        continue
+                    if (
+                        not all(math.isfinite(value) for value in (xcoord, ycoord, width, height))
+                        or width <= 0
+                        or height <= 0
+                    ):
+                        continue
+                    centers.append({
+                        "x": xcoord + (width / 2.0),
+                        "y": ycoord + (height / 2.0),
+                        "width": width,
+                        "height": height,
+                    })
+        except OSError:
+            return []
+        return centers
+
+    def get_pick_micrograph_previews(self, max_previews=20, max_coordinates=1500):
+        """Build stream-shaped picker previews from owned batch artifacts."""
+        if self.jobmodel is None or self.prog != "pick":
+            return []
+        if not isinstance(max_previews, int) or isinstance(max_previews, bool) or max_previews <= 0:
+            max_previews = 20
+        if (
+            not isinstance(max_coordinates, int)
+            or isinstance(max_coordinates, bool)
+            or max_coordinates <= 0
+        ):
+            max_coordinates = 1500
+        max_previews = min(max_previews, 24)
+        max_coordinates = min(max_coordinates, 5000)
+
+        pick_dir = self.get_safe_job_dir()
+        source_motion_job = self._get_source_motion_job()
+        source_dir = (
+            source_motion_job.get_safe_job_dir()
+            if source_motion_job is not None
+            else None
+        )
+        if pick_dir is None or source_dir is None:
+            return []
+
+        try:
+            with os.scandir(pick_dir) as directory_entries:
+                box_names = sorted(
+                    entry.name
+                    for entry in directory_entries
+                    if entry.name.lower().endswith(".box")
+                    and entry.is_file(follow_symlinks=True)
+                )
+        except OSError:
+            return []
+
+        selected_box_names = box_names[-max_previews:]
+        first_number = len(box_names) - len(selected_box_names) + 1
+        previews = []
+        for number, box_name in enumerate(selected_box_names, start=first_number):
+            box_path = self._safe_job_file(box_name, pick_dir)
+            box_stem = os.path.splitext(box_name)[0]
+            if box_path is None or not box_stem.endswith(self.PICK_INTEGRATED_SUFFIX):
+                continue
+
+            micrograph_stem = box_stem[:-len(self.PICK_INTEGRATED_SUFFIX)]
+            thumbnail_path = source_motion_job._safe_job_file(
+                f"{micrograph_stem}{self.MOTION_THUMBNAIL_SUFFIX}",
+                source_dir,
+            )
+            integrated_path = source_motion_job._safe_job_file(
+                f"{box_stem}.mrc",
+                source_dir,
+            )
+            if thumbnail_path is None or integrated_path is None:
+                continue
+            dimensions = self._read_mrc_dimensions(integrated_path)
+            if dimensions is None:
+                continue
+
+            previews.append({
+                "path": thumbnail_path,
+                "number": number,
+                "xdim": dimensions[0],
+                "ydim": dimensions[1],
+                "boxes": self._read_box_centers(box_path, max_coordinates),
+            })
+        return previews
+
+    @staticmethod
+    def _artifact_preview(
+        path,
+        name,
+        kind="image",
+        crop="full",
+        hidden_by_default=False,
+        visibility_group=None,
+    ):
+        """Return one normalized image view for the batch artifact gallery."""
+        if kind == "power_spectrum":
+            suffix = "power spectrum"
+        elif kind == "micrograph":
+            suffix = "micrograph"
+        else:
+            suffix = ""
+        preview = {
+            "path": path,
+            "name": name,
+            "kind": kind,
+            "crop": crop,
+            "title": f"{name} — {suffix}" if suffix else name,
+            "alt": f"{name} {suffix}" if suffix else name,
+        }
+        if hidden_by_default:
+            preview["hidden_by_default"] = True
+        if visibility_group is not None:
+            preview["visibility_group"] = visibility_group
+        return preview
+
     def get_artifact_summary(self, max_previews=12):
         """Summarize recognized root-level result files and safe image previews."""
         job_dir = self.get_safe_job_dir()
@@ -242,6 +465,8 @@ class BatchJob(Job):
         except OSError:
             return {"counts": [], "images": []}
 
+        source_motion_job = self._get_source_motion_job()
+
         counts = Counter()
         images = []
         for entry in entries:
@@ -253,7 +478,44 @@ class BatchJob(Job):
                 continue
             counts[extension] += 1
             if extension in self.IMAGE_EXTENSIONS and len(images) < max_previews:
-                images.append({"name": entry.name, "path": path})
+                image = {
+                    "name": entry.name,
+                    "path": path,
+                    "previews": [self._artifact_preview(path, entry.name)],
+                }
+                if (
+                    self.prog == "motion_correct"
+                    and entry.name.lower().endswith(self.MOTION_THUMBNAIL_SUFFIX)
+                ):
+                    image["previews"] = [
+                        self._artifact_preview(
+                            path,
+                            entry.name,
+                            kind="power_spectrum",
+                            crop="left",
+                            visibility_group="motion",
+                        ),
+                        self._artifact_preview(
+                            path,
+                            entry.name,
+                            kind="micrograph",
+                            crop="right",
+                            hidden_by_default=True,
+                            visibility_group="motion",
+                        ),
+                    ]
+                micrograph_path = self._get_motion_thumbnail(source_motion_job, entry.name)
+                if micrograph_path is not None:
+                    micrograph_name = os.path.basename(micrograph_path)
+                    image["previews"].append(self._artifact_preview(
+                        micrograph_path,
+                        micrograph_name,
+                        kind="micrograph",
+                        crop="right",
+                        hidden_by_default=True,
+                        visibility_group="ctf_micrograph",
+                    ))
+                images.append(image)
 
         return {
             "counts": [

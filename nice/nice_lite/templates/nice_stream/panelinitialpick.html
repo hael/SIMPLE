@@ -21,6 +21,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
+    <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}"></script>
 </head>
 <body class="bg-streambar h-screen overflow-hidden font-sans">
 
@@ -52,39 +53,7 @@
         {% if "latest_micrographs" in jobstats and jobstats.latest_micrographs|length > 0 %}
             <div class="flex flex-col px-4 pt-2">
                 <span class="text-[10px] text-streamlabel mb-2">pick locations</span>
-                <div class="flex items-center gap-1">
-
-                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="left" action="scrlLeft(this, event)" %}
-
-                    <div id="micrographs_slider"
-                         {% if status == "running" and jobstats.user_input is True and "picking_diameters" in jobstats %}
-                             data-best_diam="{{ jobstats.best_diam }}"
-                             data-picking_diameters="{{ jobstats.picking_diameters }}"
-                         {% endif %}
-                         class="flex flex-row flex-1 overflow-y-hidden overflow-x-scroll snap-x snap-mandatory scrollbar-hidden scroll-smooth">
-                        {# Boxes overlay canvas — drawn by JS, z-stacked above the micrograph. #}
-                        <canvas id="boxes_overlay" class="fixed hover:animate-pulse z-10" height="210" width="210"></canvas>
-                        {% for micrograph in jobstats.latest_micrographs %}
-                            <div class="flex-shrink-0 w-full aspect-square relative overflow-hidden snap-center slider_micrograph"
-                                    oncontextmenu="showMenu(this, event)"
-                                    data-ctfres="{{ micrograph.ctfres|floatformat:1 }}"
-                                    data-dfx="{{ micrograph.dfx|floatformat:2 }}"
-                                    data-dfy="{{ micrograph.dfy|floatformat:2 }}"
-                                    data-xdim="{{ micrograph.xdim }}"
-                                    data-ydim="{{ micrograph.ydim }}"
-                                    data-boxes="{{ micrograph.boxes }}">
-                                <!-- Image is 200% wide, anchored right → shows the right half (micrograph) of the composite -->
-                                <img src="{% url 'nice_lite:image' micrograph.path %}"
-                                        loading="lazy" alt=""
-                                        class="rounded absolute inset-0 w-full h-full object-cover object-[100%]"
-                                        style="filter:contrast(var(--preprocess-contrast)) brightness(var(--preprocess-brightness));">
-                            </div>
-                        {% endfor %}
-                    </div>
-
-                    {% include 'nice_stream/includes/_scroll_btn.html' with direction="right" action="scrlRight(this, event)" %}
-
-                </div>
+                {% include 'nice_stream/includes/_pick_micrograph_slider.html' with micrographs=jobstats.latest_micrographs left_action="scrlLeft(this, event)" right_action="scrlRight(this, event)" context_action="showMenu(this, event)" %}
             </div>
 
             <!-- Context menu (contrast/brightness) -->
@@ -130,71 +99,20 @@
             }
         };
 
-        const parseAttr = (raw, fallback = "[]") => JSON.parse((raw || fallback).replaceAll("'", '"'));
-
         const scrlRight = (element, event) => {
-            event.preventDefault();
-            const slider = document.getElementById("micrographs_slider");
-            if (!slider) return;
-            const atEnd = slider.scrollLeft + slider.clientWidth >= slider.scrollWidth - 1;
-            slider.scrollLeft = atEnd ? 0 : slider.scrollLeft + slider.clientWidth;
+            scrollPickMicrographs(element, event, 1);
             lastinteraction = Date.now();
         };
 
         const scrlLeft = (element, event) => {
-            event.preventDefault();
-            const slider = document.getElementById("micrographs_slider");
-            if (!slider) return;
-            const atStart = slider.scrollLeft <= 0;
-            slider.scrollLeft = atStart ? slider.scrollWidth - slider.clientWidth : slider.scrollLeft - slider.clientWidth;
+            scrollPickMicrographs(element, event, -1);
             lastinteraction = Date.now();
-        };
-
-        const overlayState = {
-            xdim: 0,
-            ydim: 0,
-            boxes: []
-        };
-
-        const drawOverlayCoordinates = () => {
-            const boxesOverlay = document.getElementById("boxes_overlay");
-            if (!boxesOverlay || !overlayState.xdim || !overlayState.ydim) return;
-
-            const xdim = Number(overlayState.xdim);
-            const ydim = Number(overlayState.ydim);
-            let scale = 1;
-            if (xdim > ydim) {
-                scale = boxesOverlay.width / xdim;
-            } else {
-                scale = boxesOverlay.height / ydim;
-            }
-
-            const yoffset = (boxesOverlay.height - (scale * ydim)) / 2;
-            const xoffset = (boxesOverlay.width - (scale * xdim)) / 2;
-            const ctx = boxesOverlay.getContext("2d");
-            ctx.clearRect(0, 0, boxesOverlay.width, boxesOverlay.height);
-
-            for (const box of overlayState.boxes) {
-                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue("--color-streamaction").trim();
-                ctx.beginPath();
-                ctx.arc((box.x * scale) + xoffset, (box.y * scale) + yoffset, 1, 0, 2 * Math.PI);
-                ctx.stroke();
-            }
-
-            lastinteraction = Date.now();
-        };
-
-        const setOverlayFromSlide = (slide) => {
-            if (!slide) return;
-            overlayState.xdim = Number(slide.dataset.xdim || 0);
-            overlayState.ydim = Number(slide.dataset.ydim || 0);
-            overlayState.boxes = parseAttr(slide.dataset.boxes, "[]");
-            drawOverlayCoordinates();
         };
 
         const showMenu = (element, event) => {
             event.preventDefault();
-            const selectmenu = element.parentElement.parentElement.querySelector("[name='selectmenu']");
+            const selectmenu = document.querySelector("[name='selectmenu']");
+            if (!selectmenu) return;
             const selectmenubox = selectmenu.querySelector("[name='selectmenubox']");
             selectmenu.style.display = "flex";
 
@@ -228,26 +146,6 @@
             const root = document.querySelector(":root");
             root.style.setProperty("--preprocess-contrast", 1.0);
             root.style.setProperty("--preprocess-brightness", 1.0);
-
-            const slider = document.getElementById("micrographs_slider");
-            if (slider) {
-                const observer = new IntersectionObserver(
-                    (entries) => {
-                        for (const entry of entries) {
-                            if (entry.intersectionRatio > 0.5) {
-                                setOverlayFromSlide(entry.target);
-                            }
-                        }
-                    },
-                    { root: slider, threshold: 0.5 }
-                );
-                for (const slide of document.getElementsByClassName("slider_micrograph")) {
-                    observer.observe(slide);
-                }
-
-                const firstSlide = slider.querySelector(".slider_micrograph");
-                if (firstSlide) setOverlayFromSlide(firstSlide);
-            }
 
             const gauze = document.getElementById("loadinggauze");
             if (gauze) {

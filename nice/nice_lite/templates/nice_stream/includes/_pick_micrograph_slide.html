@@ -1,0 +1,19 @@
+{% comment %}
+  Shared picked-micrograph image and metadata used by stream carousels and the
+  batch output grid. Set grid_tile for an absolutely positioned gallery tile.
+{% endcomment %}
+<div data-pick-micrograph-slide
+     class="{% if grid_tile %}absolute inset-0 w-full h-full{% else %}flex-shrink-0 w-full aspect-square snap-center{% endif %} relative overflow-hidden slider_micrograph"
+     {% if context_action %}oncontextmenu="{{ context_action }}"{% endif %}
+     data-ctfres="{{ micrograph.ctfres|floatformat:1 }}"
+     data-dfx="{{ micrograph.dfx|floatformat:2 }}"
+     data-dfy="{{ micrograph.dfy|floatformat:2 }}"
+     data-xdim="{{ micrograph.xdim }}"
+     data-ydim="{{ micrograph.ydim }}"
+     data-boxes="{{ micrograph.boxes }}">
+    <img src="{% url 'nice_lite:image' micrograph.path %}"
+         loading="lazy"
+         alt="picked micrograph{% if micrograph.number %} {{ micrograph.number }}{% endif %}"
+         class="rounded absolute inset-0 w-full h-full object-cover object-[100%]"
+         style="filter:contrast(var(--preprocess-contrast,1)) brightness(var(--preprocess-brightness,1));">
+</div>

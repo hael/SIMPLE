@@ -1,5 +1,6 @@
 import os
 import signal
+import struct
 import subprocess
 import tempfile
 from unittest.mock import ANY, patch
@@ -145,6 +146,186 @@ class BatchJobLifecycleTests(TestCase):
             {"JPG": 1, "MRC": 1},
         )
         self.assertEqual(artifacts["images"][0]["name"], "movie_thumb.jpg")
+        previews = artifacts["images"][0]["previews"]
+        self.assertEqual(
+            [(preview["kind"], preview["crop"]) for preview in previews],
+            [
+                ("power_spectrum", "left"),
+                ("micrograph", "right"),
+            ],
+        )
+        self.assertEqual(
+            [preview["visibility_group"] for preview in previews],
+            ["motion", "motion"],
+        )
+        self.assertNotIn("hidden_by_default", previews[0])
+        self.assertTrue(previews[1]["hidden_by_default"])
+
+    def test_ctf_artifacts_pair_diagnostics_with_source_motion_thumbnails(self):
+        motion_dir = os.path.join(self.workspace_dir, "1_motion_correct")
+        os.mkdir(motion_dir)
+        motion_thumbnail = os.path.join(motion_dir, "movie_thumb.jpg")
+        with open(motion_thumbnail, "wb") as image_file:
+            image_file.write(b"motion")
+        motion_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_motion_correct",
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "motion_correct",
+            },
+        )
+
+        ctf_dir = os.path.join(self.workspace_dir, "2_ctf_estimate")
+        os.mkdir(ctf_dir)
+        diagnostic = os.path.join(ctf_dir, "movie_ctf_estimate_diag.jpg")
+        with open(diagnostic, "wb") as image_file:
+            image_file.write(b"ctf")
+        ctf_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=2,
+            dirc="2_ctf_estimate",
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "ctf_estimate",
+                "source": {"type": "batch_job", "batch_job_id": motion_job.id},
+            },
+        )
+
+        job = BatchJob(id=ctf_job.id)
+        artifacts = job.get_artifact_summary()
+
+        self.assertEqual(artifacts["images"][0]["path"], diagnostic)
+        previews = artifacts["images"][0]["previews"]
+        self.assertEqual(
+            [(preview["kind"], preview["crop"]) for preview in previews],
+            [
+                ("image", "full"),
+                ("micrograph", "right"),
+            ],
+        )
+        self.assertEqual(previews[1]["name"], "movie_thumb.jpg")
+        self.assertEqual(previews[1]["path"], motion_thumbnail)
+        self.assertTrue(previews[1]["hidden_by_default"])
+        self.assertEqual(previews[1]["visibility_group"], "ctf_micrograph")
+
+    def test_ctf_artifacts_do_not_pair_with_a_non_motion_source(self):
+        source_dir = os.path.join(self.workspace_dir, "1_import_movies")
+        os.mkdir(source_dir)
+        with open(os.path.join(source_dir, "movie_thumb.jpg"), "wb") as image_file:
+            image_file.write(b"not motion")
+        source_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_import_movies",
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "import_movies",
+            },
+        )
+
+        ctf_dir = os.path.join(self.workspace_dir, "2_ctf_estimate")
+        os.mkdir(ctf_dir)
+        with open(os.path.join(ctf_dir, "movie_ctf_estimate_diag.jpg"), "wb") as image_file:
+            image_file.write(b"ctf")
+        ctf_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=2,
+            dirc="2_ctf_estimate",
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "ctf_estimate",
+                "source": {"type": "batch_job", "batch_job_id": source_job.id},
+            },
+        )
+
+        artifacts = BatchJob(id=ctf_job.id).get_artifact_summary()
+
+        self.assertEqual(
+            [preview["kind"] for preview in artifacts["images"][0]["previews"]],
+            ["image"],
+        )
+
+    def test_pick_previews_follow_source_chain_and_read_owned_artifacts(self):
+        motion_dir = os.path.join(self.workspace_dir, "1_motion_correct")
+        os.mkdir(motion_dir)
+        thumbnail_path = os.path.join(motion_dir, "movie_thumb.jpg")
+        with open(thumbnail_path, "wb") as thumbnail_file:
+            thumbnail_file.write(b"image")
+        with open(os.path.join(motion_dir, "movie_intg.mrc"), "wb") as mrc_file:
+            mrc_file.write(struct.pack("<3i", 4096, 3072, 1))
+        motion_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=1,
+            dirc="1_motion_correct",
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "motion_correct",
+            },
+        )
+
+        ctf_dir = os.path.join(self.workspace_dir, "2_ctf_estimate")
+        os.mkdir(ctf_dir)
+        ctf_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=2,
+            dirc="2_ctf_estimate",
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "ctf_estimate",
+                "source": {"type": "batch_job", "batch_job_id": motion_job.id},
+            },
+        )
+
+        pick_dir = os.path.join(self.workspace_dir, "3_pick")
+        os.mkdir(pick_dir)
+        with open(os.path.join(pick_dir, "movie_intg.box"), "w", encoding="utf-8") as box_file:
+            box_file.write("-10 -20 40 60 99.0\ninvalid record\n100 200 20 40\n")
+        pick_job = JobModel.objects.create(
+            dset=self.workspace_model,
+            cdat=timezone.now(),
+            disp=3,
+            dirc="3_pick",
+            status="finished",
+            master_stats={
+                "job_type": "batch",
+                "package": "simple",
+                "program": "pick",
+                "source": {"type": "batch_job", "batch_job_id": ctf_job.id},
+            },
+        )
+
+        previews = BatchJob(id=pick_job.id).get_pick_micrograph_previews()
+
+        self.assertEqual(previews, [{
+            "path": thumbnail_path,
+            "number": 1,
+            "xdim": 4096,
+            "ydim": 3072,
+            "boxes": [
+                {"x": 10.0, "y": 10.0, "width": 40.0, "height": 60.0},
+                {"x": 110.0, "y": 220.0, "width": 20.0, "height": 40.0},
+            ],
+        }])
 
     def test_batch_detail_rejects_job_directory_outside_workspace(self):
         outside_dir = os.path.join(self.tempdir.name, "outside_job")

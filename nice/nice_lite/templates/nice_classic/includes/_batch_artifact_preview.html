@@ -1,0 +1,20 @@
+{% comment %}
+  Batch-owned adapter for SIMPLE's composite motion thumbnail convention.
+  `crop=right` matches the stream micrograph preview; `crop=left` exposes the
+  power-spectrum half. The stream templates and assets remain unchanged.
+{% endcomment %}
+<a data-artifact-preview-kind="{{ preview.kind }}"
+   {% if preview.visibility_group == "ctf_micrograph" %}data-ctf-micrograph-preview{% elif preview.visibility_group == "motion" %}data-motion-artifact-preview="{{ preview.kind }}"{% endif %}
+   href="{% url 'nice_lite:image' preview.path %}" target="_blank" rel="noopener"
+   class="{% if preview.hidden_by_default %}hidden {% endif %}{% if preview.crop == 'full' %}inline-flex{% else %}relative{% endif %} flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
+   style="height:var(--artifact-tile-height){% if preview.crop != 'full' %};width:var(--artifact-tile-height){% endif %}"
+   title="{{ preview.title }}">
+    {% if preview.crop == "full" %}
+        <img src="{% url 'nice_lite:image' preview.path %}" loading="lazy" alt="{{ preview.alt }}"
+             class="h-full w-auto hover:opacity-90 transition-opacity" style="max-width:none">
+    {% else %}
+        <img src="{% url 'nice_lite:image' preview.path %}" loading="lazy" alt="{{ preview.alt }}"
+             class="rounded absolute inset-0 w-full h-full object-cover{% if preview.crop == 'right' %} object-[100%]{% endif %} hover:opacity-90 transition-opacity"
+             {% if preview.crop == "left" %}style="object-position:0%"{% endif %}>
+    {% endif %}
+</a>
