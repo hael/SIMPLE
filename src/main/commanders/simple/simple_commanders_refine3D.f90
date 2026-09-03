@@ -58,7 +58,8 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_auto( self, cline )
-        use simple_abinitio_utils, only: gen_ortho_reprojs4viz, write_final_rec_outputs
+        use simple_abinitio_utils, only: configure_final_pcg_solve_budget, gen_ortho_reprojs4viz, &
+            &write_final_rec_outputs
         use simple_commanders_rec, only: commander_rec3D
         use simple_estimate_ssnr,     only: lpstages_setlims
         use simple_commanders_rec,    only: commander_bootstrap_rec3D
@@ -327,6 +328,11 @@ contains
             call cline_rec3D%set('automsk', 'no')
         endif
         call cline_rec3D%set('nu_refine', 'no')
+        if( trim(params%rec_backend) == 'pcg' )then
+            call configure_final_pcg_solve_budget(cline, cline_rec3D)
+            write(logfhandle,'(A,I0)') '>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', &
+                &cline_rec3D%get_iarg('maxits_pcg')
+        endif
         call xbootstrap_rec3D%execute(cline_rec3D)
         call params_final_rec%new(cline_rec3D)
         params_final_rec%box  = params%box

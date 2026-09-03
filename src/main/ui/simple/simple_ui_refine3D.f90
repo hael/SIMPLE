@@ -461,7 +461,8 @@ subroutine new_automask( prgtab )
         &choices=ui_choices([character(len=3) :: 'yes', 'no']), &
         &visibility=UI_VIS_ADVANCED)
         call refine3D_auto%add_input(UI_FILT, 'maxits_pcg', 'num', 'PCG maximum iterations', &
-        &'Maximum kernel PCG iterations; independent of the outer refinement iteration budget', 'iterations{2}', &
+        &'Maximum kernel PCG iterations during refinement; the cold original-sampling final reconstruction uses at least 5', &
+        &'iterations{2}', &
         &.false., 2., group="filter", visibility=UI_VIS_ADVANCED, &
         &activation=ui_activation_equals_any('rec_backend', [character(len=3) :: 'pcg']))
         call refine3D_auto%add_input(UI_FILT, 'pcg_nu_lambda_rel', 'num', 'PCG direct NU-evidence prior strength', &

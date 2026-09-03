@@ -291,7 +291,8 @@ contains
         call simple_end('**** SIMPLE_SHARPVOL NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_sharpvol
 
-    subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline, state )
+    subroutine postprocess_volume_from_files( fname_vol, fname_fsc, box, smpd, params, cline, state, &
+            &density_window_bfac )
         use simple_vol_pproc_policy, only: state_mask_is_compatible
         class(string),   intent(in)    :: fname_vol, fname_fsc
         integer,         intent(in)    :: box
@@ -299,13 +300,17 @@ contains
         type(parameters),intent(inout) :: params
         class(cmdline),  intent(inout) :: cline
         integer,         intent(in)    :: state
+        logical, optional, intent(in)  :: density_window_bfac
         real, allocatable :: fsc(:), optlp(:), res(:)
         type(string)     :: fname_mirr, fname_pproc, fname_lp, fname_envmsk
         type(string)     :: fname_even_unfil, fname_odd_unfil
         type(image)      :: vol_bfac, vol_no_bfac, vol_envmsk, vol_unfil, vol_unfil_odd
+        type(image_msk)  :: bfac_envmsk
         real    :: fsc0143, fsc05, lplim
         integer :: ldim(3)
-        logical :: has_fsc, do_envfsc, msk_exists, msk_compatible
+        logical :: has_fsc, do_envfsc, msk_exists, msk_compatible, l_density_window_bfac
+        l_density_window_bfac = .false.
+        if( present(density_window_bfac) ) l_density_window_bfac = density_window_bfac
         if( .not.file_exists(fname_vol) )then
             THROW_HARD('volume: '//fname_vol%to_char()//' does not exist')
         endif
@@ -359,8 +364,23 @@ contains
                     call vol_unfil_odd%read(fname_odd_unfil)
                     call vol_unfil%add(vol_unfil_odd)
                     call vol_unfil%mul(0.5)
+                    if( trim(params%rec_backend) == 'pcg' .and. l_density_window_bfac )then
+                        ! A final cold PCG base pair can only use the broad
+                        ! spherical support. Estimate its Guinier slope over
+                        ! the same conservative density domain used by the
+                        ! regularized solve. This masks only the temporary
+                        ! spectrum-estimation copy; no PCG output is modified.
+                        call bfac_envmsk%automask3D(params, vol_unfil, .false., &
+                            &lp_override=params%envmsklp, l_report=.false.)
+                        call bfac_envmsk%apply_3Dmask(vol_unfil)
+                    endif
                     params%bfac = vol_unfil%guinier_bfac(HPLIM_GUINIER, lplim)
-                    write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR (UNFIL PAIR) DETERMINED TO:', params%bfac
+                    if( trim(params%rec_backend) == 'pcg' .and. l_density_window_bfac )then
+                        write(logfhandle,'(A,1X,F8.2)') &
+                            &'>>> B-FACTOR (DENSITY-WINDOWED UNFIL PAIR) DETERMINED TO:', params%bfac
+                    else
+                        write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR (UNFIL PAIR) DETERMINED TO:', params%bfac
+                    endif
                     call vol_unfil%kill
                     call vol_unfil_odd%kill
                 else
@@ -422,6 +442,7 @@ contains
         call vol_bfac%kill
         call vol_no_bfac%kill
         call vol_envmsk%kill
+        call bfac_envmsk%kill_bimg
         call fname_mirr%kill
         call fname_pproc%kill
         call fname_lp%kill

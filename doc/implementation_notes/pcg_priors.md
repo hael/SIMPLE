@@ -2470,6 +2470,15 @@ the acceptable-looking outputs do not validate the prior.
      after `resolve_nu_autolambda` has adapted from that measurement. Only
      the calibrated replay is shipped. A missing target starts at 15%.
      Explicit lambda controls skip calibration and remain pinned as usual.
+   - Final cold-solve convergence and sharpening (corrected 2026-09-03):
+     both `calc_final_rec` (abinitio3D) and the refine3D_auto final bootstrap
+     use the shared five-iteration PCG budget floor, while larger explicit
+     budgets survive and an explicit residual tolerance may still stop early.
+     The final global B-factor is still estimated from the prior-free
+     `_even_unfil`/`_odd_unfil` average, but its temporary Guinier-fit copy is
+     windowed by the conservative density envelope. This removes the broad
+     spherical bootstrap background from the slope without applying a mask to
+     any PCG output. Iteration postprocessing and non-PCG paths are unchanged.
 
    **PfCRT REGRESSION ROOT CAUSE -- HANDOFF GATE + FROZEN-EVIDENCE
    DEADLOCK (2026-08-31).** The post-auto-target PfCRT abinitio3D run

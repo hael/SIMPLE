@@ -529,6 +529,14 @@ On finalization:
 - `cls3D` distributed runs map class-orientation output back to particles
 - `JOB_FINISHED` is touched by the shared-memory path
 
+The original-sampling final reconstruction is distinct from an ordinary warm
+refinement iteration. On the PCG backend, both abinitio3D and refine3D_auto
+apply the shared minimum five-iteration budget to this cold solve. An explicit
+positive residual tolerance may still stop convergence earlier. Final
+automatic sharpening estimates its B-factor from a
+conservative-density-windowed copy of the unregularized pair; this is an
+estimation window only and never a post-hoc mask on a PCG output.
+
 Grouped sigma files are run-local noise-model state. They may be written and
 consumed inside a running refinement, but they are not registered as `os_out`
 handoff artifacts for a later `refine3D` execution.

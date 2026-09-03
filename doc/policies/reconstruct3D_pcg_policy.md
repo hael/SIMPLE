@@ -214,6 +214,22 @@ supplies the conservative replay support. Once a prior reconstruction exists,
 the table applies without exception. No PCG map is multiplied by either mask
 after reconstruction.
 
+The original-sampling final reconstructions launched by `abinitio3D` and
+`refine3D_auto` are cold solves. They use a PCG iteration budget of at least
+five; a larger user-supplied `maxits_pcg` remains in force. An explicit
+positive `rtol` may still stop a converged solve earlier. Ordinary refinement
+iterations retain their normal budget because their base solves warm-start
+from compatible lag-one half maps.
+
+Automatic final-map sharpening estimates its Guinier B-factor from the
+unregularized half-pair average. For an automatically postprocessed PCG
+reconstruction, a conservative density envelope is applied only to a
+temporary copy used for that spectral fit. This prevents the broad spherical
+bootstrap background from setting the sharpening slope. The reconstructed
+map, `_lp`, `_pproc`, and mirrored products are not multiplied by that mask;
+the prohibition on post-hoc PCG masking remains absolute. Iteration-time
+postprocessing retains its existing behavior.
+
 ### Beyond-band diagnostic
 
 `report_beyond_band_excess` (module-level in the strategy, both execution

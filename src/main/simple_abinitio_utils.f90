@@ -32,6 +32,7 @@ type(string)     :: refine3D_mode_override
 real             :: update_frac  = 1.0
 integer          :: nstates_glob = 1, nptcls_eff = 0
 integer          :: nstages_refine3D = 0
+integer, parameter :: FINAL_PCG_MAXITS_FLOOR = 5
 
 ! In submodule: simple_abinitio_controller.f90
 interface
@@ -803,6 +804,16 @@ contains
         call final_vol%kill
     end subroutine gen_ortho_reprojs4viz
 
+    subroutine configure_final_pcg_solve_budget( source_cline, final_cline )
+        class(cmdline), intent(in)    :: source_cline
+        class(cmdline), intent(inout) :: final_cline
+        integer :: maxits_final
+        maxits_final = FINAL_PCG_MAXITS_FLOOR
+        if( source_cline%defined('maxits_pcg') ) &
+            &maxits_final = max(FINAL_PCG_MAXITS_FLOOR, source_cline%get_iarg('maxits_pcg'))
+        call final_cline%set('maxits_pcg', maxits_final)
+    end subroutine configure_final_pcg_solve_budget
+
     subroutine calc_final_rec( params, spproj, projfile, xrec3D, l_postprocess )
         class(parameters),     intent(in)    :: params
         class(sp_project),     intent(inout) :: spproj
@@ -835,8 +846,12 @@ contains
             call prep_final_rec_cline(cline_reconstruct3D, 'bootstrap_rec3D')
             call cline_reconstruct3D%set('which_iter', bootstrap_sigma_iter)
             write(logfhandle,'(A,I0)') '>>> FINAL RECONSTRUCTION BOOTSTRAP SIGMA ITERATION: ', bootstrap_sigma_iter
+            if( trim(params%rec_backend) == 'pcg' ) write(logfhandle,'(A,I0)') &
+                &'>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', cline_reconstruct3D%get_iarg('maxits_pcg')
             call xbootstrap_rec3D%execute(cline_reconstruct3D)
         else
+            if( trim(params%rec_backend) == 'pcg' ) write(logfhandle,'(A,I0)') &
+                &'>>> FINAL PCG COLD-SOLVE ITERATION BUDGET: ', cline_reconstruct3D%get_iarg('maxits_pcg')
             call xrec3D%execute(cline_reconstruct3D)
         endif
         if( .not. l_postprocess )then
@@ -973,8 +988,7 @@ contains
                 ! the final map. Explicit controls remain pinned.
                 if( trim(params%rec_backend) == 'pcg' )then
                     call child_cline%set('rec_backend', 'pcg')
-                    if( cline_refine3D%defined('maxits_pcg') )&
-                        &call child_cline%set('maxits_pcg', cline_refine3D%get_iarg('maxits_pcg'))
+                    call configure_final_pcg_solve_budget(cline_refine3D, child_cline)
                     if( cline_refine3D%defined('rtol') )&
                         &call child_cline%set('rtol', cline_refine3D%get_rarg('rtol'))
                     if( final_stage_uses_ml_reg() )then
