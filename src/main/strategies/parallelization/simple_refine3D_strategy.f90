@@ -10,7 +10,7 @@ use simple_qsys_env,      only: qsys_env
 use simple_convergence,   only: convergence
 use simple_decay_funs,    only: inv_cos_decay, cos_decay
 use simple_cluster_seed,  only: gen_labelling
-use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap
+use simple_euclid_sigma2, only: sigma2_group_iter, sigma2_stage_needs_bootstrap, sigma2_star_from_iter
 use simple_rec3D_pcg_strategy, only: execute_rec3D_pcg_distributed_master, get_pcg_nu_evidence_bench_seconds
 implicit none
 
@@ -613,7 +613,17 @@ contains
                 call cline_calc_pspec%set('prg', 'calc_pspec')
                 call xcalc_pspec%execute( cline_calc_pspec )
             else
-                write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
+                ! A grouped sigma file is partition-independent. Skip the
+                ! first consolidation so workers can initialize from it and
+                ! emit particle sigma files in the current partition layout.
+                self%l_sigma_transition_ready = self%l_sigma_transition_ready .or. &
+                    &file_exists(sigma2_star_from_iter(startit))
+                if( self%l_sigma_transition_ready )then
+                    call clear_sigma2_partition_files
+                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'
+                else
+                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
+                endif
             endif
         endif
         ! Keep run-time counters consistent with the new high-level loop
@@ -687,7 +697,11 @@ contains
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! Per-iteration sigma update (euclid)
         if( self%l_sigma .and. self%l_sigma_transition_ready )then
-            write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
+            if( trim(params%sigma_transition_ready) == 'yes' )then
+                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
+            else
+                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using reusable grouped sigmas for current partition layout'
+            endif
             self%l_sigma_transition_ready  = .false.
             params%sigma_transition_ready = 'no'
             call cline%set('sigma_transition_ready', 'no')
@@ -1007,7 +1021,17 @@ contains
                 if( sigma2_stage_needs_bootstrap(params%startit) )then
                     call xcalc_pspec_distr%execute(self%cline_calc_pspec_distr)
                 else
-                    write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
+                    ! A grouped sigma file is partition-independent. Skip the
+                    ! first consolidation so workers can initialize from it and
+                    ! emit particle sigma files in the current partition layout.
+                    self%l_sigma_transition_ready = self%l_sigma_transition_ready .or. &
+                        &file_exists(sigma2_star_from_iter(params%startit))
+                    if( self%l_sigma_transition_ready )then
+                        call clear_sigma2_partition_files
+                        write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing grouped sigmas'
+                    else
+                        write(logfhandle,'(A)') '>>> SIGMA2 INIT: reusing existing particle sigma files'
+                    endif
                 endif
             endif
             ! check if we have input volume(s) and/or 3D orientations
@@ -1078,6 +1102,19 @@ contains
         call fsc_file%kill
     end subroutine distr_initialize
 
+    ! Grouped sigmas do not depend on the worker partition layout. Once they
+    ! are selected as the startup source, remove every stale partition-local
+    ! file so all consumers take the group-only initialization path and the
+    ! matcher regenerates one complete set for the current layout.
+    subroutine clear_sigma2_partition_files
+        type(string), allocatable :: files(:)
+        call simple_list_files(SIGMA2_FBODY//'*.dat', files)
+        if( allocated(files) )then
+            call del_files(files)
+            deallocate(files)
+        endif
+    end subroutine clear_sigma2_partition_files
+
     subroutine distr_execute_iteration(self, params, build, cline, converged)
         use simple_commanders_rec_distr, only: commander_volassemble
         use simple_commanders_volops, only: commander_postprocess
@@ -1126,7 +1163,11 @@ contains
         if( L_BENCH_GLOB ) self%bench%rt_model = toc(self%bench%t_model)
         ! per-iteration group sigmas (euclid)
         if( trim(params%objfun).eq.'euclid' .and. self%l_sigma_transition_ready )then
-            write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
+            if( trim(params%sigma_transition_ready) == 'yes' )then
+                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using CC pose-initialization residual groups'
+            else
+                write(logfhandle,'(A)') '>>> SIGMA2 INIT: using reusable grouped sigmas for current partition layout'
+            endif
             self%l_sigma_transition_ready  = .false.
             params%sigma_transition_ready = 'no'
             call cline%set('sigma_transition_ready', 'no')

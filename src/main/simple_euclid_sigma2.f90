@@ -73,6 +73,9 @@ contains
     !! the startup reconstruction and the refinement on two different sigma
     !! bases -- the reconstruction regularized against sigmas the refinement
     !! then discards.
+    !! When this returns false because the grouped STAR exists, refine3D must
+    !! consume that group file before consolidating partition-local files. The
+    !! matcher will emit those files in the current partition layout.
     logical function sigma2_stage_needs_bootstrap( startit ) result( needs_bootstrap )
         integer, intent(in) :: startit
         needs_bootstrap = startit <= 1
