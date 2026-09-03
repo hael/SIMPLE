@@ -281,7 +281,7 @@ contains
             real,    allocatable :: proj_pops(:), angles(:,:), stencil_weights(:)
             integer, allocatable :: stencil_dx(:), stencil_dy(:)
             logical, allocatable :: proj_seen(:)
-            real    :: phi, theta, population, weight
+            real    :: phi, theta, population, weight, logpop
             real    :: phi_step, theta_step, delta, sig2, cutoff2, dsq
             integer :: i, p, center_x, center_y, dx, dy, target_x, target_y, s, stencil_index
             integer :: halfwin_x, halfwin_y, stencil_capacity, stencil_size
@@ -335,8 +335,9 @@ contains
             do p = 1,nspace
                 population = proj_pops(p)
                 if( .not. proj_seen(p) .or. population <= 0. ) cycle
-                phi   = angles(1,p)
-                theta = angles(2,p)
+                logpop = log10(1.0 + population)
+                phi    = angles(1,p)
+                theta  = angles(2,p)
                 center_x = 1 + modulo(nint(phi / phi_step), PLOT_WIDTH)
                 center_y = 1 + nint(theta / theta_step)
                 center_y = max(1, min(PLOT_HEIGHT, center_y))
@@ -345,7 +346,7 @@ contains
                     if( target_y < 1 .or. target_y > PLOT_HEIGHT ) cycle
                     target_x = 1 + modulo(center_x - 1 + stencil_dx(stencil_index), PLOT_WIDTH)
                     map(target_x,target_y) = map(target_x,target_y) + &
-                        &population * stencil_weights(stencil_index)
+                        &logpop * stencil_weights(stencil_index)
                 enddo
             enddo
             map = map * (maxval(proj_pops) / maxval(map))

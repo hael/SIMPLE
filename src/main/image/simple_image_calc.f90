@@ -1122,22 +1122,23 @@ contains
     end subroutine calc_principal_axes
 
     ! eccentricity — dimensionless
-    ! kappa2 — relative shape anisotropy, dimensionless and clamped to [0,1]
-    ! b — asphericity in voxel²
-    ! c — acylindricity in voxel²
+    ! anisotropy — relative shape anisotropy, dimensionless and clamped to [0,1]
+    ! asphericity — normalized by rg_sq so it is dimensionless
+    ! acylindricity — normalized by rg_sq so it is dimensionless
     ! rg_sq — radius of gyration squared in voxel²
-
-    module subroutine calc_3D_shape_descriptors( self, radius, eccentricity, kappa2, b, c, rg_sq )
+    ! identity: anisotropy = asphericity**2 + 0.75*acylindricity**2
+    module subroutine calc_3D_shape_descriptors( self, radius, eccentricity, anisotropy, asphericity, acylindricity, rg_sq )
         class(image), intent(in)  :: self
         real,         intent(in)  :: radius
-        real,         intent(out) :: eccentricity, kappa2          ! dimensionless
-        real,         intent(out) :: b, c, rg_sq                    ! voxel squared
+        real,         intent(out) :: eccentricity, anisotropy      ! dimensionless
+        real,         intent(out) :: asphericity, acylindricity    ! dimensionless, normalized by rg_sq
+        real,         intent(out) :: rg_sq                          ! voxel squared
         real :: eigvals(3), eigvecs(3,3), gyr_eigvals(3)
-        eccentricity = 0.
-        kappa2       = 0.
-        b            = 0.
-        c            = 0.
-        rg_sq        = 0.
+        eccentricity  = 0.
+        anisotropy    = 0.
+        asphericity   = 0.
+        acylindricity = 0.
+        rg_sq         = 0.
         call self%calc_principal_axes(radius, eigvals, eigvecs)
         if( maxval(eigvals) <= 0. ) return
         ! Convert the descending, mass-normalized principal moments of inertia
@@ -1146,19 +1147,23 @@ contains
         gyr_eigvals(2) = max(0., eigvals(1) + eigvals(3) - eigvals(2)) / 2.
         gyr_eigvals(3) = max(0., eigvals(1) + eigvals(2) - eigvals(3)) / 2.
         ! With lambda(1) <= lambda(2) <= lambda(3): Rg^2=sum(lambda),
-        ! b=lambda(3)-(lambda(2)+lambda(1))/2, c=lambda(2)-lambda(1),
-        ! kappa^2=1-3*sum_of_pair_products/Rg^4, e=sqrt(1-lambda(1)/lambda(3)).
+        ! asphericity=lambda(3)-(lambda(2)+lambda(1))/2, acylindricity=lambda(2)-lambda(1),
+        ! anisotropy=1-3*sum_of_pair_products/Rg^4, e=sqrt(1-lambda(1)/lambda(3)).
         rg_sq = sum(gyr_eigvals)
         if( gyr_eigvals(3) > 0. )then
             eccentricity = sqrt(max(0., 1. - gyr_eigvals(1) / gyr_eigvals(3)))
         endif
         if( rg_sq > 0. )then
-            kappa2 = 1. - 3. * (gyr_eigvals(1) * gyr_eigvals(2) + &
+            anisotropy = 1. - 3. * (gyr_eigvals(1) * gyr_eigvals(2) + &
                 gyr_eigvals(2) * gyr_eigvals(3) + gyr_eigvals(3) * gyr_eigvals(1)) / rg_sq**2
-            kappa2 = min(1., max(0., kappa2))
+            anisotropy = min(1., max(0., anisotropy))
         endif
-        b = gyr_eigvals(3) - 0.5 * (gyr_eigvals(2) + gyr_eigvals(1))
-        c = gyr_eigvals(2) - gyr_eigvals(1)
+        asphericity   = gyr_eigvals(3) - 0.5 * (gyr_eigvals(2) + gyr_eigvals(1))
+        acylindricity = gyr_eigvals(2) - gyr_eigvals(1)
+        if( rg_sq > 0. )then
+            asphericity   = asphericity   / rg_sq
+            acylindricity = acylindricity / rg_sq
+        endif
     end subroutine calc_3D_shape_descriptors
 
     !===========================

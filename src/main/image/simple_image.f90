@@ -1718,11 +1718,12 @@ interface
         real,         intent(out) :: eigvals(3), eigvecs(3,3)
     end subroutine calc_principal_axes
 
-    module subroutine calc_3D_shape_descriptors( self, radius, eccentricity, kappa2, b, c, rg_sq )
+    module subroutine calc_3D_shape_descriptors( self, radius, eccentricity, anisotropy, asphericity, acylindricity, rg_sq )
         class(image), intent(in)  :: self
         real,         intent(in)  :: radius
-        real,         intent(out) :: eccentricity, kappa2          ! dimensionless
-        real,         intent(out) :: b, c, rg_sq                    ! voxel squared
+        real,         intent(out) :: eccentricity, anisotropy      ! dimensionless
+        real,         intent(out) :: asphericity, acylindricity    ! dimensionless, normalized by rg_sq
+        real,         intent(out) :: rg_sq                         ! voxel squared
     end subroutine calc_3D_shape_descriptors
 
     !--- Physical coords helpers ---!
