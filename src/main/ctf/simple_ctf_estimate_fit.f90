@@ -1315,6 +1315,11 @@ contains
             self%icefrac = 0.
             return
         endif
+        if( self%parms%l_fit_phshift )then
+            ! is uninformative with phase shift
+            self%icefrac = 0.
+            return
+        endif
         ! init
         phshift = self%parms%phshift
         tfun    = ctf(self%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
