@@ -112,6 +112,7 @@ class StreamJob(Job):
         jobmodel.reference_picking_heartbeat = 0
         jobmodel.particle_sieving_heartbeat  = 0
         jobmodel.classification_2D_heartbeat = 0
+        jobmodel.desc = simplestream.autoDescription()
         jobmodel.save()
         workspacemodel.save()
 
@@ -305,6 +306,7 @@ class StreamJob(Job):
                     particle_set["nptcls"]    = snapshot["snapshot_nptcls"]
                     particle_set["time"]      = snapshot["snapshot_time"]
                     particle_set["filename"]  = snapshot["snapshot_filename"]
+                    particle_set["cls2D"]     = snapshot["cls2D"]
             pool2D_stats = {k: v for k, v in stats_json["pool2D"].items() if k != "snapshot"}
             self.jobmodel.classification_2D_stats = pool2D_stats
         if updated:
@@ -328,6 +330,32 @@ class StreamJob(Job):
         master_update["terminate"] = True
         self.jobmodel.master_update = master_update
         self.jobmodel.save()
+        return True
+
+    def restart(self):
+        """
+        Relaunch this job in place by re-submitting its existing master script.
+
+        Clears any pending terminate signal from master_update, resets the
+        master/status to 'queued', then re-submits the on-disk
+        stream_master.script without regenerating it.
+        Returns True on success, False on any failure.
+        """
+        if self.jobmodel is None:
+            print_error("jobmodel is none")
+            return False
+        master_update = self.jobmodel.master_update
+        master_update.pop("terminate", None)
+        self.jobmodel.master_update    = master_update
+        self.jobmodel.master_status    = "queued"
+        self.jobmodel.status           = "queued"
+        self.jobmodel.master_heartbeat = 0
+        self.jobmodel.save()
+
+        simplestream = SIMPLEStream()
+        if not simplestream.restart_master(self.absdir):
+            print_error("failed to restart master script for job " + str(self.id))
+            return False
         return True
 
     def terminate_process(self, term_preprocess, term_optics_assignment, term_generate_pickrefs, term_reference_picking, term_particle_sieving, term_pool2D):

@@ -50,6 +50,7 @@ type :: qsys_env
     procedure :: start_persistent_workers
     procedure :: service_persistent_worker_warmup
     procedure :: get_persistent_worker_server_address
+    procedure :: get_n_active_persistent_workers
     procedure :: get_exec_bin
     procedure :: get_qsys
     procedure :: get_navail_computing_units
@@ -627,6 +628,16 @@ contains
         if( len_trim(first_host) > 0 ) server_address = string(trim(first_host)//':'//int2str(port))
         call host_ips%kill()
     end function get_persistent_worker_server_address
+
+    !> Return the number of currently connected/registered persistent workers.
+    !! Returns 0 when no persistent worker server is allocated or not running.
+    integer function get_n_active_persistent_workers( self )
+        class(qsys_env), intent(in) :: self
+        get_n_active_persistent_workers = 0
+        if( .not. associated(persistent_worker%server) )  return
+        if( .not. persistent_worker%server%is_running() ) return
+        get_n_active_persistent_workers = persistent_worker%server%get_n_active_workers()
+    end function get_n_active_persistent_workers
 
     !> Get fully resolved executable path used for generated scripts.
     function get_exec_bin( self ) result( exec_bin )

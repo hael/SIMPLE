@@ -222,6 +222,7 @@ contains
         type(gui_metadata_micrograph),   allocatable :: meta_reference_picking_micrographs(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_opening2D_cavgs2D(:), meta_opening2D_final_cavgs2D(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_reference_picking_cavgs2D(:), meta_pool2D_cavgs2D(:)
+        type(gui_metadata_cavg2D),       allocatable :: meta_pool2D_snapshot_cavgs2D(:)
         type(gui_metadata_cavg2D),       allocatable :: meta_particle_sieving_cavgs2D(:), meta_particle_sieving_ref_cavgs2D(:)
         ! forked processes
         type(preprocess_fork)                      :: fork_preprocess
@@ -351,7 +352,8 @@ contains
         do while( .true. )
             loop_counter = loop_counter + 1
             ! heartbeat
-             call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_reference_picking, fork_particle_sieving, fork_pool2D)
+            call assembler%assemble_stream_heartbeat(fork_preprocess, fork_assign_optics, fork_initial_analysis, fork_reference_picking, fork_particle_sieving, fork_pool2D, &
+                &n_active_persistent_workers=qsys%get_n_active_persistent_workers())
             ! processes
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
             call assembler%assemble_stream_preprocess(meta_preprocess, meta_preprocess_micrographs, meta_preprocess_histograms, meta_preprocess_timeplots)
@@ -372,7 +374,7 @@ contains
             call assembler%assemble_stream_particle_sieving(meta_particle_sieving, meta_particle_sieving_cavgs2D, meta_particle_sieving_ref_cavgs2D)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             if( c_pthread_mutex_lock(meta_mutex) /= 0 ) THROW_HARD('failed to lock meta mutex')
-            call assembler%assemble_stream_pool2D(meta_pool2D, meta_pool2D_cavgs2D, meta_pool2D_snapshot)
+            call assembler%assemble_stream_pool2D(meta_pool2D, meta_pool2D_cavgs2D, meta_pool2D_snapshot, meta_pool2D_snapshot_cavgs2D)
             if( c_pthread_mutex_unlock(meta_mutex) /= 0 ) THROW_HARD('failed to unlock meta mutex')
             ! stringify assembled json
             request = assembler%to_string()
@@ -897,6 +899,27 @@ contains
                                     endif
                                     ! place the already-deserialised tmp object into the correct slot
                                     meta_pool2D_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
+                                case( GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE )
+                                    my_l_reinit = .false.
+                                    ! deserialise temporary copy of cavg2D metadata to read routing fields
+                                    meta_cavg2D_tmp = transfer(my_buffer, meta_cavg2D_tmp)
+                                    ! allocate or resize meta_pool2D_snapshot_cavgs2D as necessary based on i_max
+                                    if( .not.allocated(meta_pool2D_snapshot_cavgs2D) ) then
+                                        my_l_reinit = .true.
+                                    else if( size(meta_pool2D_snapshot_cavgs2D) /= meta_cavg2D_tmp%get_i_max() ) then
+                                        deallocate(meta_pool2D_snapshot_cavgs2D)
+                                        my_l_reinit = .true.
+                                    endif
+                                    if( my_l_reinit ) then
+                                        ! allocate and initialise each object in meta_pool2D_snapshot_cavgs2D
+                                        allocate(meta_pool2D_snapshot_cavgs2D(meta_cavg2D_tmp%get_i_max()))
+                                        do my_i=1, size(meta_pool2D_snapshot_cavgs2D)
+                                            call meta_pool2D_snapshot_cavgs2D(my_i)%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE)
+                                            if( .not.meta_pool2D_snapshot_cavgs2D(my_i)%initialized() ) THROW_HARD('failed to initialise pool2D snapshot cavg2D metadata')
+                                        enddo
+                                    endif
+                                    ! place the already-deserialised tmp object into the correct slot
+                                    meta_pool2D_snapshot_cavgs2D(meta_cavg2D_tmp%get_i()) = meta_cavg2D_tmp
                             end select
                             deallocate(my_buffer)
                         end if

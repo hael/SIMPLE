@@ -180,6 +180,20 @@ def view_stream_create_stream(request):
 
 @login_required(login_url="/login")
 @require_POST
+def view_stream_restart_stream(request):
+    """Relaunch a finished/failed/stopped stream in place using its existing script."""
+    streamjob, jobmodel = _get_accessible_streamjob(request, log_context="restart_stream")
+    if streamjob is None:
+        return redirect("nice_lite:workspace")
+
+    if not streamjob.restart():
+        print_error(f"restart_stream: failed to restart job {jobmodel.id}")
+    response = redirect("nice_lite:view_stream", jobid=jobmodel.id)
+    return response
+
+
+@login_required(login_url="/login")
+@require_POST
 def view_stream_terminate_stream(request):
     """Terminates stream and refreshes page by redirecting to workspace view."""
     streamjob, _jobmodel = _get_accessible_streamjob(request, log_context="terminate_stream")
@@ -855,6 +869,34 @@ def view_stream_particle_sets(request):
 
     context = {
         "jobid": jobmodel.id,
+        "jobstats": jobmodel.particle_sets_stats,
+        "workspaces": workspaces,
+    }
+    return _render_if_changed(request, template, context, checksum_cookie)
+
+
+@login_required(login_url="/login")
+def view_stream_particle_sets_zoom(request):
+    """Returns particle sets zoom panel in stream view."""
+    template = "nice_stream/zoomparticlesets.html"
+    checksum_cookie = "panel_particlesets_checksum"
+    jobmodel = _get_jobmodel_from_request(request)
+
+    if jobmodel is None:
+        return HttpResponseNoContent()
+    projectid = jobmodel.dset.proj.id
+    workspacemodels = WorkspaceModel.objects.filter(proj=projectid)
+    workspaces = []
+    for workspacemodel in workspacemodels:
+        workspaces.append({
+            "id": workspacemodel.id,
+            "name": workspacemodel.name,
+        })
+
+    context = {
+        "jobid": jobmodel.id,
+        "displayid": jobmodel.disp,
+        "desc": jobmodel.desc,
         "jobstats": jobmodel.particle_sets_stats,
         "workspaces": workspaces,
     }

@@ -3,6 +3,7 @@
 # global imports
 import json
 import os
+import re
 import shlex
 import shutil
 import stat
@@ -259,6 +260,32 @@ class SIMPLEStream:
                     return False
         return True
 
+    def restart_master(self, absdir):
+        """
+        Re-submit the existing stream_master.script without rebuilding it.
+
+        Unlike start()/dispatch(), this does not regenerate the script from
+        the template — it reuses the file already written for this job.
+        Returns True on success, False on any failure.
+        """
+        if not absdir or not os.path.isdir(absdir):
+            return False
+        dispatchmodel = DispatchModel.objects.filter(active=True).last()
+        if dispatchmodel is None:
+            return False
+        script_path = os.path.join(absdir, "stream_master.script")
+        if not os.path.isfile(script_path):
+            print_error("stream_master.script not found")
+            return False
+        if shutil.which(dispatchmodel.scmd) is None:
+            return False
+        try:
+            _submit(dispatchmodel, script_path, absdir)
+        except Exception as e:
+            print_error(str(e))
+            return False
+        return True
+
     def dispatch(self):
         """
         Build the stream master dispatch script from the active template and submit it.
@@ -330,6 +357,27 @@ class SIMPLEStream:
             print_error(str(e))
             return False
         return True
+
+    def autoDescription(self):
+        """
+        Generate an automatic name for the job based on dir_movies.
+
+        If the basename of dir_movies starts with a year (e.g.
+        "20240115_grid1"), that basename is used as the description. If not,
+        the basename of the parent directory is tried instead. Falls back to
+        the dispid/jobid based name when neither looks like a year.
+        """
+        year_prefix = re.compile(r'^(19|20)\d{2}')
+        dir_movies = str((self.args or {}).get("dir_movies", "") or "").strip()
+        if dir_movies:
+            normalized = dir_movies.rstrip(os.sep)
+            basename = os.path.basename(normalized)
+            if year_prefix.match(basename):
+                return basename
+            parent_basename = os.path.basename(os.path.dirname(normalized))
+            if year_prefix.match(parent_basename):
+                return parent_basename
+        return ""
 
 
 # ------------------------------------------------------------------

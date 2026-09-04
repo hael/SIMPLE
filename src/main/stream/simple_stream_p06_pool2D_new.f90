@@ -29,6 +29,10 @@
 !   send_meta_snapshot2D  — broadcast snapshot metadata to the GUI
 !   send_cavg2D_meta      — serialise and send one class-average sprite tile
 !   send_cavgs2D          — iterate all current class averages and send each
+!   send_snapshot_cavg2D_meta — serialise and send one snapshot-selected class-average
+!                               sprite tile, using the jpeg/sprite locations written
+!                               by write_project_stream2D
+!   send_snapshot_cavgs2D — iterate snapshot-selected class averages and send each
 !   sigterm_handler       — SIGTERM handler: sets l_terminate for graceful exit
 !
 ! DEPENDENCIES:
@@ -51,6 +55,7 @@ use simple_gui_metadata_api,     only: gui_metadata_cavg2D,                     
                                        GUI_METADATA_STREAM_POOL2D_TYPE,          &
                                        GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE,    &
                                        GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE, &
+                                       GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE, &
                                        GUI_METADATA_STREAM_UPDATE_TYPE
 implicit none
 
@@ -82,11 +87,16 @@ contains
         type(rec_iterator)                        :: it_mskdiam
         type(gui_metadata_stream_update)          :: meta_update
         type(gui_metadata_cavg2D)                 :: meta_cavg2D
+        type(gui_metadata_cavg2D)                 :: meta_snapshot_cavg2D
         type(gui_metadata_stream_pool2D)          :: meta_pool2D
         type(gui_metadata_stream_pool2D_snapshot) :: meta_snapshot
         type(string),               allocatable   :: projects(:)
         character(len=:),           allocatable   :: update_pending
         logical,                    allocatable   :: l_imported(:)
+        type(string)                               :: snapshot_cavgs_jpeg, snapshot_cavgs_mrc
+        integer                                    :: snapshot_cavgs_ntilesx, snapshot_cavgs_ntilesy
+        integer,                     allocatable   :: snapshot_cavgs_idx(:), snapshot_cavgs_pop(:)
+        real,                        allocatable   :: snapshot_cavgs_res(:)
         type(string)                              :: snapshot_filename, snapshot_dir, iteration_snapshot_filename, iteration_snapshot_dir
         integer(kind=dp)                          :: time_last_import
         integer                                   :: i, nprojects, nimported, nptcls_glob, pool_iter, iter_last_import
@@ -142,6 +152,7 @@ contains
         call meta_update%new(GUI_METADATA_STREAM_UPDATE_TYPE)
         call meta_pool2D%new(GUI_METADATA_STREAM_POOL2D_TYPE)
         call meta_cavg2D%new(GUI_METADATA_STREAM_POOL2D_CLS2D_TYPE)
+        call meta_snapshot_cavg2D%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_CLS2D_TYPE)
         call meta_snapshot%new(GUI_METADATA_STREAM_POOL2D_SNAPSHOT_TYPE)
         call send_meta(string('initialising'))
         call create_stream_project(spproj_glob, cline, string('pool2D'))
@@ -319,9 +330,17 @@ contains
                                 snapshot_projfile      = snapshot_dir // '/' // snapshot_filename,                             &
                                 snapshot_starfile_base = snapshot_dir // '/' // swap_suffix(snapshot_filename, "", ".simple"), &
                                 optics_dir             = params%optics_dir,                                                    &
-                                optics_offset          = optics_id_offset)
+                                optics_offset          = optics_id_offset,                                                     &
+                                snapshot_cavgs_jpeg    = snapshot_cavgs_jpeg,                                                   &
+                                snapshot_cavgs_mrc     = snapshot_cavgs_mrc,                                                    &
+                                snapshot_cavgs_ntilesx = snapshot_cavgs_ntilesx,                                                &
+                                snapshot_cavgs_ntilesy = snapshot_cavgs_ntilesy,                                                &
+                                snapshot_cavgs_idx     = snapshot_cavgs_idx,                                                    &
+                                snapshot_cavgs_pop     = snapshot_cavgs_pop,                                                    &
+                                snapshot_cavgs_res     = snapshot_cavgs_res)
                             last_snapshot_id = snapshot_id
                             call send_meta_snapshot2D()
+                            call send_snapshot_cavgs2D()
                         end if
                         if( allocated(snapshot_selection) ) deallocate(snapshot_selection)
                     endif
@@ -653,6 +672,43 @@ contains
                     end do
                 end if
             end subroutine send_cavgs2D
+
+            ! Serialise one snapshot-selected class-average sprite tile and send it to the GUI,
+            ! using the jpeg/sprite locations written by write_project_stream2D (thumb2D.jpeg).
+            subroutine send_snapshot_cavg2D_meta( my_i, my_i_max, my_xtile, my_ytile )
+                integer, intent(in) :: my_i, my_i_max, my_xtile, my_ytile
+                call meta_snapshot_cavg2D%set(                                                                     &
+                    path    = snapshot_cavgs_jpeg,                                                                 &
+                    mrcpath = snapshot_cavgs_mrc,                                                                  &
+                    i       = my_i,                                                                                &
+                    i_max   = my_i_max,                                                                            &
+                    res     = snapshot_cavgs_res(my_i),                                                            &
+                    pop     = snapshot_cavgs_pop(my_i),                                                            &
+                    idx     = snapshot_cavgs_idx(my_i),                                                            &
+                    sprite  = sprite_sheet_pos(                                                                    &
+                                    x = my_xtile * (100.0 / max(1, snapshot_cavgs_ntilesx - 1)),                   &
+                                    y = my_ytile * (100.0 / max(1, snapshot_cavgs_ntilesy - 1)),                   &
+                                    h = 100 * snapshot_cavgs_ntilesy,                                              &
+                                    w = 100 * snapshot_cavgs_ntilesx))
+                if( meta_snapshot_cavg2D%assigned() ) then
+                    call meta_snapshot_cavg2D%serialise(meta_buffer)
+                    call send_to_pool2D_in_pipe(meta_buffer)
+                endif
+            end subroutine send_snapshot_cavg2D_meta
+
+            ! Send cavg2D metadata for each class average selected for the current snapshot,
+            ! using the jpeg/sprite locations reported by write_project_stream2D.
+            subroutine send_snapshot_cavgs2D()
+                integer :: my_i, my_n, my_xtile, my_ytile
+                if( .not.allocated(snapshot_cavgs_idx) ) return
+                my_n = size(snapshot_cavgs_idx)
+                if( my_n == 0 .or. snapshot_cavgs_ntilesx <= 0 ) return
+                do my_i = 1, my_n
+                    my_xtile = mod(my_i - 1, snapshot_cavgs_ntilesx)
+                    my_ytile = (my_i - 1) / snapshot_cavgs_ntilesx
+                    call send_snapshot_cavg2D_meta(my_i, my_n, my_xtile, my_ytile)
+                end do
+            end subroutine send_snapshot_cavgs2D
 
             subroutine send_to_pool2D_in_pipe(buffer)
                 character(len=*), intent(in)                :: buffer

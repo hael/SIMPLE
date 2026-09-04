@@ -560,7 +560,12 @@ contains
     end subroutine update_user_params2D
 
     !> produces consolidated project
-    subroutine write_project_stream2D( params, write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir, optics_offset, force_snapshot)
+    ! snapshot_cavgs_* (all optional, output) report the jpeg/sprite locations written
+    ! for the snapshot's selected class averages by set_cavgs_thumb, so that callers can
+    ! broadcast cavg2D metadata for the snapshot without recomputing sprite geometry from
+    ! the (unrelated, continuously changing) pool sprite sheet.
+    subroutine write_project_stream2D( params, write_star, clspath, snapshot_projfile, snapshot_starfile_base, optics_dir, optics_offset, force_snapshot, &
+        snapshot_cavgs_jpeg, snapshot_cavgs_mrc, snapshot_cavgs_ntilesx, snapshot_cavgs_ntilesy, snapshot_cavgs_idx, snapshot_cavgs_pop, snapshot_cavgs_res)
         use, intrinsic :: iso_c_binding, only: c_int64_t, c_double
         class(parameters), intent(inout) :: params
         logical,       optional, intent(in) :: write_star
@@ -568,6 +573,10 @@ contains
         integer,       optional, intent(in) :: force_snapshot
         class(string), optional, intent(in) :: snapshot_projfile, snapshot_starfile_base, optics_dir
         integer,       optional, intent(in) :: optics_offset
+        type(string),  optional, intent(out) :: snapshot_cavgs_jpeg, snapshot_cavgs_mrc
+        integer,       optional, intent(out) :: snapshot_cavgs_ntilesx, snapshot_cavgs_ntilesy
+        integer,       optional, allocatable, intent(out) :: snapshot_cavgs_idx(:), snapshot_cavgs_pop(:)
+        real,          optional, allocatable, intent(out) :: snapshot_cavgs_res(:)
         logical, parameter :: DEBUG_HERE = .false.
         integer            :: snapshot_complete_jobid = 0 ! nice job id for completed snapshot
         type(class_frcs)   :: frcs
@@ -642,6 +651,8 @@ contains
                 call snapshot_proj%add_cavgs2os_out(cavgsfname, params%smpd, 'cavg')
                 call snapshot_proj%add_frcs2os_out(frcsfname, 'frc2D')
                 call snapshot_proj%set_cavgs_thumb(snapshot_projfile)
+                call get_snapshot_cavgs_meta(snapshot_cavgs_jpeg, snapshot_cavgs_mrc, snapshot_cavgs_ntilesx, &
+                    &snapshot_cavgs_ntilesy, snapshot_cavgs_idx, snapshot_cavgs_pop, snapshot_cavgs_res)
                 snapshot_proj%os_ptcl3D = snapshot_proj%os_ptcl2D
                 call snapshot_proj%write(snapshot_projfile)
                 if(present(snapshot_starfile_base)) then
@@ -723,7 +734,49 @@ contains
             write(logfhandle,'(A,A,A,F10.1,A,F10.1,A)') '>>> RSS ', trim(phase), ': current=', current_mib, ' MiB peak=', peak_mib, ' MiB'
             call flush(logfhandle)
         end subroutine log_rss
-            
+
+        ! Reports the jpeg/sprite locations written for the snapshot's selected class
+        ! averages by set_cavgs_thumb (thumb/thumbnx/thumbny/thumbidx fields on
+        ! snapshot_proj%os_cls2D), so callers can broadcast cavg2D metadata for the
+        ! snapshot without recomputing sprite geometry elsewhere.
+        subroutine get_snapshot_cavgs_meta( jpeg_path, mrc_path, ntilesx, ntilesy, cls_idx, cls_pop, cls_res )
+            type(string),  optional, intent(out)              :: jpeg_path, mrc_path
+            integer,       optional, intent(out)              :: ntilesx, ntilesy
+            integer,       optional, allocatable, intent(out) :: cls_idx(:), cls_pop(:)
+            real,          optional, allocatable, intent(out) :: cls_res(:)
+            integer :: iori, noris, n_selected, thumbidx
+            noris = snapshot_proj%os_cls2D%get_noris()
+            if( noris == 0 ) return
+            if( present(jpeg_path) ) jpeg_path = snapshot_proj%os_cls2D%get_str(1,'thumb')
+            if( present(mrc_path)  ) mrc_path  = cavgsfname
+            if( present(ntilesx)   ) ntilesx   = snapshot_proj%os_cls2D%get_int(1,'thumbnx')
+            if( present(ntilesy)   ) ntilesy   = snapshot_proj%os_cls2D%get_int(1,'thumbny')
+            n_selected = 0
+            do iori=1, noris
+                if( snapshot_proj%os_cls2D%isthere(iori,'thumbidx') ) n_selected = n_selected + 1
+            enddo
+            if( present(cls_idx) )then
+                if( allocated(cls_idx) ) deallocate(cls_idx)
+                allocate(cls_idx(n_selected), source=0)
+            endif
+            if( present(cls_pop) )then
+                if( allocated(cls_pop) ) deallocate(cls_pop)
+                allocate(cls_pop(n_selected), source=0)
+            endif
+            if( present(cls_res) )then
+                if( allocated(cls_res) ) deallocate(cls_res)
+                allocate(cls_res(n_selected), source=0.0)
+            endif
+            do iori=1, noris
+                if( .not.snapshot_proj%os_cls2D%isthere(iori,'thumbidx') ) cycle
+                thumbidx = snapshot_proj%os_cls2D%get_int(iori,'thumbidx')
+                if( thumbidx < 1 .or. thumbidx > n_selected ) cycle
+                if( present(cls_idx) ) cls_idx(thumbidx) = iori
+                if( present(cls_pop) ) cls_pop(thumbidx) = nint(snapshot_proj%os_cls2D%get(iori,'pop'))
+                if( present(cls_res) ) cls_res(thumbidx) = snapshot_proj%os_cls2D%get(iori,'res')
+            enddo
+        end subroutine get_snapshot_cavgs_meta
+
         subroutine set_snapshot_time()
             character(8)  :: date
             character(10) :: time

@@ -74,6 +74,14 @@
             lastinteraction = Date.now();
           };
 
+          const restartStream = (button) => {
+            const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
+            if (confirm("Please confirm that you wish to restart stream " + jobid)) {
+              button.closest("form")?.submit();
+            }
+            lastinteraction = Date.now();
+          };
+
           const killDeleteStream = (button) => {
             const jobid = getValue(button, "jobId", getValue(button, "job-id", ""));
             if (confirm("Please confirm that you wish to kill and delete stream " + jobid)) {

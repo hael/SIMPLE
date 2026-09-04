@@ -11,7 +11,7 @@
     jobid
 {% endcomment %}
 <div class="bg-streambar rounded-xl border border-streamline w-75 h-[410px]">
-    <iframe id="{{ frame_id }}" class="w-full {{ frame_height|default:'h-96' }} border-none rounded-xl"
+    <iframe id="{{ frame_id }}" class="w-full {{ frame_height|default:'h-[410px]' }} border-none rounded-xl"
             src="{% url frame_url %}?selected_job_id={{ jobid }}">
     </iframe>
 </div>

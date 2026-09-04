@@ -85,6 +85,7 @@ module simple_persistent_worker_server
     !> and the listener pthread — always under mutex protection.
     type persistent_worker_data
         integer :: n_workers                        = 0       !< highest worker_id registered so far
+        integer :: n_active_workers                 = 0       !< count of workers with a live identity; refreshed on every heartbeat
         integer :: nthr_per_worker                  = 1       !< configured thread capacity per worker process
         integer :: queue_pressure_workers_required  = 0       !< estimated workers needed for queued backlog + currently running tasks
         integer :: queue_pressure_below_since       = 0       !< first heartbeat_time where pressure stayed below active workers
@@ -116,6 +117,7 @@ module simple_persistent_worker_server
         procedure :: get_port     !< return the TCP port being listened on
         procedure :: get_host_ips !< return the local IP address list
         procedure :: get_queue_pressure_workers_required !< estimated workers needed for queued backlog + running tasks
+        procedure :: get_n_active_workers !< number of currently connected/registered workers
         procedure :: set_warmup_cooldown_enabled !< enable/disable listener-side warmup/cooldown autoscaling
         procedure :: claim_warmup_worker_ids !< claim and clear pending warm-up worker slot requests
         procedure :: mark_worker_slots_launch_pending !< mark worker slots as launch-pending prior to scheduler submission
@@ -326,6 +328,24 @@ contains
         rc = c_pthread_mutex_unlock(self%listener_args%mutex)
         if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER get_queue_pressure_workers_required: mutex_unlock failed, rc=', rc
     end function get_queue_pressure_workers_required
+
+    !> Return the number of currently connected/registered workers (live identity),
+    !> refreshed on every worker heartbeat. Returns 0 when server state is unavailable.
+    function get_n_active_workers( self ) result( n_active_workers )
+        class(persistent_worker_server), intent(in) :: self
+        integer                                 :: n_active_workers
+        integer(kind=c_int)                     :: rc
+        n_active_workers = 0
+        if( .not. associated(self%listener_args) .or. .not. associated(self%worker_data) ) return
+        rc = c_pthread_mutex_lock(self%listener_args%mutex)
+        if( rc /= 0 ) then
+            write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER get_n_active_workers: mutex_lock failed, rc=', rc
+            return
+        end if
+        n_active_workers = self%worker_data%n_active_workers
+        rc = c_pthread_mutex_unlock(self%listener_args%mutex)
+        if( rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER get_n_active_workers: mutex_unlock failed, rc=', rc
+    end function get_n_active_workers
 
     !> Enable or disable listener-side warmup/cooldown autoscaling.
     subroutine set_warmup_cooldown_enabled( self, enabled )
@@ -838,30 +858,71 @@ contains
 
         !> Scan the workers registry and clear any entry whose fd matches conn_fd.
         !> Called at accept time to evict stale entries when the OS reuses an fd number
-        !> after a worker disconnect.  workers is thread-local so no mutex is needed.
+        !> after a worker disconnect.  workers is thread-local so no mutex is needed for
+        !> the registry itself, but the externally-visible n_active_workers count must
+        !> be refreshed under the mutex whenever an entry is actually evicted, otherwise
+        !> it can go stale if no further heartbeat ever arrives (e.g. the last worker
+        !> disconnecting).
         subroutine clear_stale_registry_entry()
-            integer :: k
+            integer :: k, my_rc
+            logical :: evicted
+            evicted = .false.
             do k = 1, size(workers)
                 if( workers(k)%fd == conn_fd .and. workers(k)%worker_uid /= '' ) then
                     if( DEBUG ) write(logfhandle,'(A,I0,A,I0,A)') '>>> PERSISTENT_WORKER_SERVER: evicting stale registry entry fd=', &
                             conn_fd, ' (worker slot ', k, ')'
                     workers(k) = qsys_persistent_worker_message_heartbeat()
+                    evicted = .true.
                 end if
             end do
+            if( evicted ) then
+                my_rc = c_pthread_mutex_lock(args%mutex)
+                if( my_rc /= 0 ) then
+                    write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER clear_stale_registry_entry: mutex_lock failed, rc=', my_rc
+                else
+                    status%n_active_workers = count_active_workers()
+                    my_rc = c_pthread_mutex_unlock(args%mutex)
+                    if( my_rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER clear_stale_registry_entry: mutex_unlock failed, rc=', my_rc
+                end if
+            end if
         end subroutine clear_stale_registry_entry
 
         !> Clear a worker registry entry by server-side fd when a connection drops.
+        !> workers is thread-local, but status is shared, so the writes to
+        !> status%launch_pending_worker_ids and status%n_active_workers must happen
+        !> under the mutex; otherwise n_active_workers can go stale if no further
+        !> heartbeat ever arrives (e.g. the last worker disconnecting).
         subroutine clear_registry_entry_by_fd(fd_to_clear)
             integer, intent(in) :: fd_to_clear
-            integer :: k
+            integer :: k, my_rc
+            logical :: evicted
+            evicted = .false.
             do k = 1, size(workers)
                 if( workers(k)%fd == fd_to_clear .and. workers(k)%worker_uid /= '' ) then
                     if( DEBUG ) write(logfhandle,'(A,I0,A,I0,A)') '>>> PERSISTENT_WORKER_SERVER: clearing registry entry fd=', &
                         fd_to_clear, ' (worker slot ', k, ')'
                     workers(k) = qsys_persistent_worker_message_heartbeat()
-                    status%launch_pending_worker_ids(k) = .false.
+                    evicted = .true.
+                    my_rc = c_pthread_mutex_lock(args%mutex)
+                    if( my_rc /= 0 ) then
+                        write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER clear_registry_entry_by_fd: mutex_lock failed, rc=', my_rc
+                    else
+                        status%launch_pending_worker_ids(k) = .false.
+                        my_rc = c_pthread_mutex_unlock(args%mutex)
+                        if( my_rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER clear_registry_entry_by_fd: mutex_unlock failed, rc=', my_rc
+                    end if
                 end if
             end do
+            if( evicted ) then
+                my_rc = c_pthread_mutex_lock(args%mutex)
+                if( my_rc /= 0 ) then
+                    write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER clear_registry_entry_by_fd: mutex_lock failed, rc=', my_rc
+                else
+                    status%n_active_workers = count_active_workers()
+                    my_rc = c_pthread_mutex_unlock(args%mutex)
+                    if( my_rc /= 0 ) write(logfhandle,'(A,I0)') '>>> PERSISTENT_WORKER_SERVER clear_registry_entry_by_fd: mutex_unlock failed, rc=', my_rc
+                end if
+            end if
         end subroutine clear_registry_entry_by_fd
 
         !> Count currently registered workers with a live identity.
@@ -949,6 +1010,9 @@ contains
             ! Update worker registry (bounds-checked).
             ! Log lines are deferred to outside the mutex (design contract point 5).
             call update_worker_registry()
+            ! Refresh the externally-visible active worker count on every heartbeat,
+            ! regardless of whether warmup/cooldown autoscaling is enabled.
+            status%n_active_workers = count_active_workers()
 
             ! Select one task with strict priority ordering if not terminating.
             ! Normal/low queues are considered only when the high-priority queue is empty.
@@ -992,7 +1056,7 @@ contains
             call update_queue_pressure()
 
             if( .not. send_terminate .and. status%enable_warmup_cooldown ) then
-                n_active_workers = count_active_workers()
+                n_active_workers = status%n_active_workers
                 n_effective_workers = count_effective_workers()
 
                 ! Cooldown scale-down path (require sustained surplus before terminate).

@@ -6,10 +6,11 @@
 {% endcomment %}
 {% load humanize %}
 {% with ms=job.preprocessing_stats cs=job.classification_2D_stats ss=job.particle_sieving_stats %}
-<div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamring/10{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px]">
+<div class="bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamaction/20 hover:border-streamaction{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} flex flex-col overflow-hidden w-[260px] h-[361px] transition-colors cursor cursor-zoom-in"
+    onclick="this.querySelector('form.viewform').submit();">
 
     <!-- Header: status dot · stream name · open-detail button -->
-    {% include 'nice_stream/includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" stream" status=job.status hide_actions=True show_description_editor=True description_value=job.desc description_jobid=job.id %}
+    {% include 'nice_stream/includes/_panel_header.html' with panel_title=job.disp|stringformat:"s"|add:" stream" status=job.status hide_actions=True show_description_editor=True description_value=job.desc description_jobid=job.id active_persistent_workers=job.master_stats.master.active_persistent_workers %}
 
     <!-- Body -->
     <div class="px-3 py-2 flex-1 flex flex-col">
@@ -92,14 +93,14 @@
         {% endif %}
     </div>
 
-    <!-- Footer: view · restart · delete/terminate -->
-    <div class="mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2">
+    <!-- Footer: view · restart · clone · delete/terminate -->
+    <div class="mt-auto border-t border-streamdivider flex items-center justify-around px-2 py-2 cursor-default">
 
         <!-- View -->
-        <form method="GET" action="{% url 'nice_lite:view_stream' job.id %}" target="_parent">
+        <form method="GET" action="{% url 'nice_lite:view_stream' job.id %}" target="_parent" class="viewform hidden">
             {% csrf_token %}
-            <button type="submit" title="view stream"
-                    class="text-streamicon hover:text-streamsubtle transition-colors p-1">
+            <button type="submit" title="view"
+                    class="text-streamicon hover:text-streamsubtle transition-colors p-1 cursor-pointer">
                 <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
                     <circle cx="8" cy="8" r="3"/>
                     <path d="M1 8c1.5-4 5.5-6 7-6s5.5 2 7 6c-1.5 4-5.5 6-7 6s-5.5-2-7-6z"/>
@@ -108,40 +109,56 @@
         </form>
 
         <!-- Restart -->
-        <form method="POST" action="{% url 'nice_lite:new_stream' %}" target="job_builder_iframe">
+        {% if job.status == "finished" or job.status == "failed" or job.status == "stopped"%}
+            <form method="POST" action="{% url 'nice_lite:restart_stream' %}" target="_parent" onclick="event.stopPropagation()">
+                {% csrf_token %}
+                <input type="hidden" name="selected_job_id" value="{{ job.id }}">
+                <button type="button" data-job-id="{{ job.id }}" onclick="restartStream(this)"
+                        title="restart"
+                        class="text-streamicon hover:text-streamsubtle transition-colors p-1 cursor-pointer">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 8a6 6 0 1 1-1.76-4.24"/>
+                        <polyline points="14,2 14,6 10,6"/>
+                    </svg>
+                </button>
+            </form>
+        {% endif %}
+
+        <!-- Clone -->
+        <form method="POST" action="{% url 'nice_lite:new_stream' %}" target="job_builder_iframe" onclick="event.stopPropagation()">
             {% csrf_token %}
             <input type="hidden" name="selected_job_id" value="{{ job.id }}">
-            <button type="submit" title="restart stream"
-                    class="text-streamicon hover:text-streamsubtle transition-colors p-1">
+            <button type="submit" title="clone"
+                    class="text-streamicon hover:text-streamsubtle transition-colors p-1 cursor-pointer">
                 <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 8a6 6 0 1 1-1.76-4.24"/>
-                    <polyline points="14,2 14,6 10,6"/>
+                    <rect x="6" y="6" width="8" height="8" rx="1"/>
+                    <path d="M4 10H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1"/>
                 </svg>
             </button>
         </form>
 
         <!-- Delete (finished/failed/stopped) -->
         {% if job.status == "finished" or job.status == "failed" or job.status == "stopped"%}
-            <form method="POST" action="{% url 'nice_lite:delete_stream' %}" target="_parent">
+            <form method="POST" action="{% url 'nice_lite:delete_stream' %}" target="_parent" onclick="event.stopPropagation()">
                 {% csrf_token %}
                 <input type="hidden" name="selected_job_id" value="{{ job.id }}">
                 <button type="button" data-job-id="{{ job.id }}" onclick="deleteStream(this)"
-                        title="delete stream"
-                        class="text-streamicon hover:text-streamerror transition-colors p-1">
+                        title="delete"
+                        class="text-streamicon hover:text-streamerror transition-colors p-1 cursor-pointer">
                     <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-                        <polyline points="3,3 13,13"/>
-                        <polyline points="13,3 3,13"/>
+                        <polyline points="2,4 14,4"/>
+                        <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M6 7v5M10 7v5M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/>
                     </svg>
                 </button>
             </form>
         <!-- Kill/Delete (queued) -->
         {% elif job.status == "queued" %}
-            <form method="POST" action="{% url 'nice_lite:kill_delete_stream' %}" target="_parent">
+            <form method="POST" action="{% url 'nice_lite:kill_delete_stream' %}" target="_parent" onclick="event.stopPropagation()">
                 {% csrf_token %}
                 <input type="hidden" name="selected_job_id" value="{{ job.id }}">
                 <button type="button" data-job-id="{{ job.id }}" onclick="killDeleteStream(this)"
-                        title="kill/delete stream"
-                        class="text-streamicon hover:text-streamerror transition-colors p-1">
+                        title="kill/delete"
+                        class="text-streamicon hover:text-streamerror transition-colors p-1 cursor-pointer">
                     <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
                         <polyline points="3,3 13,13"/>
                         <polyline points="13,3 3,13"/>
@@ -150,12 +167,12 @@
             </form>   
         <!-- Terminate (running/alarm) -->
         {% elif job.status == "running" or job.status == "alarm" or job.status == "error" %}
-            <form method="POST" action="{% url 'nice_lite:terminate_stream' %}" target="_parent">
+            <form method="POST" action="{% url 'nice_lite:terminate_stream' %}" target="_parent" onclick="event.stopPropagation()">
                 {% csrf_token %}
                 <input type="hidden" name="selected_job_id" value="{{ job.id }}">
                 <button type="button" data-job-id="{{ job.id }}" onclick="terminateStream(this)"
-                        title="terminate stream"
-                        class="text-streamicon hover:text-streamerror transition-colors p-1">
+                        title="terminate"
+                        class="text-streamicon hover:text-streamerror transition-colors p-1 cursor-pointer">
                     <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
                         <circle cx="8" cy="8" r="6"/>
                         <rect x="5.5" y="5.5" width="5" height="5" rx="0.5" fill="currentColor" stroke="none"/>

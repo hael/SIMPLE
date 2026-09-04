@@ -135,10 +135,11 @@ contains
 
   ! Write the stream_heartbeat section: per-process status fields plus a master
   ! aggregate status derived from the union of all child-process states.
-  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D, fork_reference_picking, fork_particle_sieving, fork_pool2D )
+  subroutine assemble_stream_heartbeat( self, fork_preprocess, fork_assign_optics, fork_opening2D, fork_reference_picking, fork_particle_sieving, fork_pool2D, n_active_persistent_workers )
     class(gui_assembler),  intent(inout) :: self
     class(forked_process), intent(inout) :: fork_preprocess, fork_assign_optics, fork_opening2D, fork_particle_sieving
     class(forked_process), intent(inout) :: fork_reference_picking, fork_pool2D
+    integer, optional,     intent(in)    :: n_active_persistent_workers
     type(json_value),      pointer       :: json_ptr, json_master_ptr
     integer                              :: n_running, n_failed, n_restarting, n_unknown
     n_running    = 0
@@ -160,6 +161,8 @@ contains
     call self%json%add(json_master_ptr, 'starttime',        self%starttime)
     call self%json%add(json_master_ptr, 'stoptime',          self%stoptime)
     call self%json%add(json_master_ptr, 'pid',                    getpid())
+    if( present(n_active_persistent_workers) ) &
+      call self%json%add(json_master_ptr, 'active_persistent_workers', n_active_persistent_workers)
     if( n_unknown > 0 ) then
       call self%json%add(json_master_ptr, 'status', 'unknown')
     else if( n_failed > 0 ) then
@@ -563,14 +566,18 @@ contains
   end subroutine assemble_stream_particle_sieving
 
   ! Write the pool-2D section, including the latest class averages.
+  ! meta_snapshot_cavgs2D, when present, holds the cavg2D metadata for the class
+  ! averages selected for the current snapshot and is embedded as 'cls2D' nested
+  ! under the 'snapshot' object.
   ! The whole section is suppressed when its hash matches the previously sent hash.
-  subroutine assemble_stream_pool2D( self, meta_pool2D, meta_latest_cavgs2D, meta_pool2D_snapshot )
+  subroutine assemble_stream_pool2D( self, meta_pool2D, meta_latest_cavgs2D, meta_pool2D_snapshot, meta_snapshot_cavgs2D )
     class(gui_assembler),                      intent(inout) :: self
     type(gui_metadata_cavg2D),   allocatable,  intent(inout) :: meta_latest_cavgs2D(:)
     type(gui_metadata_stream_pool2D),          intent(inout) :: meta_pool2D
     type(gui_metadata_stream_pool2D_snapshot), intent(inout) :: meta_pool2D_snapshot
+    type(gui_metadata_cavg2D),   allocatable,  optional, intent(inout) :: meta_snapshot_cavgs2D(:)
     character(kind=CK,len=:),                  allocatable   :: buffer
-    type(json_value),                          pointer       :: json_ptr => null(), json_cavgs2D_ptr => null(), json_snapshot_ptr => null()
+    type(json_value),                          pointer       :: json_ptr => null(), json_cavgs2D_ptr => null(), json_snapshot_ptr => null(), json_snapshot_cavgs2D_ptr => null()
     type(string)                                             :: str, hash
     logical                                                  :: l_add
     integer                                                  :: i_cls2D
@@ -582,6 +589,24 @@ contains
       json_snapshot_ptr => meta_pool2D_snapshot%jsonise()
       if( associated(json_snapshot_ptr) ) then
         call self%json%rename(json_snapshot_ptr, 'snapshot')
+        if( present(meta_snapshot_cavgs2D) ) then
+          if( allocated(meta_snapshot_cavgs2D) ) then
+            l_add = .false.
+            call self%json%create_array(json_snapshot_cavgs2D_ptr, 'cls2D')
+            do i_cls2D=1, size(meta_snapshot_cavgs2D)
+              if( meta_snapshot_cavgs2D(i_cls2D)%assigned() ) then
+                l_add = .true.
+                call self%json%add(json_snapshot_cavgs2D_ptr, meta_snapshot_cavgs2D(i_cls2D)%jsonise())
+              endif
+            enddo
+            if( l_add ) then
+              call self%json%add(json_snapshot_ptr, json_snapshot_cavgs2D_ptr)
+            else
+              call self%json%destroy(json_snapshot_cavgs2D_ptr)
+              nullify(json_snapshot_cavgs2D_ptr)
+            end if
+          endif
+        endif
         call self%json%add(json_ptr, json_snapshot_ptr)
       end if
     end if

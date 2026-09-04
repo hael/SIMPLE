@@ -30,27 +30,56 @@
     description_value — current stream description value for the editor input
     description_jobid — optional job id used by description editor form;
                         defaults to jobid from context when omitted
+    active_persistent_workers — number of active persistent workers for this job; used to display a status indicator in the header
 
   These variables are read directly from the parent context (no need to pass):
     status, jobid, jobstats
 {% endcomment %}
 {% load timestamps %}
 <div class="flex flex-col border-b border-streamline">
-    <div class="flex items-center gap-2 px-4 pt-3 pb-2 flex-shrink-0">
+    <div class="flex items-center gap-2 px-3 pt-3 pb-2 flex-shrink-0">
         <!-- Status indicator -->
         {% if status == "running" %}
-            <span class="w-2 h-2 rounded-full bg-streamaction animate-pulse flex-shrink-0"
-                title="status: running&#013;stage: {{ jobstats.stage }}&#013;last import: {{ last_import|print_timestamp }}"></span>
+            {% with n_workers=active_persistent_workers|default:1 %}
+                {% if n_workers == 0 %}
+                    <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamaction/10 text-streamaction"
+                        title="status: running&#013;stage: {{ jobstats.stage }}&#013;last import: {{ last_import|print_timestamp }}">
+                        <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamaction animate-pulse flex-shrink-0" title="dormant"></span>
+                        dormant
+                    </span>
+                {% else %}
+                    <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamaction/10 text-streamaction"
+                        title="status: running&#013;stage: {{ jobstats.stage }}&#013;last import: {{ last_import|print_timestamp }}">
+                        <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamaction animate-pulse flex-shrink-0" title="{{ status }}"></span>
+                        {{ status }}
+                    </span>
+                {% endif %}
+            {% endwith %}
         {% elif status == "finished" or has_skipped and status == "skipped" %}
-            <span class="w-2 h-2 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+            <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamring">
+                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+                {{ status }}
+            </span>
         {% elif status == "failed" %}
-            <span class="w-2 h-2 rounded-full bg-streamerror flex-shrink-0" title="failed"></span>
+            <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamerror/10 text-streamerror">
+                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamerror flex-shrink-0" title="{{ status }}"></span>
+                {{ status }}
+            </span>
         {% elif status == "queued" or status == "terminating" %}
-            <span class="w-2 h-2 rounded-full bg-streamlabel flex-shrink-0" title="queued"></span>
+            <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamring">
+                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+                {{ status }}
+            </span>
         {% elif status == "error" %}
-            <span class="w-2 h-2 rounded-full bg-streamrejected flex-shrink-0" title="error"></span>
+            <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamrejected/10 text-streamrejected">
+                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamrejected flex-shrink-0" title="{{ status }}"></span>
+                running - {{ status }}
+            </span>
         {% else %}
-            <span class="w-2 h-2 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+            <span class="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-streamring/10 text-streamring">
+                <span class="w-1.5 h-1.5 mr-1 rounded-full bg-streamring flex-shrink-0" title="{{ status }}"></span>
+                {{ status }}
+            </span>
         {% endif %}
 
         <!-- Title -->
@@ -58,7 +87,7 @@
 
         <!-- User-input raised-hand button -->
         {% if user_input_url and jobstats.user_input is True and status == "running" %}
-            <form method="GET" action="{% url user_input_url %}" target="_parent" class="flex">
+            <form method="GET" action="{% url user_input_url %}" target="_parent" class="flex" onclick="event.stopPropagation()">
                 {% csrf_token %}
                 <input name="selected_job_id" value="{{ jobid }}" type="hidden">
                 <button type="submit" class="text-streamaction animate-wave" title="{{ user_input_title|default:'user input required' }}">
@@ -74,7 +103,7 @@
 
         {% if zoom_url  and not status == "skipped" %}
             <!-- Zoom button -->
-            <form method="{{ zoom_method|default:'GET' }}" action="{% url zoom_url %}" target="_parent" class="flex">
+            <form method="{{ zoom_method|default:'GET' }}" action="{% url zoom_url %}" target="_parent" class="zoomform flex hidden">
                 {% csrf_token %}
                 <input name="selected_job_id" value="{{ jobid }}" type="hidden">
                 <button type="submit" class="text-streamicon hover:text-streamsubtle transition-colors" title="view full screen">
@@ -89,7 +118,7 @@
         {% if not hide_actions and not status == "skipped" %}
             <!-- Stop button (running) -->
             {% if status == "running" %}
-                <form method="POST" action="{% url 'nice_lite:term_stream_process' %}" class="flex">
+                <form method="POST" action="{% url 'nice_lite:term_stream_process' %}" class="flex" onclick="event.stopPropagation()">
                     {% csrf_token %}
                     <input name="selected_job_id" value="{{ jobid }}" type="hidden">
                     <input name="{{ terminate_field }}" type="hidden">
@@ -103,7 +132,7 @@
 
             <!-- Restart button (finished or failed) -->
             {% elif status == "finished" or status == "failed" %}
-                <form method="POST" action="{% url 'nice_lite:restart_stream_process' %}" class="flex">
+                <form method="POST" action="{% url 'nice_lite:restart_stream_process' %}" class="flex" onclick="event.stopPropagation()">
                     {% csrf_token %}
                     <input name="selected_job_id" value="{{ jobid }}" type="hidden">
                     <input name="{{ restart_field }}" type="hidden">
@@ -119,7 +148,7 @@
     </div>
 
     {% if show_description_editor %}
-        <div class="flex items-center gap-1 px-3 pb-1">
+        <div class="flex items-center gap-1 px-3 pb-1" onclick="event.stopPropagation()">
             <form method="POST" action="{% url 'nice_lite:update_stream_description' %}" class="flex flex-1 min-w-0">
                 {% csrf_token %}
                 <input type="hidden" name="selected_job_id" value="{{ description_jobid }}">

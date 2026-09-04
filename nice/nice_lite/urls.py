@@ -59,7 +59,7 @@ urlpatterns = [
     # Job lifecycle
     path("newstream",                          views.view_job_builder,                             name="new_stream"),
     path("createbatch",                        views.view_create_batch,                            name="create_batch"),
-    path("viewbatch/<int:jobid>",              batch_views.view_batch,                            name="view_batch"),
+    path("viewbatch/<int:jobid>",              batch_views.view_batch,                             name="view_batch"),
     path(
         "batchparticle/<int:jobid>/<str:stack_name>/<int:particle_index>",
         batch_views.view_batch_particle_thumbnail,
@@ -73,6 +73,7 @@ urlpatterns = [
     path("stopbatch",                          batch_views.view_batch_stop,                        name="stop_batch"),
     path("deletebatch",                        batch_views.view_batch_delete,                      name="delete_batch"),
     path("createstream",                       stream_views.view_stream_create_stream,             name="create_stream"),
+    path("restartstream",                      stream_views.view_stream_restart_stream,            name="restart_stream"),
     path("termstream",                         stream_views.view_stream_terminate_stream,          name="terminate_stream"),
     path("deletestream",                       stream_views.view_stream_delete_stream,             name="delete_stream"),
     path("killdeletestream",                   stream_views.view_stream_kill_delete_stream,        name="kill_delete_stream"),
@@ -102,6 +103,7 @@ urlpatterns = [
     path("viewstreamclassification2D",         stream_views.view_stream_classification_2D,         name="view_stream_classification_2D"),
     path("viewstreamclassification2Dzoom",     stream_views.view_stream_classification_2D_zoom,    name="view_stream_classification_2D_zoom"),
     path("viewstreamparticlesets",             stream_views.view_stream_particle_sets,             name="view_stream_particle_sets"),
+    path("viewstreamparticlesetszoom",         stream_views.view_stream_particle_sets_zoom,        name="view_stream_particle_sets_zoom"),
 
     # Stream user interactions (parameter updates, selections)
     path("updatestreamclassification2Dmskdiam", stream_views.view_stream_update_classification_2D_mskdiam, name="update_classification_2D_mskdiam"),

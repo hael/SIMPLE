@@ -23,7 +23,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
 </head>
-<body class="bg-streambar h-screen overflow-hidden font-sans">
+<body class="bg-streambar h-screen overflow-hidden font-sans rounded-xl border {% if status == 'running' %}border-streamaction/20 hover:border-streamaction{% elif status == 'failed' or status == 'stopped' %}border-streamerror/20 hover:border-streamerror{% else %}border-streamring/20 hover:border-streamring{% endif %} transition-colors cursor cursor-zoom-in"
+    onclick="this.querySelector('form.zoomform')?.submit();">
 
     <!-- Loading gauze -->
     {% include 'nice_stream/includes/_panel_gauze_loading.html' %}
