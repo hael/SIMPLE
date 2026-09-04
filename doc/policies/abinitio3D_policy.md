@@ -308,7 +308,10 @@ After symmetry handling, the selected maps are injected back into the staged
 Staged `abinitio3D` uses static discrete-bank nonuniform filtering when
 `filt_mode` is NU-enabled. It always emits `nu_refine=no`; high-resolution NU
 shell extension is reserved for `refine3D_auto` and explicit base
-`refine3D` use.
+`refine3D` use. NU always computes its objective over the full spherical
+`mskdiam` support. With the default `automsk=no`, no envelope constrains the
+static local-resolution field; an explicit `automsk=yes` request uses the
+NU-evidence envelope to fix its background to the coarsest candidate.
 
 Because `abinitio3D` currently keeps gold-standard refinement disabled,
 `GOLD_STD_STAGE` is off and `envfsc` defaults to `no`. The advanced `envfsc`

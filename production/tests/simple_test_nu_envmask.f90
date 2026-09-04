@@ -255,7 +255,7 @@ if( envelope%get([1,1,1]) > 1.e-5 ) THROW_HARD('box corner is inside the soft en
 ! The readiness null fraction remains that of the unconstrained spherical
 ! Potts field, while the replay state fixes envelope-background voxels to the
 ! coarsest bank member: coarse support 1, every finer support 0.
-call set_nu_solvent_envelope(envelope, source='test_density_envelope')
+call set_nu_solvent_envelope(envelope, source='test_nu_evidence_envelope')
 call build_nu_evidence_state(even, odd, evstate)
 call assert_nu_evidence_replay_ready(evstate)
 call get_nu_evidence_summary(evstate, evsummary)

@@ -17,7 +17,7 @@ use simple_halfmap_diagnostics, only: halfmap_diagnostics_result, evaluate_halfm
     &write_halfmap_diagnostics
 use simple_image_msk,         only: image_msk
 use simple_nu_filter,         only: setup_nu_dmats, optimize_nu_cutoff_finds, cleanup_nu_filter, &
-    &set_nu_solvent_envelope, NU_DEV_OUTPUT, &
+    &NU_DEV_OUTPUT, &
     &extend_nu_filter_highres_shells, get_nu_filter_bank_finest_lp, &
     &build_nu_evidence_state, nu_evidence_state, nu_evidence_summary, get_nu_evidence_summary, &
     &expand_nu_evidence_band_weights, &
@@ -111,6 +111,7 @@ integer, parameter :: NU_ALIGN_LP_FSC_HEADROOM_SHELLS = 0
 type :: nu_evidence_cache_entry
     logical :: valid = .false.
     logical :: l_nu_refine = .false.
+    logical :: l_automsk = .false.
     integer :: box = 0
     integer :: fsc_find = 0
     integer :: handoff_find = 0 !< Fourier index of the matching low-pass this evidence handed off
@@ -416,8 +417,9 @@ contains
     !! is regenerated here (policy 2026-08-29): the raw per-voxel evidence
     !! margins are live at this point, so that envelope constrains the same
     !! Potts field that supplies the Q_NU precision, without a second NU
-    !! analysis. It is diagnostic state, never a matching-reference mask;
-    !! cadence and artifact naming follow plan_state_postprocess.
+    !! analysis. This is controlled solely by automsk; nu_refine independently
+    !! controls candidate-bank extension. It is never a matching-reference
+    !! mask; cadence and artifact naming follow plan_state_postprocess.
     subroutine build_nu_replay_evidence( params, state_here, context, vol_even, vol_odd, &
             &res0143, band_w, band_limits, finest_lp, evidence_source, evidence_seconds )
         class(parameters),          intent(in)  :: params
@@ -433,8 +435,6 @@ contains
         type(nu_evidence_state)   :: evstate
         type(nu_evidence_summary) :: evsumm
         type(vol_pproc_plan)      :: pp_plan
-        type(image)               :: vol_env_avg
-        type(image_msk)           :: solvent_env
         character(len=32) :: source_here
         integer :: nsteps_ext, ldim_here(3), fsc_find
         real    :: handoff_lp
@@ -464,22 +464,12 @@ contains
                 ! boundary for both the initial Potts field and any adaptive
                 ! shell challenges. Accepted high-resolution probes refine the
                 ! local precision inside this boundary; they do not redefine
-                ! their own support in the same evidence pass.
+                ! their own support in the same evidence pass. Static NU uses
+                ! the same explicit automsk policy without extending the bank.
                 ! The PCG SOLVE support keeps the conservative density
                 ! envelope elsewhere (set_pcg_solve_support) -- never this mask.
                 call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, vol_even%get_smpd(), &
                     &state_here, pp_plan%nu_envmask_file, l_arm_background=.true.)
-            else
-                ! automsk=no: solvent constraint from the conservative density
-                ! envelope, computed on the fly from the evidence pair average
-                ! (pcg_priors.md dev item 4)
-                call vol_env_avg%copy(vol_even)
-                call vol_env_avg%add(vol_odd)
-                call vol_env_avg%mul(0.5)
-                call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp, l_report=.false.)
-                call set_nu_solvent_envelope(solvent_env)
-                call solvent_env%kill_bimg
-                call vol_env_avg%kill
             endif
             call optimize_nu_cutoff_finds()
             ! Stage 6.6 (pcg_priors.md): with nu_refine=yes the evidence candidate
@@ -510,12 +500,6 @@ contains
                     &'>>> Existing NU evidence envelope incompatible with current box/sampling, regenerating:', &
                     &pp_plan%nu_envmask_file%to_char()
             endif
-            if( l_envmask_regen .and. trim(params%automsk).eq.'no' )then
-                ! with automsk=yes the artifact was already written by the
-                ! background-arming call above, from the same evidence pass
-                call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, vol_even%get_smpd(), &
-                    &state_here, pp_plan%nu_envmask_file)
-            endif
             call build_nu_evidence_state(vol_even, vol_odd, evstate)
             ! no post-hoc NU filter follows on the pcg backend, so the
             ! evidence phase owns and tears down its setup
@@ -529,6 +513,7 @@ contains
                 &ldim_here(1), vol_even%get_smpd())
             nu_evidence_cache(state_here)%valid        = .true.
             nu_evidence_cache(state_here)%l_nu_refine  = params%l_nu_refine
+            nu_evidence_cache(state_here)%l_automsk    = trim(params%automsk).ne.'no'
             nu_evidence_cache(state_here)%box          = ldim_here(1)
             nu_evidence_cache(state_here)%fsc_find     = fsc_find
             nu_evidence_cache(state_here)%handoff_find = 0
@@ -578,8 +563,8 @@ contains
     end subroutine build_nu_replay_evidence
 
     !> Rebuild-on-advance decision for the frozen NU replay evidence. Rebuild
-    !! when there is no valid cached state, the evidence geometry or source
-    !! changed, the envmask cadence requires regeneration from live margins,
+    !! when there is no valid cached state, the evidence geometry, source, or
+    !! automsk policy changed, the envmask cadence requires regeneration from live margins,
     !! the FSC=0.143 crossing reached a FINER shell than the ridden evidence
     !! was built at (an advance; the oscillating tail around a plateau does
     !! not retrigger), the alignment band is the BINDING constraint (the FSC
@@ -607,6 +592,8 @@ contains
         if( state_here < 1 .or. state_here > params%nstates ) THROW_HARD('invalid state for NU evidence cache')
         if( .not. nu_evidence_cache(state_here)%valid                          ) return
         if( nu_evidence_cache(state_here)%l_nu_refine .neqv. params%l_nu_refine ) return
+        if( nu_evidence_cache(state_here)%l_automsk .neqv. &
+            &(trim(params%automsk).ne.'no')                                    ) return
         if( nu_evidence_cache(state_here)%box /= box_here                      ) return
         if( trim(nu_evidence_cache(state_here)%source) /= trim(source_here)    ) return
         if( l_envmask_regen                                                    ) return

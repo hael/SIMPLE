@@ -134,14 +134,18 @@ not interchangeable in the FSC or NU-objective paths.
    and cFAR. `envfsc=yes` generates the density envelope during this step;
    `envfsc=no` uses the broad spherical FSC mask.
 3. `volassemble` restores the merged state volume.
-4. The NU filter constructs spherical support from `mskdiam`, optimizes the
-   static bank, and accepts any supported `nu_refine` extensions.
+4. The NU filter constructs spherical support from `mskdiam` and evaluates the
+   static candidate-bank unaries.
 5. If `automsk=yes`, `volassemble` derives
-   `nu_envmask3D_stateNN.mrc` before NU unary storage is released.
-6. The NU envelope affects matching references only through the local filter
+   `nu_envmask3D_stateNN.mrc` from those live unaries and fixes the envelope
+   background to the coarsest candidate; `automsk=no` leaves the spherical
+   field unconstrained.
+6. The NU filter optimizes the static field and accepts any supported
+   `nu_refine` extensions inside that fixed background.
+7. The NU envelope affects matching references only through the local filter
    field or `Q_NU`; it is never multiplied into a reference and never enters
    FSC correction or NU objective support.
-7. Non-PCG final postprocessing may reuse a compatible
+8. Non-PCG final postprocessing may reuse a compatible
    `automask3D_stateNN.mrc` when `envfsc=yes`; PCG postprocessing applies no
    mask after the solve.
 

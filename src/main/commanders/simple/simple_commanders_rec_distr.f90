@@ -853,10 +853,8 @@ contains
             &extend_nu_filter_highres_shell_next, refine_nu_extension_filtmap_ordered_labels, &
             &nu_highres_extension_stats, get_nu_filtmap_finest_selected_lp, &
             &get_nu_filtmap_highres_shell_depth, write_nu_local_resolution_map, &
-            &write_nu_evidence_envmask, set_nu_solvent_envelope
-        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess, &
-            &NU_ENVMASK_ACTION_REGENERATE
-        use simple_image_msk,        only: image_msk
+            &write_nu_evidence_envmask
+        use simple_vol_pproc_policy, only: vol_pproc_plan, plan_state_postprocess
         class(commander_volassemble), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters), target      :: params
@@ -865,8 +863,6 @@ contains
         type(image)                   :: vol_prev_even, vol_prev_odd, vol_merged
         type(image)                   :: vol_even_nu, vol_odd_nu
         type(image)                   :: vol_nu_base_even, vol_nu_base_odd, vol_nu_aux_even, vol_nu_aux_odd
-        type(image)                   :: vol_env_avg
-        type(image_msk)               :: solvent_env
         type(image), allocatable      :: nu_aux_even(:), nu_aux_odd(:)
         type(string)                  :: volname, eonames(2)
         type(restore_timings_t)       :: restore_timings
@@ -1077,7 +1073,6 @@ contains
             call release_nonuniform_aux_inputs()
             call optimize_nu_cutoff_finds()
             call refine_nonuniform_filter_bank()
-            call generate_state_nu_envmask()
             call release_nonuniform_base_inputs()
             call nu_filter_vols(vol_even_nu, vol_odd_nu)
             call log_nonuniform_filter_stats()
@@ -1086,17 +1081,6 @@ contains
             call cleanup_nonuniform_state()
             if( L_BENCH_GLOB ) rt_nonuniform_filter = rt_nonuniform_filter + toc(t_nonuniform_filter)
         end subroutine run_state_nonuniform_filter
-
-        subroutine generate_state_nu_envmask()
-            ! with automsk=yes the artifact was already written by the
-            ! background-arming call in setup_nonuniform_filter
-            if( trim(params%automsk).ne.'no' ) return
-            if( pp_plan%nu_envmask_action /= NU_ENVMASK_ACTION_REGENERATE ) return
-            if( L_BENCH_GLOB ) t_nu_envmask = tic()
-            call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, &
-                &vol_nu_base_even%get_smpd(), state, pp_plan%nu_envmask_file)
-            if( L_BENCH_GLOB ) rt_nu_envmask = rt_nu_envmask + toc(t_nu_envmask)
-        end subroutine generate_state_nu_envmask
 
         subroutine setup_nonuniform_filter()
             integer :: n_highres_steps
@@ -1117,22 +1101,13 @@ contains
             if( trim(params%automsk).ne.'no' )then
                 ! automsk=yes: the filter-field background is the complement of
                 ! the NU evidence envelope, derived from the unaries of the
-                ! setup that just ran (same pass, no second compute); the
-                ! artifact is written by the same call, so
-                ! generate_state_nu_envmask is skipped in this mode
+                ! setup that just ran (same pass, no second compute). The
+                ! objective domain remains the spherical mskdiam support;
+                ! nu_refine independently controls high-resolution extension.
+                if( L_BENCH_GLOB ) t_nu_envmask = tic()
                 call write_nu_evidence_envmask(params%nu_msk_sig, params%amsklp, &
                     &vol_nu_base_even%get_smpd(), state, pp_plan%nu_envmask_file, l_arm_background=.true.)
-            else
-                ! automsk=no: solvent constraint from the conservative density
-                ! envelope, computed on the fly from the base pair average
-                ! (pcg_priors.md dev item 4)
-                call vol_env_avg%copy(vol_nu_base_even)
-                call vol_env_avg%add(vol_nu_base_odd)
-                call vol_env_avg%mul(0.5)
-                call solvent_env%automask3D(params, vol_env_avg, .false., lp_override=params%envmsklp, l_report=.false.)
-                call set_nu_solvent_envelope(solvent_env)
-                call solvent_env%kill_bimg
-                call vol_env_avg%kill
+                if( L_BENCH_GLOB ) rt_nu_envmask = rt_nu_envmask + toc(t_nu_envmask)
             endif
         end subroutine setup_nonuniform_filter
 

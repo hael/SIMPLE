@@ -78,13 +78,16 @@ of `automsk` and can operate without NU filtering.
 
 Matching references are never multiplied with an envelope before reprojection
 (2026-09-02): a reference must not hard-remove density that is present in the
-particle images. Whenever `automsk=yes`, the filter-field background -- the
+particle images. With `automsk=yes`, the filter-field background -- the
 complement of the NU evidence envelope, derived in the same evidence pass that
 builds the filter bank -- takes the coarsest bank candidate, so the
 envelope-excluded density (detergent micelle, disordered belt) enters the
 matching references heavily low-pass filtered rather than removed, and the
-same field derives the Q_NU precisions on the pcg backend. With `automsk=no`
-the background clamp uses the conservative density envelope instead. The
+same field derives the Q_NU precisions on the pcg backend. With `automsk=no`,
+the entire spherical `mskdiam` support remains unconstrained. The conservative
+density envelope is not an NU filter-field input; it remains independently
+owned by FSC correction and PCG solve support. This masking policy is
+independent of `nu_refine`, which controls only candidate-bank extension. The
 matcher applies the spherical soft mask only. The former `envref` parameter
 has been removed.
 
@@ -125,10 +128,13 @@ For each state, `volassemble` then:
 2. restores and writes the merged/base state volumes
 3. plans the NU-evidence envelope action
 4. configures spherical NU support from `mskdiam`
-5. configures the full NU candidate bank
-6. optimizes the local filter map
-7. optionally runs `nu_refine` high-resolution shell extension
-8. regenerates the NU-evidence envelope when requested
+5. configures the full static NU candidate bank
+6. with `automsk=yes`, derives the NU-evidence envelope from the live static
+   unaries and fixes its background to the coarsest candidate; with
+   `automsk=no`, leaves the spherical field unconstrained
+7. optimizes the local filter map
+8. optionally runs `nu_refine` high-resolution shell extension inside the
+   fixed background
 9. writes NU-filtered even, odd, merged, and local-resolution products
 10. records the finest locally selected NU low-pass limit for later handoff
 
