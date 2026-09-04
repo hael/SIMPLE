@@ -289,21 +289,20 @@ contains
             allocate(proj_pops(nspace), angles(2,nspace), source=0.)
             allocate(proj_seen(nspace), source=.false.)
             do i = 1,self%n
-                s = self%get_state(i)
+                s = self%o(i)%get_state()
                 if( s /= state ) cycle
-                p = self%get_proj(i)
-                if( p == 0 )then
-                    if( .not. self%isthere(i, 'proj') ) THROW_HARD('Active orientation is missing a PROJ key')
-                    cycle
-                endif
-                if( p < 0 .or. p > nspace ) THROW_HARD('PROJ index is outside [1,nspace]')
+                p = self%o(i)%get_proj()
+                if( p == 0 )                           cycle
+                if( self%o(i)%get_sampled()    < 0.5 ) cycle
+                if( self%o(i)%get('updatecnt') < 0.5 ) cycle
+                if( p < 0 .or. p > nspace )            cycle
                 if( .not. proj_seen(p) )then
-                    angles(1,p) = modulo(self%e1get(i), 360.)
-                    angles(2,p) = max(0., min(180., self%e2get(i)))
+                    angles(1,p) = modulo(self%o(i)%e1get(), 360.)
+                    angles(2,p) = max(0., min(180., self%o(i)%e2get()))
                     proj_seen(p) = .true.
                 endif
                 weight = 1.
-                if( self%isthere(i, 'w') ) weight = self%get(i, 'w')
+                if( self%o(i)%isthere('w') ) weight = self%o(i)%get('w')
                 proj_pops(p) = proj_pops(p) + max(0., weight)
             enddo
             if( sum(proj_pops) <= 0.001 )then

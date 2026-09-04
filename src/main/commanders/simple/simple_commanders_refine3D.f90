@@ -551,12 +551,12 @@ contains
         type(string)              :: multivol_mode, flex_arg, pose_policy_arg
         integer, parameter :: NSAMPLE_PER_STATE_REFINE3D_STATES = 10000
         integer, parameter :: NSAMPLE_REFINE3D_STATES_CAP       = 100000
-        integer, parameter :: STAGE1_NSPACE                    = 2500
-        integer, parameter :: STAGE2_NSPACE                    = 5000
-        integer, parameter :: STAGE2_NSPACE_SUB                = 500
-        integer, parameter :: FREQUENCY_BLOCK_NITS             = 3
+        integer, parameter :: STAGE1_NSPACE               = 2500
+        integer, parameter :: STAGE2_NSPACE               = 5000
+        integer, parameter :: STAGE2_NSPACE_SUB           = 500
+        integer, parameter :: FREQUENCY_BLOCK_NITS        = 3
         integer, parameter :: INIT_MAXITS_REFINE3D_STATES = 5
-        integer, parameter :: STAGE2_MINITS              = 5
+        integer, parameter :: STAGE2_MINITS               = 5
         integer, parameter :: MINITS_REFINE3D_STATES      = 10
         integer, parameter :: MAXITS_REFINE3D_STATES_CAP  = 50
         real,    parameter :: TARGET_UPDATES_PER_PARTICLE_REFINE3D_STATES = 4.0
@@ -596,13 +596,13 @@ contains
         pose_policy_arg = cline%get_carg('pose_policy')
         select case(trim(pose_policy_arg%to_char()))
             case('fixed')
-                call cline%set('multivol_mode', 'input_oris_fixed')
+                call cline%set('multivol_mode',   'input_oris_fixed')
                 call cline%set('prob_neigh_mode', 'geom')
             case('local')
-                call cline%set('multivol_mode', 'input_oris_refine')
+                call cline%set('multivol_mode',   'input_oris_refine')
                 call cline%set('prob_neigh_mode', 'geom')
             case('global')
-                call cline%set('multivol_mode', 'input_oris_refine')
+                call cline%set('multivol_mode',   'input_oris_refine')
                 call cline%set('prob_neigh_mode', 'state')
             case default
                 THROW_HARD(WORKFLOW_LABEL//' supports pose_policy=fixed|local|global')
