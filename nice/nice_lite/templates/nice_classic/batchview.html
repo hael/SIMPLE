@@ -6,11 +6,86 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
-    {% if pick_micrographs %}
-        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}?v=6"></script>
+    <style>
+        @media (min-width: 64rem) {
+            [data-display-levels] {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) max-content;
+                align-items: center;
+                column-gap: 0.75rem;
+            }
+
+            [data-display-level-header] {
+                display: contents;
+            }
+
+            [data-display-level-grid] {
+                grid-column: 1;
+                grid-row: 1;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            [data-display-levels] [data-pick-display-reset] {
+                grid-column: 2;
+                grid-row: 1;
+            }
+
+            [data-display-level-field] {
+                display: grid;
+                grid-template-columns: 5rem minmax(0, 1fr) 3rem;
+                align-items: center;
+                column-gap: 0.5rem;
+            }
+
+            [data-display-level-field] > input[type="range"] {
+                grid-column: 2;
+                grid-row: 1;
+                min-width: 0;
+                width: 100%;
+            }
+
+            [data-display-level-caption] {
+                display: contents;
+            }
+
+            [data-display-level-name] {
+                grid-column: 1;
+                grid-row: 1;
+                justify-self: end;
+                text-align: right;
+            }
+
+            [data-display-level-field] [data-pick-display-output] {
+                grid-column: 3;
+                grid-row: 1;
+                text-align: left;
+            }
+
+            [data-class-selector-sort-field] {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            [data-class-selector-control-row] {
+                grid-template-columns: max-content minmax(0, 1fr) max-content;
+                align-items: center;
+                column-gap: 0.75rem;
+            }
+        }
+
+        @media (min-width: 72rem) {
+            [data-display-level-grid] {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+    </style>
+    <script type="module" src="{% static 'nice_lite/output_grid.js' %}?v=2"></script>
+    {% if pick_micrographs or batch_class_selector %}
+        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}?v=7"></script>
     {% endif %}
     {% if batch_class_selector %}
-        <script type="module" src="{% static 'nice_lite/class_selector.js' %}"></script>
+        <script type="module" src="{% static 'nice_lite/class_selector.js' %}?v=4"></script>
     {% endif %}
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans" style="height:100vh;height:100dvh">
@@ -252,6 +327,9 @@
                                 <span data-ctf-micrograph-toggle-label>show micrographs</span>
                             </button>
                         {% endif %}
+                        {% if batch_class_selector or import_movie_page.movies or particle_stack_page.particles or pick_micrographs or artifact_images and not class_selector_replaces_artifact_previews %}
+                            {% include 'nice_classic/includes/_batch_output_grid_size.html' with control_id='batch_output_tile_size' target_id='batch_artifacts_panel' grid_name='output' %}
+                        {% endif %}
                         {% if output_dimensions_available %}
                             <label id="batch_output_dimensions_control"
                                    for="batch_output_dimensions_toggle"
@@ -278,72 +356,7 @@
                     {% endif %}
 
                     {% if pick_micrographs %}
-                        <p class="text-[10px] text-streamlabel mb-2">pick locations</p>
-                        <div data-pick-display-controls data-pick-display-target-id="batch_artifact_images"
-                             class="mb-3 rounded-lg border border-streamdivider bg-streambg p-3">
-                            <div class="mb-2 flex items-center justify-between gap-3">
-                                <span class="text-[10px] font-medium uppercase tracking-widest text-streamlabel">display levels</span>
-                                <button type="button" data-pick-display-reset
-                                        class="min-h-9 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
-                                    reset
-                                </button>
-                            </div>
-                            <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-                                <label class="min-w-0 text-[10px] text-streamlabel" for="batch_pick_display_min">
-                                    <span class="mb-1 flex items-center justify-between gap-2">
-                                        <span>min</span>
-                                        <output data-pick-display-output="min" for="batch_pick_display_min" class="font-mono text-streamsubtle">0</output>
-                                    </span>
-                                    <input id="batch_pick_display_min" type="range"
-                                           min="0" max="254" step="1" value="0"
-                                           data-pick-display-control="min"
-                                           aria-label="minimum display level"
-                                           aria-valuetext="0 of 255"
-                                           aria-controls="batch_artifact_images"
-                                           class="w-full" style="accent-color:var(--color-streamaccent)">
-                                </label>
-                                <label class="min-w-0 text-[10px] text-streamlabel" for="batch_pick_display_max">
-                                    <span class="mb-1 flex items-center justify-between gap-2">
-                                        <span>max</span>
-                                        <output data-pick-display-output="max" for="batch_pick_display_max" class="font-mono text-streamsubtle">255</output>
-                                    </span>
-                                    <input id="batch_pick_display_max" type="range"
-                                           min="1" max="255" step="1" value="255"
-                                           data-pick-display-control="max"
-                                           aria-label="maximum display level"
-                                           aria-valuetext="255 of 255"
-                                           aria-controls="batch_artifact_images"
-                                           class="w-full" style="accent-color:var(--color-streamaccent)">
-                                </label>
-                                <label class="min-w-0 text-[10px] text-streamlabel" for="batch_pick_display_brightness">
-                                    <span class="mb-1 flex items-center justify-between gap-2">
-                                        <span>brightness</span>
-                                        <output data-pick-display-output="brightness" for="batch_pick_display_brightness" class="font-mono text-streamsubtle">0.000</output>
-                                    </span>
-                                    <input id="batch_pick_display_brightness" type="range"
-                                           min="-0.5" max="0.5" step="0.001" value="0"
-                                           data-pick-display-control="brightness"
-                                           aria-label="display brightness"
-                                           aria-valuetext="0.000"
-                                           aria-controls="batch_artifact_images"
-                                           class="w-full" style="accent-color:var(--color-streamaccent)">
-                                </label>
-                                <label class="min-w-0 text-[10px] text-streamlabel" for="batch_pick_display_contrast">
-                                    <span class="mb-1 flex items-center justify-between gap-2">
-                                        <span>contrast</span>
-                                        <output data-pick-display-output="contrast" for="batch_pick_display_contrast" class="font-mono text-streamsubtle">0.500</output>
-                                    </span>
-                                    <input id="batch_pick_display_contrast" type="range"
-                                           min="0.5" max="0.999" step="0.001" value="0.5"
-                                           data-pick-display-control="contrast"
-                                           aria-label="display contrast"
-                                           aria-valuetext="0.500"
-                                           aria-controls="batch_artifact_images"
-                                           class="w-full" style="accent-color:var(--color-streamaccent)">
-                                </label>
-                            </div>
-                            <p class="mt-2 text-[9px] text-streamsubtle">min/max and brightness/contrast are synchronized views of the displayed 8-bit level window</p>
-                        </div>
+                        {% include 'nice_classic/includes/_batch_display_levels.html' with control_prefix='batch_pick' target_id='batch_artifact_images' image_selector='[data-pick-micrograph-slide] > img' %}
                     {% endif %}
 
                     {% if artifact_counts %}
@@ -367,11 +380,13 @@
                                 </span>
                                 <span class="text-[9px] text-streamsubtle">thumbnails are cached as WebP on demand</span>
                             </div>
-                            <div id="batch_movie_thumbnails" class="flex flex-wrap items-start gap-2"
+                            <div id="batch_movie_thumbnails" data-output-grid
+                                 data-output-grid-size-property="--artifact-tile-height" data-output-grid-tile-dimension="height"
+                                 class="flex flex-wrap items-start gap-2"
                                  style="--artifact-tile-height:clamp(72px,18vw,260px)">
                                 {% for movie in import_movie_page.movies %}
                                     {% if movie.preview_available %}
-                                        <a data-artifact-preview-kind="movie"
+                                        <a data-output-grid-tile data-artifact-preview-kind="movie"
                                            href="{% url 'nice_lite:batch_movie_thumbnail' jobid movie.token %}"
                                            target="_blank" rel="noopener"
                                            class="relative flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
@@ -384,7 +399,7 @@
                                             {% include 'nice_classic/includes/_batch_dimensions_badge.html' with width=movie.width height=movie.height %}
                                         </a>
                                     {% else %}
-                                        <div data-artifact-preview-kind="movie"
+                                        <div data-output-grid-tile data-artifact-preview-kind="movie"
                                              class="relative flex flex-shrink-0 items-center justify-center rounded-md overflow-hidden bg-streambg border border-streamdivider text-streamsubtle"
                                              style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
                                              title="{{ movie.name }}{% if movie.width and movie.height %} — {{ movie.width }} × {{ movie.height }} px{% endif %} — thumbnail unavailable for this format">
@@ -442,10 +457,12 @@
                                 </span>
                                 <span class="text-[9px] text-streamsubtle">thumbnails are generated on demand</span>
                             </div>
-                            <div id="batch_particle_thumbnails" class="flex flex-wrap items-start gap-2"
+                            <div id="batch_particle_thumbnails" data-output-grid
+                                 data-output-grid-size-property="--artifact-tile-height" data-output-grid-tile-dimension="height"
+                                 class="flex flex-wrap items-start gap-2"
                                  style="--artifact-tile-height:clamp(72px,18vw,260px)">
                                 {% for particle in particle_stack_page.particles %}
-                                    <a data-artifact-preview-kind="particle"
+                                    <a data-output-grid-tile data-artifact-preview-kind="particle"
                                        href="{% url 'nice_lite:batch_particle_thumbnail' jobid particle.stack_name particle.stack_index %}"
                                        target="_blank" rel="noopener"
                                        class="relative flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
@@ -492,7 +509,9 @@
                     {% endif %}
 
                     {% if pick_micrographs or artifact_images and not class_selector_replaces_artifact_previews %}
-                        <div id="batch_artifact_images" class="flex flex-wrap items-start gap-2"
+                        <div id="batch_artifact_images" data-output-grid
+                            data-output-grid-size-property="--artifact-tile-height" data-output-grid-tile-dimension="height"
+                            class="flex flex-wrap items-start gap-2"
                             data-pick-overlay-mode="points" data-pick-overlay-size="0"
                             style="--artifact-tile-height:clamp(72px,18vw,260px)">
                             {% for micrograph in pick_micrographs %}

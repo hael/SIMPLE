@@ -3,7 +3,7 @@
   `crop=right` matches the stream micrograph preview; `crop=left` exposes the
   power-spectrum half. The stream templates and assets remain unchanged.
 {% endcomment %}
-<a data-artifact-preview-kind="{{ preview.kind }}"
+<a data-output-grid-tile data-artifact-preview-kind="{{ preview.kind }}"
    {% if preview.visibility_group == "ctf_micrograph" %}data-ctf-micrograph-preview{% elif preview.visibility_group == "motion" %}data-motion-artifact-preview="{{ preview.kind }}"{% endif %}
    href="{% url 'nice_lite:image' preview.path %}" target="_blank" rel="noopener"
    class="{% if preview.hidden_by_default %}hidden {% endif %}relative {% if preview.crop == 'full' %}inline-flex {% endif %}flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"

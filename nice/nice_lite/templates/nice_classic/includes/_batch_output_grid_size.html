@@ -1,0 +1,12 @@
+{% comment %}Reusable size control for the batch Output grids.{% endcomment %}
+<label for="{{ control_id }}"
+       title="drag or use Ctrl/Cmd-wheel over an output grid to resize"
+       class="min-h-9 flex-shrink-0 inline-flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel">
+    <span>tile size</span>
+    <input id="{{ control_id }}" type="range"
+           data-output-grid-size data-output-grid-target-id="{{ target_id }}"
+           min="72" max="320" step="8" value="152"
+           aria-label="{{ grid_name }} tile size"
+           aria-valuetext="152 pixels" aria-controls="{{ target_id }}"
+           style="width:8rem;accent-color:var(--color-streamaccent)">
+</label>

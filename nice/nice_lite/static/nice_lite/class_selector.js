@@ -3,7 +3,6 @@ import {
     normalizedClassIds,
     sortedClasses,
     toggleClass,
-    wheelAdjustedTileSize,
 } from "./class_selection_state.mjs";
 
 const root = document.querySelector("[data-class-selector]");
@@ -27,9 +26,6 @@ if (root && dataNode) {
     const saveStatus = root.querySelector("[data-class-selector-save-status]");
     const selectionPayload = root.querySelector("[name='selected_class_ids']");
     const sortControl = root.querySelector("[data-class-selector-sort]");
-    const tileSizeControl = root.querySelector("[data-class-selector-size]");
-    const brightnessControl = root.querySelector("[data-class-selector-brightness]");
-    const contrastControl = root.querySelector("[data-class-selector-contrast]");
 
     function loadStoredSelection() {
         try {
@@ -42,7 +38,7 @@ if (root && dataNode) {
     }
 
     let selected = loadStoredSelection();
-    let sortKey = "class";
+    let sortKey = sortControl.value || "resolution";
     let anchorId = null;
     let saveTimer = null;
 
@@ -134,33 +130,6 @@ if (root && dataNode) {
     sortControl.addEventListener("change", (event) => {
         sortKey = event.target.value;
         render();
-    });
-
-    tileSizeControl.addEventListener("input", (event) => {
-        root.style.setProperty("--class-tile-size", `${event.target.value}px`);
-    });
-    grid.addEventListener(
-        "wheel",
-        (event) => {
-            if (!event.ctrlKey && !event.metaKey) return;
-            event.preventDefault();
-            const value = wheelAdjustedTileSize(
-                tileSizeControl.value,
-                event.deltaY,
-                tileSizeControl.min,
-                tileSizeControl.max,
-                tileSizeControl.step,
-            );
-            tileSizeControl.value = String(value);
-            root.style.setProperty("--class-tile-size", `${value}px`);
-        },
-        { passive: false },
-    );
-    brightnessControl.addEventListener("input", (event) => {
-        root.style.setProperty("--class-tile-brightness", event.target.value / 100);
-    });
-    contrastControl.addEventListener("input", (event) => {
-        root.style.setProperty("--class-tile-contrast", event.target.value / 100);
     });
 
     root.querySelector("[data-class-selector-select-all]").addEventListener("click", () => {

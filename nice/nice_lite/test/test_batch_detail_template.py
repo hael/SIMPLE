@@ -56,7 +56,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('data-collapse-key="artifacts" class="lg:col-span-full', batch_view)
         self.assertIn("flex overflow-x-auto rounded-t-lg", batch_view)
         self.assertIn("grid grid-cols-2 sm:grid-cols-3 gap-2", batch_view)
-        self.assertIn('id="batch_artifact_images" class="flex flex-wrap items-start gap-2"', batch_view)
+        self.assertIn('id="batch_artifact_images" data-output-grid', batch_view)
         self.assertIn("h-[220px] sm:h-[260px]", batch_view)
         self.assertIn("minmax(0,1fr)", batch_view)
         self.assertIn("touchmove", batch_view)
@@ -75,7 +75,12 @@ class BatchDetailTemplateTests(SimpleTestCase):
     def test_batch_detail_reuses_stream_class_selector_component(self):
         batch_view = self._read_template("nice_classic/batchview.html")
         selector = self._read_template("nice_stream/includes/_class_selector.html")
+        display_levels = self._read_template(
+            "nice_classic/includes/_batch_display_levels.html"
+        )
         selector_script = self._read_static("nice_lite/class_selector.js")
+        slider_script = self._read_static("nice_lite/pick_micrograph_slider.js")
+        output_grid_script = self._read_static("nice_lite/output_grid.js")
         rendered = render_to_string(
             "nice_classic/batchview.html",
             {
@@ -122,6 +127,11 @@ class BatchDetailTemplateTests(SimpleTestCase):
 
         self.assertNotIn("data-class-selector-action", batch_view)
         self.assertNotIn("select 2D classes", rendered)
+        self.assertNotIn("2D class selector", rendered)
+        self.assertNotIn(
+            "Review and update the class selection directly from this output.",
+            rendered,
+        )
         self.assertIn("nice_stream/includes/_class_selector.html", batch_view)
         self.assertLess(
             rendered.index('id="batch_artifacts_panel"'),
@@ -129,11 +139,155 @@ class BatchDetailTemplateTests(SimpleTestCase):
         )
         self.assertNotIn("redundant-cavgs.jpg", rendered)
         self.assertIn("data-class-selector-grid", selector)
+        self.assertIn("data-output-grid", selector)
+        self.assertIn('data-output-grid-size-property="--class-tile-size"', selector)
+        self.assertIn("data-output-grid-tile", selector)
+        self.assertNotIn('id="batch_class_tile_size"', selector)
+        self.assertIn('id="batch_output_tile_size" type="range"', rendered)
+        self.assertIn('data-output-grid-target-id="batch_artifacts_panel"', rendered)
         self.assertIn("data-class-selector-select-all", selector)
+        self.assertIn(">invert selection</button>", rendered)
+        self.assertIn(">reset selection</button>", rendered)
         self.assertIn("batch_class_deselection_export", selector)
+        self.assertIn('<option value="resolution" selected>resolution</option>', selector)
+        self.assertIn("nice_classic/includes/_batch_display_levels.html", selector)
+        self.assertIn("data-class-selector-toolbar", selector)
+        self.assertIn("data-class-selector-control-row", selector)
+        self.assertIn("data-class-selector-sort-field", selector)
+        self.assertIn("data-class-selector-bulk-actions", selector)
+        self.assertIn("embedded=True", selector)
+        self.assertIn(
+            "[data-class-selector-sort-field] {\n"
+            "                display: flex;\n"
+            "                align-items: center;\n"
+            "                gap: 0.5rem;",
+            batch_view,
+        )
+        self.assertLess(
+            selector.index("data-class-selector-toolbar"),
+            selector.index("data-class-selector-sort-field"),
+        )
+        self.assertLess(
+            selector.index("data-class-selector-sort-field"),
+            selector.index("nice_classic/includes/_batch_display_levels.html"),
+        )
+        self.assertLess(
+            rendered.index("<label data-class-selector-sort-field"),
+            rendered.index(
+                "<div data-pick-display-controls data-display-levels "
+                "data-display-levels-embedded"
+            ),
+        )
+        self.assertLess(
+            rendered.index(
+                "<div data-pick-display-controls data-display-levels "
+                "data-display-levels-embedded"
+            ),
+            rendered.index("<div data-class-selector-bulk-actions"),
+        )
+        self.assertIn('id="batch_class_display_min" type="range"', rendered)
+        self.assertIn('id="batch_class_display_max" type="range"', rendered)
+        self.assertIn('id="batch_class_display_brightness" type="range"', rendered)
+        self.assertIn('id="batch_class_display_contrast" type="range"', rendered)
+        self.assertIn('data-pick-display-target-id="batch_class_selector_grid"', rendered)
+        self.assertIn('data-pick-display-image-selector="[data-class-selector-tile] img"', rendered)
+        self.assertEqual(display_levels.count("accent-color:var(--color-streamaccent)"), 4)
+        self.assertEqual(display_levels.count("data-display-level-field"), 4)
+        self.assertEqual(display_levels.count("data-display-level-caption"), 4)
+        self.assertEqual(display_levels.count("data-display-level-name"), 4)
+        self.assertIn("data-display-levels", display_levels)
+        self.assertIn("data-display-levels-embedded", rendered)
+        self.assertIn("data-display-level-header", display_levels)
+        self.assertNotIn("data-display-level-title", display_levels)
+        self.assertNotIn("data-display-level-help", display_levels)
+        self.assertNotIn(">display levels<", rendered)
+        self.assertNotIn(
+            "brightness/contrast and min/max are synchronized views of the "
+            "displayed 8-bit level window",
+            rendered,
+        )
+        self.assertIn("@media (min-width: 64rem)", batch_view)
+        self.assertIn(
+            "grid-template-columns: minmax(0, 1fr) max-content",
+            batch_view,
+        )
+        self.assertIn(
+            "grid-template-columns: 5rem minmax(0, 1fr) 3rem",
+            batch_view,
+        )
+        self.assertIn(
+            '[data-display-level-field] > input[type="range"] {\n'
+            "                grid-column: 2;\n"
+            "                grid-row: 1;",
+            batch_view,
+        )
+        self.assertIn(
+            "[data-display-level-caption] {\n"
+            "                display: contents;",
+            batch_view,
+        )
+        self.assertIn(
+            "[data-display-level-name] {\n"
+            "                grid-column: 1;\n"
+            "                grid-row: 1;\n"
+            "                justify-self: end;",
+            batch_view,
+        )
+        self.assertIn(
+            "[data-display-level-field] [data-pick-display-output] {\n"
+            "                grid-column: 3;\n"
+            "                grid-row: 1;\n"
+            "                text-align: left;",
+            batch_view,
+        )
+        self.assertIn("text-align: right", batch_view)
+        self.assertIn(
+            "grid-template-columns: max-content minmax(0, 1fr) max-content",
+            batch_view,
+        )
+        self.assertIn("data-display-level-grid", display_levels)
+        self.assertIn(
+            "grid-template-columns: repeat(2, minmax(0, 1fr))",
+            batch_view,
+        )
+        self.assertIn("@media (min-width: 72rem)", batch_view)
+        self.assertIn(
+            "grid-template-columns: repeat(4, minmax(0, 1fr))",
+            batch_view,
+        )
+        self.assertLess(
+            batch_view.index("@media (min-width: 64rem)"),
+            batch_view.index("@media (min-width: 72rem)"),
+        )
+        self.assertLess(
+            display_levels.index("_display_brightness"),
+            display_levels.index("_display_contrast"),
+        )
+        self.assertLess(
+            display_levels.index("_display_contrast"),
+            display_levels.index("_display_min"),
+        )
+        self.assertLess(
+            display_levels.index("_display_min"),
+            display_levels.index("_display_max"),
+        )
         self.assertIn("128 × 128 px", rendered)
         self.assertIn("applyVisualRange", selector_script)
+        self.assertIn('let sortKey = sortControl.value || "resolution"', selector_script)
         self.assertIn("localStorage", selector_script)
+        self.assertNotIn("data-class-selector-brightness", selector_script)
+        self.assertIn("pickDisplayImageSelector", slider_script)
+        self.assertIn("target.querySelectorAll(imageSelector)", slider_script)
+        self.assertNotIn("wheelAdjustedTileSize", selector_script)
+        self.assertIn("wheelAdjustedTileSize", output_grid_script)
+        self.assertIn("event.ctrlKey", output_grid_script)
+        self.assertIn("event.metaKey", output_grid_script)
+        self.assertIn("event.preventDefault()", output_grid_script)
+        self.assertIn("{ passive: false }", output_grid_script)
+        self.assertIn('target.querySelectorAll("[data-output-grid]")', output_grid_script)
+        self.assertIn("output_grid.js?v=2", rendered)
+        self.assertIn("pick_micrograph_slider.js?v=7", rendered)
+        self.assertIn("class_selector.js?v=4", rendered)
 
     def test_batch_detail_ctf_artifacts_add_source_micrographs_automatically(self):
         batch_view = self._read_template("nice_classic/batchview.html")
@@ -270,7 +424,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn(shared_slide, slider)
         self.assertIn(shared_slide, batch_pick)
         self.assertIn("nice_lite/pick_micrograph_slider.js", batch_view)
-        self.assertIn("pick_micrograph_slider.js' %}?v=6", batch_view)
+        self.assertIn("pick_micrograph_slider.js' %}?v=7", batch_view)
         self.assertIn("nice_lite/pick_micrograph_slider.js", initial_pick)
         self.assertIn("nice_lite/pick_micrograph_slider.js", reference_pick)
         self.assertIn("nice_stream/includes/_scroll_btn.html", slider)
@@ -307,8 +461,10 @@ class BatchDetailTemplateTests(SimpleTestCase):
             "auto_refresh": False,
         })
 
-        self.assertIn("pick locations", rendered)
-        self.assertIn('id="batch_artifact_images" class="flex flex-wrap items-start gap-2"', rendered)
+        self.assertNotIn("pick locations", rendered)
+        self.assertIn('id="batch_artifact_images" data-output-grid', rendered)
+        self.assertIn('id="batch_output_tile_size" type="range"', rendered)
+        self.assertIn('data-output-grid-target-id="batch_artifacts_panel"', rendered)
         self.assertIn("data-pick-micrograph-grid-preview", rendered)
         self.assertIn('id="batch_pick_overlay_toggle"', rendered)
         self.assertIn('data-pick-overlay-mode="points"', rendered)
@@ -331,7 +487,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('sizeControl.classList.toggle("hidden", !adjustableSize)', slider_script)
         self.assertIn("if (sizeInput) sizeInput.disabled = !adjustableSize", slider_script)
         self.assertIn("if (sizeNumber) sizeNumber.disabled = !adjustableSize", slider_script)
-        self.assertIn("pick_micrograph_slider.js?v=6", rendered)
+        self.assertIn("pick_micrograph_slider.js?v=7", rendered)
         self.assertIn('data-pick-display-target-id="batch_artifact_images"', rendered)
         self.assertIn('id="batch_pick_display_min" type="range"', rendered)
         self.assertIn('min="0" max="254" step="1" value="0"', rendered)
@@ -346,7 +502,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('data-pick-display-output="contrast"', rendered)
         self.assertIn(">0.500</output>", rendered)
         self.assertIn("data-pick-display-reset", rendered)
-        self.assertIn("are synchronized views", rendered)
+        self.assertNotIn("are synchronized views", rendered)
         self.assertIn('const defaults = {min: 0, max: 255, brightness: 0, contrast: 0.5}', slider_script)
         self.assertIn("const applyLevels =", slider_script)
         self.assertIn("const applyBrightnessContrast =", slider_script)
@@ -357,7 +513,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('target.style.setProperty("--pick-level-contrast"', slider_script)
         self.assertNotIn("--pick-display-brightness", slider_script)
         self.assertNotIn("--pick-display-contrast", slider_script)
-        self.assertIn('target.querySelectorAll("[data-pick-micrograph-slide] > img")', slider_script)
+        self.assertIn("pickDisplayImageSelector", slider_script)
+        self.assertIn("target.querySelectorAll(imageSelector)", slider_script)
         self.assertIn("image.style.filter = displayFilter", slider_script)
         self.assertIn('querySelectorAll("[data-pick-display-controls]")', slider_script)
         self.assertNotIn("percent of picked box size", slider_script)
@@ -411,6 +568,10 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("/batchparticle/7/particles.mrcs/42", rendered)
         self.assertIn('loading="lazy" decoding="async"', rendered)
         self.assertIn('data-artifact-preview-kind="particle"', rendered)
+        self.assertIn('id="batch_particle_thumbnails" data-output-grid', rendered)
+        self.assertIn('id="batch_output_tile_size" type="range"', rendered)
+        self.assertIn('data-output-grid-target-id="batch_artifacts_panel"', rendered)
+        self.assertIn("data-output-grid-tile", rendered)
         self.assertIn("data-artifact-dimensions", rendered)
         self.assertIn("128 × 128 px", rendered)
         self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
@@ -468,6 +629,10 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("/batchmovie/7/signed-token", rendered)
         self.assertIn('loading="lazy" decoding="async"', rendered)
         self.assertIn('data-artifact-preview-kind="movie"', rendered)
+        self.assertIn('id="batch_movie_thumbnails" data-output-grid', rendered)
+        self.assertIn('id="batch_output_tile_size" type="range"', rendered)
+        self.assertIn('data-output-grid-target-id="batch_artifacts_panel"', rendered)
+        self.assertIn("data-output-grid-tile", rendered)
         self.assertIn("data-artifact-dimensions", rendered)
         self.assertIn("4096 × 4096 px", rendered)
         self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
@@ -552,7 +717,12 @@ class BatchDetailTemplateTests(SimpleTestCase):
         )
 
         self.assertIn('id="batch_output_controls"', rendered)
+        self.assertIn('id="batch_output_tile_size" type="range"', rendered)
         self.assertIn('id="batch_output_dimensions_toggle"', rendered)
+        self.assertLess(
+            rendered.index('id="batch_output_tile_size"'),
+            rendered.index('id="batch_output_dimensions_toggle"'),
+        )
         self.assertIn('type="checkbox" role="switch"', rendered)
         self.assertIn('aria-label="hide output dimensions"', rendered)
         self.assertIn('class="peer sr-only" checked', rendered)

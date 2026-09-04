@@ -1,0 +1,66 @@
+{% comment %}Shared 8-bit display-level controls for batch preview images.{% endcomment %}
+<div data-pick-display-controls data-display-levels{% if embedded %} data-display-levels-embedded{% endif %}
+     data-pick-display-target-id="{{ target_id }}"
+     data-pick-display-image-selector="{{ image_selector }}"
+     class="{% if embedded %}min-w-0{% else %}mb-3 rounded-lg border border-streamdivider bg-streambg p-3{% endif %}">
+    <div data-display-level-header class="mb-2 flex items-center justify-end gap-3">
+        <button type="button" data-pick-display-reset
+                class="min-h-9 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+            reset
+        </button>
+    </div>
+    <div data-display-level-grid class="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <label data-display-level-field class="min-w-0 text-[10px] text-streamlabel" for="{{ control_prefix }}_display_brightness">
+            <span data-display-level-caption class="mb-1 flex items-center justify-between gap-2">
+                <span data-display-level-name>brightness</span>
+                <output data-pick-display-output="brightness" for="{{ control_prefix }}_display_brightness" class="font-mono text-streamsubtle">0.000</output>
+            </span>
+            <input id="{{ control_prefix }}_display_brightness" type="range"
+                   min="-0.5" max="0.5" step="0.001" value="0"
+                   data-pick-display-control="brightness"
+                   aria-label="display brightness"
+                   aria-valuetext="0.000"
+                   aria-controls="{{ target_id }}"
+                   class="w-full" style="accent-color:var(--color-streamaccent)">
+        </label>
+        <label data-display-level-field class="min-w-0 text-[10px] text-streamlabel" for="{{ control_prefix }}_display_contrast">
+            <span data-display-level-caption class="mb-1 flex items-center justify-between gap-2">
+                <span data-display-level-name>contrast</span>
+                <output data-pick-display-output="contrast" for="{{ control_prefix }}_display_contrast" class="font-mono text-streamsubtle">0.500</output>
+            </span>
+            <input id="{{ control_prefix }}_display_contrast" type="range"
+                   min="0.5" max="0.999" step="0.001" value="0.5"
+                   data-pick-display-control="contrast"
+                   aria-label="display contrast"
+                   aria-valuetext="0.500"
+                   aria-controls="{{ target_id }}"
+                   class="w-full" style="accent-color:var(--color-streamaccent)">
+        </label>
+        <label data-display-level-field class="min-w-0 text-[10px] text-streamlabel" for="{{ control_prefix }}_display_min">
+            <span data-display-level-caption class="mb-1 flex items-center justify-between gap-2">
+                <span data-display-level-name>min</span>
+                <output data-pick-display-output="min" for="{{ control_prefix }}_display_min" class="font-mono text-streamsubtle">0</output>
+            </span>
+            <input id="{{ control_prefix }}_display_min" type="range"
+                   min="0" max="254" step="1" value="0"
+                   data-pick-display-control="min"
+                   aria-label="minimum display level"
+                   aria-valuetext="0 of 255"
+                   aria-controls="{{ target_id }}"
+                   class="w-full" style="accent-color:var(--color-streamaccent)">
+        </label>
+        <label data-display-level-field class="min-w-0 text-[10px] text-streamlabel" for="{{ control_prefix }}_display_max">
+            <span data-display-level-caption class="mb-1 flex items-center justify-between gap-2">
+                <span data-display-level-name>max</span>
+                <output data-pick-display-output="max" for="{{ control_prefix }}_display_max" class="font-mono text-streamsubtle">255</output>
+            </span>
+            <input id="{{ control_prefix }}_display_max" type="range"
+                   min="1" max="255" step="1" value="255"
+                   data-pick-display-control="max"
+                   aria-label="maximum display level"
+                   aria-valuetext="255 of 255"
+                   aria-controls="{{ target_id }}"
+                   class="w-full" style="accent-color:var(--color-streamaccent)">
+        </label>
+    </div>
+</div>

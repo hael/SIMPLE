@@ -237,7 +237,9 @@
             "brightness(var(--pick-level-brightness,1))",
             "contrast(var(--pick-level-contrast,1))",
         ].join(" ");
-        for (const image of target.querySelectorAll("[data-pick-micrograph-slide] > img")) {
+        const imageSelector = controls.dataset.pickDisplayImageSelector
+            || "[data-pick-micrograph-slide] > img";
+        for (const image of target.querySelectorAll(imageSelector)) {
             image.style.filter = displayFilter;
         }
 
