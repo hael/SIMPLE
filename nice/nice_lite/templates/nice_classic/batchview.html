@@ -7,6 +7,130 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     <style>
+        [data-pick-overlay-color-control] {
+            position: relative;
+        }
+
+        [data-pick-overlay-color-panel] {
+            position: absolute;
+            top: calc(100% + 0.5rem);
+            right: 0;
+            z-index: 30;
+            width: 15rem;
+            padding: 0.75rem;
+            border: 1px solid var(--color-streamline);
+            border-radius: 0.5rem;
+            background: var(--color-streambar);
+            box-shadow: 0 12px 28px rgb(0 0 0 / 0.16);
+        }
+
+        [data-pick-overlay-color-swatch] {
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 1px solid rgb(0 0 0 / 0.18);
+            border-radius: 0.375rem;
+        }
+
+        [data-pick-overlay-color-disc-wrap] {
+            position: relative;
+            width: 12rem;
+            height: 12rem;
+            margin: 0 auto;
+        }
+
+        [data-pick-overlay-color-presets] {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        [data-pick-overlay-color-preset] {
+            width: 1.75rem;
+            height: 1.75rem;
+            justify-self: center;
+            border: 2px solid var(--color-streambar);
+            border-radius: 50%;
+            box-shadow: 0 0 0 1px rgb(0 0 0 / 0.22);
+            cursor: pointer;
+        }
+
+        [data-pick-overlay-color-preset][aria-pressed="true"] {
+            box-shadow: 0 0 0 2px var(--color-streamtext);
+        }
+
+        [data-pick-overlay-color-preset]:focus-visible {
+            outline: 2px solid var(--color-streamring);
+            outline-offset: 2px;
+        }
+
+        [data-pick-overlay-color-disc] {
+            width: 100%;
+            height: 100%;
+            border: 1px solid rgb(0 0 0 / 0.12);
+            border-radius: 50%;
+            cursor: crosshair;
+            outline: none;
+            touch-action: none;
+        }
+
+        [data-pick-overlay-color-disc]:focus-visible {
+            box-shadow: 0 0 0 2px var(--color-streamring);
+        }
+
+        [data-pick-overlay-color-disc-pointer] {
+            position: absolute;
+            width: 0.75rem;
+            height: 0.75rem;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 0 1px rgb(0 0 0 / 0.65);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+
+        [data-pick-overlay-color-slider] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 0.375rem;
+            margin-top: 0.5rem;
+            border-radius: 9999px;
+            outline: none;
+        }
+
+        [data-pick-overlay-color-slider]:focus-visible {
+            box-shadow: 0 0 0 2px var(--color-streamring);
+        }
+
+        [data-pick-overlay-color-slider]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 0.875rem;
+            height: 0.875rem;
+            border: 2px solid var(--color-streambar);
+            border-radius: 9999px;
+            background: var(--color-streamtext);
+            box-shadow: 0 0 0 1px rgb(0 0 0 / 0.22);
+            cursor: pointer;
+        }
+
+        [data-pick-overlay-color-slider]::-moz-range-thumb {
+            width: 0.75rem;
+            height: 0.75rem;
+            border: 2px solid var(--color-streambar);
+            border-radius: 9999px;
+            background: var(--color-streamtext);
+            box-shadow: 0 0 0 1px rgb(0 0 0 / 0.22);
+            cursor: pointer;
+        }
+
+        [data-pick-overlay-color-slider]::-moz-range-track {
+            height: 0.375rem;
+            border-radius: 9999px;
+            background: transparent;
+        }
+
         @media (min-width: 64rem) {
             [data-display-levels] {
                 display: grid;
@@ -82,7 +206,7 @@
     </style>
     <script type="module" src="{% static 'nice_lite/output_grid.js' %}?v=2"></script>
     {% if pick_micrographs or batch_class_selector %}
-        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}?v=7"></script>
+        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}?v=14"></script>
     {% endif %}
     {% if batch_class_selector %}
         <script type="module" src="{% static 'nice_lite/class_selector.js' %}?v=4"></script>
@@ -266,39 +390,118 @@
                         </button>
                     </h2>
                     <div id="batch_output_controls" class="flex flex-wrap items-center justify-end gap-2">
-                        {% if pick_box_overlay_available %}
+                        {% if pick_box_overlay_available or batch_class_selector %}
+                            <div data-pick-overlay-size-control
+                                 title="set circle diameter or box size in source-image pixels"
+                                 class="{% if not batch_class_selector %}hidden {% endif %}min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel">
+                                <label for="batch_pick_overlay_size">size</label>
+                                <input id="batch_pick_overlay_size" type="range"
+                                       min="1" max="1000" step="1" value="100"{% if not batch_class_selector %} disabled{% endif %}
+                                       aria-label="overlay size in pixels"
+                                       aria-valuetext="100 pixels"
+                                       aria-controls="{% if batch_class_selector %}batch_class_selector_grid{% else %}batch_artifact_images{% endif %}"
+                                       style="width:6rem;accent-color:var(--color-streamaccent)">
+                                <input id="batch_pick_overlay_size_value" type="number"
+                                       min="1" max="1000" step="1" value="100"{% if not batch_class_selector %} disabled{% endif %}
+                                       data-pick-overlay-size-number
+                                       inputmode="numeric"
+                                       aria-label="enter overlay size in pixels"
+                                       aria-valuetext="100 pixels"
+                                       aria-controls="{% if batch_class_selector %}batch_class_selector_grid{% else %}batch_artifact_images{% endif %}"
+                                       class="rounded-md border border-streamline bg-streambar px-2 py-1 font-mono text-streamtext"
+                                       style="width:5rem">
+                                <span aria-hidden="true" class="text-streamsubtle">px</span>
+                            </div>
                             <button id="batch_pick_overlay_toggle" type="button" data-pick-overlay-toggle
-                                    data-pick-overlay-mode="points"
+                                    data-pick-overlay-mode="{% if batch_class_selector %}circle{% else %}points{% endif %}"
+                                    data-pick-overlay-modes="{% if batch_class_selector %}circle,boxes{% else %}points,circle,boxes{% endif %}"
+                                    data-pick-overlay-name="{% if batch_class_selector %}class-average{% else %}pick{% endif %}"
                                     data-pick-overlay-size-input-id="batch_pick_overlay_size"
-                                    aria-controls="batch_artifact_images"
-                                    aria-label="points overlay; show circle" title="show circle"
+                                    data-pick-overlay-color-control-id="batch_pick_overlay_color_control"
+                                    aria-controls="{% if batch_class_selector %}batch_class_selector_grid{% else %}batch_artifact_images{% endif %}"
+                                    aria-label="{% if batch_class_selector %}circle overlay; show box{% else %}points overlay; show circle{% endif %}"
+                                    title="{% if batch_class_selector %}show box{% else %}show circle{% endif %}"
                                     class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
                                 <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
                                     <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/>
                                     <rect x="2.5" y="2.5" width="11" height="11" rx="1"/>
                                 </svg>
-                                <span data-pick-overlay-toggle-label>points</span>
+                                <span data-pick-overlay-toggle-label>{% if batch_class_selector %}circle{% else %}points{% endif %}</span>
                             </button>
-                            <div data-pick-overlay-size-control
-                                 title="set circle diameter or box size in source-image pixels"
-                                 class="hidden min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel">
-                                <label for="batch_pick_overlay_size">size</label>
-                                <input id="batch_pick_overlay_size" type="range"
-                                       min="1" max="1000" step="1" value="100" disabled
-                                       aria-label="overlay size in pixels"
-                                       aria-valuetext="100 pixels"
-                                       aria-controls="batch_artifact_images"
-                                       style="width:6rem;accent-color:var(--color-streamaccent)">
-                                <input id="batch_pick_overlay_size_value" type="number"
-                                       min="1" max="1000" step="1" value="100" disabled
-                                       data-pick-overlay-size-number
-                                       inputmode="numeric"
-                                       aria-label="enter overlay size in pixels"
-                                       aria-valuetext="100 pixels"
-                                       aria-controls="batch_artifact_images"
-                                       class="rounded-md border border-streamline bg-streambar px-2 py-1 font-mono text-streamtext"
-                                       style="width:5rem">
-                                <span aria-hidden="true" class="text-streamsubtle">px</span>
+                            <div id="batch_pick_overlay_color_control"
+                                 data-pick-overlay-color-control
+                                 class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel">
+                                <span>color</span>
+                                <button type="button" data-pick-overlay-color-toggle
+                                        aria-haspopup="dialog" aria-expanded="false"
+                                        aria-controls="batch_pick_overlay_color_panel"
+                                        aria-label="open {% if batch_class_selector %}class-average{% else %}pick{% endif %} overlay color picker, current color #ff3b30"
+                                        class="flex items-center gap-2 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                                    <span data-pick-overlay-color-swatch aria-hidden="true"
+                                          style="background-color:#ff3b30"></span>
+                                </button>
+                                <div id="batch_pick_overlay_color_panel"
+                                     data-pick-overlay-color-panel
+                                     role="dialog" aria-label="{% if batch_class_selector %}class-average{% else %}pick{% endif %} overlay color"
+                                     class="hidden">
+                                    <p class="mb-2 text-[9px] uppercase tracking-wide text-streamlabel">
+                                        quick colors
+                                    </p>
+                                    <div data-pick-overlay-color-presets
+                                         role="group" aria-label="quick overlay colors">
+                                        <button type="button" data-pick-overlay-color-preset="#ff3b30"
+                                                aria-label="select red overlay" aria-pressed="true"
+                                                style="background-color:#ff3b30"></button>
+                                        <button type="button" data-pick-overlay-color-preset="#ffd60a"
+                                                aria-label="select yellow overlay" aria-pressed="false"
+                                                style="background-color:#ffd60a"></button>
+                                        <button type="button" data-pick-overlay-color-preset="#64dd17"
+                                                aria-label="select lime overlay" aria-pressed="false"
+                                                style="background-color:#64dd17"></button>
+                                        <button type="button" data-pick-overlay-color-preset="#00e5ff"
+                                                aria-label="select cyan overlay" aria-pressed="false"
+                                                style="background-color:#00e5ff"></button>
+                                        <button type="button" data-pick-overlay-color-preset="#60a5fa"
+                                                aria-label="select blue overlay" aria-pressed="false"
+                                                style="background-color:#60a5fa"></button>
+                                        <button type="button" data-pick-overlay-color-preset="#ff2dff"
+                                                aria-label="select magenta overlay" aria-pressed="false"
+                                                style="background-color:#ff2dff"></button>
+                                    </div>
+                                    <div data-pick-overlay-color-disc-wrap>
+                                        <canvas id="batch_pick_overlay_color_disc"
+                                                data-pick-overlay-color-disc
+                                                width="192" height="192" tabindex="0"
+                                                aria-label="color disc; left and right change hue, up and down change saturation"></canvas>
+                                        <span data-pick-overlay-color-disc-pointer aria-hidden="true"></span>
+                                    </div>
+                                    <p class="mt-2 text-center text-[9px] text-streamlabel">
+                                        drag the disc to choose hue and saturation
+                                    </p>
+                                    <div class="mt-3 flex items-center justify-between gap-3">
+                                        <label for="batch_pick_overlay_color_hex"
+                                               class="text-[10px] text-streamlabel">hex</label>
+                                        <input id="batch_pick_overlay_color_hex" type="text"
+                                               data-pick-overlay-color-hex
+                                               value="#ff3b30" maxlength="7"
+                                               pattern="#?[0-9a-fA-F]{6}"
+                                               inputmode="text" autocomplete="off" spellcheck="false"
+                                               aria-label="{% if batch_class_selector %}class-average{% else %}pick{% endif %} overlay hexadecimal color"
+                                               class="rounded-md border border-streamline bg-streambar px-2 py-1 font-mono text-streamtext"
+                                               style="width:6.5rem">
+                                    </div>
+                                    <label class="mt-3 block text-[10px] text-streamlabel">
+                                        <span class="flex items-center justify-between">
+                                            <span>brightness</span>
+                                            <output data-pick-overlay-color-output="brightness"
+                                                    for="batch_pick_overlay_color_brightness">100%</output>
+                                        </span>
+                                        <input id="batch_pick_overlay_color_brightness" type="range"
+                                               data-pick-overlay-color-slider data-pick-overlay-color-channel="brightness"
+                                               min="0" max="100" step="1" value="100"
+                                               aria-label="pick overlay brightness" aria-valuetext="100 percent">
+                                    </label>
+                                </div>
                             </div>
                         {% endif %}
                         {% if motion_artifact_toggle_available %}
@@ -513,6 +716,7 @@
                             data-output-grid-size-property="--artifact-tile-height" data-output-grid-tile-dimension="height"
                             class="flex flex-wrap items-start gap-2"
                             data-pick-overlay-mode="points" data-pick-overlay-size="0"
+                            data-pick-overlay-color="#ff3b30"
                             style="--artifact-tile-height:clamp(72px,18vw,260px)">
                             {% for micrograph in pick_micrographs %}
                                 {% include 'nice_classic/includes/_batch_pick_micrograph_preview.html' with micrograph=micrograph %}
