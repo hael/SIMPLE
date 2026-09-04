@@ -7,8 +7,9 @@
    href="{% url 'nice_lite:image' micrograph.path %}" target="_blank" rel="noopener"
    class="relative flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
    style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
-   title="picked micrograph{% if micrograph.number %} {{ micrograph.number }}{% endif %}">
+   title="picked micrograph{% if micrograph.number %} {{ micrograph.number }}{% endif %}{% if micrograph.xdim and micrograph.ydim %} — {{ micrograph.xdim }} × {{ micrograph.ydim }} px{% endif %}">
     <canvas data-pick-micrograph-overlay
             class="absolute inset-0 pointer-events-none hover:animate-pulse z-10"></canvas>
     {% include 'nice_stream/includes/_pick_micrograph_slide.html' with micrograph=micrograph grid_tile=True %}
+    {% include 'nice_classic/includes/_batch_dimensions_badge.html' with width=micrograph.xdim height=micrograph.ydim %}
 </a>

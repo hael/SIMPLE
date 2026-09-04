@@ -10,6 +10,7 @@ import time
 from collections import Counter
 
 import psutil
+from PIL import Image
 
 # django imports
 from django.core.paginator import Paginator
@@ -318,6 +319,28 @@ class BatchJob(Job):
             source_dir,
         )
 
+    def _get_motion_micrograph_dimensions(self, thumbnail_name):
+        """Return dimensions of the integrated MRC represented by a thumbnail."""
+        if (
+            self.prog != "motion_correct"
+            or not isinstance(thumbnail_name, str)
+            or not thumbnail_name.lower().endswith(self.MOTION_THUMBNAIL_SUFFIX)
+        ):
+            return None
+        motion_dir = self.get_safe_job_dir()
+        if motion_dir is None:
+            return None
+        micrograph_stem = thumbnail_name[:-len(self.MOTION_THUMBNAIL_SUFFIX)]
+        integrated_path = self._safe_job_file(
+            f"{micrograph_stem}{self.PICK_INTEGRATED_SUFFIX}.mrc",
+            motion_dir,
+        )
+        return (
+            self._read_mrc_dimensions(integrated_path)
+            if integrated_path is not None
+            else None
+        )
+
     @staticmethod
     def _read_mrc_dimensions(path):
         """Read validated x/y dimensions through the shared MRC helper."""
@@ -325,6 +348,32 @@ class BatchJob(Job):
         if stack_info is None:
             return None
         return stack_info.width, stack_info.height
+
+    @staticmethod
+    def _read_raster_dimensions(path):
+        """Return JPEG/PNG dimensions without loading image pixels."""
+        try:
+            with Image.open(path) as image:
+                width, height = image.size
+        except (
+            EOFError,
+            Image.DecompressionBombError,
+            OSError,
+            OverflowError,
+            TypeError,
+            ValueError,
+        ):
+            return None
+        if (
+            not isinstance(width, int)
+            or isinstance(width, bool)
+            or not isinstance(height, int)
+            or isinstance(height, bool)
+            or width <= 0
+            or height <= 0
+        ):
+            return None
+        return width, height
 
     @staticmethod
     def _read_box_centers(path, max_coordinates):
@@ -435,6 +484,7 @@ class BatchJob(Job):
         crop="full",
         hidden_by_default=False,
         visibility_group=None,
+        dimensions=None,
     ):
         """Return one normalized image view for the batch artifact gallery."""
         if kind == "power_spectrum":
@@ -455,6 +505,8 @@ class BatchJob(Job):
             preview["hidden_by_default"] = True
         if visibility_group is not None:
             preview["visibility_group"] = visibility_group
+        if dimensions is not None:
+            preview["width"], preview["height"] = dimensions
         return preview
 
     def get_artifact_summary(self, max_previews=12):
@@ -485,15 +537,24 @@ class BatchJob(Job):
                 continue
             counts[extension] += 1
             if extension in self.IMAGE_EXTENSIONS and len(images) < max_previews:
+                raster_dimensions = self._read_raster_dimensions(path)
                 image = {
                     "name": entry.name,
                     "path": path,
-                    "previews": [self._artifact_preview(path, entry.name)],
+                    "previews": [self._artifact_preview(
+                        path,
+                        entry.name,
+                        dimensions=raster_dimensions,
+                    )],
                 }
                 if (
                     self.prog == "motion_correct"
                     and entry.name.lower().endswith(self.MOTION_THUMBNAIL_SUFFIX)
                 ):
+                    micrograph_dimensions = (
+                        self._get_motion_micrograph_dimensions(entry.name)
+                        or raster_dimensions
+                    )
                     image["previews"] = [
                         self._artifact_preview(
                             path,
@@ -501,6 +562,7 @@ class BatchJob(Job):
                             kind="power_spectrum",
                             crop="left",
                             visibility_group="motion",
+                            dimensions=micrograph_dimensions,
                         ),
                         self._artifact_preview(
                             path,
@@ -509,11 +571,18 @@ class BatchJob(Job):
                             crop="right",
                             hidden_by_default=True,
                             visibility_group="motion",
+                            dimensions=micrograph_dimensions,
                         ),
                     ]
                 micrograph_path = self._get_motion_thumbnail(source_motion_job, entry.name)
                 if micrograph_path is not None:
                     micrograph_name = os.path.basename(micrograph_path)
+                    micrograph_dimensions = (
+                        source_motion_job._get_motion_micrograph_dimensions(
+                            micrograph_name
+                        )
+                        or source_motion_job._read_raster_dimensions(micrograph_path)
+                    )
                     image["previews"].append(self._artifact_preview(
                         micrograph_path,
                         micrograph_name,
@@ -521,6 +590,7 @@ class BatchJob(Job):
                         crop="right",
                         hidden_by_default=True,
                         visibility_group="ctf_micrograph",
+                        dimensions=micrograph_dimensions,
                     ))
                 images.append(image)
 
@@ -607,6 +677,8 @@ class BatchJob(Job):
                     "number": global_offset + 1,
                     "stack_name": stack["name"],
                     "stack_index": global_offset - stack_offset + 1,
+                    "width": stack["width"],
+                    "height": stack["height"],
                 })
             stack_offset = stack_last_offset
             if stack_offset >= last_offset:

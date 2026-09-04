@@ -1,7 +1,9 @@
 """Lifecycle actions for classic SIMPLE and SINGLE batch jobs."""
 
+import json
 import logging
 import os
+import struct
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -9,11 +11,19 @@ from django.core import signing
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.views.decorators.cache import cache_control
 from django.views.decorators.http import require_GET, require_POST
 
 from ..data_structures.batchjob import BatchJob
-from ..data_structures.movie import movie_preview_supported
+from ..data_structures.class_selection import (
+    ClassSelectionError,
+    batch_class_selection_available,
+    deselected_class_ids,
+    load_batch_class_selection,
+)
+from ..data_structures.mrc import render_mrc_particle_png
+from ..data_structures.movie import movie_preview_supported, read_movie_dimensions
 from ..data_structures.project import Project
 from ..data_structures.simple import SIMPLEBatch, SIMPLEProjFile
 from ..data_structures.workspace import Workspace
@@ -288,6 +298,18 @@ def _empty_movie_page():
     }
 
 
+def _has_positive_dimensions(item, width_key="width", height_key="height"):
+    """Return whether a rendered output item has usable pixel dimensions."""
+    if not isinstance(item, dict):
+        return False
+    return all(
+        isinstance(item.get(key), (int, float))
+        and not isinstance(item.get(key), bool)
+        and item.get(key) > 0
+        for key in (width_key, height_key)
+    )
+
+
 def _movie_thumbnail_token(job_id, movie_path):
     """Sign an imported movie path so it cannot be replaced in the URL."""
     return signing.Signer(salt=_BATCH_MOVIE_THUMBNAIL_SALT).sign_object(
@@ -324,9 +346,12 @@ def _import_movie_page(job_id, batch_job, page=1, page_size=40):
     movies = []
     for offset, movie_path in enumerate(page_obj.object_list):
         preview_available = movie_preview_supported(movie_path)
+        dimensions = read_movie_dimensions(movie_path)
         movies.append({
             "number": first_movie + offset,
             "name": os.path.basename(movie_path) or movie_path,
+            "width": dimensions[0] if dimensions is not None else None,
+            "height": dimensions[1] if dimensions is not None else None,
             "preview_available": preview_available,
             "token": (
                 _movie_thumbnail_token(job_id, movie_path)
@@ -356,7 +381,13 @@ def _import_movie_page(job_id, batch_job, page=1, page_size=40):
     }
 
 
-def _batch_detail_context(batch_job, jobmodel, particle_page=1, movie_page=1):
+def _batch_detail_context(
+    batch_job,
+    jobmodel,
+    particle_page=1,
+    movie_page=1,
+    class_selector_requested=False,
+):
     """Assemble validated batch metadata, logs, artifacts, and project summary."""
     metadata = jobmodel.master_stats if isinstance(jobmodel.master_stats, dict) else {}
     result_project = batch_job.get_result_project_path()
@@ -366,6 +397,49 @@ def _batch_detail_context(batch_job, jobmodel, particle_page=1, movie_page=1):
     if jobmodel.status == "finished" and result_project is not None:
         project_reader = SIMPLEProjFile(result_project)
         project_stats = project_reader.getGlobalStats()
+    cls2d_stats = project_stats.get("cls2D") if isinstance(project_stats, dict) else None
+    reported_cls2d_available = (
+        isinstance(cls2d_stats, dict)
+        and isinstance(cls2d_stats.get("n"), int)
+        and not isinstance(cls2d_stats.get("n"), bool)
+        and cls2d_stats["n"] > 0
+    )
+    class_selector_available = (
+        jobmodel.status == "finished"
+        and result_project is not None
+        and (
+            reported_cls2d_available
+            or batch_class_selection_available(
+                result_project,
+                jobmodel.dset.proj.dirc,
+            )
+        )
+    )
+    batch_class_selector = None
+    class_selector_error = ""
+    if class_selector_requested and class_selector_available:
+        try:
+            selection = load_batch_class_selection(
+                result_project,
+                jobmodel.dset.proj.dirc,
+                jobmodel.id,
+            )
+            batch_class_selector = {
+                "classes": selection.classes,
+                "class_count": len(selection.classes),
+                "stack_name": selection.stack_name,
+                "width": selection.width,
+                "height": selection.height,
+                "initial_selected_class_ids": selection.initial_selected_class_ids,
+                "browser_data": selection.browser_data(),
+            }
+        except (ClassSelectionError, OSError, OverflowError, struct.error) as error:
+            logger.warning(
+                "batch class selector unavailable for job %s: %s",
+                jobmodel.id,
+                error,
+            )
+            class_selector_error = str(error)
     if jobmodel.status == "finished" and metadata.get("program") == "pick":
         pick_micrographs = batch_job.get_pick_micrograph_previews(
             max_previews=_BATCH_PICK_PREVIEW_LIMIT,
@@ -377,6 +451,10 @@ def _batch_detail_context(batch_job, jobmodel, particle_page=1, movie_page=1):
     artifact_summary = batch_job.get_artifact_summary()
     artifact_counts = list(artifact_summary.get("counts", []))
     artifact_images = artifact_summary.get("images", [])
+    class_selector_replaces_artifact_previews = (
+        metadata.get("program") == "abinitio2D"
+        and batch_class_selector is not None
+    )
     particle_stack_page = {}
     if metadata.get("program") in BatchJob.PARTICLE_STACK_PROGRAMS:
         particle_stack_page = batch_job.get_particle_stack_page(
@@ -399,6 +477,26 @@ def _batch_detail_context(batch_job, jobmodel, particle_page=1, movie_page=1):
             page=movie_page,
             page_size=_BATCH_MOVIE_PAGE_SIZE,
         )
+    output_dimensions_available = (
+        _has_positive_dimensions(batch_class_selector)
+        or any(
+            _has_positive_dimensions(micrograph, "xdim", "ydim")
+            for micrograph in pick_micrographs
+        )
+        or any(
+            _has_positive_dimensions(preview)
+            for image in artifact_images
+            for preview in image.get("previews", [])
+        )
+        or any(
+            _has_positive_dimensions(particle)
+            for particle in particle_stack_page.get("particles", [])
+        )
+        or any(
+            _has_positive_dimensions(movie)
+            for movie in import_movie_page.get("movies", [])
+        )
+    )
     arguments = _argument_rows(jobmodel, metadata)
     return {
         "jobid": jobmodel.id,
@@ -418,6 +516,13 @@ def _batch_detail_context(batch_job, jobmodel, particle_page=1, movie_page=1):
         "result_project": result_project,
         "project_sections": _project_sections(project_stats),
         "project_summary_available": bool(project_stats),
+        "class_selector_available": class_selector_available,
+        "class_selector_requested": class_selector_requested,
+        "batch_class_selector": batch_class_selector,
+        "class_selector_error": class_selector_error,
+        "class_selector_replaces_artifact_previews": (
+            class_selector_replaces_artifact_previews
+        ),
         "pick_micrographs": pick_micrographs,
         "pick_box_overlay_available": any(
             isinstance(box.get("width"), (int, float))
@@ -436,6 +541,7 @@ def _batch_detail_context(batch_job, jobmodel, particle_page=1, movie_page=1):
         "artifact_images": artifact_images,
         "particle_stack_page": particle_stack_page,
         "import_movie_page": import_movie_page,
+        "output_dimensions_available": output_dimensions_available,
         "motion_artifact_toggle_available": (
             metadata.get("program") == "motion_correct"
             and any(
@@ -465,6 +571,26 @@ def _positive_page_number(request, query_name):
     return max(1, page)
 
 
+def _class_selector_requested(request):
+    """Return True only for the explicit, default-off batch selector key."""
+    return request.GET.get("class_selector") == "1"
+
+
+def _class_selector_redirect(job_id):
+    batch_url = reverse("nice_lite:view_batch", args=(job_id,))
+    return f"{batch_url}?class_selector=1#batch_class_selector"
+
+
+def _selected_class_ids(request):
+    try:
+        selected_ids = json.loads(request.POST.get("selected_class_ids", ""))
+    except (TypeError, json.JSONDecodeError) as error:
+        raise ClassSelectionError("Selection data is missing or invalid.") from error
+    if not isinstance(selected_ids, list):
+        raise ClassSelectionError("Selection data is missing or invalid.")
+    return selected_ids
+
+
 @login_required(login_url="/login")
 @require_GET
 def view_batch(request, jobid):
@@ -486,12 +612,95 @@ def view_batch(request, jobid):
             jobmodel,
             particle_page=_positive_page_number(request, "particle_page"),
             movie_page=_positive_page_number(request, "movie_page"),
+            class_selector_requested=_class_selector_requested(request),
         ),
     )
     response.set_cookie(key="selected_project_id", value=jobmodel.dset.proj_id)
     response.set_cookie(key="selected_workspace_id", value=jobmodel.dset_id)
     # Ensure Back renders the checksum-gated workspace instead of returning 204.
     clear_checksum_cookies(request, response)
+    return response
+
+
+@login_required(login_url="/login")
+@require_GET
+@cache_control(private=True, max_age=300, no_transform=True)
+def view_batch_class_thumbnail(request, jobid, stack_index):
+    """Render one class average from an owned finished batch result."""
+    batch_job, jobmodel = _get_accessible_batch_job(
+        request,
+        "view_batch_class_thumbnail",
+        job_id=jobid,
+    )
+    if batch_job is None or jobmodel.status != "finished":
+        return HttpResponse(status=404)
+
+    result_project = batch_job.get_result_project_path()
+    try:
+        selection = load_batch_class_selection(
+            result_project,
+            jobmodel.dset.proj.dirc,
+            jobmodel.id,
+        )
+    except (ClassSelectionError, OSError, OverflowError, struct.error):
+        return HttpResponse(status=404)
+    if stack_index not in {
+        entry["stack_index"] for entry in selection.classes
+    }:
+        return HttpResponse(status=404)
+
+    thumbnail = render_mrc_particle_png(
+        selection.stack_path,
+        stack_index,
+        max_size=512,
+    )
+    if thumbnail is None:
+        return HttpResponse(status=404)
+    response = HttpResponse(thumbnail, content_type="image/png")
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@login_required(login_url="/login")
+@require_POST
+def view_batch_class_deselection_export(request, jobid):
+    """Download a validated, one-based deselection list for a batch result."""
+    batch_job, jobmodel = _get_accessible_batch_job(
+        request,
+        "view_batch_class_deselection_export",
+        job_id=jobid,
+    )
+    if batch_job is None or jobmodel.status != "finished":
+        messages.add_message(request, messages.ERROR, "invalid batch job selection")
+        return redirect("nice_lite:workspace")
+
+    try:
+        selection = load_batch_class_selection(
+            batch_job.get_result_project_path(),
+            jobmodel.dset.proj.dirc,
+            jobmodel.id,
+        )
+        deselected_ids = deselected_class_ids(
+            selection,
+            _selected_class_ids(request),
+        )
+    except (ClassSelectionError, OSError, OverflowError, struct.error) as error:
+        logger.warning(
+            "batch class deselection export failed for job %s: %s",
+            jobmodel.id,
+            error,
+        )
+        messages.add_message(request, messages.ERROR, f"selection export failed: {error}")
+        return redirect(_class_selector_redirect(jobmodel.id))
+
+    response = HttpResponse(
+        "".join(f"{class_id}\n" for class_id in deselected_ids),
+        content_type="text/plain; charset=utf-8",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="batch_{jobmodel.id}_deselected_classes.txt"'
+    )
+    response["X-Content-Type-Options"] = "nosniff"
     return response
 
 

@@ -163,6 +163,158 @@ class BatchViewTests(SimpleTestCase):
             "submitted": True,
         }])
 
+    def test_batch_class_selector_is_loaded_only_by_explicit_query_key(self):
+        project = SimpleNamespace(name="project", dirc="/project")
+        workspace = SimpleNamespace(name="workspace", proj=project)
+        jobmodel = SimpleNamespace(
+            id=7,
+            disp=2,
+            name="2D classification",
+            desc="",
+            status="finished",
+            cdat="created",
+            args={},
+            master_stats={"package": "simple", "program": "abinitio2D"},
+            dset=workspace,
+        )
+        batch_job = Mock()
+        batch_job.get_result_project_path.return_value = "/project/workspace.simple"
+        batch_job.get_artifact_summary.return_value = {"counts": [], "images": []}
+        batch_job.get_safe_job_dir.return_value = "/project/2_cluster2D"
+        batch_job.get_log_tails.return_value = []
+        selection = SimpleNamespace(
+            classes=({"class_id": 1, "stack_index": 1},),
+            stack_name="classes.mrcs",
+            width=128,
+            height=128,
+            initial_selected_class_ids=(1,),
+            browser_data=lambda: {
+                "classes": [{"class_id": 1, "stack_index": 1}],
+                "initial_selected_class_ids": [1],
+                "selection_storage_key": "selection-key",
+            },
+        )
+
+        with (
+            patch.object(batch_views, "SIMPLEProjFile") as project_reader_cls,
+            patch.object(
+                batch_views,
+                "load_batch_class_selection",
+                return_value=selection,
+            ) as load_selection,
+        ):
+            project_reader_cls.return_value.getGlobalStats.return_value = {
+                "cls2D": {"n": 1}
+            }
+            closed_context = batch_views._batch_detail_context(batch_job, jobmodel)
+            open_context = batch_views._batch_detail_context(
+                batch_job,
+                jobmodel,
+                class_selector_requested=True,
+            )
+
+        self.assertTrue(closed_context["class_selector_available"])
+        self.assertIsNone(closed_context["batch_class_selector"])
+        self.assertFalse(
+            closed_context["class_selector_replaces_artifact_previews"]
+        )
+        load_selection.assert_called_once_with(
+            "/project/workspace.simple",
+            "/project",
+            7,
+        )
+        self.assertEqual(open_context["batch_class_selector"]["class_count"], 1)
+        self.assertEqual(open_context["batch_class_selector"]["width"], 128)
+        self.assertEqual(open_context["batch_class_selector"]["height"], 128)
+        self.assertTrue(
+            open_context["class_selector_replaces_artifact_previews"]
+        )
+        self.assertTrue(open_context["output_dimensions_available"])
+
+    def test_batch_class_thumbnail_renders_owned_stack_slice(self):
+        jobmodel = SimpleNamespace(
+            id=7,
+            status="finished",
+            dset=SimpleNamespace(proj=SimpleNamespace(dirc="/project")),
+        )
+        batch_job = Mock()
+        batch_job.get_result_project_path.return_value = "/project/workspace.simple"
+        selection = SimpleNamespace(
+            stack_path="/project/classes.mrcs",
+            classes=({"class_id": 4, "stack_index": 2},),
+        )
+
+        with (
+            patch.object(
+                batch_views,
+                "_get_accessible_batch_job",
+                return_value=(batch_job, jobmodel),
+            ),
+            patch.object(
+                batch_views,
+                "load_batch_class_selection",
+                return_value=selection,
+            ),
+            patch.object(
+                batch_views,
+                "render_mrc_particle_png",
+                return_value=b"png",
+            ) as render_thumbnail,
+        ):
+            response = batch_views.view_batch_class_thumbnail(
+                self._get_request("/batchclass/7/2"),
+                7,
+                2,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        render_thumbnail.assert_called_once_with(
+            "/project/classes.mrcs",
+            2,
+            max_size=512,
+        )
+
+    def test_batch_class_export_returns_sorted_one_based_deselection(self):
+        jobmodel = SimpleNamespace(
+            id=7,
+            status="finished",
+            dset=SimpleNamespace(proj=SimpleNamespace(dirc="/project")),
+        )
+        batch_job = Mock()
+        batch_job.get_result_project_path.return_value = "/project/workspace.simple"
+        selection = SimpleNamespace(classes=(
+            {"class_id": 1},
+            {"class_id": 2},
+            {"class_id": 3},
+        ))
+        request = self.factory.post(
+            "/batchclass/7/deselection",
+            {"selected_class_ids": "[3, 1]"},
+        )
+        request.user = _AuthUser()
+
+        with (
+            patch.object(
+                batch_views,
+                "_get_accessible_batch_job",
+                return_value=(batch_job, jobmodel),
+            ),
+            patch.object(
+                batch_views,
+                "load_batch_class_selection",
+                return_value=selection,
+            ),
+        ):
+            response = batch_views.view_batch_class_deselection_export(
+                request,
+                7,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"2\n")
+        self.assertIn("batch_7_deselected_classes.txt", response["Content-Disposition"])
+
     def test_extract_batch_context_paginates_particle_stack_headers(self):
         project = SimpleNamespace(name="project")
         workspace = SimpleNamespace(name="workspace", proj=project)
@@ -179,7 +331,13 @@ class BatchViewTests(SimpleTestCase):
         )
         particle_stack_page = {
             "stacks": [{"name": "particles.mrcs", "count": 80}],
-            "particles": [{"number": 41, "stack_name": "particles.mrcs", "stack_index": 41}],
+            "particles": [{
+                "number": 41,
+                "stack_name": "particles.mrcs",
+                "stack_index": 41,
+                "width": 128,
+                "height": 128,
+            }],
             "total": 80,
         }
         batch_job = Mock()
@@ -194,6 +352,7 @@ class BatchViewTests(SimpleTestCase):
         batch_job.get_particle_stack_page.assert_called_once_with(page=2, page_size=40)
         self.assertIs(context["particle_stack_page"], particle_stack_page)
         self.assertEqual(context["artifact_counts"], [{"extension": "MRCS", "count": 1}])
+        self.assertTrue(context["output_dimensions_available"])
 
     def test_particle_thumbnail_endpoint_renders_only_requested_particle(self):
         batch_job = Mock()
@@ -224,17 +383,25 @@ class BatchViewTests(SimpleTestCase):
             for number in range(1, 482)
         ]
 
-        movie_page = batch_views._import_movie_page(
-            7,
-            batch_job,
-            page=2,
-            page_size=40,
-        )
+        with patch.object(
+            batch_views,
+            "read_movie_dimensions",
+            return_value=(4096, 4096),
+        ) as read_dimensions:
+            movie_page = batch_views._import_movie_page(
+                7,
+                batch_job,
+                page=2,
+                page_size=40,
+            )
 
         batch_job.get_import_movie_paths.assert_called_once_with()
         self.assertEqual(movie_page["first_movie"], 41)
         self.assertEqual(movie_page["last_movie"], 80)
         self.assertEqual(movie_page["movies"][0]["number"], 41)
+        self.assertEqual(movie_page["movies"][0]["width"], 4096)
+        self.assertEqual(movie_page["movies"][0]["height"], 4096)
+        self.assertEqual(read_dimensions.call_count, 40)
         payload = signing.Signer(
             salt=batch_views._BATCH_MOVIE_THUMBNAIL_SALT,
         ).unsign_object(movie_page["movies"][0]["token"])
@@ -319,6 +486,7 @@ class BatchViewTests(SimpleTestCase):
         batch_job.get_artifact_summary.assert_called_once_with()
         self.assertEqual(context["artifact_images"], artifact_summary["images"])
         self.assertTrue(context["ctf_artifact_micrograph_toggle_available"])
+        self.assertFalse(context["output_dimensions_available"])
 
     def test_batch_detail_prefers_pick_previews_from_motion_artifacts(self):
         jobmodel = SimpleNamespace(
@@ -371,6 +539,7 @@ class BatchViewTests(SimpleTestCase):
             "boxes": [{"x": 101, "y": 202, "width": 180, "height": 180}],
         }])
         self.assertTrue(context["pick_box_overlay_available"])
+        self.assertTrue(context["output_dimensions_available"])
 
     def test_batch_detail_rejects_inaccessible_job(self):
         with (

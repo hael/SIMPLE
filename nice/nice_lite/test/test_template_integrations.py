@@ -397,6 +397,18 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn('aria-label="view batch job 1 Import Movie Data"', rendered)
         self.assertNotIn('<circle cx="8" cy="8" r="3"', rendered)
 
+        job["name"] = "Create 2D Class Averages"
+        job["master_stats"]["program"] = "abinitio2D"
+        class_average_rendered = render_to_string(
+            "nice_classic/_batch_card.html",
+            {"job": job},
+        )
+
+        self.assertIn(
+            'href="/viewbatch/7?class_selector=1"',
+            class_average_rendered,
+        )
+
     def test_batch_detail_template_has_common_result_and_log_panels(self):
         batch_view = self._read_template("nice_classic/batchview.html")
 
@@ -480,8 +492,19 @@ class TemplateIntegrationTests(SimpleTestCase):
         self.assertIn("Import Movie Data", rendered)
         self.assertIn("Number of threads", rendered)
         self.assertNotIn(">nthr</dt>", rendered)
-        self.assertIn('onclick="setBatchArgumentView(\'submitted\')"', rendered)
-        self.assertIn('onclick="setBatchArgumentView(\'all\')"', rendered)
+        self.assertIn('id="argument_view_toggle"', rendered)
+        self.assertIn('type="checkbox" role="switch"', rendered)
+        self.assertIn('aria-label="show all arguments"', rendered)
+        self.assertIn('data-argument-view-label="all"', rendered)
+        self.assertNotIn('data-argument-view-label="submitted"', rendered)
+        self.assertLess(
+            rendered.index('data-argument-view-label="all"'),
+            rendered.index('id="argument_view_toggle"'),
+        )
+        self.assertNotIn('id="submitted_arguments_button"', rendered)
+        self.assertNotIn('id="all_arguments_button"', rendered)
+        self.assertIn('batchArgumentViewToggle.addEventListener("change"', rendered)
+        self.assertIn('batchArgumentViewToggle.checked ? "all" : "submitted"', rendered)
         self.assertIn('sessionStorage.getItem(batchArgumentViewStorageKey)', rendered)
         self.assertIn('data-submitted="false"', rendered)
         self.assertIn("Scale", rendered)

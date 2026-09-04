@@ -66,6 +66,16 @@ urlpatterns = [
         name="batch_particle_thumbnail",
     ),
     path(
+        "batchclass/<int:jobid>/<int:stack_index>",
+        batch_views.view_batch_class_thumbnail,
+        name="batch_class_thumbnail",
+    ),
+    path(
+        "batchclass/<int:jobid>/deselection",
+        batch_views.view_batch_class_deselection_export,
+        name="batch_class_deselection_export",
+    ),
+    path(
         "batchmovie/<int:jobid>/<str:token>",
         batch_views.view_batch_movie_thumbnail,
         name="batch_movie_thumbnail",

@@ -1,4 +1,5 @@
 import os
+import struct
 import tempfile
 from unittest import mock
 
@@ -6,7 +7,11 @@ import numpy as np
 from django.test import SimpleTestCase
 from PIL import Image
 
-from ..data_structures.movie import movie_preview_supported, render_movie_webp
+from ..data_structures.movie import (
+    movie_preview_supported,
+    read_movie_dimensions,
+    render_movie_webp,
+)
 
 
 class MovieThumbnailTests(SimpleTestCase):
@@ -57,6 +62,30 @@ class MovieThumbnailTests(SimpleTestCase):
 
         self.assertIsNotNone(thumbnail)
         self.assertLess(operations.index("convert"), operations.index("resize"))
+
+    def test_reads_tiff_dimensions_without_loading_movie_pixels(self):
+        movie_path = os.path.join(self.tempdir.name, "movie.tiff")
+        Image.fromarray(np.zeros((3, 5), dtype=np.uint16)).save(movie_path)
+
+        with mock.patch.object(
+            Image.Image,
+            "load",
+            side_effect=AssertionError("movie pixels should remain lazy"),
+        ):
+            dimensions = read_movie_dimensions(movie_path)
+
+        self.assertEqual(dimensions, (5, 3))
+
+    def test_reads_big_tiff_eer_dimensions(self):
+        movie_path = os.path.join(self.tempdir.name, "movie.eer")
+        with open(movie_path, "wb") as movie:
+            movie.write(struct.pack("<2sHHHQ", b"II", 43, 8, 0, 16))
+            movie.write(struct.pack("<Q", 2))
+            movie.write(struct.pack("<HHQQ", 256, 4, 1, 4096))
+            movie.write(struct.pack("<HHQQ", 257, 4, 1, 4096))
+            movie.write(struct.pack("<Q", 0))
+
+        self.assertEqual(read_movie_dimensions(movie_path), (4096, 4096))
 
     def test_rejects_unsupported_movie_formats(self):
         self.assertFalse(movie_preview_supported("movie.eer"))

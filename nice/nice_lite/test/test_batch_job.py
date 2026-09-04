@@ -7,6 +7,7 @@ from unittest.mock import ANY, Mock, patch
 
 from django.test import TestCase
 from django.utils import timezone
+from PIL import Image
 
 from ..data_structures import batchjob as batchjob_module
 from ..data_structures import simple as simple_module
@@ -136,7 +137,19 @@ class BatchJobLifecycleTests(TestCase):
 
         job = BatchJob(id=jobmodel.id)
         logs = job.get_log_tails(max_bytes=5)
-        artifacts = job.get_artifact_summary()
+        with (
+            patch.object(
+                BatchJob,
+                "_read_raster_dimensions",
+                return_value=(320, 160),
+            ),
+            patch.object(
+                BatchJob,
+                "_read_mrc_dimensions",
+                return_value=(4096, 3072),
+            ),
+        ):
+            artifacts = job.get_artifact_summary()
 
         self.assertEqual(logs[0]["text"], "56789")
         self.assertTrue(logs[0]["truncated"])
@@ -160,6 +173,23 @@ class BatchJobLifecycleTests(TestCase):
         )
         self.assertNotIn("hidden_by_default", previews[0])
         self.assertTrue(previews[1]["hidden_by_default"])
+        self.assertEqual(
+            [(preview["width"], preview["height"]) for preview in previews],
+            [(4096, 3072), (4096, 3072)],
+        )
+
+    def test_raster_dimensions_are_read_without_loading_pixels(self):
+        image_path = os.path.join(self.tempdir.name, "artifact.png")
+        Image.new("L", (13, 7)).save(image_path)
+
+        with patch.object(
+            Image.Image,
+            "load",
+            side_effect=AssertionError("artifact pixels should remain lazy"),
+        ):
+            dimensions = BatchJob._read_raster_dimensions(image_path)
+
+        self.assertEqual(dimensions, (13, 7))
 
     def test_extract_particle_stack_pages_read_headers_without_rendering_thumbnails(self):
         job_dir = os.path.join(self.workspace_dir, "1_extract")
@@ -198,13 +228,19 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(particle_page["page_numbers"], [1, 2])
         self.assertEqual(
             [
-                (particle["number"], particle["stack_name"], particle["stack_index"])
+                (
+                    particle["number"],
+                    particle["stack_name"],
+                    particle["stack_index"],
+                    particle["width"],
+                    particle["height"],
+                )
                 for particle in particle_page["particles"]
             ],
             [
-                (5, "particles_b.mrcs", 2),
-                (6, "particles_b.mrcs", 3),
-                (7, "particles_b.mrcs", 4),
+                (5, "particles_b.mrcs", 2, 128, 128),
+                (6, "particles_b.mrcs", 3, 128, 128),
+                (7, "particles_b.mrcs", 4, 128, 128),
             ],
         )
         render_thumbnail.assert_not_called()
@@ -309,6 +345,8 @@ class BatchJobLifecycleTests(TestCase):
         motion_thumbnail = os.path.join(motion_dir, "movie_thumb.jpg")
         with open(motion_thumbnail, "wb") as image_file:
             image_file.write(b"motion")
+        with open(os.path.join(motion_dir, "movie_intg.mrc"), "wb") as mrc_file:
+            mrc_file.write(b"mrc")
         motion_job = JobModel.objects.create(
             dset=self.workspace_model,
             cdat=timezone.now(),
@@ -342,7 +380,21 @@ class BatchJobLifecycleTests(TestCase):
         )
 
         job = BatchJob(id=ctf_job.id)
-        artifacts = job.get_artifact_summary()
+        with (
+            patch.object(
+                BatchJob,
+                "_read_raster_dimensions",
+                side_effect=lambda path: (
+                    (800, 600) if path == diagnostic else (320, 160)
+                ),
+            ),
+            patch.object(
+                BatchJob,
+                "_read_mrc_dimensions",
+                return_value=(4096, 3072),
+            ),
+        ):
+            artifacts = job.get_artifact_summary()
 
         self.assertEqual(artifacts["images"][0]["path"], diagnostic)
         previews = artifacts["images"][0]["previews"]
@@ -357,6 +409,10 @@ class BatchJobLifecycleTests(TestCase):
         self.assertEqual(previews[1]["path"], motion_thumbnail)
         self.assertTrue(previews[1]["hidden_by_default"])
         self.assertEqual(previews[1]["visibility_group"], "ctf_micrograph")
+        self.assertEqual(
+            [(preview["width"], preview["height"]) for preview in previews],
+            [(800, 600), (4096, 3072)],
+        )
 
     def test_ctf_artifacts_do_not_pair_with_a_non_motion_source(self):
         source_dir = os.path.join(self.workspace_dir, "1_import_movies")

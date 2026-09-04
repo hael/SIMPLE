@@ -1,6 +1,6 @@
 {% comment %}Compact workspace card for a classic SIMPLE/SINGLE batch job.{% endcomment %}
 <div class="relative bg-streambar rounded-xl border {% if job.status == 'running' %}border-streamring/10{% elif job.status == 'failed' or job.status == 'stopped' %}border-streamerrorline{% else %}border-streamline{% endif %} flex flex-col overflow-hidden w-[260px] h-[180px] cursor-pointer hover:border-streamring transition-colors">
-    <a href="{% url 'nice_lite:view_batch' job.id %}" target="_parent"
+    <a href="{% url 'nice_lite:view_batch' job.id %}{% if job.status == 'finished' and job.master_stats.program == 'abinitio2D' %}?class_selector=1{% endif %}" target="_parent"
        aria-label="view batch job {{ job.disp }} {{ job.name }}" title="view batch job"
        class="absolute inset-0 z-10 rounded-xl focus:outline-none focus:ring-1 focus:ring-streamring">
     </a>

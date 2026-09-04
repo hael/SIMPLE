@@ -7,7 +7,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{% static 'nice_lite/nice_lite.css' %}">
     {% if pick_micrographs %}
-        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}"></script>
+        <script defer src="{% static 'nice_lite/pick_micrograph_slider.js' %}?v=6"></script>
+    {% endif %}
+    {% if batch_class_selector %}
+        <script type="module" src="{% static 'nice_lite/class_selector.js' %}"></script>
     {% endif %}
 </head>
 <body class="bg-streambg h-screen flex flex-col font-sans" style="height:100vh;height:100dvh">
@@ -103,14 +106,16 @@
                         </button>
                     </h2>
                     {% if arguments %}
-                        <div id="argument_view_controls" class="flex items-center rounded-md border border-streamdivider p-0.5" role="group" aria-label="argument view">
-                            <button id="submitted_arguments_button" type="button" aria-pressed="true" aria-controls="argument_list"
-                                    onclick="setBatchArgumentView('submitted')"
-                                    class="min-h-9 rounded px-3 py-1.5 text-[10px] bg-streamring/10 text-streamaccent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">submitted</button>
-                            <button id="all_arguments_button" type="button" aria-pressed="false" aria-controls="argument_list"
-                                    onclick="setBatchArgumentView('all')"
-                                    class="min-h-9 rounded px-3 py-1.5 text-[10px] text-streamlabel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">all</button>
-                        </div>
+                        <label id="argument_view_controls" for="argument_view_toggle"
+                               title="toggle between submitted and all arguments"
+                               class="min-h-9 flex-shrink-0 inline-flex cursor-pointer select-none items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px]">
+                            <span data-argument-view-label="all" class="text-streamlabel">all</span>
+                            <input id="argument_view_toggle" type="checkbox" role="switch"
+                                   aria-label="show all arguments" aria-controls="argument_list"
+                                   class="peer sr-only">
+                            <span aria-hidden="true"
+                                  class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-nice4bubble peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
+                        </label>
                     {% endif %}
                 </div>
                 <div id="batch_arguments_panel" data-collapse-body class="mt-3">
@@ -174,9 +179,9 @@
             </section>
 
             <section data-collapsible-panel data-collapse-key="artifacts" class="lg:col-span-full min-w-0 bg-streambar rounded-xl border border-streamline p-3 sm:p-4">
-                <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center gap-3">
                     <h2 class="min-w-0 flex-1">
-                        <button type="button" data-collapse-toggle data-collapse-companion-id="{% if pick_box_overlay_available %}batch_pick_overlay_toggle{% elif motion_artifact_toggle_available %}batch_motion_artifact_toggle{% else %}batch_ctf_micrograph_toggle{% endif %}"
+                        <button type="button" data-collapse-toggle data-collapse-companion-id="batch_output_controls"
                                 aria-expanded="true" aria-controls="batch_artifacts_panel"
                                 class="min-h-9 w-full flex items-center gap-2 text-left text-[10px] font-medium uppercase tracking-widest text-streamlabel hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring rounded-md">
                             <svg data-collapse-icon aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-3 h-3 flex-shrink-0 rotate-90 transition-transform duration-150">
@@ -185,48 +190,160 @@
                             <span>output</span>
                         </button>
                     </h2>
-                    {% if pick_box_overlay_available %}
-                        <button id="batch_pick_overlay_toggle" type="button" data-pick-overlay-toggle
-                                aria-pressed="false" aria-controls="batch_artifact_images"
-                                aria-label="show boxes" title="show boxes"
-                                class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
-                            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
-                                <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/>
-                                <rect x="2.5" y="2.5" width="11" height="11" rx="1"/>
-                            </svg>
-                            <span data-pick-overlay-toggle-label>show boxes</span>
-                        </button>
-                    {% endif %}
-                    {% if motion_artifact_toggle_available %}
-                        <button id="batch_motion_artifact_toggle" type="button"
-                                aria-controls="batch_artifact_images"
-                                aria-label="show micrographs" title="show micrographs"
-                                class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
-                            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
-                                <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
-                                <path d="M8 2.5v11"/>
-                                <circle cx="11" cy="8" r="1.25"/>
-                            </svg>
-                            <span data-motion-artifact-toggle-label>show micrographs</span>
-                        </button>
-                    {% endif %}
-                    {% if ctf_artifact_micrograph_toggle_available %}
-                        <button id="batch_ctf_micrograph_toggle" type="button" aria-pressed="false"
-                                aria-controls="batch_artifact_images"
-                                aria-label="show micrographs" title="show micrographs"
-                                class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
-                            <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
-                                <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
-                                <circle cx="5" cy="6" r="1.25"/>
-                                <path d="m2.5 12 3.25-3 2.25 2 2.25-2.25L13.5 12"/>
-                            </svg>
-                            <span data-ctf-micrograph-toggle-label>show micrographs</span>
-                        </button>
-                    {% endif %}
+                    <div id="batch_output_controls" class="flex flex-wrap items-center justify-end gap-2">
+                        {% if pick_box_overlay_available %}
+                            <button id="batch_pick_overlay_toggle" type="button" data-pick-overlay-toggle
+                                    data-pick-overlay-mode="points"
+                                    data-pick-overlay-size-input-id="batch_pick_overlay_size"
+                                    aria-controls="batch_artifact_images"
+                                    aria-label="points overlay; show circle" title="show circle"
+                                    class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
+                                    <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/>
+                                    <rect x="2.5" y="2.5" width="11" height="11" rx="1"/>
+                                </svg>
+                                <span data-pick-overlay-toggle-label>points</span>
+                            </button>
+                            <div data-pick-overlay-size-control
+                                 title="set circle diameter or box size in source-image pixels"
+                                 class="hidden min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel">
+                                <label for="batch_pick_overlay_size">size</label>
+                                <input id="batch_pick_overlay_size" type="range"
+                                       min="1" max="1000" step="1" value="100" disabled
+                                       aria-label="overlay size in pixels"
+                                       aria-valuetext="100 pixels"
+                                       aria-controls="batch_artifact_images"
+                                       style="width:6rem;accent-color:var(--color-streamaccent)">
+                                <input id="batch_pick_overlay_size_value" type="number"
+                                       min="1" max="1000" step="1" value="100" disabled
+                                       data-pick-overlay-size-number
+                                       inputmode="numeric"
+                                       aria-label="enter overlay size in pixels"
+                                       aria-valuetext="100 pixels"
+                                       aria-controls="batch_artifact_images"
+                                       class="rounded-md border border-streamline bg-streambar px-2 py-1 font-mono text-streamtext"
+                                       style="width:5rem">
+                                <span aria-hidden="true" class="text-streamsubtle">px</span>
+                            </div>
+                        {% endif %}
+                        {% if motion_artifact_toggle_available %}
+                            <button id="batch_motion_artifact_toggle" type="button"
+                                    aria-controls="batch_artifact_images"
+                                    aria-label="show micrographs" title="show micrographs"
+                                    class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
+                                    <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
+                                    <path d="M8 2.5v11"/>
+                                    <circle cx="11" cy="8" r="1.25"/>
+                                </svg>
+                                <span data-motion-artifact-toggle-label>show micrographs</span>
+                            </button>
+                        {% endif %}
+                        {% if ctf_artifact_micrograph_toggle_available %}
+                            <button id="batch_ctf_micrograph_toggle" type="button" aria-pressed="false"
+                                    aria-controls="batch_artifact_images"
+                                    aria-label="show micrographs" title="show micrographs"
+                                    class="min-h-9 flex-shrink-0 flex items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" class="w-3.5 h-3.5">
+                                    <rect x="1.5" y="2.5" width="13" height="11" rx="1"/>
+                                    <circle cx="5" cy="6" r="1.25"/>
+                                    <path d="m2.5 12 3.25-3 2.25 2 2.25-2.25L13.5 12"/>
+                                </svg>
+                                <span data-ctf-micrograph-toggle-label>show micrographs</span>
+                            </button>
+                        {% endif %}
+                        {% if output_dimensions_available %}
+                            <label id="batch_output_dimensions_control"
+                                   for="batch_output_dimensions_toggle"
+                                   title="hide output dimensions"
+                                   class="min-h-9 flex-shrink-0 inline-flex cursor-pointer select-none items-center gap-2 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel">
+                                <span>dimensions</span>
+                                <input id="batch_output_dimensions_toggle" type="checkbox" role="switch"
+                                       aria-label="hide output dimensions" aria-controls="batch_artifacts_panel"
+                                       class="peer sr-only" checked>
+                                <span aria-hidden="true"
+                                      class="relative h-5 w-10 rounded-full bg-streamline transition-colors peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-nice4bubble peer-checked:bg-streamaccent after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5"></span>
+                            </label>
+                        {% endif %}
+                    </div>
                 </div>
                 <div id="batch_artifacts_panel" data-collapse-body class="mt-3">
+                    {% if batch_class_selector %}
+                        {% include 'nice_stream/includes/_class_selector.html' %}
+                    {% elif class_selector_requested and class_selector_error %}
+                        <div id="batch_class_selector" class="mb-3 min-w-0 rounded-lg border border-streamerrorline bg-streamerrorsurface p-3">
+                            <h3 class="text-[10px] font-medium uppercase tracking-widest text-streamerror">2D class selector unavailable</h3>
+                            <p class="mt-2 text-[11px] text-streamerror" style="overflow-wrap:anywhere">{{ class_selector_error }}</p>
+                        </div>
+                    {% endif %}
+
                     {% if pick_micrographs %}
                         <p class="text-[10px] text-streamlabel mb-2">pick locations</p>
+                        <div data-pick-display-controls data-pick-display-target-id="batch_artifact_images"
+                             class="mb-3 rounded-lg border border-streamdivider bg-streambg p-3">
+                            <div class="mb-2 flex items-center justify-between gap-3">
+                                <span class="text-[10px] font-medium uppercase tracking-widest text-streamlabel">display levels</span>
+                                <button type="button" data-pick-display-reset
+                                        class="min-h-9 rounded-md border border-streamdivider px-3 py-1.5 text-[10px] text-streamlabel hover:bg-streamsurface hover:text-streamtext transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-streamring">
+                                    reset
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+                                <label class="min-w-0 text-[10px] text-streamlabel" for="batch_pick_display_min">
+                                    <span class="mb-1 flex items-center justify-between gap-2">
+                                        <span>min</span>
+                                        <output data-pick-display-output="min" for="batch_pick_display_min" class="font-mono text-streamsubtle">0</output>
+                                    </span>
+                                    <input id="batch_pick_display_min" type="range"
+                                           min="0" max="254" step="1" value="0"
+                                           data-pick-display-control="min"
+                                           aria-label="minimum display level"
+                                           aria-valuetext="0 of 255"
+                                           aria-controls="batch_artifact_images"
+                                           class="w-full" style="accent-color:var(--color-streamaccent)">
+                                </label>
+                                <label class="min-w-0 text-[10px] text-streamlabel" for="batch_pick_display_max">
+                                    <span class="mb-1 flex items-center justify-between gap-2">
+                                        <span>max</span>
+                                        <output data-pick-display-output="max" for="batch_pick_display_max" class="font-mono text-streamsubtle">255</output>
+                                    </span>
+                                    <input id="batch_pick_display_max" type="range"
+                                           min="1" max="255" step="1" value="255"
+                                           data-pick-display-control="max"
+                                           aria-label="maximum display level"
+                                           aria-valuetext="255 of 255"
+                                           aria-controls="batch_artifact_images"
+                                           class="w-full" style="accent-color:var(--color-streamaccent)">
+                                </label>
+                                <label class="min-w-0 text-[10px] text-streamlabel" for="batch_pick_display_brightness">
+                                    <span class="mb-1 flex items-center justify-between gap-2">
+                                        <span>brightness</span>
+                                        <output data-pick-display-output="brightness" for="batch_pick_display_brightness" class="font-mono text-streamsubtle">0.000</output>
+                                    </span>
+                                    <input id="batch_pick_display_brightness" type="range"
+                                           min="-0.5" max="0.5" step="0.001" value="0"
+                                           data-pick-display-control="brightness"
+                                           aria-label="display brightness"
+                                           aria-valuetext="0.000"
+                                           aria-controls="batch_artifact_images"
+                                           class="w-full" style="accent-color:var(--color-streamaccent)">
+                                </label>
+                                <label class="min-w-0 text-[10px] text-streamlabel" for="batch_pick_display_contrast">
+                                    <span class="mb-1 flex items-center justify-between gap-2">
+                                        <span>contrast</span>
+                                        <output data-pick-display-output="contrast" for="batch_pick_display_contrast" class="font-mono text-streamsubtle">0.500</output>
+                                    </span>
+                                    <input id="batch_pick_display_contrast" type="range"
+                                           min="0.5" max="0.999" step="0.001" value="0.5"
+                                           data-pick-display-control="contrast"
+                                           aria-label="display contrast"
+                                           aria-valuetext="0.500"
+                                           aria-controls="batch_artifact_images"
+                                           class="w-full" style="accent-color:var(--color-streamaccent)">
+                                </label>
+                            </div>
+                            <p class="mt-2 text-[9px] text-streamsubtle">min/max and brightness/contrast are synchronized views of the displayed 8-bit level window</p>
+                        </div>
                     {% endif %}
 
                     {% if artifact_counts %}
@@ -259,21 +376,23 @@
                                            target="_blank" rel="noopener"
                                            class="relative flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
                                            style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
-                                           title="{{ movie.name }}{% if movie.frames %}, {{ movie.frames }} frames{% endif %}">
+                                           title="{{ movie.name }}{% if movie.width and movie.height %} — {{ movie.width }} × {{ movie.height }} px{% endif %}{% if movie.frames %}, {{ movie.frames }} frames{% endif %}">
                                             <img src="{% url 'nice_lite:batch_movie_thumbnail' jobid movie.token %}"
                                                  loading="lazy" decoding="async"
                                                  class="rounded absolute inset-0 w-full h-full object-cover hover:opacity-90 transition-opacity"
                                                  alt="imported movie {{ movie.number }}">
+                                            {% include 'nice_classic/includes/_batch_dimensions_badge.html' with width=movie.width height=movie.height %}
                                         </a>
                                     {% else %}
                                         <div data-artifact-preview-kind="movie"
                                              class="relative flex flex-shrink-0 items-center justify-center rounded-md overflow-hidden bg-streambg border border-streamdivider text-streamsubtle"
                                              style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
-                                             title="{{ movie.name }} — thumbnail unavailable for this format">
+                                             title="{{ movie.name }}{% if movie.width and movie.height %} — {{ movie.width }} × {{ movie.height }} px{% endif %} — thumbnail unavailable for this format">
                                             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25" class="h-8 w-8">
                                                 <rect x="3" y="5" width="18" height="14" rx="2"/>
                                                 <path d="m8 15 2.5-3 2 2 2.5-3 3 4"/>
                                             </svg>
+                                            {% include 'nice_classic/includes/_batch_dimensions_badge.html' with width=movie.width height=movie.height %}
                                             <span class="sr-only">thumbnail unavailable for imported movie {{ movie.number }}</span>
                                         </div>
                                     {% endif %}
@@ -331,11 +450,12 @@
                                        target="_blank" rel="noopener"
                                        class="relative flex-shrink-0 rounded-md overflow-hidden bg-black border border-streamdivider"
                                        style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"
-                                       title="{{ particle.stack_name }}, particle {{ particle.stack_index }}">
+                                       title="{{ particle.stack_name }}, particle {{ particle.stack_index }}{% if particle.width and particle.height %} — {{ particle.width }} × {{ particle.height }} px{% endif %}">
                                         <img src="{% url 'nice_lite:batch_particle_thumbnail' jobid particle.stack_name particle.stack_index %}"
                                              loading="lazy" decoding="async"
                                              class="rounded absolute inset-0 w-full h-full object-cover hover:opacity-90 transition-opacity"
                                              alt="extracted particle {{ particle.number }}">
+                                        {% include 'nice_classic/includes/_batch_dimensions_badge.html' with width=particle.width height=particle.height %}
                                     </a>
                                 {% endfor %}
                             </div>
@@ -371,19 +491,22 @@
                         </div>
                     {% endif %}
 
-                    {% if pick_micrographs or artifact_images %}
-                        <div id="batch_artifact_images" class="flex flex-wrap items-start gap-2" data-pick-overlay-mode="points"
+                    {% if pick_micrographs or artifact_images and not class_selector_replaces_artifact_previews %}
+                        <div id="batch_artifact_images" class="flex flex-wrap items-start gap-2"
+                            data-pick-overlay-mode="points" data-pick-overlay-size="0"
                             style="--artifact-tile-height:clamp(72px,18vw,260px)">
                             {% for micrograph in pick_micrographs %}
                                 {% include 'nice_classic/includes/_batch_pick_micrograph_preview.html' with micrograph=micrograph %}
                             {% endfor %}
-                            {% for image in artifact_images %}
-                                <div data-artifact-preview-group class="flex flex-shrink-0 items-start gap-2">
-                                    {% for preview in image.previews %}
-                                        {% include 'nice_classic/includes/_batch_artifact_preview.html' with preview=preview %}
-                                    {% endfor %}
-                                </div>
-                            {% endfor %}
+                            {% if not class_selector_replaces_artifact_previews %}
+                                {% for image in artifact_images %}
+                                    <div data-artifact-preview-group class="flex flex-shrink-0 items-start gap-2">
+                                        {% for preview in image.previews %}
+                                            {% include 'nice_classic/includes/_batch_artifact_preview.html' with preview=preview %}
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
                         </div>
                     {% endif %}
                 </div>
@@ -463,6 +586,7 @@
 
     <script>
         const batchArgumentViewStorageKey = "nice_batch_argument_view_{{ jobid }}";
+        const batchArgumentViewToggle = document.querySelector("#argument_view_toggle");
         const setBatchArgumentView = (view) => {
             const showAll = view === "all";
             document.querySelectorAll("[data-argument-row]").forEach((row) => {
@@ -480,14 +604,11 @@
             const heading = document.querySelector("#argument_view_heading");
             if (heading) heading.textContent = showAll ? "all arguments" : "submitted arguments";
 
-            const submittedButton = document.querySelector("#submitted_arguments_button");
-            const allButton = document.querySelector("#all_arguments_button");
-            [[submittedButton, !showAll], [allButton, showAll]].forEach(([button, active]) => {
-                if (!button) return;
-                button.setAttribute("aria-pressed", active ? "true" : "false");
-                button.classList.toggle("bg-streamring/10", active);
-                button.classList.toggle("text-streamaccent", active);
-                button.classList.toggle("text-streamlabel", !active);
+            if (batchArgumentViewToggle) batchArgumentViewToggle.checked = showAll;
+            document.querySelectorAll("[data-argument-view-label]").forEach((label) => {
+                const active = label.dataset.argumentViewLabel === view;
+                label.classList.toggle("text-streamaccent", active);
+                label.classList.toggle("text-streamlabel", !active);
             });
 
             try {
@@ -497,12 +618,46 @@
             }
         };
 
+        if (batchArgumentViewToggle) {
+            batchArgumentViewToggle.addEventListener("change", () => {
+                setBatchArgumentView(batchArgumentViewToggle.checked ? "all" : "submitted");
+            });
+        }
+
         try {
             if (sessionStorage.getItem(batchArgumentViewStorageKey) === "all") {
                 setBatchArgumentView("all");
             }
         } catch (error) {
             // Keep the default submitted view when storage is unavailable.
+        }
+
+        const batchOutputDimensionsToggle = document.querySelector("#batch_output_dimensions_toggle");
+        const batchOutputDimensionsControl = document.querySelector("#batch_output_dimensions_control");
+        const batchOutputDimensions = [
+            ...document.querySelectorAll("[data-artifact-dimensions]"),
+        ];
+        const setBatchOutputDimensionsVisible = (visible) => {
+            batchOutputDimensions.forEach((dimensions) => {
+                dimensions.classList.toggle("hidden", !visible);
+            });
+            if (!batchOutputDimensionsToggle) return;
+
+            batchOutputDimensionsToggle.checked = visible;
+            const actionDescription = visible
+                ? "hide output dimensions"
+                : "show output dimensions";
+            batchOutputDimensionsToggle.setAttribute("aria-label", actionDescription);
+            if (batchOutputDimensionsControl) {
+                batchOutputDimensionsControl.title = actionDescription;
+            }
+        };
+
+        if (batchOutputDimensionsToggle) {
+            batchOutputDimensionsToggle.addEventListener("change", () => {
+                setBatchOutputDimensionsVisible(batchOutputDimensionsToggle.checked);
+            });
+            setBatchOutputDimensionsVisible(true);
         }
 
         const batchMotionArtifactToggle = document.querySelector("#batch_motion_artifact_toggle");

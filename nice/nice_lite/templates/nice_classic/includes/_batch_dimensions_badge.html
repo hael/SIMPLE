@@ -1,0 +1,5 @@
+{% if width and height %}
+    <span data-artifact-dimensions
+          class="absolute rounded-md bg-neutral-900 px-2 py-1 text-[9px] leading-none text-white"
+          style="left:0.25rem;bottom:0.25rem;z-index:20">{{ width }} × {{ height }} px</span>
+{% endif %}

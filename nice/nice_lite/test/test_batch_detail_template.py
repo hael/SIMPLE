@@ -23,6 +23,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         crop,
         hidden_by_default=False,
         visibility_group=None,
+        width=None,
+        height=None,
     ):
         label = kind.replace("_", " ")
         preview = {
@@ -37,6 +39,9 @@ class BatchDetailTemplateTests(SimpleTestCase):
             preview["hidden_by_default"] = True
         if visibility_group is not None:
             preview["visibility_group"] = visibility_group
+        if width is not None and height is not None:
+            preview["width"] = width
+            preview["height"] = height
         return preview
 
     def test_batch_detail_template_uses_mobile_first_layout(self):
@@ -67,6 +72,69 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("object-[100%]", preview)
         self.assertIn('style="object-position:0%"', preview)
 
+    def test_batch_detail_reuses_stream_class_selector_component(self):
+        batch_view = self._read_template("nice_classic/batchview.html")
+        selector = self._read_template("nice_stream/includes/_class_selector.html")
+        selector_script = self._read_static("nice_lite/class_selector.js")
+        rendered = render_to_string(
+            "nice_classic/batchview.html",
+            {
+                "jobid": 7,
+                "status": "finished",
+                "result_project": "/project/workspace.simple",
+                "project_summary_available": False,
+                "class_selector_available": True,
+                "class_selector_requested": True,
+                "batch_class_selector": {
+                    "classes": ({
+                        "class_id": 1,
+                        "stack_index": 1,
+                        "population": 25,
+                        "resolution": 4.5,
+                    },),
+                    "class_count": 1,
+                    "stack_name": "classes.mrcs",
+                    "width": 128,
+                    "height": 128,
+                    "initial_selected_class_ids": (1,),
+                    "browser_data": {
+                        "classes": [{"class_id": 1, "stack_index": 1}],
+                        "initial_selected_class_ids": [1],
+                        "selection_storage_key": "selection-key",
+                    },
+                },
+                "class_selector_replaces_artifact_previews": True,
+                "arguments": [],
+                "logs": [],
+                "artifact_counts": [],
+                "artifact_images": [{
+                    "name": "redundant-cavgs.jpg",
+                    "previews": [self._preview(
+                        "/project/redundant-cavgs.jpg",
+                        "redundant-cavgs.jpg",
+                        "image",
+                        "full",
+                    )],
+                }],
+                "auto_refresh": False,
+            },
+        )
+
+        self.assertNotIn("data-class-selector-action", batch_view)
+        self.assertNotIn("select 2D classes", rendered)
+        self.assertIn("nice_stream/includes/_class_selector.html", batch_view)
+        self.assertLess(
+            rendered.index('id="batch_artifacts_panel"'),
+            rendered.index('id="batch_class_selector"'),
+        )
+        self.assertNotIn("redundant-cavgs.jpg", rendered)
+        self.assertIn("data-class-selector-grid", selector)
+        self.assertIn("data-class-selector-select-all", selector)
+        self.assertIn("batch_class_deselection_export", selector)
+        self.assertIn("128 × 128 px", rendered)
+        self.assertIn("applyVisualRange", selector_script)
+        self.assertIn("localStorage", selector_script)
+
     def test_batch_detail_ctf_artifacts_add_source_micrographs_automatically(self):
         batch_view = self._read_template("nice_classic/batchview.html")
         diagnostic_path = "/project/workspace/2_ctf_estimate/movie_ctf_estimate_diag.jpg"
@@ -83,6 +151,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
                         "movie_ctf_estimate_diag.jpg",
                         "image",
                         "full",
+                        width=800,
+                        height=600,
                     ),
                     self._preview(
                         micrograph_path,
@@ -91,6 +161,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
                         "right",
                         hidden_by_default=True,
                         visibility_group="ctf_micrograph",
+                        width=4096,
+                        height=3072,
                     ),
                 ],
             }],
@@ -115,6 +187,9 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertNotIn("data-artifact-secondary-preview", rendered)
         self.assertIn('data-artifact-preview-kind="image"', rendered)
         self.assertIn('data-artifact-preview-kind="micrograph"', rendered)
+        self.assertEqual(rendered.count("data-artifact-dimensions"), 2)
+        self.assertIn("800 × 600 px", rendered)
+        self.assertIn("4096 × 3072 px", rendered)
         self.assertGreater(rendered.index("movie_thumb.jpg"), rendered.index("movie_ctf_estimate_diag.jpg"))
         self.assertIn("setBatchCtfMicrographsVisible(false)", batch_view)
         self.assertIn('visible ? "hide micrographs" : "show micrographs"', batch_view)
@@ -136,6 +211,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
                         "power_spectrum",
                         "left",
                         visibility_group="motion",
+                        width=4096,
+                        height=3072,
                     ),
                     self._preview(
                         thumbnail_path,
@@ -144,6 +221,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
                         "right",
                         hidden_by_default=True,
                         visibility_group="motion",
+                        width=4096,
+                        height=3072,
                     ),
                 ],
             }],
@@ -163,6 +242,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('data-artifact-preview-kind="micrograph"', rendered)
         self.assertIn('data-motion-artifact-preview="power_spectrum"', rendered)
         self.assertIn('data-motion-artifact-preview="micrograph"', rendered)
+        self.assertEqual(rendered.count("data-artifact-dimensions"), 2)
+        self.assertIn("4096 × 3072 px", rendered)
         self.assertIn('class="hidden relative', rendered)
         self.assertIn('setBatchMotionArtifactView("power_spectrum")', batch_view)
         self.assertIn('const showSideBySide = view === "side_by_side"', batch_view)
@@ -189,6 +270,7 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn(shared_slide, slider)
         self.assertIn(shared_slide, batch_pick)
         self.assertIn("nice_lite/pick_micrograph_slider.js", batch_view)
+        self.assertIn("pick_micrograph_slider.js' %}?v=6", batch_view)
         self.assertIn("nice_lite/pick_micrograph_slider.js", initial_pick)
         self.assertIn("nice_lite/pick_micrograph_slider.js", reference_pick)
         self.assertIn("nice_stream/includes/_scroll_btn.html", slider)
@@ -197,8 +279,16 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("context.arc(", slider_script)
         self.assertIn("context.strokeRect(", slider_script)
         self.assertIn('overlayMode === "boxes"', slider_script)
+        self.assertIn('overlayMode === "circle"', slider_script)
+        self.assertIn('const modes = ["points", "circle", "boxes"]', slider_script)
+        self.assertIn("width * overlayScale", slider_script)
+        self.assertIn("const overlayScale = overlaySize / nativeSize", slider_script)
+        self.assertIn("(overlaySize * scale) / 2", slider_script)
+        self.assertIn("findNativeOverlaySize", slider_script)
         self.assertIn("Number(box.x) * scale", slider_script)
         self.assertIn("Number(box.y) * scale", slider_script)
+        self.assertIn("--preprocess-contrast", slide)
+        self.assertIn("--preprocess-brightness", slide)
 
         rendered = render_to_string("nice_classic/batchview.html", {
             "jobid": 7,
@@ -222,10 +312,60 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("data-pick-micrograph-grid-preview", rendered)
         self.assertIn('id="batch_pick_overlay_toggle"', rendered)
         self.assertIn('data-pick-overlay-mode="points"', rendered)
-        self.assertIn("show boxes", rendered)
+        self.assertIn("points overlay; show circle", rendered)
+        self.assertIn("data-pick-overlay-toggle-label>points", rendered)
+        self.assertIn('id="batch_pick_overlay_size" type="range"', rendered)
+        self.assertIn('min="1" max="1000" step="1" value="100" disabled', rendered)
+        self.assertIn('aria-label="overlay size in pixels"', rendered)
+        self.assertIn("data-pick-overlay-size-control", rendered)
+        self.assertIn('id="batch_pick_overlay_size_value" type="number"', rendered)
+        self.assertIn("data-pick-overlay-size-number", rendered)
+        self.assertIn('aria-label="enter overlay size in pixels"', rendered)
+        self.assertIn('data-pick-overlay-size="0"', rendered)
+        self.assertIn('sizeInput.addEventListener("input"', slider_script)
+        self.assertIn('sizeNumber.addEventListener("input"', slider_script)
+        self.assertIn('sizeNumber.addEventListener("change"', slider_script)
+        self.assertIn("sizeNumber.value = String(pixels)", slider_script)
+        self.assertIn("sizeNumber.max = sizeInput.max", slider_script)
+        self.assertIn("setSize(nativeSize || sizeInput.value)", slider_script)
+        self.assertIn('sizeControl.classList.toggle("hidden", !adjustableSize)', slider_script)
+        self.assertIn("if (sizeInput) sizeInput.disabled = !adjustableSize", slider_script)
+        self.assertIn("if (sizeNumber) sizeNumber.disabled = !adjustableSize", slider_script)
+        self.assertIn("pick_micrograph_slider.js?v=6", rendered)
+        self.assertIn('data-pick-display-target-id="batch_artifact_images"', rendered)
+        self.assertIn('id="batch_pick_display_min" type="range"', rendered)
+        self.assertIn('min="0" max="254" step="1" value="0"', rendered)
+        self.assertIn('id="batch_pick_display_max" type="range"', rendered)
+        self.assertIn('min="1" max="255" step="1" value="255"', rendered)
+        self.assertIn('id="batch_pick_display_brightness" type="range"', rendered)
+        self.assertIn('min="-0.5" max="0.5" step="0.001" value="0"', rendered)
+        self.assertIn('data-pick-display-output="brightness"', rendered)
+        self.assertIn(">0.000</output>", rendered)
+        self.assertIn('id="batch_pick_display_contrast" type="range"', rendered)
+        self.assertIn('min="0.5" max="0.999" step="0.001" value="0.5"', rendered)
+        self.assertIn('data-pick-display-output="contrast"', rendered)
+        self.assertIn(">0.500</output>", rendered)
+        self.assertIn("data-pick-display-reset", rendered)
+        self.assertIn("are synchronized views", rendered)
+        self.assertIn('const defaults = {min: 0, max: 255, brightness: 0, contrast: 0.5}', slider_script)
+        self.assertIn("const applyLevels =", slider_script)
+        self.assertIn("const applyBrightnessContrast =", slider_script)
+        self.assertIn('name === "brightness" || name === "contrast"', slider_script)
+        self.assertIn("minimum + maximum - (displayMinimum + displayMaximum)", slider_script)
+        self.assertIn("displayRange * (1 - contrast)", slider_script)
+        self.assertIn('target.style.setProperty("--pick-level-brightness"', slider_script)
+        self.assertIn('target.style.setProperty("--pick-level-contrast"', slider_script)
+        self.assertNotIn("--pick-display-brightness", slider_script)
+        self.assertNotIn("--pick-display-contrast", slider_script)
+        self.assertIn('target.querySelectorAll("[data-pick-micrograph-slide] > img")', slider_script)
+        self.assertIn("image.style.filter = displayFilter", slider_script)
+        self.assertIn('querySelectorAll("[data-pick-display-controls]")', slider_script)
+        self.assertNotIn("percent of picked box size", slider_script)
         self.assertNotIn("data-pick-micrograph-slider", rendered)
         self.assertIn('data-xdim="4096"', rendered)
         self.assertIn('data-ydim="3072"', rendered)
+        self.assertIn("data-artifact-dimensions", rendered)
+        self.assertIn("4096 × 3072 px", rendered)
         self.assertIn("movie_thumb.jpg", rendered)
         self.assertIn("picked micrograph 9", rendered)
 
@@ -240,6 +380,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
                         "number": 42,
                         "stack_name": "particles.mrcs",
                         "stack_index": 42,
+                        "width": 128,
+                        "height": 128,
                     },
                 ],
                 "total": 481,
@@ -269,6 +411,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("/batchparticle/7/particles.mrcs/42", rendered)
         self.assertIn('loading="lazy" decoding="async"', rendered)
         self.assertIn('data-artifact-preview-kind="particle"', rendered)
+        self.assertIn("data-artifact-dimensions", rendered)
+        self.assertIn("128 × 128 px", rendered)
         self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
         self.assertIn("hover:opacity-90 transition-opacity", rendered)
         self.assertNotIn("<figcaption", rendered)
@@ -292,6 +436,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
                     "number": 41,
                     "name": "movie_041.mrcs",
                     "frames": 40,
+                    "width": 4096,
+                    "height": 4096,
                     "preview_available": True,
                     "token": "signed-token",
                 }],
@@ -322,6 +468,8 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn("/batchmovie/7/signed-token", rendered)
         self.assertIn('loading="lazy" decoding="async"', rendered)
         self.assertIn('data-artifact-preview-kind="movie"', rendered)
+        self.assertIn("data-artifact-dimensions", rendered)
+        self.assertIn("4096 × 4096 px", rendered)
         self.assertIn('style="height:var(--artifact-tile-height);width:var(--artifact-tile-height)"', rendered)
         self.assertNotIn("<figcaption", rendered)
         self.assertIn('aria-label="imported movie pages"', rendered)
@@ -331,6 +479,102 @@ class BatchDetailTemplateTests(SimpleTestCase):
         self.assertIn('aria-label="last movie page"', rendered)
         self.assertIn("import_movie_page.ellipsis", batch_view)
         self.assertIn("…", rendered)
+
+    def test_import_movie_output_shows_eer_dimensions_without_thumbnail(self):
+        rendered = render_to_string(
+            "nice_classic/batchview.html",
+            {
+                "jobid": 7,
+                "import_movie_page": {
+                    "movies": [{
+                        "number": 1,
+                        "name": "movie.eer",
+                        "width": 4096,
+                        "height": 4096,
+                        "preview_available": False,
+                        "token": "",
+                    }],
+                    "total": 1,
+                    "page": 1,
+                    "pages": 1,
+                    "page_numbers": [1],
+                    "ellipsis": "…",
+                    "has_previous": False,
+                    "has_next": False,
+                    "first_movie": 1,
+                    "last_movie": 1,
+                },
+                "arguments": [],
+                "logs": [],
+                "artifact_counts": [],
+                "artifact_images": [],
+                "auto_refresh": False,
+            },
+        )
+
+        self.assertIn("movie.eer — 4096 × 4096 px", rendered)
+        self.assertIn("data-artifact-dimensions", rendered)
+        self.assertIn("thumbnail unavailable for this format", rendered)
+        self.assertNotIn("/batchmovie/7/", rendered)
+
+    def test_output_dimensions_use_page_local_header_switch(self):
+        batch_view = self._read_template("nice_classic/batchview.html")
+        rendered = render_to_string(
+            "nice_classic/batchview.html",
+            {
+                "jobid": 7,
+                "output_dimensions_available": True,
+                "import_movie_page": {
+                    "movies": [{
+                        "number": 1,
+                        "name": "movie.mrcs",
+                        "width": 4096,
+                        "height": 4096,
+                        "preview_available": False,
+                        "token": "",
+                    }],
+                    "total": 1,
+                    "page": 1,
+                    "pages": 1,
+                    "page_numbers": [1],
+                    "ellipsis": "…",
+                    "has_previous": False,
+                    "has_next": False,
+                    "first_movie": 1,
+                    "last_movie": 1,
+                },
+                "arguments": [],
+                "logs": [],
+                "artifact_counts": [],
+                "artifact_images": [],
+                "auto_refresh": False,
+            },
+        )
+
+        self.assertIn('id="batch_output_controls"', rendered)
+        self.assertIn('id="batch_output_dimensions_toggle"', rendered)
+        self.assertIn('type="checkbox" role="switch"', rendered)
+        self.assertIn('aria-label="hide output dimensions"', rendered)
+        self.assertIn('class="peer sr-only" checked', rendered)
+        self.assertIn('data-collapse-companion-id="batch_output_controls"', rendered)
+        self.assertIn('querySelectorAll("[data-artifact-dimensions]")', batch_view)
+        self.assertIn('dimensions.classList.toggle("hidden", !visible)', batch_view)
+        self.assertIn("setBatchOutputDimensionsVisible(true)", batch_view)
+        self.assertNotIn("nice_batch_output_dimensions", batch_view)
+
+        rendered_without_dimensions = render_to_string(
+            "nice_classic/batchview.html",
+            {
+                "jobid": 7,
+                "output_dimensions_available": False,
+                "arguments": [],
+                "logs": [],
+                "artifact_counts": [],
+                "artifact_images": [],
+                "auto_refresh": False,
+            },
+        )
+        self.assertNotIn('id="batch_output_dimensions_toggle"', rendered_without_dimensions)
 
     def test_batch_detail_panels_collapse_and_logs_are_last(self):
         batch_view = self._read_template("nice_classic/batchview.html")
